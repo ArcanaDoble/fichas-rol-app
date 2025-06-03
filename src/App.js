@@ -155,7 +155,6 @@ function App() {
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           valor:       obj.VALOR || '',
-          tecnologia:  obj.TECNOLOGÍA || '',
           tecnologia: obj.TECNOLOGÍA || '',
         };
       });
@@ -749,10 +748,12 @@ function App() {
                     <p><strong>Carga:</strong> {a.carga}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    
                     <p><strong>Cuerpo:</strong> {a.cuerpo}</p>
                     <p><strong>Mente:</strong> {a.mente}</p>
                     <p><strong>Carga:</strong> {a.carga}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
+
                     <Boton
                       color="red"
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
@@ -791,7 +792,9 @@ function App() {
             {armas
               .filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
               .map((a,i)=>(<Tarjeta key={i}>
+
             {armas.map((a,i)=>(<Tarjeta key={i}>
+
               <p className="font-bold text-lg">{a.nombre}</p>
               <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
               <p><strong>Alcance:</strong> {a.alcance}</p>
@@ -816,6 +819,7 @@ function App() {
               {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
               {a.descripcion && <p className="italic">{a.descripcion}</p>}
             </Tarjeta>))}
+
             <h2 className="text-xl font-semibold mt-6 mb-2">Armaduras</h2>
             {armaduras.map((a,i)=>(<Tarjeta key={i}>
               <p className="font-bold text-lg">{a.nombre}</p>
@@ -825,6 +829,7 @@ function App() {
               <p><strong>Carga:</strong> {a.carga}</p>
               <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
             </Tarjeta>))}
+
           </>)
         }
       </div>
