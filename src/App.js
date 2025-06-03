@@ -62,6 +62,7 @@ function App() {
   );
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // NAVIGATION
   const volverAlMenu = () => {
@@ -76,6 +77,7 @@ function App() {
     setPlayerInputArma('');
     setPlayerInputArmadura('');
     setPlayerArmaduraError('');
+    setSearchTerm('');
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -115,7 +117,9 @@ function App() {
           carga:   obj.CARGA,
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico'
+          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+          valor:       obj.VALOR || '',
+          tecnologia:  obj.TECNOLOGÍA || ''
         };
       });
       setArmas(datos);
@@ -149,6 +153,9 @@ function App() {
           mente:   obj.MENTE,
           carga:   obj.CARGA,
           rasgos,
+          descripcion: obj.DESCRIPCIÓN || '',
+          valor:       obj.VALOR || '',
+          tecnologia:  obj.TECNOLOGÍA || '',
           tecnologia: obj.TECNOLOGÍA || '',
         };
       });
@@ -737,6 +744,11 @@ function App() {
                   <div key={i} className="bg-gray-800 rounded-xl shadow-md p-4 w-full max-w-md flex flex-col items-center text-center">
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
+                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
+                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
+                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <p><strong>Cuerpo:</strong> {a.cuerpo}</p>
                     <p><strong>Mente:</strong> {a.mente}</p>
                     <p><strong>Carga:</strong> {a.carga}</p>
@@ -766,17 +778,42 @@ function App() {
           <Boton onClick={fetchArmas}>Refrescar armas</Boton>
           <Boton onClick={fetchArmaduras}>Refrescar armaduras</Boton>
         </div>
+        <Input
+          placeholder="Buscar arma o armadura"
+          value={searchTerm}
+          onChange={e=>setSearchTerm(e.target.value)}
+          className="mb-4 w-full max-w-md"
+        />
         {loading
           ? <p>Cargando catálogo…</p>
           : (<>
             <h2 className="text-xl font-semibold mb-2">Armas</h2>
+            {armas
+              .filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((a,i)=>(<Tarjeta key={i}>
             {armas.map((a,i)=>(<Tarjeta key={i}>
               <p className="font-bold text-lg">{a.nombre}</p>
               <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
               <p><strong>Alcance:</strong> {a.alcance}</p>
               <p><strong>Consumo:</strong> {a.consumo}</p>
               <p><strong>Carga:</strong> {a.carga}</p>
-              <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
+              <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+              <p><strong>Valor:</strong> {a.valor}</p>
+              {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+              {a.descripcion && <p className="italic">{a.descripcion}</p>}
+            </Tarjeta>))}
+            <h2 className="text-xl font-semibold mt-6 mb-2">Armaduras</h2>
+            {armaduras
+              .filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((a,i)=>(<Tarjeta key={i}>
+              <p className="font-bold text-lg">{a.nombre}</p>
+              <p><strong>Defensa:</strong> {a.defensa}</p>
+              <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
+              <p><strong>Mente:</strong> {a.mente || '❌'}</p>
+              <p><strong>Carga:</strong> {a.carga}</p>
+              <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+              <p><strong>Valor:</strong> {a.valor}</p>
+              {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
               {a.descripcion && <p className="italic">{a.descripcion}</p>}
             </Tarjeta>))}
             <h2 className="text-xl font-semibold mt-6 mb-2">Armaduras</h2>
