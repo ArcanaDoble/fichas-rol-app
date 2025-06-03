@@ -19,7 +19,8 @@ const atributoColor = {
   voluntad: '#a78bfa',
 };
 
-const recursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
+const defaultRecursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
+
 const recursoColor = {
   postura: '#34d399',
   vida:    '#f87171',
@@ -50,7 +51,11 @@ function App() {
 
   // Recursos dinámicos (añadir / eliminar)
   const [resourcesList, setResourcesList] = useState(
-    recursos.map(name => ({ id: name, name, color: recursoColor[name] }))
+    defaultRecursos.map(name => ({
+      id: name,
+      name,
+      color: recursoColor[name] || '#ffffff'
+    }))
   );
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
@@ -117,71 +122,179 @@ function App() {
   }, []);
   useEffect(() => { fetchArmas() }, [fetchArmas]);
 
-  // LOAD PLAYER DATA
+  // ──────────────────────────────────────────────────────────────────────────────
+  // FUNCIONES PARA CARGAR Y GUARDAR
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
     if (!nameEntered) return;
-    const ref  = doc(db, 'players', playerName);
+    const ref = doc(db, 'players', playerName);
     const snap = await getDoc(ref);
-    const baseA = {}; atributos.forEach(k => baseA[k] = 'D4');
-    const baseS = {}; recursos.forEach(r => baseS[r] = { base:0, total:0, actual:0, buff:0 });
+
+    // 1.a) Para los atributos por defecto
+    const baseA = {};
+    atributos.forEach(k => (baseA[k] = 'D4'));
+
     if (snap.exists()) {
       const d = snap.data();
-      setPlayerData({
-        weapons:  d.weapons || [],
-        atributos:{ ...baseA, ...(d.atributos || {}) },
-        stats:    { ...baseS,   ...(d.stats || {}) }
+      const statsFromDB = d.stats || {};
+      const listFromDB = d.resourcesList || [];
+
+      // 1.b) Reconstruir resourcesList: si Firestore devolvió una lista, úsala; si no, toma defaultRecursos
+      const lista = listFromDB.length > 0
+        ? listFromDB
+        : defaultRecursos.map(id => ({
+            id,
+            name: id,
+            color: recursoColor[id] || '#ffffff'
+          }));
+
+      // 1.c) A cada recurso en "lista" (cargado o por defecto) le aseguro un objeto stats[id]:
+      const statsInit = {};
+      lista.forEach(({ id }) => {
+        const s = statsFromDB[id] || {};
+        statsInit[id] = {
+          base:   s.base   ?? 0,
+          total:  s.total  ?? s.base ?? 0,
+          actual: s.actual ?? 0,
+          buff:   s.buff   ?? 0
+        };
       });
+
+      // 1.d) Guardar en el estado
+      setResourcesList(lista);
+      setPlayerData({
+        weapons:  d.weapons    || [],
+        atributos: { ...baseA, ...(d.atributos || {}) },
+        stats:     statsInit
+      });
+
     } else {
+      // 1.e) Si no existe aún en Firestore, creo una ficha nueva con valores predeterminados
+      const baseS = {};
+      defaultRecursos.forEach(r => {
+        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+      });
+
+      const lista = defaultRecursos.map(id => ({
+        id,
+        name: id,
+        color: recursoColor[id] || '#ffffff'
+      }));
+
+      setResourcesList(lista);
       setPlayerData({ weapons: [], atributos: baseA, stats: baseS });
     }
   }, [nameEntered, playerName]);
-  useEffect(() => { loadPlayer() }, [loadPlayer]);
 
-  // SAVE PLAYER
-  const savePlayer = async data => {
-    setPlayerData(data);
-    await setDoc(doc(db, 'players', playerName), { ...data, updatedAt: new Date() });
+  // 1.b) useEffect que llama a loadPlayer
+  useEffect(() => {
+    loadPlayer();
+  }, [loadPlayer]);
+
+  // 2) savePlayer: guarda todos los datos (weapons, atributos, stats y resourcesList) en Firestore
+  //    Acepta un parámetro opcional `listaParaGuardar`.
+  const savePlayer = async (data, listaParaGuardar = resourcesList) => {
+    const fullData = {
+      ...data,
+      resourcesList: listaParaGuardar,
+      updatedAt: new Date(),
+    };
+    setPlayerData(fullData);
+    await setDoc(doc(db, 'players', playerName), fullData);
   };
 
-  // HANDLERS
+  // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso
   const handleAtributoChange = (k, v) => {
-    savePlayer({ ...playerData, atributos:{ ...playerData.atributos, [k]: v } });
+    const newAtributos = { ...playerData.atributos, [k]: v };
+    savePlayer({ ...playerData, atributos: newAtributos });
   };
+
   const handleStatChange = (r, field, val) => {
     let v = parseInt(val) || 0;
     v = Math.max(0, Math.min(v, RESOURCE_MAX));
-    const st = { ...playerData.stats[r] };
+    const s = { ...playerData.stats[r] };
+
     if (field === 'base') {
-      st.base = v; st.total = v;
-      if (st.actual > v) st.actual = v;
+      s.base = v;
+      s.total = v;
+      if (s.actual > v) s.actual = v;
     }
     if (field === 'actual') {
-      st.actual = Math.min(v, st.total + st.buff, RESOURCE_MAX);
+      s.actual = Math.min(v, s.total + s.buff, RESOURCE_MAX);
     }
-    savePlayer({ ...playerData, stats:{ ...playerData.stats, [r]: st } });
+
+    const newStats = { ...playerData.stats, [r]: s };
+    savePlayer({ ...playerData, stats: newStats });
   };
-  const handleAddBuff = r => {
-    const st = { ...playerData.stats[r] };
-    st.buff = (st.buff || 0) + 1;
-    savePlayer({ ...playerData, stats:{ ...playerData.stats, [r]: st } });
+
+  const handleAddBuff = (r) => {
+    const s = { ...playerData.stats[r] };
+    s.buff = (s.buff || 0) + 1;
+    const newStats = { ...playerData.stats, [r]: s };
+    savePlayer({ ...playerData, stats: newStats });
   };
-const handleNerf = (r) => {
-  const st = { ...playerData.stats[r] };
-  if (st.buff > 0) {
-    // Si hay buff, primero lo reduce
-    st.buff--;
-  } else {
-    // Si no hay buff, resta 1 punto de vida actual (hasta 0)
-    st.actual = Math.max(0, st.actual - 1);
-  }
-  savePlayer({
-    ...playerData,
-    stats: {
+
+  const handleNerf = (r) => {
+    const s = { ...playerData.stats[r] };
+    if (s.buff > 0) {
+      s.buff--;
+    } else {
+      s.actual = Math.max(0, s.actual - 1);
+    }
+    const newStats = { ...playerData.stats, [r]: s };
+    savePlayer({ ...playerData, stats: newStats });
+  };
+
+  const eliminarRecurso = (id) => {
+    const newStats = { ...playerData.stats };
+    delete newStats[id];
+    const newList = resourcesList.filter((r) => r.id !== id);
+    setResourcesList(newList);
+    savePlayer({ ...playerData, stats: newStats }, newList);
+  };
+
+  const agregarRecurso = () => {
+    // Si ya hay 6 o más recursos, no añadimos
+    if (resourcesList.length >= 6) return;
+
+    // Generar un ID único para el recurso nuevo
+    const nuevoId = `recurso${Date.now()}`;
+
+    // Armar la nueva lista de recursos
+    const nuevaLista = [
+      ...resourcesList,
+      {
+        id: nuevoId,
+        name: newResName || nuevoId,
+        color: newResColor
+      }
+    ];
+
+    // Inicializar las stats de ese recurso en 0
+    const nuevaStats = {
       ...playerData.stats,
-      [r]: st
-    }
-  });
-};
+      [nuevoId]: { base: 0, total: 0, actual: 0, buff: 0 }
+    };
+
+    // Actualizar el estado local de resourcesList
+    setResourcesList(nuevaLista);
+
+    // Guardar en Firestore pasando explícitamente la lista completa
+    savePlayer(
+      { ...playerData, stats: nuevaStats },
+      nuevaLista
+    );
+
+    // Limpiar el formulario
+    setNewResName('');
+    setNewResColor('#ffffff');
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Terminan las funciones de carga/guardado y handlers
+  // ──────────────────────────────────────────────────────────────────────────────
 
   const handleLogin = () => {
     if (passwordInput === MASTER_PASSWORD) {
@@ -327,7 +440,7 @@ const handleNerf = (r) => {
           <h2 className="text-xl font-semibold text-center mb-4">Atributos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 w-full">
             {atributos.map(attr=>{
-              const val = playerData.atributos[attr];
+              const val = playerData.atributos[attr] || 'D4';
               return (
                 <div key={attr} className="flex items-center justify-between p-3 rounded-xl shadow w-full" style={{ backgroundColor: atributoColor[attr] }}>
                   <span className="flex-1 text-lg sm:text-xl font-bold text-gray-800 text-center">{attr.charAt(0).toUpperCase()+attr.slice(1)}</span>
@@ -341,65 +454,171 @@ const handleNerf = (r) => {
           </div>
 
           {/* ESTADÍSTICAS */}
-          <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
-          <div className="flex flex-col gap-4 w-full max-w-2xl mx-auto mb-8">
-            {recursos.map(r=>{
-              const s       = playerData.stats[r] || { base:0,total:0,actual:0,buff:0 };
-              const baseV   = Math.min(s.base||0, RESOURCE_MAX);
-              const actualV = Math.min(s.actual||0, RESOURCE_MAX);
-              const buffV   = s.buff||0;
-              const color   = recursoColor[r];
+{/* ESTADÍSTICAS */}
+<h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
+<div className="flex flex-col gap-4 w-full mb-8">
+  {resourcesList.map(({ id: r, name, color }, index) => {
+    const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
+    const baseV = Math.min(s.base || 0, RESOURCE_MAX);
+    const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
+    const buffV = s.buff || 0;
+    const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseV));
 
-              return (
-                <div key={r} className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-2 items-center w-full">
-                  <div className="flex flex-col sm:flex-row w-full items-center justify-between gap-2">
-                    <span className="font-bold capitalize text-center w-full sm:w-24">{r}</span>
-                    <div className="flex gap-2 items-center">
-                      <Input type="number" min={0} max={RESOURCE_MAX}
-                             value={baseV===0?'':baseV}
-                             placeholder="0"
-                             onChange={e=>handleStatChange(r,'base',e.target.value)}
-                             className="w-14 text-center"/>
-                      <span className="font-semibold">/</span>
-                      <Input type="number" min={0} max={RESOURCE_MAX}
-                             value={actualV===0?'':actualV}
-                             placeholder="0"
-                             onChange={e=>handleStatChange(r,'actual',e.target.value)}
-                             className="w-14 text-center"/>
-                      <Boton color="green" className="px-3 py-1 text-xs rounded font-bold" onClick={()=>handleAddBuff(r)}>+Buff</Boton>
-                      <Boton color="gray"  className="px-3 py-1 text-xs rounded font-bold" onClick={()=>handleNerf(r)}>-Nerf</Boton>
-                    </div>
-                  </div>
+    const cells = Array.from({ length: RESOURCE_MAX }).map((_, i) => {
+      let bg;
+      if (i < actualV) bg = color;
+      else if (i < baseV) bg = color + "55";
+      else if (i < baseV + buffV) bg = "#facc15";
+      else bg = "#374151";
 
-                  {/* Barra RPG + Badge overflow */}
-                  <div className="flex items-center w-full justify-center mt-2">
-                    <div className="flex gap-[2px]">
-                      {Array.from({ length: RESOURCE_MAX }).map((_,i)=>{
-                        let bg;
-                        if      (i < actualV)           bg = color;              // vida actual
-                        else if (i < baseV)             bg = color + '55';      // faltante hasta base
-                        else if (i < baseV + buffV)     bg = '#facc15';         // buff
-                        else                             bg = '#374151';         // vacío
-                        return (
-                          <div key={i}
-                               className="rounded-lg"
-                               style={{ width:'16px', height:'16px', background:bg, transition:'background 0.2s' }}/>
-                        );
-                      })}
-                    </div>
-                    {buffV > (RESOURCE_MAX - baseV) && (
-                      <span className="ml-2 px-1 py-0.5 text-xs font-bold bg-yellow-500 text-gray-900 rounded">
-                        +{buffV - (RESOURCE_MAX - baseV)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      return (
+        <div
+          key={i}
+          className="rounded-lg"
+          style={{
+            width: "16px",
+            height: "16px",
+            background: bg,
+            transition: "background 0.2s",
+          }}
+        />
+      );
+    });
+
+    return (
+      <div
+        key={r}
+        className="bg-gray-800 rounded-xl p-4 shadow w-full"
+      >
+        {/* Nombre centrado y X a la derecha, en la misma fila */}
+        <div className="relative flex items-center w-full mb-4 h-8">
+          {/* Nombre absoluto centrado con tamaño mayor */}
+          <span className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize">
+            {name}
+          </span>
+          {/* Botón eliminar recurso en la esquina derecha */}
+          <button
+            onClick={() => eliminarRecurso(r)}
+            className="absolute right-0 text-red-400 hover:text-red-200 text-sm font-bold"
+            title="Eliminar esta estadística"
+          >
+            ❌
+          </button>
+        </div>
+
+        {/* Inputs y botones */}
+        <div className="w-full flex justify-center mb-2">
+          <div className="flex items-center gap-2 max-w-fit">
+            <Input
+              type="number"
+              min={0}
+              max={RESOURCE_MAX}
+              value={baseV === 0 ? "" : baseV}
+              placeholder="0"
+              onChange={(e) => handleStatChange(r, "base", e.target.value)}
+              className="w-14 text-center"
+            />
+            <span className="font-semibold">/</span>
+            <Input
+              type="number"
+              min={0}
+              max={RESOURCE_MAX}
+              value={actualV === 0 ? "" : actualV}
+              placeholder="0"
+              onChange={(e) => handleStatChange(r, "actual", e.target.value)}
+              className="w-14 text-center"
+            />
+            <Boton
+              color="green"
+              className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+              onClick={() => handleAddBuff(r)}
+            >
+              +
+            </Boton>
+            <Boton
+              color="gray"
+              className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+              onClick={() => handleNerf(r)}
+            >
+              –
+            </Boton>
           </div>
+        </div>
+
+        {/* Barra (añadido mayor margen superior) */}
+        <div className="relative w-full mt-4">
+          {/* Móvil */}
+          <div
+            className="grid gap-[2px] sm:hidden w-full"
+            style={{
+              gridTemplateColumns: `repeat(${RESOURCE_MAX}, minmax(0, 1fr))`,
+            }}
+          >
+            {cells}
+          </div>
+          {overflowBuf > 0 && (
+            <div className="sm:hidden flex justify-center mt-1">
+              <span className="px-1 py-0.5 text-xs font-bold bg-yellow-500 text-gray-900 rounded">
+                +{overflowBuf}
+              </span>
+            </div>
+          )}
+
+          {/* PC */}
+          <div className="hidden sm:flex flex-wrap gap-[2px] justify-center w-full mt-2">
+            {cells.map((cell, idx) => (
+              <div
+                key={idx}
+                className="w-4 h-4 rounded-lg"
+                style={{ background: cell.props.style.background }}
+              />
+            ))}
+            {overflowBuf > 0 && (
+              <span className="ml-2 px-1 py-0.5 text-xs font-bold bg-yellow-500 text-gray-900 rounded">
+                +{overflowBuf}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+
+
+          {/* FORMULARIO “Añadir recurso” */}
+          {resourcesList.length < 6 && (
+            <div className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-4 w-full max-w-md mx-auto mb-4">
+              <h3 className="text-lg font-semibold text-center">Añadir recurso</h3>
+              <Input
+                type="text"
+                placeholder="Nombre de la nueva estadística"
+                value={newResName}
+                onChange={e => setNewResName(e.target.value)}
+                className="w-full text-center"
+              />
+              <div className="flex items-center justify-center gap-2">
+                <label className="text-sm font-medium">Color:</label>
+                <input
+                  type="color"
+                  value={newResColor}
+                  onChange={e => setNewResColor(e.target.value)}
+                  className="w-10 h-8 border-none p-0 rounded"
+                />
+              </div>
+              <Boton
+                color="green"
+                className="mt-2 py-2 rounded-lg font-extrabold text-base shadow-sm"
+                onClick={agregarRecurso}
+              >
+                Añadir recurso
+              </Boton>
+            </div>
+          )}
 
           {/* EQUIPAR ARMA */}
-          <div className="mb-6 flex flex-col items-center w-full">
+          <div className="mt-4 mb-6 flex flex-col items-center w-full">
             <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
             <Input
               placeholder="Escribe nombre del arma y pulsa Enter"
@@ -410,6 +629,7 @@ const handleNerf = (r) => {
             />
             {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
+
 
           {/* ARMAS EQUIPADAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Armas Equipadas</h2>
