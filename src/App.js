@@ -41,13 +41,16 @@ function App() {
   const [authenticated, setAuthenticated]     = useState(false);
   const [authError, setAuthError]             = useState('');
   const [armas, setArmas]                     = useState([]);
+  const [armaduras, setArmaduras]             = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const [playerData, setPlayerData]           = useState({ weapons: [], atributos: {}, stats: {} });
+  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], atributos: {}, stats: {} });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
+  const [playerInputArmadura, setPlayerInputArmadura] = useState('');
+  const [playerArmaduraError, setPlayerArmaduraError] = useState('');
 
   // Recursos dinámicos (añadir / eliminar)
   const [resourcesList, setResourcesList] = useState(
@@ -59,6 +62,7 @@ function App() {
   );
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // NAVIGATION
   const volverAlMenu = () => {
@@ -68,9 +72,12 @@ function App() {
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
-    setPlayerData({ weapons: [], atributos: {}, stats: {} });
+    setPlayerData({ weapons: [], armaduras: [], atributos: {}, stats: {} });
     setPlayerError('');
     setPlayerInputArma('');
+    setPlayerInputArmadura('');
+    setPlayerArmaduraError('');
+    setSearchTerm('');
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -110,7 +117,9 @@ function App() {
           carga:   obj.CARGA,
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico'
+          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+          valor:       obj.VALOR || '',
+          tecnologia:  obj.TECNOLOGÍA || ''
         };
       });
       setArmas(datos);
@@ -121,6 +130,42 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchArmas() }, [fetchArmas]);
+
+  // FETCH ARMADURAS
+  const fetchArmaduras = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(
+        'https://docs.google.com/spreadsheets/d/1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs/gviz/tq?sheet=Lista_Armaduras&tqx=out:json'
+      );
+      const txt  = await res.text();
+      const json = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
+      const cols = json.table.cols.map(c => c.label || c.id);
+      const datos = (json.table.rows || []).map(r => {
+        const obj = {}; cols.forEach((l,i) => obj[l] = r.c[i]?.v || '');
+        const rasgos = obj.RASGOS
+          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map(s => s.replace(/[\[\]]/g, '').trim())
+          : [];
+        return {
+          nombre: obj.NOMBRE,
+          defensa: obj.ARMADURA,
+          cuerpo:  obj.CUERPO,
+          mente:   obj.MENTE,
+          carga:   obj.CARGA,
+          rasgos,
+          descripcion: obj.DESCRIPCIÓN || '',
+          valor:       obj.VALOR || '',
+          tecnologia:  obj.TECNOLOGÍA || '',
+        };
+      });
+      setArmaduras(datos);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { fetchArmaduras() }, [fetchArmaduras]);
 
   // ──────────────────────────────────────────────────────────────────────────────
   // FUNCIONES PARA CARGAR Y GUARDAR
@@ -166,6 +211,7 @@ function App() {
       setResourcesList(lista);
       setPlayerData({
         weapons:  d.weapons    || [],
+        armaduras: d.armaduras || [],
         atributos: { ...baseA, ...(d.atributos || {}) },
         stats:     statsInit
       });
@@ -184,7 +230,7 @@ function App() {
       }));
 
       setResourcesList(lista);
-      setPlayerData({ weapons: [], atributos: baseA, stats: baseS });
+      setPlayerData({ weapons: [], armaduras: [], atributos: baseA, stats: baseS });
     }
   }, [nameEntered, playerName]);
 
@@ -317,6 +363,19 @@ function App() {
   };
   const handlePlayerUnequip = n => {
     savePlayer({ ...playerData, weapons: playerData.weapons.filter(x => x !== n) });
+  };
+
+  const handlePlayerEquipArmadura = () => {
+    if (loading) return;
+    const f = armaduras.find(a => a.nombre.toLowerCase().includes(playerInputArmadura.trim().toLowerCase()));
+    if (!f) return setPlayerArmaduraError('Armadura no encontrada');
+    if (!playerData.armaduras.includes(f.nombre)) {
+      savePlayer({ ...playerData, armaduras:[...playerData.armaduras, f.nombre] });
+      setPlayerInputArmadura(''); setPlayerArmaduraError('');
+    }
+  };
+  const handlePlayerUnequipArmadura = n => {
+    savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -627,7 +686,7 @@ function App() {
               onKeyDown={e=>e.key==='Enter'&&handlePlayerEquip()}
               className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
             />
-            {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
+          {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
 
 
@@ -658,6 +717,47 @@ function App() {
               })}
             </div>
           )}
+
+          {/* EQUIPAR ARMADURA */}
+          <div className="mt-8 mb-6 flex flex-col items-center w-full">
+            <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
+            <Input
+              placeholder="Escribe nombre de la armadura y pulsa Enter"
+              value={playerInputArmadura}
+              onChange={e=>setPlayerInputArmadura(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&handlePlayerEquipArmadura()}
+              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+            />
+            {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
+          </div>
+
+          {/* ARMADURAS EQUIPADAS */}
+          <h2 className="text-xl font-semibold text-center mb-2">Armaduras Equipadas</h2>
+          {playerData.armaduras.length===0 ? (
+            <p className="text-gray-400 text-center">No tienes armaduras equipadas.</p>
+          ) : (
+            <div className="flex flex-col items-center space-y-4 w-full">
+              {playerData.armaduras.map((n,i)=>{
+                const a = armaduras.find(x=>x.nombre===n);
+                return a && (
+                  <div key={i} className="bg-gray-800 rounded-xl shadow-md p-4 w-full max-w-md flex flex-col items-center text-center">
+                    <p className="font-bold text-lg">{a.nombre}</p>
+                    <p><strong>Defensa:</strong> {a.defensa}</p>
+                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
+                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
+                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    <Boton
+                      color="red"
+                      className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
+                      onClick={()=>handlePlayerUnequipArmadura(a.nombre)}
+                    >Desequipar</Boton>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -670,19 +770,47 @@ function App() {
         <h1 className="text-2xl font-bold mb-4">Modo Máster</h1>
         <div className="flex gap-2 mb-4">
           <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
-          <Boton onClick={fetchArmas}>Refrescar catálogo</Boton>
+          <Boton onClick={fetchArmas}>Refrescar armas</Boton>
+          <Boton onClick={fetchArmaduras}>Refrescar armaduras</Boton>
         </div>
+        <Input
+          placeholder="Buscar arma o armadura"
+          value={searchTerm}
+          onChange={e=>setSearchTerm(e.target.value)}
+          className="mb-4 w-full max-w-md"
+        />
         {loading
-          ? <p>Cargando armas…</p>
-          : armas.map((a,i)=>(<Tarjeta key={i}>
+          ? <p>Cargando catálogo…</p>
+          : (<>
+            <h2 className="text-xl font-semibold mb-2">Armas</h2>
+            {armas
+              .filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((a,i)=>(<Tarjeta key={i}>
               <p className="font-bold text-lg">{a.nombre}</p>
               <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
               <p><strong>Alcance:</strong> {a.alcance}</p>
               <p><strong>Consumo:</strong> {a.consumo}</p>
               <p><strong>Carga:</strong> {a.carga}</p>
-              <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
+              <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+              <p><strong>Valor:</strong> {a.valor}</p>
+              {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
               {a.descripcion && <p className="italic">{a.descripcion}</p>}
-            </Tarjeta>))
+            </Tarjeta>))}
+            <h2 className="text-xl font-semibold mt-6 mb-2">Armaduras</h2>
+            {armaduras
+              .filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((a,i)=>(<Tarjeta key={i}>
+              <p className="font-bold text-lg">{a.nombre}</p>
+              <p><strong>Defensa:</strong> {a.defensa}</p>
+              <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
+              <p><strong>Mente:</strong> {a.mente || '❌'}</p>
+              <p><strong>Carga:</strong> {a.carga}</p>
+              <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+              <p><strong>Valor:</strong> {a.valor}</p>
+              {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+              {a.descripcion && <p className="italic">{a.descripcion}</p>}
+            </Tarjeta>))}
+          </>)
         }
       </div>
     );
