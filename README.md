@@ -1,6 +1,6 @@
 # Fichas Rol App
 
-Aplicación web para crear y gestionar fichas de rol de jugadores. Permite almacenar atributos, armas y otros recursos en una base de datos de Firebase.
+Aplicación web para crear y gestionar fichas de rol de jugadores. Permite almacenar atributos, armas y armaduras, junto con otros recursos, en una base de datos de Firebase. El catálogo de equipos se mantiene en hojas de cálculo públicas de Google Sheets, por lo que cualquier cambio allí se refleja automáticamente en la aplicación.
 
 ## Instalación
 
@@ -16,7 +16,7 @@ Aplicación web para crear y gestionar fichas de rol de jugadores. Permite almac
 
 ## Funcionalidades
 
-- Gestión de armas, atributos y recursos de personajes.
+ - Gestión de armas, armaduras, atributos y recursos de personajes.
 - Interfaz adaptable a distintos dispositivos.
 - Autenticación básica mediante contraseña maestra.
 
