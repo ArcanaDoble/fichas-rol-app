@@ -50,15 +50,15 @@ const applyCargaPenalties = (data, armas, armaduras) => {
   data.weapons?.forEach(n => {
     const w = armas.find(a => a.nombre === n);
     if (w) {
-      fisica += parseCargaValue(w.cargaFisica ?? w.carga);
-      mental += parseCargaValue(w.cargaMental);
+      fisica += parseCargaValue(w.cargaFisica || w.cuerpo || w.carga);
+      mental += parseCargaValue(w.cargaMental || w.mente);
     }
   });
   data.armaduras?.forEach(n => {
     const a = armaduras.find(x => x.nombre === n);
     if (a) {
-      fisica += parseCargaValue(a.cargaFisica ?? a.carga);
-      mental += parseCargaValue(a.cargaMental);
+      fisica += parseCargaValue(a.cargaFisica || a.cuerpo || a.carga);
+      mental += parseCargaValue(a.cargaMental || a.mente);
     }
   });
 
@@ -185,8 +185,12 @@ function App() {
           alcance: obj.ALCANCE,
           consumo: obj.CONSUMO,
           carga:   obj.CARGA,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
+          cuerpo:  obj.CUERPO,
+          mente:   obj.MENTE,
+          cargaFisica:
+            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental:
+            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
@@ -227,8 +231,10 @@ function App() {
           cuerpo:  obj.CUERPO,
           mente:   obj.MENTE,
           carga:   obj.CARGA,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
+          cargaFisica:
+            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental:
+            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           valor:       obj.VALOR || '',
@@ -878,8 +884,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica || a.cuerpo || a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica || a.cuerpo || a.carga)) : '❌'}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental || a.mente) || '❌'}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -921,10 +927,8 @@ function App() {
                   >
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
-                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica || a.cuerpo || a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica || a.cuerpo || a.carga)) : '❌'}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental || a.mente) || '❌'}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -974,8 +978,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica || a.cuerpo || a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica || a.cuerpo || a.carga)) : '❌'}</p>
+                      <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental || a.mente) || '❌'}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
@@ -994,10 +998,8 @@ function App() {
                   <Tarjeta key={`armadura-${i}`}>
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
-                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica || a.cuerpo || a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica || a.cuerpo || a.carga)) : '❌'}</p>
+                      <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental || a.mente) || '❌'}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
