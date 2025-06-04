@@ -32,6 +32,66 @@ const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 const RESOURCE_MAX = 20;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
 
+const parseCargaValue = (v) => {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const match = v.match(/🔲/g);
+    if (match) return match.length;
+    const n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+};
+
+const applyCargaPenalties = (data, armas, armaduras) => {
+  let fisica = 0;
+  let mental = 0;
+  data.weapons?.forEach(n => {
+    const w = armas.find(a => a.nombre === n);
+    if (w) {
+      fisica += parseCargaValue(w.cargaFisica ?? w.carga);
+      mental += parseCargaValue(w.cargaMental);
+    }
+  });
+  data.armaduras?.forEach(n => {
+    const a = armaduras.find(x => x.nombre === n);
+    if (a) {
+      fisica += parseCargaValue(a.cargaFisica ?? a.carga);
+      mental += parseCargaValue(a.cargaMental);
+    }
+  });
+
+  const resistencia = data.stats?.vida?.total ?? 0;
+  const newStats = { ...data.stats };
+
+  if (newStats.postura) {
+    const base = newStats.postura.base || 0;
+    const buff = newStats.postura.buff || 0;
+    const penal = Math.max(0, fisica - resistencia);
+    const baseEfectiva = Math.max(0, base - penal);
+    const total = Math.max(0, Math.min(baseEfectiva + buff, RESOURCE_MAX));
+    newStats.postura.total = total;
+    if (newStats.postura.actual > total) newStats.postura.actual = total;
+  }
+
+  if (newStats.cordura) {
+    const base = newStats.cordura.base || 0;
+    const buff = newStats.cordura.buff || 0;
+    const penal = Math.max(0, mental - resistencia);
+    const baseEfectiva = Math.max(0, base - penal);
+    const total = Math.max(0, Math.min(baseEfectiva + buff, RESOURCE_MAX));
+    newStats.cordura.total = total;
+    if (newStats.cordura.actual > total) newStats.cordura.actual = total;
+  }
+
+  return {
+    ...data,
+    stats: newStats,
+    cargaAcumulada: { fisica, mental }
+  };
+};
+
 function App() {
   // ───────────────────────────────────────────────────────────
   // STATES
@@ -47,7 +107,7 @@ function App() {
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], atributos: {}, stats: {} });
+  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
@@ -76,7 +136,7 @@ function App() {
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
-    setPlayerData({ weapons: [], armaduras: [], atributos: {}, stats: {} });
+    setPlayerData({ weapons: [], armaduras: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
     setPlayerInputArmadura('');
@@ -125,6 +185,8 @@ function App() {
           alcance: obj.ALCANCE,
           consumo: obj.CONSUMO,
           carga:   obj.CARGA,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
@@ -165,6 +227,8 @@ function App() {
           cuerpo:  obj.CUERPO,
           mente:   obj.MENTE,
           carga:   obj.CARGA,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           valor:       obj.VALOR || '',
@@ -222,12 +286,14 @@ function App() {
 
       // Guardar en estado
       setResourcesList(lista);
-      setPlayerData({
+      const loaded = {
         weapons:   d.weapons    || [],
         armaduras: d.armaduras  || [],
         atributos: { ...baseA, ...(d.atributos || {}) },
-        stats:     statsInit
-      });
+        stats:     statsInit,
+        cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
+      };
+      setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
 
     } else {
       // Si no existe en Firestore, crear con valores predeterminados
@@ -241,7 +307,8 @@ function App() {
         color: recursoColor[id] || '#ffffff'
       }));
       setResourcesList(lista);
-      setPlayerData({ weapons: [], armaduras: [], atributos: baseA, stats: baseS });
+      const created = { weapons: [], armaduras: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
   }, [nameEntered, playerName]);
 
@@ -253,8 +320,9 @@ function App() {
   // 2) savePlayer: guarda todos los datos en Firestore
   //    Acepta un parámetro opcional `listaParaGuardar`.
   const savePlayer = async (data, listaParaGuardar = resourcesList) => {
+    const recalculated = applyCargaPenalties(data, armas, armaduras);
     const fullData = {
-      ...data,
+      ...recalculated,
       resourcesList: listaParaGuardar,
       updatedAt: new Date(),
     };
@@ -305,6 +373,14 @@ function App() {
   };
 
   const eliminarRecurso = (id) => {
+    if (id === 'postura') {
+      const carga = playerData.cargaAcumulada?.fisica || 0;
+      if (!window.confirm(`¿Estás seguro? Si eliminas Postura, tu carga física de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`)) return;
+    }
+    if (id === 'cordura') {
+      const carga = playerData.cargaAcumulada?.mental || 0;
+      if (!window.confirm(`¿Estás seguro? Si eliminas Cordura, tu carga mental de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`)) return;
+    }
     const newStats = { ...playerData.stats };
     delete newStats[id];
     const newList = resourcesList.filter((r) => r.id !== id);
@@ -328,8 +404,9 @@ function App() {
 
     setNewResError('');
 
-    // Generar ID único
-    const nuevoId = `recurso${Date.now()}`;
+    const lower = nombre.toLowerCase();
+    const nuevoId = (lower === 'postura' || lower === 'cordura') ? lower : `recurso${Date.now()}`;
+    const color = lower === 'postura' ? '#34d399' : lower === 'cordura' ? '#a78bfa' : newResColor;
 
     // Nueva lista de recursos
     const nuevaLista = [
@@ -337,7 +414,7 @@ function App() {
       {
         id: nuevoId,
         name: newResName || nuevoId,
-        color: newResColor
+        color
       }
     ];
 
@@ -528,6 +605,13 @@ function App() {
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <h1 className="text-2xl font-bold text-center mb-4">Ficha de {playerName}</h1>
+          <div className="mb-4 text-center text-sm text-gray-300">
+            Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
+            {'   |   '}
+            Carga física total: {'🔲'.repeat(playerData.cargaAcumulada?.fisica || 0)} ({playerData.cargaAcumulada?.fisica || 0})
+            {'   |   '}
+            Carga mental total: {playerData.cargaAcumulada?.mental || 0}
+          </div>
 
           {/* Botones Volver / Eliminar */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 w-full justify-center">
@@ -578,14 +662,41 @@ function App() {
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
               const buffV = s.buff || 0;
-              const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseV));
+
+              const resistencia = playerData.stats["vida"]?.total ?? 0;
+              const cargaFisicaTotal = playerData.cargaAcumulada?.fisica || 0;
+              const cargaMentalTotal = playerData.cargaAcumulada?.mental || 0;
+
+              let penalizacion = 0;
+              let baseEfectiva = baseV;
+              if (r === 'postura') {
+                penalizacion = Math.max(0, cargaFisicaTotal - resistencia);
+                baseEfectiva = Math.max(0, baseV - penalizacion);
+              } else if (r === 'cordura') {
+                penalizacion = Math.max(0, cargaMentalTotal - resistencia);
+                baseEfectiva = Math.max(0, baseV - penalizacion);
+              }
+
+              const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
 
               const cells = Array.from({ length: RESOURCE_MAX }).map((_, i) => {
                 let bg;
-                if (i < actualV)      bg = color;
-                else if (i < baseV)   bg = color + "55";
-                else if (i < baseV + buffV) bg = "#facc15";
-                else                   bg = "#374151";
+                if (r === 'postura' || r === 'cordura') {
+                  if (i < penalizacion) {
+                    bg = '#f87171aa';
+                  } else {
+                    const idx = i - penalizacion;
+                    if (idx < actualV) bg = color;
+                    else if (idx < baseEfectiva) bg = color + '55';
+                    else if (idx < baseEfectiva + buffV) bg = '#facc15';
+                    else bg = '#374151';
+                  }
+                } else {
+                  if (i < actualV) bg = color;
+                  else if (i < baseV) bg = color + '55';
+                  else if (i < baseV + buffV) bg = '#facc15';
+                  else bg = '#374151';
+                }
                 return (
                   <div
                     key={i}
@@ -693,6 +804,17 @@ function App() {
             })}
           </div>
 
+          {!playerData.stats["postura"] && (
+            <div className="text-center text-sm text-gray-400 mb-2">
+              No tienes Postura; tu carga física ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
+            </div>
+          )}
+          {!playerData.stats["cordura"] && (
+            <div className="text-center text-sm text-gray-400 mb-2">
+              No tienes Cordura; tu carga mental ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
+            </div>
+          )}
+
           {/* FORMULARIO “Añadir recurso” */}
           {resourcesList.length < 6 && (
             <div className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-4 w-full max-w-md mx-auto mb-4">
@@ -756,7 +878,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -800,7 +923,8 @@ function App() {
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
                     <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -850,7 +974,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
@@ -871,7 +996,8 @@ function App() {
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
                     <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga:</strong> {a.carga}</p>
+                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
+                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
