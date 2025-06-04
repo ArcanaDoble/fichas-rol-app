@@ -153,6 +153,7 @@ function App() {
   const [editingInfoId, setEditingInfoId] = useState(null);
   const [editingInfoText, setEditingInfoText] = useState('');
   const [hoveredTipId, setHoveredTipId] = useState(null);
+  const [pinnedTipId, setPinnedTipId] = useState(null);
 
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -533,6 +534,7 @@ function App() {
   };
 
   const startEditInfo = (id, current) => {
+    setPinnedTipId(null);
     setEditingInfoId(id);
     setEditingInfoText(current);
   };
@@ -546,6 +548,10 @@ function App() {
     savePlayer(playerData, newList);
     setEditingInfoId(null);
     setEditingInfoText('');
+  };
+
+  const togglePinnedTip = id => {
+    setPinnedTipId(prev => (prev === id ? null : id));
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -796,8 +802,8 @@ function App() {
                         className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
                         data-tooltip-id={`tip-${r}`}
                         data-tooltip-content={info}
-                        onClick={isTouchDevice ? undefined : () => startEditInfo(r, info)}
-                        onDoubleClick={isTouchDevice ? () => startEditInfo(r, info) : undefined}
+                        onClick={isTouchDevice ? undefined : () => togglePinnedTip(r)}
+                        onDoubleClick={() => startEditInfo(r, info)}
                         onMouseEnter={() => setHoveredTipId(r)}
                         onMouseLeave={() => setHoveredTipId(null)}
                       >
@@ -809,7 +815,7 @@ function App() {
                         id={`tip-${r}`}
                         place="top"
                         openOnClick={isTouchDevice}
-                        isOpen={!isTouchDevice && hoveredTipId === r}
+                        isOpen={!isTouchDevice && (hoveredTipId === r || pinnedTipId === r)}
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
