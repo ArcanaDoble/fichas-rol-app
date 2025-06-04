@@ -132,7 +132,7 @@ function App() {
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], claves: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
@@ -171,6 +171,14 @@ function App() {
   const [hoveredTipId, setHoveredTipId] = useState(null);
   const [pinnedTipId, setPinnedTipId] = useState(null);
 
+  // Claves (acciones consumibles)
+  const [claves, setClaves] = useState([]);
+  const [showAddClaveForm, setShowAddClaveForm] = useState(false);
+  const [newClaveName, setNewClaveName] = useState('');
+  const [newClaveColor, setNewClaveColor] = useState('#ffffff');
+  const [newClaveTotal, setNewClaveTotal] = useState(0);
+  const [newClaveError, setNewClaveError] = useState('');
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -198,7 +206,7 @@ function App() {
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
-    setPlayerData({ weapons: [], armaduras: [], poderes: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+    setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
     setPlayerInputArmadura('');
@@ -212,6 +220,12 @@ function App() {
     setShowAddResForm(typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
     setEditingInfoId(null);
     setEditingInfoText('');
+    setClaves([]);
+    setShowAddClaveForm(false);
+    setNewClaveName('');
+    setNewClaveColor('#ffffff');
+    setNewClaveTotal(0);
+    setNewClaveError('');
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -388,10 +402,12 @@ function App() {
 
       // Guardar en estado
       setResourcesList(lista);
+      setClaves(d.claves || []);
       const loaded = {
         weapons:   d.weapons    || [],
         armaduras: d.armaduras  || [],
         poderes:   d.poderes    || [],
+        claves:    d.claves     || [],
         atributos: { ...baseA, ...(d.atributos || {}) },
         stats:     statsInit,
         cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
@@ -411,7 +427,8 @@ function App() {
         info: recursoInfo[id] || ''
       }));
       setResourcesList(lista);
-      const created = { weapons: [], armaduras: [], poderes: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setClaves([]);
+      const created = { weapons: [], armaduras: [], poderes: [], claves: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
   }, [nameEntered, playerName]);
@@ -422,12 +439,17 @@ function App() {
   }, [loadPlayer]);
 
   // 2) savePlayer: guarda todos los datos en Firestore
-  //    Acepta un parámetro opcional `listaParaGuardar`.
-  const savePlayer = async (data, listaParaGuardar = resourcesList) => {
+  //    Acepta parámetros opcionales para recursos y claves.
+  const savePlayer = async (
+    data,
+    listaParaGuardar = resourcesList,
+    clavesParaGuardar = claves
+  ) => {
     const recalculated = applyCargaPenalties(data, armas, armaduras);
     const fullData = {
       ...recalculated,
       resourcesList: listaParaGuardar,
+      claves: clavesParaGuardar,
       updatedAt: new Date(),
     };
     setPlayerData(fullData);
@@ -650,6 +672,60 @@ function App() {
       setPlayerInputPoder('');
       setPlayerPoderError('');
     }
+  };
+
+  // ────────────────────────────────
+  // Claves handlers
+  // ────────────────────────────────
+  const handleClaveChange = (id, field, val) => {
+    const v = parseInt(val) || 0;
+    const list = claves.map(c =>
+      c.id === id ? { ...c, [field]: Math.max(0, Math.min(v, RESOURCE_MAX)) } : c
+    );
+    setClaves(list);
+    savePlayer({ ...playerData, claves: list }, undefined, list);
+  };
+
+  const handleClaveIncrement = (id, delta) => {
+    const list = claves.map(c => {
+      if (c.id !== id) return c;
+      const newActual = Math.max(
+        0,
+        Math.min((c.actual || 0) + delta, c.total || RESOURCE_MAX)
+      );
+      return { ...c, actual: newActual };
+    });
+    setClaves(list);
+    savePlayer({ ...playerData, claves: list }, undefined, list);
+  };
+
+  const handleAddClave = () => {
+    const nombre = newClaveName.trim();
+    if (!nombre) {
+      setNewClaveError('Nombre requerido');
+      return;
+    }
+    const nueva = {
+      id: `clave${Date.now()}`,
+      name: nombre,
+      color: newClaveColor,
+      total: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, RESOURCE_MAX)),
+      actual: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, RESOURCE_MAX)),
+    };
+    const list = [...claves, nueva];
+    setClaves(list);
+    savePlayer({ ...playerData, claves: list }, undefined, list);
+    setShowAddClaveForm(false);
+    setNewClaveName('');
+    setNewClaveColor('#ffffff');
+    setNewClaveTotal(0);
+    setNewClaveError('');
+  };
+
+  const handleRemoveClave = id => {
+    const list = claves.filter(c => c.id !== id);
+    setClaves(list);
+    savePlayer({ ...playerData, claves: list }, undefined, list);
   };
 
   const startEditInfo = (id, current) => {
@@ -1040,6 +1116,140 @@ function App() {
               )}
             </div>
           )}
+
+          {/* CLAVES */}
+          <h2 className="text-xl font-semibold text-center mb-2">Claves</h2>
+          {claves.length === 0 ? (
+            <p className="text-gray-400 text-center mb-4">No tienes claves.</p>
+          ) : (
+            <div className="flex flex-col gap-4 w-full mb-4">
+              {claves.map(c => (
+                <div key={c.id} className="bg-gray-800 rounded-xl p-4 shadow w-full">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold flex items-center gap-2">
+                      <span
+                        className="w-4 h-4 rounded-full inline-block"
+                        style={{ background: c.color }}
+                      />
+                      {c.name}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveClave(c.id)}
+                      className="text-red-400 hover:text-red-200 text-sm font-bold"
+                      title="Eliminar clave"
+                    >
+                      ❌
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 justify-center mb-2">
+                    <Boton
+                      color="green"
+                      className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                      onClick={() => handleClaveIncrement(c.id, 1)}
+                    >
+                      +
+                    </Boton>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={RESOURCE_MAX}
+                      value={c.actual}
+                      onChange={e => handleClaveChange(c.id, 'actual', e.target.value)}
+                      className="w-14 text-center"
+                    />
+                    <span className="font-semibold">/</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={RESOURCE_MAX}
+                      value={c.total}
+                      onChange={e => handleClaveChange(c.id, 'total', e.target.value)}
+                      className="w-14 text-center"
+                    />
+                    <Boton
+                      color="gray"
+                      className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                      onClick={() => handleClaveIncrement(c.id, -1)}
+                    >
+                      –
+                    </Boton>
+                  </div>
+                  <ResourceBar
+                    color={c.color}
+                    actual={c.actual}
+                    base={c.total}
+                    buff={0}
+                    penalizacion={0}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="w-full max-w-md mx-auto mb-4">
+            {!showAddClaveForm ? (
+              <Boton
+                color="green"
+                className="py-2 rounded-lg font-extrabold text-base shadow-sm w-full flex items-center justify-center gap-2"
+                onClick={() => setShowAddClaveForm(true)}
+              >
+                + Añadir clave
+              </Boton>
+            ) : (
+              <div className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Añadir clave</h3>
+                  <button
+                    onClick={() => {
+                      setShowAddClaveForm(false);
+                      setNewClaveError('');
+                      setNewClaveName('');
+                      setNewClaveColor('#ffffff');
+                      setNewClaveTotal(0);
+                    }}
+                    className="text-white text-lg font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Nombre de la clave"
+                  value={newClaveName}
+                  onChange={e => setNewClaveName(e.target.value)}
+                  className="w-full text-center"
+                />
+                <div className="flex items-center justify-center gap-2">
+                  <label className="text-sm font-medium">Color:</label>
+                  <input
+                    type="color"
+                    value={newClaveColor}
+                    onChange={e => setNewClaveColor(e.target.value)}
+                    className="w-10 h-8 border-none p-0 rounded"
+                  />
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  max={RESOURCE_MAX}
+                  placeholder="Total"
+                  value={newClaveTotal}
+                  onChange={e => setNewClaveTotal(e.target.value)}
+                  className="w-full text-center"
+                />
+                <Boton
+                  color="green"
+                  className="py-2 rounded-lg font-extrabold text-base shadow-sm"
+                  onClick={handleAddClave}
+                >
+                  Añadir clave
+                </Boton>
+                {newClaveError && (
+                  <p className="text-red-400 mt-1 text-center">{newClaveError}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* EQUIPAR ARMA */}
           <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
