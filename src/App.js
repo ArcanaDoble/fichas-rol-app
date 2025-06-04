@@ -9,6 +9,7 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
+import AtributoCard from './components/AtributoCard';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -736,28 +737,16 @@ function App() {
           {/* ATRIBUTOS */}
           <h2 className="text-xl font-semibold text-center mb-4">Atributos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 w-full">
-            {atributos.map(attr => {
-              const val = playerData.atributos[attr] || 'D4';
-              return (
-                <div
-                  key={attr}
-                  className="flex items-center justify-between p-3 rounded-xl shadow w-full"
-                  style={{ backgroundColor: atributoColor[attr] }}
-                >
-                  <span className="flex-1 text-lg sm:text-xl font-bold text-gray-800 text-center">
-                    {attr.charAt(0).toUpperCase() + attr.slice(1)}
-                  </span>
-                  <select
-                    value={val}
-                    onChange={e => handleAtributoChange(attr, e.target.value)}
-                    className="bg-gray-700 text-white border border-gray-500 rounded px-2 py-1 w-24 mr-2 text-center"
-                  >
-                    {DADOS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <img src={dadoImgUrl(val)} alt={val} className="w-10 h-10 object-contain" />
-                </div>
-              );
-            })}
+            {atributos.map(attr => (
+              <AtributoCard
+                key={attr}
+                name={attr}
+                value={playerData.atributos[attr] || 'D4'}
+                color={atributoColor[attr]}
+                dadoImgUrl={dadoImgUrl}
+                onChange={v => handleAtributoChange(attr, v)}
+              />
+            ))}
           </div>
 
           {/* ESTADÍSTICAS */}
