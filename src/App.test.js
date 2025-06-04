@@ -24,7 +24,9 @@ test('master login shows refresh buttons', async () => {
   // Verificar que aparecen los botones de refrescar catálogo
   const refreshArmas = await screen.findByRole('button', { name: /refrescar armas/i });
   const refreshArmaduras = screen.getByRole('button', { name: /refrescar armaduras/i });
+  const refreshHabilidades = screen.getByRole('button', { name: /refrescar habilidades/i });
 
   expect(refreshArmas).toBeInTheDocument();
   expect(refreshArmaduras).toBeInTheDocument();
+  expect(refreshHabilidades).toBeInTheDocument();
 });
