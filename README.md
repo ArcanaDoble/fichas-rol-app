@@ -1,22 +1,45 @@
 # Fichas Rol App
 
-Aplicación web para crear y gestionar fichas de rol de jugadores. Permite almacenar atributos, armas y armaduras, junto con otros recursos, en una base de datos de Firebase. El catálogo de equipos se mantiene en hojas de cálculo públicas de Google Sheets, por lo que cualquier cambio allí se refleja automáticamente en la aplicación.
+Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje. Toda la información de cada jugador se almacena en Firebase y el catálogo de equipo proviene de hojas de cálculo públicas de Google Sheets, por lo que se actualiza automáticamente.
 
-## Instalación
+## Características principales
 
-1. Clona el repositorio.
+- **Modo Jugador y Modo Máster**. Los jugadores pueden crear su ficha introduciendo su nombre y el máster puede acceder con una contraseña para refrescar el catálogo de armas y armaduras.
+- **Gestión de atributos y recursos**. Cada ficha contiene los cuatro atributos principales (destreza, vigor, intelecto y voluntad) representados con dados y una lista editable de recursos (postura, vida, ingenio, cordura, armadura, etc.). Es posible añadir o eliminar recursos personalizados y definir su color e información emergente.
+- **Equipamiento desde Google Sheets**. Las armas y armaduras se cargan de hojas de cálculo públicas. El máster puede buscar y revisar todas las opciones y los jugadores pueden equiparse desde su ficha.
+- **Carga física y mental**. El peso del equipo afecta a la Postura y a la Cordura. La aplicación calcula automáticamente la carga física y mental acumulada e indica la penalización correspondiente.
+- **Edición de tooltips**. Los textos explicativos de cada recurso pueden editarse directamente en la interfaz tanto en ordenador como en móviles.
+- **Interfaz responsive**. Está pensada para verse correctamente en móviles y escritorio y utiliza TailwindCSS para los estilos.
+- **Pruebas automáticas**. Se incluye un conjunto básico de pruebas con React Testing Library en `src/App.test.js`.
+
+## Instalación y uso
+
+1. Clona este repositorio.
 2. Ejecuta `npm install` para instalar las dependencias.
-3. Ejecuta `npm start` para iniciar la aplicación en modo desarrollo.
+3. Configura tus credenciales de Firebase en `src/firebase.js` si es necesario.
+4. Lanza la aplicación con `npm start` y abre `http://localhost:3000` en el navegador.
 
-## Despliegue en Firebase
+### Despliegue en Firebase
 
-1. Configura Firebase en el archivo `src/firebase.js` con tus credenciales.
-2. Ejecuta `npm run build` para generar los archivos de producción.
-3. Despliega la carpeta `build` con `firebase deploy`.
+1. Ejecuta `npm run build` para generar la versión de producción.
+2. Despliega la carpeta `build` con `firebase deploy`.
 
-## Funcionalidades
+### Ejecutar las pruebas
 
- - Gestión de armas, armaduras, atributos y recursos de personajes.
-- Interfaz adaptable a distintos dispositivos.
-- Autenticación básica mediante contraseña maestra.
+Las pruebas se ejecutan con `npm test`.
+
+```bash
+npm test
+```
+
+## Cambios recientes
+
+A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
+
+- Cálculo de carga física y mental y visualización con iconos.
+- Edición y eliminación de recursos dinámicos con validaciones.
+- Bloque de "añadir recurso" plegable para simplificar la interfaz.
+- Tooltips explicativos editables y adaptados a móviles.
+- Mejoras de estilo y responsividad utilizando Tailwind.
+- Actualización de metadatos y pruebas automatizadas.
 
