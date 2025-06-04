@@ -126,15 +126,18 @@ function App() {
   const [authError, setAuthError]             = useState('');
   const [armas, setArmas]                     = useState([]);
   const [armaduras, setArmaduras]             = useState([]);
+  const [habilidades, setHabilidades]         = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
+  const [playerInputPoder, setPlayerInputPoder] = useState('');
+  const [playerPoderError, setPlayerPoderError] = useState('');
 
   // Recursos dinámicos (añadir / eliminar)
   const [resourcesList, setResourcesList] = useState(
@@ -148,6 +151,16 @@ function App() {
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
   const [newResError, setNewResError] = useState('');
+  const [newAbility, setNewAbility] = useState({
+    nombre: '',
+    alcance: '',
+    consumo: '',
+    cuerpo: '',
+    mente: '',
+    poder: '',
+    descripcion: ''
+  });
+  const [newAbilityError, setNewAbilityError] = useState('');
   const [showAddResForm, setShowAddResForm] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 640 : false
   );
@@ -168,6 +181,11 @@ function App() {
         a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
       ).slice(0, 5)
     : [];
+  const poderSugerencias = playerInputPoder
+    ? habilidades.filter(h =>
+        h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+      ).slice(0, 5)
+    : [];
 
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -179,11 +197,13 @@ function App() {
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
-    setPlayerData({ weapons: [], armaduras: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+    setPlayerData({ weapons: [], armaduras: [], poderes: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
     setPlayerInputArmadura('');
     setPlayerArmaduraError('');
+    setPlayerInputPoder('');
+    setPlayerPoderError('');
     setNewResError('');
     setNewResName('');
     setNewResColor('#ffffff');
@@ -299,6 +319,23 @@ function App() {
   useEffect(() => { fetchArmaduras() }, [fetchArmaduras]);
 
   // ───────────────────────────────────────────────────────────
+  // FETCH HABILIDADES
+  // ───────────────────────────────────────────────────────────
+  const fetchHabilidades = useCallback(async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'abilities'));
+      const datos = snap.docs.map(d => d.data());
+      setHabilidades(datos);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
+
+  // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA CARGAR Y GUARDAR
   // ───────────────────────────────────────────────────────────
 
@@ -347,6 +384,7 @@ function App() {
       const loaded = {
         weapons:   d.weapons    || [],
         armaduras: d.armaduras  || [],
+        poderes:   d.poderes    || [],
         atributos: { ...baseA, ...(d.atributos || {}) },
         stats:     statsInit,
         cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
@@ -366,7 +404,7 @@ function App() {
         info: recursoInfo[id] || ''
       }));
       setResourcesList(lista);
-      const created = { weapons: [], armaduras: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      const created = { weapons: [], armaduras: [], poderes: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
   }, [nameEntered, playerName]);
@@ -504,6 +542,23 @@ function App() {
     setNewResColor('#ffffff');
   };
 
+  const agregarHabilidad = async () => {
+    const { nombre } = newAbility;
+    if (!nombre.trim()) {
+      setNewAbilityError('Nombre requerido');
+      return;
+    }
+    try {
+      await setDoc(doc(db, 'abilities', nombre), newAbility);
+      setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' });
+      setNewAbilityError('');
+      fetchHabilidades();
+    } catch (e) {
+      console.error(e);
+      setNewAbilityError('Error al guardar');
+    }
+  };
+
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
@@ -564,6 +619,29 @@ function App() {
       savePlayer({ ...playerData, armaduras: [...playerData.armaduras, a.nombre] });
       setPlayerInputArmadura('');
       setPlayerArmaduraError('');
+    }
+  };
+
+  const handlePlayerEquipPoder = () => {
+    if (loading) return;
+    const f = habilidades.find(h => h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase()));
+    if (!f) return setPlayerPoderError('Poder no encontrado');
+    if (!playerData.poderes.includes(f.nombre)) {
+      savePlayer({ ...playerData, poderes: [...playerData.poderes, f.nombre] });
+      setPlayerInputPoder('');
+      setPlayerPoderError('');
+    }
+  };
+  const handlePlayerUnequipPoder = n => {
+    savePlayer({ ...playerData, poderes: playerData.poderes.filter(x => x !== n) });
+  };
+  const handlePlayerEquipPoderFromSuggestion = name => {
+    const h = habilidades.find(x => x.nombre === name);
+    if (!h) return setPlayerPoderError('Poder no encontrado');
+    if (!playerData.poderes.includes(h.nombre)) {
+      savePlayer({ ...playerData, poderes: [...playerData.poderes, h.nombre] });
+      setPlayerInputPoder('');
+      setPlayerPoderError('');
     }
   };
 
@@ -1069,6 +1147,63 @@ function App() {
               })}
             </div>
           )}
+
+          {/* EQUIPAR PODER */}
+          <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
+            <label className="block font-semibold mb-1 text-center">Equipa un poder:</label>
+            <Input
+              placeholder="Busca un poder"
+              value={playerInputPoder}
+              onChange={e => setPlayerInputPoder(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
+              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+            />
+            {poderSugerencias.length > 0 && (
+              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
+                {poderSugerencias.map(a => (
+                  <li
+                    key={a.nombre}
+                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                    onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
+                  >
+                    {a.nombre}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {playerPoderError && <p className="text-red-400 mt-1 text-center">{playerPoderError}</p>}
+          </div>
+
+          {/* PODERES EQUIPADOS */}
+          <h2 className="text-xl font-semibold text-center mb-2">Poderes Equipados</h2>
+          {playerData.poderes.length === 0 ? (
+            <p className="text-gray-400 text-center">No tienes poderes equipados.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+              {playerData.poderes.map((n, i) => {
+                const p = habilidades.find(x => x.nombre === n);
+                return p && (
+                  <div
+                    key={i}
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
+                  >
+                    <p className="font-bold text-lg">{p.nombre}</p>
+                    <p><strong>Alcance:</strong> {p.alcance}</p>
+                    <p><strong>Consumo:</strong> {p.consumo}</p>
+                    <p><strong>Cuerpo:</strong> {p.cuerpo}</p>
+                    <p><strong>Mente:</strong> {p.mente}</p>
+                    <p><strong>Poder:</strong> {p.poder}</p>
+                    {p.descripcion && <p className="italic">{p.descripcion}</p>}
+                    <Boton
+                      color="red"
+                      className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
+                      onClick={() => handlePlayerUnequipPoder(p.nombre)}
+                    >Desequipar</Boton>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1083,9 +1218,52 @@ function App() {
           <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
           <Boton onClick={fetchArmas}>Refrescar armas</Boton>
           <Boton onClick={fetchArmaduras}>Refrescar armaduras</Boton>
+          <Boton onClick={fetchHabilidades}>Refrescar habilidades</Boton>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-4 mb-4 flex flex-col gap-2 max-w-md">
+          <h3 className="font-semibold text-lg">Crear habilidad</h3>
+          <Input
+            placeholder="Nombre"
+            value={newAbility.nombre}
+            onChange={e => setNewAbility(a => ({ ...a, nombre: e.target.value }))}
+          />
+          <Input
+            placeholder="Alcance"
+            value={newAbility.alcance}
+            onChange={e => setNewAbility(a => ({ ...a, alcance: e.target.value }))}
+          />
+          <Input
+            placeholder="Consumo"
+            value={newAbility.consumo}
+            onChange={e => setNewAbility(a => ({ ...a, consumo: e.target.value }))}
+          />
+          <Input
+            placeholder="Cuerpo"
+            value={newAbility.cuerpo}
+            onChange={e => setNewAbility(a => ({ ...a, cuerpo: e.target.value }))}
+          />
+          <Input
+            placeholder="Mente"
+            value={newAbility.mente}
+            onChange={e => setNewAbility(a => ({ ...a, mente: e.target.value }))}
+          />
+          <Input
+            placeholder="Poder"
+            value={newAbility.poder}
+            onChange={e => setNewAbility(a => ({ ...a, poder: e.target.value }))}
+          />
+          <textarea
+            className="bg-gray-700 text-white rounded px-2 py-1"
+            placeholder="Descripción"
+            value={newAbility.descripcion}
+            onChange={e => setNewAbility(a => ({ ...a, descripcion: e.target.value }))}
+          />
+          <Boton color="green" onClick={agregarHabilidad}>Guardar habilidad</Boton>
+          {newAbilityError && <p className="text-red-400 text-center">{newAbilityError}</p>}
         </div>
         <Input
-          placeholder="Buscar arma o armadura"
+          placeholder="Buscar en el catálogo"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className="mb-4 w-full max-w-md"
@@ -1132,6 +1310,25 @@ function App() {
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                  </Tarjeta>
+                ))
+              }
+
+              <h2 className="text-xl font-semibold mt-6 mb-2">Habilidades</h2>
+              {habilidades
+                .filter(h =>
+                  h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((h, i) => (
+                  <Tarjeta key={`hab-${i}`}>
+                    <p className="font-bold text-lg">{h.nombre}</p>
+                    <p><strong>Alcance:</strong> {h.alcance}</p>
+                    <p><strong>Consumo:</strong> {h.consumo}</p>
+                    <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
+                    <p><strong>Mente:</strong> {h.mente}</p>
+                    <p><strong>Poder:</strong> {h.poder}</p>
+                    {h.descripcion && <p className="italic">{h.descripcion}</p>}
                   </Tarjeta>
                 ))
               }
