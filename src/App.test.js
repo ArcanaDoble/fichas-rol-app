@@ -8,7 +8,7 @@ test('renders main menu', () => {
   expect(heading).toBeInTheDocument();
 });
 
-test('master login shows refresh buttons', async () => {
+test('master login shows refresh button', async () => {
   render(<App />);
 
   // Acceder al formulario de login de Máster
@@ -21,12 +21,7 @@ test('master login shows refresh buttons', async () => {
   const enterBtn = screen.getByRole('button', { name: /entrar/i });
   await userEvent.click(enterBtn);
 
-  // Verificar que aparecen los botones de refrescar catálogo
-  const refreshArmas = await screen.findByRole('button', { name: /refrescar armas/i });
-  const refreshArmaduras = screen.getByRole('button', { name: /refrescar armaduras/i });
-  const refreshHabilidades = screen.getByRole('button', { name: /refrescar habilidades/i });
-
-  expect(refreshArmas).toBeInTheDocument();
-  expect(refreshArmaduras).toBeInTheDocument();
-  expect(refreshHabilidades).toBeInTheDocument();
+  // Verificar que aparece el botón para refrescar el catálogo
+  const refreshCatalog = await screen.findByRole('button', { name: /refrescar catálogo/i });
+  expect(refreshCatalog).toBeInTheDocument();
 });
