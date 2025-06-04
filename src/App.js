@@ -9,6 +9,7 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import { Tooltip } from 'react-tooltip';
+import Modal from './components/Modal';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
@@ -139,7 +140,8 @@ function App() {
     defaultRecursos.map(name => ({
       id: name,
       name,
-      color: recursoColor[name] || '#ffffff'
+      color: recursoColor[name] || '#ffffff',
+      info: recursoInfo[name] || ''
     }))
   );
   const [newResName, setNewResName]   = useState('');
@@ -149,6 +151,9 @@ function App() {
     typeof window !== 'undefined' ? window.innerWidth >= 640 : false
   );
   const [searchTerm, setSearchTerm]   = useState('');
+  const [infoModalId, setInfoModalId] = useState(null);
+  const [infoModalText, setInfoModalText] = useState('');
+  const [infoModalEdit, setInfoModalEdit] = useState(false);
 
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -170,6 +175,9 @@ function App() {
     setNewResColor('#ffffff');
     setSearchTerm('');
     setShowAddResForm(typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+    setInfoModalId(null);
+    setInfoModalText('');
+    setInfoModalEdit(false);
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -298,11 +306,15 @@ function App() {
 
       // Reconstruir resourcesList: si Firestore devolvió una lista, úsala; si no, usa defaultRecursos
       const lista = listFromDB.length > 0
-        ? listFromDB
+        ? listFromDB.map(item => ({
+            ...item,
+            info: item.info ?? (recursoInfo[item.id] || '')
+          }))
         : defaultRecursos.map(id => ({
             id,
             name: id,
-            color: recursoColor[id] || '#ffffff'
+            color: recursoColor[id] || '#ffffff',
+            info: recursoInfo[id] || ''
           }));
 
       // Para cada recurso en "lista", asegurar statsInit[id]
@@ -337,7 +349,8 @@ function App() {
       const lista = defaultRecursos.map(id => ({
         id,
         name: id,
-        color: recursoColor[id] || '#ffffff'
+        color: recursoColor[id] || '#ffffff',
+        info: recursoInfo[id] || ''
       }));
       setResourcesList(lista);
       const created = { weapons: [], armaduras: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
@@ -453,7 +466,8 @@ function App() {
       {
         id: nuevoId,
         name: newResName || nuevoId,
-        color
+        color,
+        info: ''
       }
     ];
 
@@ -520,6 +534,30 @@ function App() {
     savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
   };
 
+  const openInfoModal = id => {
+    const r = resourcesList.find(x => x.id === id);
+    if (!r) return;
+    setInfoModalId(id);
+    setInfoModalText(r.info);
+    setInfoModalEdit(false);
+  };
+
+  const closeInfoModal = () => {
+    setInfoModalId(null);
+    setInfoModalText('');
+    setInfoModalEdit(false);
+  };
+
+  const saveInfoModal = () => {
+    if (!infoModalId) return;
+    const newList = resourcesList.map(r =>
+      r.id === infoModalId ? { ...r, info: infoModalText } : r
+    );
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
+    setInfoModalEdit(false);
+  };
+
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
     switch (tipo.toLowerCase()) {
@@ -558,6 +596,38 @@ function App() {
             >Soy Máster</Boton>
           </div>
         </div>
+        <Modal open={infoModalId !== null} onClose={closeInfoModal}>
+          {infoModalId && (
+            <>
+              <h3 className="text-lg font-bold mb-2 capitalize">
+                {resourcesList.find(r => r.id === infoModalId)?.name}
+              </h3>
+              {infoModalEdit ? (
+                <>
+                  <textarea
+                    value={infoModalText}
+                    onChange={e => setInfoModalText(e.target.value)}
+                    className="w-full h-32 p-2 rounded text-black mb-4"
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <Boton color="green" onClick={saveInfoModal}>Guardar</Boton>
+                    <Boton color="gray" onClick={() => setInfoModalEdit(false)}>Cancelar</Boton>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-4 whitespace-pre-wrap text-left max-h-60 overflow-auto">
+                    {infoModalText || 'Sin descripción'}
+                  </div>
+                  <div className="flex justify-center gap-2">
+                    <Boton color="blue" onClick={() => setInfoModalEdit(true)}>Editar</Boton>
+                    <Boton color="gray" onClick={closeInfoModal}>Cerrar</Boton>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </Modal>
       </div>
     );
   }
@@ -696,7 +766,7 @@ function App() {
           {/* ESTADÍSTICAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
           <div className="flex flex-col gap-4 w-full mb-8">
-            {resourcesList.map(({ id: r, name, color }) => {
+            {resourcesList.map(({ id: r, name, color, info }) => {
               const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
@@ -757,12 +827,13 @@ function App() {
                     <span
                       className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
                       data-tooltip-id={`tip-${r}`}
-                      data-tooltip-content={recursoInfo[r]}
+                      data-tooltip-content={info}
+                      onClick={() => openInfoModal(r)}
                     >
                       {name}
                     </span>
-                    {recursoInfo[r] && (
-                      <Tooltip id={`tip-${r}`} place="top" openOnClick />
+                    {info && (
+                      <Tooltip id={`tip-${r}`} place="top" />
                     )}
                     <button
                       onClick={() => eliminarRecurso(r)}
