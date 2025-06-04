@@ -134,6 +134,9 @@ function App() {
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
   const [newResError, setNewResError] = useState('');
+  const [showAddResForm, setShowAddResForm] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 640 : false
+  );
   const [searchTerm, setSearchTerm]   = useState('');
 
   // ───────────────────────────────────────────────────────────
@@ -152,7 +155,10 @@ function App() {
     setPlayerInputArmadura('');
     setPlayerArmaduraError('');
     setNewResError('');
+    setNewResName('');
+    setNewResColor('#ffffff');
     setSearchTerm('');
+    setShowAddResForm(typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -839,33 +845,60 @@ function App() {
 
           {/* FORMULARIO “Añadir recurso” */}
           {resourcesList.length < 6 && (
-            <div className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-4 w-full max-w-md mx-auto mb-4">
-              <h3 className="text-lg font-semibold text-center">Añadir recurso</h3>
-              <Input
-                type="text"
-                placeholder="Nombre de la nueva estadística"
-                value={newResName}
-                onChange={e => setNewResName(e.target.value)}
-                className="w-full text-center"
-              />
-              <div className="flex items-center justify-center gap-2">
-                <label className="text-sm font-medium">Color:</label>
-                <input
-                  type="color"
-                  value={newResColor}
-                  onChange={e => setNewResColor(e.target.value)}
-                  className="w-10 h-8 border-none p-0 rounded"
-                />
-              </div>
-              <Boton
-                color="green"
-                className="mt-2 py-2 rounded-lg font-extrabold text-base shadow-sm"
-                onClick={agregarRecurso}
-              >
-                Añadir recurso
-              </Boton>
-              {newResError && (
-                <p className="text-red-400 mt-1 text-center">{newResError}</p>
+            <div className="w-full max-w-md mx-auto mb-4">
+              {!showAddResForm ? (
+                <Boton
+                  color="green"
+                  className="py-2 rounded-lg font-extrabold text-base shadow-sm w-full flex items-center justify-center gap-2"
+                  onClick={() => setShowAddResForm(true)}
+                >
+                  + Añadir recurso
+                </Boton>
+              ) : (
+                <div className="bg-gray-800 rounded-xl p-4 shadow flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Añadir recurso</h3>
+                    <button
+                      onClick={() => {
+                        setShowAddResForm(false);
+                        setNewResError('');
+                        setNewResName('');
+                        setNewResColor('#ffffff');
+                      }}
+                      className="text-white text-lg font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Nombre de la nueva estadística"
+                      value={newResName}
+                      onChange={e => setNewResName(e.target.value)}
+                      className="w-full text-center sm:flex-1"
+                    />
+                    <div className="flex items-center justify-center gap-2 mt-2 sm:mt-0">
+                      <label className="text-sm font-medium">Color:</label>
+                      <input
+                        type="color"
+                        value={newResColor}
+                        onChange={e => setNewResColor(e.target.value)}
+                        className="w-10 h-8 border-none p-0 rounded"
+                      />
+                    </div>
+                  </div>
+                  <Boton
+                    color="green"
+                    className="py-2 rounded-lg font-extrabold text-base shadow-sm"
+                    onClick={agregarRecurso}
+                  >
+                    Añadir recurso
+                  </Boton>
+                  {newResError && (
+                    <p className="text-red-400 mt-1 text-center">{newResError}</p>
+                  )}
+                </div>
               )}
             </div>
           )}
