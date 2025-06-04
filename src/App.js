@@ -152,6 +152,7 @@ function App() {
   const [searchTerm, setSearchTerm]   = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
   const [editingInfoText, setEditingInfoText] = useState('');
+  const [hoveredTipId, setHoveredTipId] = useState(null);
 
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -787,7 +788,7 @@ function App() {
                         onChange={e => setEditingInfoText(e.target.value)}
                         onBlur={finishEditInfo}
                         onKeyDown={e => e.key === 'Enter' && !e.shiftKey && finishEditInfo()}
-                        className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white p-1 rounded text-sm focus:outline-none w-[90vw] sm:w-72 h-24 resize-none"
+                        className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white p-2 rounded-lg text-sm focus:outline-none w-[90vw] sm:w-72 h-24 resize-none border border-blue-400 shadow-lg"
                         autoFocus
                       />
                     ) : (
@@ -797,6 +798,8 @@ function App() {
                         data-tooltip-content={info}
                         onClick={isTouchDevice ? undefined : () => startEditInfo(r, info)}
                         onDoubleClick={isTouchDevice ? () => startEditInfo(r, info) : undefined}
+                        onMouseEnter={() => setHoveredTipId(r)}
+                        onMouseLeave={() => setHoveredTipId(null)}
                       >
                         {name}
                       </span>
@@ -806,6 +809,7 @@ function App() {
                         id={`tip-${r}`}
                         place="top"
                         openOnClick={isTouchDevice}
+                        isOpen={!isTouchDevice && hoveredTipId === r}
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
