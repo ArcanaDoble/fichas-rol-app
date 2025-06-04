@@ -8,6 +8,10 @@ import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
+import { Tooltip } from 'react-tooltip';
+
+const isTouchDevice = typeof window !== 'undefined' &&
+  (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
 const MASTER_PASSWORD = '0904';
 
@@ -26,6 +30,14 @@ const recursoColor = {
   ingenio: '#60a5fa',
   cordura: '#a78bfa',
   armadura:'#9ca3af',
+};
+
+const recursoInfo = {
+  postura: 'Explicación de Postura',
+  vida: 'Explicación de Vida',
+  ingenio: 'Explicación de Ingenio',
+  cordura: 'Explicación de Cordura',
+  armadura: 'Explicación de Armadura',
 };
 
 const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
@@ -743,9 +755,16 @@ function App() {
                 <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
                   {/* Nombre centrado y X a la derecha, en la misma fila */}
                   <div className="relative flex items-center w-full mb-4 h-8">
-                    <span className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize">
+                    <span
+                      className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
+                      data-tooltip-id={`tip-${r}`}
+                      data-tooltip-content={recursoInfo[r]}
+                    >
                       {name}
                     </span>
+                    {recursoInfo[r] && (
+                      <Tooltip id={`tip-${r}`} place="top" openOnClick={isTouchDevice} />
+                    )}
                     <button
                       onClick={() => eliminarRecurso(r)}
                       className="absolute right-0 text-red-400 hover:text-red-200 text-sm font-bold"
