@@ -8,6 +8,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Gestión de atributos y recursos**. Cada ficha contiene los cuatro atributos principales (destreza, vigor, intelecto y voluntad) representados con dados y una lista editable de recursos (postura, vida, ingenio, cordura, armadura, etc.). Es posible añadir o eliminar recursos personalizados y definir su color e información emergente.
 - **Equipamiento desde Google Sheets**. Las armas y armaduras se cargan de hojas de cálculo públicas. El máster puede buscar y revisar todas las opciones y los jugadores pueden equiparse desde su ficha.
 - **Habilidades personalizadas**. El máster puede crear poderes en Firebase y los jugadores pueden equiparlos en su ficha.
+- **Claves consumibles**. Cada jugador puede definir sus propias Claves, acciones especiales con contador de usos que se editan desde la ficha.
 - **Carga física y mental**. El peso del equipo afecta a la Postura y a la Cordura. La aplicación calcula automáticamente la carga física y mental acumulada e indica la penalización correspondiente.
 - **Edición de tooltips**. Los textos explicativos de cada recurso pueden editarse directamente en la interfaz tanto en ordenador como en móviles.
 - **Interfaz responsive**. Está pensada para verse correctamente en móviles y escritorio y utiliza TailwindCSS para los estilos.
@@ -45,6 +46,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Actualización de metadatos y pruebas automatizadas.
 - Interfaz de equipamiento mejorada.
 - Gestión de poderes creados en Firebase.
+- Sección de Claves con contador de usos personalizable.
 - Barras de estadísticas con diseño responsive.
 - Recursos con unidades en círculos para mayor claridad.
 - Cartas de atributos optimizadas para móvil.
