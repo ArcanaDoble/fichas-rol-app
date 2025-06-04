@@ -8,6 +8,7 @@ import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
+import ResourceBar from './components/ResourceBar';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -784,38 +785,6 @@ function App() {
 
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
 
-              const cells = Array.from({ length: RESOURCE_MAX }).map((_, i) => {
-                let bg;
-                if (r === 'postura' || r === 'cordura') {
-                  if (i < penalizacion) {
-                    bg = '#f87171aa';
-                  } else {
-                    const idx = i - penalizacion;
-                    if (idx < actualV) bg = color;
-                    else if (idx < baseEfectiva) bg = color + '55';
-                    else if (idx < baseEfectiva + buffV) bg = '#facc15';
-                    else bg = '#374151';
-                  }
-                } else {
-                  if (i < actualV) bg = color;
-                  else if (i < baseV) bg = color + '55';
-                  else if (i < baseV + buffV) bg = '#facc15';
-                  else bg = '#374151';
-                }
-                return (
-                  <div
-                    key={i}
-                    className="rounded-lg"
-                    style={{
-                      width: "16px",
-                      height: "16px",
-                      background: bg,
-                      transition: "background 0.2s",
-                    }}
-                  />
-                );
-              });
-
               return (
                 <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
                   {/* Nombre centrado y X a la derecha, en la misma fila */}
@@ -901,36 +870,26 @@ function App() {
 
                   {/* Barra (con margen superior aumentado) */}
                   <div className="relative w-full mt-4">
-                    {/* Móvil */}
-                    <div
-                      className="grid gap-[2px] sm:hidden w-full"
-                      style={{ gridTemplateColumns: `repeat(${RESOURCE_MAX}, minmax(0, 1fr))` }}
-                    >
-                      {cells}
+                    <ResourceBar
+                      color={color}
+                      penalizacion={penalizacion}
+                      actual={actualV}
+                      base={baseV}
+                      buff={buffV}
+                    />
+                    <div className="flex justify-center mt-1 text-xs font-semibold text-gray-300">
+                      {actualV}/{baseEfectiva}
+                      {buffV > 0 && (
+                        <span className="ml-1 text-yellow-400">(+{buffV})</span>
+                      )}
                     </div>
                     {overflowBuf > 0 && (
-                      <div className="sm:hidden flex justify-center mt-1">
+                      <div className="flex justify-center mt-1">
                         <span className="px-1 py-0.5 text-xs font-bold bg-yellow-500 text-gray-900 rounded">
                           +{overflowBuf}
                         </span>
                       </div>
                     )}
-
-                    {/* PC */}
-                    <div className="hidden sm:flex flex-wrap gap-[2px] justify-center w-full mt-2">
-                      {cells.map((cell, idx) => (
-                        <div
-                          key={idx}
-                          className="w-4 h-4 rounded-lg"
-                          style={{ background: cell.props.style.background }}
-                        />
-                      ))}
-                      {overflowBuf > 0 && (
-                        <span className="ml-2 px-1 py-0.5 text-xs font-bold bg-yellow-500 text-gray-900 rounded">
-                          +{overflowBuf}
-                        </span>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
