@@ -780,15 +780,14 @@ function App() {
               return (
                 <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
                   {/* Nombre centrado y X a la derecha, en la misma fila */}
-                  <div className="relative flex items-center w-full mb-4 h-8">
+                  <div className="relative flex items-center w-full mb-4 min-h-[2rem]">
                     {editingInfoId === r ? (
-                      <input
-                        type="text"
+                      <textarea
                         value={editingInfoText}
                         onChange={e => setEditingInfoText(e.target.value)}
                         onBlur={finishEditInfo}
-                        onKeyDown={e => e.key === 'Enter' && finishEditInfo()}
-                        className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white px-1 rounded text-sm focus:outline-none"
+                        onKeyDown={e => e.key === 'Enter' && !e.shiftKey && finishEditInfo()}
+                        className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white p-1 rounded text-sm focus:outline-none w-[90vw] sm:w-72 h-24 resize-none"
                         autoFocus
                       />
                     ) : (
@@ -803,7 +802,12 @@ function App() {
                       </span>
                     )}
                     {info && editingInfoId !== r && (
-                      <Tooltip id={`tip-${r}`} place="top" openOnClick={isTouchDevice} />
+                      <Tooltip
+                        id={`tip-${r}`}
+                        place="top"
+                        openOnClick={isTouchDevice}
+                        className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
+                      />
                     )}
                     <button
                       onClick={() => eliminarRecurso(r)}
