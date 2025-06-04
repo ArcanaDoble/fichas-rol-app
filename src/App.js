@@ -9,6 +9,8 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import { Tooltip } from 'react-tooltip';
+const isTouchDevice = typeof window !== 'undefined' &&
+  (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
 const MASTER_PASSWORD = '0904';
 
