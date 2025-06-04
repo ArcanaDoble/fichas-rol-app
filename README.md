@@ -42,4 +42,9 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Tooltips explicativos editables y adaptados a móviles.
 - Mejoras de estilo y responsividad utilizando Tailwind.
 - Actualización de metadatos y pruebas automatizadas.
+- Interfaz de equipamiento mejorada.
+- Barras de estadísticas con diseño responsive.
+- Recursos con unidades en círculos para mayor claridad.
+- Cartas de atributos optimizadas para móvil.
+- Comportamiento de los tooltips refinado al pasar el ratón o hacer doble toque.
 
