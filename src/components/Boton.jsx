@@ -1,15 +1,15 @@
 import React from 'react';
 
 const colores = {
-  gray: 'bg-gray-700 hover:bg-gray-600',
-  red: 'bg-rose-500 hover:bg-rose-600',
-  green: 'bg-emerald-500 hover:bg-emerald-600',
-  blue: 'bg-blue-500 hover:bg-blue-600',
-  purple: 'bg-purple-500 hover:bg-purple-600',
+  gray: 'bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500',
+  red: 'bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700',
+  green: 'bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700',
+  blue: 'bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700',
+  purple: 'bg-gradient-to-b from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700',
 };
 
 const Boton = ({ children, color = 'gray', onClick, className = '', ...props }) => {
-  const base = 'px-4 py-2 rounded font-extrabold text-white transition tracking-wide shadow-sm text-lg';
+  const base = 'px-4 py-2 rounded font-extrabold text-white transition-all duration-300 tracking-wide shadow-md text-lg active:scale-95';
   return (
     <button
       onClick={onClick}

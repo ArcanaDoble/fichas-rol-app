@@ -16,13 +16,13 @@ const ResourceBar = ({ color, penalizacion = 0, actual = 0, base = 0, buff = 0 }
 
   return (
     <div
-      className="w-full h-4 bg-gray-700 rounded-lg grid gap-[2px] p-[2px]"
+      className="w-full h-5 bg-gray-700/60 rounded-lg grid gap-[2px] p-[2px]"
       style={{ gridTemplateColumns: `repeat(${RESOURCE_MAX}, minmax(0, 1fr))` }}
     >
       {circles.map((bg, i) => (
         <div
           key={i}
-          className="rounded-full transition-colors duration-300"
+          className="rounded-full border border-gray-800 transition-all duration-300"
           style={{ background: bg }}
         />
       ))}
