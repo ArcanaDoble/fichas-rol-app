@@ -44,6 +44,7 @@ const recursoInfo = {
 
 const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 const RESOURCE_MAX = 20;
+const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
 
 const parseCargaValue = (v) => {
@@ -680,7 +681,7 @@ function App() {
   const handleClaveChange = (id, field, val) => {
     const v = parseInt(val) || 0;
     const list = claves.map(c =>
-      c.id === id ? { ...c, [field]: Math.max(0, Math.min(v, RESOURCE_MAX)) } : c
+      c.id === id ? { ...c, [field]: Math.max(0, Math.min(v, CLAVE_MAX)) } : c
     );
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
@@ -691,10 +692,18 @@ function App() {
       if (c.id !== id) return c;
       const newActual = Math.max(
         0,
-        Math.min((c.actual || 0) + delta, c.total || RESOURCE_MAX)
+        Math.min((c.actual || 0) + delta, c.total || CLAVE_MAX)
       );
       return { ...c, actual: newActual };
     });
+    setClaves(list);
+    savePlayer({ ...playerData, claves: list }, undefined, list);
+  };
+
+  const handleClaveReset = id => {
+    const list = claves.map(c =>
+      c.id === id ? { ...c, actual: c.total } : c
+    );
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
@@ -709,8 +718,8 @@ function App() {
       id: `clave${Date.now()}`,
       name: nombre,
       color: newClaveColor,
-      total: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, RESOURCE_MAX)),
-      actual: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, RESOURCE_MAX)),
+      total: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, CLAVE_MAX)),
+      actual: Math.max(0, Math.min(parseInt(newClaveTotal) || 0, CLAVE_MAX)),
     };
     const list = [...claves, nueva];
     setClaves(list);
@@ -810,6 +819,11 @@ function App() {
             className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
             onClick={handleLogin}
           >Entrar</Boton>
+          <Boton
+            color="gray"
+            className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
+            onClick={volverAlMenu}
+          >Volver al menú principal</Boton>
           {authError && <p className="text-red-400 text-center mt-2">{authError}</p>}
         </div>
       </div>
@@ -1152,7 +1166,7 @@ function App() {
                     <Input
                       type="number"
                       min={0}
-                      max={RESOURCE_MAX}
+                      max={CLAVE_MAX}
                       value={c.actual}
                       onChange={e => handleClaveChange(c.id, 'actual', e.target.value)}
                       className="w-14 text-center"
@@ -1161,7 +1175,7 @@ function App() {
                     <Input
                       type="number"
                       min={0}
-                      max={RESOURCE_MAX}
+                      max={CLAVE_MAX}
                       value={c.total}
                       onChange={e => handleClaveChange(c.id, 'total', e.target.value)}
                       className="w-14 text-center"
@@ -1173,6 +1187,13 @@ function App() {
                     >
                       –
                     </Boton>
+                    <Boton
+                      color="blue"
+                      className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                      onClick={() => handleClaveReset(c.id)}
+                    >
+                      ↺
+                    </Boton>
                   </div>
                   <ResourceBar
                     color={c.color}
@@ -1180,6 +1201,7 @@ function App() {
                     base={c.total}
                     buff={0}
                     penalizacion={0}
+                    max={CLAVE_MAX}
                   />
                 </div>
               ))}
@@ -1231,7 +1253,7 @@ function App() {
                 <Input
                   type="number"
                   min={0}
-                  max={RESOURCE_MAX}
+                  max={CLAVE_MAX}
                   placeholder="Total"
                   value={newClaveTotal}
                   onChange={e => setNewClaveTotal(e.target.value)}
@@ -1282,7 +1304,13 @@ function App() {
           {playerData.weapons.length === 0 ? (
             <p className="text-gray-400 text-center">No tienes armas equipadas.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+            <div
+              className={`${
+                playerData.weapons.length === 1
+                  ? 'grid grid-cols-1 place-items-center'
+                  : 'grid grid-cols-1 sm:grid-cols-2'
+              } gap-4 w-full`}
+            >
               {playerData.weapons.map((n, i) => {
                 const a = armas.find(x => x.nombre === n);
                 return a && (
@@ -1340,7 +1368,13 @@ function App() {
           {playerData.armaduras.length === 0 ? (
             <p className="text-gray-400 text-center">No tienes armaduras equipadas.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+            <div
+              className={`${
+                playerData.armaduras.length === 1
+                  ? 'grid grid-cols-1 place-items-center'
+                  : 'grid grid-cols-1 sm:grid-cols-2'
+              } gap-4 w-full`}
+            >
               {playerData.armaduras.map((n, i) => {
                 const a = armaduras.find(x => x.nombre === n);
                 return a && (
@@ -1396,7 +1430,13 @@ function App() {
           {playerData.poderes.length === 0 ? (
             <p className="text-gray-400 text-center">No tienes poderes equipados.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+            <div
+              className={`${
+                playerData.poderes.length === 1
+                  ? 'grid grid-cols-1 place-items-center'
+                  : 'grid grid-cols-1 sm:grid-cols-2'
+              } gap-4 w-full`}
+            >
               {playerData.poderes.map((n, i) => {
                 const p = habilidades.find(x => x.nombre === n);
                 return p && (
