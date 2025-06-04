@@ -63,6 +63,7 @@ function App() {
   );
   const [newResName, setNewResName]   = useState('');
   const [newResColor, setNewResColor] = useState('#ffffff');
+  const [newResError, setNewResError] = useState('');
   const [searchTerm, setSearchTerm]   = useState('');
 
   // ───────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ function App() {
     setPlayerInputArma('');
     setPlayerInputArmadura('');
     setPlayerArmaduraError('');
+    setNewResError('');
     setSearchTerm('');
   };
   const eliminarFichaJugador = async () => {
@@ -313,6 +315,18 @@ function App() {
   const agregarRecurso = () => {
     // No añadir si hay 6 o más recursos
     if (resourcesList.length >= 6) return;
+
+    const nombre = newResName.trim();
+    if (!nombre) {
+      setNewResError('Nombre requerido');
+      return;
+    }
+    if (resourcesList.some(r => r.name.toLowerCase() === nombre.toLowerCase())) {
+      setNewResError('Ese nombre ya existe');
+      return;
+    }
+
+    setNewResError('');
 
     // Generar ID único
     const nuevoId = `recurso${Date.now()}`;
@@ -706,6 +720,9 @@ function App() {
               >
                 Añadir recurso
               </Boton>
+              {newResError && (
+                <p className="text-red-400 mt-1 text-center">{newResError}</p>
+              )}
             </div>
           )}
 
