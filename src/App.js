@@ -11,6 +11,7 @@ import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
+import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -133,7 +134,7 @@ function App() {
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], claves: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
@@ -180,6 +181,9 @@ function App() {
   const [newClaveTotal, setNewClaveTotal] = useState(0);
   const [newClaveError, setNewClaveError] = useState('');
 
+  // Estados del personaje
+  const [estados, setEstados] = useState([]);
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -207,7 +211,7 @@ function App() {
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
-    setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+    setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
     setPlayerInputArmadura('');
@@ -222,6 +226,7 @@ function App() {
     setEditingInfoId(null);
     setEditingInfoText('');
     setClaves([]);
+    setEstados([]);
     setShowAddClaveForm(false);
     setNewClaveName('');
     setNewClaveColor('#ffffff');
@@ -404,11 +409,13 @@ function App() {
       // Guardar en estado
       setResourcesList(lista);
       setClaves(d.claves || []);
+      setEstados(d.estados || []);
       const loaded = {
         weapons:   d.weapons    || [],
         armaduras: d.armaduras  || [],
         poderes:   d.poderes    || [],
         claves:    d.claves     || [],
+        estados:   d.estados    || [],
         atributos: { ...baseA, ...(d.atributos || {}) },
         stats:     statsInit,
         cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
@@ -429,7 +436,8 @@ function App() {
       }));
       setResourcesList(lista);
       setClaves([]);
-      const created = { weapons: [], armaduras: [], poderes: [], claves: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setEstados([]);
+      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
   }, [nameEntered, playerName]);
@@ -444,13 +452,15 @@ function App() {
   const savePlayer = async (
     data,
     listaParaGuardar = resourcesList,
-    clavesParaGuardar = claves
+    clavesParaGuardar = claves,
+    estadosParaGuardar = estados
   ) => {
     const recalculated = applyCargaPenalties(data, armas, armaduras);
     const fullData = {
       ...recalculated,
       resourcesList: listaParaGuardar,
       claves: clavesParaGuardar,
+      estados: estadosParaGuardar,
       updatedAt: new Date(),
     };
     setPlayerData(fullData);
@@ -735,6 +745,17 @@ function App() {
     const list = claves.filter(c => c.id !== id);
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
+  };
+
+  // ────────────────────────────────
+  // Estados handlers
+  // ────────────────────────────────
+  const toggleEstado = id => {
+    const list = estados.includes(id)
+      ? estados.filter(e => e !== id)
+      : [...estados, id];
+    setEstados(list);
+    savePlayer({ ...playerData, estados: list }, undefined, undefined, list);
   };
 
   const startEditInfo = (id, current) => {
@@ -1271,6 +1292,12 @@ function App() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* ESTADOS */}
+          <h2 className="text-xl font-semibold text-center mb-2">Estados</h2>
+          <div className="mb-6 w-full">
+            <EstadoSelector selected={estados} onToggle={toggleEstado} />
           </div>
 
           {/* EQUIPAR ARMA */}
