@@ -16,7 +16,9 @@ Aplicación web para crear y gestionar fichas de rol de jugadores. Permite almac
 
 ## Funcionalidades
 
- - Gestión de armas, armaduras, atributos y recursos de personajes.
+- Gestión de armas, armaduras, atributos y recursos de personajes.
 - Interfaz adaptable a distintos dispositivos.
 - Autenticación básica mediante contraseña maestra.
+- Tooltip de recursos mejorado: se muestra al pasar el ratón,
+  se puede fijar con un clic y editar con doble clic.
 

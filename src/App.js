@@ -155,6 +155,19 @@ function App() {
   const [hoveredTipId, setHoveredTipId] = useState(null);
   const [pinnedTipId, setPinnedTipId] = useState(null);
 
+  useEffect(() => {
+    if (!pinnedTipId) return;
+    const handleClick = e => {
+      const anchor = document.querySelector(`[data-tooltip-id="tip-${pinnedTipId}"]`);
+      const tip = document.getElementById(`tip-${pinnedTipId}`);
+      if (anchor && anchor.contains(e.target)) return;
+      if (tip && tip.contains(e.target)) return;
+      setPinnedTipId(null);
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [pinnedTipId]);
+
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
   // ───────────────────────────────────────────────────────────
