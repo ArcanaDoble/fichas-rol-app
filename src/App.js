@@ -139,7 +139,8 @@ function App() {
     defaultRecursos.map(name => ({
       id: name,
       name,
-      color: recursoColor[name] || '#ffffff'
+      color: recursoColor[name] || '#ffffff',
+      info: recursoInfo[name] || ''
     }))
   );
   const [newResName, setNewResName]   = useState('');
@@ -149,6 +150,8 @@ function App() {
     typeof window !== 'undefined' ? window.innerWidth >= 640 : false
   );
   const [searchTerm, setSearchTerm]   = useState('');
+  const [editingInfoId, setEditingInfoId] = useState(null);
+  const [editingInfoText, setEditingInfoText] = useState('');
 
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -170,6 +173,8 @@ function App() {
     setNewResColor('#ffffff');
     setSearchTerm('');
     setShowAddResForm(typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+    setEditingInfoId(null);
+    setEditingInfoText('');
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -298,11 +303,15 @@ function App() {
 
       // Reconstruir resourcesList: si Firestore devolvió una lista, úsala; si no, usa defaultRecursos
       const lista = listFromDB.length > 0
-        ? listFromDB
+        ? listFromDB.map(item => ({
+            ...item,
+            info: item.info ?? (recursoInfo[item.id] || '')
+          }))
         : defaultRecursos.map(id => ({
             id,
             name: id,
-            color: recursoColor[id] || '#ffffff'
+            color: recursoColor[id] || '#ffffff',
+            info: recursoInfo[id] || ''
           }));
 
       // Para cada recurso en "lista", asegurar statsInit[id]
@@ -337,7 +346,8 @@ function App() {
       const lista = defaultRecursos.map(id => ({
         id,
         name: id,
-        color: recursoColor[id] || '#ffffff'
+        color: recursoColor[id] || '#ffffff',
+        info: recursoInfo[id] || ''
       }));
       setResourcesList(lista);
       const created = { weapons: [], armaduras: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
@@ -453,7 +463,8 @@ function App() {
       {
         id: nuevoId,
         name: newResName || nuevoId,
-        color
+        color,
+        info: ''
       }
     ];
 
@@ -518,6 +529,22 @@ function App() {
   };
   const handlePlayerUnequipArmadura = n => {
     savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
+  };
+
+  const startEditInfo = (id, current) => {
+    setEditingInfoId(id);
+    setEditingInfoText(current);
+  };
+
+  const finishEditInfo = () => {
+    if (!editingInfoId) return;
+    const newList = resourcesList.map(r =>
+      r.id === editingInfoId ? { ...r, info: editingInfoText } : r
+    );
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
+    setEditingInfoId(null);
+    setEditingInfoText('');
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -696,7 +723,7 @@ function App() {
           {/* ESTADÍSTICAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
           <div className="flex flex-col gap-4 w-full mb-8">
-            {resourcesList.map(({ id: r, name, color }) => {
+            {resourcesList.map(({ id: r, name, color, info }) => {
               const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
@@ -754,15 +781,28 @@ function App() {
                 <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
                   {/* Nombre centrado y X a la derecha, en la misma fila */}
                   <div className="relative flex items-center w-full mb-4 h-8">
-                    <span
-                      className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
-                      data-tooltip-id={`tip-${r}`}
-                      data-tooltip-content={recursoInfo[r]}
-                    >
-                      {name}
-                    </span>
-                    {recursoInfo[r] && (
-                      <Tooltip id={`tip-${r}`} place="top" openOnClick />
+                    {editingInfoId === r ? (
+                      <input
+                        type="text"
+                        value={editingInfoText}
+                        onChange={e => setEditingInfoText(e.target.value)}
+                        onBlur={finishEditInfo}
+                        onKeyDown={e => e.key === 'Enter' && finishEditInfo()}
+                        className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white px-1 rounded text-sm focus:outline-none"
+                        autoFocus
+                      />
+                    ) : (
+                      <span
+                        className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
+                        data-tooltip-id={`tip-${r}`}
+                        data-tooltip-content={info}
+                        onClick={() => startEditInfo(r, info)}
+                      >
+                        {name}
+                      </span>
+                    )}
+                    {info && editingInfoId !== r && (
+                      <Tooltip id={`tip-${r}`} place="top" openOnClick={isTouchDevice} />
                     )}
                     <button
                       onClick={() => eliminarRecurso(r)}
