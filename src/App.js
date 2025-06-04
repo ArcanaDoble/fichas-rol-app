@@ -822,12 +822,12 @@ function App() {
 
           {!playerData.stats["postura"] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Postura; tu carga física ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
+              No tienes Postura; tu carga física {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
             </div>
           )}
           {!playerData.stats["cordura"] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Cordura; tu carga mental ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
+              No tienes Cordura; tu carga mental {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
             </div>
           )}
 
