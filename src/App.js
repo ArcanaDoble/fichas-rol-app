@@ -155,6 +155,18 @@ function App() {
   const [hoveredTipId, setHoveredTipId] = useState(null);
   const [pinnedTipId, setPinnedTipId] = useState(null);
 
+  // Sugerencias dinámicas para inputs de equipo
+  const armaSugerencias = playerInputArma
+    ? armas.filter(a =>
+        a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
+      ).slice(0, 5)
+    : [];
+  const armaduraSugerencias = playerInputArmadura
+    ? armaduras.filter(a =>
+        a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
   // ───────────────────────────────────────────────────────────
@@ -519,6 +531,16 @@ function App() {
     savePlayer({ ...playerData, weapons: playerData.weapons.filter(x => x !== n) });
   };
 
+  const handlePlayerEquipFromSuggestion = name => {
+    const w = armas.find(a => a.nombre === name);
+    if (!w) return setPlayerError('Arma no encontrada');
+    if (!playerData.weapons.includes(w.nombre)) {
+      savePlayer({ ...playerData, weapons: [...playerData.weapons, w.nombre] });
+      setPlayerInputArma('');
+      setPlayerError('');
+    }
+  };
+
   const handlePlayerEquipArmadura = () => {
     if (loading) return;
     const f = armaduras.find(a => a.nombre.toLowerCase().includes(playerInputArmadura.trim().toLowerCase()));
@@ -531,6 +553,16 @@ function App() {
   };
   const handlePlayerUnequipArmadura = n => {
     savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
+  };
+
+  const handlePlayerEquipArmaduraFromSuggestion = name => {
+    const a = armaduras.find(x => x.nombre === name);
+    if (!a) return setPlayerArmaduraError('Armadura no encontrada');
+    if (!playerData.armaduras.includes(a.nombre)) {
+      savePlayer({ ...playerData, armaduras: [...playerData.armaduras, a.nombre] });
+      setPlayerInputArmadura('');
+      setPlayerArmaduraError('');
+    }
   };
 
   const startEditInfo = (id, current) => {
@@ -977,15 +1009,28 @@ function App() {
           )}
 
           {/* EQUIPAR ARMA */}
-          <div className="mt-4 mb-6 flex flex-col items-center w-full">
+          <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
             <Input
-              placeholder="Escribe nombre del arma y pulsa Enter"
+              placeholder="Busca un arma"
               value={playerInputArma}
               onChange={e => setPlayerInputArma(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
               className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
             />
+            {armaSugerencias.length > 0 && (
+              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
+                {armaSugerencias.map(a => (
+                  <li
+                    key={a.nombre}
+                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                    onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
+                  >
+                    {a.nombre}
+                  </li>
+                ))}
+              </ul>
+            )}
             {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
 
@@ -994,13 +1039,13 @@ function App() {
           {playerData.weapons.length === 0 ? (
             <p className="text-gray-400 text-center">No tienes armas equipadas.</p>
           ) : (
-            <div className="flex flex-col items-center space-y-4 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
               {playerData.weapons.map((n, i) => {
                 const a = armas.find(x => x.nombre === n);
                 return a && (
                   <div
                     key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full max-w-md flex flex-col items-center text-center"
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
                   >
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
@@ -1022,15 +1067,28 @@ function App() {
           )}
 
           {/* EQUIPAR ARMADURA */}
-          <div className="mt-8 mb-6 flex flex-col items-center w-full">
+          <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
             <Input
-              placeholder="Escribe nombre de la armadura y pulsa Enter"
+              placeholder="Busca una armadura"
               value={playerInputArmadura}
               onChange={e => setPlayerInputArmadura(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
               className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
             />
+            {armaduraSugerencias.length > 0 && (
+              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
+                {armaduraSugerencias.map(a => (
+                  <li
+                    key={a.nombre}
+                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                    onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
+                  >
+                    {a.nombre}
+                  </li>
+                ))}
+              </ul>
+            )}
             {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
           </div>
 
@@ -1039,13 +1097,13 @@ function App() {
           {playerData.armaduras.length === 0 ? (
             <p className="text-gray-400 text-center">No tienes armaduras equipadas.</p>
           ) : (
-            <div className="flex flex-col items-center space-y-4 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
               {playerData.armaduras.map((n, i) => {
                 const a = armaduras.find(x => x.nombre === n);
                 return a && (
                   <div
                     key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full max-w-md flex flex-col items-center text-center"
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
                   >
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
