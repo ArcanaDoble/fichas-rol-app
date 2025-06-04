@@ -10,6 +10,7 @@ import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard from './components/AtributoCard';
+import Collapsible from './components/Collapsible';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -334,6 +335,12 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
+
+  const refreshCatalog = () => {
+    fetchArmas();
+    fetchArmaduras();
+    fetchHabilidades();
+  };
 
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA CARGAR Y GUARDAR
@@ -1213,125 +1220,132 @@ function App() {
   if (userType === 'master' && authenticated) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-        <h1 className="text-2xl font-bold mb-4">Modo Máster</h1>
-        <div className="flex gap-2 mb-4">
-          <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
-          <Boton onClick={fetchArmas}>Refrescar armas</Boton>
-          <Boton onClick={fetchArmaduras}>Refrescar armaduras</Boton>
-          <Boton onClick={fetchHabilidades}>Refrescar habilidades</Boton>
+        <div className="sticky top-0 bg-gray-900 pb-2 z-10">
+          <h1 className="text-2xl font-bold mb-2">Modo Máster</h1>
+          <div className="flex flex-wrap gap-2 mb-2">
+            <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
+            <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
+          </div>
+          <Input
+            placeholder="Buscar en el catálogo"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full max-w-md"
+          />
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4 mb-4 flex flex-col gap-2 max-w-md">
-          <h3 className="font-semibold text-lg">Crear habilidad</h3>
-          <Input
-            placeholder="Nombre"
-            value={newAbility.nombre}
-            onChange={e => setNewAbility(a => ({ ...a, nombre: e.target.value }))}
-          />
-          <Input
-            placeholder="Alcance"
-            value={newAbility.alcance}
-            onChange={e => setNewAbility(a => ({ ...a, alcance: e.target.value }))}
-          />
-          <Input
-            placeholder="Consumo"
-            value={newAbility.consumo}
-            onChange={e => setNewAbility(a => ({ ...a, consumo: e.target.value }))}
-          />
-          <Input
-            placeholder="Cuerpo"
-            value={newAbility.cuerpo}
-            onChange={e => setNewAbility(a => ({ ...a, cuerpo: e.target.value }))}
-          />
-          <Input
-            placeholder="Mente"
-            value={newAbility.mente}
-            onChange={e => setNewAbility(a => ({ ...a, mente: e.target.value }))}
-          />
-          <Input
-            placeholder="Poder"
-            value={newAbility.poder}
-            onChange={e => setNewAbility(a => ({ ...a, poder: e.target.value }))}
-          />
-          <textarea
-            className="bg-gray-700 text-white rounded px-2 py-1"
-            placeholder="Descripción"
-            value={newAbility.descripcion}
-            onChange={e => setNewAbility(a => ({ ...a, descripcion: e.target.value }))}
-          />
-          <Boton color="green" onClick={agregarHabilidad}>Guardar habilidad</Boton>
-          {newAbilityError && <p className="text-red-400 text-center">{newAbilityError}</p>}
-        </div>
-        <Input
-          placeholder="Buscar en el catálogo"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="mb-4 w-full max-w-md"
-        />
+        <Collapsible title="Crear nueva habilidad" defaultOpen={false}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="Nombre"
+              value={newAbility.nombre}
+              onChange={e => setNewAbility(a => ({ ...a, nombre: e.target.value }))}
+            />
+            <Input
+              placeholder="Alcance"
+              value={newAbility.alcance}
+              onChange={e => setNewAbility(a => ({ ...a, alcance: e.target.value }))}
+            />
+            <Input
+              placeholder="Consumo"
+              value={newAbility.consumo}
+              onChange={e => setNewAbility(a => ({ ...a, consumo: e.target.value }))}
+            />
+            <Input
+              placeholder="Cuerpo"
+              value={newAbility.cuerpo}
+              onChange={e => setNewAbility(a => ({ ...a, cuerpo: e.target.value }))}
+            />
+            <Input
+              placeholder="Mente"
+              value={newAbility.mente}
+              onChange={e => setNewAbility(a => ({ ...a, mente: e.target.value }))}
+            />
+            <Input
+              placeholder="Poder"
+              value={newAbility.poder}
+              onChange={e => setNewAbility(a => ({ ...a, poder: e.target.value }))}
+            />
+            <textarea
+              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+              placeholder="Descripción"
+              value={newAbility.descripcion}
+              onChange={e => setNewAbility(a => ({ ...a, descripcion: e.target.value }))}
+            />
+            <div className="sm:col-span-2 flex justify-end">
+              <Boton color="green" onClick={agregarHabilidad}>Guardar habilidad</Boton>
+            </div>
+            {newAbilityError && <p className="text-red-400 text-center sm:col-span-2">{newAbilityError}</p>}
+          </div>
+        </Collapsible>
+
         {loading
           ? <p>Cargando catálogo…</p>
           : (
             <>
-              <h2 className="text-xl font-semibold mb-2">Armas</h2>
-              {armas
-                .filter(a =>
-                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map((a, i) => (
-                  <Tarjeta key={`arma-${i}`}>
-                    <p className="font-bold text-lg">{a.nombre}</p>
-                    <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
-                    <p><strong>Alcance:</strong> {a.alcance}</p>
-                    <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
-                    <p><strong>Valor:</strong> {a.valor}</p>
-                    {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
-                  </Tarjeta>
-                ))
-              }
+              <Collapsible title="Armas" defaultOpen>
+                {armas
+                  .filter(a =>
+                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((a, i) => (
+                    <Tarjeta key={`arma-${i}`}>
+                      <p className="font-bold text-lg">{a.nombre}</p>
+                      <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
+                      <p><strong>Alcance:</strong> {a.alcance}</p>
+                      <p><strong>Consumo:</strong> {a.consumo}</p>
+                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                      <p><strong>Valor:</strong> {a.valor}</p>
+                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                      {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    </Tarjeta>
+                  ))
+                }
+              </Collapsible>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">Armaduras</h2>
-              {armaduras
-                .filter(a =>
-                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map((a, i) => (
-                  <Tarjeta key={`armadura-${i}`}>
-                    <p className="font-bold text-lg">{a.nombre}</p>
-                    <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
-                    <p><strong>Valor:</strong> {a.valor}</p>
-                    {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
-                  </Tarjeta>
-                ))
-              }
+              <Collapsible title="Armaduras" defaultOpen>
+                {armaduras
+                  .filter(a =>
+                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((a, i) => (
+                    <Tarjeta key={`armadura-${i}`}>
+                      <p className="font-bold text-lg">{a.nombre}</p>
+                      <p><strong>Defensa:</strong> {a.defensa}</p>
+                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                      <p><strong>Valor:</strong> {a.valor}</p>
+                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                      {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    </Tarjeta>
+                  ))
+                }
+              </Collapsible>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">Habilidades</h2>
-              {habilidades
-                .filter(h =>
-                  h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map((h, i) => (
-                  <Tarjeta key={`hab-${i}`}>
-                    <p className="font-bold text-lg">{h.nombre}</p>
-                    <p><strong>Alcance:</strong> {h.alcance}</p>
-                    <p><strong>Consumo:</strong> {h.consumo}</p>
-                    <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
-                    <p><strong>Mente:</strong> {h.mente}</p>
-                    <p><strong>Poder:</strong> {h.poder}</p>
-                    {h.descripcion && <p className="italic">{h.descripcion}</p>}
-                  </Tarjeta>
-                ))
-              }
+              <Collapsible title="Habilidades" defaultOpen>
+                {habilidades
+                  .filter(h =>
+                    h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((h, i) => (
+                    <Tarjeta key={`hab-${i}`}>
+                      <p className="font-bold text-lg">{h.nombre}</p>
+                      <p><strong>Alcance:</strong> {h.alcance}</p>
+                      <p><strong>Consumo:</strong> {h.consumo}</p>
+                      <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
+                      <p><strong>Mente:</strong> {h.mente}</p>
+                      <p><strong>Poder:</strong> {h.poder}</p>
+                      {h.descripcion && <p className="italic">{h.descripcion}</p>}
+                    </Tarjeta>
+                  ))
+                }
+              </Collapsible>
             </>
           )
         }
