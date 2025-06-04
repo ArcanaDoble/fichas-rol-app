@@ -901,7 +901,7 @@ function App() {
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental) || '❌'}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -944,7 +944,7 @@ function App() {
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental) || '❌'}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -995,7 +995,7 @@ function App() {
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental) || '❌'}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
@@ -1015,7 +1015,7 @@ function App() {
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental) || '❌'}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
