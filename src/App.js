@@ -558,6 +558,41 @@ function App() {
     setInfoModalEdit(false);
   };
 
+  const infoModalElement = (
+    <Modal open={infoModalId !== null} onClose={closeInfoModal}>
+      {infoModalId && (
+        <>
+          <h3 className="text-lg font-bold mb-2 capitalize">
+            {resourcesList.find(r => r.id === infoModalId)?.name}
+          </h3>
+          {infoModalEdit ? (
+            <>
+              <textarea
+                value={infoModalText}
+                onChange={e => setInfoModalText(e.target.value)}
+                className="w-full h-32 p-2 rounded text-black mb-4"
+              />
+              <div className="flex gap-2 justify-center">
+                <Boton color="green" onClick={saveInfoModal}>Guardar</Boton>
+                <Boton color="gray" onClick={() => setInfoModalEdit(false)}>Cancelar</Boton>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-4 whitespace-pre-wrap text-left max-h-60 overflow-auto">
+                {infoModalText || 'Sin descripción'}
+              </div>
+              <div className="flex justify-center gap-2">
+                <Boton color="blue" onClick={() => setInfoModalEdit(true)}>Editar</Boton>
+                <Boton color="gray" onClick={closeInfoModal}>Cerrar</Boton>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </Modal>
+  );
+
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
     switch (tipo.toLowerCase()) {
@@ -577,6 +612,7 @@ function App() {
   // MENÚ PRINCIPAL
   if (!userType) {
     return (
+      <>
       <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
         <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-8">
           <h1 className="text-2xl font-bold text-center text-white mb-2">¿Quién eres?</h1>
@@ -596,45 +632,16 @@ function App() {
             >Soy Máster</Boton>
           </div>
         </div>
-        <Modal open={infoModalId !== null} onClose={closeInfoModal}>
-          {infoModalId && (
-            <>
-              <h3 className="text-lg font-bold mb-2 capitalize">
-                {resourcesList.find(r => r.id === infoModalId)?.name}
-              </h3>
-              {infoModalEdit ? (
-                <>
-                  <textarea
-                    value={infoModalText}
-                    onChange={e => setInfoModalText(e.target.value)}
-                    className="w-full h-32 p-2 rounded text-black mb-4"
-                  />
-                  <div className="flex gap-2 justify-center">
-                    <Boton color="green" onClick={saveInfoModal}>Guardar</Boton>
-                    <Boton color="gray" onClick={() => setInfoModalEdit(false)}>Cancelar</Boton>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-4 whitespace-pre-wrap text-left max-h-60 overflow-auto">
-                    {infoModalText || 'Sin descripción'}
-                  </div>
-                  <div className="flex justify-center gap-2">
-                    <Boton color="blue" onClick={() => setInfoModalEdit(true)}>Editar</Boton>
-                    <Boton color="gray" onClick={closeInfoModal}>Cerrar</Boton>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </Modal>
       </div>
+      {infoModalElement}
+      </>
     );
   }
 
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
     return (
+      <>
       <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
         <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
           <h2 className="text-xl font-bold text-center text-white">Acceso Máster</h2>
@@ -654,12 +661,15 @@ function App() {
           {authError && <p className="text-red-400 text-center mt-2">{authError}</p>}
         </div>
       </div>
+      {infoModalElement}
+      </>
     );
   }
 
   // SELECCIÓN JUGADOR
   if (userType === 'player' && !nameEntered) {
     return (
+      <>
       <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
         <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
           <h2 className="text-xl font-bold text-center text-white">Selecciona tu jugador</h2>
@@ -705,12 +715,15 @@ function App() {
           >Volver al menú principal</Boton>
         </div>
       </div>
+      {infoModalElement}
+      </>
     );
   }
 
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
+      <>
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <h1 className="text-2xl font-bold text-center mb-4">Ficha de {playerName}</h1>
@@ -1081,12 +1094,15 @@ function App() {
           )}
         </div>
       </div>
+      {infoModalElement}
+      </>
     );
   }
 
   // MODO MÁSTER
   if (userType === 'master' && authenticated) {
     return (
+      <>
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <h1 className="text-2xl font-bold mb-4">Modo Máster</h1>
         <div className="flex gap-2 mb-4">
@@ -1149,15 +1165,20 @@ function App() {
           )
         }
       </div>
+      {infoModalElement}
+      </>
     );
   }
 
   // FALLBACK
   return (
+    <>
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
       <p>Algo salió mal. Vuelve al menú.</p>
       <Boton onClick={volverAlMenu}>Volver al menú</Boton>
     </div>
+    {infoModalElement}
+    </>
   );
 }
 
