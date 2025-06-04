@@ -391,11 +391,17 @@ function App() {
   const eliminarRecurso = (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
-      if (!window.confirm(`¿Estás seguro? Si eliminas Postura, tu carga física de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`)) return;
+      const icono = cargaFisicaIcon(carga);
+      if (!window.confirm(
+        `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
+      )) return;
     }
     if (id === 'cordura') {
       const carga = playerData.cargaAcumulada?.mental || 0;
-      if (!window.confirm(`¿Estás seguro? Si eliminas Cordura, tu carga mental de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`)) return;
+      const icono = cargaMentalIcon(carga);
+      if (!window.confirm(
+        `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
+      )) return;
     }
     const newStats = { ...playerData.stats };
     delete newStats[id];
