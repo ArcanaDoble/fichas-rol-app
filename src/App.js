@@ -9,7 +9,6 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import { Tooltip } from 'react-tooltip';
-
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
@@ -763,7 +762,7 @@ function App() {
                       {name}
                     </span>
                     {recursoInfo[r] && (
-                      <Tooltip id={`tip-${r}`} place="top" openOnClick={isTouchDevice} />
+                      <Tooltip id={`tip-${r}`} place="top" openOnClick />
                     )}
                     <button
                       onClick={() => eliminarRecurso(r)}
