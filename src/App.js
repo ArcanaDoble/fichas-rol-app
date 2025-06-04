@@ -796,7 +796,8 @@ function App() {
                         className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
                         data-tooltip-id={`tip-${r}`}
                         data-tooltip-content={info}
-                        onClick={() => startEditInfo(r, info)}
+                        onClick={isTouchDevice ? undefined : () => startEditInfo(r, info)}
+                        onDoubleClick={isTouchDevice ? () => startEditInfo(r, info) : undefined}
                       >
                         {name}
                       </span>
