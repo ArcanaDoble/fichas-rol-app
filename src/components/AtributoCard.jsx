@@ -10,8 +10,8 @@ const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
 
   return (
     <div
-      className="relative rounded-xl shadow-md p-4 flex flex-col items-center text-gray-900"
-      style={{ background: `linear-gradient(135deg, ${color}, ${color}aa)` }}
+      className="relative rounded-xl shadow-lg p-4 flex flex-col items-center text-gray-900 transform transition hover:-translate-y-1"
+      style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
     >
       <p className="text-lg font-bold capitalize mb-2">{name}</p>
       <img src={dadoImgUrl(value)} alt={value} className="w-12 h-12 mb-2" />
