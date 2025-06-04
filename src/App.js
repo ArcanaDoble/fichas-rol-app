@@ -44,21 +44,31 @@ const parseCargaValue = (v) => {
   return 0;
 };
 
+const cargaFisicaIcon = (v) => {
+  const n = parseCargaValue(v);
+  return n > 0 ? '🔲'.repeat(n) : '❌';
+};
+
+const cargaMentalIcon = (v) => {
+  const n = parseCargaValue(v);
+  return n > 0 ? '🧠'.repeat(n) : '❌';
+};
+
 const applyCargaPenalties = (data, armas, armaduras) => {
   let fisica = 0;
   let mental = 0;
   data.weapons?.forEach(n => {
     const w = armas.find(a => a.nombre === n);
     if (w) {
-      fisica += parseCargaValue(w.cargaFisica ?? w.carga);
-      mental += parseCargaValue(w.cargaMental);
+      fisica += parseCargaValue(w.cargaFisica || w.cuerpo || w.carga);
+      mental += parseCargaValue(w.cargaMental || w.mente);
     }
   });
   data.armaduras?.forEach(n => {
     const a = armaduras.find(x => x.nombre === n);
     if (a) {
-      fisica += parseCargaValue(a.cargaFisica ?? a.carga);
-      mental += parseCargaValue(a.cargaMental);
+      fisica += parseCargaValue(a.cargaFisica || a.cuerpo || a.carga);
+      mental += parseCargaValue(a.cargaMental || a.mente);
     }
   });
 
@@ -185,8 +195,12 @@ function App() {
           alcance: obj.ALCANCE,
           consumo: obj.CONSUMO,
           carga:   obj.CARGA,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
+          cuerpo:  obj.CUERPO,
+          mente:   obj.MENTE,
+          cargaFisica:
+            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental:
+            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
@@ -227,8 +241,10 @@ function App() {
           cuerpo:  obj.CUERPO,
           mente:   obj.MENTE,
           carga:   obj.CARGA,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || '',
+          cargaFisica:
+            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental:
+            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
           valor:       obj.VALOR || '',
@@ -375,11 +391,17 @@ function App() {
   const eliminarRecurso = (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
-      if (!window.confirm(`¿Estás seguro? Si eliminas Postura, tu carga física de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`)) return;
+      const icono = cargaFisicaIcon(carga);
+      if (!window.confirm(
+        `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
+      )) return;
     }
     if (id === 'cordura') {
       const carga = playerData.cargaAcumulada?.mental || 0;
-      if (!window.confirm(`¿Estás seguro? Si eliminas Cordura, tu carga mental de ${carga} quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`)) return;
+      const icono = cargaMentalIcon(carga);
+      if (!window.confirm(
+        `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
+      )) return;
     }
     const newStats = { ...playerData.stats };
     delete newStats[id];
@@ -608,9 +630,9 @@ function App() {
           <div className="mb-4 text-center text-sm text-gray-300">
             Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
             {'   |   '}
-            Carga física total: {'🔲'.repeat(playerData.cargaAcumulada?.fisica || 0)} ({playerData.cargaAcumulada?.fisica || 0})
+            Carga física total: {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0})
             {'   |   '}
-            Carga mental total: {playerData.cargaAcumulada?.mental || 0}
+            Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
           </div>
 
           {/* Botones Volver / Eliminar */}
@@ -806,12 +828,12 @@ function App() {
 
           {!playerData.stats["postura"] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Postura; tu carga física ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
+              No tienes Postura; tu carga física {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
             </div>
           )}
           {!playerData.stats["cordura"] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Cordura; tu carga mental ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
+              No tienes Cordura; tu carga mental {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
             </div>
           )}
 
@@ -878,8 +900,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                    <p><strong>Carga física:</strong> {cargaFisicaIcon(a.cargaFisica || a.cuerpo || a.carga)}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental || a.mente)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -921,10 +943,8 @@ function App() {
                   >
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
-                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                    <p><strong>Carga física:</strong> {cargaFisicaIcon(a.cargaFisica || a.cuerpo || a.carga)}</p>
+                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental || a.mente)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     {a.descripcion && <p className="italic">{a.descripcion}</p>}
                     <Boton
@@ -974,8 +994,8 @@ function App() {
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
                     <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                      <p><strong>Carga física:</strong> {cargaFisicaIcon(a.cargaFisica || a.cuerpo || a.carga)}</p>
+                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental || a.mente)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
@@ -994,10 +1014,8 @@ function App() {
                   <Tarjeta key={`armadura-${i}`}>
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Cuerpo:</strong> {a.cuerpo || '❌'}</p>
-                    <p><strong>Mente:</strong> {a.mente || '❌'}</p>
-                    <p><strong>Carga física:</strong> {'🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga))}</p>
-                    <p><strong>Carga mental:</strong> {parseCargaValue(a.cargaMental)}</p>
+                      <p><strong>Carga física:</strong> {cargaFisicaIcon(a.cargaFisica || a.cuerpo || a.carga)}</p>
+                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental || a.mente)}</p>
                     <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
                     <p><strong>Valor:</strong> {a.valor}</p>
                     {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
