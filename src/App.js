@@ -44,6 +44,16 @@ const parseCargaValue = (v) => {
   return 0;
 };
 
+const cargaFisicaIcon = (v) => {
+  const n = parseCargaValue(v);
+  return n > 0 ? '🔲'.repeat(n) : '❌';
+};
+
+const cargaMentalIcon = (v) => {
+  const n = parseCargaValue(v);
+  return n > 0 ? '🧠'.repeat(n) : '❌';
+};
+
 const applyCargaPenalties = (data, armas, armaduras) => {
   let fisica = 0;
   let mental = 0;
@@ -614,9 +624,9 @@ function App() {
           <div className="mb-4 text-center text-sm text-gray-300">
             Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
             {'   |   '}
-            Carga física total: {'🔲'.repeat(playerData.cargaAcumulada?.fisica || 0)} ({playerData.cargaAcumulada?.fisica || 0})
+            Carga física total: {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0})
             {'   |   '}
-            Carga mental total: {playerData.cargaAcumulada?.mental || 0}
+            Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
           </div>
 
           {/* Botones Volver / Eliminar */}
