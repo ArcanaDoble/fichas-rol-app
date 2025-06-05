@@ -5,6 +5,18 @@ export const ItemTypes = {
   TOKEN: 'token'
 };
 
+const icons = {
+  remedio: '💊',
+  chatarra: '⚙️',
+  comida: '🍖',
+};
+
+const colors = {
+  remedio: 'bg-blue-300',
+  chatarra: 'bg-yellow-300',
+  comida: 'bg-green-300',
+};
+
 const ItemToken = ({ type = 'remedio', count = 1 }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TOKEN,
@@ -15,10 +27,11 @@ const ItemToken = ({ type = 'remedio', count = 1 }) => {
   }), [type, count]);
 
   const opacity = isDragging ? 0.5 : 1;
+  const bg = colors[type] || 'bg-gray-300';
 
   return (
-    <div ref={drag} className="w-16 p-2 bg-blue-300 rounded shadow text-center select-none" style={{ opacity }}>
-      <div className="text-black text-2xl">💊</div>
+    <div ref={drag} className={`w-16 p-2 ${bg} rounded shadow text-center select-none`} style={{ opacity }}>
+      <div className="text-black text-2xl">{icons[type] || '❔'}</div>
       <div className="mt-1 text-sm bg-white text-black rounded-full px-2 inline-block">{count}</div>
     </div>
   );

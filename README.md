@@ -58,4 +58,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Equipamiento y poderes centrados cuando solo hay un elemento equipado.
 - Selector de estados con iconos para llevar el control de efectos activos.
 - Inventario disponible en las fichas de jugador.
+- Slots del inventario habilitables con un clic y almacenamiento persistente.
 
