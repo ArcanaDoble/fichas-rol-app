@@ -2,15 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useDrop } from 'react-dnd';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import Slot from './Slot';
+import InventoryGrid from '../inventory-grid/InventoryGrid';
 import ItemToken, { ItemTypes } from './ItemToken';
 import ItemGenerator from './ItemGenerator';
+import { createGrid, canPlaceItem, placeItem } from '../inventory-grid/GridUtils';
 
-const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, item: null }));
+const DEFAULT_WIDTH = 6;
+const DEFAULT_HEIGHT = 10;
+
+const ITEM_SIZES = {
+  remedio: { width: 1, height: 1 },
+  chatarra: { width: 2, height: 1 },
+  comida: { width: 1, height: 2 },
+};
 
 const Inventory = ({ playerName }) => {
-  const [slots, setSlots] = useState(initialSlots);
-  const [nextId, setNextId] = useState(initialSlots.length);
+  const [width] = useState(DEFAULT_WIDTH);
+  const [height] = useState(DEFAULT_HEIGHT);
+  const [items, setItems] = useState([]);
   const [tokens, setTokens] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const docRef = useMemo(() => (playerName ? doc(db, 'inventory', playerName) : null), [playerName]);
@@ -21,9 +30,8 @@ const Inventory = ({ playerName }) => {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
-        setSlots(data.slots || initialSlots);
+        setItems(data.items || []);
         setTokens(data.tokens || []);
-        setNextId(data.nextId || initialSlots.length);
       }
       setLoaded(true);
     };
@@ -32,75 +40,65 @@ const Inventory = ({ playerName }) => {
 
   useEffect(() => {
     if (loaded && docRef) {
-      setDoc(docRef, { slots, tokens, nextId });
+      setDoc(docRef, { items, tokens });
     }
-  }, [slots, tokens, nextId, loaded, docRef]);
-
-  const removeSlot = (index) => {
-    setSlots(s => s.filter((_, i) => i !== index));
-  };
-
-  const addSlot = () => {
-    setSlots(s => [...s, { id: nextId, item: null }]);
-    setNextId(id => id + 1);
-  };
-
-  const handleDrop = (index, dragged) => {
-    setSlots(s => s.map((slot, i) => {
-      if (i !== index) return slot;
-      if (!slot.item) return { ...slot, item: { type: dragged.type, count: 1 } };
-      return { ...slot, item: { ...slot.item, count: Math.min(slot.item.count + 1, 99) } };
-    }));
-  };
-
+  }, [items, tokens, loaded, docRef]);
 
   const generateItem = (type) => {
-    setTokens(t => [...t, { id: Date.now() + Math.random(), type }]);
+    const size = ITEM_SIZES[type] || { width: 1, height: 1 };
+    setTokens(t => [...t, { id: Date.now() + Math.random(), type, count: 1, ...size, rotated: false }]);
+  };
+
+  const moveItem = (dragged, x, y) => {
+    const size = dragged.rotated ? { width: dragged.height, height: dragged.width } : { width: dragged.width, height: dragged.height };
+    const newItem = { ...dragged, ...size, x, y, fromGrid: true };
+    const grid = createGrid(width, height);
+    items.filter(it => it.id !== dragged.id).forEach(it => placeItem(grid, it, it.x, it.y));
+    if (!canPlaceItem(grid, newItem, x, y)) return;
+
+    if (dragged.fromGrid) {
+      setItems(its => its.map(it => it.id === dragged.id ? newItem : it));
+    } else {
+      setTokens(ts => ts.filter(t => t.id !== dragged.id));
+      setItems(its => [...its, newItem]);
+    }
+  };
+
+  const rotateItem = (id) => {
+    setItems(its => its.map(it => {
+      if (it.id !== id) return it;
+      const rotated = !it.rotated;
+      const testItem = { ...it, rotated, width: it.height, height: it.width };
+      const grid = createGrid(width, height);
+      its.filter(i => i.id !== id).forEach(i => placeItem(grid, i, i.x, i.y));
+      return canPlaceItem(grid, testItem, it.x, it.y) ? testItem : it;
+    }));
   };
 
   const [, trashDrop] = useDrop(() => ({
     accept: ItemTypes.TOKEN,
     drop: (dragged) => {
-      if (dragged.fromSlot != null) {
-        setSlots(s => s.map(slot => slot.id === dragged.fromSlot ? { ...slot, item: null } : slot));
-      } else if (dragged.id) {
-        setTokens(t => t.filter(tok => tok.id !== dragged.id));
+      if (dragged.fromGrid) {
+        setItems(its => its.filter(it => it.id !== dragged.id));
+      } else {
+        setTokens(ts => ts.filter(t => t.id !== dragged.id));
       }
     },
-  }), [setSlots, setTokens]);
+  }), [setItems, setTokens]);
 
   return (
     <div className="space-y-4 flex flex-col items-center">
-        <div className="flex flex-wrap justify-center gap-2">
-          {slots.map((slot, i) => (
-            <Slot
-              key={slot.id}
-              id={slot.id}
-              item={slot.item}
-              onDrop={(dragged) => handleDrop(i, dragged)}
-              onDelete={() => removeSlot(i)}
-            />
-          ))}
-          <button
-            onClick={addSlot}
-            className="w-20 h-20 md:w-24 md:h-24 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 hover:scale-110 transition-transform"
-          >
-            +
-          </button>
-          <div
-            ref={trashDrop}
-            className="w-20 h-20 md:w-24 md:h-24 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 hover:scale-110 hover:animate-pulse transition-transform"
-          >
-            🗑
-          </div>
-        </div>
-        <ItemGenerator onGenerate={generateItem} />
-        <div className="flex flex-wrap justify-center gap-2">
-          {tokens.map(token => (
-            <ItemToken key={token.id} id={token.id} type={token.type} />
-          ))}
-        </div>
+      <InventoryGrid width={width} height={height} items={items} onMove={moveItem} onRotate={rotateItem} />
+      <div ref={trashDrop} className="w-12 h-12 flex items-center justify-center border border-dashed rounded text-red-400 hover:ring-2 hover:ring-red-500 hover:scale-110 transition-transform">
+        🗑
       </div>
+      <ItemGenerator onGenerate={generateItem} />
+      <div className="flex flex-wrap justify-center gap-2">
+        {tokens.map(token => (
+          <ItemToken key={token.id} id={token.id} type={token.type} width={token.width} height={token.height} />
+        ))}
+      </div>
+    </div>
   );
 };
 
