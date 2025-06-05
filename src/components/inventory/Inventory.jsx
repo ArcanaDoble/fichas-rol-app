@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDrop } from 'react-dnd';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -6,18 +6,19 @@ import Slot from './Slot';
 import ItemToken, { ItemTypes } from './ItemToken';
 import ItemGenerator from './ItemGenerator';
 
-const STORAGE_DOC = doc(db, 'inventory', 'slots');
 const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, enabled: false, item: null }));
 
-const Inventory = () => {
+const Inventory = ({ playerName }) => {
   const [slots, setSlots] = useState(initialSlots);
   const [nextId, setNextId] = useState(initialSlots.length);
   const [tokens, setTokens] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const docRef = useMemo(() => (playerName ? doc(db, 'inventory', playerName) : null), [playerName]);
 
   useEffect(() => {
+    if (!docRef) return;
     const fetchState = async () => {
-      const snap = await getDoc(STORAGE_DOC);
+      const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
         setSlots(data.slots || initialSlots);
@@ -27,13 +28,13 @@ const Inventory = () => {
       setLoaded(true);
     };
     fetchState();
-  }, []);
+  }, [docRef]);
 
   useEffect(() => {
-    if (loaded) {
-      setDoc(STORAGE_DOC, { slots, tokens, nextId });
+    if (loaded && docRef) {
+      setDoc(docRef, { slots, tokens, nextId });
     }
-  }, [slots, tokens, nextId, loaded]);
+  }, [slots, tokens, nextId, loaded, docRef]);
 
   const toggleSlot = (index) => {
     setSlots(s => s.map((slot, i) => i === index ? { ...slot, enabled: !slot.enabled } : slot));
@@ -60,13 +61,6 @@ const Inventory = () => {
     }));
   };
 
-  const increment = (index) => {
-    setSlots(s => s.map((slot, i) => i === index ? { ...slot, item: { ...slot.item, count: Math.min(slot.item.count + 1, 99) } } : slot));
-  };
-
-  const decrement = (index) => {
-    setSlots(s => s.map((slot, i) => i === index ? { ...slot, item: { ...slot.item, count: Math.max(slot.item.count - 1, 0) } } : slot));
-  };
 
   const generateItem = (type) => {
     setTokens(t => [...t, { id: Date.now() + Math.random(), type }]);
@@ -93,8 +87,6 @@ const Inventory = () => {
               enabled={slot.enabled}
               item={slot.item}
               onDrop={(dragged) => handleDrop(i, dragged)}
-              onIncrement={() => increment(i)}
-              onDecrement={() => decrement(i)}
               onToggle={() => toggleSlot(i)}
               onClose={() => closeSlot(i)}
               onDelete={() => removeSlot(i)}
@@ -102,13 +94,13 @@ const Inventory = () => {
           ))}
           <button
             onClick={addSlot}
-            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 transition-all"
+            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 hover:scale-110 transition-transform"
           >
             +
           </button>
           <div
             ref={trashDrop}
-            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 transition-all"
+            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 hover:scale-110 hover:animate-pulse transition-transform"
           >
             🗑
           </div>
