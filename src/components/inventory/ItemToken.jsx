@@ -36,14 +36,14 @@ const descriptions = {
   comida: 'Provisiones comestibles',
 };
 
-const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
+const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null, width = 1, height = 1, rotated = false }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TOKEN,
-    item: { id, type, count, fromSlot },
+    item: { id, type, count, fromSlot, width, height, rotated },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [id, type, count, fromSlot]);
+  }), [id, type, count, fromSlot, width, height, rotated]);
 
   const opacity = isDragging ? 0.5 : 1;
   const bg = colors[type] || 'bg-gray-300';

@@ -16,6 +16,26 @@ const ITEM_SIZES = {
   comida: { width: 1, height: 2 },
 };
 
+const validItem = (item) =>
+  item &&
+  item.id !== undefined &&
+  typeof item.type === 'string' &&
+  typeof item.count === 'number' &&
+  typeof item.x === 'number' &&
+  typeof item.y === 'number' &&
+  typeof item.width === 'number' &&
+  typeof item.height === 'number' &&
+  typeof item.rotated === 'boolean';
+
+const validToken = (t) =>
+  t &&
+  t.id !== undefined &&
+  typeof t.type === 'string' &&
+  typeof t.count === 'number' &&
+  typeof t.width === 'number' &&
+  typeof t.height === 'number' &&
+  typeof t.rotated === 'boolean';
+
 const Inventory = ({ playerName }) => {
   const [width] = useState(DEFAULT_WIDTH);
   const [height] = useState(DEFAULT_HEIGHT);
@@ -30,8 +50,10 @@ const Inventory = ({ playerName }) => {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
-        setItems(data.items || []);
-        setTokens(data.tokens || []);
+        const loadedItems = (data.items || []).filter(validItem);
+        const loadedTokens = (data.tokens || []).filter(validToken);
+        setItems(loadedItems);
+        setTokens(loadedTokens);
       }
       setLoaded(true);
     };
@@ -40,7 +62,9 @@ const Inventory = ({ playerName }) => {
 
   useEffect(() => {
     if (loaded && docRef) {
-      setDoc(docRef, { items, tokens });
+      const cleanItems = items.filter(validItem);
+      const cleanTokens = tokens.filter(validToken);
+      setDoc(docRef, { items: cleanItems, tokens: cleanTokens });
     }
   }, [items, tokens, loaded, docRef]);
 
@@ -50,7 +74,9 @@ const Inventory = ({ playerName }) => {
   };
 
   const moveItem = (dragged, x, y) => {
-    const size = dragged.rotated ? { width: dragged.height, height: dragged.width } : { width: dragged.width, height: dragged.height };
+    const size = dragged.rotated
+      ? { width: dragged.height || 1, height: dragged.width || 1 }
+      : { width: dragged.width || 1, height: dragged.height || 1 };
     const newItem = { ...dragged, ...size, x, y, fromGrid: true };
     const grid = createGrid(width, height);
     items.filter(it => it.id !== dragged.id).forEach(it => placeItem(grid, it, it.x, it.y));
@@ -95,7 +121,14 @@ const Inventory = ({ playerName }) => {
       <ItemGenerator onGenerate={generateItem} />
       <div className="flex flex-wrap justify-center gap-2">
         {tokens.map(token => (
-          <ItemToken key={token.id} id={token.id} type={token.type} width={token.width} height={token.height} />
+          <ItemToken
+            key={token.id}
+            id={token.id}
+            type={token.type}
+            width={token.width}
+            height={token.height}
+            rotated={token.rotated}
+          />
         ))}
       </div>
     </div>
