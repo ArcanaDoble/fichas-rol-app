@@ -61,6 +61,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Slots del inventario habilitables con un clic y almacenamiento persistente.
 - Persistencia del inventario en Firestore en lugar de localStorage.
 - Buscador de objetos con texto visible y envío con Enter.
+- Sugerencia automática al buscar objetos con tabulación para autocompletar.
 - Botón de papelera para eliminar objetos arrastrándolos.
 - Estilo de los slots y botones optimizado para móviles.
 - Opción para borrar slots del inventario.
