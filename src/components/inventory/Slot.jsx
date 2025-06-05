@@ -3,6 +3,18 @@ import { useDrop } from 'react-dnd';
 import { motion } from 'framer-motion';
 import ItemToken, { ItemTypes } from './ItemToken';
 
+const borderColors = {
+  remedio: 'border-blue-400',
+  chatarra: 'border-yellow-400',
+  comida: 'border-green-400',
+};
+
+const ringColors = {
+  remedio: 'ring-blue-400',
+  chatarra: 'ring-yellow-400',
+  comida: 'ring-green-400',
+};
+
 const Slot = ({ id, item, onDrop, onDelete }) => {
   const [animateDrop, setAnimateDrop] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -23,10 +35,11 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
     })
   }), [onDrop]);
 
-  const border = 'border-gray-500';
   const bg = 'bg-gray-700/70';
-  const highlight = isOver ? 'ring-2 ring-blue-400' : '';
-  const glow = item ? 'ring-2 ring-yellow-300' : 'hover:ring-2 hover:ring-yellow-300';
+  const border = item ? (borderColors[item.type] || 'border-gray-500') : 'border-gray-500';
+  const ringColor = item ? (ringColors[item.type] || 'ring-yellow-300') : 'ring-yellow-300';
+  const highlight = isOver ? `ring-2 ${ringColor}` : '';
+  const glow = item ? `ring-2 ${ringColor}` : `hover:ring-2 ${ringColor}`;
   const scale = 'scale-100 opacity-100';
 
   return (

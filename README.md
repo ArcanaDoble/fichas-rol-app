@@ -85,3 +85,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Tamaño de los slots adaptado a pantallas grandes.
 - Tarjetas de armas, armaduras y poderes sin bordes de color.
 - Imágenes de espada, armadura y músculo como marcas de agua.
+- Bordes de los slots se colorean según el objeto almacenado.
+- Efectos de gradiente animado y brillo pulsante en las fichas de objeto.
+- Descripción emergente de cada objeto al pasar el cursor o tocar brevemente.
