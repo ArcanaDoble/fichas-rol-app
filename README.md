@@ -65,4 +65,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Estilo de los slots y botones optimizado para móviles.
 - Opción para borrar slots del inventario.
 - `DndProvider` movido al nivel raíz de la aplicación para evitar errores de contexto.
+- Persistencia completa del inventario (posiciones, cantidades y objetos eliminados).
+- Botones de aumento y disminución con estilo más compacto y adaptable a móviles.
 

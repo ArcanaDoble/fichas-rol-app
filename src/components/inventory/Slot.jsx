@@ -52,13 +52,13 @@ const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, o
           <div className="absolute bottom-1 right-1 flex space-x-1">
             <button
               onClick={onIncrement}
-              className="w-6 h-6 bg-gray-800/80 text-white text-xs rounded flex items-center justify-center"
+              className="w-5 h-5 bg-gray-800/70 text-white text-xs rounded-full flex items-center justify-center"
             >
               +
             </button>
             <button
               onClick={onDecrement}
-              className="w-6 h-6 bg-gray-800/80 text-white text-xs rounded flex items-center justify-center"
+              className="w-5 h-5 bg-gray-800/70 text-white text-xs rounded-full flex items-center justify-center"
             >
               -
             </button>
