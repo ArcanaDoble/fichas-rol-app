@@ -12,6 +12,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Carga física y mental**. El peso del equipo afecta a la Postura y a la Cordura. La aplicación calcula automáticamente la carga física y mental acumulada e indica la penalización correspondiente.
 - **Edición de tooltips**. Los textos explicativos de cada recurso pueden editarse directamente en la interfaz tanto en ordenador como en móviles.
 - **Interfaz responsive**. Está pensada para verse correctamente en móviles y escritorio y utiliza TailwindCSS para los estilos.
+- **Inventario drag & drop**. Nuevo componente modular con slots configurables para arrastrar objetos.
 - **Pruebas automáticas**. Se incluye un conjunto básico de pruebas con React Testing Library en `src/App.test.js`.
 
 ## Instalación y uso
@@ -47,6 +48,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Interfaz de equipamiento mejorada.
 - Gestión de poderes creados en Firebase.
 - Sección de Claves con contador de usos personalizable.
+- Inventario modular con arrastrar y soltar.
 - Barras de estadísticas con diseño responsive.
 - Recursos con unidades en círculos para mayor claridad.
 - Cartas de atributos optimizadas para móvil.
