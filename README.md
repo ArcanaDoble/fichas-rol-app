@@ -73,4 +73,9 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Efecto luminoso al pasar el ratón sobre los slots o al contener un objeto.
 - Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
 - Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
+- Inventario guardado de forma individual para cada jugador.
+- Soporte de arrastre en dispositivos móviles gracias a TouchBackend.
+- Cantidad de objetos aumentable arrastrando repetidas veces al mismo slot.
+- Animación de activación del slot con resaltado verde.
+- Papelera y botón de nuevo slot con animaciones al pasar el ratón.
 

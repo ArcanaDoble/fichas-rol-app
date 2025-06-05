@@ -1304,7 +1304,7 @@ function App() {
           {/* INVENTARIO */}
           <h2 className="text-xl font-semibold text-center mb-2">Inventario</h2>
           <div className="mb-6 w-full">
-            <Inventory />
+            <Inventory playerName={playerName} />
           </div>
 
           {/* EQUIPAR ARMA */}
