@@ -6,7 +6,7 @@ import Slot from './Slot';
 import ItemToken, { ItemTypes } from './ItemToken';
 import ItemGenerator from './ItemGenerator';
 
-const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, enabled: false, item: null }));
+const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, item: null }));
 
 const Inventory = ({ playerName }) => {
   const [slots, setSlots] = useState(initialSlots);
@@ -36,20 +36,12 @@ const Inventory = ({ playerName }) => {
     }
   }, [slots, tokens, nextId, loaded, docRef]);
 
-  const toggleSlot = (index) => {
-    setSlots(s => s.map((slot, i) => i === index ? { ...slot, enabled: !slot.enabled } : slot));
-  };
-
-  const closeSlot = (index) => {
-    setSlots(s => s.map((slot, i) => i === index ? { ...slot, enabled: false, item: null } : slot));
-  };
-
   const removeSlot = (index) => {
     setSlots(s => s.filter((_, i) => i !== index));
   };
 
   const addSlot = () => {
-    setSlots(s => [...s, { id: nextId, enabled: false, item: null }]);
+    setSlots(s => [...s, { id: nextId, item: null }]);
     setNextId(id => id + 1);
   };
 
@@ -84,11 +76,8 @@ const Inventory = ({ playerName }) => {
             <Slot
               key={slot.id}
               id={slot.id}
-              enabled={slot.enabled}
               item={slot.item}
               onDrop={(dragged) => handleDrop(i, dragged)}
-              onToggle={() => toggleSlot(i)}
-              onClose={() => closeSlot(i)}
               onDelete={() => removeSlot(i)}
             />
           ))}

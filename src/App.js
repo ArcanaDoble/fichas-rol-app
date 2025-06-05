@@ -164,6 +164,7 @@ function App() {
     poder: '',
     descripcion: ''
   });
+  const [editingAbility, setEditingAbility] = useState(null);
   const [newAbilityError, setNewAbilityError] = useState('');
   const [showAddResForm, setShowAddResForm] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 640 : false
@@ -590,13 +591,35 @@ function App() {
       return;
     }
     try {
+      if (editingAbility && editingAbility !== nombre) {
+        await deleteDoc(doc(db, 'abilities', editingAbility));
+      }
       await setDoc(doc(db, 'abilities', nombre), newAbility);
+      setEditingAbility(null);
       setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' });
       setNewAbilityError('');
       fetchHabilidades();
     } catch (e) {
       console.error(e);
       setNewAbilityError('Error al guardar');
+    }
+  };
+
+  const startEditAbility = (ability) => {
+    setNewAbility(ability);
+    setEditingAbility(ability.nombre);
+  };
+
+  const deleteAbility = async (name) => {
+    try {
+      await deleteDoc(doc(db, 'abilities', name));
+      if (editingAbility === name) {
+        setEditingAbility(null);
+        setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' });
+      }
+      fetchHabilidades();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -1518,7 +1541,7 @@ function App() {
           />
         </div>
 
-        <Collapsible title="Crear nueva habilidad" defaultOpen={false}>
+        <Collapsible title={editingAbility ? `Editar habilidad: ${editingAbility}` : "Crear nueva habilidad"} defaultOpen={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
               placeholder="Nombre"
@@ -1556,8 +1579,11 @@ function App() {
               value={newAbility.descripcion}
               onChange={e => setNewAbility(a => ({ ...a, descripcion: e.target.value }))}
             />
-            <div className="sm:col-span-2 flex justify-end">
-              <Boton color="green" onClick={agregarHabilidad}>Guardar habilidad</Boton>
+            <div className="sm:col-span-2 flex justify-between items-center">
+              {editingAbility && (
+                <Boton color="gray" onClick={() => { setEditingAbility(null); setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' }); }}>Cancelar</Boton>
+              )}
+              <Boton color="green" onClick={agregarHabilidad}>{editingAbility ? 'Actualizar' : 'Guardar'} habilidad</Boton>
             </div>
             {newAbilityError && <p className="text-red-400 text-center sm:col-span-2">{newAbilityError}</p>}
           </div>
@@ -1618,15 +1644,19 @@ function App() {
                     (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((h, i) => (
-                    <Tarjeta key={`hab-${i}`}>
-                      <p className="font-bold text-lg">{h.nombre}</p>
-                      <p><strong>Alcance:</strong> {h.alcance}</p>
-                      <p><strong>Consumo:</strong> {h.consumo}</p>
-                      <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
-                      <p><strong>Mente:</strong> {h.mente}</p>
-                      <p><strong>Poder:</strong> {h.poder}</p>
-                      {h.descripcion && <p className="italic">{h.descripcion}</p>}
-                    </Tarjeta>
+                  <Tarjeta key={`hab-${i}`}>
+                    <p className="font-bold text-lg">{h.nombre}</p>
+                    <p><strong>Alcance:</strong> {h.alcance}</p>
+                    <p><strong>Consumo:</strong> {h.consumo}</p>
+                    <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
+                    <p><strong>Mente:</strong> {h.mente}</p>
+                    <p><strong>Poder:</strong> {h.poder}</p>
+                    {h.descripcion && <p className="italic">{h.descripcion}</p>}
+                    <div className="flex justify-end gap-2 mt-2">
+                      <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
+                      <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
+                    </div>
+                  </Tarjeta>
                   ))
                 }
               </Collapsible>
