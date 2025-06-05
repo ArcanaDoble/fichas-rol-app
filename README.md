@@ -72,6 +72,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Estética del inventario renovada con bordes brillantes y controles más grandes.
 - Efecto luminoso al pasar el ratón sobre los slots o al contener un objeto.
 - Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
+- Animación de rebote al soltar objetos en los slots.
 - Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
 - Inventario guardado de forma individual para cada jugador.
 - Soporte de arrastre en dispositivos móviles gracias a TouchBackend.
