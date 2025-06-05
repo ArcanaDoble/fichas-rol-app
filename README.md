@@ -78,4 +78,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Cantidad de objetos aumentable arrastrando repetidas veces al mismo slot.
 - Animación de activación del slot con resaltado verde.
 - Papelera y botón de nuevo slot con animaciones al pasar el ratón.
+- Edición y eliminación de habilidades creadas por el máster.
+- Los slots del inventario se crean habilitados por defecto y se eliminan con doble clic.
+- Tamaño de los slots adaptado a pantallas grandes.
 
