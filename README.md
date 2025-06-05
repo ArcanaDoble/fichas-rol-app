@@ -82,6 +82,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Edición y eliminación de habilidades creadas por el máster.
 - Los slots del inventario se crean habilitados por defecto y se eliminan con doble clic.
 - Tamaño de los slots adaptado a pantallas grandes.
-- Tarjetas de armas, armaduras y poderes con iconos y bordes de color.
-
-- Iconos de equipo como marca de agua en las tarjetas.
+- Tarjetas de armas, armaduras y poderes sin bordes de color.
+- Imágenes de espada, armadura y músculo como marcas de agua.
