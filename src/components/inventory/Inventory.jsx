@@ -100,10 +100,15 @@ const Inventory = () => {
               onDelete={() => removeSlot(i)}
             />
           ))}
-          <button onClick={addSlot} className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-gray-400">+</button>
+          <button
+            onClick={addSlot}
+            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 transition-all"
+          >
+            +
+          </button>
           <div
             ref={trashDrop}
-            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-red-400"
+            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 transition-all"
           >
             🗑
           </div>

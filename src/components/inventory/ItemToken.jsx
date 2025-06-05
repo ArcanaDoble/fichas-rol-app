@@ -28,9 +28,14 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
 
   const opacity = isDragging ? 0.5 : 1;
   const bg = colors[type] || 'bg-gray-300';
+  const dragStyle = isDragging ? 'scale-110 rotate-6' : 'hover:scale-105';
 
   return (
-    <div ref={drag} className={`w-16 p-2 ${bg} rounded shadow text-center select-none`} style={{ opacity }}>
+    <div
+      ref={drag}
+      className={`w-16 p-2 ${bg} rounded shadow text-center select-none transition-transform ${dragStyle}`}
+      style={{ opacity }}
+    >
       <div className="text-black text-2xl">{icons[type] || '❔'}</div>
       <div className="mt-1 text-sm bg-white text-black rounded-full px-2 inline-block">{count}</div>
     </div>
