@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDrag } from 'react-dnd';
 import { Tooltip } from 'react-tooltip';
+import RotationHandle from '../inventory-grid/RotationHandle';
 
 export const ItemTypes = {
   TOKEN: 'token'
@@ -36,7 +37,8 @@ const descriptions = {
   comida: 'Provisiones comestibles',
 };
 
-const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null, width = 1, height = 1, rotated = false }) => {
+
+const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null, width = 1, height = 1, rotated = false, onRotate }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TOKEN,
     item: { id, type, count, fromSlot, width, height, rotated },
@@ -54,13 +56,16 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null, width = 1
   return (
     <div
       ref={drag}
-      className={`w-16 p-2 ${bg} ${border} border-2 rounded shadow text-center select-none transition-transform ${dragStyle} bg-gradient-to-r ${gradient} bg-[length:200%_200%] animate-gradient animate-glow`}
+      className={`relative w-16 p-2 ${bg} ${border} border-2 rounded shadow text-center select-none transition-transform ${dragStyle} bg-gradient-to-r ${gradient} bg-[length:200%_200%] animate-gradient animate-glow`}
       style={{ opacity }}
       data-tooltip-id={`item-${id}`}
       data-tooltip-content={descriptions[type]}
     >
       <div className="text-black text-2xl">{icons[type] || '❔'}</div>
       <div className="mt-1 text-sm bg-white text-black rounded-full px-2 inline-block">{count}</div>
+      {onRotate && (
+        <RotationHandle onRotate={(e) => { e.stopPropagation(); onRotate(id); }} />
+      )}
       <Tooltip id={`item-${id}`} place="top" className="max-w-[90vw] sm:max-w-xs" />
     </div>
   );

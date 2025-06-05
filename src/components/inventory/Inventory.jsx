@@ -101,6 +101,10 @@ const Inventory = ({ playerName }) => {
     }));
   };
 
+  const rotateToken = (id) => {
+    setTokens(ts => ts.map(t => t.id === id ? { ...t, rotated: !t.rotated, width: t.height, height: t.width } : t));
+  };
+
   const [, trashDrop] = useDrop(() => ({
     accept: ItemTypes.TOKEN,
     drop: (dragged) => {
@@ -128,6 +132,7 @@ const Inventory = ({ playerName }) => {
             width={token.width}
             height={token.height}
             rotated={token.rotated}
+            onRotate={rotateToken}
           />
         ))}
       </div>

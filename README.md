@@ -90,4 +90,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Descripción emergente de cada objeto al pasar el cursor o tocar brevemente.
 
 - Inventario en cuadrícula con rotación al estilo Resident Evil 8.
+- Previsualización de espacio con validación de colisión y rotación con la tecla R.
 - Validación de objetos del inventario para evitar guardar datos incompletos en Firebase.
