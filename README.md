@@ -67,4 +67,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - `DndProvider` movido al nivel raíz de la aplicación para evitar errores de contexto.
 - Persistencia completa del inventario (posiciones, cantidades y objetos eliminados).
 - Botones de aumento y disminución con estilo más compacto y adaptable a móviles.
+- Arreglada la sincronización inicial del inventario para que los cambios se
+  conserven tras recargar la página.
 
