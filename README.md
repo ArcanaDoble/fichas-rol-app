@@ -59,4 +59,9 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Selector de estados con iconos para llevar el control de efectos activos.
 - Inventario disponible en las fichas de jugador.
 - Slots del inventario habilitables con un clic y almacenamiento persistente.
+- Persistencia del inventario en Firestore en lugar de localStorage.
+- Buscador de objetos con texto visible y envío con Enter.
+- Botón de papelera para eliminar objetos arrastrándolos.
+- Estilo de los slots y botones optimizado para móviles.
+- Opción para borrar slots del inventario.
 
