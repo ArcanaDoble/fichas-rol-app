@@ -1371,11 +1371,7 @@ function App() {
               {playerData.weapons.map((n, i) => {
                 const a = armas.find(x => x.nombre === n);
                 return a && (
-                  <div
-                    key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-red-600 relative"
-                  >
-                    <span className="absolute top-2 right-2 text-xl">⚔️</span>
+                  <Tarjeta key={i} variant="weapon" className="w-full flex flex-col items-center text-center">
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
@@ -1389,7 +1385,7 @@ function App() {
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
                       onClick={() => handlePlayerUnequip(a.nombre)}
                     >Desequipar</Boton>
-                  </div>
+                  </Tarjeta>
                 );
               })}
             </div>
@@ -1436,11 +1432,7 @@ function App() {
               {playerData.armaduras.map((n, i) => {
                 const a = armaduras.find(x => x.nombre === n);
                 return a && (
-                  <div
-                    key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-blue-600 relative"
-                  >
-                    <span className="absolute top-2 right-2 text-xl">🛡️</span>
+                  <Tarjeta key={i} variant="armor" className="w-full flex flex-col items-center text-center">
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
@@ -1452,7 +1444,7 @@ function App() {
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
                       onClick={() => handlePlayerUnequipArmadura(a.nombre)}
                     >Desequipar</Boton>
-                  </div>
+                  </Tarjeta>
                 );
               })}
             </div>
@@ -1499,11 +1491,7 @@ function App() {
               {playerData.poderes.map((n, i) => {
                 const p = habilidades.find(x => x.nombre === n);
                 return p && (
-                  <div
-                    key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-purple-600 relative"
-                  >
-                    <span className="absolute top-2 right-2 text-xl">✨</span>
+                  <Tarjeta key={i} variant="power" className="w-full flex flex-col items-center text-center">
                     <p className="font-bold text-lg">{p.nombre}</p>
                     <p><strong>Alcance:</strong> {p.alcance}</p>
                     <p><strong>Consumo:</strong> {p.consumo}</p>
@@ -1516,7 +1504,7 @@ function App() {
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
                       onClick={() => handlePlayerUnequipPoder(p.nombre)}
                     >Desequipar</Boton>
-                  </div>
+                  </Tarjeta>
                 );
               })}
             </div>
