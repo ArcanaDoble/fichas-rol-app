@@ -64,4 +64,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Botón de papelera para eliminar objetos arrastrándolos.
 - Estilo de los slots y botones optimizado para móviles.
 - Opción para borrar slots del inventario.
+- `DndProvider` movido al nivel raíz de la aplicación para evitar errores de contexto.
 

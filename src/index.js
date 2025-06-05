@@ -3,12 +3,16 @@ import ReactDOM from 'react-dom/client';
 import './index.css'       // <- importa Tailwind + tu CSS
 import 'react-tooltip/dist/react-tooltip.css'
 import App from './App';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <DndProvider backend={HTML5Backend}>
+      <App />
+    </DndProvider>
   </React.StrictMode>
 );
 
