@@ -19,12 +19,16 @@ const Tarjeta = ({ children, className = '', variant }) => {
   const style = variantStyles[variant] || {};
   return (
     <div
-      className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-lg transition transform hover:-translate-y-1 border-2 ${style.border || 'border-gray-700'} relative ${className}`}
+      className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-lg transition transform hover:-translate-y-1 border-2 ${style.border || 'border-gray-700'} relative overflow-hidden ${className}`}
     >
       {style.icon && (
-        <span className="absolute top-2 right-2 text-xl pointer-events-none">{style.icon}</span>
+        <span className="absolute inset-0 flex items-center justify-center text-[7rem] sm:text-[8rem] text-white/30 opacity-30 pointer-events-none select-none blur-sm">
+          {style.icon}
+        </span>
       )}
-      {children}
+      <div className="relative z-10">
+        {children}
+      </div>
     </div>
   );
 };
