@@ -1373,8 +1373,9 @@ function App() {
                 return a && (
                   <div
                     key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-red-600 relative"
                   >
+                    <span className="absolute top-2 right-2 text-xl">⚔️</span>
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                     <p><strong>Alcance:</strong> {a.alcance}</p>
@@ -1437,8 +1438,9 @@ function App() {
                 return a && (
                   <div
                     key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-blue-600 relative"
                   >
+                    <span className="absolute top-2 right-2 text-xl">🛡️</span>
                     <p className="font-bold text-lg">{a.nombre}</p>
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
@@ -1499,8 +1501,9 @@ function App() {
                 return p && (
                   <div
                     key={i}
-                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg"
+                    className="bg-gray-800 rounded-xl shadow-md p-4 w-full flex flex-col items-center text-center transform transition hover:-translate-y-1 hover:shadow-lg border-2 border-purple-600 relative"
                   >
+                    <span className="absolute top-2 right-2 text-xl">✨</span>
                     <p className="font-bold text-lg">{p.nombre}</p>
                     <p><strong>Alcance:</strong> {p.alcance}</p>
                     <p><strong>Consumo:</strong> {p.consumo}</p>
@@ -1600,7 +1603,7 @@ function App() {
                     a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((a, i) => (
-                    <Tarjeta key={`arma-${i}`}>
+                    <Tarjeta key={`arma-${i}`} variant="weapon">
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                       <p><strong>Alcance:</strong> {a.alcance}</p>
@@ -1623,7 +1626,7 @@ function App() {
                     a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((a, i) => (
-                    <Tarjeta key={`armadura-${i}`}>
+                    <Tarjeta key={`armadura-${i}`} variant="armor">
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p><strong>Defensa:</strong> {a.defensa}</p>
                       <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
@@ -1644,7 +1647,7 @@ function App() {
                     (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((h, i) => (
-                  <Tarjeta key={`hab-${i}`}>
+                  <Tarjeta key={`hab-${i}`} variant="power">
                     <p className="font-bold text-lg">{h.nombre}</p>
                     <p><strong>Alcance:</strong> {h.alcance}</p>
                     <p><strong>Consumo:</strong> {h.consumo}</p>
