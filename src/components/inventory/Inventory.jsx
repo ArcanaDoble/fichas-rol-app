@@ -83,13 +83,13 @@ const Inventory = ({ playerName }) => {
           ))}
           <button
             onClick={addSlot}
-            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 hover:scale-110 transition-transform"
+            className="w-20 h-20 md:w-24 md:h-24 border border-dashed rounded flex items-center justify-center text-xl text-gray-400 hover:ring-2 hover:ring-green-400 hover:scale-110 transition-transform"
           >
             +
           </button>
           <div
             ref={trashDrop}
-            className="w-20 h-20 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 hover:scale-110 hover:animate-pulse transition-transform"
+            className="w-20 h-20 md:w-24 md:h-24 border border-dashed rounded flex items-center justify-center text-xl text-red-400 hover:ring-2 hover:ring-red-500 hover:scale-110 hover:animate-pulse transition-transform"
           >
             🗑
           </div>
