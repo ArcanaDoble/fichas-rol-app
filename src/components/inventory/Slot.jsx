@@ -2,7 +2,7 @@ import React from 'react';
 import { useDrop } from 'react-dnd';
 import ItemToken, { ItemTypes } from './ItemToken';
 
-const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, onClose }) => {
+const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, onClose, onDelete }) => {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ItemTypes.TOKEN,
     canDrop: () => enabled,
@@ -29,14 +29,39 @@ const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, o
         <span className="text-gray-400 text-3xl select-none pointer-events-none">+</span>
       )}
       {enabled && !item && (
-        <button onClick={(e) => { e.stopPropagation(); onClose && onClose(); }} className="absolute top-1 right-1 text-xs">✕</button>
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose && onClose(); }}
+            className="absolute top-1 right-1 text-xs"
+          >
+            ✕
+          </button>
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="absolute bottom-1 right-1 text-xs"
+            >
+              🗑
+            </button>
+          )}
+        </>
       )}
       {item && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <ItemToken type={item.type} count={item.count} />
+          <ItemToken type={item.type} count={item.count} fromSlot={id} />
           <div className="absolute bottom-1 right-1 flex space-x-1">
-            <button onClick={onIncrement} className="bg-white text-xs px-1 rounded">+</button>
-            <button onClick={onDecrement} className="bg-white text-xs px-1 rounded">-</button>
+            <button
+              onClick={onIncrement}
+              className="w-6 h-6 bg-gray-800/80 text-white text-xs rounded flex items-center justify-center"
+            >
+              +
+            </button>
+            <button
+              onClick={onDecrement}
+              className="w-6 h-6 bg-gray-800/80 text-white text-xs rounded flex items-center justify-center"
+            >
+              -
+            </button>
           </div>
         </div>
       )}

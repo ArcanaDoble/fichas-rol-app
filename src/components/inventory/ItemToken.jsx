@@ -17,14 +17,14 @@ const colors = {
   comida: 'bg-green-300',
 };
 
-const ItemToken = ({ type = 'remedio', count = 1 }) => {
+const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TOKEN,
-    item: { type, count },
+    item: { id, type, count, fromSlot },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [type, count]);
+  }), [id, type, count, fromSlot]);
 
   const opacity = isDragging ? 0.5 : 1;
   const bg = colors[type] || 'bg-gray-300';

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Input from '../Input';
 
 const ITEMS = ['remedio', 'chatarra', 'comida'];
 
@@ -15,11 +16,12 @@ const ItemGenerator = ({ onGenerate }) => {
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-      <input
-        className="border rounded px-2 py-1 flex-1"
+      <Input
+        className="flex-1 text-black"
         placeholder="Buscar objeto"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
       />
       <button
         onClick={handleGenerate}
