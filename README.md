@@ -84,3 +84,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Tamaño de los slots adaptado a pantallas grandes.
 - Tarjetas de armas, armaduras y poderes con iconos y bordes de color.
 
+- Iconos de equipo como marca de agua en las tarjetas.
