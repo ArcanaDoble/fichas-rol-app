@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
-import { GiFist } from 'react-icons/gi';
+import { GiFist, GiCrossedSwords, GiShield, GiMagicSwirl } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Boton from './components/Boton';
 import Input from './components/Input';
@@ -1574,7 +1574,11 @@ function App() {
                     a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((a, i) => (
-                    <Tarjeta key={`arma-${i}`}>
+                    <Tarjeta
+                      key={`arma-${i}`}
+                      Icon={GiCrossedSwords}
+                      className="border-red-600 bg-red-800/40"
+                    >
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
                       <p><strong>Alcance:</strong> {a.alcance}</p>
@@ -1597,7 +1601,11 @@ function App() {
                     a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((a, i) => (
-                    <Tarjeta key={`armadura-${i}`}>
+                    <Tarjeta
+                      key={`armadura-${i}`}
+                      Icon={GiShield}
+                      className="border-blue-600 bg-blue-800/40"
+                    >
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p><strong>Defensa:</strong> {a.defensa}</p>
                       <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
@@ -1618,7 +1626,11 @@ function App() {
                     (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
                   )
                   .map((h, i) => (
-                    <Tarjeta key={`hab-${i}`}>
+                    <Tarjeta
+                      key={`hab-${i}`}
+                      Icon={GiMagicSwirl}
+                      className="border-purple-600 bg-purple-800/40"
+                    >
                       <p className="font-bold text-lg">{h.nombre}</p>
                       <p><strong>Alcance:</strong> {h.alcance}</p>
                       <p><strong>Consumo:</strong> {h.consumo}</p>

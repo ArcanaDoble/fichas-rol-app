@@ -74,6 +74,8 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
 - Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
 - Inventario guardado de forma individual para cada jugador.
+- Cartas de armas, armaduras y poderes con icono de fondo diferenciador.
+- Cartas de armas, armaduras y poderes con colores de borde distintivos.
 - Soporte de arrastre en dispositivos móviles gracias a TouchBackend.
 - Cantidad de objetos aumentable arrastrando repetidas veces al mismo slot.
 - Animación de activación del slot con resaltado verde.
