@@ -57,4 +57,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Botón "Volver al menú principal" en la pantalla de acceso de Máster.
 - Equipamiento y poderes centrados cuando solo hay un elemento equipado.
 - Selector de estados con iconos para llevar el control de efectos activos.
+- Inventario disponible en las fichas de jugador.
 

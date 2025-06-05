@@ -12,6 +12,7 @@ import ResourceBar from './components/ResourceBar';
 import AtributoCard from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
 import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
+import Inventory from './components/inventory/Inventory';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -1298,6 +1299,12 @@ function App() {
           <h2 className="text-xl font-semibold text-center mb-2">Estados</h2>
           <div className="mb-6 w-full">
             <EstadoSelector selected={estados} onToggle={toggleEstado} />
+          </div>
+
+          {/* INVENTARIO */}
+          <h2 className="text-xl font-semibold text-center mb-2">Inventario</h2>
+          <div className="mb-6 w-full">
+            <Inventory />
           </div>
 
           {/* EQUIPAR ARMA */}
