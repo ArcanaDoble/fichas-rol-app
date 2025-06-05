@@ -18,12 +18,15 @@ const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, o
   const border = enabled ? 'border-gray-500' : 'border-dashed border-gray-400';
   const bg = enabled ? 'bg-gray-700/70' : 'bg-gray-600/40';
   const highlight = isOver && canDrop ? 'ring-2 ring-blue-400' : '';
+  const blocked = isOver && !canDrop ? 'animate-shake ring-2 ring-red-500' : '';
+  const glow = item ? 'ring-2 ring-yellow-300' : 'hover:ring-2 hover:ring-yellow-300';
+  const scale = enabled ? 'scale-100 opacity-100' : 'scale-90 opacity-70';
 
   return (
     <div
       ref={drop}
       onClick={() => !enabled && onToggle && onToggle()}
-      className={`w-20 h-20 flex items-center justify-center border ${border} ${bg} ${highlight} rounded relative`}
+      className={`w-20 h-20 flex items-center justify-center border ${border} ${bg} ${highlight} ${blocked} ${glow} ${scale} rounded relative transition-all duration-300 transform`}
     >
       {!enabled && (
         <span className="text-gray-400 text-3xl select-none pointer-events-none">+</span>
@@ -32,14 +35,14 @@ const Slot = ({ id, enabled, item, onDrop, onIncrement, onDecrement, onToggle, o
         <>
           <button
             onClick={(e) => { e.stopPropagation(); onClose && onClose(); }}
-            className="absolute top-1 right-1 text-xs"
+            className="absolute top-0 right-0 text-2xl"
           >
             ✕
           </button>
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="absolute bottom-1 right-1 text-xs"
+              className="absolute bottom-0 right-0 text-2xl"
             >
               🗑
             </button>

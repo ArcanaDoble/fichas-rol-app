@@ -69,4 +69,8 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Botones de aumento y disminución con estilo más compacto y adaptable a móviles.
 - Arreglada la sincronización inicial del inventario para que los cambios se
   conserven tras recargar la página.
+- Estética del inventario renovada con bordes brillantes y controles más grandes.
+- Efecto luminoso al pasar el ratón sobre los slots o al contener un objeto.
+- Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
+- Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
 
