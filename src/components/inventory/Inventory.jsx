@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useDrop } from 'react-dnd';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -81,8 +79,7 @@ const Inventory = () => {
   }), [setSlots, setTokens]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="space-y-4 flex flex-col items-center">
+    <div className="space-y-4 flex flex-col items-center">
         <div className="flex flex-wrap justify-center gap-2">
           {slots.map((slot, i) => (
             <Slot
@@ -113,7 +110,6 @@ const Inventory = () => {
           ))}
         </div>
       </div>
-    </DndProvider>
   );
 };
 
