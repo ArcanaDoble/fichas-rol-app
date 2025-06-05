@@ -11,24 +11,25 @@ const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, enabled: fals
 
 const Inventory = () => {
   const [slots, setSlots] = useState(initialSlots);
-  const [nextId, setNextId] = useState(slots.length);
+  const [nextId, setNextId] = useState(initialSlots.length);
   const [tokens, setTokens] = useState([]);
 
   useEffect(() => {
-    const fetchSlots = async () => {
+    const fetchState = async () => {
       const snap = await getDoc(STORAGE_DOC);
       if (snap.exists()) {
-        const data = snap.data().slots || initialSlots;
-        setSlots(data);
-        setNextId(data.length);
+        const data = snap.data();
+        setSlots(data.slots || initialSlots);
+        setTokens(data.tokens || []);
+        setNextId(data.nextId || initialSlots.length);
       }
     };
-    fetchSlots();
+    fetchState();
   }, []);
 
   useEffect(() => {
-    setDoc(STORAGE_DOC, { slots });
-  }, [slots]);
+    setDoc(STORAGE_DOC, { slots, tokens, nextId });
+  }, [slots, tokens, nextId]);
 
   const toggleSlot = (index) => {
     setSlots(s => s.map((slot, i) => i === index ? { ...slot, enabled: !slot.enabled } : slot));
