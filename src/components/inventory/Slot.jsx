@@ -1,12 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
+import { motion } from 'framer-motion';
 import ItemToken, { ItemTypes } from './ItemToken';
 
 const Slot = ({ id, item, onDrop, onDelete }) => {
+  const [animateDrop, setAnimateDrop] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.matchMedia('(max-width: 640px)').matches);
+    check();
+  }, []);
+
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ItemTypes.TOKEN,
     drop: (dragged) => {
       onDrop && onDrop(dragged);
+      setAnimateDrop(true);
     },
     collect: monitor => ({
       isOver: monitor.isOver()
@@ -32,9 +42,15 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
         </span>
       )}
       {item && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <motion.div
+          className="absolute inset-0 flex items-center justify-center"
+          animate={animateDrop ? { scale: [0.8, 1.2, 1], y: [-10, 0], rotate: [ -15, 0 ] } : {}}
+          initial={false}
+          transition={{ duration: isMobile ? 0.2 : 0.4, type: 'spring', bounce: 0.5 }}
+          onAnimationComplete={() => setAnimateDrop(false)}
+        >
           <ItemToken type={item.type} count={item.count} fromSlot={id} />
-        </div>
+        </motion.div>
       )}
     </div>
   );
