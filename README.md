@@ -89,3 +89,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Efectos de gradiente animado y brillo pulsante en las fichas de objeto.
 - Descripción emergente de cada objeto al pasar el cursor o tocar brevemente.
 - Glosario configurable por el máster con palabras destacadas y tooltip de ayuda.
+- Tooltips del glosario con identificadores únicos para cada palabra.
