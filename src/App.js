@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -135,6 +135,7 @@ function App() {
   const [playerName, setPlayerName]           = useState('');
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
+  const tooltipCounterRef = useRef(0);
   const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
@@ -867,7 +868,7 @@ function App() {
         if (typeof part !== 'string') return [part];
         return part.split(regex).map((p, i) => {
           if (p.toLowerCase() === term.word.toLowerCase()) {
-            const id = `gloss-${term.word}-${i}`;
+            const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
             return (
               <React.Fragment key={id}>
                 <span
