@@ -13,6 +13,8 @@ import AtributoCard from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
 import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
+import MasterMenu from './components/MasterMenu';
+import InventoryRE4 from './components/re4/InventoryRE4';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -187,6 +189,9 @@ function App() {
   // Estados del personaje
   const [estados, setEstados] = useState([]);
 
+  // Vista elegida por el máster (inventario prototipo u opciones clásicas)
+  const [chosenView, setChosenView] = useState(null);
+
   // Glosario de términos destacados
   const [glossary, setGlossary] = useState([]);
   const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
@@ -217,6 +222,7 @@ function App() {
     setUserType(null);
     setAuthenticated(false);
     setShowLogin(false);
+    setChosenView(null);
     setNameEntered(false);
     setPlayerName('');
     setPasswordInput('');
@@ -1615,6 +1621,19 @@ function App() {
   }
 
   // MODO MÁSTER
+  if (userType === 'master' && authenticated && !chosenView) {
+    return <MasterMenu onSelect={setChosenView} />;
+  }
+
+  if (userType === 'master' && authenticated && chosenView === 're4') {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
+        <Boton onClick={() => setChosenView(null)} className="mb-4">Volver</Boton>
+        <InventoryRE4 playerName={playerName} />
+      </div>
+    );
+  }
+
   if (userType === 'master' && authenticated) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
