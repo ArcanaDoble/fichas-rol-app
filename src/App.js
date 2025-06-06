@@ -186,6 +186,12 @@ function App() {
   // Estados del personaje
   const [estados, setEstados] = useState([]);
 
+  // Glosario de términos destacados
+  const [glossary, setGlossary] = useState([]);
+  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
+  const [editingTerm, setEditingTerm] = useState(null);
+  const [newTermError, setNewTermError] = useState('');
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -358,10 +364,25 @@ function App() {
   }, []);
   useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
 
+  // ───────────────────────────────────────────────────────────
+  // FETCH GLOSARIO
+  // ───────────────────────────────────────────────────────────
+  const fetchGlossary = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, 'glossary'));
+      const datos = snap.docs.map(d => d.data());
+      setGlossary(datos);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+  useEffect(() => { fetchGlossary() }, [fetchGlossary]);
+
   const refreshCatalog = () => {
     fetchArmas();
     fetchArmaduras();
     fetchHabilidades();
+    fetchGlossary();
   };
 
   // ───────────────────────────────────────────────────────────
@@ -801,6 +822,76 @@ function App() {
 
   const togglePinnedTip = id => {
     setPinnedTipId(prev => (prev === id ? null : id));
+  };
+
+  // ────────────────────────────────
+  // Glosario handlers
+  // ────────────────────────────────
+  const saveTerm = async () => {
+    const { word, color, info } = newTerm;
+    if (!word.trim()) {
+      setNewTermError('Palabra requerida');
+      return;
+    }
+    try {
+      if (editingTerm && editingTerm !== word.trim()) {
+        await deleteDoc(doc(db, 'glossary', editingTerm));
+      }
+      await setDoc(doc(db, 'glossary', word.trim()), { word: word.trim(), color, info });
+      setEditingTerm(null);
+      setNewTerm({ word: '', color: '#ffff00', info: '' });
+      setNewTermError('');
+      fetchGlossary();
+    } catch (e) {
+      console.error(e);
+      setNewTermError('Error al guardar');
+    }
+  };
+
+  const startEditTerm = term => {
+    setNewTerm(term);
+    setEditingTerm(term.word);
+  };
+
+  const deleteTerm = async word => {
+    await deleteDoc(doc(db, 'glossary', word));
+    fetchGlossary();
+  };
+
+  const highlightText = text => {
+    if (!text) return text;
+    let parts = [text];
+    glossary.forEach(term => {
+      const regex = new RegExp(`(${term.word})`, 'gi');
+      parts = parts.flatMap(part => {
+        if (typeof part !== 'string') return [part];
+        return part.split(regex).map((p, i) => {
+          if (p.toLowerCase() === term.word.toLowerCase()) {
+            const id = `gloss-${term.word}-${i}`;
+            return (
+              <React.Fragment key={id}>
+                <span
+                  style={{ color: term.color }}
+                  className="font-bold cursor-help underline decoration-dotted"
+                  data-tooltip-id={id}
+                  data-tooltip-content={term.info}
+                >
+                  {p}
+                </span>
+                <Tooltip
+                  id={id}
+                  place="top"
+                  className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
+                  openOnClick={isTouchDevice}
+                />
+              </React.Fragment>
+            );
+          }
+          return p;
+        });
+      });
+    });
+    return parts;
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -1378,8 +1469,12 @@ function App() {
                     <p><strong>Consumo:</strong> {a.consumo}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
                     <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.join(', ')}</p>
-                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    <p><strong>Rasgos:</strong> {a.rasgos.map((r,ri) => (
+                      <React.Fragment key={ri}>
+                        {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                      </React.Fragment>
+                    ))}</p>
+                    {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
                     <Boton
                       color="red"
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
@@ -1437,8 +1532,12 @@ function App() {
                     <p><strong>Defensa:</strong> {a.defensa}</p>
                     <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
                     <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
-                    {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                      <React.Fragment key={ri}>
+                        {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                      </React.Fragment>
+                    )) : '❌'}</p>
+                    {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
                     <Boton
                       color="red"
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
@@ -1498,7 +1597,7 @@ function App() {
                     <p><strong>Cuerpo:</strong> {p.cuerpo}</p>
                     <p><strong>Mente:</strong> {p.mente}</p>
                     <p><strong>Poder:</strong> {p.poder}</p>
-                    {p.descripcion && <p className="italic">{p.descripcion}</p>}
+                    {p.descripcion && <p className="italic">{highlightText(p.descripcion)}</p>}
                     <Boton
                       color="red"
                       className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
@@ -1531,6 +1630,55 @@ function App() {
             className="w-full max-w-md"
           />
         </div>
+
+        <Collapsible title={editingTerm ? `Editar término: ${editingTerm}` : 'Añadir término destacado'} defaultOpen={false}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="Palabra"
+              value={newTerm.word}
+              onChange={e => setNewTerm(t => ({ ...t, word: e.target.value }))}
+            />
+            <input
+              type="color"
+              value={newTerm.color}
+              onChange={e => setNewTerm(t => ({ ...t, color: e.target.value }))}
+              className="w-10 h-8 border-none p-0 rounded"
+            />
+            <textarea
+              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+              placeholder="Descripción"
+              value={newTerm.info}
+              onChange={e => setNewTerm(t => ({ ...t, info: e.target.value }))}
+            />
+            <div className="sm:col-span-2 flex justify-between items-center">
+              {editingTerm && (
+                <Boton color="gray" onClick={() => { setEditingTerm(null); setNewTerm({ word: '', color: '#ffff00', info: '' }); }}>Cancelar</Boton>
+              )}
+              <Boton color="green" onClick={saveTerm}>{editingTerm ? 'Actualizar' : 'Guardar'} término</Boton>
+            </div>
+            {newTermError && <p className="text-red-400 text-center sm:col-span-2">{newTermError}</p>}
+          </div>
+        </Collapsible>
+
+        <Collapsible title="Glosario" defaultOpen={false}>
+          {glossary.length === 0 ? (
+            <p className="text-gray-400">No hay términos.</p>
+          ) : (
+            <ul className="space-y-2">
+              {glossary.map((t, i) => (
+                <li key={i} className="flex justify-between items-center">
+                  <span className="mr-2">
+                    <span style={{ color: t.color }} className="font-bold">{t.word}</span> - {t.info}
+                  </span>
+                  <div className="flex gap-2">
+                    <Boton color="blue" onClick={() => startEditTerm(t)} className="px-2 py-1 text-sm">Editar</Boton>
+                    <Boton color="red" onClick={() => deleteTerm(t.word)} className="px-2 py-1 text-sm">Borrar</Boton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Collapsible>
 
         <Collapsible title={editingAbility ? `Editar habilidad: ${editingAbility}` : "Crear nueva habilidad"} defaultOpen={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1598,10 +1746,14 @@ function App() {
                       <p><strong>Consumo:</strong> {a.consumo}</p>
                       <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
                       <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                        <React.Fragment key={ri}>
+                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                        </React.Fragment>
+                      )) : '❌'}</p>
                       <p><strong>Valor:</strong> {a.valor}</p>
                       {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
                     </Tarjeta>
                   ))
                 }
@@ -1619,10 +1771,14 @@ function App() {
                       <p><strong>Defensa:</strong> {a.defensa}</p>
                       <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
                       <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.join(', ') : '❌'}</p>
+                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                        <React.Fragment key={ri}>
+                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                        </React.Fragment>
+                      )) : '❌'}</p>
                       <p><strong>Valor:</strong> {a.valor}</p>
                       {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{a.descripcion}</p>}
+                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
                     </Tarjeta>
                   ))
                 }
@@ -1642,7 +1798,7 @@ function App() {
                     <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
                     <p><strong>Mente:</strong> {h.mente}</p>
                     <p><strong>Poder:</strong> {h.poder}</p>
-                    {h.descripcion && <p className="italic">{h.descripcion}</p>}
+                    {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
                     <div className="flex justify-end gap-2 mt-2">
                       <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
                       <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
