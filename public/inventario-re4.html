@@ -221,14 +221,70 @@
       }
     }
 
+    function canPlaceItem(x, y, width, height, excludeId = null) {
+      if (x < 0 || y < 0 || x + width > GRID_WIDTH || y + height > GRID_HEIGHT) {
+        return false;
+      }
+      return !inventory.some(it => it.id !== excludeId &&
+        x < it.x + it.width && x + width > it.x &&
+        y < it.y + it.height && y + height > it.y);
+    }
+
+    function addItem(templateId, x, y, quantity = 1) {
+      const template = itemTemplates.find(t => t.id === templateId);
+      if (!template) return false;
+      if (!canPlaceItem(x, y, template.width, template.height)) return false;
+      const item = {
+        ...template,
+        id: Date.now() + Math.random(),
+        x,
+        y,
+        quantity
+      };
+      inventory.push(item);
+      renderItem(item);
+      return true;
+    }
+
+    function renderItem(item) {
+      const el = document.createElement('div');
+      el.className = `item rarity-${item.rarity} category-${item.category}`;
+      el.draggable = true;
+      el.style.width = `${item.width * CELL_SIZE}px`;
+      el.style.height = `${item.height * CELL_SIZE}px`;
+      el.style.transform = `translate(${item.x * CELL_SIZE}px, ${item.y * CELL_SIZE}px)`;
+      el.textContent = item.name;
+      el.dataset.id = item.id;
+
+      if (item.quantity > 1) {
+        const qty = document.createElement('span');
+        qty.className = 'item-quantity';
+        qty.textContent = item.quantity;
+        el.appendChild(qty);
+      }
+
+      el.addEventListener('dragstart', e => {
+        draggedItem = item;
+        dragOffset.x = e.offsetX;
+        dragOffset.y = e.offsetY;
+      });
+
+      el.addEventListener('dragend', () => {
+        draggedItem = null;
+      });
+
+      document.getElementById('inventoryGrid').appendChild(el);
+      item.el = el;
+    }
+
     function initInventory() {
       createGrid();
       if (typeof createLibrary === 'function') createLibrary();
       if (typeof updateStats === 'function') updateStats();
 
-      inventory.push({ ...itemTemplates[0], x: 0, y: 0, quantity: 1 });
-      inventory.push({ ...itemTemplates[1], x: 3, y: 2, quantity: 1 });
-      inventory.push({ ...itemTemplates[2], x: 5, y: 4, quantity: 1 });
+      addItem('sword', 0, 0, 1);
+      addItem('potion_health', 3, 2, 1);
+      addItem('shield', 5, 4, 1);
     }
 
     document.addEventListener('DOMContentLoaded', initInventory);
