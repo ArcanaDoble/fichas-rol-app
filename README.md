@@ -91,3 +91,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Glosario configurable por el máster con palabras destacadas y tooltip de ayuda.
 - Tooltips del glosario con identificadores únicos para cada palabra.
 - Prototipo de inventario estilo RE4 accesible para el máster.
+- Nuevo archivo `public/inventario-re4.html` con plantilla HTML5.
