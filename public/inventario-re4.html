@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario RE4 - Tutorial</title>
+  <style>
+    /* Reset básico */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      color: #fff;
+      min-height: 100vh;
+      background: linear-gradient(145deg, #0f1d27, #193047);
+    }
+
+    /* Contenedor principal con efecto glass */
+    .container {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .header {
+      text-align: center;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .btn:active {
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 50px);
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .grid-cell {
+      width: 50px;
+      height: 50px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      position: relative;
+    }
+
+    .grid-highlight {
+      border-color: #4caf50;
+    }
+
+    .grid-invalid {
+      border-color: #e53935;
+    }
+
+    .item {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.9);
+      color: #000;
+      border-radius: 4px;
+      cursor: grab;
+      transition: transform 0.2s, filter 0.2s;
+    }
+
+    .item:hover {
+      filter: brightness(1.1);
+    }
+
+    .item:active {
+      transform: scale(0.95);
+    }
+
+    .item-selected {
+      outline: 2px solid #ffeb3b;
+    }
+
+    .item-quantity {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 0 3px;
+      font-size: 0.75rem;
+      border-radius: 2px;
+    }
+
+    /* Rarezas */
+    .rarity-common {
+      border: 1px solid #bdbdbd;
+    }
+
+    .rarity-rare {
+      border: 1px solid #4fc3f7;
+    }
+
+    .rarity-epic {
+      border: 1px solid #ab47bc;
+    }
+
+    .rarity-legendary {
+      border: 1px solid #ffa726;
+    }
+
+    /* Categorías */
+    .category-weapon {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .category-ammo {
+      background: rgba(255, 216, 104, 0.2);
+    }
+
+    .category-key {
+      background: rgba(171, 194, 255, 0.2);
+    }
+
+    .item-library {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .stats {
+      text-align: center;
+    }
+
+    .tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 10;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 0.5rem;
+      }
+
+      .inventory-grid {
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">Inventario RE4 (Prototipo)</div>
+    <div class="controls">
+      <button id="addBtn" class="btn">＋</button>
+      <button id="rotateBtn" class="btn">🔄</button>
+      <button id="clearBtn" class="btn">🗑</button>
+      <button id="autoBtn" class="btn">Auto</button>
+    </div>
+    <div class="inventory-grid" id="inventoryGrid"></div>
+    <div class="item-library" id="itemLibrary"></div>
+    <div class="stats">Espacio: <span id="spaceUsed">0</span>/<span id="spaceTotal">0</span> | <span id="count-weapon">0</span> armas | <span id="count-consumable">0</span> consumibles | <span id="count-armor">0</span> armaduras</div>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+  <script>
+    const GRID_WIDTH = 10, GRID_HEIGHT = 8, CELL_SIZE = 48;
+    let inventory = [], selectedItem = null, draggedItem = null, dragOffset = { x: 0, y: 0 };
+    const itemTemplates = [
+      { id: 'sword', width: 2, height: 1, name: 'Espada', category: 'weapon', rarity: 'common' },
+      { id: 'potion_health', width: 1, height: 1, name: 'Poción de salud', category: 'consumable', rarity: 'common' },
+      { id: 'shield', width: 2, height: 2, name: 'Escudo', category: 'armor', rarity: 'rare' }
+      // ...otros objetos...
+    ];
+
+    function createGrid() {
+      const grid = document.getElementById('inventoryGrid');
+      grid.style.gridTemplateColumns = `repeat(${GRID_WIDTH}, ${CELL_SIZE}px)`;
+      grid.style.gridTemplateRows = `repeat(${GRID_HEIGHT}, ${CELL_SIZE}px)`;
+
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          const cell = document.createElement('div');
+          cell.className = 'grid-cell';
+          cell.dataset.x = x;
+          cell.dataset.y = y;
+          cell.addEventListener('dragover', handleDragOver);
+          cell.addEventListener('drop', handleDrop);
+          grid.appendChild(cell);
+        }
+      }
+    }
+
+    function canPlaceItem(x, y, width, height, excludeId = null) {
+      if (x < 0 || y < 0 || x + width > GRID_WIDTH || y + height > GRID_HEIGHT) {
+        return false;
+      }
+      return !inventory.some(it => it.id !== excludeId &&
+        x < it.x + it.width && x + width > it.x &&
+        y < it.y + it.height && y + height > it.y);
+    }
+
+    function addItem(templateId, x, y, quantity = 1) {
+      const template = itemTemplates.find(t => t.id === templateId);
+      if (!template) return false;
+      if (!canPlaceItem(x, y, template.width, template.height)) return false;
+      const item = {
+        ...template,
+        id: Date.now() + Math.random(),
+        x,
+        y,
+        quantity
+      };
+      inventory.push(item);
+      renderItem(item);
+      if (typeof updateStats === "function") updateStats();
+      return true;
+    }
+
+    function handleDragStart(e, item) {
+      draggedItem = item;
+      dragOffset.x = e.offsetX;
+      dragOffset.y = e.offsetY;
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('.grid-highlight,.grid-invalid')
+        .forEach(c => c.classList.remove('grid-highlight', 'grid-invalid'));
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      if (!draggedItem) return;
+      clearHighlights();
+      const cell = e.currentTarget;
+      const startX = parseInt(cell.dataset.x) - Math.floor(dragOffset.x / CELL_SIZE);
+      const startY = parseInt(cell.dataset.y) - Math.floor(dragOffset.y / CELL_SIZE);
+      const valid = canPlaceItem(startX, startY, draggedItem.width, draggedItem.height, draggedItem.id);
+      for (let y = 0; y < draggedItem.height; y++) {
+        for (let x = 0; x < draggedItem.width; x++) {
+          const gx = startX + x;
+          const gy = startY + y;
+          const highlight = document.querySelector(`.grid-cell[data-x='${gx}'][data-y='${gy}']`);
+          if (highlight) highlight.classList.add(valid ? 'grid-highlight' : 'grid-invalid');
+        }
+      }
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      if (!draggedItem) return;
+      const cell = e.currentTarget;
+      const startX = parseInt(cell.dataset.x) - Math.floor(dragOffset.x / CELL_SIZE);
+      const startY = parseInt(cell.dataset.y) - Math.floor(dragOffset.y / CELL_SIZE);
+      if (canPlaceItem(startX, startY, draggedItem.width, draggedItem.height, draggedItem.id)) {
+        draggedItem.x = startX;
+        draggedItem.y = startY;
+        draggedItem.el.style.transform = `translate(${startX * CELL_SIZE}px, ${startY * CELL_SIZE}px)`;
+      }
+      clearHighlights();
+      draggedItem = null;
+    }
+
+    function rotateItem(item) {
+      const newW = item.height;
+      const newH = item.width;
+      if (!canPlaceItem(item.x, item.y, newW, newH, item.id)) return;
+      item.width = newW;
+      item.height = newH;
+      item.el.style.width = `${item.width * CELL_SIZE}px`;
+      item.el.style.height = `${item.height * CELL_SIZE}px`;
+      item.el.style.transform = `translate(${item.x * CELL_SIZE}px, ${item.y * CELL_SIZE}px)`;
+    }
+
+    function renderItem(item) {
+      const el = document.createElement('div');
+      el.className = `item rarity-${item.rarity} category-${item.category}`;
+      el.draggable = true;
+      el.style.width = `${item.width * CELL_SIZE}px`;
+      el.style.height = `${item.height * CELL_SIZE}px`;
+      el.style.transform = `translate(${item.x * CELL_SIZE}px, ${item.y * CELL_SIZE}px)`;
+      el.textContent = item.name;
+      el.dataset.id = item.id;
+
+      if (item.quantity > 1) {
+        const qty = document.createElement('span');
+        qty.className = 'item-quantity';
+        qty.textContent = item.quantity;
+        el.appendChild(qty);
+      }
+
+      el.addEventListener('dragstart', e => handleDragStart(e, item));
+
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        rotateItem(item);
+      });
+
+        el.addEventListener("click", () => selectItem(item));
+        el.addEventListener("mouseenter", e => showTooltip(e, item, item));
+        el.addEventListener("mouseleave", hideTooltip);
+
+      el.addEventListener('dragend', () => {
+        draggedItem = null;
+      });
+
+      document.getElementById('inventoryGrid').appendChild(el);
+      item.el = el;
+
+    function selectItem(item) {
+      if (selectedItem && selectedItem.el) selectedItem.el.classList.remove('item-selected');
+      selectedItem = item;
+      if (item && item.el) item.el.classList.add('item-selected');
+    }
+
+    function addRandomItem() {
+      const template = itemTemplates[Math.floor(Math.random() * itemTemplates.length)];
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          if (canPlaceItem(x, y, template.width, template.height)) {
+            addItem(template.id, x, y, 1);
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function clearInventory() {
+      inventory.forEach(it => it.el.remove());
+      inventory = [];
+      selectedItem = null;
+      updateStats();
+    }
+
+    function rotateSelected() {
+      if (selectedItem) {
+        rotateItem(selectedItem);
+        updateStats();
+      }
+    }
+
+    function removeSelectedItem() {
+      if (!selectedItem) return;
+      selectedItem.el.remove();
+      inventory = inventory.filter(i => i !== selectedItem);
+      selectedItem = null;
+      updateStats();
+    }
+
+    function autoOrganize() {
+      const items = [...inventory];
+      document.querySelectorAll('.item').forEach(el => el.remove());
+      inventory = [];
+      for (const it of items) {
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+          for (let x = 0; x < GRID_WIDTH; x++) {
+            if (canPlaceItem(x, y, it.width, it.height)) {
+              it.x = x;
+              it.y = y;
+              inventory.push(it);
+              renderItem(it);
+              x = GRID_WIDTH; y = GRID_HEIGHT;
+            }
+          }
+        }
+      }
+      updateStats();
+    }
+
+    function updateStats() {
+      const used = inventory.reduce((a, it) => a + it.width * it.height, 0);
+      document.getElementById('spaceUsed').textContent = used;
+      document.getElementById('spaceTotal').textContent = GRID_WIDTH * GRID_HEIGHT;
+      const counts = {};
+      inventory.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; });
+      ['weapon','consumable','armor'].forEach(cat => {
+        const el = document.getElementById(`count-${cat}`);
+        if (el) el.textContent = counts[cat] || 0;
+      });
+    }
+
+    function showTooltip(e, template, itemObj) {
+      const tip = document.getElementById('tooltip');
+      tip.textContent = template.name;
+      tip.style.left = `${e.pageX + 10}px`;
+      tip.style.top = `${e.pageY + 10}px`;
+      tip.style.opacity = '1';
+    }
+
+    function hideTooltip() {
+      const tip = document.getElementById('tooltip');
+      tip.style.opacity = '0';
+    }
+
+
+    function initInventory() {
+      createGrid();
+      if (typeof createLibrary === 'function') createLibrary();
+      if (typeof updateStats === "function") updateStats();
+
+      const addBtn = document.getElementById("addBtn");
+      if (addBtn) addBtn.addEventListener("click", addRandomItem);
+      const rotateBtn = document.getElementById("rotateBtn");
+      if (rotateBtn) rotateBtn.addEventListener("click", rotateSelected);
+      const clearBtn = document.getElementById("clearBtn");
+      if (clearBtn) clearBtn.addEventListener("click", clearInventory);
+      const autoBtn = document.getElementById("autoBtn");
+      if (autoBtn) autoBtn.addEventListener("click", autoOrganize);
+
+      addItem("sword", 0, 0, 1);
+      addItem("potion_health", 3, 2, 1);
+      addItem("shield", 5, 4, 1);
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "r" || e.key === "R") rotateSelected();
+        else if (e.key === "Delete" || e.key === "Backspace") removeSelectedItem();
+        else if (e.key === "Escape") selectItem(null);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', initInventory);
+  </script>
+</body>
+</html>
