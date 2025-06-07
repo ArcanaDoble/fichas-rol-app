@@ -107,6 +107,10 @@
       transform: scale(0.95);
     }
 
+    .item-selected {
+      outline: 2px solid #ffeb3b;
+    }
+
     .item-quantity {
       position: absolute;
       bottom: 2px;
@@ -186,13 +190,16 @@
 </head>
 <body>
   <div class="container">
-    <div class="header">…</div>
+    <div class="header">Inventario RE4 (Prototipo)</div>
     <div class="controls">
+      <button id="addBtn" class="btn">＋</button>
       <button id="rotateBtn" class="btn">🔄</button>
+      <button id="clearBtn" class="btn">🗑</button>
+      <button id="autoBtn" class="btn">Auto</button>
     </div>
     <div class="inventory-grid" id="inventoryGrid"></div>
-    <div class="item-library">…</div>
-    <div class="stats">…</div>
+    <div class="item-library" id="itemLibrary"></div>
+    <div class="stats">Espacio: <span id="spaceUsed">0</span>/<span id="spaceTotal">0</span> | <span id="count-weapon">0</span> armas | <span id="count-consumable">0</span> consumibles | <span id="count-armor">0</span> armaduras</div>
   </div>
   <div class="tooltip" id="tooltip"></div>
   <script>
@@ -245,6 +252,7 @@
       };
       inventory.push(item);
       renderItem(item);
+      if (typeof updateStats === "function") updateStats();
       return true;
     }
 
@@ -327,7 +335,9 @@
         rotateItem(item);
       });
 
-      el.addEventListener('click', () => { selectedItem = item; });
+        el.addEventListener("click", () => selectItem(item));
+        el.addEventListener("mouseenter", e => showTooltip(e, item, item));
+        el.addEventListener("mouseleave", hideTooltip);
 
       el.addEventListener('dragend', () => {
         draggedItem = null;
@@ -335,22 +345,116 @@
 
       document.getElementById('inventoryGrid').appendChild(el);
       item.el = el;
+
+    function selectItem(item) {
+      if (selectedItem && selectedItem.el) selectedItem.el.classList.remove('item-selected');
+      selectedItem = item;
+      if (item && item.el) item.el.classList.add('item-selected');
     }
+    function addRandomItem() {
+      const template = itemTemplates[Math.floor(Math.random() * itemTemplates.length)];
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          if (canPlaceItem(x, y, template.width, template.height)) {
+            addItem(template.id, x, y, 1);
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function clearInventory() {
+      inventory.forEach(it => it.el.remove());
+      inventory = [];
+      selectedItem = null;
+      updateStats();
+    }
+
+    function rotateSelected() {
+      if (selectedItem) {
+        rotateItem(selectedItem);
+        updateStats();
+      }
+    }
+
+    function removeSelectedItem() {
+      if (!selectedItem) return;
+      selectedItem.el.remove();
+      inventory = inventory.filter(i => i !== selectedItem);
+      selectedItem = null;
+      updateStats();
+    }
+
+    function autoOrganize() {
+      const items = [...inventory];
+      document.querySelectorAll('.item').forEach(el => el.remove());
+      inventory = [];
+      for (const it of items) {
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+          for (let x = 0; x < GRID_WIDTH; x++) {
+            if (canPlaceItem(x, y, it.width, it.height)) {
+              it.x = x;
+              it.y = y;
+              inventory.push(it);
+              renderItem(it);
+              x = GRID_WIDTH; y = GRID_HEIGHT;
+            }
+          }
+        }
+      }
+      updateStats();
+    }
+
+    function updateStats() {
+      const used = inventory.reduce((a, it) => a + it.width * it.height, 0);
+      document.getElementById('spaceUsed').textContent = used;
+      document.getElementById('spaceTotal').textContent = GRID_WIDTH * GRID_HEIGHT;
+      const counts = {};
+      inventory.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; });
+      ['weapon','consumable','armor'].forEach(cat => {
+        const el = document.getElementById(`count-${cat}`);
+        if (el) el.textContent = counts[cat] || 0;
+      });
+    }
+
+    function showTooltip(e, template, itemObj) {
+      const tip = document.getElementById('tooltip');
+      tip.textContent = template.name;
+      tip.style.left = `${e.pageX + 10}px`;
+      tip.style.top = `${e.pageY + 10}px`;
+      tip.style.opacity = '1';
+    }
+
+    function hideTooltip() {
+      const tip = document.getElementById('tooltip');
+      tip.style.opacity = '0';
+    }
+
+
     function initInventory() {
       createGrid();
       if (typeof createLibrary === 'function') createLibrary();
-      if (typeof updateStats === 'function') updateStats();
+      if (typeof updateStats === "function") updateStats();
 
-      const rotateBtn = document.getElementById('rotateBtn');
-      if (rotateBtn) {
-        rotateBtn.addEventListener('click', () => {
-          if (selectedItem) rotateItem(selectedItem);
-        });
-      }
+      const addBtn = document.getElementById("addBtn");
+      if (addBtn) addBtn.addEventListener("click", addRandomItem);
+      const rotateBtn = document.getElementById("rotateBtn");
+      if (rotateBtn) rotateBtn.addEventListener("click", rotateSelected);
+      const clearBtn = document.getElementById("clearBtn");
+      if (clearBtn) clearBtn.addEventListener("click", clearInventory);
+      const autoBtn = document.getElementById("autoBtn");
+      if (autoBtn) autoBtn.addEventListener("click", autoOrganize);
 
-      addItem('sword', 0, 0, 1);
-      addItem('potion_health', 3, 2, 1);
-      addItem('shield', 5, 4, 1);
+      addItem("sword", 0, 0, 1);
+      addItem("potion_health", 3, 2, 1);
+      addItem("shield", 5, 4, 1);
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "r" || e.key === "R") rotateSelected();
+        else if (e.key === "Delete" || e.key === "Backspace") removeSelectedItem();
+        else if (e.key === "Escape") selectItem(null);
+      });
     }
 
     document.addEventListener('DOMContentLoaded', initInventory);
