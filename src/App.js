@@ -14,7 +14,6 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
-import InventoryRE4 from './components/re4/InventoryRE4';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -1629,7 +1628,13 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <Boton onClick={() => setChosenView(null)} className="mb-4">Volver</Boton>
-        <InventoryRE4 playerName={playerName} />
+        <div className="w-full h-[80vh]">
+          <iframe
+            src="/inventario-re4.html"
+            title="Inventario RE4"
+            className="w-full h-full border-0"
+          />
+        </div>
       </div>
     );
   }
