@@ -193,7 +193,17 @@
     <div class="stats">…</div>
   </div>
   <div class="tooltip" id="tooltip"></div>
-  <style>/* CSS irá aquí */</style>
+  <script>
+    const GRID_WIDTH = 10, GRID_HEIGHT = 8, CELL_SIZE = 48;
+    let inventory = [], selectedItem = null, draggedItem = null, dragOffset = { x: 0, y: 0 };
+    const itemTemplates = [
+      { id: 'sword', width: 2, height: 1, name: 'Espada', category: 'weapon', rarity: 'common' },
+      { id: 'potion_health', width: 1, height: 1, name: 'Poción de salud', category: 'consumable', rarity: 'common' },
+      { id: 'shield', width: 2, height: 2, name: 'Escudo', category: 'armor', rarity: 'rare' }
+      // ...otros objetos...
+    ];
+    /* JS irá aquí */
+  </script>
 </head>
 <body>
   <!-- HTML irá aquí -->

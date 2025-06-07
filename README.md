@@ -94,3 +94,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Nuevo archivo `public/inventario-re4.html` con plantilla HTML5.
 - Inventario RE4 con contenedores, controles, grid, biblioteca, stats y tooltip.
 - Estilos base del inventario RE4 con Glass Morphism, rarezas y tooltip.
+- Variables de grid y plantillas de objetos añadidas en el script del inventario RE4.
