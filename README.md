@@ -98,3 +98,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Inicialización del inventario y creación dinámica de la cuadrícula.
 - Comprobación de colisiones con `canPlaceItem()` y creación de objetos mediante `addItem()`.
 - Arrastre con vista previa de validación y rotación de objetos.
+
