@@ -100,4 +100,5 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Comprobación de colisiones con `canPlaceItem()` y creación de objetos mediante `addItem()`.
 - Arrastre con vista previa de validación y rotación de objetos.
 - Controles de usuario para añadir ítems aleatorios, rotar y organizar, con estadísticas y tooltips.
+- Biblioteca de objetos interactiva con iconos y botones para añadir ítems al inventario.
 
