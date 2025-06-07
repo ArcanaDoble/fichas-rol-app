@@ -187,7 +187,9 @@
 <body>
   <div class="container">
     <div class="header">…</div>
-    <div class="controls">…</div>
+    <div class="controls">
+      <button id="rotateBtn" class="btn">🔄</button>
+    </div>
     <div class="inventory-grid" id="inventoryGrid"></div>
     <div class="item-library">…</div>
     <div class="stats">…</div>
@@ -214,21 +216,141 @@
           cell.className = 'grid-cell';
           cell.dataset.x = x;
           cell.dataset.y = y;
-          cell.addEventListener('dragover', e => e.preventDefault());
-          cell.addEventListener('drop', () => {});
+          cell.addEventListener('dragover', handleDragOver);
+          cell.addEventListener('drop', handleDrop);
           grid.appendChild(cell);
         }
       }
     }
 
+    function canPlaceItem(x, y, width, height, excludeId = null) {
+      if (x < 0 || y < 0 || x + width > GRID_WIDTH || y + height > GRID_HEIGHT) {
+        return false;
+      }
+      return !inventory.some(it => it.id !== excludeId &&
+        x < it.x + it.width && x + width > it.x &&
+        y < it.y + it.height && y + height > it.y);
+    }
+
+    function addItem(templateId, x, y, quantity = 1) {
+      const template = itemTemplates.find(t => t.id === templateId);
+      if (!template) return false;
+      if (!canPlaceItem(x, y, template.width, template.height)) return false;
+      const item = {
+        ...template,
+        id: Date.now() + Math.random(),
+        x,
+        y,
+        quantity
+      };
+      inventory.push(item);
+      renderItem(item);
+      return true;
+    }
+
+    function handleDragStart(e, item) {
+      draggedItem = item;
+      dragOffset.x = e.offsetX;
+      dragOffset.y = e.offsetY;
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('.grid-highlight,.grid-invalid')
+        .forEach(c => c.classList.remove('grid-highlight', 'grid-invalid'));
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      if (!draggedItem) return;
+      clearHighlights();
+      const cell = e.currentTarget;
+      const startX = parseInt(cell.dataset.x) - Math.floor(dragOffset.x / CELL_SIZE);
+      const startY = parseInt(cell.dataset.y) - Math.floor(dragOffset.y / CELL_SIZE);
+      const valid = canPlaceItem(startX, startY, draggedItem.width, draggedItem.height, draggedItem.id);
+      for (let y = 0; y < draggedItem.height; y++) {
+        for (let x = 0; x < draggedItem.width; x++) {
+          const gx = startX + x;
+          const gy = startY + y;
+          const highlight = document.querySelector(`.grid-cell[data-x='${gx}'][data-y='${gy}']`);
+          if (highlight) highlight.classList.add(valid ? 'grid-highlight' : 'grid-invalid');
+        }
+      }
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      if (!draggedItem) return;
+      const cell = e.currentTarget;
+      const startX = parseInt(cell.dataset.x) - Math.floor(dragOffset.x / CELL_SIZE);
+      const startY = parseInt(cell.dataset.y) - Math.floor(dragOffset.y / CELL_SIZE);
+      if (canPlaceItem(startX, startY, draggedItem.width, draggedItem.height, draggedItem.id)) {
+        draggedItem.x = startX;
+        draggedItem.y = startY;
+        draggedItem.el.style.transform = `translate(${startX * CELL_SIZE}px, ${startY * CELL_SIZE}px)`;
+      }
+      clearHighlights();
+      draggedItem = null;
+    }
+
+    function rotateItem(item) {
+      const newW = item.height;
+      const newH = item.width;
+      if (!canPlaceItem(item.x, item.y, newW, newH, item.id)) return;
+      item.width = newW;
+      item.height = newH;
+      item.el.style.width = `${item.width * CELL_SIZE}px`;
+      item.el.style.height = `${item.height * CELL_SIZE}px`;
+      item.el.style.transform = `translate(${item.x * CELL_SIZE}px, ${item.y * CELL_SIZE}px)`;
+    }
+
+    function renderItem(item) {
+      const el = document.createElement('div');
+      el.className = `item rarity-${item.rarity} category-${item.category}`;
+      el.draggable = true;
+      el.style.width = `${item.width * CELL_SIZE}px`;
+      el.style.height = `${item.height * CELL_SIZE}px`;
+      el.style.transform = `translate(${item.x * CELL_SIZE}px, ${item.y * CELL_SIZE}px)`;
+      el.textContent = item.name;
+      el.dataset.id = item.id;
+
+      if (item.quantity > 1) {
+        const qty = document.createElement('span');
+        qty.className = 'item-quantity';
+        qty.textContent = item.quantity;
+        el.appendChild(qty);
+      }
+
+      el.addEventListener('dragstart', e => handleDragStart(e, item));
+
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        rotateItem(item);
+      });
+
+      el.addEventListener('click', () => { selectedItem = item; });
+
+      el.addEventListener('dragend', () => {
+        draggedItem = null;
+      });
+
+      document.getElementById('inventoryGrid').appendChild(el);
+      item.el = el;
+    }
     function initInventory() {
       createGrid();
       if (typeof createLibrary === 'function') createLibrary();
       if (typeof updateStats === 'function') updateStats();
 
-      inventory.push({ ...itemTemplates[0], x: 0, y: 0, quantity: 1 });
-      inventory.push({ ...itemTemplates[1], x: 3, y: 2, quantity: 1 });
-      inventory.push({ ...itemTemplates[2], x: 5, y: 4, quantity: 1 });
+      const rotateBtn = document.getElementById('rotateBtn');
+      if (rotateBtn) {
+        rotateBtn.addEventListener('click', () => {
+          if (selectedItem) rotateItem(selectedItem);
+        });
+      }
+
+      addItem('sword', 0, 0, 1);
+      addItem('potion_health', 3, 2, 1);
+      addItem('shield', 5, 4, 1);
     }
 
     document.addEventListener('DOMContentLoaded', initInventory);

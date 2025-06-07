@@ -96,4 +96,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Estilos base del inventario RE4 con Glass Morphism, rarezas y tooltip.
 - Variables de grid y plantillas de objetos añadidas en el script del inventario RE4.
 - Inicialización del inventario y creación dinámica de la cuadrícula.
+- Comprobación de colisiones con `canPlaceItem()` y creación de objetos mediante `addItem()`.
+- Arrastre con vista previa de validación y rotación de objetos.
 
