@@ -92,6 +92,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Tooltips del glosario con identificadores únicos para cada palabra.
 - Prototipo de inventario estilo RE4 accesible para el máster.
 - Nuevo archivo `public/inventario-re4.html` con plantilla HTML5.
+- El prototipo RE4 se incrusta en la vista de Máster mediante un `iframe`.
 - Inventario RE4 con contenedores, controles, grid, biblioteca, stats y tooltip.
 - Estilos base del inventario RE4 con Glass Morphism, rarezas y tooltip.
 - Variables de grid y plantillas de objetos añadidas en el script del inventario RE4.
