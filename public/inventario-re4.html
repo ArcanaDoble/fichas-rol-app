@@ -166,6 +166,22 @@
       margin-bottom: 1rem;
     }
 
+    .search {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .search-input {
+      flex: 1 1 150px;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.2);
+      color: #fff;
+    }
+
     .stats {
       text-align: center;
     }
@@ -203,6 +219,10 @@
       <button id="clearBtn" class="btn">🗑</button>
       <button id="autoBtn" class="btn">Auto</button>
     </div>
+    <div class="search">
+      <input id="searchInput" class="search-input" type="text" placeholder="Buscar objeto..."/>
+      <button id="searchBtn" class="btn">Añadir</button>
+    </div>
     <div class="inventory-grid" id="inventoryGrid"></div>
     <div class="item-library" id="itemLibrary"></div>
     <div class="stats">Espacio: <span id="spaceUsed">0</span>/<span id="spaceTotal">0</span> | <span id="count-weapon">0</span> armas | <span id="count-consumable">0</span> consumibles | <span id="count-armor">0</span> armaduras</div>
@@ -211,35 +231,26 @@
   <script>
     const GRID_WIDTH = 10, GRID_HEIGHT = 8, CELL_SIZE = 48;
     let inventory = [], selectedItem = null, draggedItem = null, dragOffset = { x: 0, y: 0 };
+    const libraryItems = [];
     const itemTemplates = [
       {
-        id: 'sword',
-        width: 2,
+        id: 'espada',
+        width: 4,
         height: 1,
         name: 'Espada',
         category: 'weapon',
         rarity: 'common',
-        icon: 'marcas/Espada.png'
+        icon: 'items/Espada.png'
       },
       {
-        id: 'potion_health',
-        width: 1,
-        height: 1,
-        name: 'Poción de salud',
-        category: 'consumable',
-        rarity: 'common',
-        icon: 'https://via.placeholder.com/40'
-      },
-      {
-        id: 'shield',
+        id: 'daga',
         width: 2,
-        height: 2,
-        name: 'Escudo',
-        category: 'armor',
-        rarity: 'rare',
-        icon: 'marcas/Armadura.png'
+        height: 1,
+        name: 'Daga',
+        category: 'weapon',
+        rarity: 'common',
+        icon: 'items/Daga.png'
       }
-      // ...otros objetos...
     ];
 
     function createGrid() {
@@ -390,7 +401,9 @@
       const lib = document.getElementById('itemLibrary');
       if (!lib) return;
       lib.innerHTML = '';
-      itemTemplates.forEach(t => {
+      libraryItems.forEach(id => {
+        const t = itemTemplates.find(tmp => tmp.id === id);
+        if (!t) return;
         const btn = document.createElement('div');
         btn.className = `item rarity-${t.rarity} category-${t.category}`;
         btn.style.width = `${t.width * CELL_SIZE}px`;
@@ -522,9 +535,19 @@
       const autoBtn = document.getElementById("autoBtn");
       if (autoBtn) autoBtn.addEventListener("click", autoOrganize);
 
-      addItem("sword", 0, 0, 1);
-      addItem("potion_health", 3, 2, 1);
-      addItem("shield", 5, 4, 1);
+      const searchBtn = document.getElementById("searchBtn");
+      const searchInput = document.getElementById("searchInput");
+      function handleSearch() {
+        const query = searchInput.value.trim().toLowerCase();
+        const t = itemTemplates.find(it => it.name.toLowerCase() === query || it.id === query);
+        if (t && !libraryItems.includes(t.id)) {
+          libraryItems.push(t.id);
+          createLibrary();
+        }
+        searchInput.value = '';
+      }
+      if (searchBtn) searchBtn.addEventListener("click", handleSearch);
+      if (searchInput) searchInput.addEventListener("keypress", e => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } });
 
       document.addEventListener("keydown", e => {
         if (e.key === "r" || e.key === "R") rotateSelected();
