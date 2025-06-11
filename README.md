@@ -107,5 +107,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
 - Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
 - Se añadió un workflow de GitHub Actions que instala las dependencias, ejecuta las pruebas y pasa el lint en cada push.
+- Se añadió un polyfill de `setImmediate` para que las pruebas funcionen con Node 20.
 
 
