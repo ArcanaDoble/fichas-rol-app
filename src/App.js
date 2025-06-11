@@ -410,7 +410,23 @@ function App() {
   const loadPlayer = useCallback(async () => {
     if (!nameEntered) return;
     const ref = doc(db, 'players', playerName);
-    const snap = await getDoc(ref);
+    let snap;
+    try {
+      snap = await getDoc(ref);
+    } catch (e) {
+      console.error(e);
+      const stored = typeof window !== 'undefined'
+        ? window.localStorage.getItem(`player_${playerName}`)
+        : null;
+      if (stored) {
+        const d = JSON.parse(stored);
+        setResourcesList(d.resourcesList || []);
+        setClaves(d.claves || []);
+        setEstados(d.estados || []);
+        setPlayerData(applyCargaPenalties(d, armas, armaduras));
+      }
+      return;
+    }
 
     // Atributos por defecto
     const baseA = {};
@@ -463,22 +479,33 @@ function App() {
       setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
 
     } else {
-      // Si no existe en Firestore, crear con valores predeterminados
-      const baseS = {};
-      defaultRecursos.forEach(r => {
-        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
-      });
-      const lista = defaultRecursos.map(id => ({
-        id,
-        name: id,
-        color: recursoColor[id] || '#ffffff',
-        info: recursoInfo[id] || ''
-      }));
-      setResourcesList(lista);
-      setClaves([]);
-      setEstados([]);
-      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
-      setPlayerData(applyCargaPenalties(created, armas, armaduras));
+      const stored = typeof window !== 'undefined'
+        ? window.localStorage.getItem(`player_${playerName}`)
+        : null;
+      if (stored) {
+        const d = JSON.parse(stored);
+        setResourcesList(d.resourcesList || []);
+        setClaves(d.claves || []);
+        setEstados(d.estados || []);
+        setPlayerData(applyCargaPenalties(d, armas, armaduras));
+      } else {
+        // Si no existe en Firestore ni en localStorage, crear con valores predeterminados
+        const baseS = {};
+        defaultRecursos.forEach(r => {
+          baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+        });
+        const lista = defaultRecursos.map(id => ({
+          id,
+          name: id,
+          color: recursoColor[id] || '#ffffff',
+          info: recursoInfo[id] || ''
+        }));
+        setResourcesList(lista);
+        setClaves([]);
+        setEstados([]);
+        const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+        setPlayerData(applyCargaPenalties(created, armas, armaduras));
+      }
     }
   }, [armas, armaduras, nameEntered, playerName]);
 
@@ -504,7 +531,17 @@ function App() {
       updatedAt: new Date(),
     };
     setPlayerData(fullData);
-    await setDoc(doc(db, 'players', playerName), fullData);
+    try {
+      await setDoc(doc(db, 'players', playerName), fullData);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+      }
+    } catch (e) {
+      console.error(e);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+      }
+    }
   };
 
   // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso

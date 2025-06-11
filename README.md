@@ -66,6 +66,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Inventario disponible en las fichas de jugador.
 - Slots del inventario habilitables con un clic y almacenamiento persistente.
 - Persistencia del inventario en Firestore en lugar de localStorage.
+- Copia de seguridad local de los datos del jugador si falla la conexión a Firebase.
 - Buscador de objetos con texto visible y envío con Enter.
 - Sugerencia automática al buscar objetos con tabulación para autocompletar.
 - Botón de papelera para eliminar objetos arrastrándolos.
