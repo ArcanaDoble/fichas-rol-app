@@ -55,14 +55,14 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
           🗑
         </span>
       )}
-      {item && (
-        <motion.div
-          className="absolute inset-0 flex items-center justify-center"
-          animate={animateDrop ? { scale: [0.8, 1.2, 1], y: [-10, 0], rotate: [ -15, 0 ] } : {}}
-          initial={false}
-          transition={{ duration: isMobile ? 0.2 : 0.4, type: 'spring', bounce: 0.5 }}
-          onAnimationComplete={() => setAnimateDrop(false)}
-        >
+        {item && (
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center"
+            animate={animateDrop ? { scale: [0.8, 1.2, 1], y: [-10, 0], rotate: [-15, 0] } : {}}
+            initial={false}
+            transition={{ duration: isMobile ? 0.3 : 0.5, ease: 'easeOut' }}
+            onAnimationComplete={() => setAnimateDrop(false)}
+          >
           <ItemToken type={item.type} count={item.count} fromSlot={id} />
         </motion.div>
       )}
