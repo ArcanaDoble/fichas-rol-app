@@ -179,6 +179,7 @@ function App() {
     newResColor,
     setNewResColor,
     newResError,
+    setNewResError,
     agregarRecurso,
     eliminarRecurso,
   } = useResourcesHook(
