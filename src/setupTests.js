@@ -6,3 +6,7 @@ import '@testing-library/jest-dom';
 
 // Mock fetch globally to avoid network calls in tests
 global.fetch = jest.fn(() => Promise.resolve({ text: () => Promise.resolve('') }));
+
+afterEach(() => {
+  jest.clearAllTimers();
+});
