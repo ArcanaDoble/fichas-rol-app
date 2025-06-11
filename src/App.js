@@ -12,15 +12,16 @@ import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
-import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
+import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import { Tooltip } from 'react-tooltip';
 import { useConfirm } from './components/Confirm';
+
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
-const MASTER_PASSWORD = '0904';
+const MASTER_PASSWORD = process.env.REACT_APP_MASTER_PASSWORD || '';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
@@ -47,7 +48,6 @@ const recursoInfo = {
   armadura: 'Explicación de Armadura',
 };
 
-const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
@@ -149,17 +149,28 @@ function App() {
   const [playerPoderError, setPlayerPoderError] = useState('');
 
   // Recursos dinámicos (añadir / eliminar)
-  const [resourcesList, setResourcesList] = useState(
+  const {
+    resourcesList,
+    setResourcesList,
+    showAddResForm,
+    setShowAddResForm,
+    newResName,
+    setNewResName,
+    newResColor,
+    setNewResColor,
+    newResError,
+    agregarRecurso,
+    eliminarRecurso,
+  } = useResourcesHook(
     defaultRecursos.map(name => ({
       id: name,
       name,
       color: recursoColor[name] || '#ffffff',
       info: recursoInfo[name] || ''
-    }))
+    })),
+    (data, list) => savePlayer(data, list),
+    playerData
   );
-  const [newResName, setNewResName]   = useState('');
-  const [newResColor, setNewResColor] = useState('#ffffff');
-  const [newResError, setNewResError] = useState('');
   const [newAbility, setNewAbility] = useState({
     nombre: '',
     alcance: '',
@@ -171,9 +182,6 @@ function App() {
   });
   const [editingAbility, setEditingAbility] = useState(null);
   const [newAbilityError, setNewAbilityError] = useState('');
-  const [showAddResForm, setShowAddResForm] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 640 : false
-  );
   const [searchTerm, setSearchTerm]   = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
   const [editingInfoText, setEditingInfoText] = useState('');
@@ -195,10 +203,18 @@ function App() {
   const [chosenView, setChosenView] = useState(null);
 
   // Glosario de términos destacados
-  const [glossary, setGlossary] = useState([]);
-  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
-  const [editingTerm, setEditingTerm] = useState(null);
-  const [newTermError, setNewTermError] = useState('');
+  const {
+    glossary,
+    newTerm,
+    setNewTerm,
+    editingTerm,
+    setEditingTerm,
+    newTermError,
+    saveTerm,
+    startEditTerm,
+    deleteTerm,
+    fetchGlossary,
+  } = useGlossary();
 
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -221,13 +237,10 @@ function App() {
   // NAVIGATION
   // ───────────────────────────────────────────────────────────
   const volverAlMenu = () => {
-    setUserType(null);
-    setAuthenticated(false);
-    setShowLogin(false);
+    resetLogin();
     setChosenView(null);
     setNameEntered(false);
     setPlayerName('');
-    setPasswordInput('');
     setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
@@ -270,7 +283,7 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
-  const sheetId = '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID;
 
   const fetchArmas = useCallback(async () => {
     setLoading(true);
@@ -278,7 +291,7 @@ function App() {
       const rows = await fetchSheetData(sheetId, 'Lista_Armas');
       const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
@@ -315,7 +328,7 @@ function App() {
       const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
       const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
@@ -360,16 +373,6 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH GLOSARIO
   // ───────────────────────────────────────────────────────────
-  const fetchGlossary = useCallback(async () => {
-    try {
-      const snap = await getDocs(collection(db, 'glossary'));
-      const datos = snap.docs.map(d => d.data());
-      setGlossary(datos);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-  useEffect(() => { fetchGlossary() }, [fetchGlossary]);
 
   const refreshCatalog = () => {
     fetchArmas();
@@ -456,7 +459,7 @@ function App() {
       const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
-  }, [nameEntered, playerName]);
+  }, [armas, armaduras, nameEntered, playerName]);
 
   // useEffect que llama a loadPlayer
   useEffect(() => {
@@ -640,15 +643,6 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
-  const handleLogin = () => {
-    if (passwordInput === MASTER_PASSWORD) {
-      setAuthenticated(true);
-      setShowLogin(false);
-      setAuthError('');
-    } else {
-      setAuthError('Contraseña incorrecta');
-    }
-  };
   const enterPlayer = () => {
     if (playerName.trim()) setNameEntered(true);
   };
@@ -819,37 +813,7 @@ function App() {
 
   // ────────────────────────────────
   // Glosario handlers
-  // ────────────────────────────────
-  const saveTerm = async () => {
-    const { word, color, info } = newTerm;
-    if (!word.trim()) {
-      setNewTermError('Palabra requerida');
-      return;
-    }
-    try {
-      if (editingTerm && editingTerm !== word.trim()) {
-        await deleteDoc(doc(db, 'glossary', editingTerm));
-      }
-      await setDoc(doc(db, 'glossary', word.trim()), { word: word.trim(), color, info });
-      setEditingTerm(null);
-      setNewTerm({ word: '', color: '#ffff00', info: '' });
-      setNewTermError('');
-      fetchGlossary();
-    } catch (e) {
-      console.error(e);
-      setNewTermError('Error al guardar');
-    }
-  };
-
-  const startEditTerm = term => {
-    setNewTerm(term);
-    setEditingTerm(term.word);
-  };
-
-  const deleteTerm = async word => {
-    await deleteDoc(doc(db, 'glossary', word));
-    fetchGlossary();
-  };
+  // (ahora gestionados por el hook useGlossary)
 
   const highlightText = text => {
     if (!text) return text;
