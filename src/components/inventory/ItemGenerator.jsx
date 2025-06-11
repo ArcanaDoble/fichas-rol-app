@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 import Input from '../Input';
 
 const ITEMS = ['remedio', 'chatarra', 'comida'];
@@ -82,6 +83,10 @@ const ItemGenerator = ({ onGenerate }) => {
       </button>
     </div>
   );
+};
+
+ItemGenerator.propTypes = {
+  onGenerate: PropTypes.func.isRequired,
 };
 
 export default ItemGenerator;

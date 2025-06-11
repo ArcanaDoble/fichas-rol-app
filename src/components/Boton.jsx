@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 const colores = {
   gray: 'bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500',
@@ -19,6 +20,13 @@ const Boton = ({ children, color = 'gray', onClick, className = '', ...props }) 
       {children}
     </button>
   );
+};
+
+Boton.propTypes = {
+  children: PropTypes.node,
+  color: PropTypes.oneOf(['gray', 'red', 'green', 'blue', 'purple']),
+  onClick: PropTypes.func,
+  className: PropTypes.string,
 };
 
 export default Boton;
