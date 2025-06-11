@@ -1,5 +1,6 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import fetchSheetData from './utils/fetchSheetData';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -267,38 +268,31 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
+  const sheetId = '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+
   const fetchArmas = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch(
-        'https://docs.google.com/spreadsheets/d/1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs/gviz/tq?sheet=Lista_Armas&tqx=out:json'
-      );
-      const txt  = await res.text();
-      const json = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-      const cols = json.table.cols.map(c => c.label || c.id);
-      const datos = (json.table.rows || []).map(r => {
-        const obj = {};
-        cols.forEach((l,i) => obj[l] = r.c[i]?.v || '');
+      const rows = await fetchSheetData(sheetId, 'Lista_Armas');
+      const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map(s => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
-          dano:    obj.DAÑO,
+          dano: obj.DAÑO,
           alcance: obj.ALCANCE,
           consumo: obj.CONSUMO,
-          carga:   obj.CARGA,
-          cuerpo:  obj.CUERPO,
-          mente:   obj.MENTE,
-          cargaFisica:
-            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental:
-            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+          carga: obj.CARGA,
+          cuerpo: obj.CUERPO,
+          mente: obj.MENTE,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
-          valor:       obj.VALOR || '',
-          tecnologia:  obj.TECNOLOGÍA || ''
+          tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+          valor: obj.VALOR || '',
+          tecnologia: obj.TECNOLOGÍA || '',
         };
       });
       setArmas(datos);
@@ -316,32 +310,23 @@ function App() {
   const fetchArmaduras = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch(
-        'https://docs.google.com/spreadsheets/d/1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs/gviz/tq?sheet=Lista_Armaduras&tqx=out:json'
-      );
-      const txt  = await res.text();
-      const json = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-      const cols = json.table.cols.map(c => c.label || c.id);
-      const datos = (json.table.rows || []).map(r => {
-        const obj = {};
-        cols.forEach((l,i) => obj[l] = r.c[i]?.v || '');
+      const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
+      const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map(s => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
           defensa: obj.ARMADURA,
-          cuerpo:  obj.CUERPO,
-          mente:   obj.MENTE,
-          carga:   obj.CARGA,
-          cargaFisica:
-            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental:
-            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+          cuerpo: obj.CUERPO,
+          mente: obj.MENTE,
+          carga: obj.CARGA,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          valor:       obj.VALOR || '',
-          tecnologia:  obj.TECNOLOGÍA || ''
+          valor: obj.VALOR || '',
+          tecnologia: obj.TECNOLOGÍA || '',
         };
       });
       setArmaduras(datos);

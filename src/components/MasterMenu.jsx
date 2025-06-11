@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import Boton from './Boton';
 
 const MasterMenu = ({ onSelect }) => {
@@ -15,6 +16,10 @@ const MasterMenu = ({ onSelect }) => {
       </div>
     </div>
   );
+};
+
+MasterMenu.propTypes = {
+  onSelect: PropTypes.func.isRequired,
 };
 
 export default MasterMenu;
