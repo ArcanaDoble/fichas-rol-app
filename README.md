@@ -105,4 +105,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Biblioteca de objetos interactiva con iconos y botones para añadir ítems al inventario.
 - Buscador integrado para localizar "Espada" o "Daga" y agregarlas a la biblioteca.
 - Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
+- Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
+
 
