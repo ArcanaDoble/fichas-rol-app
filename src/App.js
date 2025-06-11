@@ -16,6 +16,7 @@ import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import { Tooltip } from 'react-tooltip';
+import { useConfirm } from './components/Confirm';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
@@ -125,6 +126,7 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // STATES
   // ───────────────────────────────────────────────────────────
+  const confirm = useConfirm();
   const [userType, setUserType]               = useState(null);
   const [showLogin, setShowLogin]             = useState(false);
   const [passwordInput, setPasswordInput]     = useState('');
@@ -249,7 +251,7 @@ function App() {
     setNewClaveError('');
   };
   const eliminarFichaJugador = async () => {
-    if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
+    if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
     await deleteDoc(doc(db, 'players', playerName));
     volverAlMenu();
   };
@@ -523,20 +525,20 @@ function App() {
     savePlayer({ ...playerData, stats: newStats });
   };
 
-  const eliminarRecurso = (id) => {
+  const eliminarRecurso = async (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
       const icono = cargaFisicaIcon(carga);
-      if (!window.confirm(
+      if (!(await confirm(
         `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
-      )) return;
+      ))) return;
     }
     if (id === 'cordura') {
       const carga = playerData.cargaAcumulada?.mental || 0;
       const icono = cargaMentalIcon(carga);
-      if (!window.confirm(
+      if (!(await confirm(
         `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
-      )) return;
+      ))) return;
     }
     const newStats = { ...playerData.stats };
     delete newStats[id];

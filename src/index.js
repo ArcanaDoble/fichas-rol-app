@@ -5,13 +5,16 @@ import 'react-tooltip/dist/react-tooltip.css'
 import App from './App';
 import { DndProvider } from 'react-dnd';
 import { TouchBackend } from 'react-dnd-touch-backend';
+import { ConfirmProvider } from './components/Confirm';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true }}>
-      <App />
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
     </DndProvider>
   </React.StrictMode>
 );
