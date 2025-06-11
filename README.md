@@ -19,7 +19,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 1. Clona este repositorio.
 2. Ejecuta `npm install` para instalar las dependencias.
-3. Configura tus credenciales de Firebase en `src/firebase.js` si es necesario.
+3. Copia el archivo `.env.example` a `.env` y completa tus claves de Firebase,
+   la contraseña de Máster y el ID de la hoja de cálculo de Google.
 4. Lanza la aplicación con `npm start` y abre `http://localhost:3000` en el navegador.
 
 ### Despliegue en Firebase
@@ -107,5 +108,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
 - Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
 - Nuevas pruebas unitarias para Inventory, ItemGenerator, Slot y la utilidad `fetchSheetData`.
+- Código limpiado eliminando variables sin usar y simplificando expresiones regulares.
 
 
