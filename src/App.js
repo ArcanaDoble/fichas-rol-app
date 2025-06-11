@@ -17,6 +17,8 @@ import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import { Tooltip } from 'react-tooltip';
 import { useConfirm } from './components/Confirm';
+import useResourcesHook from './hooks/useResources';
+import useGlossary from './hooks/useGlossary';
 
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -132,6 +134,24 @@ function App() {
   const [passwordInput, setPasswordInput]     = useState('');
   const [authenticated, setAuthenticated]     = useState(false);
   const [authError, setAuthError]             = useState('');
+
+  const handleLogin = () => {
+    if (passwordInput === MASTER_PASSWORD) {
+      setAuthenticated(true);
+      setShowLogin(false);
+      setAuthError('');
+    } else {
+      setAuthError('Contraseña incorrecta');
+    }
+  };
+
+  const resetLogin = () => {
+    setUserType(null);
+    setShowLogin(false);
+    setPasswordInput('');
+    setAuthenticated(false);
+    setAuthError('');
+  };
   const [armas, setArmas]                     = useState([]);
   const [armaduras, setArmaduras]             = useState([]);
   const [habilidades, setHabilidades]         = useState([]);
@@ -159,6 +179,7 @@ function App() {
     newResColor,
     setNewResColor,
     newResError,
+    setNewResError,
     agregarRecurso,
     eliminarRecurso,
   } = useResourcesHook(
@@ -528,7 +549,7 @@ function App() {
     savePlayer({ ...playerData, stats: newStats });
   };
 
-  const eliminarRecurso = async (id) => {
+  const handleEliminarRecurso = async (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
       const icono = cargaFisicaIcon(carga);
@@ -543,63 +564,10 @@ function App() {
         `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
       ))) return;
     }
-    const newStats = { ...playerData.stats };
-    delete newStats[id];
-    const newList = resourcesList.filter((r) => r.id !== id);
-    setResourcesList(newList);
-    savePlayer({ ...playerData, stats: newStats }, newList);
+
+    eliminarRecurso(id);
   };
 
-  const agregarRecurso = () => {
-    // No añadir si hay 6 o más recursos
-    if (resourcesList.length >= 6) return;
-
-    const nombre = newResName.trim();
-    if (!nombre) {
-      setNewResError('Nombre requerido');
-      return;
-    }
-    if (resourcesList.some(r => r.name.toLowerCase() === nombre.toLowerCase())) {
-      setNewResError('Ese nombre ya existe');
-      return;
-    }
-
-    setNewResError('');
-
-    const lower = nombre.toLowerCase();
-    const nuevoId = (lower === 'postura' || lower === 'cordura') ? lower : `recurso${Date.now()}`;
-    const color = lower === 'postura' ? '#34d399' : lower === 'cordura' ? '#a78bfa' : newResColor;
-
-    // Nueva lista de recursos
-    const nuevaLista = [
-      ...resourcesList,
-      {
-        id: nuevoId,
-        name: newResName || nuevoId,
-        color,
-        info: ''
-      }
-    ];
-
-    // Inicializar stats del recurso nuevo en 0
-    const nuevaStats = {
-      ...playerData.stats,
-      [nuevoId]: { base: 0, total: 0, actual: 0, buff: 0 }
-    };
-
-    // Actualizar estado local
-    setResourcesList(nuevaLista);
-
-    // Guardar en Firestore (se pasa la lista completa explícitamente)
-    savePlayer(
-      { ...playerData, stats: nuevaStats },
-      nuevaLista
-    );
-
-    // Limpiar el formulario
-    setNewResName('');
-    setNewResColor('#ffffff');
-  };
 
   const agregarHabilidad = async () => {
     const { nombre } = newAbility;
@@ -1078,7 +1046,7 @@ function App() {
                       />
                     )}
                     <button
-                      onClick={() => eliminarRecurso(r)}
+                    onClick={() => handleEliminarRecurso(r)}
                       className="absolute right-0 text-red-400 hover:text-red-200 text-sm font-bold"
                       title="Eliminar esta estadística"
                     >
