@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { useDrop } from 'react-dnd';
 import { motion } from 'framer-motion';
 import ItemToken, { ItemTypes } from './ItemToken';
@@ -67,6 +68,13 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
       )}
     </div>
   );
+};
+
+Slot.propTypes = {
+  id: PropTypes.number.isRequired,
+  item: PropTypes.shape({ type: PropTypes.string, count: PropTypes.number }),
+  onDrop: PropTypes.func,
+  onDelete: PropTypes.func,
 };
 
 export default Slot;
