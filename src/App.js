@@ -12,7 +12,7 @@ import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
-import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
+import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import { Tooltip } from 'react-tooltip';
@@ -46,7 +46,6 @@ const recursoInfo = {
   armadura: 'Explicación de Armadura',
 };
 
-const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
@@ -276,7 +275,7 @@ function App() {
       const rows = await fetchSheetData(sheetId, 'Lista_Armas');
       const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
@@ -313,7 +312,7 @@ function App() {
       const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
       const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map((s) => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
@@ -454,7 +453,7 @@ function App() {
       const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
-  }, [nameEntered, playerName]);
+  }, [armas, armaduras, nameEntered, playerName]);
 
   // useEffect que llama a loadPlayer
   useEffect(() => {
