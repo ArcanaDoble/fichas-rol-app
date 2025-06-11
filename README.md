@@ -29,11 +29,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### Ejecutar las pruebas
 
-Las pruebas se ejecutan con `npm test`.
+Las pruebas se ejecutan con `npm test -- --watchAll=false` para evitar el modo interactivo.
 
 ```bash
-npm test
+npm test -- --watchAll=false
 ```
+
+Se añadió un script `npm run lint` para verificar el código con ESLint y otro `npm run format` para formatear con Prettier.
 
 ## Cambios recientes
 
