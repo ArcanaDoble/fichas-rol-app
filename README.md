@@ -61,6 +61,7 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Equipamiento y poderes centrados cuando solo hay un elemento equipado.
 - Selector de estados con iconos para llevar el control de efectos activos.
 - Se unificaron funciones de gestión de recursos mediante hooks personalizados.
+- Corregido un error al restablecer los mensajes de recursos (setNewResError).
 - Inventario disponible en las fichas de jugador.
 - Slots del inventario habilitables con un clic y almacenamiento persistente.
 - Persistencia del inventario en Firestore en lugar de localStorage.
