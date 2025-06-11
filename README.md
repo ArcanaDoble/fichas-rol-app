@@ -29,11 +29,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### Ejecutar las pruebas
 
-Las pruebas se ejecutan con `npm test`.
+Las pruebas se ejecutan con `npm test -- --watchAll=false` para evitar el modo interactivo.
 
 ```bash
-npm test
+npm test -- --watchAll=false
 ```
+
+Se añadió un script `npm run lint` para verificar el código con ESLint y otro `npm run format` para formatear con Prettier.
 
 ## Cambios recientes
 
@@ -102,4 +104,6 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Controles de usuario para añadir ítems aleatorios, rotar y organizar, con estadísticas y tooltips.
 - Biblioteca de objetos interactiva con iconos y botones para añadir ítems al inventario.
 - Buscador integrado para localizar "Espada" o "Daga" y agregarlas a la biblioteca.
+- Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
+- Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { useDrag } from 'react-dnd';
 
 export const ItemTypes = { ITEM: 'item' };
@@ -22,6 +23,17 @@ const InventoryItem = ({ item, cellSize }) => {
   };
 
   return <div ref={drag} style={style} />;
+};
+
+InventoryItem.propTypes = {
+  item: PropTypes.shape({
+    x: PropTypes.number.isRequired,
+    y: PropTypes.number.isRequired,
+    width: PropTypes.number.isRequired,
+    height: PropTypes.number.isRequired,
+    icon: PropTypes.string.isRequired,
+  }).isRequired,
+  cellSize: PropTypes.number.isRequired,
 };
 
 export default InventoryItem;

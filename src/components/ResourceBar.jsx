@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 const DEFAULT_MAX = 20;
 
@@ -35,6 +36,15 @@ const ResourceBar = ({
       ))}
     </div>
   );
+};
+
+ResourceBar.propTypes = {
+  color: PropTypes.string.isRequired,
+  penalizacion: PropTypes.number,
+  actual: PropTypes.number,
+  base: PropTypes.number,
+  buff: PropTypes.number,
+  max: PropTypes.number,
 };
 
 export default ResourceBar;
