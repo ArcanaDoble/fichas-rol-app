@@ -60,9 +60,13 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Botón "Volver al menú principal" en la pantalla de acceso de Máster.
 - Equipamiento y poderes centrados cuando solo hay un elemento equipado.
 - Selector de estados con iconos para llevar el control de efectos activos.
+- Se unificaron funciones de gestión de recursos mediante hooks personalizados.
+- Corregido un error al restablecer los mensajes de recursos (setNewResError).
+- Solucionado aviso de ESLint importando `setNewResError` desde el hook.
 - Inventario disponible en las fichas de jugador.
 - Slots del inventario habilitables con un clic y almacenamiento persistente.
 - Persistencia del inventario en Firestore en lugar de localStorage.
+- Copia de seguridad local de los datos del jugador si falla la conexión a Firebase.
 - Buscador de objetos con texto visible y envío con Enter.
 - Sugerencia automática al buscar objetos con tabulación para autocompletar.
 - Botón de papelera para eliminar objetos arrastrándolos.

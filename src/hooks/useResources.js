@@ -54,6 +54,7 @@ export default function useResources(initialList, savePlayer, playerData) {
     newResColor,
     setNewResColor,
     newResError,
+    setNewResError,
     agregarRecurso,
     eliminarRecurso,
   };
