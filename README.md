@@ -107,3 +107,4 @@ A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
 - Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
 - Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
 
+
