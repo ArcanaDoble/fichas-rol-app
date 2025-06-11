@@ -22,6 +22,8 @@ import useResourcesHook from './hooks/useResources';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
+const MASTER_PASSWORD = process.env.REACT_APP_MASTER_PASSWORD || '';
+
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
   destreza: '#34d399',
@@ -289,7 +291,7 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
-  const sheetId = '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID;
 
   const fetchArmas = useCallback(async () => {
     setLoading(true);
