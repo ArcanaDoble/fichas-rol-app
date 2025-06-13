@@ -958,7 +958,7 @@ function App() {
 
           {/* Pregunta principal */}
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-white mb-6">¿Quién eres?</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">¿Quién eres?</h2>
           </div>
 
           {/* Opciones minimalistas */}
@@ -1126,18 +1126,17 @@ function App() {
                   Personajes Existentes
                 </h3>
               </div>
-              <div className="flex flex-col gap-3 max-h-48 overflow-y-auto">
-                {existingPlayers.map((n, index) => (
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                {existingPlayers.map((n) => (
                   <Boton
                     key={n}
-                    color="blue"
+                    color="gray"
                     size="md"
-                    className="w-full rounded-lg font-semibold text-sm px-3 py-3 hover:scale-105 transition-all duration-300"
+                    className="w-full rounded-lg font-semibold text-base px-4 py-2 transition-colors duration-200"
                     onClick={() => {
                       setPlayerName(n);
                       setTimeout(() => setNameEntered(true), 0);
                     }}
-                    style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <div className="flex justify-center items-center">
                       <span className="truncate">{n}</span>
@@ -1601,26 +1600,30 @@ function App() {
           {/* EQUIPAR ARMA */}
           <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
-            <Input
-              placeholder="Busca un arma"
-              value={playerInputArma}
-              onChange={e => setPlayerInputArma(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {armaSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {armaSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca un arma"
+                  value={playerInputArma}
+                  onChange={e => setPlayerInputArma(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {armaSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {armaSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
 
@@ -1666,26 +1669,30 @@ function App() {
           {/* EQUIPAR ARMADURA */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
-            <Input
-              placeholder="Busca una armadura"
-              value={playerInputArmadura}
-              onChange={e => setPlayerInputArmadura(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {armaduraSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {armaduraSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca una armadura"
+                  value={playerInputArmadura}
+                  onChange={e => setPlayerInputArmadura(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {armaduraSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {armaduraSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
           </div>
 
@@ -1729,26 +1736,30 @@ function App() {
           {/* EQUIPAR PODER */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un poder:</label>
-            <Input
-              placeholder="Busca un poder"
-              value={playerInputPoder}
-              onChange={e => setPlayerInputPoder(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {poderSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {poderSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca un poder"
+                  value={playerInputPoder}
+                  onChange={e => setPlayerInputPoder(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {poderSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {poderSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerPoderError && <p className="text-red-400 mt-1 text-center">{playerPoderError}</p>}
           </div>
 
