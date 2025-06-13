@@ -192,6 +192,23 @@ function App() {
   // Estados del personaje
   const [estados, setEstados] = useState([]);
 
+  // Estados para fichas de enemigos
+  const [enemies, setEnemies] = useState([]);
+  const [selectedEnemy, setSelectedEnemy] = useState(null);
+  const [showEnemyForm, setShowEnemyForm] = useState(false);
+  const [editingEnemy, setEditingEnemy] = useState(null);
+  const [newEnemy, setNewEnemy] = useState({
+    name: '',
+    portrait: '',
+    description: '',
+    weapons: [],
+    armaduras: [],
+    poderes: [],
+    atributos: {},
+    stats: {},
+    cargaAcumulada: { fisica: 0, mental: 0 }
+  });
+
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
 
@@ -388,11 +405,26 @@ function App() {
   }, []);
   useEffect(() => { fetchGlossary() }, [fetchGlossary]);
 
+  // ───────────────────────────────────────────────────────────
+  // FETCH ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const fetchEnemies = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, 'enemies'));
+      const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEnemies(datos);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+  useEffect(() => { fetchEnemies() }, [fetchEnemies]);
+
   const refreshCatalog = () => {
     fetchArmas();
     fetchArmaduras();
     fetchHabilidades();
     fetchGlossary();
+    fetchEnemies();
   };
 
   // ───────────────────────────────────────────────────────────
@@ -651,6 +683,105 @@ function App() {
       fetchHabilidades();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────
+  // FUNCIONES PARA ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const saveEnemy = async (enemyData) => {
+    try {
+      const enemyId = enemyData.id || `enemy_${Date.now()}`;
+      const dataToSave = {
+        ...enemyData,
+        id: enemyId,
+        updatedAt: new Date()
+      };
+      await setDoc(doc(db, 'enemies', enemyId), dataToSave);
+      fetchEnemies();
+      return enemyId;
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  };
+
+  const deleteEnemy = async (enemyId) => {
+    try {
+      await deleteDoc(doc(db, 'enemies', enemyId));
+      fetchEnemies();
+      if (selectedEnemy?.id === enemyId) {
+        setSelectedEnemy(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const createNewEnemy = () => {
+    const baseAtributos = {};
+    atributos.forEach(k => (baseAtributos[k] = 'D4'));
+
+    const baseStats = {};
+    defaultRecursos.forEach(r => {
+      baseStats[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+    });
+
+    setNewEnemy({
+      name: '',
+      portrait: '',
+      description: '',
+      weapons: [],
+      armaduras: [],
+      poderes: [],
+      atributos: baseAtributos,
+      stats: baseStats,
+      cargaAcumulada: { fisica: 0, mental: 0 }
+    });
+    setEditingEnemy(null);
+    setShowEnemyForm(true);
+  };
+
+  const editEnemy = (enemy) => {
+    setNewEnemy(enemy);
+    setEditingEnemy(enemy.id);
+    setShowEnemyForm(true);
+  };
+
+  const handleSaveEnemy = async () => {
+    if (!newEnemy.name.trim()) {
+      alert('El nombre del enemigo es requerido');
+      return;
+    }
+
+    try {
+      const enemyId = await saveEnemy(newEnemy);
+      setShowEnemyForm(false);
+      setNewEnemy({
+        name: '',
+        portrait: '',
+        description: '',
+        weapons: [],
+        armaduras: [],
+        poderes: [],
+        atributos: {},
+        stats: {},
+        cargaAcumulada: { fisica: 0, mental: 0 }
+      });
+      setEditingEnemy(null);
+    } catch (e) {
+      alert('Error al guardar el enemigo');
+    }
+  };
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setNewEnemy({ ...newEnemy, portrait: e.target.result });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -958,7 +1089,7 @@ function App() {
 
           {/* Pregunta principal */}
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-white mb-4">¿Quién eres?</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">¿Quién eres?</h2>
           </div>
 
           {/* Opciones minimalistas */}
@@ -1821,6 +1952,206 @@ function App() {
           </p>
         </div>
         <InventoryRE4 playerName="master_inventory" />
+      </div>
+    );
+  }
+
+  if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
+        <div className="sticky top-0 bg-gray-900 pb-2 z-10">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-white">👹 Fichas de Enemigos</h1>
+            <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+              ← Volver al Menú
+            </Boton>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Boton color="green" onClick={createNewEnemy}>Crear Nuevo Enemigo</Boton>
+            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+          </div>
+        </div>
+
+        {/* Lista de enemigos */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {enemies.map((enemy) => (
+            <div key={enemy.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+              {/* Retrato del enemigo */}
+              {enemy.portrait && (
+                <div className="w-full h-32 mb-3 rounded-lg overflow-hidden bg-gray-700">
+                  <img
+                    src={enemy.portrait}
+                    alt={enemy.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              <h3 className="text-lg font-bold text-white mb-2">{enemy.name}</h3>
+              {enemy.description && (
+                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{enemy.description}</p>
+              )}
+
+              <div className="flex gap-2">
+                <Boton
+                  color="blue"
+                  size="sm"
+                  onClick={() => editEnemy(enemy)}
+                  className="flex-1"
+                >
+                  Editar
+                </Boton>
+                <Boton
+                  color="purple"
+                  size="sm"
+                  onClick={() => setSelectedEnemy(enemy)}
+                  className="flex-1"
+                >
+                  Ver Ficha
+                </Boton>
+                <Boton
+                  color="red"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                      deleteEnemy(enemy.id);
+                    }
+                  }}
+                >
+                  🗑️
+                </Boton>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {enemies.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-400 text-lg">No hay enemigos creados</p>
+            <p className="text-gray-500 text-sm mt-2">Crea tu primer enemigo para empezar</p>
+          </div>
+        )}
+
+        {/* Modal para crear/editar enemigo */}
+        {showEnemyForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">
+                {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
+              </h2>
+
+              <div className="space-y-4">
+                {/* Nombre */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nombre</label>
+                  <Input
+                    value={newEnemy.name}
+                    onChange={(e) => setNewEnemy({...newEnemy, name: e.target.value})}
+                    placeholder="Nombre del enemigo"
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Retrato */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Retrato</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  />
+                  {newEnemy.portrait && (
+                    <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
+                      <img
+                        src={newEnemy.portrait}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Descripción */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Descripción</label>
+                  <textarea
+                    value={newEnemy.description}
+                    onChange={(e) => setNewEnemy({...newEnemy, description: e.target.value})}
+                    placeholder="Descripción del enemigo"
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-2 pt-4">
+                  <Boton
+                    color="green"
+                    onClick={handleSaveEnemy}
+                    className="flex-1"
+                  >
+                    {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
+                  </Boton>
+                  <Boton
+                    color="gray"
+                    onClick={() => {
+                      setShowEnemyForm(false);
+                      setEditingEnemy(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Boton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para ver ficha completa */}
+        {selectedEnemy && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Ficha de {selectedEnemy.name}</h2>
+                <Boton
+                  color="gray"
+                  onClick={() => setSelectedEnemy(null)}
+                >
+                  ✕
+                </Boton>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Retrato y descripción */}
+                <div className="space-y-4">
+                  {selectedEnemy.portrait && (
+                    <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-700">
+                      <img
+                        src={selectedEnemy.portrait}
+                        alt={selectedEnemy.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  {selectedEnemy.description && (
+                    <div>
+                      <h3 className="font-semibold mb-2">Descripción</h3>
+                      <p className="text-gray-400 text-sm">{selectedEnemy.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Estadísticas y equipo */}
+                <div className="lg:col-span-2 space-y-4">
+                  <p className="text-gray-400">
+                    Esta funcionalidad se expandirá para incluir atributos, estadísticas y equipo como las fichas de jugador.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

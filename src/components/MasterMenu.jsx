@@ -32,6 +32,14 @@ const MasterMenu = ({ onSelect }) => {
       isNew: true,
     },
     {
+      id: 'enemies',
+      title: 'Fichas de Enemigos',
+      description: 'Crear y gestionar fichas de enemigos con retratos',
+      color: 'red',
+      features: ['Fichas NPCs', 'Retratos', 'Estadísticas', 'Gestión'],
+      isNew: true,
+    },
+    {
       id: 'default',
       title: 'Herramientas Tradicionales',
       description: 'Gestión de catálogo, habilidades y glosario',

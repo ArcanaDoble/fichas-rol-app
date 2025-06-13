@@ -109,7 +109,7 @@ const Tarjeta = ({
           <img
             src={style.icon}
             alt=""
-            className="absolute inset-0 w-full h-full object-contain opacity-5 pointer-events-none z-0 blur-sm"
+            className="absolute inset-0 w-full h-full object-contain opacity-15 pointer-events-none z-0 blur-sm"
           />
         </>
       )}
