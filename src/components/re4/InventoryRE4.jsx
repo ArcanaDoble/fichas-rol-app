@@ -22,7 +22,7 @@ const InventoryRE4 = ({ playerName }) => {
       const mobile = window.innerWidth < 768;
       setCellSize(mobile ? 32 : BASE_CELL_SIZE);
     };
-
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -69,7 +69,7 @@ const InventoryRE4 = ({ playerName }) => {
       const nx = Math.round(dragged.x + delta.x / cellSize);
       const ny = Math.round(dragged.y + delta.y / cellSize);
       if (!findCollision(nx, ny, dragged.width, dragged.height, dragged.id)) {
-        setItems(items => items.map(item =>
+        setItems(items => items.map(item => 
           item.id === dragged.id ? { ...item, x: nx, y: ny } : item
         ));
       }
@@ -80,7 +80,7 @@ const InventoryRE4 = ({ playerName }) => {
   const addItem = useCallback((templateId) => {
     const template = itemTemplates.find(t => t.id === templateId);
     if (!template) return;
-
+    
     // Buscar posición libre
     let x = 0, y = 0;
     let found = false;
@@ -93,7 +93,7 @@ const InventoryRE4 = ({ playerName }) => {
         }
       }
     }
-
+    
     if (!found) {
       alert('No hay espacio suficiente en el inventario');
       return;
@@ -114,15 +114,15 @@ const InventoryRE4 = ({ playerName }) => {
   const rotateItem = useCallback((itemId) => {
     setItems(items => items.map(item => {
       if (item.id !== itemId || !item.rotatable) return item;
-
+      
       const newRotation = ((item.rotation || 0) + 90) % 360;
       const newWidth = newRotation % 180 === 0 ? item.width : item.height;
       const newHeight = newRotation % 180 === 0 ? item.height : item.width;
-
+      
       if (findCollision(item.x, item.y, newWidth, newHeight, item.id)) {
         return item; // No rotar si hay colisión
       }
-
+      
       return { ...item, rotation: newRotation };
     }));
   }, [findCollision]);
@@ -194,8 +194,8 @@ const InventoryRE4 = ({ playerName }) => {
           <div
             ref={drop}
             className="relative"
-            style={{
-              width: GRID_COLS * cellSize,
+            style={{ 
+              width: GRID_COLS * cellSize, 
               height: GRID_ROWS * cellSize
             }}
           >
@@ -210,9 +210,9 @@ const InventoryRE4 = ({ playerName }) => {
 
             {/* Items del inventario */}
             {items.map(item => (
-              <InventoryItem
-                key={item.id}
-                item={item}
+              <InventoryItem 
+                key={item.id} 
+                item={item} 
                 cellSize={cellSize}
                 onRotate={rotateItem}
                 onDelete={deleteItem}
@@ -266,131 +266,6 @@ const InventoryRE4 = ({ playerName }) => {
           <div>• <strong>Hover:</strong> Ver información</div>
         </div>
       </div>
-    </div>
-  );
-};
-
-export default InventoryRE4;
-
-  // Memoizar el grid para mejor performance
-  const gridCells = useMemo(() => {
-    const cells = [];
-    for (let y = 0; y < GRID_ROWS; y++) {
-      for (let x = 0; x < GRID_COLS; x++) {
-        const isHighlighted = highlightedCells.some(cell => cell.x === x && cell.y === y);
-        cells.push(
-          <GridCell
-            key={`${x}-${y}`}
-            size={cellSize}
-            x={x}
-            y={y}
-            isHighlighted={isHighlighted}
-            isValid={isValidPlacement}
-          />
-        );
-      }
-    }
-    return cells;
-  }, [cellSize, highlightedCells, isValidPlacement]);
-
-  return (
-    <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
-      {/* Controles del inventario */}
-      <InventoryControls
-        onAddItem={addItem}
-        onClearInventory={clearInventory}
-        itemCount={items.length}
-        maxItems={MAX_ITEMS}
-      />
-
-      {/* Grid del inventario */}
-      <div className="flex justify-center">
-        <div className="relative bg-gray-900 p-4 rounded-lg shadow-2xl border-2 border-gray-700">
-          <div
-            ref={drop}
-            className="relative grid"
-            style={{
-              width: GRID_COLS * cellSize,
-              height: GRID_ROWS * cellSize,
-              gridTemplateColumns: `repeat(${GRID_COLS}, ${cellSize}px)`,
-              gridTemplateRows: `repeat(${GRID_ROWS}, ${cellSize}px)`
-            }}
-          >
-            {/* Celdas del grid */}
-            {gridCells}
-
-            {/* Items del inventario */}
-            {items.map(item => (
-              <InventoryItem
-                key={item.id}
-                item={item}
-                cellSize={cellSize}
-                onRotate={rotateItem}
-                onDelete={deleteItem}
-              />
-            ))}
-
-            {/* Preview durante drag */}
-            {dragPreview && (
-              <div
-                className="absolute pointer-events-none z-50"
-                style={{
-                  left: dragPreview.x * cellSize,
-                  top: dragPreview.y * cellSize,
-                }}
-              >
-                <ItemPreview
-                  item={dragPreview.item}
-                  cellSize={cellSize}
-                  isValid={dragPreview.isValid}
-                  rotation={dragPreview.item.rotation || 0}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Información del grid */}
-          <div className="mt-2 text-center text-xs text-gray-400">
-            Grid: {GRID_COLS}×{GRID_ROWS} | Tamaño de celda: {cellSize}px
-            {isMobile && ' | Modo móvil'}
-          </div>
-        </div>
-      </div>
-
-      {/* Estadísticas del inventario */}
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h4 className="text-lg font-bold text-white mb-2">📊 Estadísticas</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-400">{items.length}</div>
-            <div className="text-gray-400">Objetos</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-400">
-              {Math.round((items.length / MAX_ITEMS) * 100)}%
-            </div>
-            <div className="text-gray-400">Ocupación</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-400">
-              {items.reduce((sum, item) => sum + (item.width * item.height), 0)}
-            </div>
-            <div className="text-gray-400">Celdas usadas</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-400">
-              {items.reduce((sum, item) => sum + (item.value || 0), 0)}
-            </div>
-            <div className="text-gray-400">Valor total</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Efectos visuales */}
-      <InventoryEffects effects={effects} onEffectComplete={removeEffect} />
-
-      {/* Componente de ayuda */}
-      <InventoryHelp />
     </div>
   );
 };
