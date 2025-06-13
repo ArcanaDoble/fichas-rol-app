@@ -994,9 +994,6 @@ function App() {
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
             <p className="text-sm font-medium text-gray-400">Versión 2.1</p>
-            <p className="text-xs text-gray-500">
-              Sistema con inventario RE4 y herramientas de gestión
-            </p>
           </div>
         </div>
       </div>
@@ -1079,13 +1076,7 @@ function App() {
             </Boton>
           </div>
 
-          {/* Footer minimalista */}
-          <div className="text-center space-y-2 border-t border-gray-700 pt-4">
-            <p className="text-xs font-medium text-gray-400">Acceso seguro</p>
-            <p className="text-xs text-gray-500">
-              Solo usuarios autorizados pueden acceder al modo máster
-            </p>
-          </div>
+
         </div>
       </div>
     );
@@ -1135,7 +1126,7 @@ function App() {
                   Personajes Existentes
                 </h3>
               </div>
-              <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto">
+              <div className="flex flex-col gap-3 max-h-48 overflow-y-auto">
                 {existingPlayers.map((n, index) => (
                   <Boton
                     key={n}
@@ -1148,7 +1139,7 @@ function App() {
                     }}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <div className="flex flex-col items-center">
+                    <div className="flex justify-center items-center">
                       <span className="truncate">{n}</span>
                     </div>
                   </Boton>
@@ -1197,13 +1188,7 @@ function App() {
             </Boton>
           </div>
 
-          {/* Footer minimalista */}
-          <div className="text-center space-y-2 border-t border-gray-700 pt-4">
-            <p className="text-xs font-medium text-gray-400">Gestión de personajes</p>
-            <p className="text-xs text-gray-500">
-              Tus datos se guardan automáticamente en la nube
-            </p>
-          </div>
+
         </div>
       </div>
     );
@@ -1838,12 +1823,14 @@ function App() {
             <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
             <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
           </div>
-          <Input
-            placeholder="Buscar en el catálogo"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full max-w-md"
-          />
+          <div className="flex justify-center">
+            <Input
+              placeholder="Buscar en el catálogo"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full max-w-md text-center"
+            />
+          </div>
         </div>
 
         <Collapsible title={editingTerm ? `Editar término: ${editingTerm}` : 'Añadir término destacado'} defaultOpen={false}>
@@ -1947,81 +1934,114 @@ function App() {
           ? <p>Cargando catálogo…</p>
           : (
             <>
-              <Collapsible title="Armas" defaultOpen>
-                {armas
-                  .filter(a =>
-                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((a, i) => (
-                    <Tarjeta key={`arma-${i}`} variant="weapon">
-                      <p className="font-bold text-lg">{a.nombre}</p>
-                      <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
-                      <p><strong>Alcance:</strong> {a.alcance}</p>
-                      <p><strong>Consumo:</strong> {a.consumo}</p>
-                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                        <React.Fragment key={ri}>
-                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                        </React.Fragment>
-                      )) : '❌'}</p>
-                      <p><strong>Valor:</strong> {a.valor}</p>
-                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+              {/* Mostrar pestañas solo si hay búsqueda activa */}
+              {searchTerm.trim() && (
+                <>
+                  {/* Mostrar Armas si hay coincidencias */}
+                  {(() => {
+                    const armasFiltradas = armas.filter(a =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return armasFiltradas.length > 0 && (
+                      <Collapsible title={`Armas (${armasFiltradas.length})`} defaultOpen={true}>
+                        {armasFiltradas.map((a, i) => (
+                          <Tarjeta key={`arma-${i}`} variant="weapon">
+                            <p className="font-bold text-lg">{a.nombre}</p>
+                            <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
+                            <p><strong>Alcance:</strong> {a.alcance}</p>
+                            <p><strong>Consumo:</strong> {a.consumo}</p>
+                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                              <React.Fragment key={ri}>
+                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                              </React.Fragment>
+                            )) : '❌'}</p>
+                            <p><strong>Valor:</strong> {a.valor}</p>
+                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
 
-              <Collapsible title="Armaduras" defaultOpen>
-                {armaduras
-                  .filter(a =>
-                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((a, i) => (
-                    <Tarjeta key={`armadura-${i}`} variant="armor">
-                      <p className="font-bold text-lg">{a.nombre}</p>
-                      <p><strong>Defensa:</strong> {a.defensa}</p>
-                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                        <React.Fragment key={ri}>
-                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                        </React.Fragment>
-                      )) : '❌'}</p>
-                      <p><strong>Valor:</strong> {a.valor}</p>
-                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+                  {/* Mostrar Armaduras si hay coincidencias */}
+                  {(() => {
+                    const armadurasFiltradas = armaduras.filter(a =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return armadurasFiltradas.length > 0 && (
+                      <Collapsible title={`Armaduras (${armadurasFiltradas.length})`} defaultOpen={true}>
+                        {armadurasFiltradas.map((a, i) => (
+                          <Tarjeta key={`armadura-${i}`} variant="armor">
+                            <p className="font-bold text-lg">{a.nombre}</p>
+                            <p><strong>Defensa:</strong> {a.defensa}</p>
+                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                              <React.Fragment key={ri}>
+                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                              </React.Fragment>
+                            )) : '❌'}</p>
+                            <p><strong>Valor:</strong> {a.valor}</p>
+                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
 
-              <Collapsible title="Habilidades" defaultOpen>
-                {habilidades
-                  .filter(h =>
-                    h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((h, i) => (
-                  <Tarjeta key={`hab-${i}`} variant="power">
-                    <p className="font-bold text-lg">{h.nombre}</p>
-                    <p><strong>Alcance:</strong> {h.alcance}</p>
-                    <p><strong>Consumo:</strong> {h.consumo}</p>
-                    <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
-                    <p><strong>Mente:</strong> {h.mente}</p>
-                    <p><strong>Poder:</strong> {h.poder}</p>
-                    {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
-                    <div className="flex justify-end gap-2 mt-2">
-                      <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
-                      <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
-                    </div>
-                  </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+                  {/* Mostrar Habilidades si hay coincidencias */}
+                  {(() => {
+                    const habilidadesFiltradas = habilidades.filter(h =>
+                      h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return habilidadesFiltradas.length > 0 && (
+                      <Collapsible title={`Habilidades (${habilidadesFiltradas.length})`} defaultOpen={true}>
+                        {habilidadesFiltradas.map((h, i) => (
+                          <Tarjeta key={`hab-${i}`} variant="power">
+                            <p className="font-bold text-lg">{h.nombre}</p>
+                            <p><strong>Alcance:</strong> {h.alcance}</p>
+                            <p><strong>Consumo:</strong> {h.consumo}</p>
+                            <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
+                            <p><strong>Mente:</strong> {h.mente}</p>
+                            <p><strong>Poder:</strong> {h.poder}</p>
+                            {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
+                            <div className="flex justify-end gap-2 mt-2">
+                              <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
+                              <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
+                            </div>
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* Mostrar mensaje cuando no hay búsqueda activa */}
+              {!searchTerm.trim() && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-lg">Usa el buscador para explorar el catálogo</p>
+                  <p className="text-gray-500 text-sm mt-2">Las pestañas se abrirán automáticamente cuando busques</p>
+                </div>
+              )}
+
+              {/* Mostrar mensaje cuando no hay resultados */}
+              {searchTerm.trim() &&
+                armas.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
+                armaduras.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
+                habilidades.filter(h => h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-lg">No se encontraron resultados para "{searchTerm}"</p>
+                  <p className="text-gray-500 text-sm mt-2">Intenta con otros términos de búsqueda</p>
+                </div>
+              )}
             </>
           )
         }

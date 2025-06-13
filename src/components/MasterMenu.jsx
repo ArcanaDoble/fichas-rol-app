@@ -140,9 +140,6 @@ const MasterMenu = ({ onSelect }) => {
         {/* Footer minimalista */}
         <div className="text-center space-y-2 border-t border-gray-700 pt-6">
           <p className="text-sm font-medium text-gray-400">Fichas de Rol • Versión 2.1</p>
-          <p className="text-xs text-gray-500">
-            Sistema mejorado con inventario RE4 y herramientas avanzadas
-          </p>
         </div>
       </div>
     </div>

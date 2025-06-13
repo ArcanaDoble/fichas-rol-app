@@ -14,7 +14,7 @@ const variantStyles = {
     glow: 'hover:shadow-blue-500/20',
   },
   power: {
-    icon: '/marcas/musculo.png',
+    icon: '/marcas/Músculo.png',
     gradient: 'from-purple-900/20 to-pink-900/20',
     border: 'border-purple-700/50 hover:border-purple-600/70',
     glow: 'hover:shadow-purple-500/20',
@@ -92,17 +92,26 @@ const Tarjeta = ({
         </div>
       )}
 
-      {/* Icon */}
+      {/* Icon como marca de agua */}
       {style.icon && (
-        <img
-          src={style.icon}
-          alt=""
-          className={`
-            absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
-            transition-all duration-300
-            ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
-          `}
-        />
+        <>
+          {/* Icono pequeño en la esquina */}
+          <img
+            src={style.icon}
+            alt=""
+            className={`
+              absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
+              transition-all duration-300
+              ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
+            `}
+          />
+          {/* Marca de agua difuminada en el fondo */}
+          <img
+            src={style.icon}
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain opacity-5 pointer-events-none z-0 blur-sm"
+          />
+        </>
       )}
 
       {/* Content */}
