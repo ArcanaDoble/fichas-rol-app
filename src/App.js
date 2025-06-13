@@ -410,11 +410,13 @@ function App() {
   // ───────────────────────────────────────────────────────────
   const fetchEnemies = useCallback(async () => {
     try {
+      console.log('Fetching enemies...');
       const snap = await getDocs(collection(db, 'enemies'));
       const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log('Enemies fetched:', datos);
       setEnemies(datos);
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching enemies:', e);
     }
   }, []);
   useEffect(() => { fetchEnemies() }, [fetchEnemies]);
@@ -697,11 +699,13 @@ function App() {
         id: enemyId,
         updatedAt: new Date()
       };
+      console.log('Guardando enemigo:', dataToSave);
       await setDoc(doc(db, 'enemies', enemyId), dataToSave);
+      console.log('Enemigo guardado exitosamente');
       fetchEnemies();
       return enemyId;
     } catch (e) {
-      console.error(e);
+      console.error('Error en saveEnemy:', e);
       throw e;
     }
   };
@@ -755,7 +759,13 @@ function App() {
     }
 
     try {
-      const enemyId = await saveEnemy(newEnemy);
+      // Si estamos editando, usar el ID existente; si no, generar uno nuevo
+      const enemyToSave = {
+        ...newEnemy,
+        id: editingEnemy || `enemy_${Date.now()}`
+      };
+
+      await saveEnemy(enemyToSave);
       setShowEnemyForm(false);
       setNewEnemy({
         name: '',
@@ -770,7 +780,8 @@ function App() {
       });
       setEditingEnemy(null);
     } catch (e) {
-      alert('Error al guardar el enemigo');
+      console.error('Error al guardar enemigo:', e);
+      alert('Error al guardar el enemigo: ' + e.message);
     }
   };
 
