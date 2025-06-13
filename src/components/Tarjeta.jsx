@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const variantStyles = {
   weapon: {
     icon: '/marcas/Espada.png',
+    fallbackIcon: '⚔️',
     gradient: 'from-red-900/20 to-orange-900/20',
     border: 'border-red-700/50 hover:border-red-600/70',
     glow: 'hover:shadow-red-500/20',
   },
   armor: {
     icon: '/marcas/Armadura.png',
+    fallbackIcon: '🛡️',
     gradient: 'from-blue-900/20 to-cyan-900/20',
     border: 'border-blue-700/50 hover:border-blue-600/70',
     glow: 'hover:shadow-blue-500/20',
   },
   power: {
     icon: '/marcas/Músculo.png',
+    fallbackIcon: '💪',
     gradient: 'from-purple-900/20 to-pink-900/20',
     border: 'border-purple-700/50 hover:border-purple-600/70',
     glow: 'hover:shadow-purple-500/20',
@@ -38,7 +41,32 @@ const Tarjeta = ({
   ...props
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const style = variantStyles[variant] || variantStyles.default;
+
+  // Detectar si es dispositivo móvil
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // Precargar imagen y detectar errores (solo en desktop)
+  useEffect(() => {
+    if (style.icon && !isMobile) {
+      const img = new Image();
+      img.onload = () => {
+        setImageLoaded(true);
+        setImageError(false);
+      };
+      img.onerror = () => {
+        setImageLoaded(false);
+        setImageError(true);
+      };
+      img.src = style.icon;
+    } else if (isMobile) {
+      // En móviles, usar directamente el fallback
+      setImageError(true);
+      setImageLoaded(false);
+    }
+  }, [style.icon, isMobile]);
 
   const baseClasses = `
     relative overflow-hidden
@@ -95,22 +123,50 @@ const Tarjeta = ({
       {/* Icon como marca de agua */}
       {style.icon && (
         <>
-          {/* Icono pequeño en la esquina */}
-          <img
-            src={style.icon}
-            alt=""
-            className={`
-              absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
-              transition-all duration-300
-              ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
-            `}
-          />
-          {/* Marca de agua difuminada en el fondo */}
-          <img
-            src={style.icon}
-            alt=""
-            className="absolute inset-0 w-full h-full object-contain opacity-15 pointer-events-none z-0 blur-sm"
-          />
+          {/* Si la imagen carga correctamente, mostrarla */}
+          {imageLoaded && !imageError ? (
+            <>
+              {/* Icono pequeño en la esquina */}
+              <img
+                src={style.icon}
+                alt=""
+                className={`
+                  absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
+                  transition-all duration-300
+                  ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
+                `}
+              />
+              {/* Marca de agua difuminada en el fondo */}
+              <img
+                src={style.icon}
+                alt=""
+                className="absolute inset-0 w-full h-full object-contain opacity-15 pointer-events-none z-0 blur-sm"
+              />
+            </>
+          ) : (
+            /* Fallback con emoji si la imagen no carga */
+            style.fallbackIcon && (
+              <>
+                {/* Emoji pequeño en la esquina */}
+                <div
+                  className={`
+                    absolute top-3 right-3 text-lg pointer-events-none z-10
+                    transition-all duration-300
+                    ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
+                  `}
+                >
+                  {style.fallbackIcon}
+                </div>
+                {/* Marca de agua emoji difuminada en el fondo */}
+                <div
+                  className="absolute bottom-4 right-4 text-8xl opacity-10 pointer-events-none z-0"
+                  style={{ filter: 'blur(2px)' }}
+                >
+                  {style.fallbackIcon}
+                </div>
+              </>
+            )
+          )}
         </>
       )}
 
