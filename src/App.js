@@ -15,6 +15,9 @@ import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import InventoryRE4 from './components/re4/InventoryRE4';
+import { ToastProvider, useToast } from './components/Toast';
+import LoadingSpinner from './components/LoadingSpinner';
+import Modal, { ConfirmModal, useModal } from './components/Modal';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -920,23 +923,104 @@ function App() {
   // MENÚ PRINCIPAL
   if (!userType) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-8">
-          <h1 className="text-2xl font-bold text-center text-white mb-2">¿Quién eres?</h1>
-          <div className="flex flex-col gap-4">
-            <Boton
-              color="green"
-              className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 active:scale-95 transition"
-              onClick={() => setUserType('player')}
-            >Soy Jugador</Boton>
-            <Boton
-              color="purple"
-              className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 active:scale-95 transition"
-              onClick={() => {
-                setUserType('master');
-                setShowLogin(true);
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo animadas */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-blue-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 4}s`,
               }}
-            >Soy Máster</Boton>
+            />
+          ))}
+        </div>
+
+        {/* Círculos decorativos */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header mejorado */}
+          <div className="text-center space-y-4">
+            <div className="relative">
+              <div className="text-6xl mb-4 animate-bounce">⚔️</div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-xl"></div>
+            </div>
+            <h1 className="text-3xl font-bold text-center text-white bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Fichas de Rol
+            </h1>
+            <p className="text-gray-400 text-base">
+              Sistema avanzado de gestión de personajes
+            </p>
+            <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mx-auto"></div>
+          </div>
+
+          {/* Pregunta principal */}
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-white mb-6">¿Quién eres?</h2>
+          </div>
+
+          {/* Opciones mejoradas */}
+          <div className="flex flex-col gap-4">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg blur-sm"></div>
+              <Boton
+                color="green"
+                size="lg"
+                className="relative py-4 rounded-lg font-extrabold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300 group"
+                onClick={() => setUserType('player')}
+                icon={<span className="text-2xl">🎭</span>}
+                iconPosition="left"
+              >
+                <div className="flex flex-col items-start">
+                  <span>Soy Jugador</span>
+                  <span className="text-sm opacity-80 font-normal">Gestiona tu personaje</span>
+                </div>
+              </Boton>
+            </div>
+
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg blur-sm"></div>
+              <Boton
+                color="purple"
+                size="lg"
+                className="relative py-4 rounded-lg font-extrabold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300 group"
+                onClick={() => {
+                  setUserType('master');
+                  setShowLogin(true);
+                }}
+                icon={<span className="text-2xl">👑</span>}
+                iconPosition="left"
+              >
+                <div className="flex flex-col items-start">
+                  <span>Soy Máster</span>
+                  <span className="text-sm opacity-80 font-normal">Herramientas avanzadas</span>
+                </div>
+              </Boton>
+            </div>
+          </div>
+
+          {/* Footer informativo */}
+          <div className="text-center space-y-2 border-t border-gray-700 pt-6">
+            <div className="flex items-center justify-center space-x-2 text-gray-400">
+              <span className="text-sm">🛡️</span>
+              <p className="text-sm font-medium">Versión 2.1</p>
+              <span className="text-sm">⚔️</span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Sistema completo con inventario RE4 y herramientas de gestión
+            </p>
+
+            {/* Indicador de estado */}
+            <div className="flex items-center justify-center space-x-2 mt-4">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs text-green-400">Sistema operativo</span>
+            </div>
           </div>
         </div>
       </div>
@@ -946,28 +1030,100 @@ function App() {
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-center text-white">Acceso Máster</h2>
-          <Input
-            type="password"
-            placeholder="Contraseña"
-            value={passwordInput}
-            onChange={e => setPasswordInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="mb-2 w-full text-center"
-          />
-          <Boton
-            color="green"
-            className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
-            onClick={handleLogin}
-          >Entrar</Boton>
-          <Boton
-            color="gray"
-            className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
-            onClick={volverAlMenu}
-          >Volver al menú principal</Boton>
-          {authError && <p className="text-red-400 text-center mt-2">{authError}</p>}
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-purple-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 3}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Efectos de fondo */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header mejorado */}
+          <div className="text-center space-y-4">
+            <div className="relative">
+              <div className="text-5xl mb-4 animate-bounce">👑</div>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full blur-xl"></div>
+            </div>
+            <h2 className="text-2xl font-bold text-center text-white bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Acceso Máster
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Ingresa la contraseña para acceder a las herramientas avanzadas
+            </p>
+            <div className="w-16 h-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto"></div>
+          </div>
+
+          {/* Campo de contraseña mejorado */}
+          <div className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Contraseña de máster"
+              value={passwordInput}
+              onChange={e => setPasswordInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              className="w-full text-center"
+              size="lg"
+              icon={<span>🔐</span>}
+              iconPosition="left"
+            />
+
+            {authError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center animate-in fade-in duration-300">
+                <p className="text-red-400 text-sm font-medium">{authError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Botones mejorados */}
+          <div className="space-y-3">
+            <Boton
+              color="green"
+              size="lg"
+              className="w-full py-4 rounded-lg font-extrabold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
+              onClick={handleLogin}
+              icon={<span>🚀</span>}
+              iconPosition="left"
+            >
+              Acceder al Sistema
+            </Boton>
+
+            <Boton
+              color="gray"
+              size="md"
+              className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+              onClick={volverAlMenu}
+              icon={<span>↩️</span>}
+              iconPosition="left"
+            >
+              Volver al menú principal
+            </Boton>
+          </div>
+
+          {/* Footer informativo */}
+          <div className="text-center space-y-2 border-t border-gray-700 pt-4">
+            <div className="flex items-center justify-center space-x-2 text-gray-400">
+              <span className="text-sm">🛡️</span>
+              <p className="text-xs font-medium">Acceso seguro</p>
+              <span className="text-sm">⚔️</span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Solo usuarios autorizados pueden acceder al modo máster
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -976,49 +1132,138 @@ function App() {
   // SELECCIÓN JUGADOR
   if (userType === 'player' && !nameEntered) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-center text-white">Selecciona tu jugador</h2>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(25)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-green-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 3}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Efectos de fondo */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-green-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-lg rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header mejorado */}
+          <div className="text-center space-y-4">
+            <div className="relative">
+              <div className="text-5xl mb-4 animate-bounce">🎭</div>
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-full blur-xl"></div>
+            </div>
+            <h2 className="text-2xl font-bold text-center text-white bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">
+              Selecciona tu Personaje
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Elige un personaje existente o crea uno nuevo
+            </p>
+            <div className="w-16 h-1 bg-gradient-to-r from-green-500 to-blue-500 rounded-full mx-auto"></div>
+          </div>
+
+          {/* Jugadores existentes */}
           {existingPlayers.length > 0 && (
-            <div>
-              <p className="font-semibold text-white mb-2 text-center">Jugadores existentes:</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {existingPlayers.map(n => (
-                  <Boton
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="font-semibold text-white mb-3 flex items-center justify-center gap-2">
+                  <span>👥</span>
+                  Personajes Existentes
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto">
+                {existingPlayers.map((n, index) => (
+                  <div
                     key={n}
-                    color="gray"
-                    className="rounded-lg font-bold text-base px-3 py-2"
-                    onClick={() => {
-                      setPlayerName(n);
-                      setTimeout(() => setNameEntered(true), 0);
-                    }}
+                    className="relative group"
+                    style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    {n}
-                  </Boton>
+                    <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg blur-sm"></div>
+                    <Boton
+                      color="blue"
+                      size="md"
+                      className="relative w-full rounded-lg font-bold text-sm px-3 py-3 hover:scale-105 transition-all duration-300 group"
+                      onClick={() => {
+                        setPlayerName(n);
+                        setTimeout(() => setNameEntered(true), 0);
+                      }}
+                    >
+                      <div className="flex flex-col items-center">
+                        <span className="text-lg mb-1">🎲</span>
+                        <span className="truncate">{n}</span>
+                      </div>
+                    </Boton>
+                  </div>
                 ))}
               </div>
             </div>
           )}
-          <div>
-            <p className="font-semibold text-white mb-1 text-center">O crea uno nuevo:</p>
+
+          {/* Crear nuevo personaje */}
+          <div className="space-y-4">
+            <div className="text-center">
+              <h3 className="font-semibold text-white mb-3 flex items-center justify-center gap-2">
+                <span>✨</span>
+                Crear Nuevo Personaje
+              </h3>
+            </div>
+
             <Input
-              placeholder="Tu nombre"
+              placeholder="Nombre de tu personaje"
               value={playerName}
               onChange={e => setPlayerName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && enterPlayer()}
-              className="mb-2 w-full text-center"
+              className="w-full text-center"
+              size="lg"
+              icon={<span>🏷️</span>}
+              iconPosition="left"
+              clearable
             />
+
             <Boton
               color="green"
-              className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow"
+              size="lg"
+              className="w-full py-4 rounded-lg font-extrabold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
               onClick={enterPlayer}
-            >Crear / Entrar</Boton>
+              icon={<span>🚀</span>}
+              iconPosition="left"
+            >
+              Crear / Entrar
+            </Boton>
           </div>
-          <Boton
-            color="gray"
-            className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow"
-            onClick={volverAlMenu}
-          >Volver al menú principal</Boton>
+
+          {/* Botón volver */}
+          <div className="border-t border-gray-700 pt-4">
+            <Boton
+              color="gray"
+              size="md"
+              className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+              onClick={volverAlMenu}
+              icon={<span>↩️</span>}
+              iconPosition="left"
+            >
+              Volver al menú principal
+            </Boton>
+          </div>
+
+          {/* Footer informativo */}
+          <div className="text-center space-y-2 border-t border-gray-700 pt-4">
+            <div className="flex items-center justify-center space-x-2 text-gray-400">
+              <span className="text-sm">🎲</span>
+              <p className="text-xs font-medium">Gestión de personajes</p>
+              <span className="text-sm">⚔️</span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Tus datos se guardan automáticamente en la nube
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1853,4 +2098,13 @@ function App() {
   );
 }
 
-export default App;
+// Componente principal envuelto con ToastProvider
+const AppWithProviders = () => {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  );
+};
+
+export default AppWithProviders;

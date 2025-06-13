@@ -102,7 +102,7 @@ src/
 
 ## 🎯 Últimas mejoras implementadas
 
-### 🆕 **Sistema de Inventario RE4 Completo** (v2.0)
+### 🆕 **Sistema de Inventario RE4 Completo** (v2.1)
 - ✅ **Grid 10×8 perfecto** con collision detection avanzado
 - ✅ **18 tipos de objetos** organizados en 6 categorías (Armas, Munición, Curación, Objetos Clave, Tesoros, Misceláneos)
 - ✅ **Rotación con click derecho** para objetos compatibles
@@ -114,13 +114,25 @@ src/
 - ✅ **Guía interactiva** con controles, categorías y consejos
 - ✅ **Estadísticas en tiempo real** (ocupación, valor total, etc.)
 
-### 🔧 **Mejoras de UX/UI**
-- ✅ **Menú máster rediseñado** con mejor presentación visual
-- ✅ **Integración React nativa** (eliminado iframe, ahora usa componentes React)
-- ✅ **Backend adaptativo** (HTML5Backend para escritorio, TouchBackend para móviles)
-- ✅ **CSS mejorado** con animaciones, scrollbars personalizados y efectos de hover
-- ✅ **Tooltips avanzados** con información detallada de objetos
-- ✅ **Accesibilidad mejorada** con soporte para `prefers-reduced-motion`
+### 🎨 **Mejoras de UX/UI Completas** (v2.1)
+- ✅ **Pantalla de inicio rediseñada** con animaciones y efectos de partículas
+- ✅ **Login de máster mejorado** con diseño moderno y feedback visual
+- ✅ **Selección de jugador renovada** con grid de personajes existentes
+- ✅ **Menú máster completamente rediseñado** con mejor presentación visual
+- ✅ **Componentes mejorados** (Boton, Input, Tarjeta) con más variantes y estados
+- ✅ **Sistema de notificaciones Toast** para feedback de acciones
+- ✅ **Modales avanzados** con confirmaciones y efectos de transición
+- ✅ **Loading spinners** con múltiples variantes y animaciones
+- ✅ **CSS mejorado** con animaciones personalizadas, gradientes y efectos
+- ✅ **Scrollbars personalizados** y efectos de hover mejorados
+
+### 🔧 **Mejoras de Componentes**
+- ✅ **Boton mejorado** con tamaños, variantes, estados de loading y iconos
+- ✅ **Input avanzado** con validación visual, iconos, clear button y estados
+- ✅ **Tarjeta renovada** con efectos de hover, gradientes y estados interactivos
+- ✅ **Modal system** con confirmaciones, overlay personalizable y hooks
+- ✅ **Toast notifications** con tipos, auto-dismiss y animaciones
+- ✅ **LoadingSpinner** con múltiples tamaños, colores y variantes
 
 ### 🛠️ **Mejoras Técnicas**
 - ✅ **Performance optimizada** con `useMemo` y `useCallback`
@@ -129,6 +141,8 @@ src/
 - ✅ **Persistencia en Firebase** con timestamps y metadatos
 - ✅ **Manejo de errores robusto** con feedback visual
 - ✅ **Código modular** con componentes reutilizables
+- ✅ **ToastProvider** integrado para notificaciones globales
+- ✅ **CSS variables** para temas y gradientes personalizados
 
 ## 🔄 Historial de cambios previos
 
