@@ -758,7 +758,6 @@ function App() {
       poderes: [],
       atributos: baseAtributos,
       stats: baseStats,
-      cargaAcumulada: { fisica: 0, mental: 0 },
       // Campos adicionales como jugador
       nivel: 1,
       experiencia: 0,
@@ -800,7 +799,6 @@ function App() {
         poderes: [],
         atributos: {},
         stats: {},
-        cargaAcumulada: { fisica: 0, mental: 0 },
         nivel: 1,
         experiencia: 0,
         dinero: 0,
@@ -894,7 +892,6 @@ function App() {
     if (weapon) {
       const updatedWeapons = [...newEnemy.weapons, weapon];
       setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
-      recalculateEnemyStats({ ...newEnemy, weapons: updatedWeapons });
     }
   };
 
@@ -903,7 +900,6 @@ function App() {
     if (armor) {
       const updatedArmors = [...newEnemy.armaduras, armor];
       setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
-      recalculateEnemyStats({ ...newEnemy, armaduras: updatedArmors });
     }
   };
 
@@ -912,66 +908,22 @@ function App() {
     if (power) {
       const updatedPowers = [...newEnemy.poderes, power];
       setNewEnemy({ ...newEnemy, poderes: updatedPowers });
-      recalculateEnemyStats({ ...newEnemy, poderes: updatedPowers });
     }
   };
 
   const unequipEnemyWeapon = (index) => {
     const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
-    recalculateEnemyStats({ ...newEnemy, weapons: updatedWeapons });
   };
 
   const unequipEnemyArmor = (index) => {
     const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
-    recalculateEnemyStats({ ...newEnemy, armaduras: updatedArmors });
   };
 
   const unequipEnemyPower = (index) => {
     const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, poderes: updatedPowers });
-    recalculateEnemyStats({ ...newEnemy, poderes: updatedPowers });
-  };
-
-  const recalculateEnemyStats = (enemyData) => {
-    const newStats = { ...enemyData.stats };
-    let newCarga = { fisica: 0, mental: 0 };
-
-    // Calcular carga de armas
-    enemyData.weapons.forEach(weapon => {
-      const cargaFisica = parseCargaValue(weapon.cargaFisica ?? weapon.carga);
-      const cargaMental = parseCargaValue(weapon.cargaMental);
-      newCarga.fisica += cargaFisica;
-      newCarga.mental += cargaMental;
-    });
-
-    // Calcular carga de armaduras
-    enemyData.armaduras.forEach(armor => {
-      const cargaFisica = parseCargaValue(armor.cargaFisica ?? armor.carga);
-      const cargaMental = parseCargaValue(armor.cargaMental);
-      newCarga.fisica += cargaFisica;
-      newCarga.mental += cargaMental;
-    });
-
-    // Calcular estadísticas base
-    defaultRecursos.forEach(recurso => {
-      if (newStats[recurso]) {
-        const atributoBase = enemyData.atributos[recursoToAtributo[recurso]] || 'D4';
-        const valorBase = dadoToNumero[atributoBase] || 4;
-        newStats[recurso].base = valorBase;
-        newStats[recurso].total = valorBase + newStats[recurso].buff;
-        if (newStats[recurso].actual === 0) {
-          newStats[recurso].actual = newStats[recurso].total;
-        }
-      }
-    });
-
-    setNewEnemy({
-      ...enemyData,
-      stats: newStats,
-      cargaAcumulada: newCarga
-    });
   };
 
   // ───────────────────────────────────────────────────────────
@@ -2337,7 +2289,6 @@ function App() {
                               const newAtributos = { ...newEnemy.atributos, [attr]: e.target.value };
                               const updatedEnemy = { ...newEnemy, atributos: newAtributos };
                               setNewEnemy(updatedEnemy);
-                              recalculateEnemyStats(updatedEnemy);
                             }}
                             className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                           >
@@ -2353,58 +2304,74 @@ function App() {
                   {/* Estadísticas */}
                   <div>
                     <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
-                    <div className="space-y-2">
-                      {defaultRecursos.map(recurso => (
-                        <div key={recurso} className="grid grid-cols-4 gap-2 items-center">
-                          <label className="text-sm font-medium">{recurso}:</label>
-                          <div className="text-sm text-gray-400">
-                            Base: {newEnemy.stats[recurso]?.base || 0}
+                    <div className="space-y-3">
+                      {defaultRecursos.map(recurso => {
+                        const stat = newEnemy.stats[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                        const color = recursoColor[recurso] || '#ffffff';
+                        return (
+                          <div key={recurso} className="space-y-2">
+                            {/* Línea minimalista como en fichas de jugador */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium capitalize" style={{ color }}>{recurso}</span>
+                              <div className="flex gap-2 text-xs">
+                                <span className="text-gray-400">Base: {stat.base}</span>
+                                <span className="text-green-400">+{stat.buff}</span>
+                                <span className="text-blue-400">= {stat.total}</span>
+                                <span className="text-yellow-400">({stat.actual})</span>
+                              </div>
+                            </div>
+
+                            {/* Controles de edición */}
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input
+                                type="number"
+                                placeholder="Base"
+                                value={stat.base}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].base = parseInt(e.target.value) || 0;
+                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  if (newStats[recurso].actual === 0) {
+                                    newStats[recurso].actual = newStats[recurso].total;
+                                  }
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Buff"
+                                value={stat.buff}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].buff = parseInt(e.target.value) || 0;
+                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Actual"
+                                value={stat.actual}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].actual = parseInt(e.target.value) || 0;
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
                           </div>
-                          <Input
-                            type="number"
-                            placeholder="Buff"
-                            value={newEnemy.stats[recurso]?.buff || 0}
-                            onChange={(e) => {
-                              const newStats = { ...newEnemy.stats };
-                              if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
-                              newStats[recurso].buff = parseInt(e.target.value) || 0;
-                              newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
-                              if (newStats[recurso].actual === 0) {
-                                newStats[recurso].actual = newStats[recurso].total;
-                              }
-                              setNewEnemy({ ...newEnemy, stats: newStats });
-                            }}
-                            className="text-sm"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Actual"
-                            value={newEnemy.stats[recurso]?.actual || 0}
-                            onChange={(e) => {
-                              const newStats = { ...newEnemy.stats };
-                              if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
-                              newStats[recurso].actual = parseInt(e.target.value) || 0;
-                              setNewEnemy({ ...newEnemy, stats: newStats });
-                            }}
-                            className="text-sm"
-                          />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
-                  {/* Carga Acumulada */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Carga Acumulada</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-sm">
-                        <span className="font-medium">Física:</span> {newEnemy.cargaAcumulada?.fisica || 0}
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-medium">Mental:</span> {newEnemy.cargaAcumulada?.mental || 0}
-                      </div>
-                    </div>
-                  </div>
+
                 </div>
               </div>
 
@@ -2625,36 +2592,25 @@ function App() {
                   {/* Estadísticas */}
                   <div className="bg-gray-700 rounded-lg p-4">
                     <h3 className="font-semibold mb-3">Estadísticas</h3>
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-3 text-sm">
                       {defaultRecursos.map(recurso => {
                         const stat = selectedEnemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                        const color = recursoColor[recurso] || '#ffffff';
                         return (
-                          <div key={recurso} className="flex justify-between items-center">
-                            <span className="font-medium">{recurso}:</span>
-                            <div className="flex gap-2 text-xs">
-                              <span className="text-gray-400">Base: {stat.base}</span>
-                              <span className="text-green-400">+{stat.buff}</span>
-                              <span className="text-blue-400">= {stat.total}</span>
-                              <span className="text-yellow-400">({stat.actual})</span>
+                          <div key={recurso} className="space-y-1">
+                            {/* Línea minimalista como en fichas de jugador */}
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium capitalize" style={{ color }}>{recurso}</span>
+                              <div className="flex gap-2 text-xs">
+                                <span className="text-gray-400">Base: {stat.base}</span>
+                                <span className="text-green-400">+{stat.buff}</span>
+                                <span className="text-blue-400">= {stat.total}</span>
+                                <span className="text-yellow-400">({stat.actual})</span>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {/* Carga Acumulada */}
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <h3 className="font-semibold mb-3">Carga Acumulada</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex justify-between">
-                        <span className="font-medium">Física:</span>
-                        <span className="text-red-400">{selectedEnemy.cargaAcumulada?.fisica || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Mental:</span>
-                        <span className="text-purple-400">{selectedEnemy.cargaAcumulada?.mental || 0}</span>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -2672,7 +2628,7 @@ function App() {
                             <p>Daño: {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}</p>
                             <p>Alcance: {weapon.alcance}</p>
                             <p>Consumo: {weapon.consumo}</p>
-                            <p>Carga: {parseCargaValue(weapon.cargaFisica ?? weapon.carga) > 0 ? '🔲'.repeat(parseCargaValue(weapon.cargaFisica ?? weapon.carga)) : '❌'}</p>
+
                           </Tarjeta>
                         ))}
                       </div>
@@ -2690,7 +2646,7 @@ function App() {
                           <Tarjeta key={index} variant="armor" className="text-xs">
                             <p className="font-bold text-sm">{armor.nombre}</p>
                             <p>Defensa: {armor.defensa}</p>
-                            <p>Carga: {parseCargaValue(armor.cargaFisica ?? armor.carga) > 0 ? '🔲'.repeat(parseCargaValue(armor.cargaFisica ?? armor.carga)) : '❌'}</p>
+
                           </Tarjeta>
                         ))}
                       </div>
