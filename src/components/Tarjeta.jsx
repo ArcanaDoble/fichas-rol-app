@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 
 const variantStyles = {
   weapon: {
-    icon: '/marcas/espada.png',
+    icon: '/marcas/Espada.png',
     gradient: 'from-red-900/20 to-orange-900/20',
     border: 'border-red-700/50 hover:border-red-600/70',
     glow: 'hover:shadow-red-500/20',
   },
   armor: {
-    icon: '/marcas/armadura.png',
+    icon: '/marcas/Armadura.png',
     gradient: 'from-blue-900/20 to-cyan-900/20',
     border: 'border-blue-700/50 hover:border-blue-600/70',
     glow: 'hover:shadow-blue-500/20',

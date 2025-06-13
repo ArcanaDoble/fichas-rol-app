@@ -2456,19 +2456,40 @@ function App() {
                 {/* Armas Equipadas */}
                 <div>
                   <h4 className="font-medium mb-2">Armas Equipadas</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.weapons.map((weapon, index) => (
                       <Tarjeta key={index} variant="weapon" className="text-sm">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-bold">{weapon.nombre}</p>
-                            <p className="text-xs">Daño: {weapon.dano}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">⚔️</span>
+                              <p className="font-bold">{weapon.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Alcance:</span> {weapon.alcance}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Consumo:</span> {weapon.consumo}
+                            </p>
+                            {weapon.rasgos && weapon.rasgos.length > 0 && (
+                              <p className="text-xs mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {weapon.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+                              </p>
+                            )}
                           </div>
                           <Boton
                             color="red"
                             size="sm"
                             onClick={() => unequipEnemyWeapon(index)}
-                            className="text-xs px-2 py-1"
+                            className="text-xs px-2 py-1 ml-2"
                           >
                             ✕
                           </Boton>
@@ -2504,19 +2525,34 @@ function App() {
                 {/* Armaduras Equipadas */}
                 <div>
                   <h4 className="font-medium mb-2">Armaduras Equipadas</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.armaduras.map((armor, index) => (
                       <Tarjeta key={index} variant="armor" className="text-sm">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-bold">{armor.nombre}</p>
-                            <p className="text-xs">Defensa: {armor.defensa}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">🛡️</span>
+                              <p className="font-bold">{armor.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Defensa:</span> {armor.defensa}
+                            </p>
+                            {armor.rasgos && armor.rasgos.length > 0 && (
+                              <p className="text-xs mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {armor.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+                              </p>
+                            )}
                           </div>
                           <Boton
                             color="red"
                             size="sm"
                             onClick={() => unequipEnemyArmor(index)}
-                            className="text-xs px-2 py-1"
+                            className="text-xs px-2 py-1 ml-2"
                           >
                             ✕
                           </Boton>
@@ -2552,19 +2588,35 @@ function App() {
                 {/* Poderes Equipados */}
                 <div>
                   <h4 className="font-medium mb-2">Poderes Equipados</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.poderes.map((power, index) => (
                       <Tarjeta key={index} variant="power" className="text-sm">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-bold">{power.nombre}</p>
-                            <p className="text-xs">Consumo: {power.consumo}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">💪</span>
+                              <p className="font-bold">{power.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Alcance:</span> {power.alcance}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Consumo:</span> {power.consumo}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Poder:</span> {power.poder}
+                            </p>
+                            {power.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+                              </p>
+                            )}
                           </div>
                           <Boton
                             color="red"
                             size="sm"
                             onClick={() => unequipEnemyPower(index)}
-                            className="text-xs px-2 py-1"
+                            className="text-xs px-2 py-1 ml-2"
                           >
                             ✕
                           </Boton>
@@ -2737,11 +2789,29 @@ function App() {
                       <div className="space-y-2">
                         {selectedEnemy.weapons.map((weapon, index) => (
                           <Tarjeta key={index} variant="weapon" className="text-xs">
-                            <p className="font-bold text-sm">{weapon.nombre}</p>
-                            <p>Daño: {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}</p>
-                            <p>Alcance: {weapon.alcance}</p>
-                            <p>Consumo: {weapon.consumo}</p>
-
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">⚔️</span>
+                              <p className="font-bold text-sm">{weapon.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Alcance:</span> {weapon.alcance}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Consumo:</span> {weapon.consumo}
+                            </p>
+                            {weapon.rasgos && weapon.rasgos.length > 0 && (
+                              <p className="mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {weapon.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+                              </p>
+                            )}
                           </Tarjeta>
                         ))}
                       </div>
@@ -2757,9 +2827,23 @@ function App() {
                       <div className="space-y-2">
                         {selectedEnemy.armaduras.map((armor, index) => (
                           <Tarjeta key={index} variant="armor" className="text-xs">
-                            <p className="font-bold text-sm">{armor.nombre}</p>
-                            <p>Defensa: {armor.defensa}</p>
-
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">🛡️</span>
+                              <p className="font-bold text-sm">{armor.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Defensa:</span> {armor.defensa}
+                            </p>
+                            {armor.rasgos && armor.rasgos.length > 0 && (
+                              <p className="mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {armor.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+                              </p>
+                            )}
                           </Tarjeta>
                         ))}
                       </div>
@@ -2775,12 +2859,24 @@ function App() {
                       <div className="space-y-2">
                         {selectedEnemy.poderes.map((power, index) => (
                           <Tarjeta key={index} variant="power" className="text-xs">
-                            <p className="font-bold text-sm">{power.nombre}</p>
-                            <p>Alcance: {power.alcance}</p>
-                            <p>Consumo: {power.consumo}</p>
-                            <p>Cuerpo: {power.cuerpo}</p>
-                            <p>Mente: {power.mente}</p>
-                            <p>Poder: {power.poder}</p>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">💪</span>
+                              <p className="font-bold text-sm">{power.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Alcance:</span> {power.alcance}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Consumo:</span> {power.consumo}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Poder:</span> {power.poder}
+                            </p>
+                            {power.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+                              </p>
+                            )}
                           </Tarjeta>
                         ))}
                       </div>
