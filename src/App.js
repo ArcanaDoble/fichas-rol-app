@@ -54,6 +54,24 @@ const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
 
+// Mapeo de recursos a atributos para cálculo de estadísticas
+const recursoToAtributo = {
+  postura: 'destreza',
+  vida: 'vigor',
+  ingenio: 'intelecto',
+  cordura: 'voluntad',
+  armadura: 'vigor'
+};
+
+// Mapeo de dados a valores numéricos
+const dadoToNumero = {
+  'D4': 4,
+  'D6': 6,
+  'D8': 8,
+  'D10': 10,
+  'D12': 12
+};
+
 const parseCargaValue = (v) => {
   if (!v) return 0;
   if (typeof v === 'number') return v;
@@ -740,7 +758,13 @@ function App() {
       poderes: [],
       atributos: baseAtributos,
       stats: baseStats,
-      cargaAcumulada: { fisica: 0, mental: 0 }
+      cargaAcumulada: { fisica: 0, mental: 0 },
+      // Campos adicionales como jugador
+      nivel: 1,
+      experiencia: 0,
+      dinero: 0,
+      notas: '',
+      estados: []
     });
     setEditingEnemy(null);
     setShowEnemyForm(true);
@@ -776,7 +800,12 @@ function App() {
         poderes: [],
         atributos: {},
         stats: {},
-        cargaAcumulada: { fisica: 0, mental: 0 }
+        cargaAcumulada: { fisica: 0, mental: 0 },
+        nivel: 1,
+        experiencia: 0,
+        dinero: 0,
+        notas: '',
+        estados: []
       });
       setEditingEnemy(null);
     } catch (e) {
@@ -855,6 +884,94 @@ function App() {
         alert('Error al procesar la imagen. Por favor intenta con otra imagen.');
       }
     }
+  };
+
+  // ───────────────────────────────────────────────────────────
+  // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const equipEnemyWeapon = (weaponName) => {
+    const weapon = armas.find(a => a.nombre === weaponName);
+    if (weapon) {
+      const updatedWeapons = [...newEnemy.weapons, weapon];
+      setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+      recalculateEnemyStats({ ...newEnemy, weapons: updatedWeapons });
+    }
+  };
+
+  const equipEnemyArmor = (armorName) => {
+    const armor = armaduras.find(a => a.nombre === armorName);
+    if (armor) {
+      const updatedArmors = [...newEnemy.armaduras, armor];
+      setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+      recalculateEnemyStats({ ...newEnemy, armaduras: updatedArmors });
+    }
+  };
+
+  const equipEnemyPower = (powerName) => {
+    const power = habilidades.find(h => h.nombre === powerName);
+    if (power) {
+      const updatedPowers = [...newEnemy.poderes, power];
+      setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+      recalculateEnemyStats({ ...newEnemy, poderes: updatedPowers });
+    }
+  };
+
+  const unequipEnemyWeapon = (index) => {
+    const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+    recalculateEnemyStats({ ...newEnemy, weapons: updatedWeapons });
+  };
+
+  const unequipEnemyArmor = (index) => {
+    const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+    recalculateEnemyStats({ ...newEnemy, armaduras: updatedArmors });
+  };
+
+  const unequipEnemyPower = (index) => {
+    const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+    recalculateEnemyStats({ ...newEnemy, poderes: updatedPowers });
+  };
+
+  const recalculateEnemyStats = (enemyData) => {
+    const newStats = { ...enemyData.stats };
+    let newCarga = { fisica: 0, mental: 0 };
+
+    // Calcular carga de armas
+    enemyData.weapons.forEach(weapon => {
+      const cargaFisica = parseCargaValue(weapon.cargaFisica ?? weapon.carga);
+      const cargaMental = parseCargaValue(weapon.cargaMental);
+      newCarga.fisica += cargaFisica;
+      newCarga.mental += cargaMental;
+    });
+
+    // Calcular carga de armaduras
+    enemyData.armaduras.forEach(armor => {
+      const cargaFisica = parseCargaValue(armor.cargaFisica ?? armor.carga);
+      const cargaMental = parseCargaValue(armor.cargaMental);
+      newCarga.fisica += cargaFisica;
+      newCarga.mental += cargaMental;
+    });
+
+    // Calcular estadísticas base
+    defaultRecursos.forEach(recurso => {
+      if (newStats[recurso]) {
+        const atributoBase = enemyData.atributos[recursoToAtributo[recurso]] || 'D4';
+        const valorBase = dadoToNumero[atributoBase] || 4;
+        newStats[recurso].base = valorBase;
+        newStats[recurso].total = valorBase + newStats[recurso].buff;
+        if (newStats[recurso].actual === 0) {
+          newStats[recurso].actual = newStats[recurso].total;
+        }
+      }
+    });
+
+    setNewEnemy({
+      ...enemyData,
+      stats: newStats,
+      cargaAcumulada: newCarga
+    });
   };
 
   // ───────────────────────────────────────────────────────────
@@ -2107,74 +2224,325 @@ function App() {
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
 
-              <div className="space-y-4">
-                {/* Nombre */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nombre</label>
-                  <Input
-                    value={newEnemy.name}
-                    onChange={(e) => setNewEnemy({...newEnemy, name: e.target.value})}
-                    placeholder="Nombre del enemigo"
-                    className="w-full"
-                  />
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Columna izquierda: Información básica */}
+                <div className="space-y-4">
+                  {/* Nombre */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Nombre</label>
+                    <Input
+                      value={newEnemy.name}
+                      onChange={(e) => setNewEnemy({...newEnemy, name: e.target.value})}
+                      placeholder="Nombre del enemigo"
+                      className="w-full"
+                    />
+                  </div>
 
-                {/* Retrato */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">Retrato</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                  />
-                  {newEnemy.portrait && (
-                    <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
-                      <img
-                        src={newEnemy.portrait}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
+                  {/* Retrato */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Retrato</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    />
+                    {newEnemy.portrait && (
+                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
+                        <img
+                          src={newEnemy.portrait}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Descripción</label>
+                    <textarea
+                      value={newEnemy.description}
+                      onChange={(e) => setNewEnemy({...newEnemy, description: e.target.value})}
+                      placeholder="Descripción del enemigo"
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
+                    />
+                  </div>
+
+                  {/* Nivel y Experiencia */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Nivel</label>
+                      <Input
+                        type="number"
+                        value={newEnemy.nivel}
+                        onChange={(e) => setNewEnemy({...newEnemy, nivel: parseInt(e.target.value) || 1})}
+                        min="1"
+                        className="w-full"
                       />
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Experiencia</label>
+                      <Input
+                        type="number"
+                        value={newEnemy.experiencia}
+                        onChange={(e) => setNewEnemy({...newEnemy, experiencia: parseInt(e.target.value) || 0})}
+                        min="0"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dinero */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Dinero</label>
+                    <Input
+                      type="number"
+                      value={newEnemy.dinero}
+                      onChange={(e) => setNewEnemy({...newEnemy, dinero: parseInt(e.target.value) || 0})}
+                      min="0"
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Notas */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Notas</label>
+                    <textarea
+                      value={newEnemy.notas}
+                      onChange={(e) => setNewEnemy({...newEnemy, notas: e.target.value})}
+                      placeholder="Notas adicionales sobre el enemigo"
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
+                    />
+                  </div>
                 </div>
 
-                {/* Descripción */}
+                {/* Columna derecha: Atributos y Estadísticas */}
+                <div className="space-y-4">
+                  {/* Atributos */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Atributos</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {atributos.map(attr => (
+                        <div key={attr} className="flex items-center gap-2">
+                          <label className="text-sm font-medium w-16">{attr}:</label>
+                          <select
+                            value={newEnemy.atributos[attr] || 'D4'}
+                            onChange={(e) => {
+                              const newAtributos = { ...newEnemy.atributos, [attr]: e.target.value };
+                              const updatedEnemy = { ...newEnemy, atributos: newAtributos };
+                              setNewEnemy(updatedEnemy);
+                              recalculateEnemyStats(updatedEnemy);
+                            }}
+                            className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                          >
+                            {DADOS.map(dado => (
+                              <option key={dado} value={dado}>{dado}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estadísticas */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
+                    <div className="space-y-2">
+                      {defaultRecursos.map(recurso => (
+                        <div key={recurso} className="grid grid-cols-4 gap-2 items-center">
+                          <label className="text-sm font-medium">{recurso}:</label>
+                          <div className="text-sm text-gray-400">
+                            Base: {newEnemy.stats[recurso]?.base || 0}
+                          </div>
+                          <Input
+                            type="number"
+                            placeholder="Buff"
+                            value={newEnemy.stats[recurso]?.buff || 0}
+                            onChange={(e) => {
+                              const newStats = { ...newEnemy.stats };
+                              if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                              newStats[recurso].buff = parseInt(e.target.value) || 0;
+                              newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                              if (newStats[recurso].actual === 0) {
+                                newStats[recurso].actual = newStats[recurso].total;
+                              }
+                              setNewEnemy({ ...newEnemy, stats: newStats });
+                            }}
+                            className="text-sm"
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Actual"
+                            value={newEnemy.stats[recurso]?.actual || 0}
+                            onChange={(e) => {
+                              const newStats = { ...newEnemy.stats };
+                              if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                              newStats[recurso].actual = parseInt(e.target.value) || 0;
+                              setNewEnemy({ ...newEnemy, stats: newStats });
+                            }}
+                            className="text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Carga Acumulada */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Carga Acumulada</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-sm">
+                        <span className="font-medium">Física:</span> {newEnemy.cargaAcumulada?.fisica || 0}
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-medium">Mental:</span> {newEnemy.cargaAcumulada?.mental || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección de Equipo */}
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold">Equipo</h3>
+
+                {/* Armas Equipadas */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">Descripción</label>
-                  <textarea
-                    value={newEnemy.description}
-                    onChange={(e) => setNewEnemy({...newEnemy, description: e.target.value})}
-                    placeholder="Descripción del enemigo"
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
-                  />
+                  <h4 className="font-medium mb-2">Armas Equipadas</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    {newEnemy.weapons.map((weapon, index) => (
+                      <Tarjeta key={index} variant="weapon" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold">{weapon.nombre}</p>
+                            <p className="text-xs">Daño: {weapon.dano}</p>
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyWeapon(index)}
+                            className="text-xs px-2 py-1"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Buscar arma para equipar"
+                      className="flex-1 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          equipEnemyWeapon(e.target.value.trim());
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
 
-                {/* Botones */}
-                <div className="flex gap-2 pt-4">
-                  <Boton
-                    color="green"
-                    onClick={handleSaveEnemy}
-                    className="flex-1"
-                  >
-                    {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
-                  </Boton>
-                  <Boton
-                    color="gray"
-                    onClick={() => {
-                      setShowEnemyForm(false);
-                      setEditingEnemy(null);
-                    }}
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Boton>
+                {/* Armaduras Equipadas */}
+                <div>
+                  <h4 className="font-medium mb-2">Armaduras Equipadas</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    {newEnemy.armaduras.map((armor, index) => (
+                      <Tarjeta key={index} variant="armor" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold">{armor.nombre}</p>
+                            <p className="text-xs">Defensa: {armor.defensa}</p>
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyArmor(index)}
+                            className="text-xs px-2 py-1"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Buscar armadura para equipar"
+                      className="flex-1 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          equipEnemyArmor(e.target.value.trim());
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
+
+                {/* Poderes Equipados */}
+                <div>
+                  <h4 className="font-medium mb-2">Poderes Equipados</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    {newEnemy.poderes.map((power, index) => (
+                      <Tarjeta key={index} variant="power" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold">{power.nombre}</p>
+                            <p className="text-xs">Consumo: {power.consumo}</p>
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyPower(index)}
+                            className="text-xs px-2 py-1"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Buscar poder para equipar"
+                      className="flex-1 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          equipEnemyPower(e.target.value.trim());
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-2 pt-6 border-t border-gray-700 mt-6">
+                <Boton
+                  color="green"
+                  onClick={handleSaveEnemy}
+                  className="flex-1"
+                >
+                  {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
+                </Boton>
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setShowEnemyForm(false);
+                    setEditingEnemy(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Boton>
               </div>
             </div>
           </div>
@@ -2183,19 +2551,27 @@ function App() {
         {/* Modal para ver ficha completa */}
         {selectedEnemy && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Ficha de {selectedEnemy.name}</h2>
-                <Boton
-                  color="gray"
-                  onClick={() => setSelectedEnemy(null)}
-                >
-                  ✕
-                </Boton>
+                <div className="flex gap-2">
+                  <Boton
+                    color="blue"
+                    onClick={() => editEnemy(selectedEnemy)}
+                  >
+                    Editar
+                  </Boton>
+                  <Boton
+                    color="gray"
+                    onClick={() => setSelectedEnemy(null)}
+                  >
+                    ✕
+                  </Boton>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Retrato y descripción */}
+                {/* Columna 1: Retrato e información básica */}
                 <div className="space-y-4">
                   {selectedEnemy.portrait && (
                     <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-700">
@@ -2206,19 +2582,143 @@ function App() {
                       />
                     </div>
                   )}
+
+                  <div className="bg-gray-700 rounded-lg p-4 space-y-2">
+                    <h3 className="font-semibold text-lg">Información Básica</h3>
+                    <div className="text-sm space-y-1">
+                      <p><span className="font-medium">Nivel:</span> {selectedEnemy.nivel || 1}</p>
+                      <p><span className="font-medium">Experiencia:</span> {selectedEnemy.experiencia || 0}</p>
+                      <p><span className="font-medium">Dinero:</span> {selectedEnemy.dinero || 0}</p>
+                    </div>
+                  </div>
+
                   {selectedEnemy.description && (
-                    <div>
+                    <div className="bg-gray-700 rounded-lg p-4">
                       <h3 className="font-semibold mb-2">Descripción</h3>
-                      <p className="text-gray-400 text-sm">{selectedEnemy.description}</p>
+                      <p className="text-gray-300 text-sm">{selectedEnemy.description}</p>
+                    </div>
+                  )}
+
+                  {selectedEnemy.notas && (
+                    <div className="bg-gray-700 rounded-lg p-4">
+                      <h3 className="font-semibold mb-2">Notas</h3>
+                      <p className="text-gray-300 text-sm">{selectedEnemy.notas}</p>
                     </div>
                   )}
                 </div>
 
-                {/* Estadísticas y equipo */}
-                <div className="lg:col-span-2 space-y-4">
-                  <p className="text-gray-400">
-                    Esta funcionalidad se expandirá para incluir atributos, estadísticas y equipo como las fichas de jugador.
-                  </p>
+                {/* Columna 2: Atributos y Estadísticas */}
+                <div className="space-y-4">
+                  {/* Atributos */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Atributos</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {atributos.map(attr => (
+                        <div key={attr} className="flex justify-between">
+                          <span className="font-medium">{attr}:</span>
+                          <span className="text-blue-400">{selectedEnemy.atributos?.[attr] || 'D4'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estadísticas */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Estadísticas</h3>
+                    <div className="space-y-2 text-sm">
+                      {defaultRecursos.map(recurso => {
+                        const stat = selectedEnemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                        return (
+                          <div key={recurso} className="flex justify-between items-center">
+                            <span className="font-medium">{recurso}:</span>
+                            <div className="flex gap-2 text-xs">
+                              <span className="text-gray-400">Base: {stat.base}</span>
+                              <span className="text-green-400">+{stat.buff}</span>
+                              <span className="text-blue-400">= {stat.total}</span>
+                              <span className="text-yellow-400">({stat.actual})</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Carga Acumulada */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Carga Acumulada</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Física:</span>
+                        <span className="text-red-400">{selectedEnemy.cargaAcumulada?.fisica || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Mental:</span>
+                        <span className="text-purple-400">{selectedEnemy.cargaAcumulada?.mental || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna 3: Equipo */}
+                <div className="space-y-4">
+                  {/* Armas */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Armas Equipadas</h3>
+                    {selectedEnemy.weapons?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.weapons.map((weapon, index) => (
+                          <Tarjeta key={index} variant="weapon" className="text-xs">
+                            <p className="font-bold text-sm">{weapon.nombre}</p>
+                            <p>Daño: {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}</p>
+                            <p>Alcance: {weapon.alcance}</p>
+                            <p>Consumo: {weapon.consumo}</p>
+                            <p>Carga: {parseCargaValue(weapon.cargaFisica ?? weapon.carga) > 0 ? '🔲'.repeat(parseCargaValue(weapon.cargaFisica ?? weapon.carga)) : '❌'}</p>
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin armas equipadas</p>
+                    )}
+                  </div>
+
+                  {/* Armaduras */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
+                    {selectedEnemy.armaduras?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.armaduras.map((armor, index) => (
+                          <Tarjeta key={index} variant="armor" className="text-xs">
+                            <p className="font-bold text-sm">{armor.nombre}</p>
+                            <p>Defensa: {armor.defensa}</p>
+                            <p>Carga: {parseCargaValue(armor.cargaFisica ?? armor.carga) > 0 ? '🔲'.repeat(parseCargaValue(armor.cargaFisica ?? armor.carga)) : '❌'}</p>
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
+                    )}
+                  </div>
+
+                  {/* Poderes */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Poderes Equipados</h3>
+                    {selectedEnemy.poderes?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.poderes.map((power, index) => (
+                          <Tarjeta key={index} variant="power" className="text-xs">
+                            <p className="font-bold text-sm">{power.nombre}</p>
+                            <p>Alcance: {power.alcance}</p>
+                            <p>Consumo: {power.consumo}</p>
+                            <p>Cuerpo: {power.cuerpo}</p>
+                            <p>Mente: {power.mente}</p>
+                            <p>Poder: {power.poder}</p>
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin poderes equipados</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
