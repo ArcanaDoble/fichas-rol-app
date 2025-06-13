@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const variantStyles = {
   weapon: {
@@ -41,32 +41,16 @@ const Tarjeta = ({
   ...props
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const style = variantStyles[variant] || variantStyles.default;
 
-  // Detectar si es dispositivo móvil
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-  // Precargar imagen y detectar errores (solo en desktop)
-  useEffect(() => {
-    if (style.icon && !isMobile) {
-      const img = new Image();
-      img.onload = () => {
-        setImageLoaded(true);
-        setImageError(false);
-      };
-      img.onerror = () => {
-        setImageLoaded(false);
-        setImageError(true);
-      };
-      img.src = style.icon;
-    } else if (isMobile) {
-      // En móviles, usar directamente el fallback
-      setImageError(true);
-      setImageLoaded(false);
-    }
-  }, [style.icon, isMobile]);
+  // Crear URL con cache busting para forzar recarga en móviles
+  const getImageUrl = (url) => {
+    if (!url) return url;
+    // Agregar timestamp para evitar problemas de cache
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}v=${Date.now()}`;
+  };
 
   const baseClasses = `
     relative overflow-hidden
@@ -123,49 +107,52 @@ const Tarjeta = ({
       {/* Icon como marca de agua */}
       {style.icon && (
         <>
-          {/* Si la imagen carga correctamente, mostrarla */}
-          {imageLoaded && !imageError ? (
+          {/* Siempre intentar mostrar la imagen PNG primero con cache busting */}
+          <img
+            src={getImageUrl(style.icon)}
+            alt=""
+            className={`
+              absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
+              transition-all duration-300
+              ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
+              ${imageError ? 'hidden' : ''}
+            `}
+            onError={() => setImageError(true)}
+            onLoad={() => setImageError(false)}
+          />
+
+          {/* Marca de agua difuminada en el fondo con cache busting */}
+          <img
+            src={getImageUrl(style.icon)}
+            alt=""
+            className={`
+              absolute inset-0 w-full h-full object-contain opacity-15 pointer-events-none z-0 blur-sm
+              ${imageError ? 'hidden' : ''}
+            `}
+            onError={() => setImageError(true)}
+          />
+
+          {/* Fallback con emoji solo si la imagen PNG falla completamente */}
+          {imageError && style.fallbackIcon && (
             <>
-              {/* Icono pequeño en la esquina */}
-              <img
-                src={style.icon}
-                alt=""
+              {/* Emoji pequeño en la esquina como último recurso */}
+              <div
                 className={`
-                  absolute top-3 right-3 w-6 h-6 pointer-events-none z-10
+                  absolute top-3 right-3 text-lg pointer-events-none z-10
                   transition-all duration-300
                   ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
                 `}
-              />
-              {/* Marca de agua difuminada en el fondo */}
-              <img
-                src={style.icon}
-                alt=""
-                className="absolute inset-0 w-full h-full object-contain opacity-15 pointer-events-none z-0 blur-sm"
-              />
+              >
+                {style.fallbackIcon}
+              </div>
+              {/* Marca de agua emoji difuminada en el fondo como último recurso */}
+              <div
+                className="absolute bottom-4 right-4 text-8xl opacity-10 pointer-events-none z-0"
+                style={{ filter: 'blur(2px)' }}
+              >
+                {style.fallbackIcon}
+              </div>
             </>
-          ) : (
-            /* Fallback con emoji si la imagen no carga */
-            style.fallbackIcon && (
-              <>
-                {/* Emoji pequeño en la esquina */}
-                <div
-                  className={`
-                    absolute top-3 right-3 text-lg pointer-events-none z-10
-                    transition-all duration-300
-                    ${isHovered ? 'scale-110 opacity-80' : 'opacity-60'}
-                  `}
-                >
-                  {style.fallbackIcon}
-                </div>
-                {/* Marca de agua emoji difuminada en el fondo */}
-                <div
-                  className="absolute bottom-4 right-4 text-8xl opacity-10 pointer-events-none z-0"
-                  style={{ filter: 'blur(2px)' }}
-                >
-                  {style.fallbackIcon}
-                </div>
-              </>
-            )
           )}
         </>
       )}
