@@ -18,17 +18,12 @@ const sizes = {
   xl: 'px-8 py-4 text-xl',
 };
 
-const variants = {
-  solid: '',
-  outline: 'bg-transparent border-2',
-  ghost: 'bg-transparent hover:bg-opacity-10',
-};
+
 
 const Boton = ({
   children,
   color = 'gray',
   size = 'md',
-  variant = 'solid',
   loading = false,
   disabled = false,
   icon,
@@ -41,21 +36,15 @@ const Boton = ({
 
   const baseClasses = `
     relative inline-flex items-center justify-center
-    font-extrabold tracking-wide rounded-lg
+    font-semibold tracking-wide rounded-lg
     transition-all duration-300 ease-in-out
     focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900
     active:scale-95 transform
     disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
-    ${variant === 'outline' ? 'hover:bg-opacity-10' : ''}
-    ${variant === 'ghost' ? 'hover:shadow-md' : 'shadow-md hover:shadow-lg'}
+    shadow-md hover:shadow-lg
   `;
 
-  const colorClasses = variant === 'outline'
-    ? `border-current text-${color}-500 hover:bg-${color}-500 hover:text-white`
-    : variant === 'ghost'
-    ? `text-${color}-500 hover:bg-${color}-500`
-    : colores[color];
-
+  const colorClasses = colores[color];
   const sizeClasses = sizes[size];
 
   const handleClick = (e) => {
