@@ -1,105 +1,173 @@
-# Fichas Rol App
+# 🎮 Fichas Rol App
 
-Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje. Toda la información de cada jugador se almacena en Firebase y el catálogo de equipo proviene de hojas de cálculo públicas de Google Sheets, por lo que se actualiza automáticamente.
+**Aplicación web avanzada para gestión de fichas de personaje con sistema de inventario estilo Resident Evil 4**
 
-## Características principales
+Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol. Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, actualizándose automáticamente. Incluye un revolucionario sistema de inventario estilo Resident Evil 4 con grid 10×8, drag & drop fluido y rotación de objetos.
 
-- **Modo Jugador y Modo Máster**. Los jugadores pueden crear su ficha introduciendo su nombre y el máster puede acceder con una contraseña para refrescar el catálogo de armas y armaduras.
-- **Gestión de atributos y recursos**. Cada ficha contiene los cuatro atributos principales (destreza, vigor, intelecto y voluntad) representados con dados y una lista editable de recursos (postura, vida, ingenio, cordura, armadura, etc.). Es posible añadir o eliminar recursos personalizados y definir su color e información emergente.
-- **Equipamiento desde Google Sheets**. Las armas y armaduras se cargan de hojas de cálculo públicas. El máster puede buscar y revisar todas las opciones y los jugadores pueden equiparse desde su ficha.
-- **Habilidades personalizadas**. El máster puede crear poderes en Firebase y los jugadores pueden equiparlos en su ficha.
-- **Claves consumibles**. Cada jugador puede definir sus propias Claves, acciones especiales con contador de usos que se editan desde la ficha.
-- **Carga física y mental**. El peso del equipo afecta a la Postura y a la Cordura. La aplicación calcula automáticamente la carga física y mental acumulada e indica la penalización correspondiente.
-- **Edición de tooltips**. Los textos explicativos de cada recurso pueden editarse directamente en la interfaz tanto en ordenador como en móviles.
-- **Interfaz responsive**. Está pensada para verse correctamente en móviles y escritorio y utiliza TailwindCSS para los estilos.
-- **Inventario drag & drop**. Nuevo componente modular con slots configurables para arrastrar objetos.
-- **Pruebas automáticas**. Se incluye un conjunto básico de pruebas con React Testing Library en `src/App.test.js`.
+## ✨ Características principales
 
-## Instalación y uso
+### 🎯 **Sistema de Inventario RE4 (NUEVO)**
+- **Grid 10×8 con collision detection perfecto** - Sistema tetris-like para optimizar espacio
+- **Drag & Drop fluido con preview visual** - Arrastra objetos con vista previa en tiempo real
+- **Rotación de objetos con click derecho** - Rota armas y objetos para encajar mejor
+- **18 tipos de objetos diferentes** - Armas, munición, curación, tesoros, objetos clave y más
+- **Sistema de rareza con colores** - Común, poco común, raro, legendario y único
+- **Responsive design** - Optimizado para móviles y escritorio
+- **Efectos visuales y animaciones** - Feedback visual para todas las acciones
+- **Stackeado automático** - Los objetos compatibles se combinan automáticamente
+- **Guía interactiva** - Sistema de ayuda integrado con controles y consejos
 
-1. Clona este repositorio.
-2. Ejecuta `npm install` para instalar las dependencias.
-3. Configura tus credenciales de Firebase en `src/firebase.js` si es necesario.
-4. Lanza la aplicación con `npm start` y abre `http://localhost:3000` en el navegador.
+### 🎲 **Gestión de Personajes**
+- **Modo Jugador y Modo Máster** - Interfaces especializadas para cada rol
+- **Gestión de atributos y recursos** - Dados para atributos y recursos personalizables
+- **Equipamiento desde Google Sheets** - Catálogo dinámico de armas y armaduras
+- **Habilidades personalizadas** - Creación y gestión de poderes únicos
+- **Claves consumibles** - Acciones especiales con contador de usos
+- **Carga física y mental** - Sistema automático de penalizaciones por peso
+- **Estados del personaje** - Seguimiento de efectos activos con iconos
+- **Inventario tradicional** - Sistema de slots drag & drop para objetos básicos
 
-### Despliegue en Firebase
+### 🛠️ **Características Técnicas**
+- **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
+- **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
+- **Tooltips informativos** - Información detallada editables en tiempo real
+- **Glosario configurable** - Términos destacados con descripciones personalizadas
+- **Pruebas automáticas** - Suite de pruebas con React Testing Library
 
-1. Ejecuta `npm run build` para generar la versión de producción.
-2. Despliega la carpeta `build` con `firebase deploy`.
+## 🚀 Instalación y uso
 
-### Ejecutar las pruebas
+### Requisitos previos
+- Node.js 16+
+- npm o yarn
+- Cuenta de Firebase (opcional, para persistencia)
 
-Las pruebas se ejecutan con `npm test`.
-
+### Instalación
 ```bash
-npm test
+# 1. Clona el repositorio
+git clone https://github.com/ArcanaDoble/fichas-rol-app.git
+cd fichas-rol-app
+
+# 2. Instala las dependencias
+npm install
+
+# 3. Configura Firebase (opcional)
+# Edita src/firebase.js con tus credenciales
+
+# 4. Inicia la aplicación
+npm start
 ```
 
-## Cambios recientes
+La aplicación estará disponible en `http://localhost:3000`
 
-A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
+### 🎮 Cómo usar el Inventario RE4
 
-- Cálculo de carga física y mental y visualización con iconos.
-- Edición y eliminación de recursos dinámicos con validaciones.
-- Bloque de "añadir recurso" plegable para simplificar la interfaz.
-- Tooltips explicativos editables y adaptados a móviles.
-- Mejoras de estilo y responsividad utilizando Tailwind.
-- Actualización de metadatos y pruebas automatizadas.
-- Interfaz de equipamiento mejorada.
-- Gestión de poderes creados en Firebase.
-- Sección de Claves con contador de usos personalizable.
-- Inventario modular con arrastrar y soltar.
-- Barras de estadísticas con diseño responsive.
-- Recursos con unidades en círculos para mayor claridad.
-- Cartas de atributos optimizadas para móvil.
-- Comportamiento de los tooltips refinado al pasar el ratón o hacer doble toque.
-- Barra de Claves limitada a 10 unidades y botón para reiniciar sus usos.
-- Botón "Volver al menú principal" en la pantalla de acceso de Máster.
-- Equipamiento y poderes centrados cuando solo hay un elemento equipado.
-- Selector de estados con iconos para llevar el control de efectos activos.
-- Inventario disponible en las fichas de jugador.
-- Slots del inventario habilitables con un clic y almacenamiento persistente.
-- Persistencia del inventario en Firestore en lugar de localStorage.
-- Buscador de objetos con texto visible y envío con Enter.
-- Sugerencia automática al buscar objetos con tabulación para autocompletar.
-- Botón de papelera para eliminar objetos arrastrándolos.
-- Estilo de los slots y botones optimizado para móviles.
-- Opción para borrar slots del inventario.
-- `DndProvider` movido al nivel raíz de la aplicación para evitar errores de contexto.
-- Persistencia completa del inventario (posiciones, cantidades y objetos eliminados).
-- Botones de aumento y disminución con estilo más compacto y adaptable a móviles.
-- Arreglada la sincronización inicial del inventario para que los cambios se
-  conserven tras recargar la página.
-- Estética del inventario renovada con bordes brillantes y controles más grandes.
-- Efecto luminoso al pasar el ratón sobre los slots o al contener un objeto.
-- Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
-- Animación de rebote al soltar objetos en los slots.
-- Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
-- Inventario guardado de forma individual para cada jugador.
-- Soporte de arrastre en dispositivos móviles gracias a TouchBackend.
-- Cantidad de objetos aumentable arrastrando repetidas veces al mismo slot.
-- Animación de activación del slot con resaltado verde.
-- Papelera y botón de nuevo slot con animaciones al pasar el ratón.
-- Edición y eliminación de habilidades creadas por el máster.
-- Los slots del inventario se crean habilitados por defecto y se eliminan con doble clic.
-- Tamaño de los slots adaptado a pantallas grandes.
-- Tarjetas de armas, armaduras y poderes sin bordes de color.
-- Imágenes de espada, armadura y músculo como marcas de agua.
-- Bordes de los slots se colorean según el objeto almacenado.
-- Efectos de gradiente animado y brillo pulsante en las fichas de objeto.
-- Descripción emergente de cada objeto al pasar el cursor o tocar brevemente.
-- Glosario configurable por el máster con palabras destacadas y tooltip de ayuda.
-- Tooltips del glosario con identificadores únicos para cada palabra.
-- Prototipo de inventario estilo RE4 accesible para el máster.
-- Nuevo archivo `public/inventario-re4.html` con plantilla HTML5.
-- El prototipo RE4 se incrusta en la vista de Máster mediante un `iframe`.
-- Inventario RE4 con contenedores, controles, grid, biblioteca, stats y tooltip.
-- Estilos base del inventario RE4 con Glass Morphism, rarezas y tooltip.
-- Variables de grid y plantillas de objetos añadidas en el script del inventario RE4.
-- Inicialización del inventario y creación dinámica de la cuadrícula.
-- Comprobación de colisiones con `canPlaceItem()` y creación de objetos mediante `addItem()`.
-- Arrastre con vista previa de validación y rotación de objetos.
-- Controles de usuario para añadir ítems aleatorios, rotar y organizar, con estadísticas y tooltips.
-- Biblioteca de objetos interactiva con iconos y botones para añadir ítems al inventario.
-- Buscador integrado para localizar "Espada" o "Daga" y agregarlas a la biblioteca.
+1. **Acceso**: Modo Máster → "🎒 Inventario RE4"
+2. **Añadir objetos**: Usa los controles por categoría (Armas, Munición, Curación, etc.)
+3. **Mover objetos**: Arrastra y suelta en el grid 10×8
+4. **Rotar objetos**: Click derecho en objetos rotables
+5. **Eliminar objetos**: Doble click en cualquier objeto
+6. **Ayuda**: Botón "❓" para guía completa
+
+### 🔧 Comandos disponibles
+
+```bash
+# Desarrollo
+npm start          # Inicia servidor de desarrollo
+npm test           # Ejecuta las pruebas
+npm run build      # Genera build de producción
+
+# Despliegue
+firebase deploy    # Despliega a Firebase Hosting
+```
+
+## 📋 Arquitectura del proyecto
+
+```
+src/
+├── components/
+│   ├── re4/                    # Sistema de inventario RE4
+│   │   ├── InventoryRE4.jsx   # Componente principal
+│   │   ├── InventoryItem.jsx  # Items con rotación
+│   │   ├── InventoryControls.jsx # Controles y categorías
+│   │   ├── InventoryHelp.jsx  # Guía interactiva
+│   │   ├── InventoryEffects.jsx # Efectos visuales
+│   │   ├── ItemPreview.jsx    # Preview durante drag
+│   │   ├── GridCell.jsx       # Celdas del grid
+│   │   └── itemTemplates.js   # 18 tipos de objetos
+│   ├── inventory/             # Inventario tradicional
+│   └── [otros componentes]    # UI general
+├── firebase.js                # Configuración Firebase
+└── App.js                     # Componente principal
+```
+
+## 🎯 Últimas mejoras implementadas
+
+### 🆕 **Sistema de Inventario RE4 Completo** (v2.0)
+- ✅ **Grid 10×8 perfecto** con collision detection avanzado
+- ✅ **18 tipos de objetos** organizados en 6 categorías (Armas, Munición, Curación, Objetos Clave, Tesoros, Misceláneos)
+- ✅ **Rotación con click derecho** para objetos compatibles
+- ✅ **Preview visual durante drag** con validación en tiempo real
+- ✅ **Sistema de rareza** (Común, Poco común, Raro, Legendario, Único)
+- ✅ **Efectos visuales** para todas las acciones (añadir, mover, rotar, eliminar)
+- ✅ **Responsive design** optimizado para móviles y escritorio
+- ✅ **Iconos SVG personalizados** para mejor apariencia visual
+- ✅ **Guía interactiva** con controles, categorías y consejos
+- ✅ **Estadísticas en tiempo real** (ocupación, valor total, etc.)
+
+### 🔧 **Mejoras de UX/UI**
+- ✅ **Menú máster rediseñado** con mejor presentación visual
+- ✅ **Integración React nativa** (eliminado iframe, ahora usa componentes React)
+- ✅ **Backend adaptativo** (HTML5Backend para escritorio, TouchBackend para móviles)
+- ✅ **CSS mejorado** con animaciones, scrollbars personalizados y efectos de hover
+- ✅ **Tooltips avanzados** con información detallada de objetos
+- ✅ **Accesibilidad mejorada** con soporte para `prefers-reduced-motion`
+
+### 🛠️ **Mejoras Técnicas**
+- ✅ **Performance optimizada** con `useMemo` y `useCallback`
+- ✅ **Gestión de estado mejorada** con hooks personalizados
+- ✅ **Collision detection perfecto** considerando rotación de objetos
+- ✅ **Persistencia en Firebase** con timestamps y metadatos
+- ✅ **Manejo de errores robusto** con feedback visual
+- ✅ **Código modular** con componentes reutilizables
+
+## 🔄 Historial de cambios previos
+
+<details>
+<summary>Ver historial completo de mejoras anteriores</summary>
+
+- Cálculo de carga física y mental con visualización de iconos
+- Edición y eliminación de recursos dinámicos con validaciones
+- Tooltips explicativos editables adaptados a móviles
+- Mejoras de estilo y responsividad con Tailwind
+- Interfaz de equipamiento mejorada
+- Gestión de poderes creados en Firebase
+- Sección de Claves con contador de usos personalizable
+- Inventario modular con arrastrar y soltar
+- Selector de estados con iconos para efectos activos
+- Persistencia completa en Firestore
+- Soporte de arrastre en dispositivos móviles
+- Glosario configurable con palabras destacadas
+- Sistema de slots con animaciones y efectos visuales
+- Marcas de agua en tarjetas de equipo
+- Efectos de gradiente animado y brillo pulsante
+
+</details>
+
+## 🤝 Contribución
+
+Las contribuciones son bienvenidas. Por favor:
+
+1. Fork el proyecto
+2. Crea una rama para tu feature (`git checkout -b feature/nueva-caracteristica`)
+3. Commit tus cambios (`git commit -m 'Añadir nueva característica'`)
+4. Push a la rama (`git push origin feature/nueva-caracteristica`)
+5. Abre un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
+
+---
+
+**Desarrollado con ❤️ para la comunidad de rol**
 

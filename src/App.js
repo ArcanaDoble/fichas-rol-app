@@ -14,6 +14,7 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
+import InventoryRE4 from './components/re4/InventoryRE4';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -1626,15 +1627,19 @@ function App() {
 
   if (userType === 'master' && authenticated && chosenView === 're4') {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-        <Boton onClick={() => setChosenView(null)} className="mb-4">Volver</Boton>
-        <div className="w-full h-[80vh]">
-          <iframe
-            src="/inventario-re4.html"
-            title="Inventario RE4"
-            className="w-full h-full border-0"
-          />
+      <div className="min-h-screen bg-gray-900 text-gray-100">
+        <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-50">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-white">🎒 Inventario RE4 - Modo Máster</h1>
+            <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+              ← Volver al Menú
+            </Boton>
+          </div>
+          <p className="text-gray-400 text-sm mt-1">
+            Sistema de inventario estilo Resident Evil 4 con grid 10×8, drag & drop y rotación
+          </p>
         </div>
+        <InventoryRE4 playerName="master_inventory" />
       </div>
     );
   }

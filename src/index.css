@@ -28,3 +28,118 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* ─── Mejoras para el inventario RE4 ─── */
+.bg-gray-850 {
+  background-color: #1f2937;
+}
+
+/* Animaciones personalizadas */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+}
+
+.animate-gradient {
+  animation: gradient 3s ease infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient,
+  .animate-glow,
+  .transition-transform,
+  .transition-colors,
+  .transition-all {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Mejoras para dispositivos táctiles */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:scale-105:hover {
+    transform: none;
+  }
+
+  .hover\:bg-gray-600:hover {
+    background-color: inherit;
+  }
+}
+
+/* Estilos para tooltips mejorados */
+.react-tooltip {
+  z-index: 9999 !important;
+  max-width: 300px !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+
+/* Mejoras para el grid del inventario */
+.inventory-grid {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* Efectos de hover mejorados */
+.inventory-item:hover {
+  z-index: 100;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Indicadores de estado */
+.status-indicator {
+  position: relative;
+}
+
+.status-indicator::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid #1f2937;
+}
+
+.status-indicator.error::after {
+  background: #ef4444;
+}
+
+.status-indicator.warning::after {
+  background: #f59e0b;
+}
