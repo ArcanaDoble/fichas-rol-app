@@ -224,8 +224,20 @@ function App() {
     poderes: [],
     atributos: {},
     stats: {},
-    cargaAcumulada: { fisica: 0, mental: 0 }
+    nivel: 1,
+    experiencia: 0,
+    dinero: 0,
+    notas: '',
+    estados: []
   });
+
+  // Estados para equipar items a enemigos
+  const [enemyInputArma, setEnemyInputArma] = useState('');
+  const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
+  const [enemyInputPoder, setEnemyInputPoder] = useState('');
+  const [enemyArmaError, setEnemyArmaError] = useState('');
+  const [enemyArmaduraError, setEnemyArmaduraError] = useState('');
+  const [enemyPoderError, setEnemyPoderError] = useState('');
 
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
@@ -250,6 +262,23 @@ function App() {
   const poderSugerencias = playerInputPoder
     ? habilidades.filter(h =>
         h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  // Sugerencias dinámicas para inputs de equipo de enemigos
+  const enemyArmaSugerencias = enemyInputArma
+    ? armas.filter(a =>
+        a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
+      ).slice(0, 5)
+    : [];
+  const enemyArmaduraSugerencias = enemyInputArmadura
+    ? armaduras.filter(a =>
+        a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
+      ).slice(0, 5)
+    : [];
+  const enemyPoderSugerencias = enemyInputPoder
+    ? habilidades.filter(h =>
+        h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
 
@@ -806,6 +835,12 @@ function App() {
         estados: []
       });
       setEditingEnemy(null);
+      setEnemyInputArma('');
+      setEnemyInputArmadura('');
+      setEnemyInputPoder('');
+      setEnemyArmaError('');
+      setEnemyArmaduraError('');
+      setEnemyPoderError('');
     } catch (e) {
       console.error('Error al guardar enemigo:', e);
       alert('Error al guardar el enemigo: ' + e.message);
@@ -887,27 +922,66 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
-  const equipEnemyWeapon = (weaponName) => {
-    const weapon = armas.find(a => a.nombre === weaponName);
-    if (weapon) {
-      const updatedWeapons = [...newEnemy.weapons, weapon];
-      setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+  const handleEnemyEquipWeapon = () => {
+    if (loading) return;
+    const f = armas.find(a => a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
+    if (!f) return setEnemyArmaError('Arma no encontrada');
+    if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
     }
   };
 
-  const equipEnemyArmor = (armorName) => {
-    const armor = armaduras.find(a => a.nombre === armorName);
-    if (armor) {
-      const updatedArmors = [...newEnemy.armaduras, armor];
-      setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+  const handleEnemyEquipWeaponFromSuggestion = (name) => {
+    const w = armas.find(a => a.nombre === name);
+    if (!w) return setEnemyArmaError('Arma no encontrada');
+    if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
     }
   };
 
-  const equipEnemyPower = (powerName) => {
-    const power = habilidades.find(h => h.nombre === powerName);
-    if (power) {
-      const updatedPowers = [...newEnemy.poderes, power];
-      setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+  const handleEnemyEquipArmor = () => {
+    if (loading) return;
+    const f = armaduras.find(a => a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
+    if (!f) return setEnemyArmaduraError('Armadura no encontrada');
+    if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
+
+  const handleEnemyEquipArmorFromSuggestion = (name) => {
+    const a = armaduras.find(x => x.nombre === name);
+    if (!a) return setEnemyArmaduraError('Armadura no encontrada');
+    if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
+
+  const handleEnemyEquipPower = () => {
+    if (loading) return;
+    const f = habilidades.find(h => h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
+    if (!f) return setEnemyPoderError('Poder no encontrado');
+    if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
+    }
+  };
+
+  const handleEnemyEquipPowerFromSuggestion = (name) => {
+    const h = habilidades.find(x => x.nombre === name);
+    if (!h) return setEnemyPoderError('Poder no encontrado');
+    if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
+      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
     }
   };
 
@@ -2402,17 +2476,28 @@ function App() {
                       </Tarjeta>
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <Input
                       placeholder="Buscar arma para equipar"
+                      value={enemyInputArma}
+                      onChange={(e) => setEnemyInputArma(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipWeapon()}
                       className="flex-1 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && e.target.value.trim()) {
-                          equipEnemyWeapon(e.target.value.trim());
-                          e.target.value = '';
-                        }
-                      }}
                     />
+                    {enemyArmaSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyArmaSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipWeaponFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyArmaError && <p className="text-red-400 text-xs mt-1">{enemyArmaError}</p>}
                   </div>
                 </div>
 
@@ -2439,17 +2524,28 @@ function App() {
                       </Tarjeta>
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <Input
                       placeholder="Buscar armadura para equipar"
+                      value={enemyInputArmadura}
+                      onChange={(e) => setEnemyInputArmadura(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipArmor()}
                       className="flex-1 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && e.target.value.trim()) {
-                          equipEnemyArmor(e.target.value.trim());
-                          e.target.value = '';
-                        }
-                      }}
                     />
+                    {enemyArmaduraSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyArmaduraSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipArmorFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyArmaduraError && <p className="text-red-400 text-xs mt-1">{enemyArmaduraError}</p>}
                   </div>
                 </div>
 
@@ -2476,17 +2572,28 @@ function App() {
                       </Tarjeta>
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <Input
                       placeholder="Buscar poder para equipar"
+                      value={enemyInputPoder}
+                      onChange={(e) => setEnemyInputPoder(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipPower()}
                       className="flex-1 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && e.target.value.trim()) {
-                          equipEnemyPower(e.target.value.trim());
-                          e.target.value = '';
-                        }
-                      }}
                     />
+                    {enemyPoderSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyPoderSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipPowerFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyPoderError && <p className="text-red-400 text-xs mt-1">{enemyPoderError}</p>}
                   </div>
                 </div>
               </div>
@@ -2505,6 +2612,12 @@ function App() {
                   onClick={() => {
                     setShowEnemyForm(false);
                     setEditingEnemy(null);
+                    setEnemyInputArma('');
+                    setEnemyInputArmadura('');
+                    setEnemyInputPoder('');
+                    setEnemyArmaError('');
+                    setEnemyArmaduraError('');
+                    setEnemyPoderError('');
                   }}
                   className="flex-1"
                 >
