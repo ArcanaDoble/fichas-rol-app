@@ -18,6 +18,8 @@ import InventoryRE4 from './components/re4/InventoryRE4';
 import { ToastProvider, useToast } from './components/Toast';
 import LoadingSpinner from './components/LoadingSpinner';
 import Modal, { ConfirmModal, useModal } from './components/Modal';
+import DiceCalculator from './components/DiceCalculator';
+import BarraReflejos from './components/BarraReflejos';
 import { Tooltip } from 'react-tooltip';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -247,6 +249,12 @@ function App() {
   const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
   const [editingTerm, setEditingTerm] = useState(null);
   const [newTermError, setNewTermError] = useState('');
+
+  // Calculadora de dados
+  const [showDiceCalculator, setShowDiceCalculator] = useState(false);
+
+  // Minijuego Barra-Reflejos
+  const [showBarraReflejos, setShowBarraReflejos] = useState(false);
 
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -1539,12 +1547,42 @@ function App() {
     );
   }
 
+  // CALCULADORA DE DADOS
+  if (userType === 'player' && nameEntered && showDiceCalculator) {
+    return <DiceCalculator playerName={playerName} onBack={() => setShowDiceCalculator(false)} />;
+  }
+
+  // MINIJUEGO BARRA-REFLEJOS
+  if (userType === 'player' && nameEntered && showBarraReflejos) {
+    return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
+  }
+
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
-          <h1 className="text-2xl font-bold text-center mb-4">Ficha de {playerName}</h1>
+          <h1 className="text-2xl font-bold text-center mb-2">Ficha de {playerName}</h1>
+
+          {/* Botones de herramientas */}
+          <div className="mb-4 flex gap-3 justify-center">
+            {/* Botón de calculadora de dados */}
+            <Boton
+              onClick={() => setShowDiceCalculator(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              🎲
+            </Boton>
+
+            {/* Botón de minijuego reflejos */}
+            <Boton
+              onClick={() => setShowBarraReflejos(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              🔒
+            </Boton>
+          </div>
+
           <div className="mb-4 text-center text-sm text-gray-300">
             Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
             {'   |   '}
@@ -2889,6 +2927,8 @@ function App() {
             </div>
           </div>
         )}
+
+
       </div>
     );
   }
