@@ -179,7 +179,7 @@ export const ToastProvider = ({ children }) => {
     <ToastContext.Provider value={value}>
       {children}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      <style jsx>{`
+      <style>{`
         @keyframes shrink {
           from { width: 100%; }
           to { width: 0%; }
