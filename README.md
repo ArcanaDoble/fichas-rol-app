@@ -35,6 +35,8 @@ Características principales
 
         Previsualización durante el arrastre, guías interactivas y diseño responsive
 
+    Calculadora de dados y minijuego de cerrajería con dificultad progresiva
+
     Interfaz responsive con TailwindCSS y animaciones suaves (Framer Motion).
 
     Pruebas automáticas incluidas (React Testing Library).
@@ -45,7 +47,7 @@ Instalación y uso
 
     Ejecuta npm install para instalar las dependencias.
 
-    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google.
+    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google. Si no proporcionas estas variables, la aplicación usará las credenciales por defecto incluidas en `src/firebase.js` para conectarse al proyecto público.
 
     Inicia la aplicación con npm start y abre http://localhost:3000.
 
@@ -78,6 +80,13 @@ Cambios recientes destacados (v2.1)
 Inventario RE4
 
     Grid 10 × 8 con rotación, 18 objetos, cinco rarezas, animaciones y guía integrada.
+
+Minijuegos
+
+    Calculadora de dados integrada.
+    Cerrajería con diana decreciente y niveles de dificultad revisados.
+    Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
+    Configuración Firebase mejorada: usa variables de entorno o credenciales por defecto.
 
 UX / UI
 
