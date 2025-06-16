@@ -88,6 +88,7 @@ Minijuegos
     Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
     Configuración Firebase mejorada: usa variables de entorno o credenciales por defecto.
 
+
 UX / UI
 
     Pantallas de inicio y login rediseñadas, notificaciones Toast, modales avanzados, gradientes y efectos de partículas.
