@@ -85,6 +85,7 @@ Minijuegos
 
     Calculadora de dados integrada.
     Cerrajería con diana decreciente y niveles de dificultad revisados.
+    Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
 
 UX / UI
 

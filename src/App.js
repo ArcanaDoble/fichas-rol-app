@@ -10,7 +10,7 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
-import AtributoCard from './components/AtributoCard';
+import AtributoCard, { DADOS } from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
