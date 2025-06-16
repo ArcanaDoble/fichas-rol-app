@@ -47,7 +47,7 @@ Instalación y uso
 
     Ejecuta npm install para instalar las dependencias.
 
-    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google.
+    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google. Si no proporcionas estas variables, la aplicación usará las credenciales por defecto incluidas en `src/firebase.js` para conectarse al proyecto público.
 
     Inicia la aplicación con npm start y abre http://localhost:3000.
 
@@ -86,6 +86,8 @@ Minijuegos
     Calculadora de dados integrada.
     Cerrajería con diana decreciente y niveles de dificultad revisados.
     Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
+    Configuración Firebase mejorada: usa variables de entorno o credenciales por defecto.
+
 
 UX / UI
 
