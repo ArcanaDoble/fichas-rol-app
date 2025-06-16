@@ -18,27 +18,27 @@ const BarraReflejos = ({ playerName, onBack }) => {
   // Configuración de dificultades
   const difficulties = {
     EASY: {
-      initialWidth: 22,
-      minWidth: 10,
-      shrinkRate: 2,
-      speed: 2.0,
+      initialWidth: 24,
+      minWidth: 12,
+      shrinkRate: 1.5,
+      speed: 2.2,
       label: 'Fácil',
       color: 'bg-green-400',
       lightColor: 'bg-green-100 text-green-800'
     },
     MEDIUM: {
-      initialWidth: 12,
+      initialWidth: 16,
       minWidth: 6,
-      shrinkRate: 1.5,
-      speed: 3.0,
+      shrinkRate: 2,
+      speed: 3.2,
       label: 'Medio',
       color: 'bg-yellow-400',
       lightColor: 'bg-yellow-100 text-yellow-800'
     },
     HARD: {
-      initialWidth: 6,
-      minWidth: 2,
-      shrinkRate: 1,
+      initialWidth: 10,
+      minWidth: 3,
+      shrinkRate: 2.5,
       speed: 4.5,
       label: 'Difícil',
       color: 'bg-red-400',
@@ -97,20 +97,19 @@ const BarraReflejos = ({ playerName, onBack }) => {
     animationRef.current = requestAnimationFrame(animate);
   }, [gameState, difficulty, direction, difficulties]);
 
-  // Reducir tamaño de la diana cada segundo
+  // Reducir tamaño de la diana de forma continua
   useEffect(() => {
     if (gameState !== 'playing') return;
 
     const interval = setInterval(() => {
       const config = difficulties[difficulty];
-      setTargetWidth(prev => {
-        const newWidth = prev - config.shrinkRate;
-        return Math.max(newWidth, config.minWidth);
-      });
-    }, 1000);
+      const elapsed = (Date.now() - gameStartTime) / 1000;
+      const newWidth = config.initialWidth - config.shrinkRate * elapsed;
+      setTargetWidth(Math.max(newWidth, config.minWidth));
+    }, 100);
 
     return () => clearInterval(interval);
-  }, [gameState, difficulty, difficulties]);
+  }, [gameState, difficulty, gameStartTime, difficulties]);
 
   // Iniciar animación
   useEffect(() => {

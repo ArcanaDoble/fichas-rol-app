@@ -35,6 +35,8 @@ Características principales
 
         Previsualización durante el arrastre, guías interactivas y diseño responsive
 
+    Calculadora de dados y minijuego de cerrajería con dificultad progresiva
+
     Interfaz responsive con TailwindCSS y animaciones suaves (Framer Motion).
 
     Pruebas automáticas incluidas (React Testing Library).
@@ -78,6 +80,12 @@ Cambios recientes destacados (v2.1)
 Inventario RE4
 
     Grid 10 × 8 con rotación, 18 objetos, cinco rarezas, animaciones y guía integrada.
+
+Minijuegos
+
+    Calculadora de dados integrada.
+    Cerrajería con diana decreciente y niveles de dificultad revisados.
+    Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
 
 UX / UI
 
