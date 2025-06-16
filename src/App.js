@@ -15,6 +15,12 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
+import InventoryRE4 from './components/re4/InventoryRE4';
+import { ToastProvider, useToast } from './components/Toast';
+import LoadingSpinner from './components/LoadingSpinner';
+import Modal, { ConfirmModal, useModal } from './components/Modal';
+import DiceCalculator from './components/DiceCalculator';
+import BarraReflejos from './components/BarraReflejos';
 import { Tooltip } from 'react-tooltip';
 import { useConfirm } from './components/Confirm';
 import useResourcesHook from './hooks/useResources';
@@ -53,6 +59,24 @@ const recursoInfo = {
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
+
+// Mapeo de recursos a atributos para cálculo de estadísticas
+const recursoToAtributo = {
+  postura: 'destreza',
+  vida: 'vigor',
+  ingenio: 'intelecto',
+  cordura: 'voluntad',
+  armadura: 'vigor'
+};
+
+// Mapeo de dados a valores numéricos
+const dadoToNumero = {
+  'D4': 4,
+  'D6': 6,
+  'D8': 8,
+  'D10': 10,
+  'D12': 12
+};
 
 const parseCargaValue = (v) => {
   if (!v) return 0;
@@ -220,6 +244,35 @@ function App() {
   // Estados del personaje
   const [estados, setEstados] = useState([]);
 
+  // Estados para fichas de enemigos
+  const [enemies, setEnemies] = useState([]);
+  const [selectedEnemy, setSelectedEnemy] = useState(null);
+  const [showEnemyForm, setShowEnemyForm] = useState(false);
+  const [editingEnemy, setEditingEnemy] = useState(null);
+  const [newEnemy, setNewEnemy] = useState({
+    name: '',
+    portrait: '',
+    description: '',
+    weapons: [],
+    armaduras: [],
+    poderes: [],
+    atributos: {},
+    stats: {},
+    nivel: 1,
+    experiencia: 0,
+    dinero: 0,
+    notas: '',
+    estados: []
+  });
+
+  // Estados para equipar items a enemigos
+  const [enemyInputArma, setEnemyInputArma] = useState('');
+  const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
+  const [enemyInputPoder, setEnemyInputPoder] = useState('');
+  const [enemyArmaError, setEnemyArmaError] = useState('');
+  const [enemyArmaduraError, setEnemyArmaduraError] = useState('');
+  const [enemyPoderError, setEnemyPoderError] = useState('');
+
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
 
@@ -237,6 +290,12 @@ function App() {
     fetchGlossary,
   } = useGlossary();
 
+  // Calculadora de dados
+  const [showDiceCalculator, setShowDiceCalculator] = useState(false);
+
+  // Minijuego Barra-Reflejos
+  const [showBarraReflejos, setShowBarraReflejos] = useState(false);
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -251,6 +310,23 @@ function App() {
   const poderSugerencias = playerInputPoder
     ? habilidades.filter(h =>
         h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  // Sugerencias dinámicas para inputs de equipo de enemigos
+  const enemyArmaSugerencias = enemyInputArma
+    ? armas.filter(a =>
+        a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
+      ).slice(0, 5)
+    : [];
+  const enemyArmaduraSugerencias = enemyInputArmadura
+    ? armaduras.filter(a =>
+        a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
+      ).slice(0, 5)
+    : [];
+  const enemyPoderSugerencias = enemyInputPoder
+    ? habilidades.filter(h =>
+        h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
 
@@ -395,11 +471,28 @@ function App() {
   // FETCH GLOSARIO
   // ───────────────────────────────────────────────────────────
 
+  // ───────────────────────────────────────────────────────────
+  // FETCH ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const fetchEnemies = useCallback(async () => {
+    try {
+      console.log('Fetching enemies...');
+      const snap = await getDocs(collection(db, 'enemies'));
+      const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log('Enemies fetched:', datos);
+      setEnemies(datos);
+    } catch (e) {
+      console.error('Error fetching enemies:', e);
+    }
+  }, []);
+  useEffect(() => { fetchEnemies() }, [fetchEnemies]);
+
   const refreshCatalog = () => {
     fetchArmas();
     fetchArmaduras();
     fetchHabilidades();
     fetchGlossary();
+    fetchEnemies();
   };
 
   // ───────────────────────────────────────────────────────────
@@ -646,6 +739,271 @@ function App() {
   };
 
   // ───────────────────────────────────────────────────────────
+  // FUNCIONES PARA ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const saveEnemy = async (enemyData) => {
+    try {
+      const enemyId = enemyData.id || `enemy_${Date.now()}`;
+      const dataToSave = {
+        ...enemyData,
+        id: enemyId,
+        updatedAt: new Date()
+      };
+      console.log('Guardando enemigo:', dataToSave);
+      await setDoc(doc(db, 'enemies', enemyId), dataToSave);
+      console.log('Enemigo guardado exitosamente');
+      fetchEnemies();
+      return enemyId;
+    } catch (e) {
+      console.error('Error en saveEnemy:', e);
+      throw e;
+    }
+  };
+
+  const deleteEnemy = async (enemyId) => {
+    try {
+      await deleteDoc(doc(db, 'enemies', enemyId));
+      fetchEnemies();
+      if (selectedEnemy?.id === enemyId) {
+        setSelectedEnemy(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const createNewEnemy = () => {
+    const baseAtributos = {};
+    atributos.forEach(k => (baseAtributos[k] = 'D4'));
+
+    const baseStats = {};
+    defaultRecursos.forEach(r => {
+      baseStats[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+    });
+
+    setNewEnemy({
+      name: '',
+      portrait: '',
+      description: '',
+      weapons: [],
+      armaduras: [],
+      poderes: [],
+      atributos: baseAtributos,
+      stats: baseStats,
+      // Campos adicionales como jugador
+      nivel: 1,
+      experiencia: 0,
+      dinero: 0,
+      notas: '',
+      estados: []
+    });
+    setEditingEnemy(null);
+    setShowEnemyForm(true);
+  };
+
+  const editEnemy = (enemy) => {
+    setNewEnemy(enemy);
+    setEditingEnemy(enemy.id);
+    setShowEnemyForm(true);
+  };
+
+  const handleSaveEnemy = async () => {
+    if (!newEnemy.name.trim()) {
+      alert('El nombre del enemigo es requerido');
+      return;
+    }
+
+    try {
+      // Si estamos editando, usar el ID existente; si no, generar uno nuevo
+      const enemyToSave = {
+        ...newEnemy,
+        id: editingEnemy || `enemy_${Date.now()}`
+      };
+
+      await saveEnemy(enemyToSave);
+      setShowEnemyForm(false);
+      setNewEnemy({
+        name: '',
+        portrait: '',
+        description: '',
+        weapons: [],
+        armaduras: [],
+        poderes: [],
+        atributos: {},
+        stats: {},
+        nivel: 1,
+        experiencia: 0,
+        dinero: 0,
+        notas: '',
+        estados: []
+      });
+      setEditingEnemy(null);
+      setEnemyInputArma('');
+      setEnemyInputArmadura('');
+      setEnemyInputPoder('');
+      setEnemyArmaError('');
+      setEnemyArmaduraError('');
+      setEnemyPoderError('');
+    } catch (e) {
+      console.error('Error al guardar enemigo:', e);
+      alert('Error al guardar el enemigo: ' + e.message);
+    }
+  };
+
+  const resizeImage = (file, maxWidth = 300, maxHeight = 300, quality = 0.8) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        // Calcular nuevas dimensiones manteniendo proporción
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Dibujar imagen redimensionada
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convertir a base64 con calidad reducida
+        const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(resizedDataUrl);
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      try {
+        // Verificar que sea una imagen
+        if (!file.type.startsWith('image/')) {
+          alert('Por favor selecciona un archivo de imagen válido');
+          return;
+        }
+
+        // Verificar tamaño del archivo (máximo 10MB antes de procesar)
+        if (file.size > 10 * 1024 * 1024) {
+          alert('La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB');
+          return;
+        }
+
+        // Redimensionar imagen
+        const resizedImage = await resizeImage(file);
+
+        // Verificar que el resultado no sea demasiado grande para Firestore
+        if (resizedImage.length > 900000) { // ~900KB para dejar margen
+          // Si aún es muy grande, reducir más la calidad
+          const smallerImage = await resizeImage(file, 200, 200, 0.5);
+          setNewEnemy({ ...newEnemy, portrait: smallerImage });
+        } else {
+          setNewEnemy({ ...newEnemy, portrait: resizedImage });
+        }
+
+      } catch (error) {
+        console.error('Error al procesar imagen:', error);
+        alert('Error al procesar la imagen. Por favor intenta con otra imagen.');
+      }
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────
+  // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
+  // ───────────────────────────────────────────────────────────
+  const handleEnemyEquipWeapon = () => {
+    if (loading) return;
+    const f = armas.find(a => a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
+    if (!f) return setEnemyArmaError('Arma no encontrada');
+    if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
+    }
+  };
+
+  const handleEnemyEquipWeaponFromSuggestion = (name) => {
+    const w = armas.find(a => a.nombre === name);
+    if (!w) return setEnemyArmaError('Arma no encontrada');
+    if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
+    }
+  };
+
+  const handleEnemyEquipArmor = () => {
+    if (loading) return;
+    const f = armaduras.find(a => a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
+    if (!f) return setEnemyArmaduraError('Armadura no encontrada');
+    if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
+
+  const handleEnemyEquipArmorFromSuggestion = (name) => {
+    const a = armaduras.find(x => x.nombre === name);
+    if (!a) return setEnemyArmaduraError('Armadura no encontrada');
+    if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
+
+  const handleEnemyEquipPower = () => {
+    if (loading) return;
+    const f = habilidades.find(h => h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
+    if (!f) return setEnemyPoderError('Poder no encontrado');
+    if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
+      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
+    }
+  };
+
+  const handleEnemyEquipPowerFromSuggestion = (name) => {
+    const h = habilidades.find(x => x.nombre === name);
+    if (!h) return setEnemyPoderError('Poder no encontrado');
+    if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
+      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
+    }
+  };
+
+  const unequipEnemyWeapon = (index) => {
+    const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+  };
+
+  const unequipEnemyArmor = (index) => {
+    const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+  };
+
+  const unequipEnemyPower = (index) => {
+    const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
+    setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+  };
+
+  // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
   const enterPlayer = () => {
@@ -875,23 +1233,77 @@ function App() {
   // MENÚ PRINCIPAL
   if (!userType) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-8">
-          <h1 className="text-2xl font-bold text-center text-white mb-2">¿Quién eres?</h1>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo animadas */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-blue-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 4}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Círculos decorativos */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header minimalista */}
+          <div className="text-center space-y-4">
+            <h1 className="text-3xl font-bold text-center text-white">
+              Fichas de Rol
+            </h1>
+            <p className="text-gray-400 text-base">
+              Sistema de gestión de personajes
+            </p>
+            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
+          </div>
+
+          {/* Pregunta principal */}
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-white mb-2">¿Quién eres?</h2>
+          </div>
+
+          {/* Opciones minimalistas */}
           <div className="flex flex-col gap-4">
             <Boton
               color="green"
-              className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 active:scale-95 transition"
+              size="lg"
+              className="py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300"
               onClick={() => setUserType('player')}
-            >Soy Jugador</Boton>
+            >
+              <div className="flex flex-col items-center">
+                <span>Soy Jugador</span>
+                <span className="text-sm opacity-70 font-normal">Gestiona tu personaje</span>
+              </div>
+            </Boton>
+
             <Boton
               color="purple"
-              className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow hover:scale-105 active:scale-95 transition"
+              size="lg"
+              className="py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300"
               onClick={() => {
                 setUserType('master');
                 setShowLogin(true);
               }}
-            >Soy Máster</Boton>
+            >
+              <div className="flex flex-col items-center">
+                <span>Soy Máster</span>
+                <span className="text-sm opacity-70 font-normal">Herramientas avanzadas</span>
+              </div>
+            </Boton>
+          </div>
+
+          {/* Footer minimalista */}
+          <div className="text-center space-y-2 border-t border-gray-700 pt-6">
+            <p className="text-sm font-medium text-gray-400">Versión 2.1</p>
           </div>
         </div>
       </div>
@@ -901,28 +1313,80 @@ function App() {
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-center text-white">Acceso Máster</h2>
-          <Input
-            type="password"
-            placeholder="Contraseña"
-            value={passwordInput}
-            onChange={e => setPasswordInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="mb-2 w-full text-center"
-          />
-          <Boton
-            color="green"
-            className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
-            onClick={handleLogin}
-          >Entrar</Boton>
-          <Boton
-            color="gray"
-            className="py-3 rounded-lg font-extrabold text-base tracking-wide shadow w-full"
-            onClick={volverAlMenu}
-          >Volver al menú principal</Boton>
-          {authError && <p className="text-red-400 text-center mt-2">{authError}</p>}
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-purple-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 3}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Efectos de fondo */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header minimalista */}
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-bold text-center text-white">
+              Acceso Máster
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Ingresa la contraseña para acceder a las herramientas avanzadas
+            </p>
+            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
+          </div>
+
+          {/* Campo de contraseña */}
+          <div className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Contraseña de máster"
+              value={passwordInput}
+              onChange={e => setPasswordInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              className="w-full text-center"
+              size="lg"
+            />
+
+            {authError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center animate-in fade-in duration-300">
+                <p className="text-red-400 text-sm font-medium">{authError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Botones */}
+          <div className="space-y-3">
+            <Boton
+              color="green"
+              size="lg"
+              className="w-full py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
+              onClick={handleLogin}
+            >
+              Acceder al Sistema
+            </Boton>
+
+            <Boton
+              color="gray"
+              size="md"
+              className="w-full py-3 rounded-lg font-semibold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+              onClick={volverAlMenu}
+            >
+              Volver al menú principal
+            </Boton>
+          </div>
+
+
         </div>
       </div>
     );
@@ -931,52 +1395,122 @@ function App() {
   // SELECCIÓN JUGADOR
   if (userType === 'player' && !nameEntered) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center px-4">
-        <div className="w-full max-w-xs rounded-xl shadow-xl bg-gray-800 p-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-center text-white">Selecciona tu jugador</h2>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        {/* Partículas de fondo */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(25)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-green-500/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 3}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Efectos de fondo */}
+        <div className="absolute top-20 left-10 w-32 h-32 bg-green-500/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-lg rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+          {/* Header minimalista */}
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-bold text-center text-white">
+              Selecciona tu Personaje
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Elige un personaje existente o crea uno nuevo
+            </p>
+            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
+          </div>
+
+          {/* Jugadores existentes */}
           {existingPlayers.length > 0 && (
-            <div>
-              <p className="font-semibold text-white mb-2 text-center">Jugadores existentes:</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {existingPlayers.map(n => (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="font-semibold text-white mb-3">
+                  Personajes Existentes
+                </h3>
+              </div>
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                {existingPlayers.map((n) => (
                   <Boton
                     key={n}
                     color="gray"
-                    className="rounded-lg font-bold text-base px-3 py-2"
+                    size="md"
+                    className="w-full rounded-lg font-semibold text-base px-4 py-2 transition-colors duration-200"
                     onClick={() => {
                       setPlayerName(n);
                       setTimeout(() => setNameEntered(true), 0);
                     }}
                   >
-                    {n}
+                    <div className="flex justify-center items-center">
+                      <span className="truncate">{n}</span>
+                    </div>
                   </Boton>
                 ))}
               </div>
             </div>
           )}
-          <div>
-            <p className="font-semibold text-white mb-1 text-center">O crea uno nuevo:</p>
+
+          {/* Crear nuevo personaje */}
+          <div className="space-y-4">
+            <div className="text-center">
+              <h3 className="font-semibold text-white mb-3">
+                Crear Nuevo Personaje
+              </h3>
+            </div>
+
             <Input
-              placeholder="Tu nombre"
+              placeholder="Nombre de tu personaje"
               value={playerName}
               onChange={e => setPlayerName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && enterPlayer()}
-              className="mb-2 w-full text-center"
+              className="w-full text-center"
+              size="lg"
+              clearable
             />
+
             <Boton
               color="green"
-              className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow"
+              size="lg"
+              className="w-full py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
               onClick={enterPlayer}
-            >Crear / Entrar</Boton>
+            >
+              Crear / Entrar
+            </Boton>
           </div>
-          <Boton
-            color="gray"
-            className="w-full py-3 rounded-lg font-extrabold text-base tracking-wide shadow"
-            onClick={volverAlMenu}
-          >Volver al menú principal</Boton>
+
+          {/* Botón volver */}
+          <div className="border-t border-gray-700 pt-4">
+            <Boton
+              color="gray"
+              size="md"
+              className="w-full py-3 rounded-lg font-semibold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+              onClick={volverAlMenu}
+            >
+              Volver al menú principal
+            </Boton>
+          </div>
+
+
         </div>
       </div>
     );
+  }
+
+  // CALCULADORA DE DADOS
+  if (userType === 'player' && nameEntered && showDiceCalculator) {
+    return <DiceCalculator playerName={playerName} onBack={() => setShowDiceCalculator(false)} />;
+  }
+
+  // MINIJUEGO BARRA-REFLEJOS
+  if (userType === 'player' && nameEntered && showBarraReflejos) {
+    return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
   }
 
   // FICHA JUGADOR
@@ -984,7 +1518,27 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
-          <h1 className="text-2xl font-bold text-center mb-4">Ficha de {playerName}</h1>
+          <h1 className="text-2xl font-bold text-center mb-2">Ficha de {playerName}</h1>
+
+          {/* Botones de herramientas */}
+          <div className="mb-4 flex gap-3 justify-center">
+            {/* Botón de calculadora de dados */}
+            <Boton
+              onClick={() => setShowDiceCalculator(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              🎲
+            </Boton>
+
+            {/* Botón de minijuego reflejos */}
+            <Boton
+              onClick={() => setShowBarraReflejos(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              🔒
+            </Boton>
+          </div>
+
           <div className="mb-4 text-center text-sm text-gray-300">
             Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
             {'   |   '}
@@ -1386,26 +1940,30 @@ function App() {
           {/* EQUIPAR ARMA */}
           <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
-            <Input
-              placeholder="Busca un arma"
-              value={playerInputArma}
-              onChange={e => setPlayerInputArma(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {armaSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {armaSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca un arma"
+                  value={playerInputArma}
+                  onChange={e => setPlayerInputArma(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {armaSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {armaSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
 
@@ -1451,26 +2009,30 @@ function App() {
           {/* EQUIPAR ARMADURA */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
-            <Input
-              placeholder="Busca una armadura"
-              value={playerInputArmadura}
-              onChange={e => setPlayerInputArmadura(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {armaduraSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {armaduraSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca una armadura"
+                  value={playerInputArmadura}
+                  onChange={e => setPlayerInputArmadura(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {armaduraSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {armaduraSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
           </div>
 
@@ -1514,26 +2076,30 @@ function App() {
           {/* EQUIPAR PODER */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un poder:</label>
-            <Input
-              placeholder="Busca un poder"
-              value={playerInputPoder}
-              onChange={e => setPlayerInputPoder(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
-              className="w-full max-w-md mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
-            />
-            {poderSugerencias.length > 0 && (
-              <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full max-w-md text-left z-10">
-                {poderSugerencias.map(a => (
-                  <li
-                    key={a.nombre}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                    onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
-                  >
-                    {a.nombre}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="flex justify-center w-full">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Busca un poder"
+                  value={playerInputPoder}
+                  onChange={e => setPlayerInputPoder(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
+                  className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
+                />
+                {poderSugerencias.length > 0 && (
+                  <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                    {poderSugerencias.map(a => (
+                      <li
+                        key={a.nombre}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                        onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
+                      >
+                        {a.nombre}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             {playerPoderError && <p className="text-red-400 mt-1 text-center">{playerPoderError}</p>}
           </div>
 
@@ -1582,15 +2148,743 @@ function App() {
 
   if (userType === 'master' && authenticated && chosenView === 're4') {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-        <Boton onClick={() => setChosenView(null)} className="mb-4">Volver</Boton>
-        <div className="w-full h-[80vh]">
-          <iframe
-            src="/inventario-re4.html"
-            title="Inventario RE4"
-            className="w-full h-full border-0"
-          />
+      <div className="min-h-screen bg-gray-900 text-gray-100">
+        <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-50">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-white">🎒 Inventario RE4 - Modo Máster</h1>
+            <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+              ← Volver al Menú
+            </Boton>
+          </div>
+          <p className="text-gray-400 text-sm mt-1">
+            Sistema de inventario estilo Resident Evil 4 con grid 10×8, drag & drop y rotación
+          </p>
         </div>
+        <InventoryRE4 playerName="master_inventory" />
+      </div>
+    );
+  }
+
+  if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
+        <div className="sticky top-0 bg-gray-900 pb-2 z-10">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-white">👹 Fichas de Enemigos</h1>
+            <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+              ← Volver al Menú
+            </Boton>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Boton color="green" onClick={createNewEnemy}>Crear Nuevo Enemigo</Boton>
+            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+          </div>
+        </div>
+
+        {/* Lista de enemigos */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {enemies.map((enemy) => (
+            <div key={enemy.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+              {/* Retrato del enemigo */}
+              {enemy.portrait && (
+                <div className="w-full h-32 mb-3 rounded-lg overflow-hidden bg-gray-700">
+                  <img
+                    src={enemy.portrait}
+                    alt={enemy.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              <h3 className="text-lg font-bold text-white mb-2">{enemy.name}</h3>
+              {enemy.description && (
+                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{enemy.description}</p>
+              )}
+
+              <div className="flex gap-2">
+                <Boton
+                  color="blue"
+                  size="sm"
+                  onClick={() => editEnemy(enemy)}
+                  className="flex-1"
+                >
+                  Editar
+                </Boton>
+                <Boton
+                  color="purple"
+                  size="sm"
+                  onClick={() => setSelectedEnemy(enemy)}
+                  className="flex-1"
+                >
+                  Ver Ficha
+                </Boton>
+                <Boton
+                  color="red"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                      deleteEnemy(enemy.id);
+                    }
+                  }}
+                >
+                  🗑️
+                </Boton>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {enemies.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-400 text-lg">No hay enemigos creados</p>
+            <p className="text-gray-500 text-sm mt-2">Crea tu primer enemigo para empezar</p>
+          </div>
+        )}
+
+        {/* Modal para crear/editar enemigo */}
+        {showEnemyForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">
+                {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
+              </h2>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Columna izquierda: Información básica */}
+                <div className="space-y-4">
+                  {/* Nombre */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Nombre</label>
+                    <Input
+                      value={newEnemy.name}
+                      onChange={(e) => setNewEnemy({...newEnemy, name: e.target.value})}
+                      placeholder="Nombre del enemigo"
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Retrato */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Retrato</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    />
+                    {newEnemy.portrait && (
+                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
+                        <img
+                          src={newEnemy.portrait}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Descripción</label>
+                    <textarea
+                      value={newEnemy.description}
+                      onChange={(e) => setNewEnemy({...newEnemy, description: e.target.value})}
+                      placeholder="Descripción del enemigo"
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
+                    />
+                  </div>
+
+                  {/* Nivel y Experiencia */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Nivel</label>
+                      <Input
+                        type="number"
+                        value={newEnemy.nivel}
+                        onChange={(e) => setNewEnemy({...newEnemy, nivel: parseInt(e.target.value) || 1})}
+                        min="1"
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Experiencia</label>
+                      <Input
+                        type="number"
+                        value={newEnemy.experiencia}
+                        onChange={(e) => setNewEnemy({...newEnemy, experiencia: parseInt(e.target.value) || 0})}
+                        min="0"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dinero */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Dinero</label>
+                    <Input
+                      type="number"
+                      value={newEnemy.dinero}
+                      onChange={(e) => setNewEnemy({...newEnemy, dinero: parseInt(e.target.value) || 0})}
+                      min="0"
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Notas */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Notas</label>
+                    <textarea
+                      value={newEnemy.notas}
+                      onChange={(e) => setNewEnemy({...newEnemy, notas: e.target.value})}
+                      placeholder="Notas adicionales sobre el enemigo"
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Columna derecha: Atributos y Estadísticas */}
+                <div className="space-y-4">
+                  {/* Atributos */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Atributos</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {atributos.map(attr => (
+                        <div key={attr} className="flex items-center gap-2">
+                          <label className="text-sm font-medium w-16">{attr}:</label>
+                          <select
+                            value={newEnemy.atributos[attr] || 'D4'}
+                            onChange={(e) => {
+                              const newAtributos = { ...newEnemy.atributos, [attr]: e.target.value };
+                              const updatedEnemy = { ...newEnemy, atributos: newAtributos };
+                              setNewEnemy(updatedEnemy);
+                            }}
+                            className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                          >
+                            {DADOS.map(dado => (
+                              <option key={dado} value={dado}>{dado}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estadísticas */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
+                    <div className="space-y-3">
+                      {defaultRecursos.map(recurso => {
+                        const stat = newEnemy.stats[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                        const color = recursoColor[recurso] || '#ffffff';
+                        return (
+                          <div key={recurso} className="space-y-2">
+                            {/* Línea minimalista como en fichas de jugador */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium capitalize" style={{ color }}>{recurso}</span>
+                              <div className="flex gap-2 text-xs">
+                                <span className="text-gray-400">Base: {stat.base}</span>
+                                <span className="text-green-400">+{stat.buff}</span>
+                                <span className="text-blue-400">= {stat.total}</span>
+                                <span className="text-yellow-400">({stat.actual})</span>
+                              </div>
+                            </div>
+
+                            {/* Controles de edición */}
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input
+                                type="number"
+                                placeholder="Base"
+                                value={stat.base}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].base = parseInt(e.target.value) || 0;
+                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  if (newStats[recurso].actual === 0) {
+                                    newStats[recurso].actual = newStats[recurso].total;
+                                  }
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Buff"
+                                value={stat.buff}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].buff = parseInt(e.target.value) || 0;
+                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Actual"
+                                value={stat.actual}
+                                onChange={(e) => {
+                                  const newStats = { ...newEnemy.stats };
+                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
+                                  newStats[recurso].actual = parseInt(e.target.value) || 0;
+                                  setNewEnemy({ ...newEnemy, stats: newStats });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+
+                </div>
+              </div>
+
+              {/* Sección de Equipo */}
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold">Equipo</h3>
+
+                {/* Armas Equipadas */}
+                <div>
+                  <h4 className="font-medium mb-2">Armas Equipadas</h4>
+                  <div className="grid grid-cols-1 gap-2 mb-2">
+                    {newEnemy.weapons.map((weapon, index) => (
+                      <Tarjeta key={index} variant="weapon" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">⚔️</span>
+                              <p className="font-bold">{weapon.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Alcance:</span> {weapon.alcance}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Consumo:</span> {weapon.consumo}
+                            </p>
+                            {weapon.rasgos && weapon.rasgos.length > 0 && (
+                              <p className="text-xs mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {weapon.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+                              </p>
+                            )}
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyWeapon(index)}
+                            className="text-xs px-2 py-1 ml-2"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      placeholder="Buscar arma para equipar"
+                      value={enemyInputArma}
+                      onChange={(e) => setEnemyInputArma(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipWeapon()}
+                      className="flex-1 text-sm"
+                    />
+                    {enemyArmaSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyArmaSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipWeaponFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyArmaError && <p className="text-red-400 text-xs mt-1">{enemyArmaError}</p>}
+                  </div>
+                </div>
+
+                {/* Armaduras Equipadas */}
+                <div>
+                  <h4 className="font-medium mb-2">Armaduras Equipadas</h4>
+                  <div className="grid grid-cols-1 gap-2 mb-2">
+                    {newEnemy.armaduras.map((armor, index) => (
+                      <Tarjeta key={index} variant="armor" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">🛡️</span>
+                              <p className="font-bold">{armor.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Defensa:</span> {armor.defensa}
+                            </p>
+                            {armor.rasgos && armor.rasgos.length > 0 && (
+                              <p className="text-xs mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {armor.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+                              </p>
+                            )}
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyArmor(index)}
+                            className="text-xs px-2 py-1 ml-2"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      placeholder="Buscar armadura para equipar"
+                      value={enemyInputArmadura}
+                      onChange={(e) => setEnemyInputArmadura(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipArmor()}
+                      className="flex-1 text-sm"
+                    />
+                    {enemyArmaduraSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyArmaduraSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipArmorFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyArmaduraError && <p className="text-red-400 text-xs mt-1">{enemyArmaduraError}</p>}
+                  </div>
+                </div>
+
+                {/* Poderes Equipados */}
+                <div>
+                  <h4 className="font-medium mb-2">Poderes Equipados</h4>
+                  <div className="grid grid-cols-1 gap-2 mb-2">
+                    {newEnemy.poderes.map((power, index) => (
+                      <Tarjeta key={index} variant="power" className="text-sm">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">💪</span>
+                              <p className="font-bold">{power.nombre}</p>
+                            </div>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Alcance:</span> {power.alcance}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Consumo:</span> {power.consumo}
+                            </p>
+                            <p className="text-xs mb-1">
+                              <span className="font-medium">Poder:</span> {power.poder}
+                            </p>
+                            {power.descripcion && (
+                              <p className="text-xs text-gray-300">
+                                <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+                              </p>
+                            )}
+                          </div>
+                          <Boton
+                            color="red"
+                            size="sm"
+                            onClick={() => unequipEnemyPower(index)}
+                            className="text-xs px-2 py-1 ml-2"
+                          >
+                            ✕
+                          </Boton>
+                        </div>
+                      </Tarjeta>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      placeholder="Buscar poder para equipar"
+                      value={enemyInputPoder}
+                      onChange={(e) => setEnemyInputPoder(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipPower()}
+                      className="flex-1 text-sm"
+                    />
+                    {enemyPoderSugerencias.length > 0 && (
+                      <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
+                        {enemyPoderSugerencias.map(a => (
+                          <li
+                            key={a.nombre}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-700"
+                            onClick={() => handleEnemyEquipPowerFromSuggestion(a.nombre)}
+                          >
+                            {a.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {enemyPoderError && <p className="text-red-400 text-xs mt-1">{enemyPoderError}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-2 pt-6 border-t border-gray-700 mt-6">
+                <Boton
+                  color="green"
+                  onClick={handleSaveEnemy}
+                  className="flex-1"
+                >
+                  {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
+                </Boton>
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setShowEnemyForm(false);
+                    setEditingEnemy(null);
+                    setEnemyInputArma('');
+                    setEnemyInputArmadura('');
+                    setEnemyInputPoder('');
+                    setEnemyArmaError('');
+                    setEnemyArmaduraError('');
+                    setEnemyPoderError('');
+                  }}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Boton>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para ver ficha completa */}
+        {selectedEnemy && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Ficha de {selectedEnemy.name}</h2>
+                <div className="flex gap-2">
+                  <Boton
+                    color="blue"
+                    onClick={() => editEnemy(selectedEnemy)}
+                  >
+                    Editar
+                  </Boton>
+                  <Boton
+                    color="gray"
+                    onClick={() => setSelectedEnemy(null)}
+                  >
+                    ✕
+                  </Boton>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Columna 1: Retrato e información básica */}
+                <div className="space-y-4">
+                  {selectedEnemy.portrait && (
+                    <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-700">
+                      <img
+                        src={selectedEnemy.portrait}
+                        alt={selectedEnemy.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="bg-gray-700 rounded-lg p-4 space-y-2">
+                    <h3 className="font-semibold text-lg">Información Básica</h3>
+                    <div className="text-sm space-y-1">
+                      <p><span className="font-medium">Nivel:</span> {selectedEnemy.nivel || 1}</p>
+                      <p><span className="font-medium">Experiencia:</span> {selectedEnemy.experiencia || 0}</p>
+                      <p><span className="font-medium">Dinero:</span> {selectedEnemy.dinero || 0}</p>
+                    </div>
+                  </div>
+
+                  {selectedEnemy.description && (
+                    <div className="bg-gray-700 rounded-lg p-4">
+                      <h3 className="font-semibold mb-2">Descripción</h3>
+                      <p className="text-gray-300 text-sm">{selectedEnemy.description}</p>
+                    </div>
+                  )}
+
+                  {selectedEnemy.notas && (
+                    <div className="bg-gray-700 rounded-lg p-4">
+                      <h3 className="font-semibold mb-2">Notas</h3>
+                      <p className="text-gray-300 text-sm">{selectedEnemy.notas}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Columna 2: Atributos y Estadísticas */}
+                <div className="space-y-4">
+                  {/* Atributos */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Atributos</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {atributos.map(attr => (
+                        <div key={attr} className="flex justify-between">
+                          <span className="font-medium">{attr}:</span>
+                          <span className="text-blue-400">{selectedEnemy.atributos?.[attr] || 'D4'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estadísticas */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Estadísticas</h3>
+                    <div className="space-y-3 text-sm">
+                      {defaultRecursos.map(recurso => {
+                        const stat = selectedEnemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                        const color = recursoColor[recurso] || '#ffffff';
+                        return (
+                          <div key={recurso} className="space-y-1">
+                            {/* Línea minimalista como en fichas de jugador */}
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium capitalize" style={{ color }}>{recurso}</span>
+                              <div className="flex gap-2 text-xs">
+                                <span className="text-gray-400">Base: {stat.base}</span>
+                                <span className="text-green-400">+{stat.buff}</span>
+                                <span className="text-blue-400">= {stat.total}</span>
+                                <span className="text-yellow-400">({stat.actual})</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna 3: Equipo */}
+                <div className="space-y-4">
+                  {/* Armas */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Armas Equipadas</h3>
+                    {selectedEnemy.weapons?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.weapons.map((weapon, index) => (
+                          <Tarjeta key={index} variant="weapon" className="text-xs">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">⚔️</span>
+                              <p className="font-bold text-sm">{weapon.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Alcance:</span> {weapon.alcance}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Consumo:</span> {weapon.consumo}
+                            </p>
+                            {weapon.rasgos && weapon.rasgos.length > 0 && (
+                              <p className="mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {weapon.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+                              </p>
+                            )}
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin armas equipadas</p>
+                    )}
+                  </div>
+
+                  {/* Armaduras */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
+                    {selectedEnemy.armaduras?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.armaduras.map((armor, index) => (
+                          <Tarjeta key={index} variant="armor" className="text-xs">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">🛡️</span>
+                              <p className="font-bold text-sm">{armor.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Defensa:</span> {armor.defensa}
+                            </p>
+                            {armor.rasgos && armor.rasgos.length > 0 && (
+                              <p className="mb-1">
+                                <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                              </p>
+                            )}
+                            {armor.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+                              </p>
+                            )}
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
+                    )}
+                  </div>
+
+                  {/* Poderes */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">Poderes Equipados</h3>
+                    {selectedEnemy.poderes?.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedEnemy.poderes.map((power, index) => (
+                          <Tarjeta key={index} variant="power" className="text-xs">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">💪</span>
+                              <p className="font-bold text-sm">{power.nombre}</p>
+                            </div>
+                            <p className="mb-1">
+                              <span className="font-medium">Alcance:</span> {power.alcance}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Consumo:</span> {power.consumo}
+                            </p>
+                            <p className="mb-1">
+                              <span className="font-medium">Poder:</span> {power.poder}
+                            </p>
+                            {power.descripcion && (
+                              <p className="text-gray-300 italic">
+                                <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+                              </p>
+                            )}
+                          </Tarjeta>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">Sin poderes equipados</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
       </div>
     );
   }
@@ -1604,12 +2898,14 @@ function App() {
             <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
             <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
           </div>
-          <Input
-            placeholder="Buscar en el catálogo"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full max-w-md"
-          />
+          <div className="flex justify-center">
+            <Input
+              placeholder="Buscar en el catálogo"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full max-w-md text-center"
+            />
+          </div>
         </div>
 
         <Collapsible title={editingTerm ? `Editar término: ${editingTerm}` : 'Añadir término destacado'} defaultOpen={false}>
@@ -1713,81 +3009,114 @@ function App() {
           ? <p>Cargando catálogo…</p>
           : (
             <>
-              <Collapsible title="Armas" defaultOpen>
-                {armas
-                  .filter(a =>
-                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((a, i) => (
-                    <Tarjeta key={`arma-${i}`} variant="weapon">
-                      <p className="font-bold text-lg">{a.nombre}</p>
-                      <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
-                      <p><strong>Alcance:</strong> {a.alcance}</p>
-                      <p><strong>Consumo:</strong> {a.consumo}</p>
-                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                        <React.Fragment key={ri}>
-                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                        </React.Fragment>
-                      )) : '❌'}</p>
-                      <p><strong>Valor:</strong> {a.valor}</p>
-                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+              {/* Mostrar pestañas solo si hay búsqueda activa */}
+              {searchTerm.trim() && (
+                <>
+                  {/* Mostrar Armas si hay coincidencias */}
+                  {(() => {
+                    const armasFiltradas = armas.filter(a =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return armasFiltradas.length > 0 && (
+                      <Collapsible title={`Armas (${armasFiltradas.length})`} defaultOpen={true}>
+                        {armasFiltradas.map((a, i) => (
+                          <Tarjeta key={`arma-${i}`} variant="weapon">
+                            <p className="font-bold text-lg">{a.nombre}</p>
+                            <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
+                            <p><strong>Alcance:</strong> {a.alcance}</p>
+                            <p><strong>Consumo:</strong> {a.consumo}</p>
+                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                              <React.Fragment key={ri}>
+                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                              </React.Fragment>
+                            )) : '❌'}</p>
+                            <p><strong>Valor:</strong> {a.valor}</p>
+                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
 
-              <Collapsible title="Armaduras" defaultOpen>
-                {armaduras
-                  .filter(a =>
-                    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((a, i) => (
-                    <Tarjeta key={`armadura-${i}`} variant="armor">
-                      <p className="font-bold text-lg">{a.nombre}</p>
-                      <p><strong>Defensa:</strong> {a.defensa}</p>
-                      <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                      <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                      <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                        <React.Fragment key={ri}>
-                          {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                        </React.Fragment>
-                      )) : '❌'}</p>
-                      <p><strong>Valor:</strong> {a.valor}</p>
-                      {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                      {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+                  {/* Mostrar Armaduras si hay coincidencias */}
+                  {(() => {
+                    const armadurasFiltradas = armaduras.filter(a =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return armadurasFiltradas.length > 0 && (
+                      <Collapsible title={`Armaduras (${armadurasFiltradas.length})`} defaultOpen={true}>
+                        {armadurasFiltradas.map((a, i) => (
+                          <Tarjeta key={`armadura-${i}`} variant="armor">
+                            <p className="font-bold text-lg">{a.nombre}</p>
+                            <p><strong>Defensa:</strong> {a.defensa}</p>
+                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
+                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
+                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
+                              <React.Fragment key={ri}>
+                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
+                              </React.Fragment>
+                            )) : '❌'}</p>
+                            <p><strong>Valor:</strong> {a.valor}</p>
+                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
+                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
 
-              <Collapsible title="Habilidades" defaultOpen>
-                {habilidades
-                  .filter(h =>
-                    h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((h, i) => (
-                  <Tarjeta key={`hab-${i}`} variant="power">
-                    <p className="font-bold text-lg">{h.nombre}</p>
-                    <p><strong>Alcance:</strong> {h.alcance}</p>
-                    <p><strong>Consumo:</strong> {h.consumo}</p>
-                    <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
-                    <p><strong>Mente:</strong> {h.mente}</p>
-                    <p><strong>Poder:</strong> {h.poder}</p>
-                    {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
-                    <div className="flex justify-end gap-2 mt-2">
-                      <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
-                      <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
-                    </div>
-                  </Tarjeta>
-                  ))
-                }
-              </Collapsible>
+                  {/* Mostrar Habilidades si hay coincidencias */}
+                  {(() => {
+                    const habilidadesFiltradas = habilidades.filter(h =>
+                      h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    return habilidadesFiltradas.length > 0 && (
+                      <Collapsible title={`Habilidades (${habilidadesFiltradas.length})`} defaultOpen={true}>
+                        {habilidadesFiltradas.map((h, i) => (
+                          <Tarjeta key={`hab-${i}`} variant="power">
+                            <p className="font-bold text-lg">{h.nombre}</p>
+                            <p><strong>Alcance:</strong> {h.alcance}</p>
+                            <p><strong>Consumo:</strong> {h.consumo}</p>
+                            <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
+                            <p><strong>Mente:</strong> {h.mente}</p>
+                            <p><strong>Poder:</strong> {h.poder}</p>
+                            {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
+                            <div className="flex justify-end gap-2 mt-2">
+                              <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
+                              <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
+                            </div>
+                          </Tarjeta>
+                        ))}
+                      </Collapsible>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* Mostrar mensaje cuando no hay búsqueda activa */}
+              {!searchTerm.trim() && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-lg">Usa el buscador para explorar el catálogo</p>
+                  <p className="text-gray-500 text-sm mt-2">Las pestañas se abrirán automáticamente cuando busques</p>
+                </div>
+              )}
+
+              {/* Mostrar mensaje cuando no hay resultados */}
+              {searchTerm.trim() &&
+                armas.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
+                armaduras.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
+                habilidades.filter(h => h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-lg">No se encontraron resultados para "{searchTerm}"</p>
+                  <p className="text-gray-500 text-sm mt-2">Intenta con otros términos de búsqueda</p>
+                </div>
+              )}
             </>
           )
         }
@@ -1804,4 +3133,13 @@ function App() {
   );
 }
 
-export default App;
+// Componente principal envuelto con ToastProvider
+const AppWithProviders = () => {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  );
+};
+
+export default AppWithProviders;

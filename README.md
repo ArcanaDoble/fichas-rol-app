@@ -1,118 +1,127 @@
-# Fichas Rol App
+Fichas Rol App
 
-Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje. Toda la información de cada jugador se almacena en Firebase y el catálogo de equipo proviene de hojas de cálculo públicas de Google Sheets, por lo que se actualiza automáticamente.
+Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol.
+Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, por lo que se actualiza automáticamente.
 
-## Características principales
+Desde la versión 2.1 incluye un sistema de inventario tipo “Resident Evil 4” con cuadrícula 10 × 8, arrastrar-soltar fluido y rotación de objetos.
+Características principales
 
-- **Modo Jugador y Modo Máster**. Los jugadores pueden crear su ficha introduciendo su nombre y el máster puede acceder con una contraseña para refrescar el catálogo de armas y armaduras.
-- **Gestión de atributos y recursos**. Cada ficha contiene los cuatro atributos principales (destreza, vigor, intelecto y voluntad) representados con dados y una lista editable de recursos (postura, vida, ingenio, cordura, armadura, etc.). Es posible añadir o eliminar recursos personalizados y definir su color e información emergente.
-- **Equipamiento desde Google Sheets**. Las armas y armaduras se cargan de hojas de cálculo públicas. El máster puede buscar y revisar todas las opciones y los jugadores pueden equiparse desde su ficha.
-- **Habilidades personalizadas**. El máster puede crear poderes en Firebase y los jugadores pueden equiparlos en su ficha.
-- **Claves consumibles**. Cada jugador puede definir sus propias Claves, acciones especiales con contador de usos que se editan desde la ficha.
-- **Carga física y mental**. El peso del equipo afecta a la Postura y a la Cordura. La aplicación calcula automáticamente la carga física y mental acumulada e indica la penalización correspondiente.
-- **Edición de tooltips**. Los textos explicativos de cada recurso pueden editarse directamente en la interfaz tanto en ordenador como en móviles.
-- **Interfaz responsive**. Está pensada para verse correctamente en móviles y escritorio y utiliza TailwindCSS para los estilos.
-- **Inventario drag & drop**. Nuevo componente modular con slots configurables para arrastrar objetos.
-- **Pruebas automáticas**. Se incluye un conjunto básico de pruebas con React Testing Library en `src/App.test.js`.
+    Modo Jugador / Modo Máster
+    El jugador crea su ficha; el máster accede con contraseña para refrescar catálogos y ayudas.
 
-## Instalación y uso
+    Atributos y recursos personalizables
+    Destreza, vigor, intelecto y voluntad (dados) + recursos editables (postura, vida, cordura, etc.).
 
-1. Clona este repositorio.
-2. Ejecuta `npm install` para instalar las dependencias.
-3. Copia el archivo `.env.example` a `.env` y completa tus claves de Firebase,
-   la contraseña de Máster y el ID de la hoja de cálculo de Google.
-4. Lanza la aplicación con `npm start` y abre `http://localhost:3000` en el navegador.
+    Equipamiento dinámico
+    Armas y armaduras cargadas de Google Sheets; búsqueda y equipación en tiempo real.
 
-### Despliegue en Firebase
+    Habilidades y Claves
+    Poderes creados en Firebase y acciones especiales con contador de usos.
 
-1. Ejecuta `npm run build` para generar la versión de producción.
-2. Despliega la carpeta `build` con `firebase deploy`.
+    Carga física y mental automática
+    El peso del equipo modifica Postura y Cordura y muestra penalizaciones.
 
-### Ejecutar las pruebas
+    Tooltips y glosario editables
+    Textos de ayuda modificables desde la propia interfaz.
 
-Las pruebas se ejecutan con `npm test -- --watchAll=false` para evitar el modo interactivo.
+    Inventario tradicional con drag & drop
+    Slots activables, animaciones y persistencia en Firestore.
 
-```bash
-npm test -- --watchAll=false
-```
+    Inventario RE4 (nuevo)
 
-Se añadió un script `npm run lint` para verificar el código con ESLint y otro `npm run format` para formatear con Prettier.
+        Grid 10 × 8 con detección de colisiones y rotación (click derecho)
 
-## Cambios recientes
+        18 tipos de objetos, rarezas y “stacking” automático
 
-A lo largo del proyecto se han añadido numerosas mejoras, entre ellas:
+        Previsualización durante el arrastre, guías interactivas y diseño responsive
 
-- Cálculo de carga física y mental y visualización con iconos.
-- Edición y eliminación de recursos dinámicos con validaciones.
-- Bloque de "añadir recurso" plegable para simplificar la interfaz.
-- Tooltips explicativos editables y adaptados a móviles.
-- Mejoras de estilo y responsividad utilizando Tailwind.
-- Actualización de metadatos y pruebas automatizadas.
-- Interfaz de equipamiento mejorada.
-- Gestión de poderes creados en Firebase.
-- Sección de Claves con contador de usos personalizable.
-- Inventario modular con arrastrar y soltar.
-- Barras de estadísticas con diseño responsive.
-- Recursos con unidades en círculos para mayor claridad.
-- Cartas de atributos optimizadas para móvil.
-- Comportamiento de los tooltips refinado al pasar el ratón o hacer doble toque.
-- Barra de Claves limitada a 10 unidades y botón para reiniciar sus usos.
-- Botón "Volver al menú principal" en la pantalla de acceso de Máster.
-- Equipamiento y poderes centrados cuando solo hay un elemento equipado.
-- Selector de estados con iconos para llevar el control de efectos activos.
-- Se unificaron funciones de gestión de recursos mediante hooks personalizados.
-- Corregido un error al restablecer los mensajes de recursos (setNewResError).
-- Solucionado aviso de ESLint importando `setNewResError` desde el hook.
-- Inventario disponible en las fichas de jugador.
-- Slots del inventario habilitables con un clic y almacenamiento persistente.
-- Persistencia del inventario en Firestore en lugar de localStorage.
-- Copia de seguridad local de los datos del jugador si falla la conexión a Firebase.
-- Buscador de objetos con texto visible y envío con Enter.
-- Sugerencia automática al buscar objetos con tabulación para autocompletar.
-- Botón de papelera para eliminar objetos arrastrándolos.
-- Estilo de los slots y botones optimizado para móviles.
-- Opción para borrar slots del inventario.
-- `DndProvider` movido al nivel raíz de la aplicación para evitar errores de contexto.
-- Persistencia completa del inventario (posiciones, cantidades y objetos eliminados).
-- Botones de aumento y disminución con estilo más compacto y adaptable a móviles.
-- Arreglada la sincronización inicial del inventario para que los cambios se
-  conserven tras recargar la página.
-- Estética del inventario renovada con bordes brillantes y controles más grandes.
-- Efecto luminoso al pasar el ratón sobre los slots o al contener un objeto.
-- Animaciones de arrastre y para indicar intentos inválidos sobre slots deshabilitados.
-- Animación de rebote al soltar objetos en los slots.
-- Iconos de eliminar y cerrar slot ampliados y adaptados a pantallas táctiles.
-- Inventario guardado de forma individual para cada jugador.
-- Soporte de arrastre en dispositivos móviles gracias a TouchBackend.
-- Cantidad de objetos aumentable arrastrando repetidas veces al mismo slot.
-- Animación de activación del slot con resaltado verde.
-- Papelera y botón de nuevo slot con animaciones al pasar el ratón.
-- Edición y eliminación de habilidades creadas por el máster.
-- Los slots del inventario se crean habilitados por defecto y se eliminan con doble clic.
-- Tamaño de los slots adaptado a pantallas grandes.
-- Tarjetas de armas, armaduras y poderes sin bordes de color.
-- Imágenes de espada, armadura y músculo como marcas de agua.
-- Bordes de los slots se colorean según el objeto almacenado.
-- Efectos de gradiente animado y brillo pulsante en las fichas de objeto.
-- Descripción emergente de cada objeto al pasar el cursor o tocar brevemente.
-- Glosario configurable por el máster con palabras destacadas y tooltip de ayuda.
-- Tooltips del glosario con identificadores únicos para cada palabra.
-- Prototipo de inventario estilo RE4 accesible para el máster.
-- Nuevo archivo `public/inventario-re4.html` con plantilla HTML5.
-- El prototipo RE4 se incrusta en la vista de Máster mediante un `iframe`.
-- Inventario RE4 con contenedores, controles, grid, biblioteca, stats y tooltip.
-- Estilos base del inventario RE4 con Glass Morphism, rarezas y tooltip.
-- Variables de grid y plantillas de objetos añadidas en el script del inventario RE4.
-- Inicialización del inventario y creación dinámica de la cuadrícula.
-- Comprobación de colisiones con `canPlaceItem()` y creación de objetos mediante `addItem()`.
-- Arrastre con vista previa de validación y rotación de objetos.
-- Controles de usuario para añadir ítems aleatorios, rotar y organizar, con estadísticas y tooltips.
-- Biblioteca de objetos interactiva con iconos y botones para añadir ítems al inventario.
-- Buscador integrado para localizar "Espada" o "Daga" y agregarlas a la biblioteca.
-- Corregido un error de animación al aumentar la cantidad de un objeto en el inventario.
-- Confirmaciones de acciones unificadas en un modal reutilizable para facilitar las pruebas.
-- Si aparece un error de ESLint sobre `prettier`, ejecuta `npm install` para instalar todas las dependencias.
-- Nuevas pruebas unitarias para Inventory, ItemGenerator, Slot y la utilidad `fetchSheetData`.
-- Código limpiado eliminando variables sin usar y simplificando expresiones regulares.
+    Interfaz responsive con TailwindCSS y animaciones suaves (Framer Motion).
 
+    Pruebas automáticas incluidas (React Testing Library).
 
+Instalación y uso
+
+    Clona este repositorio.
+
+    Ejecuta npm install para instalar las dependencias.
+
+    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google.
+
+    Inicia la aplicación con npm start y abre http://localhost:3000.
+
+Comandos útiles
+Acción	Comando
+Servidor de desarrollo	npm start
+Ejecutar pruebas	npm test -- --watchAll=false
+Lint + Prettier	npm run lint · npm run format
+Build producción	npm run build
+Despliegue Firebase	firebase deploy
+Despliegue en Firebase
+
+    Ejecuta npm run build para generar la carpeta build.
+
+    Despliega con firebase deploy.
+    El firebase.json ya incluye el rewrite ** → /index.html para SPA.
+
+Arquitectura del proyecto (resumen)
+
+src/
+├── components/
+│   ├── re4/             # Inventario Resident Evil 4
+│   ├── inventory/       # Inventario clásico por slots
+│   └── ui/              # Boton, Modal, Toast, etc.
+├── hooks/               # Hooks personalizados
+├── firebase.js          # Configuración Firebase
+└── App.js               # Enrutado principal
+
+Cambios recientes destacados (v2.1)
+Inventario RE4
+
+    Grid 10 × 8 con rotación, 18 objetos, cinco rarezas, animaciones y guía integrada.
+
+UX / UI
+
+    Pantallas de inicio y login rediseñadas, notificaciones Toast, modales avanzados, gradientes y efectos de partículas.
+
+Componentes
+
+    Boton, Input, Tarjeta y Modal refactorizados; LoadingSpinner y sistema de confirmaciones unificados.
+
+Técnicos
+
+    Optimización con useMemo y useCallback, manejo robusto de errores, persistencia con metadatos y código más modular.
+
+<details> <summary>Historial completo de mejoras anteriores</summary>
+
+    Cálculo de carga física y mental y visualización con iconos.
+
+    Edición y eliminación de recursos dinámicos con validaciones.
+
+    Tooltips editables y adaptados a móviles.
+
+    Interfaz de equipamiento mejorada y gestión de poderes.
+
+    Inventario modular drag & drop con persistencia en Firestore.
+
+    Selector de estados con iconos, glosario configurable y sistema de slots animados.
+
+    Prototipo de inventario RE4 incrustado vía iframe para pruebas.
+
+    Tests unitarios ampliados y código limpiado de variables sin usar.
+
+</details>
+Contribución
+
+    Haz fork del proyecto.
+
+    Crea una rama (git checkout -b feature/nueva-caracteristica).
+
+    Commit de tus cambios (git commit -m 'Añadir nueva característica').
+
+    Push a tu rama (git push origin feature/nueva-caracteristica).
+
+    Abre un Pull Request.
+
+Licencia
+
+Este proyecto se distribuye bajo licencia MIT. Consulta el archivo LICENSE para más información.
