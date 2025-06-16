@@ -184,4 +184,10 @@ const Tarjeta = ({
   );
 };
 
+Tarjeta.propTypes = {
+  children: PropTypes.node,
+  className: PropTypes.string,
+  variant: PropTypes.string,
+};
+
 export default Tarjeta;

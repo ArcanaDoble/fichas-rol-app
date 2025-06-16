@@ -135,4 +135,8 @@ const Input = forwardRef(({
 
 Input.displayName = 'Input';
 
+Input.propTypes = {
+  className: PropTypes.string,
+};
+
 export default Input;

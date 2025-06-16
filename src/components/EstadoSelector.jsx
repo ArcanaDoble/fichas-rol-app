@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Tooltip } from 'react-tooltip';
 
 const ESTADOS = [
@@ -41,6 +42,11 @@ function EstadoSelector({ selected = [], onToggle }) {
     </div>
   );
 }
+
+EstadoSelector.propTypes = {
+  selected: PropTypes.arrayOf(PropTypes.string),
+  onToggle: PropTypes.func.isRequired,
+};
 
 export default EstadoSelector;
 export { ESTADOS };

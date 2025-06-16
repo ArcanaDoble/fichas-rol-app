@@ -35,4 +35,10 @@ function Collapsible({ title, children, defaultOpen = false }) {
   );
 }
 
+Collapsible.propTypes = {
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node,
+  defaultOpen: PropTypes.bool,
+};
+
 export default Collapsible;

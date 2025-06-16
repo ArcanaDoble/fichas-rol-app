@@ -154,4 +154,8 @@ const MasterMenu = ({ onSelect }) => {
   );
 };
 
+MasterMenu.propTypes = {
+  onSelect: PropTypes.func.isRequired,
+};
+
 export default MasterMenu;
