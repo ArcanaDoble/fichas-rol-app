@@ -10,15 +10,15 @@ const DiceCalculator = ({ playerName, onBack }) => {
   const [history, setHistory] = useState([]);
   const [showResult, setShowResult] = useState(false);
 
-  // Tipos de dados disponibles
+  // Tipos de dados disponibles con imágenes
   const diceTypes = [
-    { sides: 4, color: 'bg-red-500', icon: '🎲' },
-    { sides: 6, color: 'bg-blue-500', icon: '🎲' },
-    { sides: 8, color: 'bg-green-500', icon: '🎲' },
-    { sides: 10, color: 'bg-yellow-500', icon: '🎲' },
-    { sides: 12, color: 'bg-purple-500', icon: '🎲' },
-    { sides: 20, color: 'bg-pink-500', icon: '🎲' },
-    { sides: 100, color: 'bg-gray-500', icon: '🎲' }
+    { sides: 4, color: 'bg-red-500', image: '/dados/calculadora/calculadora-D4.png' },
+    { sides: 6, color: 'bg-blue-500', image: '/dados/calculadora/calculadora-D6.png' },
+    { sides: 8, color: 'bg-green-500', image: '/dados/calculadora/calculadora-D8.png' },
+    { sides: 10, color: 'bg-yellow-500', image: '/dados/calculadora/calculadora-D10.png' },
+    { sides: 12, color: 'bg-purple-500', image: '/dados/calculadora/calculadora-D12.png' },
+    { sides: 20, color: 'bg-pink-500', image: '/dados/calculadora/calculadora-D20.png' },
+    { sides: 100, color: 'bg-gray-500', image: '/dados/calculadora/calculadora-D100.png' }
   ];
 
   // Cargar historial del localStorage
@@ -170,15 +170,27 @@ const DiceCalculator = ({ playerName, onBack }) => {
           {/* Selector de dados */}
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <h3 className="text-lg font-semibold text-white mb-3 text-center">Seleccionar Dados</h3>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {diceTypes.map(dice => (
                 <Boton
                   key={dice.sides}
                   onClick={() => addDice(dice.sides)}
-                  className={`${dice.color} text-white font-bold aspect-square flex flex-col items-center justify-center text-sm`}
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-bold h-24 sm:h-20 flex flex-col items-center justify-center text-sm border-2 border-gray-600 hover:border-gray-500 transition-all duration-200 relative overflow-hidden rounded-lg"
                 >
-                  <span className="text-2xl">{dice.icon}</span>
-                  <span className="text-xs">d{dice.sides}</span>
+                  <div className="relative z-10 flex flex-col items-center justify-center h-full p-2">
+                    <img
+                      src={dice.image}
+                      alt={`d${dice.sides}`}
+                      className="w-12 h-12 sm:w-10 sm:h-10 object-contain mb-1 filter drop-shadow-lg"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
+                      }}
+                    />
+                    <span className="text-2xl hidden">🎲</span>
+                    <span className="text-sm font-semibold">d{dice.sides}</span>
+                  </div>
+                  <div className={`absolute inset-0 ${dice.color} opacity-20`}></div>
                 </Boton>
               ))}
             </div>

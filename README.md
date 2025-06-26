@@ -144,6 +144,20 @@ src/
 - ✅ **ToastProvider** integrado para notificaciones globales
 - ✅ **CSS variables** para temas y gradientes personalizados
 
+## 🔄 Historial de cambios recientes
+
+### 🎮 **Mejoras en Minijuego de Cerrajería (Diciembre 2024)**
+- ✅ **Velocidad aleatorizada mejorada** - Variación sutil de ±10% para evitar patrones predecibles
+- ✅ **Balance de dificultad mantenido** - Misma variación en todos los niveles sin afectar jugabilidad
+- ✅ **Información de velocidad** - Mostrar variación porcentual en tiempo real y resultados
+- ✅ **Historial mejorado** - Incluye datos de velocidad para análisis de intentos anteriores
+
+### 🔧 **Corrección de Permisos Firebase (Diciembre 2024)**
+- ✅ **Reglas de Firestore configuradas** - Solucionado error "Missing or insufficient permissions"
+- ✅ **Configuración de seguridad** - Añadidas reglas permisivas para acceso completo a datos
+- ✅ **Archivos de configuración** - Creados `firestore.rules` y `firestore.indexes.json`
+- ✅ **Despliegue actualizado** - Firebase configurado correctamente para producción
+
 ## 🔄 Historial de cambios previos
 
 <details>

@@ -282,15 +282,22 @@ input[type="number"] {
   background: #9ca3af;
 }
 
-/* Mejoras de accesibilidad */
+/* Mejoras de accesibilidad - Versión menos restrictiva */
 @media (prefers-reduced-motion: reduce) {
+  /* Solo desactivar animaciones complejas, mantener transiciones básicas */
   .animate-gradient,
   .animate-glow,
-  .transition-transform,
-  .transition-colors,
-  .transition-all {
+  .animate-bounce,
+  .animate-pulse,
+  .animate-spin {
     animation: none !important;
-    transition: none !important;
+  }
+
+  /* Reducir duración de transiciones pero no eliminarlas completamente */
+  .transition-all,
+  .transition-transform,
+  .transition-colors {
+    transition-duration: 0.1s !important;
   }
 }
 

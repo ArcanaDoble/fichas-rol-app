@@ -334,9 +334,18 @@ function App() {
   // ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (userType === 'player') {
-      getDocs(collection(db, 'players')).then(snap =>
-        setExistingPlayers(snap.docs.map(d => d.id))
-      );
+      console.log('🔍 Intentando cargar jugadores existentes...');
+      getDocs(collection(db, 'players'))
+        .then(snap => {
+          const players = snap.docs.map(d => d.id);
+          console.log('✅ Jugadores cargados:', players);
+          setExistingPlayers(players);
+        })
+        .catch(error => {
+          console.error('❌ Error cargando jugadores:', error);
+          console.error('Código de error:', error.code);
+          console.error('Mensaje:', error.message);
+        });
     }
   }, [userType]);
 
@@ -491,8 +500,11 @@ function App() {
   // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
     if (!nameEntered) return;
-    const ref = doc(db, 'players', playerName);
-    const snap = await getDoc(ref);
+    console.log(`🔍 Intentando cargar jugador: ${playerName}`);
+
+    try {
+      const ref = doc(db, 'players', playerName);
+      const snap = await getDoc(ref);
 
     // Atributos por defecto
     const baseA = {};
@@ -542,10 +554,12 @@ function App() {
         stats:     statsInit,
         cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
       };
+      console.log('✅ Jugador cargado exitosamente:', playerName);
       setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
 
     } else {
       // Si no existe en Firestore, crear con valores predeterminados
+      console.log('ℹ️ Jugador no existe, creando nuevo:', playerName);
       const baseS = {};
       defaultRecursos.forEach(r => {
         baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
@@ -560,6 +574,32 @@ function App() {
       setClaves([]);
       setEstados([]);
       const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setPlayerData(applyCargaPenalties(created, armas, armaduras));
+    }
+
+    } catch (error) {
+      console.error('❌ Error cargando jugador:', error);
+      console.error('Código de error:', error.code);
+      console.error('Mensaje:', error.message);
+
+      // En caso de error, crear jugador por defecto
+      const baseAError = {};
+      atributos.forEach(k => (baseAError[k] = 'D4'));
+
+      const baseS = {};
+      defaultRecursos.forEach(r => {
+        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+      });
+      const lista = defaultRecursos.map(id => ({
+        id,
+        name: id,
+        color: recursoColor[id] || '#ffffff',
+        info: recursoInfo[id] || ''
+      }));
+      setResourcesList(lista);
+      setClaves([]);
+      setEstados([]);
+      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseAError, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
   }, [nameEntered, playerName]);
@@ -702,6 +742,31 @@ function App() {
     // Limpiar el formulario
     setNewResName('');
     setNewResColor('#ffffff');
+  };
+
+  // Funciones para reordenar estadísticas
+  const moveStatUp = (index) => {
+    if (index === 0) return; // Ya está en la primera posición
+
+    const newList = [...resourcesList];
+    const temp = newList[index];
+    newList[index] = newList[index - 1];
+    newList[index - 1] = temp;
+
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
+  };
+
+  const moveStatDown = (index) => {
+    if (index === resourcesList.length - 1) return; // Ya está en la última posición
+
+    const newList = [...resourcesList];
+    const temp = newList[index];
+    newList[index] = newList[index + 1];
+    newList[index + 1] = temp;
+
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
   };
 
   const agregarHabilidad = async () => {
@@ -1623,7 +1688,7 @@ function App() {
           {/* ESTADÍSTICAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
           <div className="flex flex-col gap-4 w-full mb-8">
-            {resourcesList.map(({ id: r, name, color, info }) => {
+            {resourcesList.map(({ id: r, name, color, info }, index) => {
               const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
@@ -1646,8 +1711,8 @@ function App() {
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
 
               return (
-                <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
-                  {/* Nombre centrado y X a la derecha, en la misma fila */}
+                <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full transition-all duration-300 ease-in-out">
+                  {/* Nombre centrado y controles a la derecha, en la misma fila */}
                   <div className="relative flex items-center w-full mb-4 min-h-[2rem]">
                     {editingInfoId === r ? (
                       <textarea
@@ -1680,13 +1745,46 @@ function App() {
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
-                    <button
-                      onClick={() => eliminarRecurso(r)}
-                      className="absolute right-0 text-red-400 hover:text-red-200 text-sm font-bold"
-                      title="Eliminar esta estadística"
-                    >
-                      ❌
-                    </button>
+
+                    {/* Controles de reordenamiento y eliminación */}
+                    <div className="absolute right-0 flex items-center gap-1">
+                      {/* Botón subir */}
+                      <button
+                        onClick={() => moveStatUp(index)}
+                        disabled={index === 0}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
+                          index === 0
+                            ? 'text-gray-600 cursor-not-allowed'
+                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                        }`}
+                        title="Mover hacia arriba"
+                      >
+                        ↑
+                      </button>
+
+                      {/* Botón bajar */}
+                      <button
+                        onClick={() => moveStatDown(index)}
+                        disabled={index === resourcesList.length - 1}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
+                          index === resourcesList.length - 1
+                            ? 'text-gray-600 cursor-not-allowed'
+                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                        }`}
+                        title="Mover hacia abajo"
+                      >
+                        ↓
+                      </button>
+
+                      {/* Botón eliminar */}
+                      <button
+                        onClick={() => eliminarRecurso(r)}
+                        className="w-6 h-6 flex items-center justify-center text-xs font-bold text-red-400 hover:text-red-200 hover:bg-red-900/30 rounded transition-all duration-200"
+                        title="Eliminar esta estadística"
+                      >
+                        ❌
+                      </button>
+                    </div>
                   </div>
 
                   {/* Inputs y botones */}
@@ -2187,7 +2285,7 @@ function App() {
 
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
-    return <MasterMenu onSelect={setChosenView} />;
+    return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
 
   if (userType === 'master' && authenticated && chosenView === 're4') {
