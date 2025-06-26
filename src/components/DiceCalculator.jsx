@@ -78,10 +78,39 @@ const DiceCalculator = ({ playerName, onBack }) => {
     saveHistory(resultData);
   };
 
-  // Parsear y tirar fórmula
+  // Tirar fórmula o calcular operación matemática
   const rollFormula = () => {
     if (!formula.trim()) return;
 
+    // Si la fórmula NO contiene dados, evalúa como operación matemática
+    if (!/\d+d\d+/i.test(formula)) {
+      try {
+        // Evaluación segura: solo números, operadores y paréntesis
+        // Rechaza cualquier otro caracter
+        const safe = formula.replace(/[^0-9+\-*/().,% ]/g, '');
+        // Permite decimales y porcentajes
+        const safeEval = safe.replace(/(\d+(?:\.\d+)?)%/g, '($1/100)');
+        // eslint-disable-next-line no-eval
+        const total = eval(safeEval);
+        if (typeof total !== 'number' || isNaN(total)) throw new Error('Operación inválida');
+        const resultData = {
+          formula: formula,
+          results: [{ type: 'calc', formula: safe, value: total }],
+          total,
+          timestamp: new Date().toLocaleString(),
+          player: playerName
+        };
+        setResult(resultData);
+        setShowResult(true);
+        saveHistory(resultData);
+        return;
+      } catch (error) {
+        alert('Operación matemática inválida. Solo se permiten números y operaciones básicas.');
+        return;
+      }
+    }
+
+    // Si contiene dados, usa el parser de dados
     try {
       const parsedResult = parseAndRollFormula(formula);
       const resultData = {
@@ -96,7 +125,7 @@ const DiceCalculator = ({ playerName, onBack }) => {
       setShowResult(true);
       saveHistory(resultData);
     } catch (error) {
-      alert('Fórmula inválida. Usa formato como: 2d6+1d8+3');
+      alert('Fórmula inválida. Usa formato como: 2d6+1d8+3 o una operación matemática.');
     }
   };
 
@@ -266,6 +295,8 @@ const DiceCalculator = ({ playerName, onBack }) => {
                           <span>
                             {detail.formula}: [{detail.rolls.join(', ')}] = {detail.subtotal}
                           </span>
+                        ) : detail.type === 'calc' ? (
+                          <span>Resultado: {detail.value}</span>
                         ) : (
                           <span>Modificador: {detail.formula}</span>
                         )}

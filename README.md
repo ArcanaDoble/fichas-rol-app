@@ -18,6 +18,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Guía interactiva** - Sistema de ayuda integrado con controles y consejos
 
 ### 🎲 **Gestión de Personajes**
+
+> **Versión actual: 2.1.1**
+
+**Resumen de cambios v2.1.1:**
+- Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
+- Las tarjetas de armas y armaduras equipadas mantienen su diseño clásico, separando estilos de cartas de enemigos y equipamiento.
+- Animaciones suaves y modernas en atributos, estadísticas y reordenamiento de listas.
+- Mejoras de usabilidad y visuales en la ficha de enemigos, imágenes y minijuegos.
+- Corrección de bugs visuales y de interacción en tarjetas y componentes.
+
 - **Modo Jugador y Modo Máster** - Interfaces especializadas para cada rol
 - **Gestión de atributos y recursos** - Dados para atributos y recursos personalizables
 - **Equipamiento desde Google Sheets** - Catálogo dinámico de armas y armaduras
@@ -101,6 +111,13 @@ src/
 ```
 
 ## 🎯 Últimas mejoras implementadas
+
+#### v2.1.1 (junio 2024)
+- Vista de enemigos rediseñada como cartas coleccionables (Magic-like), con responsive y efectos visuales exclusivos.
+- Equipamiento equipado (armas/armaduras) restaurado a su diseño clásico, sin efectos de carta.
+- Animaciones suaves en atributos, dados y listas reordenables.
+- Mejoras visuales en imágenes de enemigos y atributos.
+- Corrección de bugs visuales y de interacción.
 
 ### 🆕 **Sistema de Inventario RE4 Completo** (v2.1)
 - ✅ **Grid 10×8 perfecto** con collision detection avanzado

@@ -238,7 +238,7 @@ const BarraReflejos = ({ playerName, onBack }) => {
             {/* Instrucciones */}
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-3 text-center">Cómo Jugar</h3>
-              <div className="text-sm text-gray-300 space-y-2">
+              <div className="text-sm text-gray-300 space-y-2 text-center">
                 <p>• Toca la pantalla cuando el círculo esté en la zona diana</p>
                 <p>• La diana se reduce gradualmente cada 2 segundos</p>
                 <p>• Cuanto más difícil, más pequeña la diana inicial</p>

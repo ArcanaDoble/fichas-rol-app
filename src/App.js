@@ -21,6 +21,7 @@ import Modal, { ConfirmModal, useModal } from './components/Modal';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import { Tooltip } from 'react-tooltip';
+import { AnimatePresence, motion } from 'framer-motion';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
@@ -1412,7 +1413,8 @@ function App() {
 
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.1</p>
+            <p className="text-xs text-gray-500">Calculadora de dados mejorada: operaciones matemáticas y animaciones suaves.</p>
           </div>
         </div>
       </div>
@@ -1711,7 +1713,12 @@ function App() {
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
 
               return (
-                <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full transition-all duration-300 ease-in-out">
+                <motion.div
+                  key={r}
+                  layout="position"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  className="bg-gray-800 rounded-xl p-4 shadow w-full"
+                >
                   {/* Nombre centrado y controles a la derecha, en la misma fila */}
                   <div className="relative flex items-center w-full mb-4 min-h-[2rem]">
                     {editingInfoId === r ? (
@@ -1849,7 +1856,7 @@ function App() {
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -1865,7 +1872,7 @@ function App() {
             </div>
           )}
 
-          {/* FORMULARIO “Añadir recurso” */}
+          {/* FORMULARIO "Añadir recurso" */}
           {resourcesList.length < 6 && (
             <div className="w-full max-w-md mx-auto mb-4">
               {!showAddResForm ? (
@@ -2326,53 +2333,60 @@ function App() {
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {enemies.map((enemy) => (
-            <div key={enemy.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-              {/* Retrato del enemigo */}
-              {enemy.portrait && (
-                <div className="w-full h-32 mb-3 rounded-lg overflow-hidden bg-gray-700">
-                  <img
-                    src={enemy.portrait}
-                    alt={enemy.name}
-                    className="w-full h-full object-cover"
-                  />
+            <Tarjeta key={enemy.id} variant="magic" className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl">
+              <div className="flex flex-col h-full">
+                {/* Imagen tipo Magic */}
+                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30">
+                  {enemy.portrait ? (
+                    <img
+                      src={enemy.portrait}
+                      alt={enemy.name}
+                      className="w-full h-full object-cover object-center"
+                      style={{ background: '#222' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">👹</div>
+                  )}
                 </div>
-              )}
-
-              <h3 className="text-lg font-bold text-white mb-2">{enemy.name}</h3>
-              {enemy.description && (
-                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{enemy.description}</p>
-              )}
-
-              <div className="flex gap-2">
-                <Boton
-                  color="blue"
-                  size="sm"
-                  onClick={() => editEnemy(enemy)}
-                  className="flex-1"
-                >
-                  Editar
-                </Boton>
-                <Boton
-                  color="purple"
-                  size="sm"
-                  onClick={() => setSelectedEnemy(enemy)}
-                  className="flex-1"
-                >
-                  Ver Ficha
-                </Boton>
-                <Boton
-                  color="red"
-                  size="sm"
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                      deleteEnemy(enemy.id);
-                    }
-                  }}
-                >
-                  🗑️
-                </Boton>
+                {/* Nombre y descripción */}
+                <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
+                  <h3 className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider" style={{ textShadow: '0 2px 8px #000a' }}>{enemy.name}</h3>
+                  {enemy.description && (
+                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">{enemy.description}</p>
+                  )}
+                </div>
+                {/* Acciones */}
+                <div className="flex gap-2 px-4 pb-4 pt-2 justify-center border-t border-yellow-900/20">
+                  <Boton
+                    color="blue"
+                    size="sm"
+                    onClick={() => editEnemy(enemy)}
+                    className="flex-1"
+                  >
+                    Editar
+                  </Boton>
+                  <Boton
+                    color="purple"
+                    size="sm"
+                    onClick={() => setSelectedEnemy(enemy)}
+                    className="flex-1"
+                  >
+                    Ver Ficha
+                  </Boton>
+                  <Boton
+                    color="red"
+                    size="sm"
+                    onClick={() => {
+                      if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                        deleteEnemy(enemy.id);
+                      }
+                    }}
+                  >
+                    🗑️
+                  </Boton>
+                </div>
               </div>
-            </div>
+            </Tarjeta>
           ))}
         </div>
 
@@ -2415,11 +2429,12 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     />
                     {newEnemy.portrait && (
-                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
+                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
                         <img
                           src={newEnemy.portrait}
                           alt="Preview"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-center rounded-lg shadow border border-gray-800"
+                          style={{ background: '#222' }}
                         />
                       </div>
                     )}
@@ -2842,11 +2857,12 @@ function App() {
                 {/* Columna 1: Retrato e información básica */}
                 <div className="space-y-4">
                   {selectedEnemy.portrait && (
-                    <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-700">
+                    <div className="w-full aspect-square max-w-xs mx-auto rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
                       <img
                         src={selectedEnemy.portrait}
                         alt={selectedEnemy.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-center rounded-lg shadow-md border border-gray-800"
+                        style={{ background: '#222' }}
                       />
                     </div>
                   )}
