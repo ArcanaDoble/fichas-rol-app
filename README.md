@@ -85,6 +85,7 @@ Minijuegos
 
     Calculadora de dados integrada.
     Cerrajería con diana decreciente y niveles de dificultad revisados.
+    Texto centrado en las instrucciones de la cerrajería.
     Arreglos menores: constante DADOS exportada y validación PropTypes en MasterMenu.
     Configuración Firebase mejorada: usa variables de entorno o credenciales por defecto.
 
