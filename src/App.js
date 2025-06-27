@@ -20,6 +20,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import Modal, { ConfirmModal, useModal } from './components/Modal';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
+import InitiativeTracker from './components/InitiativeTracker';
 import { Tooltip } from 'react-tooltip';
 import { AnimatePresence, motion } from 'framer-motion';
 const isTouchDevice = typeof window !== 'undefined' &&
@@ -257,6 +258,9 @@ function App() {
   // Minijuego Barra-Reflejos
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
 
+  // Sistema de Iniciativa
+  const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -323,6 +327,9 @@ function App() {
     setNewClaveColor('#ffffff');
     setNewClaveTotal(0);
     setNewClaveError('');
+    setShowDiceCalculator(false);
+    setShowBarraReflejos(false);
+    setShowInitiativeTracker(false);
   };
   const eliminarFichaJugador = async () => {
     if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
@@ -1413,8 +1420,8 @@ function App() {
 
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.1</p>
-            <p className="text-xs text-gray-500">Calculadora de dados mejorada: operaciones matemáticas y animaciones suaves.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.2.0</p>
+            <p className="text-xs text-gray-500">Sistema de velocidad revolucionario: gestión de iniciativa con actuación simultánea y efectos visuales avanzados.</p>
           </div>
         </div>
       </div>
@@ -1624,6 +1631,16 @@ function App() {
     return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
   }
 
+  // SISTEMA DE INICIATIVA
+  if (userType === 'player' && nameEntered && showInitiativeTracker) {
+    return <InitiativeTracker 
+      playerName={playerName} 
+      isMaster={authenticated} 
+      glossary={glossary}
+      onBack={() => setShowInitiativeTracker(false)} 
+    />;
+  }
+
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
@@ -1647,6 +1664,14 @@ function App() {
               className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
             >
               🔒
+            </Boton>
+
+            {/* Botón de sistema de iniciativa */}
+            <Boton
+              onClick={() => setShowInitiativeTracker(true)}
+              className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              ⚡
             </Boton>
           </div>
 
@@ -2312,6 +2337,16 @@ function App() {
         <InventoryRE4 playerName="master_inventory" />
       </div>
     );
+  }
+
+  if (userType === 'master' && authenticated && chosenView === 'initiative') {
+    return <InitiativeTracker 
+      playerName="Master" 
+      isMaster={true} 
+      enemies={enemies}
+      glossary={glossary}
+      onBack={() => setChosenView(null)} 
+    />;
   }
 
   if (userType === 'master' && authenticated && chosenView === 'enemies') {

@@ -19,14 +19,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.1.1**
+> **Versión actual: 2.2.0**
 
-**Resumen de cambios v2.1.1:**
-- Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
-- Las tarjetas de armas y armaduras equipadas mantienen su diseño clásico, separando estilos de cartas de enemigos y equipamiento.
-- Animaciones suaves y modernas en atributos, estadísticas y reordenamiento de listas.
-- Mejoras de usabilidad y visuales en la ficha de enemigos, imágenes y minijuegos.
-- Corrección de bugs visuales y de interacción en tarjetas y componentes.
+**Resumen de cambios v2.2.0:**
+- **Sistema de velocidad revolucionario** - Gestión de iniciativa basada en velocidad con actuación simultánea
+- **Interfaz de combate mejorada** - Diseño compacto y elegante para "Únete al combate"
+- **Efectos visuales avanzados** - Bloque "Actúan Simultáneamente" con borde pulsante dorado
+- **Tooltips de glosario corregidos** - Información del glosario funciona correctamente en resumen de enemigos
+- **Colores de botones optimizados** - Botones + verdes y papelera con degradado rojo sutil
+- **Componente Boton mejorado** - Detección automática de colores personalizados
+- **Gestión de permisos mejorada** - Jugadores pueden editar solo sus personajes, master puede editar todo
 
 - **Modo Jugador y Modo Máster** - Interfaces especializadas para cada rol
 - **Gestión de atributos y recursos** - Dados para atributos y recursos personalizables
@@ -78,6 +80,14 @@ La aplicación estará disponible en `http://localhost:3000`
 5. **Eliminar objetos**: Doble click en cualquier objeto
 6. **Ayuda**: Botón "❓" para guía completa
 
+### 🏃 Cómo usar el Sistema de Velocidad
+
+1. **Acceso**: Modo Máster → "⚡ Sistema de Velocidad"
+2. **Unirse al combate**: Los jugadores pueden añadir sus personajes con velocidad inicial
+3. **Gestión de velocidad**: Usa los botones + y - para ajustar velocidad
+4. **Actuación simultánea**: Cuando hay empate, actúan todos juntos
+5. **Controles del master**: Añadir enemigos, resetear velocidades, gestionar participantes
+
 ### 🔧 Comandos disponibles
 
 ```bash
@@ -111,6 +121,15 @@ src/
 ```
 
 ## 🎯 Últimas mejoras implementadas
+
+#### v2.2.0 (Diciembre 2024)
+- **Sistema de velocidad revolucionario** - Gestión de iniciativa basada en velocidad con actuación simultánea
+- **Interfaz de combate mejorada** - Diseño compacto y elegante para "Únete al combate"
+- **Efectos visuales avanzados** - Bloque "Actúan Simultáneamente" con borde pulsante dorado
+- **Tooltips de glosario corregidos** - Información del glosario funciona correctamente en resumen de enemigos
+- **Colores de botones optimizados** - Botones + verdes y papelera con degradado rojo sutil
+- **Componente Boton mejorado** - Detección automática de colores personalizados
+- **Gestión de permisos mejorada** - Jugadores pueden editar solo sus personajes, master puede editar todo
 
 #### v2.1.1 (junio 2024)
 - Vista de enemigos rediseñada como cartas coleccionables (Magic-like), con responsive y efectos visuales exclusivos.
@@ -162,6 +181,22 @@ src/
 - ✅ **CSS variables** para temas y gradientes personalizados
 
 ## 🔄 Historial de cambios recientes
+
+### 🎮 **Sistema de Velocidad Revolucionario (Diciembre 2024)**
+- ✅ **Gestión de iniciativa basada en velocidad** - Sistema donde actúa quien tiene menos velocidad
+- ✅ **Actuación simultánea** - Cuando hay empate de velocidad, actúan todos juntos
+- ✅ **Interfaz de combate mejorada** - Diseño compacto y elegante para "Únete al combate"
+- ✅ **Efectos visuales avanzados** - Bloque "Actúan Simultáneamente" con borde pulsante dorado
+- ✅ **Gestión de permisos mejorada** - Jugadores pueden editar solo sus personajes, master puede editar todo
+- ✅ **Controles del master** - Añadir enemigos, resetear velocidades, gestionar participantes
+- ✅ **Línea de sucesos** - Visualización clara del orden de actuación con colores por jugador
+
+### 🎨 **Mejoras Visuales y UX (Diciembre 2024)**
+- ✅ **Tooltips de glosario corregidos** - Información del glosario funciona correctamente en resumen de enemigos
+- ✅ **Colores de botones optimizados** - Botones + verdes y papelera con degradado rojo sutil
+- ✅ **Componente Boton mejorado** - Detección automática de colores personalizados
+- ✅ **Efectos visuales refinados** - Bordes pulsantes y animaciones suaves
+- ✅ **Interfaz más compacta** - Mejor aprovechamiento del espacio en pantalla
 
 ### 🎮 **Mejoras en Minijuego de Cerrajería (Diciembre 2024)**
 - ✅ **Velocidad aleatorizada mejorada** - Variación sutil de ±10% para evitar patrones predecibles

@@ -32,6 +32,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: true,
     },
     {
+      id: 'initiative',
+      title: 'Sistema de Velocidad',
+      description: 'Control total del combate con iniciativa y gestión de participantes',
+      color: 'blue',
+      features: ['Control Master', 'Enemigos', 'Velocidad', 'Tiempo Real'],
+      isNew: true,
+    },
+    {
       id: 'enemies',
       title: 'Fichas de Enemigos',
       description: 'Crear y gestionar fichas de enemigos con retratos',
