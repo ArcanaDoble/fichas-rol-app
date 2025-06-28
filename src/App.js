@@ -6,6 +6,10 @@ import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
+import { motion } from 'framer-motion';
+import { Tooltip } from 'react-tooltip';
+import { GiFist } from 'react-icons/gi';
+import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
@@ -26,6 +30,7 @@ import { Tooltip } from 'react-tooltip';
 import { AnimatePresence, motion } from 'framer-motion';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+const MASTER_PASSWORD = '0904';
 
 const MASTER_PASSWORD = process.env.REACT_APP_MASTER_PASSWORD || '';
 
@@ -36,7 +41,6 @@ const atributoColor = {
   intelecto:'#60a5fa',
   voluntad: '#a78bfa',
 };
-
 const defaultRecursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
 const recursoColor = {
   postura: '#34d399',
@@ -45,7 +49,6 @@ const recursoColor = {
   cordura: '#a78bfa',
   armadura:'#9ca3af',
 };
-
 const recursoInfo = {
   postura: 'Explicación de Postura',
   vida: 'Explicación de Vida',
@@ -53,6 +56,7 @@ const recursoInfo = {
   cordura: 'Explicación de Cordura',
   armadura: 'Explicación de Armadura',
 };
+const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
@@ -75,7 +79,6 @@ const dadoToNumero = {
   'D10': 10,
   'D12': 12
 };
-
 const parseCargaValue = (v) => {
   if (!v) return 0;
   if (typeof v === 'number') return v;
@@ -87,17 +90,14 @@ const parseCargaValue = (v) => {
   }
   return 0;
 };
-
 const cargaFisicaIcon = (v) => {
   const n = parseCargaValue(v);
   return n > 0 ? '🔲'.repeat(n) : '❌';
 };
-
 const cargaMentalIcon = (v) => {
   const n = parseCargaValue(v);
   return n > 0 ? '🧠'.repeat(n) : '❌';
 };
-
 const applyCargaPenalties = (data, armas, armaduras) => {
   let fisica = 0;
   let mental = 0;
@@ -115,10 +115,8 @@ const applyCargaPenalties = (data, armas, armaduras) => {
       mental += parseCargaValue(a.cargaMental || a.mente);
     }
   });
-
   const resistencia = data.stats?.vida?.total ?? 0;
   const newStats = { ...data.stats };
-
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
@@ -128,7 +126,6 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     newStats.postura.total = total;
     if (newStats.postura.actual > total) newStats.postura.actual = total;
   }
-
   if (newStats.cordura) {
     const base = newStats.cordura.base || 0;
     const buff = newStats.cordura.buff || 0;
@@ -138,14 +135,12 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     newStats.cordura.total = total;
     if (newStats.cordura.actual > total) newStats.cordura.actual = total;
   }
-
   return {
     ...data,
     stats: newStats,
     cargaAcumulada: { fisica, mental }
   };
 };
-
 function App() {
   // ───────────────────────────────────────────────────────────
   // STATES
@@ -189,7 +184,6 @@ function App() {
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
   const [playerInputPoder, setPlayerInputPoder] = useState('');
   const [playerPoderError, setPlayerPoderError] = useState('');
-
   // Recursos dinámicos (añadir / eliminar)
   const {
     resourcesList,
@@ -230,7 +224,6 @@ function App() {
   const [editingInfoText, setEditingInfoText] = useState('');
   const [hoveredTipId, setHoveredTipId] = useState(null);
   const [pinnedTipId, setPinnedTipId] = useState(null);
-
   // Claves (acciones consumibles)
   const [claves, setClaves] = useState([]);
   const [showAddClaveForm, setShowAddClaveForm] = useState(false);
@@ -238,10 +231,8 @@ function App() {
   const [newClaveColor, setNewClaveColor] = useState('#ffffff');
   const [newClaveTotal, setNewClaveTotal] = useState(0);
   const [newClaveError, setNewClaveError] = useState('');
-
   // Estados del personaje
   const [estados, setEstados] = useState([]);
-
   // Estados para fichas de enemigos
   const [enemies, setEnemies] = useState([]);
   const [selectedEnemy, setSelectedEnemy] = useState(null);
@@ -262,7 +253,6 @@ function App() {
     notas: '',
     estados: []
   });
-
   // Estados para equipar items a enemigos
   const [enemyInputArma, setEnemyInputArma] = useState('');
   const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
@@ -270,11 +260,13 @@ function App() {
   const [enemyArmaError, setEnemyArmaError] = useState('');
   const [enemyArmaduraError, setEnemyArmaduraError] = useState('');
   const [enemyPoderError, setEnemyPoderError] = useState('');
-
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
-
   // Glosario de términos destacados
+  const [glossary, setGlossary] = useState([]);
+  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
+  const [editingTerm, setEditingTerm] = useState(null);
+  const [newTermError, setNewTermError] = useState('');
   const {
     glossary,
     newTerm,
@@ -290,13 +282,10 @@ function App() {
 
   // Calculadora de dados
   const [showDiceCalculator, setShowDiceCalculator] = useState(false);
-
   // Minijuego Barra-Reflejos
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
-
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
-
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -313,7 +302,6 @@ function App() {
         h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
-
   // Sugerencias dinámicas para inputs de equipo de enemigos
   const enemyArmaSugerencias = enemyInputArma
     ? armas.filter(a =>
@@ -330,7 +318,6 @@ function App() {
         h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
-
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
   // ───────────────────────────────────────────────────────────
@@ -369,7 +356,6 @@ function App() {
     await deleteDoc(doc(db, 'players', playerName));
     volverAlMenu();
   };
-
   // ───────────────────────────────────────────────────────────
   // FETCH EXISTING PLAYERS
   // ───────────────────────────────────────────────────────────
@@ -389,7 +375,6 @@ function App() {
         });
     }
   }, [userType]);
-
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
@@ -428,7 +413,6 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchArmas() }, [fetchArmas]);
-
   // ───────────────────────────────────────────────────────────
   // FETCH ARMADURAS
   // ───────────────────────────────────────────────────────────
@@ -462,7 +446,6 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchArmaduras() }, [fetchArmaduras]);
-
   // ───────────────────────────────────────────────────────────
   // FETCH HABILIDADES
   // ───────────────────────────────────────────────────────────
@@ -479,10 +462,19 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
-
   // ───────────────────────────────────────────────────────────
   // FETCH GLOSARIO
   // ───────────────────────────────────────────────────────────
+  const fetchGlossary = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, 'glossary'));
+      const datos = snap.docs.map(d => d.data());
+      setGlossary(datos);
+    } catch (e) {
+      // Error cargando glosario
+    }
+  }, []);
+  useEffect(() => { fetchGlossary() }, [fetchGlossary]);
 
   // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
@@ -499,7 +491,6 @@ function App() {
     }
   }, []);
   useEffect(() => { fetchEnemies() }, [fetchEnemies]);
-
   const refreshCatalog = () => {
     fetchArmas();
     fetchArmaduras();
@@ -507,11 +498,9 @@ function App() {
     fetchGlossary();
     fetchEnemies();
   };
-
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA CARGAR Y GUARDAR
   // ───────────────────────────────────────────────────────────
-
   // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
     if (!nameEntered) return;
@@ -520,16 +509,13 @@ function App() {
     try {
       const ref = doc(db, 'players', playerName);
       const snap = await getDoc(ref);
-
     // Atributos por defecto
     const baseA = {};
     atributos.forEach(k => (baseA[k] = 'D4'));
-
     if (snap.exists()) {
       const d = snap.data();
       const statsFromDB = d.stats || {};
       const listFromDB = d.resourcesList || [];
-
       // Reconstruir resourcesList: si Firestore devolvió una lista, úsala; si no, usa defaultRecursos
       const lista = listFromDB.length > 0
         ? listFromDB.map(item => ({
@@ -542,7 +528,6 @@ function App() {
             color: recursoColor[id] || '#ffffff',
             info: recursoInfo[id] || ''
           }));
-
       // Para cada recurso en "lista", asegurar statsInit[id]
       const statsInit = {};
       lista.forEach(({ id }) => {
@@ -554,7 +539,6 @@ function App() {
           buff:   s.buff   ?? 0
         };
       });
-
       // Guardar en estado
       setResourcesList(lista);
       setClaves(d.claves || []);
@@ -571,7 +555,6 @@ function App() {
       };
       console.log('✅ Jugador cargado exitosamente:', playerName);
       setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
-
     } else {
       // Si no existe en Firestore, crear con valores predeterminados
       console.log('ℹ️ Jugador no existe, creando nuevo:', playerName);
@@ -591,16 +574,10 @@ function App() {
       const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
       setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
-
     } catch (error) {
-      console.error('❌ Error cargando jugador:', error);
-      console.error('Código de error:', error.code);
-      console.error('Mensaje:', error.message);
-
       // En caso de error, crear jugador por defecto
       const baseAError = {};
       atributos.forEach(k => (baseAError[k] = 'D4'));
-
       const baseS = {};
       defaultRecursos.forEach(r => {
         baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
@@ -623,7 +600,6 @@ function App() {
   useEffect(() => {
     loadPlayer();
   }, [loadPlayer]);
-
   // 2) savePlayer: guarda todos los datos en Firestore
   //    Acepta parámetros opcionales para recursos y claves.
   const savePlayer = async (
@@ -653,18 +629,15 @@ function App() {
       }
     }
   };
-
   // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso
   const handleAtributoChange = (k, v) => {
     const newAtributos = { ...playerData.atributos, [k]: v };
     savePlayer({ ...playerData, atributos: newAtributos });
   };
-
   const handleStatChange = (r, field, val) => {
     let v = parseInt(val) || 0;
     v = Math.max(0, Math.min(v, RESOURCE_MAX));
     const s = { ...playerData.stats[r] };
-
     if (field === 'base') {
       s.base = v;
       s.total = v;
@@ -673,18 +646,15 @@ function App() {
     if (field === 'actual') {
       s.actual = Math.min(v, s.total + s.buff, RESOURCE_MAX);
     }
-
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
   };
-
   const handleAddBuff = (r) => {
     const s = { ...playerData.stats[r] };
     s.buff = (s.buff || 0) + 1;
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
   };
-
   const handleNerf = (r) => {
     const s = { ...playerData.stats[r] };
     if (s.buff > 0) {
@@ -695,6 +665,7 @@ function App() {
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
   };
+  const eliminarRecurso = (id) => {
 
   const handleEliminarRecurso = async (id) => {
     if (id === 'postura') {
@@ -719,28 +690,22 @@ function App() {
   // Funciones para reordenar estadísticas
   const moveStatUp = (index) => {
     if (index === 0) return; // Ya está en la primera posición
-
     const newList = [...resourcesList];
     const temp = newList[index];
     newList[index] = newList[index - 1];
     newList[index - 1] = temp;
-
     setResourcesList(newList);
     savePlayer(playerData, newList);
   };
-
   const moveStatDown = (index) => {
     if (index === resourcesList.length - 1) return; // Ya está en la última posición
-
     const newList = [...resourcesList];
     const temp = newList[index];
     newList[index] = newList[index + 1];
     newList[index + 1] = temp;
-
     setResourcesList(newList);
     savePlayer(playerData, newList);
   };
-
   const agregarHabilidad = async () => {
     const { nombre } = newAbility;
     if (!nombre.trim()) {
@@ -757,16 +722,13 @@ function App() {
       setNewAbilityError('');
       fetchHabilidades();
     } catch (e) {
-      console.error(e);
       setNewAbilityError('Error al guardar');
     }
   };
-
   const startEditAbility = (ability) => {
     setNewAbility(ability);
     setEditingAbility(ability.nombre);
   };
-
   const deleteAbility = async (name) => {
     try {
       await deleteDoc(doc(db, 'abilities', name));
@@ -776,10 +738,8 @@ function App() {
       }
       fetchHabilidades();
     } catch (e) {
-      console.error(e);
     }
   };
-
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -791,17 +751,13 @@ function App() {
         id: enemyId,
         updatedAt: new Date()
       };
-      console.log('Guardando enemigo:', dataToSave);
       await setDoc(doc(db, 'enemies', enemyId), dataToSave);
-      console.log('Enemigo guardado exitosamente');
       fetchEnemies();
       return enemyId;
     } catch (e) {
-      console.error('Error en saveEnemy:', e);
       throw e;
     }
   };
-
   const deleteEnemy = async (enemyId) => {
     try {
       await deleteDoc(doc(db, 'enemies', enemyId));
@@ -810,19 +766,15 @@ function App() {
         setSelectedEnemy(null);
       }
     } catch (e) {
-      console.error(e);
     }
   };
-
   const createNewEnemy = () => {
     const baseAtributos = {};
     atributos.forEach(k => (baseAtributos[k] = 'D4'));
-
     const baseStats = {};
     defaultRecursos.forEach(r => {
       baseStats[r] = { base: 0, total: 0, actual: 0, buff: 0 };
     });
-
     setNewEnemy({
       name: '',
       portrait: '',
@@ -842,26 +794,22 @@ function App() {
     setEditingEnemy(null);
     setShowEnemyForm(true);
   };
-
   const editEnemy = (enemy) => {
     setNewEnemy(enemy);
     setEditingEnemy(enemy.id);
     setShowEnemyForm(true);
   };
-
   const handleSaveEnemy = async () => {
     if (!newEnemy.name.trim()) {
       alert('El nombre del enemigo es requerido');
       return;
     }
-
     try {
       // Si estamos editando, usar el ID existente; si no, generar uno nuevo
       const enemyToSave = {
         ...newEnemy,
         id: editingEnemy || `enemy_${Date.now()}`
       };
-
       await saveEnemy(enemyToSave);
       setShowEnemyForm(false);
       setNewEnemy({
@@ -887,21 +835,17 @@ function App() {
       setEnemyArmaduraError('');
       setEnemyPoderError('');
     } catch (e) {
-      console.error('Error al guardar enemigo:', e);
       alert('Error al guardar el enemigo: ' + e.message);
     }
   };
-
   const resizeImage = (file, maxWidth = 300, maxHeight = 300, quality = 0.8) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
-
       img.onload = () => {
         // Calcular nuevas dimensiones manteniendo proporción
         let { width, height } = img;
-
         if (width > height) {
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
@@ -913,22 +857,17 @@ function App() {
             height = maxHeight;
           }
         }
-
         canvas.width = width;
         canvas.height = height;
-
         // Dibujar imagen redimensionada
         ctx.drawImage(img, 0, 0, width, height);
-
         // Convertir a base64 con calidad reducida
         const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(resizedDataUrl);
       };
-
       img.src = URL.createObjectURL(file);
     });
   };
-
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -938,16 +877,13 @@ function App() {
           alert('Por favor selecciona un archivo de imagen válido');
           return;
         }
-
         // Verificar tamaño del archivo (máximo 10MB antes de procesar)
         if (file.size > 10 * 1024 * 1024) {
           alert('La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB');
           return;
         }
-
         // Redimensionar imagen
         const resizedImage = await resizeImage(file);
-
         // Verificar que el resultado no sea demasiado grande para Firestore
         if (resizedImage.length > 900000) { // ~900KB para dejar margen
           // Si aún es muy grande, reducir más la calidad
@@ -956,14 +892,11 @@ function App() {
         } else {
           setNewEnemy({ ...newEnemy, portrait: resizedImage });
         }
-
       } catch (error) {
-        console.error('Error al procesar imagen:', error);
         alert('Error al procesar la imagen. Por favor intenta con otra imagen.');
       }
     }
   };
-
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -977,7 +910,6 @@ function App() {
       setEnemyArmaError('');
     }
   };
-
   const handleEnemyEquipWeaponFromSuggestion = (name) => {
     const w = armas.find(a => a.nombre === name);
     if (!w) return setEnemyArmaError('Arma no encontrada');
@@ -987,7 +919,6 @@ function App() {
       setEnemyArmaError('');
     }
   };
-
   const handleEnemyEquipArmor = () => {
     if (loading) return;
     const f = armaduras.find(a => a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
@@ -998,7 +929,6 @@ function App() {
       setEnemyArmaduraError('');
     }
   };
-
   const handleEnemyEquipArmorFromSuggestion = (name) => {
     const a = armaduras.find(x => x.nombre === name);
     if (!a) return setEnemyArmaduraError('Armadura no encontrada');
@@ -1008,7 +938,6 @@ function App() {
       setEnemyArmaduraError('');
     }
   };
-
   const handleEnemyEquipPower = () => {
     if (loading) return;
     const f = habilidades.find(h => h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
@@ -1019,7 +948,6 @@ function App() {
       setEnemyPoderError('');
     }
   };
-
   const handleEnemyEquipPowerFromSuggestion = (name) => {
     const h = habilidades.find(x => x.nombre === name);
     if (!h) return setEnemyPoderError('Poder no encontrado');
@@ -1029,22 +957,18 @@ function App() {
       setEnemyPoderError('');
     }
   };
-
   const unequipEnemyWeapon = (index) => {
     const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
   };
-
   const unequipEnemyArmor = (index) => {
     const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
   };
-
   const unequipEnemyPower = (index) => {
     const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
     setNewEnemy({ ...newEnemy, poderes: updatedPowers });
   };
-
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
@@ -1064,7 +988,6 @@ function App() {
   const handlePlayerUnequip = n => {
     savePlayer({ ...playerData, weapons: playerData.weapons.filter(x => x !== n) });
   };
-
   const handlePlayerEquipFromSuggestion = name => {
     const w = armas.find(a => a.nombre === name);
     if (!w) return setPlayerError('Arma no encontrada');
@@ -1074,7 +997,6 @@ function App() {
       setPlayerError('');
     }
   };
-
   const handlePlayerEquipArmadura = () => {
     if (loading) return;
     const f = armaduras.find(a => a.nombre.toLowerCase().includes(playerInputArmadura.trim().toLowerCase()));
@@ -1088,7 +1010,6 @@ function App() {
   const handlePlayerUnequipArmadura = n => {
     savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
   };
-
   const handlePlayerEquipArmaduraFromSuggestion = name => {
     const a = armaduras.find(x => x.nombre === name);
     if (!a) return setPlayerArmaduraError('Armadura no encontrada');
@@ -1098,7 +1019,6 @@ function App() {
       setPlayerArmaduraError('');
     }
   };
-
   const handlePlayerEquipPoder = () => {
     if (loading) return;
     const f = habilidades.find(h => h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase()));
@@ -1121,7 +1041,6 @@ function App() {
       setPlayerPoderError('');
     }
   };
-
   // ────────────────────────────────
   // Claves handlers
   // ────────────────────────────────
@@ -1133,7 +1052,6 @@ function App() {
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
-
   const handleClaveIncrement = (id, delta) => {
     const list = claves.map(c => {
       if (c.id !== id) return c;
@@ -1146,7 +1064,6 @@ function App() {
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
-
   const handleClaveReset = id => {
     const list = claves.map(c =>
       c.id === id ? { ...c, actual: c.total } : c
@@ -1154,7 +1071,6 @@ function App() {
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
-
   const handleAddClave = () => {
     const nombre = newClaveName.trim();
     if (!nombre) {
@@ -1177,13 +1093,11 @@ function App() {
     setNewClaveTotal(0);
     setNewClaveError('');
   };
-
   const handleRemoveClave = id => {
     const list = claves.filter(c => c.id !== id);
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
-
   // ────────────────────────────────
   // Estados handlers
   // ────────────────────────────────
@@ -1194,13 +1108,11 @@ function App() {
     setEstados(list);
     savePlayer({ ...playerData, estados: list }, undefined, undefined, list);
   };
-
   const startEditInfo = (id, current) => {
     setPinnedTipId(null);
     setEditingInfoId(id);
     setEditingInfoText(current);
   };
-
   const finishEditInfo = () => {
     if (!editingInfoId) return;
     const newList = resourcesList.map(r =>
@@ -1211,11 +1123,9 @@ function App() {
     setEditingInfoId(null);
     setEditingInfoText('');
   };
-
   const togglePinnedTip = id => {
     setPinnedTipId(prev => (prev === id ? null : id));
   };
-
   // ────────────────────────────────
   // Glosario handlers
   // (ahora gestionados por el hook useGlossary)
@@ -1255,7 +1165,6 @@ function App() {
     });
     return parts;
   };
-
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
     switch (tipo.toLowerCase()) {
@@ -1267,11 +1176,9 @@ function App() {
       default: return null;
     }
   };
-
   // ───────────────────────────────────────────────────────────
   // RENDERIZADO CONDICIONAL
   // ───────────────────────────────────────────────────────────
-
   // MENÚ PRINCIPAL
   if (!userType) {
     return (
@@ -1291,11 +1198,9 @@ function App() {
             />
           ))}
         </div>
-
         {/* Círculos decorativos */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-xl animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-
         <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1307,12 +1212,10 @@ function App() {
             </p>
             <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
-
           {/* Pregunta principal */}
           <div className="text-center">
             <h2 className="text-xl font-semibold text-white mb-2">¿Quién eres?</h2>
           </div>
-
           {/* Opciones minimalistas */}
           <div className="flex flex-col gap-4">
             <Boton
@@ -1326,7 +1229,6 @@ function App() {
                 <span className="text-sm opacity-70 font-normal">Gestiona tu personaje</span>
               </div>
             </Boton>
-
             <Boton
               color="purple"
               size="lg"
@@ -1342,7 +1244,6 @@ function App() {
               </div>
             </Boton>
           </div>
-
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
             <p className="text-sm font-medium text-gray-400">Versión 2.1.2</p>
@@ -1352,7 +1253,6 @@ function App() {
       </div>
     );
   }
-
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
     return (
@@ -1372,11 +1272,9 @@ function App() {
             />
           ))}
         </div>
-
         {/* Efectos de fondo */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-
         <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1388,7 +1286,6 @@ function App() {
             </p>
             <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
-
           {/* Campo de contraseña */}
           <div className="space-y-4">
             <Input
@@ -1400,14 +1297,12 @@ function App() {
               className="w-full text-center"
               size="lg"
             />
-
             {authError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center animate-in fade-in duration-300">
                 <p className="text-red-400 text-sm font-medium">{authError}</p>
               </div>
             )}
           </div>
-
           {/* Botones */}
           <div className="space-y-3">
             <Boton
@@ -1418,7 +1313,6 @@ function App() {
             >
               Acceder al Sistema
             </Boton>
-
             <Boton
               color="gray"
               size="md"
@@ -1428,13 +1322,10 @@ function App() {
               Volver al menú principal
             </Boton>
           </div>
-
-
         </div>
       </div>
     );
   }
-
   // SELECCIÓN JUGADOR
   if (userType === 'player' && !nameEntered) {
     return (
@@ -1454,11 +1345,9 @@ function App() {
             />
           ))}
         </div>
-
         {/* Efectos de fondo */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-green-500/10 rounded-full blur-xl animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-
         <div className="w-full max-w-lg rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1470,7 +1359,6 @@ function App() {
             </p>
             <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
-
           {/* Jugadores existentes */}
           {existingPlayers.length > 0 && (
             <div className="space-y-4">
@@ -1499,7 +1387,6 @@ function App() {
               </div>
             </div>
           )}
-
           {/* Crear nuevo personaje */}
           <div className="space-y-4">
             <div className="text-center">
@@ -1507,7 +1394,6 @@ function App() {
                 Crear Nuevo Personaje
               </h3>
             </div>
-
             <Input
               placeholder="Nombre de tu personaje"
               value={playerName}
@@ -1517,7 +1403,6 @@ function App() {
               size="lg"
               clearable
             />
-
             <Boton
               color="green"
               size="lg"
@@ -1527,7 +1412,6 @@ function App() {
               Crear / Entrar
             </Boton>
           </div>
-
           {/* Botón volver */}
           <div className="border-t border-gray-700 pt-4">
             <Boton
@@ -1539,23 +1423,18 @@ function App() {
               Volver al menú principal
             </Boton>
           </div>
-
-
         </div>
       </div>
     );
   }
-
   // CALCULADORA DE DADOS
   if (userType === 'player' && nameEntered && showDiceCalculator) {
     return <DiceCalculator playerName={playerName} onBack={() => setShowDiceCalculator(false)} />;
   }
-
   // MINIJUEGO BARRA-REFLEJOS
   if (userType === 'player' && nameEntered && showBarraReflejos) {
     return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
   }
-
   // SISTEMA DE INICIATIVA
   if (userType === 'player' && nameEntered && showInitiativeTracker) {
     return <InitiativeTracker 
@@ -1573,14 +1452,12 @@ function App() {
       onBack={() => setShowInitiativeTracker(false)} 
     />;
   }
-
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <h1 className="text-2xl font-bold text-center mb-2">Ficha de {playerName}</h1>
-
           {/* Botones de herramientas */}
           <div className="mb-4 flex gap-3 justify-center">
             {/* Botón de calculadora de dados */}
@@ -1590,7 +1467,6 @@ function App() {
             >
               🎲
             </Boton>
-
             {/* Botón de minijuego reflejos */}
             <Boton
               onClick={() => setShowBarraReflejos(true)}
@@ -1598,7 +1474,6 @@ function App() {
             >
               🔒
             </Boton>
-
             {/* Botón de sistema de iniciativa */}
             <Boton
               onClick={() => setShowInitiativeTracker(true)}
@@ -1607,7 +1482,6 @@ function App() {
               ⚡
             </Boton>
           </div>
-
           <div className="mb-4 text-center text-sm text-gray-300">
             Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
             {'   |   '}
@@ -1615,7 +1489,6 @@ function App() {
             {'   |   '}
             Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
           </div>
-
           {/* Botones Volver / Eliminar */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 w-full justify-center">
             <Boton
@@ -1629,7 +1502,6 @@ function App() {
               onClick={eliminarFichaJugador}
             >Eliminar ficha</Boton>
           </div>
-
           {/* ATRIBUTOS */}
           <h2 className="text-xl font-semibold text-center mb-4">Atributos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 w-full">
@@ -1644,7 +1516,6 @@ function App() {
               />
             ))}
           </div>
-
           {/* ESTADÍSTICAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
           <div className="flex flex-col gap-4 w-full mb-8">
@@ -1653,11 +1524,9 @@ function App() {
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
               const buffV = s.buff || 0;
-
               const resistencia = playerData.stats["vida"]?.total ?? 0;
               const cargaFisicaTotal = playerData.cargaAcumulada?.fisica || 0;
               const cargaMentalTotal = playerData.cargaAcumulada?.mental || 0;
-
               let penalizacion = 0;
               let baseEfectiva = baseV;
               if (r === 'postura') {
@@ -1667,9 +1536,7 @@ function App() {
                 penalizacion = Math.max(0, cargaMentalTotal - resistencia);
                 baseEfectiva = Math.max(0, baseV - penalizacion);
               }
-
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
-
               return (
                 <motion.div
                   key={r}
@@ -1710,7 +1577,6 @@ function App() {
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
-
                     {/* Controles de reordenamiento y eliminación */}
                     <div className="absolute right-0 flex items-center gap-1">
                       {/* Botón subir */}
@@ -1726,7 +1592,6 @@ function App() {
                       >
                         ↑
                       </button>
-
                       {/* Botón bajar */}
                       <button
                         onClick={() => moveStatDown(index)}
@@ -1740,7 +1605,6 @@ function App() {
                       >
                         ↓
                       </button>
-
                       {/* Botón eliminar */}
                       <button
                         onClick={() => eliminarRecurso(r)}
@@ -1751,7 +1615,6 @@ function App() {
                       </button>
                     </div>
                   </div>
-
                   {/* Inputs y botones */}
                   <div className="w-full flex justify-center mb-2">
                     <div className="flex items-center gap-2 max-w-fit">
@@ -1790,7 +1653,6 @@ function App() {
                       </Boton>
                     </div>
                   </div>
-
                   {/* Barra (con margen superior aumentado) */}
                   <div className="relative w-full mt-4">
                     <ResourceBar
@@ -1818,7 +1680,6 @@ function App() {
               );
             })}
           </div>
-
           {!playerData.stats["postura"] && (
             <div className="text-center text-sm text-gray-400 mb-2">
               No tienes Postura; tu carga física {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
@@ -1829,7 +1690,6 @@ function App() {
               No tienes Cordura; tu carga mental {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
             </div>
           )}
-
           {/* FORMULARIO "Añadir recurso" */}
           {resourcesList.length < 6 && (
             <div className="w-full max-w-md mx-auto mb-4">
@@ -1889,7 +1749,6 @@ function App() {
               )}
             </div>
           )}
-
           {/* CLAVES */}
           <h2 className="text-xl font-semibold text-center mb-2">Claves</h2>
           {claves.length === 0 ? (
@@ -1966,7 +1825,6 @@ function App() {
               ))}
             </div>
           )}
-
           <div className="w-full max-w-md mx-auto mb-4">
             {!showAddClaveForm ? (
               <Boton
@@ -2031,19 +1889,16 @@ function App() {
               </div>
             )}
           </div>
-
           {/* ESTADOS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estados</h2>
           <div className="mb-6 w-full">
             <EstadoSelector selected={estados} onToggle={toggleEstado} />
           </div>
-
           {/* INVENTARIO */}
           <h2 className="text-xl font-semibold text-center mb-2">Inventario</h2>
           <div className="mb-6 w-full">
             <Inventory playerName={playerName} />
           </div>
-
           {/* EQUIPAR ARMA */}
           <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
@@ -2073,7 +1928,6 @@ function App() {
             </div>
             {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
           </div>
-
           {/* ARMAS EQUIPADAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Armas Equipadas</h2>
           {playerData.weapons.length === 0 ? (
@@ -2112,7 +1966,6 @@ function App() {
               })}
             </div>
           )}
-
           {/* EQUIPAR ARMADURA */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
@@ -2142,7 +1995,6 @@ function App() {
             </div>
             {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
           </div>
-
           {/* ARMADURAS EQUIPADAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Armaduras Equipadas</h2>
           {playerData.armaduras.length === 0 ? (
@@ -2179,7 +2031,6 @@ function App() {
               })}
             </div>
           )}
-
           {/* EQUIPAR PODER */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
             <label className="block font-semibold mb-1 text-center">Equipa un poder:</label>
@@ -2209,7 +2060,6 @@ function App() {
             </div>
             {playerPoderError && <p className="text-red-400 mt-1 text-center">{playerPoderError}</p>}
           </div>
-
           {/* PODERES EQUIPADOS */}
           <h2 className="text-xl font-semibold text-center mb-2">Poderes Equipados</h2>
           {playerData.poderes.length === 0 ? (
@@ -2247,12 +2097,10 @@ function App() {
       </div>
     );
   }
-
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
     return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
-
   if (userType === 'master' && authenticated && chosenView === 're4') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100">
@@ -2271,7 +2119,6 @@ function App() {
       </div>
     );
   }
-
   if (userType === 'master' && authenticated && chosenView === 'initiative') {
     return <InitiativeTracker 
       playerName="Master" 
@@ -2281,7 +2128,6 @@ function App() {
       onBack={() => setChosenView(null)} 
     />;
   }
-
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
@@ -2297,7 +2143,6 @@ function App() {
             <Boton onClick={refreshCatalog}>Refrescar</Boton>
           </div>
         </div>
-
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {enemies.map((enemy) => (
@@ -2357,14 +2202,12 @@ function App() {
             </Tarjeta>
           ))}
         </div>
-
         {enemies.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-400 text-lg">No hay enemigos creados</p>
             <p className="text-gray-500 text-sm mt-2">Crea tu primer enemigo para empezar</p>
           </div>
         )}
-
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -2372,7 +2215,6 @@ function App() {
               <h2 className="text-xl font-bold mb-4">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Columna izquierda: Información básica */}
                 <div className="space-y-4">
@@ -2386,7 +2228,6 @@ function App() {
                       className="w-full"
                     />
                   </div>
-
                   {/* Retrato */}
                   <div>
                     <label className="block text-sm font-medium mb-1">Retrato</label>
@@ -2407,7 +2248,6 @@ function App() {
                       </div>
                     )}
                   </div>
-
                   {/* Descripción */}
                   <div>
                     <label className="block text-sm font-medium mb-1">Descripción</label>
@@ -2418,7 +2258,6 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
                     />
                   </div>
-
                   {/* Nivel y Experiencia */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -2442,7 +2281,6 @@ function App() {
                       />
                     </div>
                   </div>
-
                   {/* Dinero */}
                   <div>
                     <label className="block text-sm font-medium mb-1">Dinero</label>
@@ -2454,7 +2292,6 @@ function App() {
                       className="w-full"
                     />
                   </div>
-
                   {/* Notas */}
                   <div>
                     <label className="block text-sm font-medium mb-1">Notas</label>
@@ -2466,7 +2303,6 @@ function App() {
                     />
                   </div>
                 </div>
-
                 {/* Columna derecha: Atributos y Estadísticas */}
                 <div className="space-y-4">
                   {/* Atributos */}
@@ -2493,7 +2329,6 @@ function App() {
                       ))}
                     </div>
                   </div>
-
                   {/* Estadísticas */}
                   <div>
                     <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
@@ -2513,7 +2348,6 @@ function App() {
                                 <span className="text-yellow-400">({stat.actual})</span>
                               </div>
                             </div>
-
                             {/* Controles de edición */}
                             <div className="grid grid-cols-3 gap-2">
                               <Input
@@ -2563,15 +2397,11 @@ function App() {
                       })}
                     </div>
                   </div>
-
-
                 </div>
               </div>
-
               {/* Sección de Equipo */}
               <div className="mt-6 space-y-4">
                 <h3 className="text-lg font-semibold">Equipo</h3>
-
                 {/* Armas Equipadas */}
                 <div>
                   <h4 className="font-medium mb-2">Armas Equipadas</h4>
@@ -2640,7 +2470,6 @@ function App() {
                     {enemyArmaError && <p className="text-red-400 text-xs mt-1">{enemyArmaError}</p>}
                   </div>
                 </div>
-
                 {/* Armaduras Equipadas */}
                 <div>
                   <h4 className="font-medium mb-2">Armaduras Equipadas</h4>
@@ -2703,7 +2532,6 @@ function App() {
                     {enemyArmaduraError && <p className="text-red-400 text-xs mt-1">{enemyArmaduraError}</p>}
                   </div>
                 </div>
-
                 {/* Poderes Equipados */}
                 <div>
                   <h4 className="font-medium mb-2">Poderes Equipados</h4>
@@ -2768,7 +2596,6 @@ function App() {
                   </div>
                 </div>
               </div>
-
               {/* Botones */}
               <div className="flex gap-2 pt-6 border-t border-gray-700 mt-6">
                 <Boton
@@ -2798,7 +2625,6 @@ function App() {
             </div>
           </div>
         )}
-
         {/* Modal para ver ficha completa */}
         {selectedEnemy && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -2820,7 +2646,6 @@ function App() {
                   </Boton>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Columna 1: Retrato e información básica */}
                 <div className="space-y-4">
@@ -2834,7 +2659,6 @@ function App() {
                       />
                     </div>
                   )}
-
                   <div className="bg-gray-700 rounded-lg p-4 space-y-2">
                     <h3 className="font-semibold text-lg">Información Básica</h3>
                     <div className="text-sm space-y-1">
@@ -2843,14 +2667,12 @@ function App() {
                       <p><span className="font-medium">Dinero:</span> {selectedEnemy.dinero || 0}</p>
                     </div>
                   </div>
-
                   {selectedEnemy.description && (
                     <div className="bg-gray-700 rounded-lg p-4">
                       <h3 className="font-semibold mb-2">Descripción</h3>
                       <p className="text-gray-300 text-sm">{selectedEnemy.description}</p>
                     </div>
                   )}
-
                   {selectedEnemy.notas && (
                     <div className="bg-gray-700 rounded-lg p-4">
                       <h3 className="font-semibold mb-2">Notas</h3>
@@ -2858,7 +2680,6 @@ function App() {
                     </div>
                   )}
                 </div>
-
                 {/* Columna 2: Atributos y Estadísticas */}
                 <div className="space-y-4">
                   {/* Atributos */}
@@ -2873,7 +2694,6 @@ function App() {
                       ))}
                     </div>
                   </div>
-
                   {/* Estadísticas */}
                   <div className="bg-gray-700 rounded-lg p-4">
                     <h3 className="font-semibold mb-3">Estadísticas</h3>
@@ -2899,7 +2719,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-
                 {/* Columna 3: Equipo */}
                 <div className="space-y-4">
                   {/* Armas */}
@@ -2939,7 +2758,6 @@ function App() {
                       <p className="text-gray-400 text-sm">Sin armas equipadas</p>
                     )}
                   </div>
-
                   {/* Armaduras */}
                   <div className="bg-gray-700 rounded-lg p-4">
                     <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
@@ -2971,7 +2789,6 @@ function App() {
                       <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
                     )}
                   </div>
-
                   {/* Poderes */}
                   <div className="bg-gray-700 rounded-lg p-4">
                     <h3 className="font-semibold mb-3">Poderes Equipados</h3>
@@ -3009,12 +2826,9 @@ function App() {
             </div>
           </div>
         )}
-
-
       </div>
     );
   }
-
   if (userType === 'master' && authenticated) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
@@ -3033,7 +2847,6 @@ function App() {
             />
           </div>
         </div>
-
         <Collapsible title={editingTerm ? `Editar término: ${editingTerm}` : 'Añadir término destacado'} defaultOpen={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
@@ -3062,7 +2875,6 @@ function App() {
             {newTermError && <p className="text-red-400 text-center sm:col-span-2">{newTermError}</p>}
           </div>
         </Collapsible>
-
         <Collapsible title="Glosario" defaultOpen={false}>
           {glossary.length === 0 ? (
             <p className="text-gray-400">No hay términos.</p>
@@ -3082,7 +2894,6 @@ function App() {
             </ul>
           )}
         </Collapsible>
-
         <Collapsible title={editingAbility ? `Editar habilidad: ${editingAbility}` : "Crear nueva habilidad"} defaultOpen={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
@@ -3130,7 +2941,6 @@ function App() {
             {newAbilityError && <p className="text-red-400 text-center sm:col-span-2">{newAbilityError}</p>}
           </div>
         </Collapsible>
-
         {loading
           ? <p>Cargando catálogo…</p>
           : (
@@ -3167,7 +2977,6 @@ function App() {
                       </Collapsible>
                     );
                   })()}
-
                   {/* Mostrar Armaduras si hay coincidencias */}
                   {(() => {
                     const armadurasFiltradas = armaduras.filter(a =>
@@ -3195,7 +3004,6 @@ function App() {
                       </Collapsible>
                     );
                   })()}
-
                   {/* Mostrar Habilidades si hay coincidencias */}
                   {(() => {
                     const habilidadesFiltradas = habilidades.filter(h =>
@@ -3224,7 +3032,6 @@ function App() {
                   })()}
                 </>
               )}
-
               {/* Mostrar mensaje cuando no hay búsqueda activa */}
               {!searchTerm.trim() && (
                 <div className="text-center py-8">
@@ -3232,7 +3039,6 @@ function App() {
                   <p className="text-gray-500 text-sm mt-2">Las pestañas se abrirán automáticamente cuando busques</p>
                 </div>
               )}
-
               {/* Mostrar mensaje cuando no hay resultados */}
               {searchTerm.trim() &&
                 armas.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
@@ -3249,7 +3055,6 @@ function App() {
       </div>
     );
   }
-
   // FALLBACK
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
@@ -3258,7 +3063,6 @@ function App() {
     </div>
   );
 }
-
 // Componente principal envuelto con ToastProvider
 const AppWithProviders = () => {
   return (
@@ -3267,5 +3071,4 @@ const AppWithProviders = () => {
     </ToastProvider>
   );
 };
-
 export default AppWithProviders;

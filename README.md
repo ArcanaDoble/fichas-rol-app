@@ -28,7 +28,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.1.2**
+> **Versión actual: 2.1.3**
+
+**Resumen de cambios v2.1.3:**
+- Corrección de errores críticos de compilación: imports de iconos faltantes (GiFist, FaFire, FaBolt, FaSnowflake, FaRadiationAlt)
+- Limpieza completa de código: eliminación de todos los console.log y console.error innecesarios
+- Corrección de expresiones regulares: eliminación de escapes innecesarios en patrones de búsqueda
+- Eliminación de imports no usados: useState en Input.jsx
+- Proyecto ahora compila sin errores ni warnings de ESLint
+- Optimización de rendimiento y mantenibilidad del código
 
 **Resumen de cambios v2.1.2:**
 - Sistema de Píldoras de Equipamiento integrado en el Sistema de Velocidad para uso directo de armas y poderes
@@ -195,6 +203,14 @@ src/
 
 ## 🔄 Historial de cambios recientes
 
+### 🧹 **Limpieza y Corrección de Errores (Diciembre 2024) - v2.1.3**
+- ✅ **Errores críticos solucionados** - Imports de iconos faltantes corregidos para evitar errores de compilación
+- ✅ **Código completamente limpio** - Eliminación de todos los console.log y console.error innecesarios
+- ✅ **Expresiones regulares optimizadas** - Corrección de escapes innecesarios en patrones de búsqueda
+- ✅ **Imports optimizados** - Eliminación de useState no usado en Input.jsx
+- ✅ **Compilación perfecta** - Proyecto ahora compila sin errores ni warnings de ESLint
+- ✅ **Mantenibilidad mejorada** - Código más limpio y fácil de mantener
+
 ### 🎮 **Mejoras en Minijuego de Cerrajería (Diciembre 2024)**
 - ✅ **Velocidad aleatorizada mejorada** - Variación sutil de ±10% para evitar patrones predecibles
 - ✅ **Balance de dificultad mantenido** - Misma variación en todos los niveles sin afectar jugabilidad
@@ -227,81 +243,24 @@ src/
 - Sistema de slots con animaciones y efectos visuales
 - Marcas de agua en tarjetas de equipo
 - Efectos de gradiente animado y brillo pulsante
-=======
-Fichas Rol App
 
-Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol.
-Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, por lo que se actualiza automáticamente.
+</details>
 
-Desde la versión 2.1 incluye un sistema de inventario tipo “Resident Evil 4” con cuadrícula 10 × 8, arrastrar-soltar fluido y rotación de objetos.
-Características principales
+## 🤝 Contribución
 
-    Modo Jugador / Modo Máster
-    El jugador crea su ficha; el máster accede con contraseña para refrescar catálogos y ayudas.
+Las contribuciones son bienvenidas. Por favor:
 
-    Atributos y recursos personalizables
-    Destreza, vigor, intelecto y voluntad (dados) + recursos editables (postura, vida, cordura, etc.).
+1. Fork el proyecto
+2. Crea una rama para tu feature (`git checkout -b feature/nueva-caracteristica`)
+3. Commit tus cambios (`git commit -m 'Añadir nueva característica'`)
+4. Push a la rama (`git push origin feature/nueva-caracteristica`)
+5. Abre un Pull Request
 
-    Equipamiento dinámico
-    Armas y armaduras cargadas de Google Sheets; búsqueda y equipación en tiempo real.
+## 📄 Licencia
 
-    Habilidades y Claves
-    Poderes creados en Firebase y acciones especiales con contador de usos.
+Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 
-    Carga física y mental automática
-    El peso del equipo modifica Postura y Cordura y muestra penalizaciones.
+---
 
-    Tooltips y glosario editables
-    Textos de ayuda modificables desde la propia interfaz.
+**Desarrollado con ❤️ para la comunidad de rol**
 
-    Inventario tradicional con drag & drop
-    Slots activables, animaciones y persistencia en Firestore.
-
-    Inventario RE4 (nuevo)
-
-        Grid 10 × 8 con detección de colisiones y rotación (click derecho)
-
-        18 tipos de objetos, rarezas y “stacking” automático
-
-        Previsualización durante el arrastre, guías interactivas y diseño responsive
-
-    Calculadora de dados y minijuego de cerrajería con dificultad progresiva
-
-    Interfaz responsive con TailwindCSS y animaciones suaves (Framer Motion).
-
-    Pruebas automáticas incluidas (React Testing Library).
-
-Instalación y uso
-
-    Clona este repositorio.
-
-    Ejecuta npm install para instalar las dependencias.
-
-    Copia .env.example a .env y rellena tus claves de Firebase, la contraseña de Máster y el ID de la hoja de cálculo de Google. Si no proporcionas estas variables, la aplicación usará las credenciales por defecto incluidas en `src/firebase.js` para conectarse al proyecto público.
-
-    Inicia la aplicación con npm start y abre http://localhost:3000.
-
-Comandos útiles
-Acción	Comando
-Servidor de desarrollo	npm start
-Ejecutar pruebas	npm test -- --watchAll=false
-Lint + Prettier	npm run lint · npm run format
-Build producción	npm run build
-Despliegue Firebase	firebase deploy
-Despliegue en Firebase
-
-    Ejecuta npm run build para generar la carpeta build.
-
-    Despliega con firebase deploy.
-    El firebase.json ya incluye el rewrite ** → /index.html para SPA.
-
-Arquitectura del proyecto (resumen)
-
-src/
-├── components/
-│   ├── re4/             # Inventario Resident Evil 4
-│   ├── inventory/       # Inventario clásico por slots
-│   └── ui/              # Boton, Modal, Toast, etc.
-├── hooks/               # Hooks personalizados
-├── firebase.js          # Configuración Firebase
-└── App.js               # Enrutado principal

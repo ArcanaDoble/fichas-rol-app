@@ -13,7 +13,7 @@ export default function useGlossary() {
       const snap = await getDocs(collection(db, 'glossary'));
       setGlossary(snap.docs.map(d => d.data()));
     } catch (e) {
-      console.error(e);
+      // Eliminar console.error innecesarios.
     }
   }, []);
 
@@ -37,7 +37,7 @@ export default function useGlossary() {
       setNewTermError('');
       fetchGlossary();
     } catch (e) {
-      console.error(e);
+      // Eliminar console.error innecesarios.
       setNewTermError('Error al guardar');
     }
   };

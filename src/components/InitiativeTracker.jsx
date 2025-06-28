@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc, collection, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
@@ -103,7 +103,6 @@ const hexToRgb = (hex) => {
 const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], playerEquipment = null, armas = [], armaduras = [], habilidades = [], onBack }) => {
   const [participants, setParticipants] = useState([]);
   const [newParticipant, setNewParticipant] = useState({ name: '', speed: 0, type: 'player' });
-  const [editingParticipant, setEditingParticipant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentPlayerSpeed, setCurrentPlayerSpeed] = useState(0);
   const [currentCharacterName, setCurrentCharacterName] = useState('');
@@ -130,7 +129,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
       try {
         setEnemyModifications(JSON.parse(savedModifications));
       } catch (error) {
-        console.error('Error al cargar modificaciones:', error);
+        // Error al cargar modificaciones: error
       }
     }
   }, []);
@@ -147,12 +146,12 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
       }
       setLoading(false);
     }, (error) => {
-      console.error('Error al cargar velocidad:', error);
+      // Error al cargar velocidad: error
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [initiativeRef]);
 
   // Actualizar mapa de colores cuando cambian los participantes
   useEffect(() => {
@@ -342,7 +341,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
     // Buscar el participante del jugador actual
     const playerParticipant = participants.find(p => p.addedBy === playerName);
     if (!playerParticipant) {
-      alert('Primero debes agregar tu personaje a la línea de sucesos');
+      // Alerta: Primero debes agregar tu personaje a la línea de sucesos
       return;
     }
 

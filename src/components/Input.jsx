@@ -1,4 +1,4 @@
-import React, { useState, forwardRef } from 'react';
+import React, { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 
 const sizes = {
@@ -30,8 +30,6 @@ const Input = forwardRef(({
   clearable = false,
   ...props
 }, ref) => {
-  const [isFocused, setIsFocused] = useState(false);
-
   // Determinar variante basada en props
   let currentVariant = variant;
   if (error) currentVariant = 'error';
@@ -86,11 +84,9 @@ const Input = forwardRef(({
           {...props}
           className={inputClasses}
           onFocus={(e) => {
-            setIsFocused(true);
             props.onFocus?.(e);
           }}
           onBlur={(e) => {
-            setIsFocused(false);
             props.onBlur?.(e);
           }}
         />
