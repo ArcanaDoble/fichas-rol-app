@@ -1420,8 +1420,8 @@ function App() {
 
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.2.0</p>
-            <p className="text-xs text-gray-500">Sistema de velocidad revolucionario: gestión de iniciativa con actuación simultánea y efectos visuales avanzados.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.2</p>
+            <p className="text-xs text-gray-500">Adición del Sistema de gestión de Velocidad.</p>
           </div>
         </div>
       </div>
@@ -1637,6 +1637,14 @@ function App() {
       playerName={playerName} 
       isMaster={authenticated} 
       glossary={glossary}
+      playerEquipment={{
+        weapons: playerData.weapons,
+        armaduras: playerData.armaduras,
+        poderes: playerData.poderes
+      }}
+      armas={armas}
+      armaduras={armaduras}
+      habilidades={habilidades}
       onBack={() => setShowInitiativeTracker(false)} 
     />;
   }

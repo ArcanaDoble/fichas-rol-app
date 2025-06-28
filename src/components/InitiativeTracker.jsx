@@ -100,7 +100,7 @@ const hexToRgb = (hex) => {
   } : null;
 };
 
-const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], onBack }) => {
+const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], playerEquipment = null, armas = [], armaduras = [], habilidades = [], onBack }) => {
   const [participants, setParticipants] = useState([]);
   const [newParticipant, setNewParticipant] = useState({ name: '', speed: 0, type: 'player' });
   const [editingParticipant, setEditingParticipant] = useState(null);
@@ -337,6 +337,31 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
     };
   };
 
+  // Función para usar equipamiento y aumentar velocidad
+  const handleUseEquipment = async (equipmentName, equipmentType, speedIncrease) => {
+    // Buscar el participante del jugador actual
+    const playerParticipant = participants.find(p => p.addedBy === playerName);
+    if (!playerParticipant) {
+      alert('Primero debes agregar tu personaje a la línea de sucesos');
+      return;
+    }
+
+    // Aumentar la velocidad del participante
+    const newSpeed = playerParticipant.speed + speedIncrease;
+    await updateSpeed(playerParticipant.id, newSpeed);
+  };
+
+  // Función para obtener el consumo de velocidad de un equipamiento
+  const getSpeedConsumption = (equipment, equipmentType) => {
+    if (equipmentType === 'weapon' || equipmentType === 'power') {
+      const consumo = equipment.consumo || '';
+      // Contar los emojis 🟡 en el campo consumo
+      const yellowDotCount = (consumo.match(/🟡/g) || []).length;
+      return yellowDotCount;
+    }
+    return 0; // Las armaduras no consumen velocidad
+  };
+
   // Función para destacar palabras del glosario
   const highlightText = (text) => {
     if (!text || !glossary || glossary.length === 0) return text;
@@ -541,7 +566,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
                               onClick={() => {
                                 updateSpeed(participant.id, participant.speed + 1);
                               }}
-                              className="bg-green-600 hover:bg-green-700 text-white w-8 h-8 p-0 flex items-center justify-center text-sm font-bold"
+                              className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white w-8 h-8 p-0 flex items-center justify-center text-sm font-bold"
                             >
                               +
                             </Boton>
@@ -549,7 +574,8 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
                             {(isMaster || participant.addedBy === playerName) && (
                               <Boton
                                 onClick={() => removeParticipant(participant.id)}
-                                className="bg-gradient-to-b from-red-700 to-red-800 hover:from-red-800 hover:to-red-900 text-white px-2 py-1 text-sm"
+                                color="red"
+                                size="sm"
                               >
                                 🗑️
                               </Boton>
@@ -758,6 +784,68 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
             <p>• Los colores identifican qué jugador controla cada personaje</p>
           </div>
         </div>
+
+        {/* Píldoras de Equipamiento del Jugador */}
+        {playerEquipment && (
+          <div className="mb-6 max-w-2xl mx-auto">
+            <h3 className="text-lg font-bold mb-4 text-center">Píldoras de Equipamiento</h3>
+            
+            {/* Armas */}
+            {playerEquipment.weapons && playerEquipment.weapons.length > 0 && (
+              <div className="mb-4">
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {playerEquipment.weapons.map((weaponName) => {
+                    const weapon = armas.find(w => w.nombre === weaponName);
+                    if (!weapon) return null;
+                    const speedIncrease = getSpeedConsumption(weapon, 'weapon');
+                    return (
+                      <Boton
+                        key={weaponName}
+                        onClick={() => handleUseEquipment(weaponName, 'weapon', speedIncrease)}
+                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 px-3 py-1 text-sm"
+                        title={`${weapon.nombre} - Consumo: 🟡${speedIncrease} velocidad`}
+                      >
+                        {weapon.nombre} 🟡{speedIncrease}
+                      </Boton>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Poderes */}
+            {playerEquipment.poderes && playerEquipment.poderes.length > 0 && (
+              <div className="mb-4">
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {playerEquipment.poderes.map((powerName) => {
+                    const power = habilidades.find(p => p.nombre === powerName);
+                    if (!power) return null;
+                    const speedIncrease = getSpeedConsumption(power, 'power');
+                    return (
+                      <Boton
+                        key={powerName}
+                        onClick={() => handleUseEquipment(powerName, 'power', speedIncrease)}
+                        className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-3 py-1 text-sm"
+                        title={`${power.nombre} - Consumo: 🟡${speedIncrease} velocidad`}
+                      >
+                        {power.nombre} 🟡{speedIncrease}
+                      </Boton>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Mensaje si no hay equipamiento */}
+            {(!playerEquipment.weapons || playerEquipment.weapons.length === 0) &&
+             (!playerEquipment.poderes || playerEquipment.poderes.length === 0) && (
+              <div className="text-center text-gray-400 py-4">
+                <p>No tienes equipamiento equipado</p>
+                <p className="text-sm">Equipa armas y poderes en tu ficha para usarlos aquí</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Modal de previsualización de enemigo */}
         {previewEnemy && (

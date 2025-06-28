@@ -18,6 +18,8 @@ const sizes = {
   xl: 'px-8 py-4 text-xl',
 };
 
+
+
 const Boton = ({
   children,
   color = 'gray',
@@ -42,10 +44,7 @@ const Boton = ({
     shadow-md hover:shadow-lg
   `;
 
-  // Si hay className personalizado, no aplicar colores por defecto
-  const hasCustomColors = className.includes('bg-') || className.includes('text-') || className.includes('hover:bg-');
-  
-  const colorClasses = hasCustomColors ? '' : colores[color];
+  const colorClasses = colores[color];
   const sizeClasses = sizes[size];
 
   const handleClick = (e) => {
