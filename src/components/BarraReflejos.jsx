@@ -8,7 +8,7 @@ const BarraReflejos = ({ playerName, onBack }) => {
   const [direction, setDirection] = useState(1);
   const [targetPosition, setTargetPosition] = useState(50);
   const [targetWidth, setTargetWidth] = useState(12);
-  const [gameStartTime, setGameStartTime] = useState(null);
+
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   
@@ -18,28 +18,28 @@ const BarraReflejos = ({ playerName, onBack }) => {
   // Configuración de dificultades
   const difficulties = {
     EASY: {
-      initialWidth: 24,
-      minWidth: 12,
-      shrinkRate: 1.5,
-      speed: 2.2,
+      initialWidth: 22,
+      minWidth: 11, // Mitad de la diana inicial (22/2 = 11)
+      shrinkRate: 1.5, // Reducción más lenta y uniforme
+      speed: 2.0, // Velocidad uniforme para todas las dificultades
       label: 'Fácil',
       color: 'bg-green-400',
       lightColor: 'bg-green-100 text-green-800'
     },
     MEDIUM: {
-      initialWidth: 16,
-      minWidth: 6,
-      shrinkRate: 2,
-      speed: 3.2,
+      initialWidth: 12,
+      minWidth: 6, // Mitad de la diana inicial (12/2 = 6)
+      shrinkRate: 1.5, // Reducción más lenta y uniforme
+      speed: 2.0, // Velocidad uniforme para todas las dificultades
       label: 'Medio',
       color: 'bg-yellow-400',
       lightColor: 'bg-yellow-100 text-yellow-800'
     },
     HARD: {
-      initialWidth: 10,
-      minWidth: 3,
-      shrinkRate: 2.5,
-      speed: 4.5,
+      initialWidth: 6,
+      minWidth: 3, // Mitad de la diana inicial (6/2 = 3)
+      shrinkRate: 1.5, // Reducción más lenta y uniforme
+      speed: 2.0, // Velocidad uniforme para todas las dificultades
       label: 'Difícil',
       color: 'bg-red-400',
       lightColor: 'bg-red-100 text-red-800'
@@ -61,26 +61,57 @@ const BarraReflejos = ({ playerName, onBack }) => {
     localStorage.setItem('reflexHistory', JSON.stringify(updatedHistory));
   };
 
+  // Estados para el sistema de reducción
+  const [gameStartTime, setGameStartTime] = useState(0);
+  const [lastShrinkTime, setLastShrinkTime] = useState(0);
+
+  // Estado para velocidad aleatoria
+  const [currentSpeed, setCurrentSpeed] = useState(2.0);
+
   // Iniciar juego
   const startGame = () => {
     const config = difficulties[difficulty];
+
+    // Aleatorizar velocidad sutilmente (±10% para mantener dificultad pero romper predictibilidad)
+    const baseSpeed = config.speed; // 2.0 para todas las dificultades
+
+    // Usar distribución más uniforme y sutil: ±10% en lugar de ±15%
+    const variationRange = 0.2; // ±10% (0.9x a 1.1x)
+    const randomVariation = 0.9 + (Math.random() * variationRange); // Entre 0.9x y 1.1x
+    const randomizedSpeed = baseSpeed * randomVariation; // Entre 1.8 y 2.2
+
+    // Calcular porcentaje de variación para mostrar al jugador
+    const variationPercentage = ((randomVariation - 1) * 100);
+
+    // Aleatorizar posición y dirección inicial
+    const initialPosition = Math.random() * 20; // Entre 0% y 20%
+    const initialDirection = Math.random() < 0.5 ? 1 : -1; // Izquierda o derecha aleatoriamente
+
     setTargetPosition(Math.random() * 80 + 10); // Entre 10% y 90%
     setTargetWidth(config.initialWidth);
-    setCirclePosition(0);
-    setDirection(1);
-    setGameStartTime(Date.now());
+    setCirclePosition(initialPosition);
+    setDirection(initialDirection);
+    setCurrentSpeed(randomizedSpeed);
+
+    const now = Date.now();
+    setGameStartTime(now);
+    setLastShrinkTime(now);
     setGameState('playing');
     setResult(null);
+
+    console.log(`🎮 Juego iniciado - Velocidad: ${randomizedSpeed.toFixed(2)} (${variationPercentage >= 0 ? '+' : ''}${variationPercentage.toFixed(1)}% de velocidad base)`);
   };
 
-  // Animación del círculo a 60fps
+  // Animación del círculo a 60fps CON reducción de diana integrada
   const animate = useCallback(() => {
     if (gameState !== 'playing') return;
 
     const config = difficulties[difficulty];
+    const now = Date.now();
 
+    // Mover círculo usando la velocidad aleatorizada
     setCirclePosition(prev => {
-      let newPos = prev + direction * config.speed; // Velocidad normal para 60fps fluidos
+      let newPos = prev + direction * currentSpeed;
 
       // Rebote en los bordes
       if (newPos >= 100) {
@@ -94,22 +125,21 @@ const BarraReflejos = ({ playerName, onBack }) => {
       return newPos;
     });
 
+    // Reducir diana cada 2 segundos (2000ms) para que sea más lento
+    if (now - lastShrinkTime >= 2000) {
+      setTargetWidth(prev => {
+        const newWidth = prev - config.shrinkRate;
+        const finalWidth = Math.max(newWidth, config.minWidth);
+
+        console.log(`[${new Date(now).toLocaleTimeString()}] Diana: ${prev.toFixed(1)}% → ${finalWidth.toFixed(1)}%`);
+
+        return finalWidth;
+      });
+      setLastShrinkTime(now);
+    }
+
     animationRef.current = requestAnimationFrame(animate);
-  }, [gameState, difficulty, direction, difficulties]);
-
-  // Reducir tamaño de la diana de forma continua
-  useEffect(() => {
-    if (gameState !== 'playing') return;
-
-    const interval = setInterval(() => {
-      const config = difficulties[difficulty];
-      const elapsed = (Date.now() - gameStartTime) / 1000;
-      const newWidth = config.initialWidth - config.shrinkRate * elapsed;
-      setTargetWidth(Math.max(newWidth, config.minWidth));
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [gameState, difficulty, gameStartTime, difficulties]);
+  }, [gameState, difficulty, direction, difficulties, lastShrinkTime, currentSpeed]);
 
   // Iniciar animación
   useEffect(() => {
@@ -140,7 +170,9 @@ const BarraReflejos = ({ playerName, onBack }) => {
       circlePosition: circlePosition.toFixed(1),
       targetPosition: targetPosition.toFixed(1),
       timestamp: new Date().toLocaleString(),
-      duration: ((Date.now() - gameStartTime) / 1000).toFixed(1)
+      duration: ((Date.now() - gameStartTime) / 1000).toFixed(1),
+      speed: currentSpeed.toFixed(2),
+      speedVariation: ((currentSpeed / 2.0 - 1) * 100).toFixed(1)
     };
 
     setResult(gameResult);
@@ -208,8 +240,8 @@ const BarraReflejos = ({ playerName, onBack }) => {
               <h3 className="text-lg font-semibold text-white mb-3 text-center">Cómo Jugar</h3>
               <div className="text-sm text-gray-300 space-y-2 text-center">
                 <p>• Toca la pantalla cuando el círculo esté en la zona diana</p>
-                <p>• La diana se reduce cada segundo que pases</p>
-                <p>• Cuanto más difícil, más pequeña la diana y más rápida la bola</p>
+                <p>• La diana se reduce gradualmente cada 2 segundos</p>
+                <p>• Cuanto más difícil, más pequeña la diana inicial</p>
               </div>
             </div>
 
@@ -229,7 +261,13 @@ const BarraReflejos = ({ playerName, onBack }) => {
             {/* Info del juego */}
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
               <p className="text-white font-semibold">Dificultad: {difficulties[difficulty].label}</p>
-              <p className="text-gray-300 text-sm">Diana: {targetWidth.toFixed(1)}%</p>
+              <p className="text-gray-300 text-sm">Diana: {targetWidth.toFixed(1)}% (Mín: {difficulties[difficulty].minWidth}%)</p>
+              <p className="text-blue-400 text-xs">
+                Velocidad: {currentSpeed.toFixed(2)}
+                <span className="text-yellow-400 ml-1">
+                  ({((currentSpeed / 2.0 - 1) * 100) >= 0 ? '+' : ''}{((currentSpeed / 2.0 - 1) * 100).toFixed(1)}%)
+                </span>
+              </p>
             </div>
 
             {/* Área de juego */}
@@ -247,10 +285,12 @@ const BarraReflejos = ({ playerName, onBack }) => {
               <div className="relative w-full h-2 bg-gray-600 rounded-full mb-8">
                 {/* Diana */}
                 <div
-                  className="absolute h-full bg-yellow-400 rounded-full opacity-70"
+                  className="absolute h-full bg-yellow-400 rounded-full opacity-70 transition-all duration-1000 ease-in-out"
                   style={{
                     left: `${targetPosition - targetWidth / 2}%`,
-                    width: `${targetWidth}%`
+                    width: `${targetWidth}%`,
+                    boxShadow: '0 0 12px rgba(255, 255, 0, 0.8)',
+                    border: '1px solid rgba(255, 255, 0, 0.9)'
                   }}
                 />
                 
@@ -304,6 +344,12 @@ const BarraReflejos = ({ playerName, onBack }) => {
                 <p className="text-white">
                   <span className="font-medium">Tamaño diana:</span> {result.targetWidth}%
                 </p>
+                <p className="text-white">
+                  <span className="font-medium">Velocidad:</span> {result.speed}
+                  <span className="text-yellow-400 ml-1">
+                    ({result.speedVariation >= 0 ? '+' : ''}{result.speedVariation}%)
+                  </span>
+                </p>
                 <p className="text-gray-300 text-sm">
                   Círculo en {result.circlePosition}% | Diana en {result.targetPosition}%
                 </p>
@@ -339,6 +385,14 @@ const BarraReflejos = ({ playerName, onBack }) => {
                       <p className="text-white font-medium">{entry.player}</p>
                       <p className="text-gray-300">
                         {entry.difficulty} - {entry.duration}s
+                        {entry.speed && (
+                          <span className="text-blue-400 ml-2">
+                            Vel: {entry.speed}
+                            <span className="text-yellow-400 ml-1">
+                              ({entry.speedVariation >= 0 ? '+' : ''}{entry.speedVariation}%)
+                            </span>
+                          </span>
+                        )}
                       </p>
                       <p className={`font-bold ${
                         entry.success ? 'text-green-400' : 'text-red-400'

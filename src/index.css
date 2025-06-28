@@ -282,15 +282,22 @@ input[type="number"] {
   background: #9ca3af;
 }
 
-/* Mejoras de accesibilidad */
+/* Mejoras de accesibilidad - Versión menos restrictiva */
 @media (prefers-reduced-motion: reduce) {
+  /* Solo desactivar animaciones complejas, mantener transiciones básicas */
   .animate-gradient,
   .animate-glow,
-  .transition-transform,
-  .transition-colors,
-  .transition-all {
+  .animate-bounce,
+  .animate-pulse,
+  .animate-spin {
     animation: none !important;
-    transition: none !important;
+  }
+
+  /* Reducir duración de transiciones pero no eliminarlas completamente */
+  .transition-all,
+  .transition-transform,
+  .transition-colors {
+    transition-duration: 0.1s !important;
   }
 }
 
@@ -350,4 +357,23 @@ input[type="number"] {
 
 .status-indicator.warning::after {
   background: #f59e0b;
+}
+
+/* ─── Aurora minimalista para actores simultáneos ─── */
+@keyframes borderPulse {
+  0%, 100% { 
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  }
+  50% { 
+    border-color: #fbbf24;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+  }
+}
+
+.simul {
+  background: linear-gradient(135deg, #1e293b, #334155, #475569);
+  border: 2px solid;
+  animation: borderPulse 4s ease-in-out infinite;
+  position: relative;
 }

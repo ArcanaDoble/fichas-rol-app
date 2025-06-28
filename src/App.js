@@ -21,11 +21,9 @@ import LoadingSpinner from './components/LoadingSpinner';
 import Modal, { ConfirmModal, useModal } from './components/Modal';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
+import InitiativeTracker from './components/InitiativeTracker';
 import { Tooltip } from 'react-tooltip';
-import { useConfirm } from './components/Confirm';
-import useResourcesHook from './hooks/useResources';
-import useGlossary from './hooks/useGlossary';
-
+import { AnimatePresence, motion } from 'framer-motion';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
@@ -296,6 +294,9 @@ function App() {
   // Minijuego Barra-Reflejos
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
 
+  // Sistema de Iniciativa
+  const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -359,6 +360,9 @@ function App() {
     setNewClaveColor('#ffffff');
     setNewClaveTotal(0);
     setNewClaveError('');
+    setShowDiceCalculator(false);
+    setShowBarraReflejos(false);
+    setShowInitiativeTracker(false);
   };
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
@@ -371,9 +375,18 @@ function App() {
   // ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (userType === 'player') {
-      getDocs(collection(db, 'players')).then(snap =>
-        setExistingPlayers(snap.docs.map(d => d.id))
-      );
+      console.log('🔍 Intentando cargar jugadores existentes...');
+      getDocs(collection(db, 'players'))
+        .then(snap => {
+          const players = snap.docs.map(d => d.id);
+          console.log('✅ Jugadores cargados:', players);
+          setExistingPlayers(players);
+        })
+        .catch(error => {
+          console.error('❌ Error cargando jugadores:', error);
+          console.error('Código de error:', error.code);
+          console.error('Mensaje:', error.message);
+        });
     }
   }, [userType]);
 
@@ -502,24 +515,11 @@ function App() {
   // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
     if (!nameEntered) return;
-    const ref = doc(db, 'players', playerName);
-    let snap;
+    console.log(`🔍 Intentando cargar jugador: ${playerName}`);
+
     try {
-      snap = await getDoc(ref);
-    } catch (e) {
-      console.error(e);
-      const stored = typeof window !== 'undefined'
-        ? window.localStorage.getItem(`player_${playerName}`)
-        : null;
-      if (stored) {
-        const d = JSON.parse(stored);
-        setResourcesList(d.resourcesList || []);
-        setClaves(d.claves || []);
-        setEstados(d.estados || []);
-        setPlayerData(applyCargaPenalties(d, armas, armaduras));
-      }
-      return;
-    }
+      const ref = doc(db, 'players', playerName);
+      const snap = await getDoc(ref);
 
     // Atributos por defecto
     const baseA = {};
@@ -569,38 +569,55 @@ function App() {
         stats:     statsInit,
         cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
       };
+      console.log('✅ Jugador cargado exitosamente:', playerName);
       setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
 
     } else {
-      const stored = typeof window !== 'undefined'
-        ? window.localStorage.getItem(`player_${playerName}`)
-        : null;
-      if (stored) {
-        const d = JSON.parse(stored);
-        setResourcesList(d.resourcesList || []);
-        setClaves(d.claves || []);
-        setEstados(d.estados || []);
-        setPlayerData(applyCargaPenalties(d, armas, armaduras));
-      } else {
-        // Si no existe en Firestore ni en localStorage, crear con valores predeterminados
-        const baseS = {};
-        defaultRecursos.forEach(r => {
-          baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
-        });
-        const lista = defaultRecursos.map(id => ({
-          id,
-          name: id,
-          color: recursoColor[id] || '#ffffff',
-          info: recursoInfo[id] || ''
-        }));
-        setResourcesList(lista);
-        setClaves([]);
-        setEstados([]);
-        const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
-        setPlayerData(applyCargaPenalties(created, armas, armaduras));
-      }
+      // Si no existe en Firestore, crear con valores predeterminados
+      console.log('ℹ️ Jugador no existe, creando nuevo:', playerName);
+      const baseS = {};
+      defaultRecursos.forEach(r => {
+        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+      });
+      const lista = defaultRecursos.map(id => ({
+        id,
+        name: id,
+        color: recursoColor[id] || '#ffffff',
+        info: recursoInfo[id] || ''
+      }));
+      setResourcesList(lista);
+      setClaves([]);
+      setEstados([]);
+      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
-  }, [armas, armaduras, nameEntered, playerName]);
+
+    } catch (error) {
+      console.error('❌ Error cargando jugador:', error);
+      console.error('Código de error:', error.code);
+      console.error('Mensaje:', error.message);
+
+      // En caso de error, crear jugador por defecto
+      const baseAError = {};
+      atributos.forEach(k => (baseAError[k] = 'D4'));
+
+      const baseS = {};
+      defaultRecursos.forEach(r => {
+        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
+      });
+      const lista = defaultRecursos.map(id => ({
+        id,
+        name: id,
+        color: recursoColor[id] || '#ffffff',
+        info: recursoInfo[id] || ''
+      }));
+      setResourcesList(lista);
+      setClaves([]);
+      setEstados([]);
+      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseAError, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
+      setPlayerData(applyCargaPenalties(created, armas, armaduras));
+    }
+  }, [nameEntered, playerName]);
 
   // useEffect que llama a loadPlayer
   useEffect(() => {
@@ -698,6 +715,31 @@ function App() {
     eliminarRecurso(id);
   };
 
+
+  // Funciones para reordenar estadísticas
+  const moveStatUp = (index) => {
+    if (index === 0) return; // Ya está en la primera posición
+
+    const newList = [...resourcesList];
+    const temp = newList[index];
+    newList[index] = newList[index - 1];
+    newList[index - 1] = temp;
+
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
+  };
+
+  const moveStatDown = (index) => {
+    if (index === resourcesList.length - 1) return; // Ya está en la última posición
+
+    const newList = [...resourcesList];
+    const temp = newList[index];
+    newList[index] = newList[index + 1];
+    newList[index + 1] = temp;
+
+    setResourcesList(newList);
+    savePlayer(playerData, newList);
+  };
 
   const agregarHabilidad = async () => {
     const { nombre } = newAbility;
@@ -1303,7 +1345,8 @@ function App() {
 
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.2</p>
+            <p className="text-xs text-gray-500">Adición del Sistema de gestión de Velocidad.</p>
           </div>
         </div>
       </div>
@@ -1513,6 +1556,24 @@ function App() {
     return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
   }
 
+  // SISTEMA DE INICIATIVA
+  if (userType === 'player' && nameEntered && showInitiativeTracker) {
+    return <InitiativeTracker 
+      playerName={playerName} 
+      isMaster={authenticated} 
+      glossary={glossary}
+      playerEquipment={{
+        weapons: playerData.weapons,
+        armaduras: playerData.armaduras,
+        poderes: playerData.poderes
+      }}
+      armas={armas}
+      armaduras={armaduras}
+      habilidades={habilidades}
+      onBack={() => setShowInitiativeTracker(false)} 
+    />;
+  }
+
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
@@ -1536,6 +1597,14 @@ function App() {
               className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
             >
               🔒
+            </Boton>
+
+            {/* Botón de sistema de iniciativa */}
+            <Boton
+              onClick={() => setShowInitiativeTracker(true)}
+              className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+            >
+              ⚡
             </Boton>
           </div>
 
@@ -1579,7 +1648,7 @@ function App() {
           {/* ESTADÍSTICAS */}
           <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
           <div className="flex flex-col gap-4 w-full mb-8">
-            {resourcesList.map(({ id: r, name, color, info }) => {
+            {resourcesList.map(({ id: r, name, color, info }, index) => {
               const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
@@ -1602,8 +1671,13 @@ function App() {
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
 
               return (
-                <div key={r} className="bg-gray-800 rounded-xl p-4 shadow w-full">
-                  {/* Nombre centrado y X a la derecha, en la misma fila */}
+                <motion.div
+                  key={r}
+                  layout="position"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  className="bg-gray-800 rounded-xl p-4 shadow w-full"
+                >
+                  {/* Nombre centrado y controles a la derecha, en la misma fila */}
                   <div className="relative flex items-center w-full mb-4 min-h-[2rem]">
                     {editingInfoId === r ? (
                       <textarea
@@ -1636,13 +1710,46 @@ function App() {
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
-                    <button
-                    onClick={() => handleEliminarRecurso(r)}
-                      className="absolute right-0 text-red-400 hover:text-red-200 text-sm font-bold"
-                      title="Eliminar esta estadística"
-                    >
-                      ❌
-                    </button>
+
+                    {/* Controles de reordenamiento y eliminación */}
+                    <div className="absolute right-0 flex items-center gap-1">
+                      {/* Botón subir */}
+                      <button
+                        onClick={() => moveStatUp(index)}
+                        disabled={index === 0}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
+                          index === 0
+                            ? 'text-gray-600 cursor-not-allowed'
+                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                        }`}
+                        title="Mover hacia arriba"
+                      >
+                        ↑
+                      </button>
+
+                      {/* Botón bajar */}
+                      <button
+                        onClick={() => moveStatDown(index)}
+                        disabled={index === resourcesList.length - 1}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
+                          index === resourcesList.length - 1
+                            ? 'text-gray-600 cursor-not-allowed'
+                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                        }`}
+                        title="Mover hacia abajo"
+                      >
+                        ↓
+                      </button>
+
+                      {/* Botón eliminar */}
+                      <button
+                        onClick={() => eliminarRecurso(r)}
+                        className="w-6 h-6 flex items-center justify-center text-xs font-bold text-red-400 hover:text-red-200 hover:bg-red-900/30 rounded transition-all duration-200"
+                        title="Eliminar esta estadística"
+                      >
+                        ❌
+                      </button>
+                    </div>
                   </div>
 
                   {/* Inputs y botones */}
@@ -1707,7 +1814,7 @@ function App() {
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -1723,7 +1830,7 @@ function App() {
             </div>
           )}
 
-          {/* FORMULARIO “Añadir recurso” */}
+          {/* FORMULARIO "Añadir recurso" */}
           {resourcesList.length < 6 && (
             <div className="w-full max-w-md mx-auto mb-4">
               {!showAddResForm ? (
@@ -2143,7 +2250,7 @@ function App() {
 
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
-    return <MasterMenu onSelect={setChosenView} />;
+    return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
 
   if (userType === 'master' && authenticated && chosenView === 're4') {
@@ -2165,6 +2272,16 @@ function App() {
     );
   }
 
+  if (userType === 'master' && authenticated && chosenView === 'initiative') {
+    return <InitiativeTracker 
+      playerName="Master" 
+      isMaster={true} 
+      enemies={enemies}
+      glossary={glossary}
+      onBack={() => setChosenView(null)} 
+    />;
+  }
+
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
@@ -2184,53 +2301,60 @@ function App() {
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {enemies.map((enemy) => (
-            <div key={enemy.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-              {/* Retrato del enemigo */}
-              {enemy.portrait && (
-                <div className="w-full h-32 mb-3 rounded-lg overflow-hidden bg-gray-700">
-                  <img
-                    src={enemy.portrait}
-                    alt={enemy.name}
-                    className="w-full h-full object-cover"
-                  />
+            <Tarjeta key={enemy.id} variant="magic" className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl">
+              <div className="flex flex-col h-full">
+                {/* Imagen tipo Magic */}
+                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30">
+                  {enemy.portrait ? (
+                    <img
+                      src={enemy.portrait}
+                      alt={enemy.name}
+                      className="w-full h-full object-cover object-center"
+                      style={{ background: '#222' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">👹</div>
+                  )}
                 </div>
-              )}
-
-              <h3 className="text-lg font-bold text-white mb-2">{enemy.name}</h3>
-              {enemy.description && (
-                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{enemy.description}</p>
-              )}
-
-              <div className="flex gap-2">
-                <Boton
-                  color="blue"
-                  size="sm"
-                  onClick={() => editEnemy(enemy)}
-                  className="flex-1"
-                >
-                  Editar
-                </Boton>
-                <Boton
-                  color="purple"
-                  size="sm"
-                  onClick={() => setSelectedEnemy(enemy)}
-                  className="flex-1"
-                >
-                  Ver Ficha
-                </Boton>
-                <Boton
-                  color="red"
-                  size="sm"
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                      deleteEnemy(enemy.id);
-                    }
-                  }}
-                >
-                  🗑️
-                </Boton>
+                {/* Nombre y descripción */}
+                <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
+                  <h3 className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider" style={{ textShadow: '0 2px 8px #000a' }}>{enemy.name}</h3>
+                  {enemy.description && (
+                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">{enemy.description}</p>
+                  )}
+                </div>
+                {/* Acciones */}
+                <div className="flex gap-2 px-4 pb-4 pt-2 justify-center border-t border-yellow-900/20">
+                  <Boton
+                    color="blue"
+                    size="sm"
+                    onClick={() => editEnemy(enemy)}
+                    className="flex-1"
+                  >
+                    Editar
+                  </Boton>
+                  <Boton
+                    color="purple"
+                    size="sm"
+                    onClick={() => setSelectedEnemy(enemy)}
+                    className="flex-1"
+                  >
+                    Ver Ficha
+                  </Boton>
+                  <Boton
+                    color="red"
+                    size="sm"
+                    onClick={() => {
+                      if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                        deleteEnemy(enemy.id);
+                      }
+                    }}
+                  >
+                    🗑️
+                  </Boton>
+                </div>
               </div>
-            </div>
+            </Tarjeta>
           ))}
         </div>
 
@@ -2273,11 +2397,12 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     />
                     {newEnemy.portrait && (
-                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700">
+                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
                         <img
                           src={newEnemy.portrait}
                           alt="Preview"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-center rounded-lg shadow border border-gray-800"
+                          style={{ background: '#222' }}
                         />
                       </div>
                     )}
@@ -2700,11 +2825,12 @@ function App() {
                 {/* Columna 1: Retrato e información básica */}
                 <div className="space-y-4">
                   {selectedEnemy.portrait && (
-                    <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-700">
+                    <div className="w-full aspect-square max-w-xs mx-auto rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
                       <img
                         src={selectedEnemy.portrait}
                         alt={selectedEnemy.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-center rounded-lg shadow-md border border-gray-800"
+                        style={{ background: '#222' }}
                       />
                     </div>
                   )}

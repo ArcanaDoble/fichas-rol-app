@@ -7,7 +7,7 @@ const variantStyles = {
     fallbackIcon: '⚔️',
     gradient: 'from-red-900/20 to-orange-900/20',
     border: 'border-red-700/50 hover:border-red-600/70',
-    glow: 'hover:shadow-red-500/20',
+    glow: '',
   },
   armor: {
     icon: '/marcas/Armadura.png',
@@ -22,6 +22,11 @@ const variantStyles = {
     gradient: 'from-purple-900/20 to-pink-900/20',
     border: 'border-purple-700/50 hover:border-purple-600/70',
     glow: 'hover:shadow-purple-500/20',
+  },
+  magic: {
+    gradient: 'from-yellow-100/10 to-purple-900/30',
+    border: 'border-yellow-900/40 hover:border-yellow-400/80',
+    glow: '',
   },
   default: {
     gradient: 'from-gray-900/20 to-gray-800/20',
@@ -64,7 +69,7 @@ const Tarjeta = ({
   const interactiveClasses = interactive ? `
     transform hover:-translate-y-1 hover:scale-[1.02]
     cursor-pointer
-    ${style.glow} hover:shadow-xl
+    ${style.glow} hover:shadow-lg hover:bg-yellow-100/10 hover:bg-gradient-to-br hover:from-yellow-200/10 hover:to-purple-900/30
   ` : '';
 
   const cardClasses = `
@@ -72,7 +77,28 @@ const Tarjeta = ({
     ${interactiveClasses}
     ${style.border}
     ${className}
+    ${variant === 'magic' ? 'transition-transform duration-300 will-change-transform z-10 sm:z-30 relative' : 'relative'}
   `;
+
+  const cardStyle = variant === 'magic'
+    ? {
+        boxShadow: isHovered ? '0 8px 32px 0 #000a, 0 0 0 4px #facc15aa' : '0 2px 12px 0 #0006',
+        transform: isHovered ? 'scale(1.04) translateZ(0.1px)' : 'scale(1)',
+        zIndex: isHovered ? 50 : 10,
+        borderRadius: '1.25rem',
+        overflow: 'visible',
+        minHeight: '320px',
+        maxWidth: '420px',
+        margin: 'auto',
+      }
+    : {
+        boxShadow: '0 2px 12px 0 #0006',
+        borderRadius: '1rem',
+        overflow: 'hidden',
+        minHeight: 'unset',
+        maxWidth: 'unset',
+        margin: 'unset',
+      };
 
   const handleMouseEnter = () => {
     if (interactive) setIsHovered(true);
@@ -88,15 +114,16 @@ const Tarjeta = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={onClick}
-      {...props}
+      style={cardStyle}
+      tabIndex={0}
     >
       {/* Gradient overlay */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} opacity-50`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} ${variant === 'magic' ? 'opacity-50' : 'opacity-20'} pointer-events-none`} />
 
       {/* Animated border glow */}
-      {isHovered && (
+      {/* {isHovered && (
         <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
-      )}
+      )} */}
 
       {/* Loading overlay */}
       {loading && (
@@ -159,28 +186,28 @@ const Tarjeta = ({
       )}
 
       {/* Content */}
-      <div className="relative z-10 p-4">
+      <div className={`relative z-10 ${variant === 'magic' ? 'p-2 sm:p-4 flex flex-col h-full min-h-[260px]' : 'p-3'} `}>
         {header && (
-          <div className="mb-3 pb-3 border-b border-gray-600/50">
+          <div className="mb-2 pb-2 border-b border-gray-600/50 text-center text-base font-bold tracking-wide text-yellow-200 drop-shadow">
             {header}
           </div>
         )}
 
-        <div className={loading ? 'opacity-50' : ''}>
+        <div className={`flex-1 flex flex-col justify-between ${loading ? 'opacity-50' : ''}`}>
           {children}
         </div>
 
         {footer && (
-          <div className="mt-3 pt-3 border-t border-gray-600/50">
+          <div className="mt-2 pt-2 border-t border-gray-600/50 text-center text-xs text-gray-300">
             {footer}
           </div>
         )}
       </div>
 
       {/* Shine effect on hover */}
-      {isHovered && (
+      {/* {isHovered && (
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform -skew-x-12 translate-x-full animate-pulse" />
-      )}
+      )} */}
     </div>
   );
 };

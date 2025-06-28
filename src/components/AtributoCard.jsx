@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 
@@ -15,7 +16,24 @@ const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
       style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
     >
       <p className="text-lg font-bold capitalize mb-2">{name}</p>
-      <img src={dadoImgUrl(value)} alt={value} className="w-12 h-12 mb-2" />
+      <div
+        className="w-16 h-16 mb-2 flex items-center justify-center relative overflow-hidden rounded-full bg-gradient-to-br from-white/80 via-gray-100/80 to-gray-300/60 shadow-inner border-2 border-white/60"
+        style={{ boxShadow: `0 2px 12px 0 ${color}44` }}
+      >
+        <AnimatePresence initial={false} mode="wait">
+          <motion.img
+            key={value}
+            src={dadoImgUrl(value)}
+            alt={value}
+            className="w-12 h-12 select-none pointer-events-none"
+            initial={{ opacity: 0, x: 30, scale: 0.85 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -30, scale: 0.85 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30, duration: 0.25 }}
+            draggable={false}
+          />
+        </AnimatePresence>
+      </div>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}

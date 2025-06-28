@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
 
-const MasterMenu = ({ onSelect }) => {
+const MasterMenu = ({ onSelect, onBackToMain }) => {
   const [selectedOption, setSelectedOption] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,6 +30,14 @@ const MasterMenu = ({ onSelect }) => {
       description: 'Sistema avanzado con grid 10×8, drag & drop y rotación',
       color: 'green',
       features: ['Grid 10×8', 'Drag & Drop', 'Rotación', 'Persistencia'],
+      isNew: true,
+    },
+    {
+      id: 'initiative',
+      title: 'Sistema de Velocidad',
+      description: 'Control total del combate con iniciativa y gestión de participantes',
+      color: 'blue',
+      features: ['Control Master', 'Enemigos', 'Velocidad', 'Tiempo Real'],
       isNew: true,
     },
     {
@@ -146,8 +154,15 @@ const MasterMenu = ({ onSelect }) => {
           ))}
         </div>
 
-        {/* Footer minimalista */}
-        <div className="text-center space-y-2 border-t border-gray-700 pt-6">
+        {/* Footer con botón de volver */}
+        <div className="text-center space-y-4 border-t border-gray-700 pt-6">
+          <Boton
+            color="gray"
+            className="py-3 px-6 rounded-lg font-semibold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+            onClick={onBackToMain}
+          >
+            ← Volver al menú principal
+          </Boton>
           <p className="text-sm font-medium text-gray-400">Fichas de Rol • Versión 2.1</p>
         </div>
       </div>
