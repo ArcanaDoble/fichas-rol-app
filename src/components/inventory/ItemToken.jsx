@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { useDrag } from 'react-dnd';
 import { Tooltip } from 'react-tooltip';
 
@@ -64,6 +65,13 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
       <Tooltip id={`item-${id}`} place="top" className="max-w-[90vw] sm:max-w-xs" />
     </div>
   );
+};
+
+ItemToken.propTypes = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  type: PropTypes.string,
+  count: PropTypes.number,
+  fromSlot: PropTypes.number,
 };
 
 export default ItemToken;

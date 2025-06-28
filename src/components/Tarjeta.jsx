@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 
 const variantStyles = {
   weapon: {
@@ -209,6 +210,12 @@ const Tarjeta = ({
       )} */}
     </div>
   );
+};
+
+Tarjeta.propTypes = {
+  children: PropTypes.node,
+  className: PropTypes.string,
+  variant: PropTypes.string,
 };
 
 export default Tarjeta;

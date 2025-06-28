@@ -1,8 +1,9 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
+export const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 
 const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
   const index = DADOS.indexOf(value);
@@ -56,6 +57,14 @@ const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
       </button>
     </div>
   );
+};
+
+AtributoCard.propTypes = {
+  name: PropTypes.string.isRequired,
+  value: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
+  color: PropTypes.string,
+  dadoImgUrl: PropTypes.func.isRequired,
 };
 
 export default AtributoCard;

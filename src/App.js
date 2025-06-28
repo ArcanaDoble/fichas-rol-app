@@ -1,5 +1,6 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import fetchSheetData from './utils/fetchSheetData';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -9,9 +10,9 @@ import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
-import AtributoCard from './components/AtributoCard';
+import AtributoCard, { DADOS } from './components/AtributoCard';
 import Collapsible from './components/Collapsible';
-import EstadoSelector, { ESTADOS } from './components/EstadoSelector';
+import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import InventoryRE4 from './components/re4/InventoryRE4';
@@ -26,7 +27,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
-const MASTER_PASSWORD = '0904';
+const MASTER_PASSWORD = process.env.REACT_APP_MASTER_PASSWORD || '';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
@@ -53,7 +54,6 @@ const recursoInfo = {
   armadura: 'Explicación de Armadura',
 };
 
-const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
@@ -150,11 +150,30 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // STATES
   // ───────────────────────────────────────────────────────────
+  const confirm = useConfirm();
   const [userType, setUserType]               = useState(null);
   const [showLogin, setShowLogin]             = useState(false);
   const [passwordInput, setPasswordInput]     = useState('');
   const [authenticated, setAuthenticated]     = useState(false);
   const [authError, setAuthError]             = useState('');
+
+  const handleLogin = () => {
+    if (passwordInput === MASTER_PASSWORD) {
+      setAuthenticated(true);
+      setShowLogin(false);
+      setAuthError('');
+    } else {
+      setAuthError('Contraseña incorrecta');
+    }
+  };
+
+  const resetLogin = () => {
+    setUserType(null);
+    setShowLogin(false);
+    setPasswordInput('');
+    setAuthenticated(false);
+    setAuthError('');
+  };
   const [armas, setArmas]                     = useState([]);
   const [armaduras, setArmaduras]             = useState([]);
   const [habilidades, setHabilidades]         = useState([]);
@@ -172,17 +191,29 @@ function App() {
   const [playerPoderError, setPlayerPoderError] = useState('');
 
   // Recursos dinámicos (añadir / eliminar)
-  const [resourcesList, setResourcesList] = useState(
+  const {
+    resourcesList,
+    setResourcesList,
+    showAddResForm,
+    setShowAddResForm,
+    newResName,
+    setNewResName,
+    newResColor,
+    setNewResColor,
+    newResError,
+    setNewResError,
+    agregarRecurso,
+    eliminarRecurso,
+  } = useResourcesHook(
     defaultRecursos.map(name => ({
       id: name,
       name,
       color: recursoColor[name] || '#ffffff',
       info: recursoInfo[name] || ''
-    }))
+    })),
+    (data, list) => savePlayer(data, list),
+    playerData
   );
-  const [newResName, setNewResName]   = useState('');
-  const [newResColor, setNewResColor] = useState('#ffffff');
-  const [newResError, setNewResError] = useState('');
   const [newAbility, setNewAbility] = useState({
     nombre: '',
     alcance: '',
@@ -194,9 +225,6 @@ function App() {
   });
   const [editingAbility, setEditingAbility] = useState(null);
   const [newAbilityError, setNewAbilityError] = useState('');
-  const [showAddResForm, setShowAddResForm] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 640 : false
-  );
   const [searchTerm, setSearchTerm]   = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
   const [editingInfoText, setEditingInfoText] = useState('');
@@ -247,10 +275,18 @@ function App() {
   const [chosenView, setChosenView] = useState(null);
 
   // Glosario de términos destacados
-  const [glossary, setGlossary] = useState([]);
-  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
-  const [editingTerm, setEditingTerm] = useState(null);
-  const [newTermError, setNewTermError] = useState('');
+  const {
+    glossary,
+    newTerm,
+    setNewTerm,
+    editingTerm,
+    setEditingTerm,
+    newTermError,
+    saveTerm,
+    startEditTerm,
+    deleteTerm,
+    fetchGlossary,
+  } = useGlossary();
 
   // Calculadora de dados
   const [showDiceCalculator, setShowDiceCalculator] = useState(false);
@@ -299,13 +335,10 @@ function App() {
   // NAVIGATION
   // ───────────────────────────────────────────────────────────
   const volverAlMenu = () => {
-    setUserType(null);
-    setAuthenticated(false);
-    setShowLogin(false);
+    resetLogin();
     setChosenView(null);
     setNameEntered(false);
     setPlayerName('');
-    setPasswordInput('');
     setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
     setPlayerError('');
     setPlayerInputArma('');
@@ -332,7 +365,7 @@ function App() {
     setShowInitiativeTracker(false);
   };
   const eliminarFichaJugador = async () => {
-    if (!window.confirm(`¿Eliminar ficha de ${playerName}?`)) return;
+    if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
     await deleteDoc(doc(db, 'players', playerName));
     volverAlMenu();
   };
@@ -360,38 +393,31 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
+  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID;
+
   const fetchArmas = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch(
-        'https://docs.google.com/spreadsheets/d/1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs/gviz/tq?sheet=Lista_Armas&tqx=out:json'
-      );
-      const txt  = await res.text();
-      const json = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-      const cols = json.table.cols.map(c => c.label || c.id);
-      const datos = (json.table.rows || []).map(r => {
-        const obj = {};
-        cols.forEach((l,i) => obj[l] = r.c[i]?.v || '');
+      const rows = await fetchSheetData(sheetId, 'Lista_Armas');
+      const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map(s => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
-          dano:    obj.DAÑO,
+          dano: obj.DAÑO,
           alcance: obj.ALCANCE,
           consumo: obj.CONSUMO,
-          carga:   obj.CARGA,
-          cuerpo:  obj.CUERPO,
-          mente:   obj.MENTE,
-          cargaFisica:
-            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental:
-            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+          carga: obj.CARGA,
+          cuerpo: obj.CUERPO,
+          mente: obj.MENTE,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          tipoDano:    obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
-          valor:       obj.VALOR || '',
-          tecnologia:  obj.TECNOLOGÍA || ''
+          tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+          valor: obj.VALOR || '',
+          tecnologia: obj.TECNOLOGÍA || '',
         };
       });
       setArmas(datos);
@@ -409,32 +435,23 @@ function App() {
   const fetchArmaduras = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch(
-        'https://docs.google.com/spreadsheets/d/1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs/gviz/tq?sheet=Lista_Armaduras&tqx=out:json'
-      );
-      const txt  = await res.text();
-      const json = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-      const cols = json.table.cols.map(c => c.label || c.id);
-      const datos = (json.table.rows || []).map(r => {
-        const obj = {};
-        cols.forEach((l,i) => obj[l] = r.c[i]?.v || '');
+      const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
+      const datos = rows.map((obj) => {
         const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[([^\]]+)\]/g) || []).map(s => s.replace(/[\[\]]/g, '').trim())
+          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
           : [];
         return {
           nombre: obj.NOMBRE,
           defensa: obj.ARMADURA,
-          cuerpo:  obj.CUERPO,
-          mente:   obj.MENTE,
-          carga:   obj.CARGA,
-          cargaFisica:
-            obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental:
-            obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+          cuerpo: obj.CUERPO,
+          mente: obj.MENTE,
+          carga: obj.CARGA,
+          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
           rasgos,
           descripcion: obj.DESCRIPCIÓN || '',
-          valor:       obj.VALOR || '',
-          tecnologia:  obj.TECNOLOGÍA || ''
+          valor: obj.VALOR || '',
+          tecnologia: obj.TECNOLOGÍA || '',
         };
       });
       setArmaduras(datos);
@@ -466,16 +483,6 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // FETCH GLOSARIO
   // ───────────────────────────────────────────────────────────
-  const fetchGlossary = useCallback(async () => {
-    try {
-      const snap = await getDocs(collection(db, 'glossary'));
-      const datos = snap.docs.map(d => d.data());
-      setGlossary(datos);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-  useEffect(() => { fetchGlossary() }, [fetchGlossary]);
 
   // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
@@ -634,7 +641,17 @@ function App() {
       updatedAt: new Date(),
     };
     setPlayerData(fullData);
-    await setDoc(doc(db, 'players', playerName), fullData);
+    try {
+      await setDoc(doc(db, 'players', playerName), fullData);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+      }
+    } catch (e) {
+      console.error(e);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+      }
+    }
   };
 
   // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso
@@ -679,78 +696,25 @@ function App() {
     savePlayer({ ...playerData, stats: newStats });
   };
 
-  const eliminarRecurso = (id) => {
+  const handleEliminarRecurso = async (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
       const icono = cargaFisicaIcon(carga);
-      if (!window.confirm(
+      if (!(await confirm(
         `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
-      )) return;
+      ))) return;
     }
     if (id === 'cordura') {
       const carga = playerData.cargaAcumulada?.mental || 0;
       const icono = cargaMentalIcon(carga);
-      if (!window.confirm(
+      if (!(await confirm(
         `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
-      )) return;
+      ))) return;
     }
-    const newStats = { ...playerData.stats };
-    delete newStats[id];
-    const newList = resourcesList.filter((r) => r.id !== id);
-    setResourcesList(newList);
-    savePlayer({ ...playerData, stats: newStats }, newList);
+
+    eliminarRecurso(id);
   };
 
-  const agregarRecurso = () => {
-    // No añadir si hay 6 o más recursos
-    if (resourcesList.length >= 6) return;
-
-    const nombre = newResName.trim();
-    if (!nombre) {
-      setNewResError('Nombre requerido');
-      return;
-    }
-    if (resourcesList.some(r => r.name.toLowerCase() === nombre.toLowerCase())) {
-      setNewResError('Ese nombre ya existe');
-      return;
-    }
-
-    setNewResError('');
-
-    const lower = nombre.toLowerCase();
-    const nuevoId = (lower === 'postura' || lower === 'cordura') ? lower : `recurso${Date.now()}`;
-    const color = lower === 'postura' ? '#34d399' : lower === 'cordura' ? '#a78bfa' : newResColor;
-
-    // Nueva lista de recursos
-    const nuevaLista = [
-      ...resourcesList,
-      {
-        id: nuevoId,
-        name: newResName || nuevoId,
-        color,
-        info: ''
-      }
-    ];
-
-    // Inicializar stats del recurso nuevo en 0
-    const nuevaStats = {
-      ...playerData.stats,
-      [nuevoId]: { base: 0, total: 0, actual: 0, buff: 0 }
-    };
-
-    // Actualizar estado local
-    setResourcesList(nuevaLista);
-
-    // Guardar en Firestore (se pasa la lista completa explícitamente)
-    savePlayer(
-      { ...playerData, stats: nuevaStats },
-      nuevaLista
-    );
-
-    // Limpiar el formulario
-    setNewResName('');
-    setNewResColor('#ffffff');
-  };
 
   // Funciones para reordenar estadísticas
   const moveStatUp = (index) => {
@@ -1084,15 +1048,6 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
-  const handleLogin = () => {
-    if (passwordInput === MASTER_PASSWORD) {
-      setAuthenticated(true);
-      setShowLogin(false);
-      setAuthError('');
-    } else {
-      setAuthError('Contraseña incorrecta');
-    }
-  };
   const enterPlayer = () => {
     if (playerName.trim()) setNameEntered(true);
   };
@@ -1263,37 +1218,7 @@ function App() {
 
   // ────────────────────────────────
   // Glosario handlers
-  // ────────────────────────────────
-  const saveTerm = async () => {
-    const { word, color, info } = newTerm;
-    if (!word.trim()) {
-      setNewTermError('Palabra requerida');
-      return;
-    }
-    try {
-      if (editingTerm && editingTerm !== word.trim()) {
-        await deleteDoc(doc(db, 'glossary', editingTerm));
-      }
-      await setDoc(doc(db, 'glossary', word.trim()), { word: word.trim(), color, info });
-      setEditingTerm(null);
-      setNewTerm({ word: '', color: '#ffff00', info: '' });
-      setNewTermError('');
-      fetchGlossary();
-    } catch (e) {
-      console.error(e);
-      setNewTermError('Error al guardar');
-    }
-  };
-
-  const startEditTerm = term => {
-    setNewTerm(term);
-    setEditingTerm(term.word);
-  };
-
-  const deleteTerm = async word => {
-    await deleteDoc(doc(db, 'glossary', word));
-    fetchGlossary();
-  };
+  // (ahora gestionados por el hook useGlossary)
 
   const highlightText = text => {
     if (!text) return text;

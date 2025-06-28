@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import PropTypes from 'prop-types';
 import { useDrop } from 'react-dnd';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -102,6 +103,10 @@ const Inventory = ({ playerName }) => {
         </div>
       </div>
   );
+};
+
+Inventory.propTypes = {
+  playerName: PropTypes.string,
 };
 
 export default Inventory;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import Boton from './Boton';
 
 const MasterMenu = ({ onSelect, onBackToMain }) => {
@@ -167,6 +168,10 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       </div>
     </div>
   );
+};
+
+MasterMenu.propTypes = {
+  onSelect: PropTypes.func.isRequired,
 };
 
 export default MasterMenu;
