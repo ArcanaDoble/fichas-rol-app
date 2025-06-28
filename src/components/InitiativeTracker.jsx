@@ -120,7 +120,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
   }, [glossary]);
 
   // Referencia al documento de velocidad en Firestore
-  const initiativeRef = doc(db, 'initiative', 'current');
+  const initiativeRef = React.useMemo(() => doc(db, 'initiative', 'current'), []);
 
   // Cargar modificaciones guardadas al iniciar
   useEffect(() => {

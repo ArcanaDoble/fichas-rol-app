@@ -50,7 +50,7 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
       title="Doble clic para borrar"
     >
       {onDelete && !item && (
-        <span className="absolute bottom-0 right-0 text-xl select-none pointer-events-none bg-red-600 hover:bg-red-700 text-white rounded px-1 py-0.5 transition-colors">
+        <span className="absolute bottom-0 right-0 text-xl select-none pointer-events-none text-gray-400 hover:text-gray-300 transition-colors">
           🗑
         </span>
       )}

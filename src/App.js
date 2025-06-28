@@ -8,8 +8,6 @@ import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
-import { GiFist } from 'react-icons/gi';
-import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Boton from './components/Boton';
 import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
@@ -20,19 +18,17 @@ import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import InventoryRE4 from './components/re4/InventoryRE4';
-import { ToastProvider, useToast } from './components/Toast';
-import LoadingSpinner from './components/LoadingSpinner';
-import Modal, { ConfirmModal, useModal } from './components/Modal';
+import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
-import { Tooltip } from 'react-tooltip';
-import { AnimatePresence, motion } from 'framer-motion';
+import useConfirm from './hooks/useConfirm';
+import useResourcesHook from './hooks/useResources';
+import useGlossary from './hooks/useGlossary';
+
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 const MASTER_PASSWORD = '0904';
-
-const MASTER_PASSWORD = process.env.REACT_APP_MASTER_PASSWORD || '';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
@@ -56,29 +52,11 @@ const recursoInfo = {
   cordura: 'Explicación de Cordura',
   armadura: 'Explicación de Armadura',
 };
-const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
 
-// Mapeo de recursos a atributos para cálculo de estadísticas
-const recursoToAtributo = {
-  postura: 'destreza',
-  vida: 'vigor',
-  ingenio: 'intelecto',
-  cordura: 'voluntad',
-  armadura: 'vigor'
-};
-
-// Mapeo de dados a valores numéricos
-const dadoToNumero = {
-  'D4': 4,
-  'D6': 6,
-  'D8': 8,
-  'D10': 10,
-  'D12': 12
-};
 const parseCargaValue = (v) => {
   if (!v) return 0;
   if (typeof v === 'number') return v;
@@ -102,19 +80,20 @@ const applyCargaPenalties = (data, armas, armaduras) => {
   let fisica = 0;
   let mental = 0;
   data.weapons?.forEach(n => {
-    const w = armas.find(a => a.nombre === n);
+    const w = armas.find(a => a && a.nombre === n);
     if (w) {
       fisica += parseCargaValue(w.cargaFisica || w.cuerpo || w.carga);
       mental += parseCargaValue(w.cargaMental || w.mente);
     }
   });
   data.armaduras?.forEach(n => {
-    const a = armaduras.find(x => x.nombre === n);
+    const a = armaduras.find(x => x && x.nombre === n);
     if (a) {
       fisica += parseCargaValue(a.cargaFisica || a.cuerpo || a.carga);
       mental += parseCargaValue(a.cargaMental || a.mente);
     }
   });
+  
   const resistencia = data.stats?.vida?.total ?? 0;
   const newStats = { ...data.stats };
   if (newStats.postura) {
@@ -135,6 +114,7 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     newStats.cordura.total = total;
     if (newStats.cordura.actual > total) newStats.cordura.actual = total;
   }
+  
   return {
     ...data,
     stats: newStats,
@@ -184,6 +164,22 @@ function App() {
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
   const [playerInputPoder, setPlayerInputPoder] = useState('');
   const [playerPoderError, setPlayerPoderError] = useState('');
+  
+  // Google Sheets ID
+  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID || '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+  
+  // Datos de prueba temporales mientras arreglamos Google Sheets
+  const datosPruebaArmas = React.useMemo(() => [
+    { nombre: 'Espada', dano: '1D6', alcance: 'Cuerpo a cuerpo', consumo: '0', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Espada básica', tipoDano: 'físico', valor: '10', tecnologia: 'Baja' },
+    { nombre: 'Daga', dano: '1D4', alcance: 'Cuerpo a cuerpo', consumo: '0', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Daga pequeña', tipoDano: 'físico', valor: '5', tecnologia: 'Baja' },
+    { nombre: 'Pistola', dano: '1D8', alcance: 'Media', consumo: '1', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Pistola básica', tipoDano: 'físico', valor: '50', tecnologia: 'Media' }
+  ], []);
+  
+  const datosPruebaArmaduras = React.useMemo(() => [
+    { nombre: 'Armadura de Cuero', defensa: '1', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura ligera de cuero', valor: '20', tecnologia: 'Baja' },
+    { nombre: 'Armadura de Malla', defensa: '2', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura de malla metálica', valor: '40', tecnologia: 'Baja' },
+    { nombre: 'Armadura Completa', defensa: '3', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura completa de metal', valor: '100', tecnologia: 'Baja' }
+  ], []);
   // Recursos dinámicos (añadir / eliminar)
   const {
     resourcesList,
@@ -263,10 +259,6 @@ function App() {
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
   // Glosario de términos destacados
-  const [glossary, setGlossary] = useState([]);
-  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
-  const [editingTerm, setEditingTerm] = useState(null);
-  const [newTermError, setNewTermError] = useState('');
   const {
     glossary,
     newTerm,
@@ -277,7 +269,6 @@ function App() {
     saveTerm,
     startEditTerm,
     deleteTerm,
-    fetchGlossary,
   } = useGlossary();
 
   // Calculadora de dados
@@ -289,33 +280,33 @@ function App() {
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
-        a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
+        a && a.nombre && a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
       ).slice(0, 5)
     : [];
   const armaduraSugerencias = playerInputArmadura
     ? armaduras.filter(a =>
-        a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
+        a && a.nombre && a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
       ).slice(0, 5)
     : [];
   const poderSugerencias = playerInputPoder
     ? habilidades.filter(h =>
-        h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+        h && h.nombre && h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
   // Sugerencias dinámicas para inputs de equipo de enemigos
   const enemyArmaSugerencias = enemyInputArma
     ? armas.filter(a =>
-        a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
+        a && a.nombre && a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
       ).slice(0, 5)
     : [];
   const enemyArmaduraSugerencias = enemyInputArmadura
     ? armaduras.filter(a =>
-        a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
+        a && a.nombre && a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
       ).slice(0, 5)
     : [];
   const enemyPoderSugerencias = enemyInputPoder
     ? habilidades.filter(h =>
-        h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
+        h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
       ).slice(0, 5)
     : [];
   // ───────────────────────────────────────────────────────────
@@ -361,91 +352,105 @@ function App() {
   // ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (userType === 'player') {
-      console.log('🔍 Intentando cargar jugadores existentes...');
       getDocs(collection(db, 'players'))
         .then(snap => {
           const players = snap.docs.map(d => d.id);
-          console.log('✅ Jugadores cargados:', players);
           setExistingPlayers(players);
         })
         .catch(error => {
-          console.error('❌ Error cargando jugadores:', error);
-          console.error('Código de error:', error.code);
-          console.error('Mensaje:', error.message);
+          // Error cargando jugadores
         });
     }
   }, [userType]);
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
-  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID;
-
+  const [fetchArmasError, setFetchArmasError] = useState(false);
   const fetchArmas = useCallback(async () => {
+    if (fetchArmasError) return;
     setLoading(true);
     try {
       const rows = await fetchSheetData(sheetId, 'Lista_Armas');
-      const datos = rows.map((obj) => {
-        const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
-          : [];
-        return {
-          nombre: obj.NOMBRE,
-          dano: obj.DAÑO,
-          alcance: obj.ALCANCE,
-          consumo: obj.CONSUMO,
-          carga: obj.CARGA,
-          cuerpo: obj.CUERPO,
-          mente: obj.MENTE,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
-          rasgos,
-          descripcion: obj.DESCRIPCIÓN || '',
-          tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
-          valor: obj.VALOR || '',
-          tecnologia: obj.TECNOLOGÍA || '',
-        };
-      });
+      let datos;
+      if (rows && rows.length > 0) {
+        datos = rows.map((obj) => {
+          const rasgos = obj.RASGOS
+            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
+            : [];
+          return {
+            nombre: obj.NOMBRE,
+            dano: obj.DAÑO,
+            alcance: obj.ALCANCE,
+            consumo: obj.CONSUMO,
+            carga: obj.CARGA,
+            cuerpo: obj.CUERPO,
+            mente: obj.MENTE,
+            cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+            cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+            rasgos,
+            descripcion: obj.DESCRIPCIÓN || '',
+            tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+            valor: obj.VALOR || '',
+            tecnologia: obj.TECNOLOGÍA || '',
+          };
+        });
+      } else {
+        datos = datosPruebaArmas;
+      }
       setArmas(datos);
     } catch (e) {
-      console.error(e);
+      setArmas(datosPruebaArmas);
+      setFetchArmasError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
-  useEffect(() => { fetchArmas() }, [fetchArmas]);
+  }, [sheetId, datosPruebaArmas, fetchArmasError]);
+  useEffect(() => { 
+    fetchArmas(); 
+  }, [fetchArmas]);
   // ───────────────────────────────────────────────────────────
   // FETCH ARMADURAS
   // ───────────────────────────────────────────────────────────
+  const [fetchArmadurasError, setFetchArmadurasError] = useState(false);
   const fetchArmaduras = useCallback(async () => {
+    if (fetchArmadurasError) return;
     setLoading(true);
     try {
       const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
-      const datos = rows.map((obj) => {
-        const rasgos = obj.RASGOS
-          ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
-          : [];
-        return {
-          nombre: obj.NOMBRE,
-          defensa: obj.ARMADURA,
-          cuerpo: obj.CUERPO,
-          mente: obj.MENTE,
-          carga: obj.CARGA,
-          cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-          cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
-          rasgos,
-          descripcion: obj.DESCRIPCIÓN || '',
-          valor: obj.VALOR || '',
-          tecnologia: obj.TECNOLOGÍA || '',
-        };
-      });
+      let datos;
+      if (rows && rows.length > 0) {
+        datos = rows.map((obj) => {
+          const rasgos = obj.RASGOS
+            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
+            : [];
+          return {
+            nombre: obj.NOMBRE,
+            defensa: obj.ARMADURA,
+            cuerpo: obj.CUERPO,
+            mente: obj.MENTE,
+            carga: obj.CARGA,
+            cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
+            cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+            rasgos,
+            descripcion: obj.DESCRIPCIÓN || '',
+            valor: obj.VALOR || '',
+            tecnologia: obj.TECNOLOGÍA || '',
+          };
+        });
+      } else {
+        datos = datosPruebaArmaduras;
+      }
       setArmaduras(datos);
     } catch (e) {
-      console.error(e);
+      setArmaduras(datosPruebaArmaduras);
+      setFetchArmadurasError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
-  useEffect(() => { fetchArmaduras() }, [fetchArmaduras]);
+  }, [sheetId, datosPruebaArmaduras, fetchArmadurasError]);
+  useEffect(() => { 
+    fetchArmaduras(); 
+  }, [fetchArmaduras]);
   // ───────────────────────────────────────────────────────────
   // FETCH HABILIDADES
   // ───────────────────────────────────────────────────────────
@@ -456,38 +461,22 @@ function App() {
       const datos = snap.docs.map(d => d.data());
       setHabilidades(datos);
     } catch (e) {
-      console.error(e);
+      // Error cargando habilidades
     } finally {
       setLoading(false);
     }
   }, []);
   useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
   // ───────────────────────────────────────────────────────────
-  // FETCH GLOSARIO
-  // ───────────────────────────────────────────────────────────
-  const fetchGlossary = useCallback(async () => {
-    try {
-      const snap = await getDocs(collection(db, 'glossary'));
-      const datos = snap.docs.map(d => d.data());
-      setGlossary(datos);
-    } catch (e) {
-      // Error cargando glosario
-    }
-  }, []);
-  useEffect(() => { fetchGlossary() }, [fetchGlossary]);
-
-  // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
   // ───────────────────────────────────────────────────────────
   const fetchEnemies = useCallback(async () => {
     try {
-      console.log('Fetching enemies...');
       const snap = await getDocs(collection(db, 'enemies'));
       const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      console.log('Enemies fetched:', datos);
       setEnemies(datos);
     } catch (e) {
-      console.error('Error fetching enemies:', e);
+      // Error cargando enemigos
     }
   }, []);
   useEffect(() => { fetchEnemies() }, [fetchEnemies]);
@@ -495,7 +484,6 @@ function App() {
     fetchArmas();
     fetchArmaduras();
     fetchHabilidades();
-    fetchGlossary();
     fetchEnemies();
   };
   // ───────────────────────────────────────────────────────────
@@ -503,103 +491,84 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
-    if (!nameEntered) return;
-    console.log(`🔍 Intentando cargar jugador: ${playerName}`);
-
+    if (!playerName) return;
+    
     try {
-      const ref = doc(db, 'players', playerName);
-      const snap = await getDoc(ref);
-    // Atributos por defecto
-    const baseA = {};
-    atributos.forEach(k => (baseA[k] = 'D4'));
-    if (snap.exists()) {
-      const d = snap.data();
-      const statsFromDB = d.stats || {};
-      const listFromDB = d.resourcesList || [];
-      // Reconstruir resourcesList: si Firestore devolvió una lista, úsala; si no, usa defaultRecursos
-      const lista = listFromDB.length > 0
-        ? listFromDB.map(item => ({
-            ...item,
-            info: item.info ?? (recursoInfo[item.id] || '')
-          }))
-        : defaultRecursos.map(id => ({
-            id,
-            name: id,
-            color: recursoColor[id] || '#ffffff',
-            info: recursoInfo[id] || ''
-          }));
-      // Para cada recurso en "lista", asegurar statsInit[id]
-      const statsInit = {};
-      lista.forEach(({ id }) => {
-        const s = statsFromDB[id] || {};
-        statsInit[id] = {
-          base:   s.base   ?? 0,
-          total:  s.total  ?? s.base ?? 0,
-          actual: s.actual ?? 0,
-          buff:   s.buff   ?? 0
+      const docRef = doc(db, 'players', playerName);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const recalculated = applyCargaPenalties(data, armas, armaduras);
+        setPlayerData(recalculated);
+        setResourcesList(recalculated.resourcesList || []);
+        setClaves(recalculated.claves || []);
+        setEstados(recalculated.estados || []);
+      } else {
+        const defaultData = {
+          weapons: [],
+          armaduras: [],
+          poderes: [],
+          claves: [],
+          estados: [],
+          atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
+          stats: {
+            vida: { base: 0, buff: 0, total: 0, actual: 0 },
+            postura: { base: 0, buff: 0, total: 0, actual: 0 },
+            cordura: { base: 0, buff: 0, total: 0, actual: 0 }
+          },
+          cargaAcumulada: { fisica: 0, mental: 0 },
+          resourcesList: [],
+          updatedAt: new Date()
         };
-      });
-      // Guardar en estado
-      setResourcesList(lista);
-      setClaves(d.claves || []);
-      setEstados(d.estados || []);
-      const loaded = {
-        weapons:   d.weapons    || [],
-        armaduras: d.armaduras  || [],
-        poderes:   d.poderes    || [],
-        claves:    d.claves     || [],
-        estados:   d.estados    || [],
-        atributos: { ...baseA, ...(d.atributos || {}) },
-        stats:     statsInit,
-        cargaAcumulada: d.cargaAcumulada || { fisica: 0, mental: 0 }
-      };
-      console.log('✅ Jugador cargado exitosamente:', playerName);
-      setPlayerData(applyCargaPenalties(loaded, armas, armaduras));
-    } else {
-      // Si no existe en Firestore, crear con valores predeterminados
-      console.log('ℹ️ Jugador no existe, creando nuevo:', playerName);
-      const baseS = {};
-      defaultRecursos.forEach(r => {
-        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
-      });
-      const lista = defaultRecursos.map(id => ({
-        id,
-        name: id,
-        color: recursoColor[id] || '#ffffff',
-        info: recursoInfo[id] || ''
-      }));
-      setResourcesList(lista);
-      setClaves([]);
-      setEstados([]);
-      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseA, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
-      setPlayerData(applyCargaPenalties(created, armas, armaduras));
-    }
+        setPlayerData(defaultData);
+        setResourcesList([]);
+        setClaves([]);
+        setEstados([]);
+      }
     } catch (error) {
-      // En caso de error, crear jugador por defecto
-      const baseAError = {};
-      atributos.forEach(k => (baseAError[k] = 'D4'));
-      const baseS = {};
-      defaultRecursos.forEach(r => {
-        baseS[r] = { base: 0, total: 0, actual: 0, buff: 0 };
-      });
-      const lista = defaultRecursos.map(id => ({
-        id,
-        name: id,
-        color: recursoColor[id] || '#ffffff',
-        info: recursoInfo[id] || ''
-      }));
-      setResourcesList(lista);
+      // Error cargando jugador
+      const defaultData = {
+        weapons: [],
+        armaduras: [],
+        poderes: [],
+        claves: [],
+        estados: [],
+        atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
+        stats: {
+          vida: { base: 0, buff: 0, total: 0, actual: 0 },
+          postura: { base: 0, buff: 0, total: 0, actual: 0 },
+          cordura: { base: 0, buff: 0, total: 0, actual: 0 }
+        },
+        cargaAcumulada: { fisica: 0, mental: 0 },
+        resourcesList: [],
+        updatedAt: new Date()
+      };
+      setPlayerData(defaultData);
+      setResourcesList([]);
       setClaves([]);
       setEstados([]);
-      const created = { weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: baseAError, stats: baseS, cargaAcumulada: { fisica: 0, mental: 0 } };
-      setPlayerData(applyCargaPenalties(created, armas, armaduras));
     }
-  }, [nameEntered, playerName]);
+  }, [playerName, armas, armaduras, setResourcesList]);
 
   // useEffect que llama a loadPlayer
   useEffect(() => {
     loadPlayer();
   }, [loadPlayer]);
+
+  // Debug: Monitorear cambios en playerData
+  useEffect(() => {
+    // playerData actualizado
+  }, [playerData]);
+
+  // Debug: Monitorear cambios en armas y armaduras
+  useEffect(() => {
+    // armas actualizadas
+  }, [armas]);
+
+  useEffect(() => {
+    // armaduras actualizadas
+  }, [armaduras]);
   // 2) savePlayer: guarda todos los datos en Firestore
   //    Acepta parámetros opcionales para recursos y claves.
   const savePlayer = async (
@@ -623,7 +592,7 @@ function App() {
         window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
       }
     } catch (e) {
-      console.error(e);
+      // Error guardando en Firestore
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
       }
@@ -665,8 +634,6 @@ function App() {
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
   };
-  const eliminarRecurso = (id) => {
-
   const handleEliminarRecurso = async (id) => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
@@ -902,72 +869,72 @@ function App() {
   // ───────────────────────────────────────────────────────────
   const handleEnemyEquipWeapon = () => {
     if (loading) return;
-    const f = armas.find(a => a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
+    const f = armas.find(a => a && a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
     if (!f) return setEnemyArmaError('Arma no encontrada');
-    if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
-      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
+    if (!selectedEnemy.weapons.includes(f.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f.nombre] });
       setEnemyInputArma('');
       setEnemyArmaError('');
     }
   };
   const handleEnemyEquipWeaponFromSuggestion = (name) => {
-    const w = armas.find(a => a.nombre === name);
+    const w = armas.find(a => a && a.nombre === name);
     if (!w) return setEnemyArmaError('Arma no encontrada');
-    if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
-      setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
+    if (!selectedEnemy.weapons.includes(w.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w.nombre] });
       setEnemyInputArma('');
       setEnemyArmaError('');
     }
   };
   const handleEnemyEquipArmor = () => {
     if (loading) return;
-    const f = armaduras.find(a => a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
+    const f = armaduras.find(a => a && a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
     if (!f) return setEnemyArmaduraError('Armadura no encontrada');
-    if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
-      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
+    if (!selectedEnemy.armaduras.includes(f.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f.nombre] });
       setEnemyInputArmadura('');
       setEnemyArmaduraError('');
     }
   };
   const handleEnemyEquipArmorFromSuggestion = (name) => {
-    const a = armaduras.find(x => x.nombre === name);
+    const a = armaduras.find(x => x && x.nombre === name);
     if (!a) return setEnemyArmaduraError('Armadura no encontrada');
-    if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
-      setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
+    if (!selectedEnemy.armaduras.includes(a.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a.nombre] });
       setEnemyInputArmadura('');
       setEnemyArmaduraError('');
     }
   };
   const handleEnemyEquipPower = () => {
     if (loading) return;
-    const f = habilidades.find(h => h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
+    const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
     if (!f) return setEnemyPoderError('Poder no encontrado');
-    if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
-      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
+    if (!selectedEnemy.poderes.includes(f.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f.nombre] });
       setEnemyInputPoder('');
       setEnemyPoderError('');
     }
   };
   const handleEnemyEquipPowerFromSuggestion = (name) => {
-    const h = habilidades.find(x => x.nombre === name);
+    const h = habilidades.find(x => x && x.nombre === name);
     if (!h) return setEnemyPoderError('Poder no encontrado');
-    if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
-      setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
+    if (!selectedEnemy.poderes.includes(h.nombre)) {
+      setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h.nombre] });
       setEnemyInputPoder('');
       setEnemyPoderError('');
     }
   };
   const unequipEnemyWeapon = (index) => {
-    const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
-    setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+    const updatedWeapons = selectedEnemy.weapons.filter((_, i) => i !== index);
+    setSelectedEnemy({ ...selectedEnemy, weapons: updatedWeapons });
   };
   const unequipEnemyArmor = (index) => {
-    const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
-    setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+    const updatedArmors = selectedEnemy.armaduras.filter((_, i) => i !== index);
+    setSelectedEnemy({ ...selectedEnemy, armaduras: updatedArmors });
   };
   const unequipEnemyPower = (index) => {
-    const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
-    setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+    const updatedPowers = selectedEnemy.poderes.filter((_, i) => i !== index);
+    setSelectedEnemy({ ...selectedEnemy, poderes: updatedPowers });
   };
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
@@ -977,51 +944,80 @@ function App() {
   };
   const handlePlayerEquip = () => {
     if (loading) return;
-    const f = armas.find(a => a.nombre.toLowerCase().includes(playerInputArma.trim().toLowerCase()));
-    if (!f) return setPlayerError('Arma no encontrada');
+    const nombreArma = playerInputArma.trim();
+    if (!nombreArma) return setPlayerError('Nombre de arma requerido');
+    
+    const f = armas.find(a => a && a.nombre && a.nombre.toLowerCase().includes(nombreArma.toLowerCase()));
+    if (!f) {
+      return setPlayerError('Arma no encontrada');
+    }
+    
+    // Agregar el arma si no está ya equipada
     if (!playerData.weapons.includes(f.nombre)) {
-      savePlayer({ ...playerData, weapons: [...playerData.weapons, f.nombre] });
+      const newWeapons = [...playerData.weapons, f.nombre];
+      savePlayer({ ...playerData, weapons: newWeapons });
       setPlayerInputArma('');
       setPlayerError('');
+    } else {
+      setPlayerError('Arma ya equipada');
     }
   };
   const handlePlayerUnequip = n => {
     savePlayer({ ...playerData, weapons: playerData.weapons.filter(x => x !== n) });
   };
   const handlePlayerEquipFromSuggestion = name => {
-    const w = armas.find(a => a.nombre === name);
+    const w = armas.find(a => a && a.nombre === name);
     if (!w) return setPlayerError('Arma no encontrada');
+    
     if (!playerData.weapons.includes(w.nombre)) {
-      savePlayer({ ...playerData, weapons: [...playerData.weapons, w.nombre] });
+      const newWeapons = [...playerData.weapons, w.nombre];
+      savePlayer({ ...playerData, weapons: newWeapons });
       setPlayerInputArma('');
       setPlayerError('');
+    } else {
+      setPlayerError('Arma ya equipada');
     }
   };
   const handlePlayerEquipArmadura = () => {
     if (loading) return;
-    const f = armaduras.find(a => a.nombre.toLowerCase().includes(playerInputArmadura.trim().toLowerCase()));
-    if (!f) return setPlayerArmaduraError('Armadura no encontrada');
+    const nombreArmadura = playerInputArmadura.trim();
+    if (!nombreArmadura) return setPlayerArmaduraError('Nombre de armadura requerido');
+    
+    const f = armaduras.find(a => a && a.nombre && a.nombre.toLowerCase().includes(nombreArmadura.toLowerCase()));
+    if (!f) {
+      return setPlayerArmaduraError('Armadura no encontrada');
+    }
+    
+    // Agregar la armadura si no está ya equipada
     if (!playerData.armaduras.includes(f.nombre)) {
-      savePlayer({ ...playerData, armaduras: [...playerData.armaduras, f.nombre] });
+      const newArmaduras = [...playerData.armaduras, f.nombre];
+      savePlayer({ ...playerData, armaduras: newArmaduras });
       setPlayerInputArmadura('');
       setPlayerArmaduraError('');
+    } else {
+      setPlayerArmaduraError('Armadura ya equipada');
     }
   };
   const handlePlayerUnequipArmadura = n => {
     savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
   };
   const handlePlayerEquipArmaduraFromSuggestion = name => {
-    const a = armaduras.find(x => x.nombre === name);
+    const a = armaduras.find(x => x && x.nombre === name);
     if (!a) return setPlayerArmaduraError('Armadura no encontrada');
+    
+    
     if (!playerData.armaduras.includes(a.nombre)) {
-      savePlayer({ ...playerData, armaduras: [...playerData.armaduras, a.nombre] });
+      const newArmaduras = [...playerData.armaduras, a.nombre];
+      savePlayer({ ...playerData, armaduras: newArmaduras });
       setPlayerInputArmadura('');
       setPlayerArmaduraError('');
+    } else {
+      setPlayerArmaduraError('Armadura ya equipada');
     }
   };
   const handlePlayerEquipPoder = () => {
     if (loading) return;
-    const f = habilidades.find(h => h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase()));
+    const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase()));
     if (!f) return setPlayerPoderError('Poder no encontrado');
     if (!playerData.poderes.includes(f.nombre)) {
       savePlayer({ ...playerData, poderes: [...playerData.poderes, f.nombre] });
@@ -1033,7 +1029,7 @@ function App() {
     savePlayer({ ...playerData, poderes: playerData.poderes.filter(x => x !== n) });
   };
   const handlePlayerEquipPoderFromSuggestion = name => {
-    const h = habilidades.find(x => x.nombre === name);
+    const h = habilidades.find(x => x && x.nombre === name);
     if (!h) return setPlayerPoderError('Poder no encontrado');
     if (!playerData.poderes.includes(h.nombre)) {
       savePlayer({ ...playerData, poderes: [...playerData.poderes, h.nombre] });
@@ -1165,6 +1161,23 @@ function App() {
     });
     return parts;
   };
+
+  // Renderizar tooltips por separado para evitar errores de hidratación
+  const renderTooltips = () => {
+    return glossary.map(term => {
+      const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
+      return (
+        <Tooltip
+          key={id}
+          id={id}
+          place="top"
+          className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
+          openOnClick={isTouchDevice}
+        />
+      );
+    });
+  };
+
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
     switch (tipo.toLowerCase()) {
@@ -1607,7 +1620,7 @@ function App() {
                       </button>
                       {/* Botón eliminar */}
                       <button
-                        onClick={() => eliminarRecurso(r)}
+                        onClick={() => handleEliminarRecurso(r)}
                         className="w-6 h-6 flex items-center justify-center text-xs font-bold text-red-400 hover:text-red-200 hover:bg-red-900/30 rounded transition-all duration-200"
                         title="Eliminar esta estadística"
                       >
@@ -2094,6 +2107,7 @@ function App() {
             </div>
           )}
         </div>
+        {renderTooltips()}
       </div>
     );
   }
