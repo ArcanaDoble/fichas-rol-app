@@ -28,7 +28,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.1.4**
+> **Versión actual: 2.1.5**
 
 **Resumen de cambios v2.1.3:**
 - Corrección de errores críticos de compilación: imports de iconos faltantes (GiFist, FaFire, FaBolt, FaSnowflake, FaRadiationAlt)
@@ -38,6 +38,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Proyecto ahora compila sin errores ni warnings de ESLint
 - Optimización de rendimiento y mantenibilidad del código
 
+**Resumen de cambios v2.1.5:**
+- Corrección al eliminar equipamiento de enemigos
+- 
 **Resumen de cambios v2.1.4:**
 - Prevención de error al mostrar el icono de daño cuando no se define el tipo
 
