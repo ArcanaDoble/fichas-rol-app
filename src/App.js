@@ -1180,6 +1180,7 @@ function App() {
 
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
+    if (!tipo) return null;
     switch (tipo.toLowerCase()) {
       case 'físico':    return <GiFist className="inline" />;
       case 'fuego':     return <FaFire className="inline" />;
@@ -1259,8 +1260,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.2</p>
-            <p className="text-xs text-gray-500">Adición del Sistema de gestión de Velocidad.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.4</p>
+            <p className="text-xs text-gray-500">Corrección del icono de daño sin tipo definido.</p>
           </div>
         </div>
       </div>
