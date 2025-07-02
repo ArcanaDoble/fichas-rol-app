@@ -764,6 +764,7 @@ function App() {
   const editEnemy = (enemy) => {
     setNewEnemy(enemy);
     setEditingEnemy(enemy.id);
+    setSelectedEnemy(null); // Close preview when switching to edit mode
     setShowEnemyForm(true);
   };
   const handleSaveEnemy = async () => {
@@ -868,74 +869,125 @@ function App() {
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
   const handleEnemyEquipWeapon = () => {
-    if (loading) return;
-    const f = armas.find(a => a && a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
-    if (!f) return setEnemyArmaError('Arma no encontrada');
-    if (!selectedEnemy.weapons.includes(f.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f.nombre] });
-      setEnemyInputArma('');
-      setEnemyArmaError('');
-    }
-  };
+      if (loading) return;
+      const f = armas.find(a => a && a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
+      if (!f) return setEnemyArmaError('Arma no encontrada');
+      if (showEnemyForm) {
+        if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
+          setEnemyInputArma('');
+          setEnemyArmaError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.weapons.some(w => w.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f] });
+        setEnemyInputArma('');
+        setEnemyArmaError('');
+      }
+    };
   const handleEnemyEquipWeaponFromSuggestion = (name) => {
-    const w = armas.find(a => a && a.nombre === name);
-    if (!w) return setEnemyArmaError('Arma no encontrada');
-    if (!selectedEnemy.weapons.includes(w.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w.nombre] });
-      setEnemyInputArma('');
-      setEnemyArmaError('');
-    }
-  };
+      const w = armas.find(a => a && a.nombre === name);
+      if (!w) return setEnemyArmaError('Arma no encontrada');
+      if (showEnemyForm) {
+        if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
+          setEnemyInputArma('');
+          setEnemyArmaError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w] });
+        setEnemyInputArma('');
+        setEnemyArmaError('');
+      }
+    };
   const handleEnemyEquipArmor = () => {
-    if (loading) return;
-    const f = armaduras.find(a => a && a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
-    if (!f) return setEnemyArmaduraError('Armadura no encontrada');
-    if (!selectedEnemy.armaduras.includes(f.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f.nombre] });
-      setEnemyInputArmadura('');
-      setEnemyArmaduraError('');
-    }
-  };
+      if (loading) return;
+      const f = armaduras.find(a => a && a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
+      if (!f) return setEnemyArmaduraError('Armadura no encontrada');
+      if (showEnemyForm) {
+        if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
+          setEnemyInputArmadura('');
+          setEnemyArmaduraError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f] });
+        setEnemyInputArmadura('');
+        setEnemyArmaduraError('');
+      }
+    };
   const handleEnemyEquipArmorFromSuggestion = (name) => {
-    const a = armaduras.find(x => x && x.nombre === name);
-    if (!a) return setEnemyArmaduraError('Armadura no encontrada');
-    if (!selectedEnemy.armaduras.includes(a.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a.nombre] });
-      setEnemyInputArmadura('');
-      setEnemyArmaduraError('');
-    }
-  };
+      const a = armaduras.find(x => x && x.nombre === name);
+      if (!a) return setEnemyArmaduraError('Armadura no encontrada');
+      if (showEnemyForm) {
+        if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
+          setEnemyInputArmadura('');
+          setEnemyArmaduraError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a] });
+        setEnemyInputArmadura('');
+        setEnemyArmaduraError('');
+      }
+    };
   const handleEnemyEquipPower = () => {
-    if (loading) return;
-    const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
-    if (!f) return setEnemyPoderError('Poder no encontrado');
-    if (!selectedEnemy.poderes.includes(f.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f.nombre] });
-      setEnemyInputPoder('');
-      setEnemyPoderError('');
-    }
-  };
+      if (loading) return;
+      const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
+      if (!f) return setEnemyPoderError('Poder no encontrado');
+      if (showEnemyForm) {
+        if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
+          setEnemyInputPoder('');
+          setEnemyPoderError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.poderes.some(p => p.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f] });
+        setEnemyInputPoder('');
+        setEnemyPoderError('');
+      }
+    };
   const handleEnemyEquipPowerFromSuggestion = (name) => {
-    const h = habilidades.find(x => x && x.nombre === name);
-    if (!h) return setEnemyPoderError('Poder no encontrado');
-    if (!selectedEnemy.poderes.includes(h.nombre)) {
-      setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h.nombre] });
-      setEnemyInputPoder('');
-      setEnemyPoderError('');
-    }
-  };
+      const h = habilidades.find(x => x && x.nombre === name);
+      if (!h) return setEnemyPoderError('Poder no encontrado');
+      if (showEnemyForm) {
+        if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
+          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
+          setEnemyInputPoder('');
+          setEnemyPoderError('');
+        }
+      } else if (selectedEnemy && !selectedEnemy.poderes.some(power => power.nombre === h.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h] });
+        setEnemyInputPoder('');
+        setEnemyPoderError('');
+      }
+    };
   const unequipEnemyWeapon = (index) => {
-    const updatedWeapons = selectedEnemy.weapons.filter((_, i) => i !== index);
-    setSelectedEnemy({ ...selectedEnemy, weapons: updatedWeapons });
-  };
+      if (showEnemyForm) {
+        const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
+        setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+      } else if (selectedEnemy) {
+        const updatedWeapons = selectedEnemy.weapons.filter((_, i) => i !== index);
+        setSelectedEnemy({ ...selectedEnemy, weapons: updatedWeapons });
+      }
+    };
   const unequipEnemyArmor = (index) => {
-    const updatedArmors = selectedEnemy.armaduras.filter((_, i) => i !== index);
-    setSelectedEnemy({ ...selectedEnemy, armaduras: updatedArmors });
-  };
+      if (showEnemyForm) {
+        const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
+        setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+      } else if (selectedEnemy) {
+        const updatedArmors = selectedEnemy.armaduras.filter((_, i) => i !== index);
+        setSelectedEnemy({ ...selectedEnemy, armaduras: updatedArmors });
+      }
+    };
   const unequipEnemyPower = (index) => {
-    const updatedPowers = selectedEnemy.poderes.filter((_, i) => i !== index);
-    setSelectedEnemy({ ...selectedEnemy, poderes: updatedPowers });
-  };
+      if (showEnemyForm) {
+        const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
+        setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+      } else if (selectedEnemy) {
+        const updatedPowers = selectedEnemy.poderes.filter((_, i) => i !== index);
+        setSelectedEnemy({ ...selectedEnemy, poderes: updatedPowers });
+      }
+    };
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
@@ -1180,6 +1232,7 @@ function App() {
 
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = tipo => {
+    if (!tipo) return null;
     switch (tipo.toLowerCase()) {
       case 'físico':    return <GiFist className="inline" />;
       case 'fuego':     return <FaFire className="inline" />;
@@ -1259,8 +1312,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.2</p>
-            <p className="text-xs text-gray-500">Adición del Sistema de gestión de Velocidad.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.9</p>
+            <p className="text-xs text-gray-500">Animación de dados mejorada.</p>
           </div>
         </div>
       </div>
@@ -2224,8 +2277,23 @@ function App() {
         )}
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => {
+              setShowEnemyForm(false);
+              setEditingEnemy(null);
+              setEnemyInputArma('');
+              setEnemyInputArmadura('');
+              setEnemyInputPoder('');
+              setEnemyArmaError('');
+              setEnemyArmaduraError('');
+              setEnemyPoderError('');
+            }}
+          >
+            <div
+              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h2 className="text-xl font-bold mb-4">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
@@ -2641,8 +2709,14 @@ function App() {
         )}
         {/* Modal para ver ficha completa */}
         {selectedEnemy && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setSelectedEnemy(null)}
+          >
+            <div
+              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Ficha de {selectedEnemy.name}</h2>
                 <div className="flex gap-2">
