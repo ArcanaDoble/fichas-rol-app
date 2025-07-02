@@ -64,6 +64,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.3:**
 - Carga de enemigos ahora usa datos locales en lugar de una petición `/api`
+- Botón verde "+" ahora incrementa el recurso hasta el máximo base
+- Nuevo botón dorado "+" permite aplicar buffs temporales
 - 
 **Resumen de cambios v2.1.9:**
 - Animación de dados ahora se desliza en la dirección del control
