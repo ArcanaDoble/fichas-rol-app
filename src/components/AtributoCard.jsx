@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,9 +6,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 export const DADOS = ['D4', 'D6', 'D8', 'D10', 'D12'];
 
 const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
+  const [direction, setDirection] = useState('next');
   const index = DADOS.indexOf(value);
-  const prev = () => onChange(DADOS[(index - 1 + DADOS.length) % DADOS.length]);
-  const next = () => onChange(DADOS[(index + 1) % DADOS.length]);
+  const prev = () => {
+    setDirection('prev');
+    onChange(DADOS[(index - 1 + DADOS.length) % DADOS.length]);
+  };
+  const next = () => {
+    setDirection('next');
+    onChange(DADOS[(index + 1) % DADOS.length]);
+  };
 
   return (
     <div
@@ -26,9 +33,9 @@ const AtributoCard = ({ name, value, onChange, color, dadoImgUrl }) => {
             src={dadoImgUrl(value)}
             alt={value}
             className="w-12 h-12 select-none pointer-events-none"
-            initial={{ opacity: 0, x: 30, scale: 0.85 }}
+            initial={{ opacity: 0, x: direction === 'next' ? 30 : -30, scale: 0.85 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -30, scale: 0.85 }}
+            exit={{ opacity: 0, x: direction === 'next' ? -30 : 30, scale: 0.85 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30, duration: 0.25 }}
             draggable={false}
           />
