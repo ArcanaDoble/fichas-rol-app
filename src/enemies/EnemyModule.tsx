@@ -4,11 +4,10 @@ import EnemyDrawer from './EnemyDrawer';
 import TopBar from './TopBar';
 import FloatingActionButton from './FloatingActionButton';
 import { EnemyCardProps } from './EnemyCard';
+import { getEnemies } from './api';
 
 async function fetchEnemies(): Promise<EnemyCardProps[]> {
-  const res = await fetch('/api/enemies');
-  if (!res.ok) throw new Error('failed');
-  return res.json();
+  return getEnemies();
 }
 
 const EnemyModule: React.FC = () => {
