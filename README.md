@@ -59,6 +59,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.1:**
 - EnemyDrawer actualizado para usar `Dialog.Backdrop` en lugar de `Dialog.Overlay`
 
+**Resumen de cambios v2.2.2:**
+- Vista de enemigos reemplazada por el nuevo componente `EnemyModule`
+
 **Resumen de cambios v2.1.9:**
 - Animación de dados ahora se desliza en la dirección del control
 
