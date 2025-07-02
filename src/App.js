@@ -872,13 +872,13 @@ function App() {
       const f = armas.find(a => a && a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
       if (!f) return setEnemyArmaError('Arma no encontrada');
       if (showEnemyForm) {
-        if (!newEnemy.weapons.includes(f.nombre)) {
-          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f.nombre] });
+        if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
           setEnemyInputArma('');
           setEnemyArmaError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.weapons.includes(f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.weapons.some(w => w.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f] });
         setEnemyInputArma('');
         setEnemyArmaError('');
       }
@@ -887,13 +887,13 @@ function App() {
       const w = armas.find(a => a && a.nombre === name);
       if (!w) return setEnemyArmaError('Arma no encontrada');
       if (showEnemyForm) {
-        if (!newEnemy.weapons.includes(w.nombre)) {
-          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w.nombre] });
+        if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
           setEnemyInputArma('');
           setEnemyArmaError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.weapons.includes(w.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w] });
         setEnemyInputArma('');
         setEnemyArmaError('');
       }
@@ -903,13 +903,13 @@ function App() {
       const f = armaduras.find(a => a && a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
       if (!f) return setEnemyArmaduraError('Armadura no encontrada');
       if (showEnemyForm) {
-        if (!newEnemy.armaduras.includes(f.nombre)) {
-          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f.nombre] });
+        if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
           setEnemyInputArmadura('');
           setEnemyArmaduraError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.armaduras.includes(f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.armaduras.some(a => a.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f] });
         setEnemyInputArmadura('');
         setEnemyArmaduraError('');
       }
@@ -918,13 +918,13 @@ function App() {
       const a = armaduras.find(x => x && x.nombre === name);
       if (!a) return setEnemyArmaduraError('Armadura no encontrada');
       if (showEnemyForm) {
-        if (!newEnemy.armaduras.includes(a.nombre)) {
-          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a.nombre] });
+        if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
           setEnemyInputArmadura('');
           setEnemyArmaduraError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.armaduras.includes(a.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a] });
         setEnemyInputArmadura('');
         setEnemyArmaduraError('');
       }
@@ -934,13 +934,13 @@ function App() {
       const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
       if (!f) return setEnemyPoderError('Poder no encontrado');
       if (showEnemyForm) {
-        if (!newEnemy.poderes.includes(f.nombre)) {
-          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f.nombre] });
+        if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
+          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
           setEnemyInputPoder('');
           setEnemyPoderError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.poderes.includes(f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.poderes.some(p => p.nombre === f.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f] });
         setEnemyInputPoder('');
         setEnemyPoderError('');
       }
@@ -949,13 +949,13 @@ function App() {
       const h = habilidades.find(x => x && x.nombre === name);
       if (!h) return setEnemyPoderError('Poder no encontrado');
       if (showEnemyForm) {
-        if (!newEnemy.poderes.includes(h.nombre)) {
-          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h.nombre] });
+        if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
+          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
           setEnemyInputPoder('');
           setEnemyPoderError('');
         }
-      } else if (selectedEnemy && !selectedEnemy.poderes.includes(h.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h.nombre] });
+      } else if (selectedEnemy && !selectedEnemy.poderes.some(power => power.nombre === h.nombre)) {
+        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h] });
         setEnemyInputPoder('');
         setEnemyPoderError('');
       }
@@ -1311,8 +1311,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.5</p>
-            <p className="text-xs text-gray-500">Corrección al eliminar equipamiento de enemigos.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.6</p>
+            <p className="text-xs text-gray-500">Corrección de equipamiento sin datos en enemigos.</p>
           </div>
         </div>
       </div>
