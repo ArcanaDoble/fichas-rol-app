@@ -1312,8 +1312,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.9</p>
-            <p className="text-xs text-gray-500">Animación de dados mejorada.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.2.0</p>
+            <p className="text-xs text-gray-500">Rediseño de Fichas de Enemigos.</p>
           </div>
         </div>
       </div>
