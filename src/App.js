@@ -624,6 +624,16 @@ function App() {
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
   };
+  const handleIncrease = (r) => {
+    const s = { ...playerData.stats[r] };
+    const maxBase = Math.min(
+      RESOURCE_MAX,
+      (s.total || 0) - (s.buff || 0)
+    );
+    s.actual = Math.min(s.actual + 1, maxBase);
+    const newStats = { ...playerData.stats, [r]: s };
+    savePlayer({ ...playerData, stats: newStats });
+  };
   const handleNerf = (r) => {
     const s = { ...playerData.stats[r] };
     if (s.buff > 0) {
@@ -1705,6 +1715,13 @@ function App() {
                       />
                       <Boton
                         color="green"
+                        className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                        onClick={() => handleIncrease(r)}
+                      >
+                        +
+                      </Boton>
+                      <Boton
+                        color="yellow"
                         className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
                         onClick={() => handleAddBuff(r)}
                       >
