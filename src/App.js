@@ -1312,8 +1312,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.7</p>
-            <p className="text-xs text-gray-500">Edición de enemigos sin superponer ventanas.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.8</p>
+            <p className="text-xs text-gray-500">Cierre de ficha al pulsar fuera.</p>
           </div>
         </div>
       </div>
@@ -2277,8 +2277,23 @@ function App() {
         )}
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => {
+              setShowEnemyForm(false);
+              setEditingEnemy(null);
+              setEnemyInputArma('');
+              setEnemyInputArmadura('');
+              setEnemyInputPoder('');
+              setEnemyArmaError('');
+              setEnemyArmaduraError('');
+              setEnemyPoderError('');
+            }}
+          >
+            <div
+              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h2 className="text-xl font-bold mb-4">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
@@ -2694,8 +2709,14 @@ function App() {
         )}
         {/* Modal para ver ficha completa */}
         {selectedEnemy && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setSelectedEnemy(null)}
+          >
+            <div
+              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Ficha de {selectedEnemy.name}</h2>
                 <div className="flex gap-2">
