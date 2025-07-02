@@ -764,6 +764,7 @@ function App() {
   const editEnemy = (enemy) => {
     setNewEnemy(enemy);
     setEditingEnemy(enemy.id);
+    setSelectedEnemy(null); // Close preview when switching to edit mode
     setShowEnemyForm(true);
   };
   const handleSaveEnemy = async () => {
@@ -1311,8 +1312,8 @@ function App() {
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.6</p>
-            <p className="text-xs text-gray-500">Corrección de equipamiento sin datos en enemigos.</p>
+            <p className="text-sm font-medium text-gray-400">Versión 2.1.7</p>
+            <p className="text-xs text-gray-500">Edición de enemigos sin superponer ventanas.</p>
           </div>
         </div>
       </div>

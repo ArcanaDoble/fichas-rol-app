@@ -28,7 +28,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.1.6**
+> **Versión actual: 2.1.7**
 
 **Resumen de cambios v2.1.3:**
 - Corrección de errores críticos de compilación: imports de iconos faltantes (GiFist, FaFire, FaBolt, FaSnowflake, FaRadiationAlt)
@@ -43,6 +43,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.1.6:**
 - Corrección de equipamiento sin datos al agregar nuevas armas, armaduras o poderes en enemigos
+
+**Resumen de cambios v2.1.7:**
+- Cierre automático de la previsualización al editar fichas de enemigo
 
 **Resumen de cambios v2.1.4:**
 - Prevención de error al mostrar el icono de daño cuando no se define el tipo
