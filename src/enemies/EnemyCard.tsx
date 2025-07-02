@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu } from '@headlessui/react';
+import { useState } from 'react';
 import { FaEllipsisV, FaEdit, FaCopy, FaTrash } from 'react-icons/fa';
 
 export interface EnemyCardProps {
@@ -27,6 +27,7 @@ const EnemyCard: React.FC<EnemyCardProps> = ({
   onDuplicate,
   onDelete,
 }) => {
+  const [open, setOpen] = useState(false);
   return (
     <div className="relative w-[300px] h-[200px] rounded overflow-hidden shadow-lg transform transition-transform hover:scale-105">
       <img
@@ -41,51 +42,42 @@ const EnemyCard: React.FC<EnemyCardProps> = ({
       >
         CR {challenge}
       </span>
-      <Menu as="div" className="absolute top-2 right-2 text-white">
-        <Menu.Button aria-label="actions">
+      <div className="absolute top-2 right-2 text-white">
+        <button aria-label="actions" onClick={() => setOpen(!open)}>
           <FaEllipsisV />
-        </Menu.Button>
-        <Menu.Items className="absolute right-0 mt-2 w-28 origin-top-right bg-gray-800 divide-y divide-gray-700 rounded shadow-lg focus:outline-none z-10">
-          <div className="px-1 py-1">
-            <Menu.Item>
-              {({ active }) => (
-                <button
-                  onClick={() => onEdit?.(id)}
-                  className={`${
-                    active ? 'bg-gray-700' : ''
-                  } group flex rounded-md items-center w-full px-2 py-1 text-sm`}
-                >
-                  <FaEdit className="mr-2" /> Edit
-                </button>
-              )}
-            </Menu.Item>
-            <Menu.Item>
-              {({ active }) => (
-                <button
-                  onClick={() => onDuplicate?.(id)}
-                  className={`${
-                    active ? 'bg-gray-700' : ''
-                  } group flex rounded-md items-center w-full px-2 py-1 text-sm`}
-                >
-                  <FaCopy className="mr-2" /> Duplicate
-                </button>
-              )}
-            </Menu.Item>
-            <Menu.Item>
-              {({ active }) => (
-                <button
-                  onClick={() => onDelete?.(id)}
-                  className={`${
-                    active ? 'bg-gray-700' : ''
-                  } group flex rounded-md items-center w-full px-2 py-1 text-sm text-red-400`}
-                >
-                  <FaTrash className="mr-2" /> Delete
-                </button>
-              )}
-            </Menu.Item>
+        </button>
+        {open && (
+          <div className="absolute right-0 mt-2 w-28 bg-gray-800 divide-y divide-gray-700 rounded shadow-lg z-10">
+            <button
+              onClick={() => {
+                setOpen(false);
+                onEdit?.(id);
+              }}
+              className="flex items-center w-full px-2 py-1 text-sm hover:bg-gray-700"
+            >
+              <FaEdit className="mr-2" /> Edit
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDuplicate?.(id);
+              }}
+              className="flex items-center w-full px-2 py-1 text-sm hover:bg-gray-700"
+            >
+              <FaCopy className="mr-2" /> Duplicate
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDelete?.(id);
+              }}
+              className="flex items-center w-full px-2 py-1 text-sm text-red-400 hover:bg-gray-700"
+            >
+              <FaTrash className="mr-2" /> Delete
+            </button>
           </div>
-        </Menu.Items>
-      </Menu>
+        )}
+      </div>
       <div className="absolute bottom-0 p-2 text-white">
         <p className="text-lg font-bold" data-testid="enemy-name">
           {name}
