@@ -94,8 +94,9 @@ const normalizeName = (name) =>
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
+        .replace(/\s+/g, '')
     : '';
-
+const ALVARO_ID = 'fichadealvaro';
 const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
@@ -116,7 +117,7 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
   
   const statRF = data.stats?.[data.resistenciaFisica || 'vida'] || {};
   const statRM = data.stats?.[data.resistenciaMental || 'ingenio'] || {};
-  const isAlvaro = normalizeName(currentPlayerName) === 'alvaro';
+  const isAlvaro = normalizeName(currentPlayerName) === ALVARO_ID;
   const resistenciaFisica = isAlvaro
     ? (statRF.base || 0) + (statRF.buff || 0)
     : statRF.total || 0;

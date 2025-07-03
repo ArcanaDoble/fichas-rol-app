@@ -100,6 +100,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.3:**
 - Los buffs de Álvaro ahora cuentan como base si su estadística es la resistencia física o mental.
+- Corrección: otras fichas ya no aplican este ajuste por error.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
