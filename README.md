@@ -12,10 +12,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Interfaz color-coded** - Identificación visual por jugador y tipo de equipamiento
 - **Sincronización en tiempo real** - Cambios instantáneos para todos los participantes
 - **Modo Master y Jugador** - Controles especializados según el rol del usuario
+- **Mapa de Batalla integrado** - VTT sencillo con grid y tokens arrastrables
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.2.8**
+> **Versión actual: 2.2.9**
 
 **Resumen de cambios v2.1.1:**
 - Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
