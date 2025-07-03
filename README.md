@@ -28,7 +28,22 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.1.10**
+> **Versión actual: 2.2.0**
+
+
+**Resumen de cambios v2.1.1:**
+- Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
+- Las tarjetas de armas y armaduras equipadas mantienen su diseño clásico, separando estilos de cartas de enemigos y equipamiento.
+- Animaciones suaves y modernas en atributos, estadísticas y reordenamiento de listas.
+- Mejoras de usabilidad y visuales en la ficha de enemigos, imágenes y minijuegos.
+- Corrección de bugs visuales y de interacción en tarjetas y componentes.
+
+**Resumen de cambios v2.1.2:**
+- Sistema de Píldoras de Equipamiento integrado en el Sistema de Velocidad para uso directo de armas y poderes
+- Mejoras en permisos de eliminación: jugadores pueden eliminar sus propios participantes
+- Botón de papelera con color rojo consistente en todo el sistema
+- Consumo de velocidad inteligente basado en emojis 🟡 del equipamiento
+- Interfaz más limpia y organizada para mejor experiencia de usuario
 
 **Resumen de cambios v2.1.3:**
 - Corrección de errores críticos de compilación: imports de iconos faltantes (GiFist, FaFire, FaBolt, FaSnowflake, FaRadiationAlt)
@@ -37,6 +52,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Eliminación de imports no usados: useState en Input.jsx
 - Proyecto ahora compila sin errores ni warnings de ESLint
 - Optimización de rendimiento y mantenibilidad del código
+
+**Resumen de cambios v2.1.4:**
+- Prevención de error al mostrar el icono de daño cuando no se define el tipo
 
 **Resumen de cambios v2.1.5:**
 - Corrección al eliminar equipamiento de enemigos
@@ -56,24 +74,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.1.10:**
 - Nuevo botón dorado para aplicar buffs a las estadísticas.
 - El botón verde "+" ahora incrementa el recurso hasta su valor base.
-- 
-**Resumen de cambios v2.1.4:**
-- Prevención de error al mostrar el icono de daño cuando no se define el tipo
 
-**Resumen de cambios v2.1.2:**
-- Sistema de Píldoras de Equipamiento integrado en el Sistema de Velocidad para uso directo de armas y poderes
-- Mejoras en permisos de eliminación: jugadores pueden eliminar sus propios participantes
-- Botón de papelera con color rojo consistente en todo el sistema
-- Consumo de velocidad inteligente basado en emojis 🟡 del equipamiento
-- Interfaz más limpia y organizada para mejor experiencia de usuario
-
-**Resumen de cambios v2.1.1:**
-- Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
-- Las tarjetas de armas y armaduras equipadas mantienen su diseño clásico, separando estilos de cartas de enemigos y equipamiento.
-- Animaciones suaves y modernas en atributos, estadísticas y reordenamiento de listas.
-- Mejoras de usabilidad y visuales en la ficha de enemigos, imágenes y minijuegos.
-- Corrección de bugs visuales y de interacción en tarjetas y componentes.
-
+**Resumen de cambios v2.2.0:**
+- Botón **Guardar datos** para respaldar la ficha completa.
+- Botón **RESET** que restaura la ficha al último respaldo guardado.
+- Copia de seguridad ahora también incluye estadísticas eliminadas, claves,
+  estados e inventario.
 - **Modo Jugador y Modo Máster** - Interfaces especializadas para cada rol
 - **Gestión de atributos y recursos** - Dados para atributos y recursos personalizables
 - **Equipamiento desde Google Sheets** - Catálogo dinámico de armas y armaduras
