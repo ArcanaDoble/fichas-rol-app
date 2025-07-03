@@ -46,11 +46,13 @@ const Inventory = ({ playerName }) => {
     setNextId(id => id + 1);
   };
 
+  const MAX_STACK = 5;
+
   const handleDrop = (index, dragged) => {
     setSlots(s => s.map((slot, i) => {
       if (i !== index) return slot;
       if (!slot.item) return { ...slot, item: { type: dragged.type, count: 1 } };
-      return { ...slot, item: { ...slot.item, count: Math.min(slot.item.count + 1, 99) } };
+      return { ...slot, item: { ...slot.item, count: Math.min(slot.item.count + 1, MAX_STACK) } };
     }));
   };
 

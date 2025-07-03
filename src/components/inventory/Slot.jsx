@@ -7,12 +7,14 @@ const borderColors = {
   remedio: 'border-blue-400',
   chatarra: 'border-yellow-400',
   comida: 'border-green-400',
+  polvora: 'border-gray-500',
 };
 
 const ringColors = {
   remedio: 'ring-blue-400',
   chatarra: 'ring-yellow-400',
   comida: 'ring-green-400',
+  polvora: 'ring-gray-500',
 };
 
 const Slot = ({ id, item, onDrop, onDelete }) => {
