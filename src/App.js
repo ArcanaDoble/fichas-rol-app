@@ -96,7 +96,8 @@ const normalizeName = (name) =>
         .toLowerCase()
         .replace(/\s+/g, '')
     : '';
-const ALVARO_ID = 'fichadealvaro';
+
+const ALVARO_KEY = 'alvaro';
 const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
@@ -115,7 +116,7 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     }
   });
   
-  const isAlvaro = normalizeName(currentPlayerName) === ALVARO_ID;
+  const isAlvaro = normalizeName(currentPlayerName).includes(ALVARO_KEY);
   const rfId = data.resistenciaFisica || 'vida';
   const rmId = data.resistenciaMental || 'ingenio';
   const newStats = { ...data.stats };
