@@ -53,6 +53,18 @@ const recursoInfo = {
   armadura: 'Explicación de Armadura',
 };
 
+const defaultStats = defaultRecursos.reduce((acc, r) => {
+  acc[r] = { base: 0, buff: 0, total: 0, actual: 0 };
+  return acc;
+}, {});
+
+const defaultResourcesList = defaultRecursos.map(name => ({
+  id: name,
+  name,
+  color: recursoColor[name] || '#ffffff',
+  info: recursoInfo[name] || ''
+}));
+
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = dado => `/dados/${dado}.png`;
@@ -195,12 +207,7 @@ function App() {
     agregarRecurso,
     eliminarRecurso,
   } = useResourcesHook(
-    defaultRecursos.map(name => ({
-      id: name,
-      name,
-      color: recursoColor[name] || '#ffffff',
-      info: recursoInfo[name] || ''
-    })),
+    defaultResourcesList,
     (data, list) => savePlayer(data, list),
     playerData
   );
@@ -550,17 +557,13 @@ function App() {
           claves: [],
           estados: [],
           atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
-          stats: {
-            vida: { base: 0, buff: 0, total: 0, actual: 0 },
-            postura: { base: 0, buff: 0, total: 0, actual: 0 },
-            cordura: { base: 0, buff: 0, total: 0, actual: 0 }
-          },
+          stats: { ...defaultStats },
           cargaAcumulada: { fisica: 0, mental: 0 },
-          resourcesList: [],
+          resourcesList: defaultResourcesList,
           updatedAt: new Date()
         };
         setPlayerData(defaultData);
-        setResourcesList([]);
+        setResourcesList(defaultResourcesList);
         setClaves([]);
         setEstados([]);
       }
@@ -573,17 +576,13 @@ function App() {
         claves: [],
         estados: [],
         atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
-        stats: {
-          vida: { base: 0, buff: 0, total: 0, actual: 0 },
-          postura: { base: 0, buff: 0, total: 0, actual: 0 },
-          cordura: { base: 0, buff: 0, total: 0, actual: 0 }
-        },
+        stats: { ...defaultStats },
         cargaAcumulada: { fisica: 0, mental: 0 },
-        resourcesList: [],
+        resourcesList: defaultResourcesList,
         updatedAt: new Date()
       };
       setPlayerData(defaultData);
-      setResourcesList([]);
+      setResourcesList(defaultResourcesList);
       setClaves([]);
       setEstados([]);
     }
@@ -786,10 +785,7 @@ function App() {
   const createNewEnemy = () => {
     const baseAtributos = {};
     atributos.forEach(k => (baseAtributos[k] = 'D4'));
-    const baseStats = {};
-    defaultRecursos.forEach(r => {
-      baseStats[r] = { base: 0, total: 0, actual: 0, buff: 0 };
-    });
+    const baseStats = { ...defaultStats };
     setNewEnemy({
       name: '',
       portrait: '',
