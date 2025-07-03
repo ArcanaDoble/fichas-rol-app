@@ -341,6 +341,15 @@ function App() {
     { id: 1, x: 50, y: 50, color: 'blue' },
     { id: 2, x: 200, y: 150, color: 'green' },
   ]);
+  const [canvasBackground, setCanvasBackground] = useState(null);
+
+  const handleBackgroundUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setCanvasBackground(reader.result);
+    reader.readAsDataURL(file);
+  };
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -3106,9 +3115,12 @@ function App() {
             ← Volver al Menú
           </Boton>
         </div>
+        <div className="mb-4">
+          <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
+        </div>
         <div className="w-full h-[80vh]">
           <MapCanvas
-            backgroundImage="https://via.placeholder.com/800x600"
+            backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
             gridSize={100}
             tokens={canvasTokens}
             onTokensChange={setCanvasTokens}
