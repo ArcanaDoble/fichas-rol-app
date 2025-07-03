@@ -21,6 +21,7 @@ import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
+import MapCanvas from './components/MapCanvas';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -335,6 +336,11 @@ function App() {
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  // Tokens para el Mapa de Batalla
+  const [canvasTokens, setCanvasTokens] = useState([
+    { id: 1, x: 50, y: 50, color: 'blue' },
+    { id: 2, x: 200, y: 150, color: 'green' },
+  ]);
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas.filter(a =>
@@ -3088,6 +3094,26 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'canvas') {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+          <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+            ← Volver al Menú
+          </Boton>
+        </div>
+        <div className="w-full h-[80vh]">
+          <MapCanvas
+            backgroundImage="https://via.placeholder.com/800x600"
+            gridSize={100}
+            tokens={canvasTokens}
+            onTokensChange={setCanvasTokens}
+          />
+        </div>
       </div>
     );
   }

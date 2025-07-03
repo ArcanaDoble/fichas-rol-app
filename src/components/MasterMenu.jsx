@@ -41,6 +41,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: true,
     },
     {
+      id: 'canvas',
+      title: 'Mapa de Batalla',
+      description: 'Tablero virtual sencillo con grid y tokens',
+      color: 'indigo',
+      features: ['Mapa', 'Tokens', 'Grid'],
+      isNew: true,
+    },
+    {
       id: 'default',
       title: 'Herramientas Tradicionales',
       description: 'Gestión de catálogo, habilidades y glosario',
