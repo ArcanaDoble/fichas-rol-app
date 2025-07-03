@@ -11,30 +11,35 @@ const icons = {
   remedio: '💊',
   chatarra: '⚙️',
   comida: '🍖',
+  polvora: '💥',
 };
 
 const colors = {
   remedio: 'bg-blue-300',
   chatarra: 'bg-yellow-300',
   comida: 'bg-green-300',
+  polvora: 'bg-gray-400',
 };
 
 const gradients = {
   remedio: 'from-blue-200 via-blue-400 to-blue-200',
   chatarra: 'from-yellow-200 via-yellow-400 to-yellow-200',
   comida: 'from-green-200 via-green-400 to-green-200',
+  polvora: 'from-gray-300 via-gray-500 to-gray-300',
 };
 
 const borders = {
   remedio: 'border-blue-400',
   chatarra: 'border-yellow-400',
   comida: 'border-green-400',
+  polvora: 'border-gray-500',
 };
 
 const descriptions = {
   remedio: 'Un remedio curativo',
   chatarra: 'Partes de recambio variadas',
   comida: 'Provisiones comestibles',
+  polvora: 'Material explosivo en polvo',
 };
 
 const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {

@@ -28,7 +28,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.2.1**
+> **Versión actual: 2.2.2**
 
 **Resumen de cambios v2.1.1:**
 - Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
@@ -93,6 +93,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   Ingenio, Cordura y Armadura con sus colores predeterminados.
 - Dos resistencias configurables: por defecto Vida para carga física e
   Ingenio para carga mental, seleccionables por el jugador.
+
+**Resumen de cambios v2.2.2:**
+- Límite de 5 objetos por ranura en el inventario tradicional.
+- Nuevo recurso "pólvora" con color e icono propios.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

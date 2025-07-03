@@ -8,3 +8,9 @@ test('renders icon and count', () => {
   getByText('🍖');
   getByText('2');
 });
+
+test('supports new polvora type', () => {
+  const { getByText } = render(<ItemToken id="2" type="polvora" count={1} />);
+  getByText('💥');
+  getByText('1');
+});
