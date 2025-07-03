@@ -97,7 +97,6 @@ const normalizeName = (name) =>
         .replace(/\s+/g, '')
     : '';
 const ALVARO_KEY = 'alvaro';
-
 const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
@@ -120,7 +119,6 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
   const rfId = data.resistenciaFisica || 'vida';
   const rmId = data.resistenciaMental || 'ingenio';
   const newStats = { ...data.stats };
-
   const rfBase = newStats[rfId]?.base || 0;
   const rmBase = newStats[rmId]?.base || 0;
 
@@ -140,7 +138,6 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
       if (newStats[rmId].actual > total) newStats[rmId].actual = total;
     }
   }
-
   const resistenciaFisica = isAlvaro
     ? (newStats[rfId]?.total || 0)
     : rfBase;
