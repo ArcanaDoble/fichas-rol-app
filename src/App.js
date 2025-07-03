@@ -88,7 +88,17 @@ const cargaMentalIcon = (v) => {
   const n = parseCargaValue(v);
   return n > 0 ? '🧠'.repeat(n) : '❌';
 };
-const applyCargaPenalties = (data, armas, armaduras) => {
+const normalizeName = (name) =>
+  name
+    ? name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, '')
+    : '';
+const ALVARO_KEY = 'alvaro';
+
+const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
   data.weapons?.forEach(n => {
@@ -106,11 +116,37 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     }
   });
   
-  const resistenciaFisica =
-    data.stats?.[data.resistenciaFisica || 'vida']?.total ?? 0;
-  const resistenciaMental =
-    data.stats?.[data.resistenciaMental || 'ingenio']?.total ?? 0;
+  const isAlvaro = normalizeName(currentPlayerName).includes(ALVARO_KEY);
+  const rfId = data.resistenciaFisica || 'vida';
+  const rmId = data.resistenciaMental || 'ingenio';
   const newStats = { ...data.stats };
+
+  const rfBase = newStats[rfId]?.base || 0;
+  const rmBase = newStats[rmId]?.base || 0;
+
+  if (isAlvaro) {
+    if (newStats[rfId]) {
+      const base = newStats[rfId].base || 0;
+      const buff = newStats[rfId].buff || 0;
+      const total = Math.min(base + buff, RESOURCE_MAX);
+      newStats[rfId].total = total;
+      if (newStats[rfId].actual > total) newStats[rfId].actual = total;
+    }
+    if (newStats[rmId]) {
+      const base = newStats[rmId].base || 0;
+      const buff = newStats[rmId].buff || 0;
+      const total = Math.min(base + buff, RESOURCE_MAX);
+      newStats[rmId].total = total;
+      if (newStats[rmId].actual > total) newStats[rmId].actual = total;
+    }
+  }
+
+  const resistenciaFisica = isAlvaro
+    ? (newStats[rfId]?.total || 0)
+    : rfBase;
+  const resistenciaMental = isAlvaro
+    ? (newStats[rmId]?.total || 0)
+    : rmBase;
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
@@ -569,7 +605,12 @@ function App() {
       
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const recalculated = applyCargaPenalties(data, armas, armaduras);
+        const recalculated = applyCargaPenalties(
+          data,
+          armas,
+          armaduras,
+          playerName
+        );
         setPlayerData(recalculated);
         setResourcesList(recalculated.resourcesList || []);
         setClaves(recalculated.claves || []);
@@ -657,7 +698,12 @@ function App() {
     clavesParaGuardar = claves,
     estadosParaGuardar = estados
   ) => {
-    const recalculated = applyCargaPenalties(data, armas, armaduras);
+    const recalculated = applyCargaPenalties(
+      data,
+      armas,
+      armaduras,
+      playerName
+    );
     const fullData = {
       ...recalculated,
       resourcesList: listaParaGuardar,
