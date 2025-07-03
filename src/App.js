@@ -347,13 +347,20 @@ function App() {
     await deleteDoc(doc(db, 'players', playerName));
     volverAlMenu();
   };
-  const guardarDatosFicha = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        `player_${playerName}_backup`,
-        JSON.stringify(playerData)
-      );
-    }
+  const guardarDatosFicha = async () => {
+    if (typeof window === 'undefined') return;
+    const invSnap = await getDoc(doc(db, 'inventory', playerName));
+    const snapshot = {
+      playerData,
+      resourcesList,
+      claves,
+      estados,
+      inventory: invSnap.exists() ? invSnap.data() : null,
+    };
+    window.localStorage.setItem(
+      `player_${playerName}_backup`,
+      JSON.stringify(snapshot)
+    );
   };
   const resetearFichaDesdeBackup = async () => {
     if (typeof window === 'undefined') return;
@@ -361,11 +368,17 @@ function App() {
     if (backup) {
       const data = JSON.parse(backup);
       await savePlayer(
-        data,
+        data.playerData,
         data.resourcesList,
         data.claves,
         data.estados
       );
+      setResourcesList(data.resourcesList || []);
+      setClaves(data.claves || []);
+      setEstados(data.estados || []);
+      if (data.inventory) {
+        await setDoc(doc(db, 'inventory', playerName), data.inventory);
+      }
     }
   };
   // ───────────────────────────────────────────────────────────
