@@ -1,22 +1,9 @@
 # 🎮 Fichas Rol App
 
-**Aplicación web avanzada para gestión de fichas de personaje con sistema de inventario estilo Resident Evil 4**
+**Aplicación web avanzada para gestión de fichas de personaje con sistema de inventario avanzado**
 
-Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol. Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, actualizándose automáticamente. Incluye un revolucionario sistema de inventario estilo Resident Evil 4 con grid 10×8, drag & drop fluido y rotación de objetos.
-
+Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol. Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, actualizándose automáticamente. Incluye un sistema de inventario con grid 10×8, drag & drop fluido y rotación de objetos.
 ## ✨ Características principales
-
-### 🎯 **Sistema de Inventario RE4 (NUEVO)**
-- **Grid 10×8 con collision detection perfecto** - Sistema tetris-like para optimizar espacio
-- **Drag & Drop fluido con preview visual** - Arrastra objetos con vista previa en tiempo real
-- **Rotación de objetos con click derecho** - Rota armas y objetos para encajar mejor
-- **18 tipos de objetos diferentes** - Armas, munición, curación, tesoros, objetos clave y más
-- **Sistema de rareza con colores** - Común, poco común, raro, legendario y único
-- **Responsive design** - Optimizado para móviles y escritorio
-- **Efectos visuales y animaciones** - Feedback visual para todas las acciones
-- **Stackeado automático** - Los objetos compatibles se combinan automáticamente
-- **Guía interactiva** - Sistema de ayuda integrado con controles y consejos
-
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 - **Línea de sucesos en tiempo real** - Seguimiento visual del orden de actuación
 - **Píldoras de Equipamiento interactivas** - Uso directo de armas y poderes desde la ficha
@@ -147,16 +134,6 @@ npm start
 
 La aplicación estará disponible en `http://localhost:3000`
 
-### 🎮 Cómo usar el Inventario RE4
-
-1. **Acceso**: Modo Máster → "🎒 Inventario RE4"
-2. **Añadir objetos**: Usa los controles por categoría (Armas, Munición, Curación, etc.)
-3. **Mover objetos**: Arrastra y suelta en el grid 10×8
-4. **Rotar objetos**: Click derecho en objetos rotables
-5. **Eliminar objetos**: Doble click en cualquier objeto
-6. **Ayuda**: Botón "❓" para guía completa
-
-### ⚡ Cómo usar el Sistema de Velocidad
 
 1. **Acceso**: Modo Jugador → Botón "⚡" en herramientas
 2. **Agregar personaje**: Introduce nombre y velocidad inicial
@@ -182,15 +159,6 @@ firebase deploy    # Despliega a Firebase Hosting
 ```
 src/
 ├── components/
-│   ├── re4/                    # Sistema de inventario RE4
-│   │   ├── InventoryRE4.jsx   # Componente principal
-│   │   ├── InventoryItem.jsx  # Items con rotación
-│   │   ├── InventoryControls.jsx # Controles y categorías
-│   │   ├── InventoryHelp.jsx  # Guía interactiva
-│   │   ├── InventoryEffects.jsx # Efectos visuales
-│   │   ├── ItemPreview.jsx    # Preview durante drag
-│   │   ├── GridCell.jsx       # Celdas del grid
-│   │   └── itemTemplates.js   # 18 tipos de objetos
 │   ├── inventory/             # Inventario tradicional
 │   └── [otros componentes]    # UI general
 ├── firebase.js                # Configuración Firebase
@@ -213,16 +181,6 @@ src/
 - Mejoras visuales en imágenes de enemigos y atributos.
 - Corrección de bugs visuales y de interacción.
 
-### 🆕 **Sistema de Inventario RE4 Completo** (v2.1)
-- ✅ **Grid 10×8 perfecto** con collision detection avanzado
-- ✅ **18 tipos de objetos** organizados en 6 categorías (Armas, Munición, Curación, Objetos Clave, Tesoros, Misceláneos)
-- ✅ **Rotación con click derecho** para objetos compatibles
-- ✅ **Preview visual durante drag** con validación en tiempo real
-- ✅ **Sistema de rareza** (Común, Poco común, Raro, Legendario, Único)
-- ✅ **Efectos visuales** para todas las acciones (añadir, mover, rotar, eliminar)
-- ✅ **Responsive design** optimizado para móviles y escritorio
-- ✅ **Iconos SVG personalizados** para mejor apariencia visual
-- ✅ **Guía interactiva** con controles, categorías y consejos
 - ✅ **Estadísticas en tiempo real** (ocupación, valor total, etc.)
 
 ### 🎨 **Mejoras de UX/UI Completas** (v2.1)

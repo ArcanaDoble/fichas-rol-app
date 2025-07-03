@@ -25,14 +25,6 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
 
   const menuOptions = [
     {
-      id: 're4',
-      title: 'Inventario RE4',
-      description: 'Sistema avanzado con grid 10×8, drag & drop y rotación',
-      color: 'green',
-      features: ['Grid 10×8', 'Drag & Drop', 'Rotación', 'Persistencia'],
-      isNew: true,
-    },
-    {
       id: 'initiative',
       title: 'Sistema de Velocidad',
       description: 'Control total del combate con iniciativa y gestión de participantes',

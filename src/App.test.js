@@ -4,7 +4,6 @@ import App from './App';
 import { ConfirmProvider } from './components/Confirm';
 jest.mock('./components/inventory/Inventory', () => () => <div>Inventory</div>);
 jest.mock('./components/MasterMenu', () => () => <div>MasterMenu</div>);
-jest.mock('./components/re4/InventoryRE4', () => () => <div>InventoryRE4</div>);
 
 test('renders main menu', () => {
   render(

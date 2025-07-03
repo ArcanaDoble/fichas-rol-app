@@ -17,7 +17,6 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
-import InventoryRE4 from './components/re4/InventoryRE4';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
@@ -2360,24 +2359,6 @@ function App() {
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
     return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
-  }
-  if (userType === 'master' && authenticated && chosenView === 're4') {
-    return (
-      <div className="min-h-screen bg-gray-900 text-gray-100">
-        <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-50">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-white">🎒 Inventario RE4 - Modo Máster</h1>
-            <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
-              ← Volver al Menú
-            </Boton>
-          </div>
-          <p className="text-gray-400 text-sm mt-1">
-            Sistema de inventario estilo Resident Evil 4 con grid 10×8, drag & drop y rotación
-          </p>
-        </div>
-        <InventoryRE4 playerName="master_inventory" />
-      </div>
-    );
   }
   if (userType === 'master' && authenticated && chosenView === 'initiative') {
     return <InitiativeTracker 
