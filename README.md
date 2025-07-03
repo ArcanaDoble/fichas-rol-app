@@ -16,10 +16,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
 - **Grid ajustable** - Tamaño y desplazamiento de la cuadrícula configurables
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
+- **Zoom interactivo** - Acerca y aleja el mapa con la rueda del ratón
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.2.12**
+> **Versión actual: 2.2.13**
 
 **Resumen de cambios v2.1.1:**
 - Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
@@ -113,7 +114,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Imagen del mapa se escala automáticamente al contenedor sin perder la relación de aspecto.
 - Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 
-- 
+**Resumen de cambios v2.2.13:**
+- Mapa sin bordes negros utilizando escalado tipo cover o contain.
+- Zoom interactivo con la rueda del ratón en el Mapa de Batalla.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
