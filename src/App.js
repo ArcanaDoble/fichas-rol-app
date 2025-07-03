@@ -124,6 +124,24 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     ? (statRM.base || 0) + (statRM.buff || 0)
     : statRM.total || 0;
   const newStats = { ...data.stats };
+  if (isAlvaro) {
+    const rfId = data.resistenciaFisica || 'vida';
+    const rmId = data.resistenciaMental || 'ingenio';
+    if (newStats[rfId]) {
+      const base = newStats[rfId].base || 0;
+      const buff = newStats[rfId].buff || 0;
+      const total = Math.min(base + buff, RESOURCE_MAX);
+      newStats[rfId].total = total;
+      if (newStats[rfId].actual > total) newStats[rfId].actual = total;
+    }
+    if (newStats[rmId]) {
+      const base = newStats[rmId].base || 0;
+      const buff = newStats[rmId].buff || 0;
+      const total = Math.min(base + buff, RESOURCE_MAX);
+      newStats[rmId].total = total;
+      if (newStats[rmId].actual > total) newStats[rmId].actual = total;
+    }
+  }
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
