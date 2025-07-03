@@ -115,19 +115,11 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     }
   });
   
-  const statRF = data.stats?.[data.resistenciaFisica || 'vida'] || {};
-  const statRM = data.stats?.[data.resistenciaMental || 'ingenio'] || {};
   const isAlvaro = normalizeName(currentPlayerName) === ALVARO_ID;
-  const resistenciaFisica = isAlvaro
-    ? (statRF.base || 0) + (statRF.buff || 0)
-    : statRF.total || 0;
-  const resistenciaMental = isAlvaro
-    ? (statRM.base || 0) + (statRM.buff || 0)
-    : statRM.total || 0;
+  const rfId = data.resistenciaFisica || 'vida';
+  const rmId = data.resistenciaMental || 'ingenio';
   const newStats = { ...data.stats };
   if (isAlvaro) {
-    const rfId = data.resistenciaFisica || 'vida';
-    const rmId = data.resistenciaMental || 'ingenio';
     if (newStats[rfId]) {
       const base = newStats[rfId].base || 0;
       const buff = newStats[rfId].buff || 0;
@@ -143,6 +135,8 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
       if (newStats[rmId].actual > total) newStats[rmId].actual = total;
     }
   }
+  const resistenciaFisica = newStats[rfId]?.total || 0;
+  const resistenciaMental = newStats[rmId]?.total || 0;
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
