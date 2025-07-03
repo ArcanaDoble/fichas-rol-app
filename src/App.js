@@ -97,7 +97,6 @@ const normalizeName = (name) =>
         .replace(/\s+/g, '')
     : '';
 const ALVARO_ID = 'fichadealvaro';
-
 const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
