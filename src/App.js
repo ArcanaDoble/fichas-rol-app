@@ -345,6 +345,10 @@ function App() {
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
     await deleteDoc(doc(db, 'players', playerName));
+    await deleteDoc(doc(db, 'inventory', playerName));
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(`player_${playerName}_backup`);
+    }
     volverAlMenu();
   };
   const guardarDatosFicha = async () => {
