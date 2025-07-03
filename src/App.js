@@ -344,6 +344,7 @@ function App() {
   const [canvasBackground, setCanvasBackground] = useState(null);
   // Configuración de la cuadrícula del mapa de batalla
   const [gridSize, setGridSize] = useState(100);
+  const [gridCells, setGridCells] = useState(30);
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
 
@@ -3132,6 +3133,13 @@ function App() {
           />
           <Input
             type="number"
+            label="Nº casillas"
+            className="w-28"
+            value={gridCells}
+            onChange={e => setGridCells(parseInt(e.target.value, 10) || 1)}
+          />
+          <Input
+            type="number"
             label="Offset X"
             className="w-28"
             value={gridOffsetX}
@@ -3149,6 +3157,7 @@ function App() {
           <MapCanvas
             backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
             gridSize={gridSize}
+            gridCells={gridCells}
             gridOffsetX={gridOffsetX}
             gridOffsetY={gridOffsetY}
             tokens={canvasTokens}
