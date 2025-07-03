@@ -149,7 +149,12 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     const buff = newStats.postura.buff || 0;
     const penal = Math.max(0, fisica - resistenciaFisica);
     const baseEfectiva = Math.max(0, base - penal);
-    const total = Math.max(0, Math.min(baseEfectiva + buff, RESOURCE_MAX));
+    const extraBuff =
+      !isAlvaro && (rfId === 'postura' || rmId === 'postura') ? 0 : buff;
+    const total = Math.max(
+      0,
+      Math.min(baseEfectiva + extraBuff, RESOURCE_MAX)
+    );
     newStats.postura.total = total;
     if (newStats.postura.actual > total) newStats.postura.actual = total;
   }

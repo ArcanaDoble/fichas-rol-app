@@ -28,7 +28,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.2.7**
+> **Versión actual: 2.2.8**
 
 **Resumen de cambios v2.1.1:**
 - Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
@@ -107,6 +107,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.7:**
 - Se corrige la penalización de Postura para que otras fichas ignoren el buff al calcular la resistencia.
+
+**Resumen de cambios v2.2.8:**
+- Postura solo suma su buff a la resistencia física o mental de Álvaro.
 - 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
