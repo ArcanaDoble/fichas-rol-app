@@ -62,7 +62,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Botón **RESET** que restaura la ficha al último respaldo guardado.
 - Copia de seguridad ahora también incluye estadísticas eliminadas, claves,
   estados e inventario.
-- 
+  
 **Resumen de cambios v2.1.4:**
 - Prevención de error al mostrar el icono de daño cuando no se define el tipo
 
