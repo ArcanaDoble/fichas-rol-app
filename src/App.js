@@ -88,7 +88,15 @@ const cargaMentalIcon = (v) => {
   const n = parseCargaValue(v);
   return n > 0 ? '🧠'.repeat(n) : '❌';
 };
-const applyCargaPenalties = (data, armas, armaduras) => {
+const normalizeName = (name) =>
+  name
+    ? name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+    : '';
+
+const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
   data.weapons?.forEach(n => {
@@ -106,10 +114,15 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     }
   });
   
-  const resistenciaFisica =
-    data.stats?.[data.resistenciaFisica || 'vida']?.total ?? 0;
-  const resistenciaMental =
-    data.stats?.[data.resistenciaMental || 'ingenio']?.total ?? 0;
+  const statRF = data.stats?.[data.resistenciaFisica || 'vida'] || {};
+  const statRM = data.stats?.[data.resistenciaMental || 'ingenio'] || {};
+  const isAlvaro = normalizeName(currentPlayerName) === 'alvaro';
+  const resistenciaFisica = isAlvaro
+    ? (statRF.base || 0) + (statRF.buff || 0)
+    : statRF.total || 0;
+  const resistenciaMental = isAlvaro
+    ? (statRM.base || 0) + (statRM.buff || 0)
+    : statRM.total || 0;
   const newStats = { ...data.stats };
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
@@ -569,7 +582,12 @@ function App() {
       
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const recalculated = applyCargaPenalties(data, armas, armaduras);
+        const recalculated = applyCargaPenalties(
+          data,
+          armas,
+          armaduras,
+          playerName
+        );
         setPlayerData(recalculated);
         setResourcesList(recalculated.resourcesList || []);
         setClaves(recalculated.claves || []);
@@ -657,7 +675,12 @@ function App() {
     clavesParaGuardar = claves,
     estadosParaGuardar = estados
   ) => {
-    const recalculated = applyCargaPenalties(data, armas, armaduras);
+    const recalculated = applyCargaPenalties(
+      data,
+      armas,
+      armaduras,
+      playerName
+    );
     const fullData = {
       ...recalculated,
       resourcesList: listaParaGuardar,
