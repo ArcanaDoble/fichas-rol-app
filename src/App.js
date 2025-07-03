@@ -96,8 +96,8 @@ const normalizeName = (name) =>
         .toLowerCase()
         .replace(/\s+/g, '')
     : '';
-const ALVARO_KEY = 'alvaro';
 
+const ALVARO_KEY = 'alvaro';
 const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
   let fisica = 0;
   let mental = 0;
