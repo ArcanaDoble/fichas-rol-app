@@ -106,12 +106,15 @@ const applyCargaPenalties = (data, armas, armaduras) => {
     }
   });
   
-  const resistencia = data.stats?.vida?.total ?? 0;
+  const resistenciaFisica =
+    data.stats?.[data.resistenciaFisica || 'vida']?.total ?? 0;
+  const resistenciaMental =
+    data.stats?.[data.resistenciaMental || 'ingenio']?.total ?? 0;
   const newStats = { ...data.stats };
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
-    const penal = Math.max(0, fisica - resistencia);
+    const penal = Math.max(0, fisica - resistenciaFisica);
     const baseEfectiva = Math.max(0, base - penal);
     const total = Math.max(0, Math.min(baseEfectiva + buff, RESOURCE_MAX));
     newStats.postura.total = total;
@@ -120,7 +123,7 @@ const applyCargaPenalties = (data, armas, armaduras) => {
   if (newStats.cordura) {
     const base = newStats.cordura.base || 0;
     const buff = newStats.cordura.buff || 0;
-    const penal = Math.max(0, mental - resistencia);
+    const penal = Math.max(0, mental - resistenciaMental);
     const baseEfectiva = Math.max(0, base - penal);
     const total = Math.max(0, Math.min(baseEfectiva + buff, RESOURCE_MAX));
     newStats.cordura.total = total;
@@ -169,7 +172,18 @@ function App() {
   const [nameEntered, setNameEntered]         = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
   const tooltipCounterRef = useRef(0);
-  const [playerData, setPlayerData]           = useState({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+  const [playerData, setPlayerData]           = useState({
+    weapons: [],
+    armaduras: [],
+    poderes: [],
+    claves: [],
+    estados: [],
+    atributos: {},
+    stats: {},
+    cargaAcumulada: { fisica: 0, mental: 0 },
+    resistenciaFisica: 'vida',
+    resistenciaMental: 'ingenio',
+  });
   const [playerError, setPlayerError]         = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
@@ -324,7 +338,18 @@ function App() {
     setChosenView(null);
     setNameEntered(false);
     setPlayerName('');
-    setPlayerData({ weapons: [], armaduras: [], poderes: [], claves: [], estados: [], atributos: {}, stats: {}, cargaAcumulada: { fisica: 0, mental: 0 } });
+    setPlayerData({
+      weapons: [],
+      armaduras: [],
+      poderes: [],
+      claves: [],
+      estados: [],
+      atributos: {},
+      stats: {},
+      cargaAcumulada: { fisica: 0, mental: 0 },
+      resistenciaFisica: 'vida',
+      resistenciaMental: 'ingenio',
+    });
     setPlayerError('');
     setPlayerInputArma('');
     setPlayerInputArmadura('');
@@ -556,11 +581,20 @@ function App() {
           poderes: [],
           claves: [],
           estados: [],
-          atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
+          atributos: {
+            fuerza: 0,
+            destreza: 0,
+            constitucion: 0,
+            inteligencia: 0,
+            sabiduria: 0,
+            carisma: 0,
+          },
           stats: { ...defaultStats },
           cargaAcumulada: { fisica: 0, mental: 0 },
+          resistenciaFisica: 'vida',
+          resistenciaMental: 'ingenio',
           resourcesList: defaultResourcesList,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         };
         setPlayerData(defaultData);
         setResourcesList(defaultResourcesList);
@@ -575,11 +609,20 @@ function App() {
         poderes: [],
         claves: [],
         estados: [],
-        atributos: { fuerza: 0, destreza: 0, constitucion: 0, inteligencia: 0, sabiduria: 0, carisma: 0 },
+        atributos: {
+          fuerza: 0,
+          destreza: 0,
+          constitucion: 0,
+          inteligencia: 0,
+          sabiduria: 0,
+          carisma: 0,
+        },
         stats: { ...defaultStats },
         cargaAcumulada: { fisica: 0, mental: 0 },
+        resistenciaFisica: 'vida',
+        resistenciaMental: 'ingenio',
         resourcesList: defaultResourcesList,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
       setPlayerData(defaultData);
       setResourcesList(defaultResourcesList);
@@ -680,6 +723,13 @@ function App() {
     }
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
+  };
+  const handleResistenciaChange = (tipo, statId) => {
+    const newData =
+      tipo === 'fisica'
+        ? { ...playerData, resistenciaFisica: statId }
+        : { ...playerData, resistenciaMental: statId };
+    savePlayer(newData);
   };
   const handleEliminarRecurso = async (id) => {
     if (id === 'postura') {
@@ -1592,12 +1642,41 @@ function App() {
               ⚡
             </Boton>
           </div>
-          <div className="mb-4 text-center text-sm text-gray-300">
-            Resistencia (Vida): {playerData.stats["vida"]?.total ?? 0}
-            {'   |   '}
-            Carga física total: {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0})
-            {'   |   '}
-            Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
+          <div className="mb-4 text-center text-sm text-gray-300 flex flex-col gap-1">
+            <span className="flex flex-wrap justify-center items-center gap-2">
+              Res. Física:
+              <select
+                value={playerData.resistenciaFisica}
+                onChange={e => handleResistenciaChange('fisica', e.target.value)}
+                className="bg-gray-700 text-white px-1 rounded"
+              >
+                {resourcesList.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              ({playerData.stats[playerData.resistenciaFisica]?.total ?? 0})
+              {'   |   '}
+              Res. Mental:
+              <select
+                value={playerData.resistenciaMental}
+                onChange={e => handleResistenciaChange('mental', e.target.value)}
+                className="bg-gray-700 text-white px-1 rounded"
+              >
+                {resourcesList.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              ({playerData.stats[playerData.resistenciaMental]?.total ?? 0})
+            </span>
+            <span>
+              Carga física total: {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0})
+              {'   |   '}
+              Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
+            </span>
           </div>
           {/* Botones Volver / Eliminar */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 w-full justify-center">
@@ -1646,16 +1725,19 @@ function App() {
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
               const buffV = s.buff || 0;
-              const resistencia = playerData.stats["vida"]?.total ?? 0;
+              const resistenciaFisica =
+                playerData.stats[playerData.resistenciaFisica]?.total ?? 0;
+              const resistenciaMental =
+                playerData.stats[playerData.resistenciaMental]?.total ?? 0;
               const cargaFisicaTotal = playerData.cargaAcumulada?.fisica || 0;
               const cargaMentalTotal = playerData.cargaAcumulada?.mental || 0;
               let penalizacion = 0;
               let baseEfectiva = baseV;
               if (r === 'postura') {
-                penalizacion = Math.max(0, cargaFisicaTotal - resistencia);
+                penalizacion = Math.max(0, cargaFisicaTotal - resistenciaFisica);
                 baseEfectiva = Math.max(0, baseV - penalizacion);
               } else if (r === 'cordura') {
-                penalizacion = Math.max(0, cargaMentalTotal - resistencia);
+                penalizacion = Math.max(0, cargaMentalTotal - resistenciaMental);
                 baseEfectiva = Math.max(0, baseV - penalizacion);
               }
               const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));

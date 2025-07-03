@@ -91,6 +91,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.1:**
 - Las fichas nuevas ahora incluyen las estadísticas base de Postura, Vida,
   Ingenio, Cordura y Armadura con sus colores predeterminados.
+- Dos resistencias configurables: por defecto Vida para carga física e
+  Ingenio para carga mental, seleccionables por el jugador.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
