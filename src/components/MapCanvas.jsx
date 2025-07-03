@@ -41,7 +41,19 @@ Token.propTypes = {
   onDragEnd: PropTypes.func.isRequired,
 };
 
-const MapCanvas = ({ backgroundImage, gridSize = 100, tokens, onTokensChange }) => {
+/**
+ * Canvas que muestra un mapa con una cuadrícula ajustable.
+ * Permite definir tamaño de celda y desplazamiento para
+ * alinear la grid con la imagen de fondo.
+ */
+const MapCanvas = ({
+  backgroundImage,
+  gridSize = 100,
+  gridOffsetX = 0,
+  gridOffsetY = 0,
+  tokens,
+  onTokensChange,
+}) => {
   const containerRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 300, height: 300 });
   const [bg] = useImage(backgroundImage);
@@ -62,12 +74,14 @@ const MapCanvas = ({ backgroundImage, gridSize = 100, tokens, onTokensChange }) 
 
   const drawGrid = () => {
     const lines = [];
-    for (let i = gridSize; i < stageSize.width; i += gridSize) {
+    // Líneas verticales
+    for (let i = gridOffsetX; i < stageSize.width; i += gridSize) {
       lines.push(
         <Line key={`v${i}`} points={[i, 0, i, stageSize.height]} stroke="rgba(255,255,255,0.2)" />
       );
     }
-    for (let i = gridSize; i < stageSize.height; i += gridSize) {
+    // Líneas horizontales
+    for (let i = gridOffsetY; i < stageSize.height; i += gridSize) {
       lines.push(
         <Line key={`h${i}`} points={[0, i, stageSize.width, i]} stroke="rgba(255,255,255,0.2)" />
       );
@@ -100,6 +114,8 @@ const MapCanvas = ({ backgroundImage, gridSize = 100, tokens, onTokensChange }) 
 MapCanvas.propTypes = {
   backgroundImage: PropTypes.string,
   gridSize: PropTypes.number,
+  gridOffsetX: PropTypes.number,
+  gridOffsetY: PropTypes.number,
   tokens: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
