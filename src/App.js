@@ -347,6 +347,27 @@ function App() {
     await deleteDoc(doc(db, 'players', playerName));
     volverAlMenu();
   };
+  const guardarDatosFicha = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        `player_${playerName}_backup`,
+        JSON.stringify(playerData)
+      );
+    }
+  };
+  const resetearFichaDesdeBackup = async () => {
+    if (typeof window === 'undefined') return;
+    const backup = window.localStorage.getItem(`player_${playerName}_backup`);
+    if (backup) {
+      const data = JSON.parse(backup);
+      await savePlayer(
+        data,
+        data.resourcesList,
+        data.claves,
+        data.estados
+      );
+    }
+  };
   // ───────────────────────────────────────────────────────────
   // FETCH EXISTING PLAYERS
   // ───────────────────────────────────────────────────────────
@@ -1577,6 +1598,18 @@ function App() {
               className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
               onClick={eliminarFichaJugador}
             >Eliminar ficha</Boton>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 mb-6 w-full justify-center">
+            <Boton
+              color="blue"
+              className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
+              onClick={guardarDatosFicha}
+            >Guardar datos</Boton>
+            <Boton
+              color="yellow"
+              className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
+              onClick={resetearFichaDesdeBackup}
+            >RESET</Boton>
           </div>
           {/* ATRIBUTOS */}
           <h2 className="text-xl font-semibold text-center mb-4">Atributos</h2>
