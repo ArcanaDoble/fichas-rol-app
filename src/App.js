@@ -338,10 +338,7 @@ function App() {
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Tokens para el Mapa de Batalla
-  const [canvasTokens, setCanvasTokens] = useState([
-    { id: 1, x: 50, y: 50, color: 'blue' },
-    { id: 2, x: 200, y: 150, color: 'green' },
-  ]);
+  const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasBackground, setCanvasBackground] = useState(null);
   // Configuración de la cuadrícula del mapa de batalla
   const [gridSize, setGridSize] = useState(100);
