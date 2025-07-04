@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { nanoid } from 'nanoid';
 import { FiChevronDown, FiChevronRight, FiTrash } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const AssetSidebar = ({ onAssetSelect }) => {
   const [folders, setFolders] = useState(() => [
@@ -31,19 +32,26 @@ const AssetSidebar = ({ onAssetSelect }) => {
     }
   };
 
-  const handleFilesUpload = (folderId, files) => {
+  const fileToDataURL = (file) =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+
+  const handleFilesUpload = async (folderId, files) => {
     if (!files) return;
-    setFolders((fs) =>
-      fs.map((f) => {
-        if (f.id !== folderId) return f;
-        const newAssets = [...f.assets];
-        Array.from(files).forEach((file) => {
-          const url = URL.createObjectURL(file);
-          const name = file.name.replace(/\.[^/.]+$/, '');
-          newAssets.push({ id: nanoid(), name, url });
-        });
-        return { ...f, assets: newAssets };
+    const uploads = await Promise.all(
+      Array.from(files).map(async (file) => {
+        const url = await fileToDataURL(file);
+        const name = file.name.replace(/\.[^/.]+$/, '');
+        return { id: nanoid(), name, url };
       })
+    );
+    setFolders((fs) =>
+      fs.map((f) =>
+        f.id === folderId ? { ...f, assets: [...f.assets, ...uploads] } : f
+      )
     );
   };
 
@@ -75,57 +83,74 @@ const AssetSidebar = ({ onAssetSelect }) => {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {folders.map((folder) => (
-          <div key={folder.id} className="bg-gray-700 rounded">
-            <div className="flex items-center justify-between px-2 py-1 hover:bg-gray-600">
-              <button
-                onClick={() => toggleFolder(folder.id)}
-                className="flex-1 text-left truncate flex items-center gap-1"
-              >
-                {folder.open ? <FiChevronDown /> : <FiChevronRight />}
-                <span className="truncate">{folder.name}</span>
-              </button>
-              <button
-                onClick={() => removeFolder(folder.id)}
-                className="text-gray-400 hover:text-red-400"
-              >
-                <FiTrash />
-              </button>
-            </div>
-            {folder.open && (
-              <div className="p-2 space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
-                  className="text-sm w-full"
-                />
-                <div className="grid grid-cols-4 gap-2">
-                  {folder.assets.map((asset) => (
-                    <div key={asset.id} className="text-center text-xs">
-                      <div className="relative group">
-                        <img
-                          src={asset.url}
-                          alt={asset.name}
-                          className="w-16 h-16 object-cover rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
-                          onClick={() => onAssetSelect?.(asset)}
-                        />
-                        <button
-                          onClick={() => removeAsset(folder.id, asset.id)}
-                          className="absolute -top-1 -right-1 bg-gray-800 rounded-full p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400"
-                        >
-                          <FiTrash />
-                        </button>
-                      </div>
-                      <span className="truncate block w-16 mx-auto">{asset.name}</span>
-                    </div>
-                  ))}
-                </div>
+        <AnimatePresence>
+          {folders.map((folder) => (
+            <motion.div
+              key={folder.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-700 rounded"
+            >
+              <div className="flex items-center justify-between px-2 py-1 hover:bg-gray-600">
+                <button
+                  onClick={() => toggleFolder(folder.id)}
+                  className="flex-1 text-left truncate flex items-center gap-1"
+                >
+                  {folder.open ? <FiChevronDown /> : <FiChevronRight />}
+                  <span className="truncate">{folder.name}</span>
+                </button>
+                <button
+                  onClick={() => removeFolder(folder.id)}
+                  className="text-gray-400 hover:text-red-400"
+                >
+                  <FiTrash />
+                </button>
               </div>
-            )}
-          </div>
-        ))}
+              <AnimatePresence initial={false}>
+                {folder.open && (
+                  <motion.div
+                    key="content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden p-2 space-y-2"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
+                      className="text-sm w-full"
+                    />
+                    <div className="grid grid-cols-4 gap-2">
+                      {folder.assets.map((asset) => (
+                        <div key={asset.id} className="text-center text-xs">
+                          <div className="relative group">
+                            <img
+                              src={asset.url}
+                              alt={asset.name}
+                              className="w-16 h-16 object-cover rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
+                              onClick={() => onAssetSelect?.(asset)}
+                            />
+                            <button
+                              onClick={() => removeAsset(folder.id, asset.id)}
+                              className="absolute -top-1 -right-1 bg-gray-800 rounded-full p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400"
+                            >
+                              <FiTrash />
+                            </button>
+                          </div>
+                          <span className="truncate block w-16 mx-auto">{asset.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
