@@ -218,7 +218,6 @@ const MapCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
-
   const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
