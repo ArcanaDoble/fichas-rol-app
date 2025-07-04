@@ -139,41 +139,19 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
                       className="text-sm w-full"
                     />
                     <div className="grid grid-cols-4 gap-2">
-                      {folder.assets.map((asset) => {
-                        const [{ isDragging }, drag] = useDrag(
-                          () => ({
-                            type: AssetTypes.IMAGE,
-                            item: { url: asset.url, name: asset.name },
-                            collect: (monitor) => ({
-                              isDragging: monitor.isDragging(),
-                            }),
-                            begin: () => onDragStart?.({ url: asset.url, name: asset.name }),
-                          }),
-                          [asset, onDragStart]
-                        );
-                        return (
-                          <div key={asset.id} className="text-center text-xs">
-                            <div ref={drag} className="relative group" style={{ opacity: isDragging ? 0.5 : 1 }}>
-                              <img
-                                src={asset.url}
-                                alt={asset.name}
-                                className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
-                                onClick={() => onAssetSelect?.(asset)}
-                                onMouseEnter={(e) => showPreview(asset, e)}
-                                onMouseMove={movePreview}
-                                onMouseLeave={hidePreview}
-                              />
-                              <button
-                                onClick={() => removeAsset(folder.id, asset.id)}
-                                className="absolute -top-1 -right-1 bg-gray-800 rounded-full p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400"
-                              >
-                                <FiTrash />
-                              </button>
-                            </div>
-                            <span className="truncate block w-16 mx-auto">{asset.name}</span>
-                          </div>
-                        );
-                      })}
+                      {folder.assets.map((asset) => (
+                        <DraggableAssetItem
+                          key={asset.id}
+                          asset={asset}
+                          folderId={folder.id}
+                          onAssetSelect={onAssetSelect}
+                          onDragStart={onDragStart}
+                          onRemove={removeAsset}
+                          showPreview={showPreview}
+                          movePreview={movePreview}
+                          hidePreview={hidePreview}
+                        />
+                      ))}
                     </div>
                   </motion.div>
                 )}
@@ -203,4 +181,67 @@ AssetSidebar.propTypes = {
   onDragStart: PropTypes.func,
 };
 
+const DraggableAssetItem = ({
+  asset,
+  folderId,
+  onAssetSelect,
+  onDragStart,
+  onRemove,
+  showPreview,
+  movePreview,
+  hidePreview,
+}) => {
+  const [{ isDragging }, drag] = useDrag(
+    () => ({
+      type: AssetTypes.IMAGE,
+      item: { url: asset.url, name: asset.name },
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+      begin: () => onDragStart?.({ url: asset.url, name: asset.name }),
+    }),
+    [asset, onDragStart]
+  );
+  return (
+    <div className="text-center text-xs">
+      <div
+        ref={drag}
+        className="relative group"
+        style={{ opacity: isDragging ? 0.5 : 1 }}
+      >
+        <img
+          src={asset.url}
+          alt={asset.name}
+          className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
+          onClick={() => onAssetSelect?.(asset)}
+          onMouseEnter={(e) => showPreview(asset, e)}
+          onMouseMove={movePreview}
+          onMouseLeave={hidePreview}
+        />
+        <button
+          onClick={() => onRemove(folderId, asset.id)}
+          className="absolute -top-1 -right-1 bg-gray-800 rounded-full p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400"
+        >
+          <FiTrash />
+        </button>
+      </div>
+      <span className="truncate block w-16 mx-auto">{asset.name}</span>
+    </div>
+  );
+};
+
+DraggableAssetItem.propTypes = {
+  asset: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    name: PropTypes.string.isRequired,
+    url: PropTypes.string.isRequired,
+  }).isRequired,
+  folderId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  onAssetSelect: PropTypes.func,
+  onDragStart: PropTypes.func,
+  onRemove: PropTypes.func.isRequired,
+  showPreview: PropTypes.func.isRequired,
+  movePreview: PropTypes.func.isRequired,
+  hidePreview: PropTypes.func.isRequired,
+};
+
 export default AssetSidebar;
+

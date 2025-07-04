@@ -218,6 +218,7 @@ const MapCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+  const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
     () => ({
@@ -237,8 +238,6 @@ const MapCanvas = ({
     }),
     [tokens, groupPos, groupScale, mapWidth, mapHeight, gridOffsetX, gridOffsetY]
   );
-
-  const groupScale = baseScale * zoom;
 
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden">
