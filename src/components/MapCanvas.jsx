@@ -45,11 +45,20 @@ const Token = ({
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
-    const newWidth = node.width() * scaleX;
-    const newHeight = node.height() * scaleY;
+    let newWidth = node.width() * scaleX;
+    let newHeight = node.height() * scaleY;
+
+    newWidth = Math.max(gridSize, Math.round(newWidth / gridSize) * gridSize);
+    newHeight = Math.max(gridSize, Math.round(newHeight / gridSize) * gridSize);
+
+    const newX = Math.round(node.x() / gridSize) * gridSize;
+    const newY = Math.round(node.y() / gridSize) * gridSize;
+
+    node.position({ x: newX, y: newY });
     node.width(newWidth);
     node.height(newHeight);
-    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize);
+
+    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, newX, newY);
   };
 
   const handleRotateMove = (e) => {
@@ -72,6 +81,10 @@ const Token = ({
     height: height * gridSize,
     rotation: angle,
     draggable: true,
+    dragBoundFunc: (pos) => ({
+      x: Math.round(pos.x / gridSize) * gridSize,
+      y: Math.round(pos.y / gridSize) * gridSize,
+    }),
     onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
@@ -226,8 +239,12 @@ const MapCanvas = ({
     onTokensChange(newTokens);
   };
 
-  const handleSizeChange = (id, w, h) => {
-    const updated = tokens.map((t) => (t.id === id ? { ...t, w, h } : t));
+  const handleSizeChange = (id, w, h, px, py) => {
+    const x = pxToCell(px, gridOffsetX);
+    const y = pxToCell(py, gridOffsetY);
+    const updated = tokens.map((t) =>
+      t.id === id ? { ...t, w, h, x, y } : t
+    );
     onTokensChange(updated);
   };
 
