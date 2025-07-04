@@ -1,39 +1,131 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { Stage, Layer, Rect, Line, Image as KonvaImage, Group } from 'react-konva';
+import { Stage, Layer, Rect, Line, Image as KonvaImage, Group, Transformer, Circle } from 'react-konva';
 import useImage from 'use-image';
 import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
 
-const Token = ({ id, x, y, size, color, image, selected, onDragEnd, onClick }) => {
+const Token = ({
+  id,
+  x,
+  y,
+  width,
+  height,
+  angle,
+  color,
+  image,
+  gridSize,
+  selected,
+  onDragEnd,
+  onClick,
+  onTransformEnd,
+  onRotate,
+}) => {
   const [img] = useImage(image);
+  const shapeRef = useRef();
+  const trRef = useRef();
+  const SNAP = gridSize / 4;
+
+  useEffect(() => {
+    if (selected && trRef.current && shapeRef.current) {
+      trRef.current.nodes([shapeRef.current]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [selected]);
+
+  const snapBox = (box) => {
+    box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
+    box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
+    return box;
+  };
+
+  const handleTransformEnd = () => {
+    const node = shapeRef.current;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    const newWidth = node.width() * scaleX;
+    const newHeight = node.height() * scaleY;
+    node.width(newWidth);
+    node.height(newHeight);
+    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize);
+  };
+
+  const handleRotateMove = (e) => {
+    const node = shapeRef.current;
+    const pos = e.target.position();
+    const centerX = node.width() / 2;
+    const centerY = node.height() / 2;
+    const rad = Math.atan2(pos.y - centerY, pos.x - centerX);
+    node.rotation((rad * 180) / Math.PI);
+  };
+
+  const handleRotateEnd = () => {
+    onRotate(id, shapeRef.current.rotation());
+  };
+
   const common = {
     x,
     y,
-    width: size,
-    height: size,
+    width: width * gridSize,
+    height: height * gridSize,
+    rotation: angle,
     draggable: true,
     onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
     strokeWidth: selected ? 3 : 0,
   };
-  if (img) {
-    return <KonvaImage image={img} {...common} />;
-  }
-  return <Rect fill={color || 'red'} {...common} />;
+
+  return (
+    <Group>
+      {img ? (
+        <KonvaImage ref={shapeRef} image={img} {...common} />
+      ) : (
+        <Rect ref={shapeRef} fill={color || 'red'} {...common} />
+      )}
+      {selected && (
+        <>
+          <Transformer
+            ref={trRef}
+            enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+            rotateEnabled={false}
+            boundBoxFunc={(oldBox, newBox) => snapBox(newBox)}
+            onTransformEnd={handleTransformEnd}
+          />
+          <Circle
+            x={width * gridSize}
+            y={-20}
+            radius={8}
+            fill="#fff"
+            stroke="#000"
+            strokeWidth={1}
+            draggable
+            onDragMove={handleRotateMove}
+            onDragEnd={handleRotateEnd}
+          />
+        </>
+      )}
+    </Group>
+  );
 };
 
 Token.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   x: PropTypes.number.isRequired,
   y: PropTypes.number.isRequired,
-  size: PropTypes.number.isRequired,
+  width: PropTypes.number.isRequired,
+  height: PropTypes.number.isRequired,
+  angle: PropTypes.number.isRequired,
+  gridSize: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
   onClick: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
+  onTransformEnd: PropTypes.func.isRequired,
+  onRotate: PropTypes.func.isRequired,
 };
 
 /**
@@ -134,6 +226,16 @@ const MapCanvas = ({
     onTokensChange(newTokens);
   };
 
+  const handleSizeChange = (id, w, h) => {
+    const updated = tokens.map((t) => (t.id === id ? { ...t, w, h } : t));
+    onTokensChange(updated);
+  };
+
+  const handleRotateChange = (id, angle) => {
+    const updated = tokens.map((t) => (t.id === id ? { ...t, angle } : t));
+    onTokensChange(updated);
+  };
+
   // Zoom interactivo con la rueda del ratón
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -205,6 +307,15 @@ const MapCanvas = ({
         onTokensChange(tokens.filter((t) => t.id !== selectedId));
         setSelectedId(null);
         return;
+      case 'r': {
+        const delta = e.shiftKey ? -90 : 90;
+        const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
+        const rotated = tokens.map((t) =>
+          t.id === selectedId ? { ...t, angle: updatedAngle } : t
+        );
+        onTokensChange(rotated);
+        return;
+      }
       default:
         return;
     }
@@ -232,7 +343,7 @@ const MapCanvas = ({
         const cellY = pxToCell(relY, gridOffsetY);
         const x = Math.max(0, Math.min(mapWidth - 1, cellX));
         const y = Math.max(0, Math.min(mapHeight - 1, cellY));
-        const newToken = { id: Date.now(), x, y, url: item.url, name: item.name };
+        const newToken = { id: Date.now(), x, y, w: 1, h: 1, angle: 0, url: item.url, name: item.name };
         onTokensChange([...tokens, newToken]);
       },
     }),
@@ -263,12 +374,17 @@ const MapCanvas = ({
                 id={token.id}
                 x={cellToPx(token.x, gridOffsetX)}
                 y={cellToPx(token.y, gridOffsetY)}
-                size={effectiveGridSize}
+                width={token.w || 1}
+                height={token.h || 1}
+                angle={token.angle || 0}
+                gridSize={effectiveGridSize}
                 image={token.url}
                 color={token.color}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
                 onClick={setSelectedId}
+                onTransformEnd={handleSizeChange}
+                onRotate={handleRotateChange}
               />
             ))}
           </Group>
@@ -297,6 +413,9 @@ MapCanvas.propTypes = {
       url: PropTypes.string,
       name: PropTypes.string,
       color: PropTypes.string,
+      w: PropTypes.number,
+      h: PropTypes.number,
+      angle: PropTypes.number,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
