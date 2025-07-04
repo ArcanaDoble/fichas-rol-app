@@ -22,6 +22,7 @@ import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
+import AssetSidebar from './components/AssetSidebar';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -3153,16 +3154,19 @@ function App() {
             onChange={e => setGridOffsetY(parseInt(e.target.value, 10) || 0)}
           />
         </div>
-        <div className="w-full h-[80vh]">
-          <MapCanvas
-            backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
-            gridSize={gridSize}
-            gridCells={gridCells}
-            gridOffsetX={gridOffsetX}
-            gridOffsetY={gridOffsetY}
-            tokens={canvasTokens}
-            onTokensChange={setCanvasTokens}
-          />
+        <div className="relative">
+          <div className="h-[80vh] mr-80">
+            <MapCanvas
+              backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
+              gridSize={gridSize}
+              gridCells={gridCells}
+              gridOffsetX={gridOffsetX}
+              gridOffsetY={gridOffsetY}
+              tokens={canvasTokens}
+              onTokensChange={setCanvasTokens}
+            />
+          </div>
+          <AssetSidebar />
         </div>
       </div>
     );

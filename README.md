@@ -121,6 +121,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.14:**
 - Paneo con el botón central del ratón para mover el mapa.
+
+**Resumen de cambios v2.2.15:**
+- Nuevo componente **AssetSidebar** para subir y organizar imágenes del mapa.
 - 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
