@@ -342,6 +342,11 @@ function App() {
     { id: 2, x: 200, y: 150, color: 'green' },
   ]);
   const [canvasBackground, setCanvasBackground] = useState(null);
+  // Configuración de la cuadrícula del mapa de batalla
+  const [gridSize, setGridSize] = useState(100);
+  const [gridCells, setGridCells] = useState(30);
+  const [gridOffsetX, setGridOffsetX] = useState(0);
+  const [gridOffsetY, setGridOffsetY] = useState(0);
 
   const handleBackgroundUpload = (e) => {
     const file = e.target.files[0];
@@ -3118,10 +3123,43 @@ function App() {
         <div className="mb-4">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
         </div>
+        <div className="flex flex-wrap gap-4 mb-4">
+          <Input
+            type="number"
+            label="Tamaño de celda"
+            className="w-28"
+            value={gridSize}
+            onChange={e => setGridSize(parseInt(e.target.value, 10) || 1)}
+          />
+          <Input
+            type="number"
+            label="Nº casillas"
+            className="w-28"
+            value={gridCells}
+            onChange={e => setGridCells(parseInt(e.target.value, 10) || 1)}
+          />
+          <Input
+            type="number"
+            label="Offset X"
+            className="w-28"
+            value={gridOffsetX}
+            onChange={e => setGridOffsetX(parseInt(e.target.value, 10) || 0)}
+          />
+          <Input
+            type="number"
+            label="Offset Y"
+            className="w-28"
+            value={gridOffsetY}
+            onChange={e => setGridOffsetY(parseInt(e.target.value, 10) || 0)}
+          />
+        </div>
         <div className="w-full h-[80vh]">
           <MapCanvas
             backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
-            gridSize={100}
+            gridSize={gridSize}
+            gridCells={gridCells}
+            gridOffsetX={gridOffsetX}
+            gridOffsetY={gridOffsetY}
             tokens={canvasTokens}
             onTokensChange={setCanvasTokens}
           />
