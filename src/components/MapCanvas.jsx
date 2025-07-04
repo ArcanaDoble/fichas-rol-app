@@ -66,6 +66,9 @@ const MapCanvas = ({
   const [baseScale, setBaseScale] = useState(1);
   const [zoom, setZoom] = useState(initialZoom);
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
@@ -152,6 +155,30 @@ const MapCanvas = ({
     });
   };
 
+  // Iniciar paneo con el botón central del ratón
+  const handleMouseDown = (e) => {
+    if (e.evt.button === 1) {
+      e.evt.preventDefault();
+      setIsPanning(true);
+      panStart.current = stageRef.current.getPointerPosition();
+      panOrigin.current = { ...groupPos };
+    }
+  };
+
+  // Actualiza la posición del grupo durante el paneo
+  const handleMouseMove = () => {
+    if (!isPanning) return;
+    const pointer = stageRef.current.getPointerPosition();
+    setGroupPos({
+      x: panOrigin.current.x + (pointer.x - panStart.current.x),
+      y: panOrigin.current.y + (pointer.y - panStart.current.y),
+    });
+  };
+
+  const stopPanning = () => {
+    if (isPanning) setIsPanning(false);
+  };
+
   const groupScale = baseScale * zoom;
 
   return (
@@ -161,6 +188,10 @@ const MapCanvas = ({
         width={containerSize.width}
         height={containerSize.height}
         onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={stopPanning}
+        onMouseLeave={stopPanning}
         style={{ background: '#000' }}
       >
         <Layer>
