@@ -133,6 +133,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Miniaturas completas con object-contain y tamaño fijo de 64 px.
 - Previsualización flotante estilo Roll20 al pasar el ratón sobre un asset.
 
+**Resumen de cambios v2.2.18:**
+- Arrastre directo de assets al mapa para crear tokens.
+- Selección y movimiento por teclado con WASD o Delete.
+
+**Resumen de cambios v2.2.19:**
+- Hooks de drag & drop actualizados a la sintaxis de `react-dnd` v14.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real

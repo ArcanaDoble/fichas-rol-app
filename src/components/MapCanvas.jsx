@@ -1,34 +1,27 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Stage, Layer, Rect, Line, Image as KonvaImage, Group } from 'react-konva';
 import useImage from 'use-image';
+import { useDrop } from 'react-dnd';
+import { AssetTypes } from './AssetSidebar';
 
-const Token = ({ id, x, y, size, color, image, onDragEnd }) => {
+const Token = ({ id, x, y, size, color, image, selected, onDragEnd, onClick }) => {
   const [img] = useImage(image);
+  const common = {
+    x,
+    y,
+    width: size,
+    height: size,
+    draggable: true,
+    onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
+    onClick: () => onClick?.(id),
+    stroke: selected ? '#e0e0e0' : undefined,
+    strokeWidth: selected ? 3 : 0,
+  };
   if (img) {
-    return (
-      <KonvaImage
-        image={img}
-        x={x}
-        y={y}
-        width={size}
-        height={size}
-        draggable
-        onDragEnd={(e) => onDragEnd(id, e.target.x(), e.target.y())}
-      />
-    );
+    return <KonvaImage image={img} {...common} />;
   }
-  return (
-    <Rect
-      x={x}
-      y={y}
-      width={size}
-      height={size}
-      fill={color || 'red'}
-      draggable
-      onDragEnd={(e) => onDragEnd(id, e.target.x(), e.target.y())}
-    />
-  );
+  return <Rect fill={color || 'red'} {...common} />;
 };
 
 Token.propTypes = {
@@ -38,6 +31,8 @@ Token.propTypes = {
   size: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
+  selected: PropTypes.bool,
+  onClick: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
 };
 
@@ -67,12 +62,16 @@ const MapCanvas = ({
   const [zoom, setZoom] = useState(initialZoom);
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize = gridCells ? imageSize.width / gridCells : gridSize;
+
+  const pxToCell = (px, offset) => Math.round((px - offset) / effectiveGridSize);
+  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
 
   // Tamaño del contenedor para ajustar el stage al redimensionar la ventana
   useEffect(() => {
@@ -128,8 +127,10 @@ const MapCanvas = ({
     return lines;
   };
 
-  const handleDragEnd = (id, x, y) => {
-    const newTokens = tokens.map((t) => (t.id === id ? { ...t, x, y } : t));
+  const handleDragEnd = (id, px, py) => {
+    const cellX = pxToCell(px, gridOffsetX);
+    const cellY = pxToCell(py, gridOffsetY);
+    const newTokens = tokens.map((t) => (t.id === id ? { ...t, x: cellX, y: cellY } : t));
     onTokensChange(newTokens);
   };
 
@@ -179,11 +180,70 @@ const MapCanvas = ({
     if (isPanning) setIsPanning(false);
   };
 
+  const mapWidth = Math.round(imageSize.width / effectiveGridSize);
+  const mapHeight = Math.round(imageSize.height / effectiveGridSize);
+
+  const handleKeyDown = useCallback((e) => {
+    if (selectedId == null) return;
+    const index = tokens.findIndex((t) => t.id === selectedId);
+    if (index === -1) return;
+    let { x, y } = tokens[index];
+    switch (e.key.toLowerCase()) {
+      case 'w':
+        y -= 1;
+        break;
+      case 's':
+        y += 1;
+        break;
+      case 'a':
+        x -= 1;
+        break;
+      case 'd':
+        x += 1;
+        break;
+      case 'delete':
+        onTokensChange(tokens.filter((t) => t.id !== selectedId));
+        setSelectedId(null);
+        return;
+      default:
+        return;
+    }
+    x = Math.max(0, Math.min(mapWidth - 1, x));
+    y = Math.max(0, Math.min(mapHeight - 1, y));
+    const updated = tokens.map((t) => (t.id === selectedId ? { ...t, x, y } : t));
+    onTokensChange(updated);
+  }, [selectedId, tokens, onTokensChange, mapWidth, mapHeight]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   const groupScale = baseScale * zoom;
+
+  const [, drop] = useDrop(
+    () => ({
+      accept: AssetTypes.IMAGE,
+      drop: (item) => {
+        if (!stageRef.current) return;
+        const pointer = stageRef.current.getPointerPosition();
+        const relX = (pointer.x - groupPos.x) / groupScale;
+        const relY = (pointer.y - groupPos.y) / groupScale;
+        const cellX = pxToCell(relX, gridOffsetX);
+        const cellY = pxToCell(relY, gridOffsetY);
+        const x = Math.max(0, Math.min(mapWidth - 1, cellX));
+        const y = Math.max(0, Math.min(mapHeight - 1, cellY));
+        const newToken = { id: Date.now(), x, y, url: item.url, name: item.name };
+        onTokensChange([...tokens, newToken]);
+      },
+    }),
+    [tokens, groupPos, groupScale, mapWidth, mapHeight, gridOffsetX, gridOffsetY]
+  );
 
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden">
-      <Stage
+      <div ref={drop}>
+        <Stage
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
@@ -199,11 +259,23 @@ const MapCanvas = ({
             {bg && <KonvaImage image={bg} width={imageSize.width} height={imageSize.height} />}
             {drawGrid()}
             {tokens.map((token) => (
-              <Token key={token.id} {...token} size={effectiveGridSize} onDragEnd={handleDragEnd} />
+              <Token
+                key={token.id}
+                id={token.id}
+                x={cellToPx(token.x, gridOffsetX)}
+                y={cellToPx(token.y, gridOffsetY)}
+                size={effectiveGridSize}
+                image={token.url}
+                color={token.color}
+                selected={token.id === selectedId}
+                onDragEnd={handleDragEnd}
+                onClick={setSelectedId}
+              />
             ))}
           </Group>
         </Layer>
-      </Stage>
+        </Stage>
+      </div>
     </div>
   );
 };
@@ -223,8 +295,9 @@ MapCanvas.propTypes = {
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
       x: PropTypes.number.isRequired,
       y: PropTypes.number.isRequired,
+      url: PropTypes.string,
+      name: PropTypes.string,
       color: PropTypes.string,
-      image: PropTypes.string,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
