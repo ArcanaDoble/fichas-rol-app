@@ -8,6 +8,9 @@ const AssetSidebar = ({ onAssetSelect }) => {
   const [folders, setFolders] = useState(() => [
     { id: nanoid(), name: 'Enemigos', assets: [], open: true },
   ]);
+  
+  // Image preview data {url, x, y} shown on hover
+  const [preview, setPreview] = useState(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('assetSidebar');
@@ -72,6 +75,14 @@ const AssetSidebar = ({ onAssetSelect }) => {
     );
   };
 
+  // Show preview of asset under the pointer
+  const showPreview = (asset, e) => {
+    setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
+  };
+  const movePreview = (e) => {
+    setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
+  };
+  const hidePreview = () => setPreview(null);
   return (
     <div className="fixed right-0 top-0 h-screen w-80 bg-gray-800 flex flex-col">
       <div className="p-2 border-b border-gray-700">
@@ -131,8 +142,11 @@ const AssetSidebar = ({ onAssetSelect }) => {
                             <img
                               src={asset.url}
                               alt={asset.name}
-                              className="w-16 h-16 object-cover rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
+                              className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
                               onClick={() => onAssetSelect?.(asset)}
+                              onMouseEnter={(e) => showPreview(asset, e)}
+                              onMouseMove={movePreview}
+                              onMouseLeave={hidePreview}
                             />
                             <button
                               onClick={() => removeAsset(folder.id, asset.id)}
@@ -152,6 +166,18 @@ const AssetSidebar = ({ onAssetSelect }) => {
           ))}
         </AnimatePresence>
       </div>
+      {preview && (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{ top: preview.y + 10, left: preview.x + 10 }}
+        >
+          <img
+            src={preview.url}
+            alt="preview"
+            className="max-w-[256px] max-h-[256px]"
+          />
+        </div>
+      )}
     </div>
   );
 };
