@@ -194,9 +194,12 @@ const DraggableAssetItem = ({
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: AssetTypes.IMAGE,
-      item: { url: asset.url, name: asset.name },
+      item: () => {
+        const data = { url: asset.url, name: asset.name };
+        onDragStart?.(data);
+        return data;
+      },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
-      begin: () => onDragStart?.({ url: asset.url, name: asset.name }),
     }),
     [asset, onDragStart]
   );
