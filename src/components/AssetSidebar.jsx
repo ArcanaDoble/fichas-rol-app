@@ -8,6 +8,7 @@ const AssetSidebar = ({ onAssetSelect }) => {
   const [folders, setFolders] = useState(() => [
     { id: nanoid(), name: 'Enemigos', assets: [], open: true },
   ]);
+  
   // Image preview data {url, x, y} shown on hover
   const [preview, setPreview] = useState(null);
 
@@ -82,7 +83,6 @@ const AssetSidebar = ({ onAssetSelect }) => {
     setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
   };
   const hidePreview = () => setPreview(null);
-
   return (
     <div className="fixed right-0 top-0 h-screen w-80 bg-gray-800 flex flex-col">
       <div className="p-2 border-b border-gray-700">
