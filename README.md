@@ -297,6 +297,9 @@ src/
 - ✅ **Archivos de configuración** - Creados `firestore.rules` y `firestore.indexes.json`
 - ✅ **Despliegue actualizado** - Firebase configurado correctamente para producción
 
+### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
+- ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
+
 ## 🔄 Historial de cambios previos
 
 <details>
