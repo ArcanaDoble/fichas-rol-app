@@ -52,11 +52,26 @@ const Token = ({
     }
   }, [selected]);
 
+  useEffect(() => {
+    if (selected) updateHandle();
+  }, [x, y, width, height, angle, selected]);
+
   const snapBox = (box) => {
-    box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
-    box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
-    box.x = Math.round(box.x / SNAP) * SNAP;
-    box.y = Math.round(box.y / SNAP) * SNAP;
+    const threshold = gridSize;
+    const snap = box.width < threshold && box.height < threshold ? SNAP : gridSize;
+
+    box.x = Math.round(box.x / snap) * snap;
+    box.y = Math.round(box.y / snap) * snap;
+
+    if (snap === SNAP) {
+      box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
+      box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
+    } else {
+      const cells = Math.max(1, Math.round(Math.max(box.width, box.height) / gridSize));
+      box.width = cells * gridSize;
+      box.height = cells * gridSize;
+    }
+
     return box;
   };
 
@@ -71,27 +86,45 @@ const Token = ({
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+
     let newWidth = node.width() * scaleX;
     let newHeight = node.height() * scaleY;
 
-    newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
-    newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
+    const subCell = newWidth < gridSize && newHeight < gridSize;
+    const snap = subCell ? SNAP : gridSize;
 
-    const newX = Math.round(node.x() / SNAP) * SNAP;
-    const newY = Math.round(node.y() / SNAP) * SNAP;
-    node.position({ x: newX, y: newY });
+    let left = node.x() - node.offsetX();
+    let top = node.y() - node.offsetY();
+    left = Math.round(left / snap) * snap;
+    top = Math.round(top / snap) * snap;
+
+    if (subCell) {
+      newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
+      newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
+    } else {
+      const cells = Math.max(1, Math.round(Math.max(newWidth, newHeight) / gridSize));
+      newWidth = cells * gridSize;
+      newHeight = cells * gridSize;
+    }
+
     node.width(newWidth);
     node.height(newHeight);
+    node.offsetX(newWidth / 2);
+    node.offsetY(newHeight / 2);
+
+    node.position({ x: left + newWidth / 2, y: top + newHeight / 2 });
 
     updateHandle();
-    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, newX, newY);
+    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, left, top);
   };
 
   const handleRotateMove = (e) => {
     const node = shapeRef.current;
-    const stagePos = node.getClientRect({ relativeTo: node.getStage() });
+    const stage = node.getStage();
+    const pointer = stage.getPointerPosition();
+    const center = node.getAbsolutePosition();
     let angle =
-      (Math.atan2(e.evt.layerY - stagePos.y, e.evt.layerX - stagePos.x) * 180) /
+      (Math.atan2(pointer.y - center.y, pointer.x - center.x) * 180) /
       Math.PI;
     if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
     node.rotation(angle);
@@ -103,20 +136,25 @@ const Token = ({
     onRotate(id, shapeRef.current.rotation());
   };
 
+  const offX = (width * gridSize) / 2;
+  const offY = (height * gridSize) / 2;
+
   const common = {
-    x,
-    y,
+    x: x + offX,
+    y: y + offY,
     width: width * gridSize,
     height: height * gridSize,
+    offsetX: offX,
+    offsetY: offY,
     rotation: angle,
     draggable: true,
     dragBoundFunc: (pos) => ({
-      x: Math.round(pos.x / gridSize) * gridSize,
-      y: Math.round(pos.y / gridSize) * gridSize,
+      x: Math.round((pos.x - offX) / gridSize) * gridSize + offX,
+      y: Math.round((pos.y - offY) / gridSize) * gridSize + offY,
     }),
     
     onDragMove: updateHandle,
-    onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
+    onDragEnd: (e) => onDragEnd(id, e.target.x() - offX, e.target.y() - offY),
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
     strokeWidth: selected ? 3 : 0,
