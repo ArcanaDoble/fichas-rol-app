@@ -155,6 +155,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Rotación alrededor del centro del token.
 - Redimensionado cuadrado en múltiplos de celda a partir de 1×1.
 
+**Resumen de cambios v2.2.24:**
+- La rotación usa el centro del token como pivote real.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
