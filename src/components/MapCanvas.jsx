@@ -1,6 +1,15 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { Stage, Layer, Rect, Line, Image as KonvaImage, Group, Transformer, Circle } from 'react-konva';
+import {
+  Stage,
+  Layer,
+  Rect,
+  Line,
+  Image as KonvaImage,
+  Group,
+  Transformer,
+  Circle,
+} from 'react-konva';
 import useImage from 'use-image';
 import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
@@ -24,22 +33,39 @@ const Token = ({
   const [img] = useImage(image);
   const shapeRef = useRef();
   const trRef = useRef();
+  const rotateRef = useRef();
   const SNAP = gridSize / 4;
 
+  const updateHandle = () => {
+    const node = shapeRef.current;
+    const handle = rotateRef.current;
+    if (!node || !handle) return;
+    const box = node.getClientRect({ relativeTo: node.getParent() });
+    handle.position({ x: box.x + box.width + 12, y: box.y - 12 });
+    handle.getLayer().batchDraw();
+  };
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
       trRef.current.getLayer().batchDraw();
+      updateHandle();
     }
   }, [selected]);
 
   const snapBox = (box) => {
     box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
     box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
+    box.x = Math.round(box.x / SNAP) * SNAP;
+    box.y = Math.round(box.y / SNAP) * SNAP;
     return box;
   };
 
+  const handleTransformStart = () => {
+    if (shapeRef.current) shapeRef.current.draggable(false);
+  };
+
   const handleTransformEnd = () => {
+    if (shapeRef.current) shapeRef.current.draggable(true);
     const node = shapeRef.current;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
@@ -48,29 +74,32 @@ const Token = ({
     let newWidth = node.width() * scaleX;
     let newHeight = node.height() * scaleY;
 
-    newWidth = Math.max(gridSize, Math.round(newWidth / gridSize) * gridSize);
-    newHeight = Math.max(gridSize, Math.round(newHeight / gridSize) * gridSize);
+    newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
+    newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
 
-    const newX = Math.round(node.x() / gridSize) * gridSize;
-    const newY = Math.round(node.y() / gridSize) * gridSize;
-
+    const newX = Math.round(node.x() / SNAP) * SNAP;
+    const newY = Math.round(node.y() / SNAP) * SNAP;
     node.position({ x: newX, y: newY });
     node.width(newWidth);
     node.height(newHeight);
 
+    updateHandle();
     onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, newX, newY);
   };
 
   const handleRotateMove = (e) => {
     const node = shapeRef.current;
-    const pos = e.target.position();
-    const centerX = node.width() / 2;
-    const centerY = node.height() / 2;
-    const rad = Math.atan2(pos.y - centerY, pos.x - centerX);
-    node.rotation((rad * 180) / Math.PI);
+    const stagePos = node.getClientRect({ relativeTo: node.getStage() });
+    let angle =
+      (Math.atan2(e.evt.layerY - stagePos.y, e.evt.layerX - stagePos.x) * 180) /
+      Math.PI;
+    if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
+    node.rotation(angle);
+    updateHandle();
   };
 
   const handleRotateEnd = () => {
+    updateHandle();
     onRotate(id, shapeRef.current.rotation());
   };
 
@@ -85,6 +114,8 @@ const Token = ({
       x: Math.round(pos.x / gridSize) * gridSize,
       y: Math.round(pos.y / gridSize) * gridSize,
     }),
+    
+    onDragMove: updateHandle,
     onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
@@ -94,9 +125,9 @@ const Token = ({
   return (
     <Group>
       {img ? (
-        <KonvaImage ref={shapeRef} image={img} {...common} />
+        <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
       ) : (
-        <Rect ref={shapeRef} fill={color || 'red'} {...common} />
+        <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
       )}
       {selected && (
         <>
@@ -105,12 +136,15 @@ const Token = ({
             enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
             rotateEnabled={false}
             boundBoxFunc={(oldBox, newBox) => snapBox(newBox)}
+            onTransformStart={handleTransformStart}
+            onTransform={updateHandle}
             onTransformEnd={handleTransformEnd}
           />
           <Circle
+            ref={rotateRef}
             x={width * gridSize}
-            y={-20}
-            radius={8}
+            y={-12}
+            radius={6}
             fill="#fff"
             stroke="#000"
             strokeWidth={1}
