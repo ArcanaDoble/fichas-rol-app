@@ -316,6 +316,7 @@ const MapCanvas = ({
   };
 
   const handleDragEnd = (id, evt) => {
+  
     const node = evt?.target;
     if (!node) return;
     const offX = node.offsetX();
@@ -330,7 +331,6 @@ const MapCanvas = ({
     });
     updateHandle();
     node.getLayer().batchDraw();
-
     const newTokens = tokens.map((t) =>
       t.id === id ? { ...t, x: cellX, y: cellY } : t
     );
