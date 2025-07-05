@@ -316,23 +316,23 @@ const MapCanvas = ({
   };
 
   const handleDragEnd = (id, evt) => {
-  
     const node = evt?.target;
     if (!node) return;
     const offX = node.offsetX();
     const offY = node.offsetY();
-    const topLeftX = node.x() + offX;
-    const topLeftY = node.y() + offY;
-    const cellX = Math.floor((topLeftX - gridOffsetX) / effectiveGridSize);
-    const cellY = Math.floor((topLeftY - gridOffsetY) / effectiveGridSize);
+    const centerX = node.x() + offX;
+    const centerY = node.y() + offY;
+    const col = Math.round((centerX - gridOffsetX) / effectiveGridSize);
+    const row = Math.round((centerY - gridOffsetY) / effectiveGridSize);
     node.position({
-      x: cellX * effectiveGridSize - offX + gridOffsetX,
-      y: cellY * effectiveGridSize - offY + gridOffsetY,
+      x: col * effectiveGridSize - offX + gridOffsetX,
+      y: row * effectiveGridSize - offY + gridOffsetY,
     });
     updateHandle();
     node.getLayer().batchDraw();
+
     const newTokens = tokens.map((t) =>
-      t.id === id ? { ...t, x: cellX, y: cellY } : t
+      t.id === id ? { ...t, x: col, y: row } : t
     );
     onTokensChange(newTokens);
   };
