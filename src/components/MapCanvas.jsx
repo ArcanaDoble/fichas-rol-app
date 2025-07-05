@@ -127,6 +127,8 @@ const Token = ({
       (Math.atan2(pointer.y - center.y, pointer.x - center.x) * 180) /
       Math.PI;
     if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
+    const snapped = Math.round(angle / 90) * 90;
+    if (Math.abs(angle - snapped) <= 7) angle = snapped;
     node.rotation(angle);
     updateHandle();
   };
