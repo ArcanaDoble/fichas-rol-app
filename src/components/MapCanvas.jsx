@@ -153,7 +153,10 @@ const Token = ({
     rotation: angle,
     draggable: true,
     onDragMove: updateHandle,
-    onDragEnd: (e) => onDragEnd(id, e),
+    onDragEnd: (e) => {
+      onDragEnd(id, e);
+      updateHandle();
+    },
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
     strokeWidth: selected ? 3 : 0,
@@ -328,7 +331,6 @@ const MapCanvas = ({
       x: col * effectiveGridSize - offX + gridOffsetX,
       y: row * effectiveGridSize - offY + gridOffsetY,
     });
-    updateHandle();
     node.getLayer().batchDraw();
 
     const newTokens = tokens.map((t) =>

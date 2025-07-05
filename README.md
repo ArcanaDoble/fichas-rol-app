@@ -179,6 +179,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Snap definitivo calculado con el centro del token y Math.round para
   garantizar el centrado perfecto.
 
+**Resumen de cambios v2.2.31:**
+- Corrección de error al soltar un token: el handle de rotación se actualiza
+  correctamente sin fallos de referencia.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
