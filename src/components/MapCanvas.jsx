@@ -316,22 +316,21 @@ const MapCanvas = ({
   };
 
   const handleDragEnd = (id, evt) => {
-    if (!stageRef.current) return;
-    const stage = stageRef.current;
-    const pointer = stage.getPointerPosition();
-    const sceneX = (pointer.x - groupPos.x) / groupScale;
-    const sceneY = (pointer.y - groupPos.y) / groupScale;
-    const cellX = Math.round((sceneX - gridOffsetX) / effectiveGridSize);
-    const cellY = Math.round((sceneY - gridOffsetY) / effectiveGridSize);
-
-    if (evt?.target) {
-      evt.target.position({
-        x: cellToPx(cellX, gridOffsetX) + evt.target.offsetX(),
-        y: cellToPx(cellY, gridOffsetY) + evt.target.offsetY(),
-      });
-      evt.target.getLayer().batchDraw();
-    }
-
+  
+    const node = evt?.target;
+    if (!node) return;
+    const offX = node.offsetX();
+    const offY = node.offsetY();
+    const topLeftX = node.x() + offX;
+    const topLeftY = node.y() + offY;
+    const cellX = Math.floor((topLeftX - gridOffsetX) / effectiveGridSize);
+    const cellY = Math.floor((topLeftY - gridOffsetY) / effectiveGridSize);
+    node.position({
+      x: cellX * effectiveGridSize - offX + gridOffsetX,
+      y: cellY * effectiveGridSize - offY + gridOffsetY,
+    });
+    updateHandle();
+    node.getLayer().batchDraw();
     const newTokens = tokens.map((t) =>
       t.id === id ? { ...t, x: cellX, y: cellY } : t
     );
