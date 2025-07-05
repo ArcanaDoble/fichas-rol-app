@@ -52,11 +52,26 @@ const Token = ({
     }
   }, [selected]);
 
+  useEffect(() => {
+    if (selected) updateHandle();
+  }, [x, y, width, height, angle, selected]);
+
   const snapBox = (box) => {
-    box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
-    box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
-    box.x = Math.round(box.x / SNAP) * SNAP;
-    box.y = Math.round(box.y / SNAP) * SNAP;
+    const threshold = gridSize;
+    const snap = box.width < threshold && box.height < threshold ? SNAP : gridSize;
+
+    box.x = Math.round(box.x / snap) * snap;
+    box.y = Math.round(box.y / snap) * snap;
+
+    if (snap === SNAP) {
+      box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
+      box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
+    } else {
+      const cells = Math.max(1, Math.round(Math.max(box.width, box.height) / gridSize));
+      box.width = cells * gridSize;
+      box.height = cells * gridSize;
+    }
+
     return box;
   };
 
@@ -74,12 +89,21 @@ const Token = ({
     let newWidth = node.width() * scaleX;
     let newHeight = node.height() * scaleY;
 
-    newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
-    newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
+    const subCell = newWidth < gridSize && newHeight < gridSize;
+    const snap = subCell ? SNAP : gridSize;
 
-    const newX = Math.round(node.x() / SNAP) * SNAP;
-    const newY = Math.round(node.y() / SNAP) * SNAP;
+    const newX = Math.round(node.x() / snap) * snap;
+    const newY = Math.round(node.y() / snap) * snap;
     node.position({ x: newX, y: newY });
+
+    if (subCell) {
+      newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
+      newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
+    } else {
+      const cells = Math.max(1, Math.round(Math.max(newWidth, newHeight) / gridSize));
+      newWidth = cells * gridSize;
+      newHeight = cells * gridSize;
+    }
     node.width(newWidth);
     node.height(newHeight);
 
@@ -90,8 +114,10 @@ const Token = ({
   const handleRotateMove = (e) => {
     const node = shapeRef.current;
     const stagePos = node.getClientRect({ relativeTo: node.getStage() });
+    const centerX = stagePos.x + stagePos.width / 2;
+    const centerY = stagePos.y + stagePos.height / 2;
     let angle =
-      (Math.atan2(e.evt.layerY - stagePos.y, e.evt.layerX - stagePos.x) * 180) /
+      (Math.atan2(e.evt.layerY - centerY, e.evt.layerX - centerX) * 180) /
       Math.PI;
     if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
     node.rotation(angle);
