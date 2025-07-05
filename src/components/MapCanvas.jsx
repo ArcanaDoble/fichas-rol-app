@@ -294,13 +294,23 @@ const MapCanvas = ({
     // Líneas verticales
     for (let i = gridOffsetX; i < imageSize.width; i += effectiveGridSize) {
       lines.push(
-        <Line key={`v${i}`} points={[i, 0, i, imageSize.height]} stroke="rgba(255,255,255,0.2)" />
+        <Line
+          key={`v${i}`}
+          points={[i, 0, i, imageSize.height]}
+          stroke="rgba(255,255,255,0.2)"
+          listening={false}
+        />
       );
     }
     // Líneas horizontales
     for (let i = gridOffsetY; i < imageSize.height; i += effectiveGridSize) {
       lines.push(
-        <Line key={`h${i}`} points={[0, i, imageSize.width, i]} stroke="rgba(255,255,255,0.2)" />
+        <Line
+          key={`h${i}`}
+          points={[0, i, imageSize.width, i]}
+          stroke="rgba(255,255,255,0.2)"
+          listening={false}
+        />
       );
     }
     return lines;
@@ -371,6 +381,12 @@ const MapCanvas = ({
 
   const stopPanning = () => {
     if (isPanning) setIsPanning(false);
+  };
+
+  const handleStageClick = (e) => {
+    if (e.target === stageRef.current) {
+      setSelectedId(null);
+    }
   };
 
   const mapWidth = Math.round(imageSize.width / effectiveGridSize);
@@ -453,11 +469,19 @@ const MapCanvas = ({
         onMouseMove={handleMouseMove}
         onMouseUp={stopPanning}
         onMouseLeave={stopPanning}
+        onClick={handleStageClick}
         style={{ background: '#000' }}
       >
         <Layer>
           <Group x={groupPos.x} y={groupPos.y} scaleX={groupScale} scaleY={groupScale}>
-            {bg && <KonvaImage image={bg} width={imageSize.width} height={imageSize.height} />}
+            {bg && (
+              <KonvaImage
+                image={bg}
+                width={imageSize.width}
+                height={imageSize.height}
+                listening={false}
+              />
+            )}
             {drawGrid()}
             {tokens.map((token) => (
               <Token
