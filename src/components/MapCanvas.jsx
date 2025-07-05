@@ -24,6 +24,8 @@ const Token = ({
   color,
   image,
   gridSize,
+  gridOffsetX,
+  gridOffsetY,
   selected,
   onDragEnd,
   onClick,
@@ -151,8 +153,14 @@ const Token = ({
     rotation: angle,
     draggable: true,
     dragBoundFunc: (pos) => ({
-      x: Math.round((pos.x - offX) / gridSize) * gridSize + offX,
-      y: Math.round((pos.y - offY) / gridSize) * gridSize + offY,
+      x:
+        Math.round((pos.x - offX - gridOffsetX) / gridSize) * gridSize +
+        offX +
+        gridOffsetX,
+      y:
+        Math.round((pos.y - offY - gridOffsetY) / gridSize) * gridSize +
+        offY +
+        gridOffsetY,
     }),
     
     onDragMove: updateHandle,
@@ -206,6 +214,8 @@ Token.propTypes = {
   height: PropTypes.number.isRequired,
   angle: PropTypes.number.isRequired,
   gridSize: PropTypes.number.isRequired,
+  gridOffsetX: PropTypes.number.isRequired,
+  gridOffsetY: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
@@ -493,6 +503,8 @@ const MapCanvas = ({
                 height={token.h || 1}
                 angle={token.angle || 0}
                 gridSize={effectiveGridSize}
+                gridOffsetX={gridOffsetX}
+                gridOffsetY={gridOffsetY}
                 image={token.url}
                 color={token.color}
                 selected={token.id === selectedId}
