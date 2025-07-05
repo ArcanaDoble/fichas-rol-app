@@ -44,7 +44,6 @@ const Token = ({
     handle.position({ x: box.x + box.width + 12, y: box.y - 12 });
     handle.getLayer().batchDraw();
   };
-
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
@@ -80,7 +79,6 @@ const Token = ({
 
     const newX = Math.round(node.x() / SNAP) * SNAP;
     const newY = Math.round(node.y() / SNAP) * SNAP;
-
     node.position({ x: newX, y: newY });
     node.width(newWidth);
     node.height(newHeight);
@@ -116,6 +114,7 @@ const Token = ({
       x: Math.round(pos.x / gridSize) * gridSize,
       y: Math.round(pos.y / gridSize) * gridSize,
     }),
+    
     onDragMove: updateHandle,
     onDragEnd: (e) => onDragEnd(id, e.target.x(), e.target.y()),
     onClick: () => onClick?.(id),
