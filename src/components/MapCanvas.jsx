@@ -152,19 +152,8 @@ const Token = ({
     offsetY: offY,
     rotation: angle,
     draggable: true,
-    dragBoundFunc: (pos) => ({
-      x:
-        Math.round((pos.x - offX - gridOffsetX) / gridSize) * gridSize +
-        offX +
-        gridOffsetX,
-      y:
-        Math.round((pos.y - offY - gridOffsetY) / gridSize) * gridSize +
-        offY +
-        gridOffsetY,
-    }),
-    
     onDragMove: updateHandle,
-    onDragEnd: (e) => onDragEnd(id, e.target.x() - offX, e.target.y() - offY),
+    onDragEnd: (e) => onDragEnd(id, e),
     onClick: () => onClick?.(id),
     stroke: selected ? '#e0e0e0' : undefined,
     strokeWidth: selected ? 3 : 0,
@@ -326,10 +315,26 @@ const MapCanvas = ({
     return lines;
   };
 
-  const handleDragEnd = (id, px, py) => {
-    const cellX = pxToCell(px, gridOffsetX);
-    const cellY = pxToCell(py, gridOffsetY);
-    const newTokens = tokens.map((t) => (t.id === id ? { ...t, x: cellX, y: cellY } : t));
+  const handleDragEnd = (id, evt) => {
+    if (!stageRef.current) return;
+    const stage = stageRef.current;
+    const pointer = stage.getPointerPosition();
+    const sceneX = (pointer.x - groupPos.x) / groupScale;
+    const sceneY = (pointer.y - groupPos.y) / groupScale;
+    const cellX = Math.round((sceneX - gridOffsetX) / effectiveGridSize);
+    const cellY = Math.round((sceneY - gridOffsetY) / effectiveGridSize);
+
+    if (evt?.target) {
+      evt.target.position({
+        x: cellToPx(cellX, gridOffsetX) + evt.target.offsetX(),
+        y: cellToPx(cellY, gridOffsetY) + evt.target.offsetY(),
+      });
+      evt.target.getLayer().batchDraw();
+    }
+
+    const newTokens = tokens.map((t) =>
+      t.id === id ? { ...t, x: cellX, y: cellY } : t
+    );
     onTokensChange(newTokens);
   };
 
