@@ -200,6 +200,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.35:**
 - Corrección de warning de dependencia faltante en `AssetSidebar` al mover la ventana.
 
+**Resumen de cambios v2.2.36:**
+- Rediseño visual de **AssetSidebar** con ancho fijo, fondo oscuro y borde lateral.
+- Encabezados de carpeta como botones con icono y subcarpetas resaltadas.
+- Miniaturas en grid uniforme y barra lateral con scrollbar personalizada.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
