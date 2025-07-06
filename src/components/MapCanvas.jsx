@@ -323,13 +323,13 @@ const MapCanvas = ({
     if (!node) return;
     const offX = node.offsetX();
     const offY = node.offsetY();
-    const centerX = node.x() + offX;
-    const centerY = node.y() + offY;
-    const col = Math.round((centerX - gridOffsetX) / effectiveGridSize);
-    const row = Math.round((centerY - gridOffsetY) / effectiveGridSize);
+    const left = node.x() - offX;
+    const top = node.y() - offY;
+    const col = Math.round((left - gridOffsetX) / effectiveGridSize);
+    const row = Math.round((top - gridOffsetY) / effectiveGridSize);
     node.position({
-      x: col * effectiveGridSize - offX + gridOffsetX,
-      y: row * effectiveGridSize - offY + gridOffsetY,
+      x: col * effectiveGridSize + offX + gridOffsetX,
+      y: row * effectiveGridSize + offY + gridOffsetY,
     });
     node.getLayer().batchDraw();
 
