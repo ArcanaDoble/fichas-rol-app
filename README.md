@@ -188,6 +188,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Solucionado desvío inicial al colocar un token por primera vez: ahora se
   alinea en la casilla correcta sin desplazarse a una adyacente.
 
+**Resumen de cambios v2.2.33:**
+- Carpetas anidadas en **AssetSidebar** con ventanas flotantes arrastrables.
+- Doble clic en una carpeta abre su contenido en primera plana.
+- Posibilidad de crear subcarpetas ilimitadas y arrastrar tokens al mapa.
+
+**Resumen de cambios v2.2.34:**
+- Las ventanas evitan duplicados y se cierran si se elimina la carpeta.
+- Gestión mejorada del z-index para mantenerlas siempre en primer plano.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
