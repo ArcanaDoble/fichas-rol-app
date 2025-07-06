@@ -46,6 +46,7 @@ const Token = ({
   const rotateRef = useRef();
   const gearRef = useRef();
   const HANDLE_OFFSET = 12;
+
   const SNAP = gridSize / 4;
 
   const updateHandle = () => {
