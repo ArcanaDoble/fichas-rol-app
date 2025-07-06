@@ -55,7 +55,7 @@ const Token = ({
     const box = node.getClientRect({ relativeTo: node.getParent() });
     handle.position({ x: box.x + box.width + 12, y: box.y - 12 });
     if (gear) {
-      gear.position({ x: box.x + box.width - 12, y: box.y - 12 });
+      gear.position({ x: box.x - 12, y: box.y + box.height - 12 });
     }
     handle.getLayer().batchDraw();
   };
