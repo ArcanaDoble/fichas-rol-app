@@ -45,6 +45,8 @@ const Token = ({
   const trRef = useRef();
   const rotateRef = useRef();
   const gearRef = useRef();
+  const HANDLE_OFFSET = 12;
+
   const SNAP = gridSize / 4;
 
   const updateHandle = () => {
@@ -53,9 +55,15 @@ const Token = ({
     const gear = gearRef.current;
     if (!node || !handle) return;
     const box = node.getClientRect({ relativeTo: node.getParent() });
-    handle.position({ x: box.x + box.width + 12, y: box.y - 12 });
+    handle.position({
+      x: box.x + box.width + HANDLE_OFFSET,
+      y: box.y - HANDLE_OFFSET,
+    });
     if (gear) {
-      gear.position({ x: box.x - 12, y: box.y + box.height - 12 });
+      gear.position({
+        x: box.x - HANDLE_OFFSET,
+        y: box.y + box.height + HANDLE_OFFSET,
+      });
     }
     handle.getLayer().batchDraw();
   };

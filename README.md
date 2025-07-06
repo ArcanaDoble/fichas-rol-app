@@ -215,6 +215,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.39:**
 - Icono de engranaje se sitúa en la esquina inferior izquierda del token y abre la ficha al pulsarlo.
 
+**Resumen de cambios v2.2.40:**
+- Engranaje separado del token con la misma distancia que el botón de rotación.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
