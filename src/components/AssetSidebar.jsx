@@ -198,7 +198,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
           {level === 0 ? (
             <FiFolder className="text-yellow-400" />
           ) : (
-            <FiFolderPlus className="text-yellow-400 ring-1 ring-yellow-400/60 rounded-sm" />
+
+            <FiFolderPlus className="text-yellow-400 rounded-sm" />
           )}
           <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
         </button>
@@ -389,7 +390,7 @@ const FolderIcon = ({ folder, onOpen }) => (
     onDoubleClick={() => onOpen(folder.id)}
   >
     <div className="relative group">
-      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 ring-1 ring-yellow-400/60 rounded-sm" />
+      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 rounded-sm" />
     </div>
     <span className="truncate block w-16 mx-auto text-gray-300">{folder.name}</span>
   </div>
