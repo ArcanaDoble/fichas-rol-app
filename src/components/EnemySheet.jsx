@@ -6,13 +6,13 @@ import Input from './Input';
 
 const EnemySheet = ({ enemy, onClose, onSave }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [data, setData] = useState(enemy);
+  const [data, setData] = useState(enemy || null);
 
   useEffect(() => {
-    setData(enemy);
+    setData(enemy || null);
   }, [enemy]);
 
-  if (!enemy) return null;
+  if (!enemy || !data) return null;
 
   const updateStat = (stat, field, value) => {
     setData(prev => ({
