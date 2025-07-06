@@ -7,6 +7,8 @@ import {
   FiChevronRight,
   FiTrash,
   FiFolder,
+  FiFolderPlus,
+  FiX,
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from 'react-dnd';
@@ -130,12 +132,22 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
     return null;
   };
 
+  const findFolderPath = (list, id, path = []) => {
+    for (const f of list) {
+      if (f.id === id) return [...path, f.name];
+      const child = findFolderPath(f.folders, id, [...path, f.name]);
+      if (child) return child;
+    }
+    return null;
+  };
+
   const [windows, setWindows] = useState([]);
   const [zMax, setZMax] = useState(1000);
 
   const openWindow = (id) => {
     const folder = findFolder(folders, id);
     if (!folder) return;
+    const path = findFolderPath(folders, id) || [folder.name];
     setWindows((ws) => {
       const topZ = Math.max(zMax, ...ws.map((w) => w.z));
       const newZ = topZ + 1;
@@ -146,7 +158,13 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
       }
       return [
         ...ws,
-        { id, x: 100 + ws.length * 20, y: 100 + ws.length * 20, z: newZ },
+        {
+          id,
+          x: 100 + ws.length * 20,
+          y: 100 + ws.length * 20,
+          z: newZ,
+          path,
+        },
       ];
     });
   };
@@ -163,7 +181,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
     setZMax((z) => z + 1);
   };
 
-  const renderFolder = (folder) => (
+  const renderFolder = (folder, level = 0) => (
     <motion.div
       key={folder.id}
       initial={{ opacity: 0, scale: 0.95 }}
@@ -173,6 +191,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
     >
       <div
         className="flex items-center justify-between px-2 py-1 hover:bg-gray-600"
+        style={{ paddingLeft: level * 8 }}
         onDoubleClick={() => openWindow(folder.id)}
       >
         <button
@@ -180,6 +199,11 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
           className="flex-1 text-left truncate flex items-center gap-1"
         >
           {folder.open ? <FiChevronDown /> : <FiChevronRight />}
+          {level === 0 ? (
+            <FiFolder className="text-yellow-400" />
+          ) : (
+            <FiFolderPlus className="text-yellow-400" />
+          )}
           <span className="truncate">{folder.name}</span>
         </button>
         <button
@@ -216,10 +240,10 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
             </div>
             {folder.folders.length > 0 && (
               <div className="space-y-2">
-                {folder.folders.map((sub) => renderFolder(sub))}
+                {folder.folders.map((sub) => renderFolder(sub, level + 1))}
               </div>
             )}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(4rem,1fr))]">
               {folder.assets.map((asset) => (
                 <DraggableAssetItem
                   key={asset.id}
@@ -241,7 +265,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
   );
 
   return (
-    <div className="fixed right-0 top-0 h-screen w-80 bg-gray-800 flex flex-col">
+    <div className="fixed right-0 top-0 h-screen w-80 bg-gray-800 flex flex-col rounded-l-lg shadow-lg transition-all duration-200">
       <div className="p-2 border-b border-gray-700">
         <button
           onClick={addFolder}
@@ -250,9 +274,9 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
           + Carpeta
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2 scrollbar-hide">
         <AnimatePresence>
-          {folders.map((folder) => renderFolder(folder))}
+          {folders.map((folder) => renderFolder(folder, 0))}
         </AnimatePresence>
       </div>
       {preview && (
@@ -321,13 +345,13 @@ const DraggableAssetItem = ({
     <div className="text-center text-xs">
       <div
         ref={drag}
-        className="relative group"
+        className="relative group hover:bg-gray-700 rounded p-1"
         style={{ opacity: isDragging ? 0.5 : 1 }}
       >
         <img
           src={asset.url}
           alt={asset.name}
-          className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
+          className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
           onClick={() => onAssetSelect?.(asset)}
           onMouseEnter={(e) => showPreview(asset, e)}
           onMouseMove={movePreview}
@@ -362,11 +386,11 @@ DraggableAssetItem.propTypes = {
 
 const FolderIcon = ({ folder, onOpen }) => (
   <div
-    className="text-center text-xs cursor-pointer"
+    className="text-center text-xs cursor-pointer hover:bg-gray-700 rounded p-1"
     onDoubleClick={() => onOpen(folder.id)}
   >
     <div className="relative group">
-      <FiFolder className="w-12 h-12 mx-auto text-yellow-400" />
+      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400" />
     </div>
     <span className="truncate block w-16 mx-auto">{folder.name}</span>
   </div>
@@ -434,17 +458,19 @@ const FolderWindow = ({
       className="fixed select-none"
       style={{ top: pos.y, left: pos.x, zIndex: position.z }}
     >
-      <div className="w-64 bg-gray-800 border border-gray-700 rounded shadow-xl">
+      <div className="bg-gray-800 border border-gray-700 rounded shadow-xl max-w-[80vw] max-h-[70vh] overflow-auto">
         <div
           className="flex justify-between items-center bg-gray-700 px-2 py-1 cursor-move"
           onMouseDown={handleMouseDown}
         >
-          <span className="font-bold truncate">{folder.name}</span>
+          <span className="font-bold truncate">
+            {position.path?.join(' / ') || folder.name}
+          </span>
           <button
             onClick={() => onClose(position.id)}
             className="text-gray-400 hover:text-red-400"
           >
-            <FiTrash />
+            <FiX />
           </button>
         </div>
         <div className="p-2 space-y-2">
@@ -463,7 +489,7 @@ const FolderWindow = ({
               className="text-xs"
             />
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(4rem,1fr))]">
             {folder.folders.map((sub) => (
               <FolderIcon key={sub.id} folder={sub} onOpen={onOpenFolder} />
             ))}
@@ -495,6 +521,7 @@ FolderWindow.propTypes = {
     x: PropTypes.number.isRequired,
     y: PropTypes.number.isRequired,
     z: PropTypes.number.isRequired,
+    path: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
   bringToFront: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
