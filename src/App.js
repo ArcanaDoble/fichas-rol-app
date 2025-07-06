@@ -926,6 +926,16 @@ function App() {
     setSelectedEnemy(null); // Close preview when switching to edit mode
     setShowEnemyForm(true);
   };
+
+  const updateEnemyFromToken = async (enemy) => {
+    await saveEnemy(enemy);
+    setEnemies((prev) => prev.map((e) => (e.id === enemy.id ? enemy : e)));
+    setCanvasTokens((prev) =>
+      prev.map((t) =>
+        t.enemyId === enemy.id ? { ...t, url: enemy.portrait || t.url, name: enemy.name } : t
+      )
+    );
+  };
   const handleSaveEnemy = async () => {
     if (!newEnemy.name.trim()) {
       alert('El nombre del enemigo es requerido');
@@ -3161,6 +3171,8 @@ function App() {
               gridOffsetY={gridOffsetY}
               tokens={canvasTokens}
               onTokensChange={setCanvasTokens}
+              enemies={enemies}
+              onEnemyUpdate={updateEnemyFromToken}
             />
           </div>
           <AssetSidebar />
