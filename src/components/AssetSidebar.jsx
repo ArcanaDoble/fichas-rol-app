@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { nanoid } from 'nanoid';
@@ -405,11 +405,17 @@ const FolderWindow = ({
     offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
     bringToFront(position.id);
   };
-  const handleMouseMove = (e) => {
-    if (!dragging) return;
-    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
-  };
-  const handleMouseUp = () => setDragging(false);
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!dragging) return;
+      setPos({
+        x: e.clientX - offset.current.x,
+        y: e.clientY - offset.current.y,
+      });
+    },
+    [dragging]
+  );
+  const handleMouseUp = useCallback(() => setDragging(false), []);
 
   useEffect(() => {
     if (!dragging) return;
@@ -419,7 +425,7 @@ const FolderWindow = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging]);
+  }, [dragging, handleMouseMove]);
 
   if (!folder) return null;
 
