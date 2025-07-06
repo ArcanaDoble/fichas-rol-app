@@ -377,3 +377,12 @@ input[type="number"] {
   animation: borderPulse 4s ease-in-out infinite;
   position: relative;
 }
+
+/* Ocultar barra de scroll */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
