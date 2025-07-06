@@ -187,28 +187,24 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="bg-gray-700 rounded"
+      className={level > 0 ? 'pl-4 space-y-1' : 'space-y-1'}
     >
-      <div
-        className="flex items-center justify-between px-2 py-1 hover:bg-gray-600"
-        style={{ paddingLeft: level * 8 }}
-        onDoubleClick={() => openWindow(folder.id)}
-      >
+      <div className="flex items-center justify-between" onDoubleClick={() => openWindow(folder.id)}>
         <button
           onClick={() => toggleFolder(folder.id)}
-          className="flex-1 text-left truncate flex items-center gap-1"
+          className="flex-1 text-left flex items-center gap-2 p-1 rounded transition-colors duration-150 hover:bg-[#2a3344]"
         >
           {folder.open ? <FiChevronDown /> : <FiChevronRight />}
           {level === 0 ? (
             <FiFolder className="text-yellow-400" />
           ) : (
-            <FiFolderPlus className="text-yellow-400" />
+            <FiFolderPlus className="text-yellow-400 ring-1 ring-yellow-400/60 rounded-sm" />
           )}
-          <span className="truncate">{folder.name}</span>
+          <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
         </button>
         <button
           onClick={() => removeFolder(folder.id)}
-          className="text-gray-400 hover:text-red-400"
+          className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
         >
           <FiTrash />
         </button>
@@ -221,29 +217,32 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden p-2 space-y-2"
+            className="overflow-hidden space-y-2"
           >
             <div className="flex gap-2">
               <button
                 onClick={() => addFolder(folder.id)}
-                className="bg-gray-700 hover:bg-gray-600 text-xs px-2 rounded"
+                className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
               >
                 + Carpeta
               </button>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
-                className="text-xs"
-              />
+              <label className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150 cursor-pointer">
+                Examinar
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
+                  className="hidden"
+                />
+              </label>
             </div>
             {folder.folders.length > 0 && (
               <div className="space-y-2">
                 {folder.folders.map((sub) => renderFolder(sub, level + 1))}
               </div>
             )}
-            <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(4rem,1fr))]">
+            <div className="grid grid-cols-2 gap-2">
               {folder.assets.map((asset) => (
                 <DraggableAssetItem
                   key={asset.id}
@@ -265,16 +264,16 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
   );
 
   return (
-    <div className="fixed right-0 top-0 h-screen w-80 bg-gray-800 flex flex-col rounded-l-lg shadow-lg transition-all duration-200">
-      <div className="p-2 border-b border-gray-700">
+    <div className="fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+      <div className="mb-3">
         <button
           onClick={addFolder}
-          className="w-full bg-gray-700 hover:bg-gray-600 text-sm py-1 rounded"
+          className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
         >
           + Carpeta
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2 scrollbar-hide">
+      <div className="flex-1 flex flex-col gap-2">
         <AnimatePresence>
           {folders.map((folder) => renderFolder(folder, 0))}
         </AnimatePresence>
@@ -345,13 +344,13 @@ const DraggableAssetItem = ({
     <div className="text-center text-xs">
       <div
         ref={drag}
-        className="relative group hover:bg-gray-700 rounded p-1"
+        className="relative group hover:bg-[#2a3344] rounded p-1"
         style={{ opacity: isDragging ? 0.5 : 1 }}
       >
         <img
           src={asset.url}
           alt={asset.name}
-          className="w-16 h-16 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+          className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
           onClick={() => onAssetSelect?.(asset)}
           onMouseEnter={(e) => showPreview(asset, e)}
           onMouseMove={movePreview}
@@ -359,12 +358,12 @@ const DraggableAssetItem = ({
         />
         <button
           onClick={() => onRemove(folderId, asset.id)}
-          className="absolute -top-1 -right-1 bg-gray-800 rounded-full p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400"
+          className="absolute -top-1 -right-1 bg-[#374151] hover:bg-[#4b5563] rounded-full p-0.5 text-gray-300 transition-colors duration-150"
         >
           <FiTrash />
         </button>
       </div>
-      <span className="truncate block w-16 mx-auto">{asset.name}</span>
+      <span className="truncate block w-14 mx-auto text-gray-300">{asset.name}</span>
     </div>
   );
 };
@@ -386,13 +385,13 @@ DraggableAssetItem.propTypes = {
 
 const FolderIcon = ({ folder, onOpen }) => (
   <div
-    className="text-center text-xs cursor-pointer hover:bg-gray-700 rounded p-1"
+    className="text-center text-xs cursor-pointer hover:bg-[#2a3344] rounded p-1"
     onDoubleClick={() => onOpen(folder.id)}
   >
     <div className="relative group">
-      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400" />
+      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 ring-1 ring-yellow-400/60 rounded-sm" />
     </div>
-    <span className="truncate block w-16 mx-auto">{folder.name}</span>
+    <span className="truncate block w-16 mx-auto text-gray-300">{folder.name}</span>
   </div>
 );
 
@@ -477,19 +476,22 @@ const FolderWindow = ({
           <div className="flex gap-2">
             <button
               onClick={() => onAddFolder(folder.id)}
-              className="bg-gray-700 hover:bg-gray-600 text-xs px-2 rounded"
+              className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
             >
               + Carpeta
             </button>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => onUpload(folder.id, e.target.files)}
-              className="text-xs"
-            />
+            <label className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150 cursor-pointer">
+              Examinar
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => onUpload(folder.id, e.target.files)}
+                className="hidden"
+              />
+            </label>
           </div>
-          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(4rem,1fr))]">
+          <div className="grid grid-cols-2 gap-2">
             {folder.folders.map((sub) => (
               <FolderIcon key={sub.id} folder={sub} onOpen={onOpenFolder} />
             ))}
