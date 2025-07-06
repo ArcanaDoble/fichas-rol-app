@@ -207,6 +207,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.37:**
 - Iconos de subcarpeta sin borde amarillo para un aspecto más limpio.
+- Tokens del mapa pueden abrir la ficha de enemigo con un nuevo icono de engranaje.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
