@@ -198,6 +198,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
           {level === 0 ? (
             <FiFolder className="text-yellow-400" />
           ) : (
+
             <FiFolderPlus className="text-yellow-400 rounded-sm" />
           )}
           <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
