@@ -44,14 +44,26 @@ const Token = ({
   const shapeRef = useRef();
   const trRef = useRef();
   const rotateRef = useRef();
+  const gearRef = useRef();
+  const HANDLE_OFFSET = 12;
   const SNAP = gridSize / 4;
 
   const updateHandle = () => {
     const node = shapeRef.current;
     const handle = rotateRef.current;
+    const gear = gearRef.current;
     if (!node || !handle) return;
     const box = node.getClientRect({ relativeTo: node.getParent() });
-    handle.position({ x: box.x + box.width + 12, y: box.y - 12 });
+    handle.position({
+      x: box.x + box.width + HANDLE_OFFSET,
+      y: box.y - HANDLE_OFFSET,
+    });
+    if (gear) {
+      gear.position({
+        x: box.x - HANDLE_OFFSET,
+        y: box.y + box.height + HANDLE_OFFSET,
+      });
+    }
     handle.getLayer().batchDraw();
   };
   useEffect(() => {
@@ -204,10 +216,9 @@ const Token = ({
             onDragEnd={handleRotateEnd}
           />
           <Text
+            ref={gearRef}
             text="⚙️"
             fontSize={24}
-            x={(width * gridSize) / 2 - 12}
-            y={-40}
             listening
             onClick={() => onSettings?.(id)}
           />
