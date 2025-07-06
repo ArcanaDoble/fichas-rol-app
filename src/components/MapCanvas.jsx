@@ -27,7 +27,11 @@ const Token = ({
   gridOffsetX,
   gridOffsetY,
   selected,
+  draggable = true,
+  listening = true,
+  opacity = 1,
   onDragEnd,
+  onDragStart,
   onClick,
   onTransformEnd,
   onRotate,
@@ -151,7 +155,10 @@ const Token = ({
     offsetX: offX,
     offsetY: offY,
     rotation: angle,
-    draggable: true,
+    draggable,
+    listening,
+    opacity,
+    onDragStart: () => onDragStart?.(id),
     onDragMove: updateHandle,
     onDragEnd: (e) => {
       onDragEnd(id, e);
@@ -211,7 +218,11 @@ Token.propTypes = {
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
+  draggable: PropTypes.bool,
+  listening: PropTypes.bool,
+  opacity: PropTypes.number,
   onClick: PropTypes.func,
+  onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
   onTransformEnd: PropTypes.func.isRequired,
   onRotate: PropTypes.func.isRequired,
@@ -244,6 +255,7 @@ const MapCanvas = ({
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [dragShadow, setDragShadow] = useState(null);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
@@ -337,6 +349,12 @@ const MapCanvas = ({
       t.id === id ? { ...t, x: col, y: row } : t
     );
     onTokensChange(newTokens);
+    setDragShadow(null);
+  };
+
+  const handleDragStart = (id) => {
+    const token = tokens.find((t) => t.id === id);
+    if (token) setDragShadow({ ...token });
   };
 
   const handleSizeChange = (id, w, h, px, py) => {
@@ -499,6 +517,26 @@ const MapCanvas = ({
               />
             )}
             {drawGrid()}
+            {dragShadow && (
+              <Token
+                key={`shadow-${dragShadow.id}`}
+                id={dragShadow.id}
+                x={cellToPx(dragShadow.x, gridOffsetX)}
+                y={cellToPx(dragShadow.y, gridOffsetY)}
+                width={dragShadow.w || 1}
+                height={dragShadow.h || 1}
+                angle={dragShadow.angle || 0}
+                gridSize={effectiveGridSize}
+                gridOffsetX={gridOffsetX}
+                gridOffsetY={gridOffsetY}
+                image={dragShadow.url}
+                color={dragShadow.color}
+                selected={false}
+                draggable={false}
+                listening={false}
+                opacity={0.35}
+              />
+            )}
             {tokens.map((token) => (
               <Token
                 key={token.id}
@@ -515,6 +553,7 @@ const MapCanvas = ({
                 color={token.color}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
+                onDragStart={handleDragStart}
                 onClick={setSelectedId}
                 onTransformEnd={handleSizeChange}
                 onRotate={handleRotateChange}
