@@ -101,6 +101,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
         .filter((f) => f.id !== id)
         .map((f) => ({ ...f, folders: removeRec(f.folders) }));
     setFolders((fs) => removeRec(fs));
+    setWindows((ws) => ws.filter((w) => w.id !== id));
   };
 
   const removeAsset = (folderId, assetId) => {
@@ -135,8 +136,19 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
   const openWindow = (id) => {
     const folder = findFolder(folders, id);
     if (!folder) return;
-    setZMax((z) => z + 1);
-    setWindows((ws) => [...ws, { id, x: 100 + ws.length * 20, y: 100 + ws.length * 20, z: zMax + 1 }]);
+    setWindows((ws) => {
+      const topZ = Math.max(zMax, ...ws.map((w) => w.z));
+      const newZ = topZ + 1;
+      setZMax(newZ);
+      const existing = ws.find((w) => w.id === id);
+      if (existing) {
+        return ws.map((w) => (w.id === id ? { ...w, z: newZ } : w));
+      }
+      return [
+        ...ws,
+        { id, x: 100 + ws.length * 20, y: 100 + ws.length * 20, z: newZ },
+      ];
+    });
   };
 
   const closeWindow = (id) => {
