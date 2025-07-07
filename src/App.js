@@ -2981,6 +2981,7 @@ function App() {
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
+              highlightText={highlightText}
             />
           </div>
           <AssetSidebar />

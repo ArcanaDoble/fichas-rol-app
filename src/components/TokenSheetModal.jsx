@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
 
-const TokenSheetModal = ({ token, enemies = [], onClose }) => {
+const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
   const sheetId = token?.tokenSheetId;
   const [data, setData] = useState(null);
 
@@ -30,6 +30,7 @@ const TokenSheetModal = ({ token, enemies = [], onClose }) => {
     <EnemyViewModal
       enemy={data}
       onClose={onClose}
+      highlightText={highlightText}
     />
   );
 };
@@ -38,6 +39,7 @@ TokenSheetModal.propTypes = {
   token: PropTypes.object,
   enemies: PropTypes.array,
   onClose: PropTypes.func.isRequired,
+  highlightText: PropTypes.func,
 };
 
 export default TokenSheetModal;

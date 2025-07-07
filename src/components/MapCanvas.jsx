@@ -291,6 +291,7 @@ const MapCanvas = ({
   enemies = [],
   onEnemyUpdate,
   players = [],
+  highlightText,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -644,7 +645,12 @@ const MapCanvas = ({
         />
       )}
       {openSheetToken && (
-        <TokenSheetModal token={openSheetToken} enemies={enemies} onClose={() => setOpenSheetToken(null)} />
+        <TokenSheetModal
+          token={openSheetToken}
+          enemies={enemies}
+          onClose={() => setOpenSheetToken(null)}
+          highlightText={highlightText}
+        />
       )}
     </div>
   );
@@ -682,6 +688,7 @@ MapCanvas.propTypes = {
   enemies: PropTypes.array,
   onEnemyUpdate: PropTypes.func,
   players: PropTypes.array,
+  highlightText: PropTypes.func,
 };
 
 export default MapCanvas;
