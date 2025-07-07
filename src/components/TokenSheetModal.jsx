@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
+import TokenSheetEditor from './TokenSheetEditor';
 
 const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
   const sheetId = token?.tokenSheetId;
   const [data, setData] = useState(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!sheetId) return;
@@ -24,15 +26,34 @@ const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
     setData(sheet);
   }, [sheetId, token, enemies]);
 
+  const handleSave = (updated) => {
+    const stored = localStorage.getItem('tokenSheets');
+    const sheets = stored ? JSON.parse(stored) : {};
+    sheets[sheetId] = updated;
+    localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+    setData(updated);
+    setEditing(false);
+  };
+
   if (!token || !data) return null;
 
   return (
-    <EnemyViewModal
-      enemy={data}
-      onClose={onClose}
-      highlightText={highlightText}
-      floating
-    />
+    <>
+      <EnemyViewModal
+        enemy={data}
+        onClose={onClose}
+        onEdit={() => setEditing(true)}
+        highlightText={highlightText}
+        floating
+      />
+      {editing && (
+        <TokenSheetEditor
+          sheet={data}
+          onClose={() => setEditing(false)}
+          onSave={handleSave}
+        />
+      )}
+    </>
   );
 };
 

@@ -265,6 +265,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.55:**
 - Las fichas flotantes del Mapa de Batalla vuelven a ser movibles y cerrables.
 
+**Resumen de cambios v2.2.56:**
+- Las fichas de token ahora pueden editarse de forma independiente, guardando sus cambios en localStorage.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
