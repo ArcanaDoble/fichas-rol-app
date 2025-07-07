@@ -51,7 +51,6 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging]);
-
   if (!enemy) return null;
 
   const dadoIcono = () => <BsDice6 className="inline" />;
