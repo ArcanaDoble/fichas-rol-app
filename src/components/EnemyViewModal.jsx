@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
@@ -18,28 +18,63 @@ const recursoColor = {
 };
 
 const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) => {
+  const modalRef = useRef(null);
+  const [pos, setPos] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 250 });
+  const [dragging, setDragging] = useState(false);
+  const offset = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (modalRef.current) {
+      const rect = modalRef.current.getBoundingClientRect();
+      setPos({
+        x: window.innerWidth / 2 - rect.width / 2,
+        y: window.innerHeight / 2 - rect.height / 2,
+      });
+    }
+  }, [enemy]);
+
+  const handleMouseDown = (e) => {
+    setDragging(true);
+    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+  };
+  const handleMouseMove = (e) => {
+    if (!dragging) return;
+    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+  };
+  const handleMouseUp = () => setDragging(false);
+  useEffect(() => {
+    if (!dragging) return;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragging]);
   if (!enemy) return null;
 
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = (tipo) => {
     if (!tipo) return null;
     switch (tipo.toLowerCase()) {
-      case 'f\u00edsico': return <GiFist className="inline" />;
+      case 'físico': return <GiFist className="inline" />;
       case 'fuego': return <FaFire className="inline" />;
-      case 'el\u00e9ctrico': return <FaBolt className="inline" />;
+      case 'eléctrico': return <FaBolt className="inline" />;
       case 'hielo': return <FaSnowflake className="inline" />;
-      case 'radiaci\u00f3n': return <FaRadiationAlt className="inline" />;
+      case 'radiación': return <FaRadiationAlt className="inline" />;
       default: return null;
     }
   };
 
   const content = (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose}>
       <div
-        className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+        ref={modalRef}
+        className="absolute bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none"
+        style={{ top: pos.y, left: pos.x }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
           <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
           <div className="flex gap-2">
             {onEdit && (
@@ -64,7 +99,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
               </div>
             )}
             <div className="bg-gray-700 rounded-lg p-4 space-y-2">
-              <h3 className="font-semibold text-lg">Informaci\u00f3n B\u00e1sica</h3>
+              <h3 className="font-semibold text-lg">Información Básica</h3>
               <div className="text-sm space-y-1">
                 <p><span className="font-medium">Nivel:</span> {enemy.nivel || 1}</p>
                 <p><span className="font-medium">Experiencia:</span> {enemy.experiencia || 0}</p>
@@ -73,7 +108,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
             </div>
             {enemy.description && (
               <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="font-semibold mb-2">Descripci\u00f3n</h3>
+                <h3 className="font-semibold mb-2">Descripción</h3>
                 <p className="text-gray-300 text-sm">{highlightText(enemy.description)}</p>
               </div>
             )}
@@ -98,7 +133,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
               </div>
             </div>
             <div className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Estad\u00edsticas</h3>
+              <h3 className="font-semibold mb-3">Estadísticas</h3>
               <div className="space-y-3 text-sm">
                 {defaultRecursos.map((recurso) => {
                   const stat = enemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
@@ -133,7 +168,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
                         <p className="font-bold text-sm">{weapon.nombre}</p>
                       </div>
                       <p className="mb-1">
-                        <span className="font-medium">Da\u00f1o:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                        <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
                       </p>
                       <p className="mb-1">
                         <span className="font-medium">Alcance:</span> {weapon.alcance}
@@ -148,7 +183,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
                       )}
                       {weapon.descripcion && (
                         <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripci\u00f3n:</span> {highlightText(weapon.descripcion)}
+                          <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
                         </p>
                       )}
                     </Tarjeta>
@@ -178,7 +213,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
                       )}
                       {armor.descripcion && (
                         <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripci\u00f3n:</span> {highlightText(armor.descripcion)}
+                          <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
                         </p>
                       )}
                     </Tarjeta>
@@ -209,7 +244,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
                       </p>
                       {power.descripcion && (
                         <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripci\u00f3n:</span> {highlightText(power.descripcion)}
+                          <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
                         </p>
                       )}
                     </Tarjeta>
