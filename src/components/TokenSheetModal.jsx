@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import EnemySheet from './EnemySheet';
+import EnemyViewModal from './EnemyViewModal';
 
 const TokenSheetModal = ({ token, enemies = [], onClose }) => {
   const sheetId = token?.tokenSheetId;
@@ -24,18 +24,14 @@ const TokenSheetModal = ({ token, enemies = [], onClose }) => {
     setData(sheet);
   }, [sheetId, token, enemies]);
 
-  const handleSave = (d) => {
-    if (!sheetId) return;
-    const stored = localStorage.getItem('tokenSheets');
-    const sheets = stored ? JSON.parse(stored) : {};
-    sheets[sheetId] = d;
-    localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-    setData(d);
-  };
-
   if (!token || !data) return null;
 
-  return <EnemySheet enemy={data} onClose={onClose} onSave={handleSave} />;
+  return (
+    <EnemyViewModal
+      enemy={data}
+      onClose={onClose}
+    />
+  );
 };
 
 TokenSheetModal.propTypes = {

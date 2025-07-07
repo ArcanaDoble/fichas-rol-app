@@ -222,6 +222,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.41:**
 - Las fichas personalizadas de los tokens se crean usando los datos del enemigo seleccionado.
 
+**Resumen de cambios v2.2.42:**
+- Las fichas de token muestran atributos y equipo como la vista completa de enemigos.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
