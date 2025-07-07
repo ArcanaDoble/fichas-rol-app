@@ -339,6 +339,10 @@ function App() {
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
+  const [tokenSheets, setTokenSheets] = useState(() => {
+    const stored = localStorage.getItem('tokenSheets');
+    return stored ? JSON.parse(stored) : {};
+  });
   const [canvasBackground, setCanvasBackground] = useState(null);
   // Configuración de la cuadrícula del mapa de batalla
   const [gridSize, setGridSize] = useState(100);
@@ -3173,6 +3177,7 @@ function App() {
               onTokensChange={setCanvasTokens}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
+              players={existingPlayers}
             />
           </div>
           <AssetSidebar />
