@@ -51,7 +51,6 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging]);
-
   if (!enemy) return null;
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -268,7 +267,6 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
       {windowBox}
     </div>
   );
-
   return createPortal(content, document.body);
 };
 
