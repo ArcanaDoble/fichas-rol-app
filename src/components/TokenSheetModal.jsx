@@ -31,6 +31,7 @@ const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
       enemy={data}
       onClose={onClose}
       highlightText={highlightText}
+      floating
     />
   );
 };

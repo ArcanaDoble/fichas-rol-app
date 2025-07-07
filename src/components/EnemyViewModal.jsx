@@ -17,7 +17,7 @@ const recursoColor = {
   armadura: '#9ca3af',
 };
 
-const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) => {
+const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floating = false }) => {
   const modalRef = useRef(null);
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 250 });
   const [dragging, setDragging] = useState(false);
@@ -66,25 +66,24 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
     }
   };
 
-  const content = (
-    <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose}>
-      <div
-        ref={modalRef}
-        className="absolute bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none"
-        style={{ top: pos.y, left: pos.x }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
-          <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
-          <div className="flex gap-2">
-            {onEdit && (
-              <Boton color="blue" onClick={() => onEdit(enemy)}>
-                Editar
-              </Boton>
-            )}
-            <Boton color="gray" onClick={onClose}>✕</Boton>
-          </div>
+  const windowBox = (
+    <div
+      ref={modalRef}
+      className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none"
+      style={{ top: pos.y, left: pos.x }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
+        <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
+        <div className="flex gap-2">
+          {onEdit && (
+            <Boton color="blue" onClick={() => onEdit(enemy)}>
+              Editar
+            </Boton>
+          )}
+          <Boton color="gray" onClick={onClose}>✕</Boton>
         </div>
+      </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Columna 1 */}
           <div className="space-y-4">
@@ -260,6 +259,15 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t }) =>
     </div>
   );
 
+  const content = floating ? (
+    <div className="fixed inset-0 z-50 pointer-events-none">
+      {windowBox}
+    </div>
+  ) : (
+    <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose}>
+      {windowBox}
+    </div>
+  );
   return createPortal(content, document.body);
 };
 
@@ -268,6 +276,7 @@ EnemyViewModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onEdit: PropTypes.func,
   highlightText: PropTypes.func,
+  floating: PropTypes.bool,
 };
 
 export default EnemyViewModal;
