@@ -14,8 +14,9 @@ import {
 import useImage from 'use-image';
 import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
-import EnemySheet from './EnemySheet';
-import Boton from './Boton';
+import TokenSettings from './TokenSettings';
+import TokenSheetModal from './TokenSheetModal';
+import { nanoid } from 'nanoid';
 
 const Token = ({
   id,
@@ -26,6 +27,8 @@ const Token = ({
   angle,
   color,
   image,
+  customName,
+  showName,
   gridSize,
   gridOffsetX,
   gridOffsetY,
@@ -46,6 +49,7 @@ const Token = ({
   const rotateRef = useRef();
   const gearRef = useRef();
   const HANDLE_OFFSET = 12;
+  const [hover, setHover] = useState(false);
 
   const SNAP = gridSize / 4;
 
@@ -187,11 +191,23 @@ const Token = ({
   };
 
   return (
-    <Group>
+    <Group onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {img ? (
         <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
       ) : (
         <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
+      )}
+      {showName && customName && hover && (
+        <Text
+          text={customName}
+          x={(width * gridSize) / 2}
+          y={-20}
+          offsetX={(width * gridSize) / 2}
+          fontSize={14}
+          fill="#fff"
+          align="center"
+          listening={false}
+        />
       )}
       {selected && (
         <>
@@ -245,6 +261,8 @@ Token.propTypes = {
   draggable: PropTypes.bool,
   listening: PropTypes.bool,
   opacity: PropTypes.number,
+  customName: PropTypes.string,
+  showName: PropTypes.bool,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -272,6 +290,8 @@ const MapCanvas = ({
   onTokensChange,
   enemies = [],
   onEnemyUpdate,
+  players = [],
+  highlightText,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -283,8 +303,8 @@ const MapCanvas = ({
   const [isPanning, setIsPanning] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [dragShadow, setDragShadow] = useState(null);
-  const [settingsTokenId, setSettingsTokenId] = useState(null);
-  const [pendingEnemyIdToken, setPendingEnemyIdToken] = useState(null);
+  const [settingsTokenIds, setSettingsTokenIds] = useState([]);
+  const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
@@ -401,32 +421,23 @@ const MapCanvas = ({
   };
 
   const handleOpenSettings = (id) => {
-    setSettingsTokenId(id);
-    const token = tokens.find((t) => t.id === id);
-    if (token && !token.enemyId) {
-      setPendingEnemyIdToken(id);
-    }
+    setSettingsTokenIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   };
 
-  const confirmEnemyForToken = (enemyId) => {
-    if (!pendingEnemyIdToken) return;
-    const enemy = enemies.find((e) => e.id === enemyId);
-    if (!enemy) {
-      setPendingEnemyIdToken(null);
-      return;
-    }
-    const updated = tokens.map((t) =>
-      t.id === pendingEnemyIdToken
-        ? { ...t, enemyId: enemy.id, url: enemy.portrait || t.url, name: enemy.name }
-        : t
+  const handleCloseSettings = (id) => {
+    setSettingsTokenIds((prev) => prev.filter((sid) => sid !== id));
+  };
+
+  const handleOpenSheet = (token) => {
+    setOpenSheetTokens((prev) =>
+      prev.some((t) => t.tokenSheetId === token.tokenSheetId)
+        ? prev
+        : [...prev, token]
     );
-    onTokensChange(updated);
-    setPendingEnemyIdToken(null);
   };
 
-  const handleSaveEnemy = async (data) => {
-    await onEnemyUpdate?.(data);
-    setSettingsTokenId(null);
+  const handleCloseSheet = (sheetId) => {
+    setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
   };
 
   // Zoom interactivo con la rueda del ratón
@@ -552,6 +563,10 @@ const MapCanvas = ({
           url: item.url,
           name: item.name,
           enemyId: item.enemyId,
+          tokenSheetId: nanoid(),
+          customName: '',
+          showName: false,
+          controlledBy: 'master',
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -632,26 +647,29 @@ const MapCanvas = ({
         </Layer>
         </Stage>
       </div>
-      {settingsTokenId && (
-        <EnemySheet
-          enemy={enemies.find((e) => e.id === tokens.find((t) => t.id === settingsTokenId)?.enemyId)}
-          onClose={() => setSettingsTokenId(null)}
-          onSave={handleSaveEnemy}
+      {settingsTokenIds.map((id) => (
+        <TokenSettings
+          key={id}
+          token={tokens.find((t) => t.id === id)}
+          enemies={enemies}
+          players={players}
+          onClose={() => handleCloseSettings(id)}
+          onUpdate={(tk) => {
+            const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
+            onTokensChange(updated);
+          }}
+          onOpenSheet={handleOpenSheet}
         />
-      )}
-      {pendingEnemyIdToken && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setPendingEnemyIdToken(null)}>
-          <div className="bg-gray-800 p-4 rounded" onClick={(e) => e.stopPropagation()}>
-            <select id="enemySelect" className="mb-4 w-60 bg-gray-700 text-white" onChange={(e) => confirmEnemyForToken(e.target.value)} defaultValue="">
-              <option value="" disabled>Selecciona enemigo</option>
-              {enemies.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
-            <Boton onClick={() => setPendingEnemyIdToken(null)}>Cancelar</Boton>
-          </div>
-        </div>
-      )}
+      ))}
+      {openSheetTokens.map((tk) => (
+        <TokenSheetModal
+          key={tk.tokenSheetId}
+          token={tokens.find((t) => t.tokenSheetId === tk.tokenSheetId) || tk}
+          enemies={enemies}
+          onClose={() => handleCloseSheet(tk.tokenSheetId)}
+          highlightText={highlightText}
+        />
+      ))}
     </div>
   );
 };
@@ -675,6 +693,10 @@ MapCanvas.propTypes = {
       name: PropTypes.string,
       color: PropTypes.string,
       enemyId: PropTypes.string,
+      tokenSheetId: PropTypes.string,
+      customName: PropTypes.string,
+      showName: PropTypes.bool,
+      controlledBy: PropTypes.string,
       w: PropTypes.number,
       h: PropTypes.number,
       angle: PropTypes.number,
@@ -683,6 +705,8 @@ MapCanvas.propTypes = {
   onTokensChange: PropTypes.func.isRequired,
   enemies: PropTypes.array,
   onEnemyUpdate: PropTypes.func,
+  players: PropTypes.array,
+  highlightText: PropTypes.func,
 };
 
 export default MapCanvas;
