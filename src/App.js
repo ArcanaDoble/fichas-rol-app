@@ -2931,9 +2931,36 @@ function App() {
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-          <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
-            ← Volver al Menú
-          </Boton>
+          <div className="flex flex-wrap gap-2">
+            <Boton
+              size="sm"
+              onClick={() => setChosenView(null)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Menú Máster
+            </Boton>
+            <Boton
+              size="sm"
+              color="red"
+              onClick={() => setChosenView('enemies')}
+            >
+              Fichas de Enemigos
+            </Boton>
+            <Boton
+              size="sm"
+              color="blue"
+              onClick={() => setChosenView('initiative')}
+            >
+              Sistema de Velocidad
+            </Boton>
+            <Boton
+              size="sm"
+              color="purple"
+              onClick={() => setChosenView('tools')}
+            >
+              Herramientas
+            </Boton>
+          </div>
         </div>
         <div className="mb-4">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
