@@ -3012,6 +3012,9 @@ function App() {
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
+              armas={armas}
+              armaduras={armaduras}
+              habilidades={habilidades}
               highlightText={highlightText}
             />
           </div>

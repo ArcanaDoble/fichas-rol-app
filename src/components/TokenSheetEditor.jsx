@@ -4,11 +4,21 @@ import { createPortal } from 'react-dom';
 import Input from './Input';
 import Boton from './Boton';
 
-const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
+const TokenSheetEditor = ({
+  sheet,
+  onClose,
+  onSave,
+  armas = [],
+  armaduras = [],
+  habilidades = [],
+}) => {
   const [data, setData] = useState(sheet || null);
   const [newWeapon, setNewWeapon] = useState('');
   const [newArmor, setNewArmor] = useState('');
   const [newPower, setNewPower] = useState('');
+  const [weaponError, setWeaponError] = useState('');
+  const [armorError, setArmorError] = useState('');
+  const [powerError, setPowerError] = useState('');
 
   useEffect(() => {
     setData(sheet || null);
@@ -30,19 +40,55 @@ const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
   };
 
   const addItem = (type) => {
-    const value = type === 'weapon' ? newWeapon.trim() : type === 'armor' ? newArmor.trim() : newPower.trim();
+    const value =
+      type === 'weapon'
+        ? newWeapon.trim()
+        : type === 'armor'
+        ? newArmor.trim()
+        : newPower.trim();
     if (!value) return;
-    const item = { nombre: value };
-    setData(prev => ({
+    const list =
+      type === 'weapon' ? armas : type === 'armor' ? armaduras : habilidades;
+    const found = list.find(
+      (i) => i && i.nombre && i.nombre.toLowerCase().includes(value.toLowerCase())
+    );
+    if (!found) {
+      if (type === 'weapon') setWeaponError('Arma no encontrada');
+      if (type === 'armor') setArmorError('Armadura no encontrada');
+      if (type === 'power') setPowerError('Poder no encontrado');
+      return;
+    }
+    setData((prev) => ({
       ...prev,
-      [type === 'weapon' ? 'weapons' : type === 'armor' ? 'armaduras' : 'poderes']: [
-        ...(prev[type === 'weapon' ? 'weapons' : type === 'armor' ? 'armaduras' : 'poderes'] || []),
-        item,
+      [
+        type === 'weapon'
+          ? 'weapons'
+          : type === 'armor'
+          ? 'armaduras'
+          : 'poderes'
+      ]: [
+        ...(prev[
+          type === 'weapon'
+            ? 'weapons'
+            : type === 'armor'
+            ? 'armaduras'
+            : 'poderes'
+        ] || []),
+        found,
       ],
     }));
-    if (type === 'weapon') setNewWeapon('');
-    if (type === 'armor') setNewArmor('');
-    if (type === 'power') setNewPower('');
+    if (type === 'weapon') {
+      setNewWeapon('');
+      setWeaponError('');
+    }
+    if (type === 'armor') {
+      setNewArmor('');
+      setArmorError('');
+    }
+    if (type === 'power') {
+      setNewPower('');
+      setPowerError('');
+    }
   };
 
   const removeItem = (type, index) => {
@@ -51,6 +97,28 @@ const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
       [type]: prev[type].filter((_, i) => i !== index),
     }));
   };
+
+  const weaponSuggestions = newWeapon
+    ? armas
+        .filter(
+          (a) => a && a.nombre && a.nombre.toLowerCase().includes(newWeapon.toLowerCase())
+        )
+        .slice(0, 5)
+    : [];
+  const armorSuggestions = newArmor
+    ? armaduras
+        .filter(
+          (a) => a && a.nombre && a.nombre.toLowerCase().includes(newArmor.toLowerCase())
+        )
+        .slice(0, 5)
+    : [];
+  const powerSuggestions = newPower
+    ? habilidades
+        .filter(
+          (h) => h && h.nombre && h.nombre.toLowerCase().includes(newPower.toLowerCase())
+        )
+        .slice(0, 5)
+    : [];
 
   const handleSave = () => {
     onSave?.(data);
@@ -142,15 +210,33 @@ const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="relative flex gap-2">
               <Input
                 placeholder="Nombre del arma"
                 value={newWeapon}
                 onChange={e => setNewWeapon(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addItem('weapon')}
                 className="flex-1 text-sm"
               />
               <Boton size="sm" onClick={() => addItem('weapon')}>Agregar</Boton>
+              {weaponSuggestions.length > 0 && (
+                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
+                  {weaponSuggestions.map((w) => (
+                    <li
+                      key={w.nombre}
+                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
+                      onClick={() => {
+                        setNewWeapon(w.nombre);
+                        addItem('weapon');
+                      }}
+                    >
+                      {w.nombre}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            {weaponError && <p className="text-red-400 text-xs mt-1">{weaponError}</p>}
           </div>
           {/* Armors */}
           <div>
@@ -163,15 +249,33 @@ const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="relative flex gap-2">
               <Input
                 placeholder="Nombre de la armadura"
                 value={newArmor}
                 onChange={e => setNewArmor(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addItem('armor')}
                 className="flex-1 text-sm"
               />
               <Boton size="sm" onClick={() => addItem('armor')}>Agregar</Boton>
+              {armorSuggestions.length > 0 && (
+                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
+                  {armorSuggestions.map((a) => (
+                    <li
+                      key={a.nombre}
+                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
+                      onClick={() => {
+                        setNewArmor(a.nombre);
+                        addItem('armor');
+                      }}
+                    >
+                      {a.nombre}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            {armorError && <p className="text-red-400 text-xs mt-1">{armorError}</p>}
           </div>
           {/* Powers */}
           <div>
@@ -184,15 +288,33 @@ const TokenSheetEditor = ({ sheet, onClose, onSave }) => {
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="relative flex gap-2">
               <Input
                 placeholder="Nombre del poder"
                 value={newPower}
                 onChange={e => setNewPower(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addItem('power')}
                 className="flex-1 text-sm"
               />
               <Boton size="sm" onClick={() => addItem('power')}>Agregar</Boton>
+              {powerSuggestions.length > 0 && (
+                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
+                  {powerSuggestions.map((p) => (
+                    <li
+                      key={p.nombre}
+                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
+                      onClick={() => {
+                        setNewPower(p.nombre);
+                        addItem('power');
+                      }}
+                    >
+                      {p.nombre}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            {powerError && <p className="text-red-400 text-xs mt-1">{powerError}</p>}
           </div>
           <div className="flex gap-3 pt-4 border-t border-gray-600">
             <Boton onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white flex-1">Guardar</Boton>
@@ -210,6 +332,9 @@ TokenSheetEditor.propTypes = {
   sheet: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
+  armas: PropTypes.array,
+  armaduras: PropTypes.array,
+  habilidades: PropTypes.array,
 };
 
 export default TokenSheetEditor;

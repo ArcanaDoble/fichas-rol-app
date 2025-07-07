@@ -3,7 +3,15 @@ import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
 import TokenSheetEditor from './TokenSheetEditor';
 
-const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
+const TokenSheetModal = ({
+  token,
+  enemies = [],
+  armas = [],
+  armaduras = [],
+  habilidades = [],
+  onClose,
+  highlightText,
+}) => {
   const sheetId = token?.tokenSheetId;
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -49,6 +57,9 @@ const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
       {editing && (
         <TokenSheetEditor
           sheet={data}
+          armas={armas}
+          armaduras={armaduras}
+          habilidades={habilidades}
           onClose={() => setEditing(false)}
           onSave={handleSave}
         />
@@ -60,6 +71,9 @@ const TokenSheetModal = ({ token, enemies = [], onClose, highlightText }) => {
 TokenSheetModal.propTypes = {
   token: PropTypes.object,
   enemies: PropTypes.array,
+  armas: PropTypes.array,
+  armaduras: PropTypes.array,
+  habilidades: PropTypes.array,
   onClose: PropTypes.func.isRequired,
   highlightText: PropTypes.func,
 };

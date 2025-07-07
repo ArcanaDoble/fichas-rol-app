@@ -291,6 +291,9 @@ const MapCanvas = ({
   enemies = [],
   onEnemyUpdate,
   players = [],
+  armas = [],
+  armaduras = [],
+  habilidades = [],
   highlightText,
 }) => {
   const containerRef = useRef(null);
@@ -666,6 +669,9 @@ const MapCanvas = ({
           key={tk.tokenSheetId}
           token={tokens.find((t) => t.tokenSheetId === tk.tokenSheetId) || tk}
           enemies={enemies}
+          armas={armas}
+          armaduras={armaduras}
+          habilidades={habilidades}
           onClose={() => handleCloseSheet(tk.tokenSheetId)}
           highlightText={highlightText}
         />
@@ -706,6 +712,9 @@ MapCanvas.propTypes = {
   enemies: PropTypes.array,
   onEnemyUpdate: PropTypes.func,
   players: PropTypes.array,
+  armas: PropTypes.array,
+  armaduras: PropTypes.array,
+  habilidades: PropTypes.array,
   highlightText: PropTypes.func,
 };
 
