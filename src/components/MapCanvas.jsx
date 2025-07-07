@@ -303,8 +303,8 @@ const MapCanvas = ({
   const [isPanning, setIsPanning] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [dragShadow, setDragShadow] = useState(null);
-  const [settingsTokenId, setSettingsTokenId] = useState(null);
-  const [openSheetToken, setOpenSheetToken] = useState(null);
+  const [settingsTokenIds, setSettingsTokenIds] = useState([]);
+  const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
@@ -421,7 +421,23 @@ const MapCanvas = ({
   };
 
   const handleOpenSettings = (id) => {
-    setSettingsTokenId(id);
+    setSettingsTokenIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const handleCloseSettings = (id) => {
+    setSettingsTokenIds((prev) => prev.filter((sid) => sid !== id));
+  };
+
+  const handleOpenSheet = (token) => {
+    setOpenSheetTokens((prev) =>
+      prev.some((t) => t.tokenSheetId === token.tokenSheetId)
+        ? prev
+        : [...prev, token]
+    );
+  };
+
+  const handleCloseSheet = (sheetId) => {
+    setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
   };
 
   // Zoom interactivo con la rueda del ratón
@@ -631,27 +647,29 @@ const MapCanvas = ({
         </Layer>
         </Stage>
       </div>
-      {settingsTokenId && (
+      {settingsTokenIds.map((id) => (
         <TokenSettings
-          token={tokens.find((t) => t.id === settingsTokenId)}
+          key={id}
+          token={tokens.find((t) => t.id === id)}
           enemies={enemies}
           players={players}
-          onClose={() => setSettingsTokenId(null)}
+          onClose={() => handleCloseSettings(id)}
           onUpdate={(tk) => {
             const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
             onTokensChange(updated);
           }}
-          onOpenSheet={(tk) => setOpenSheetToken(tk)}
+          onOpenSheet={handleOpenSheet}
         />
-      )}
-      {openSheetToken && (
+      ))}
+      {openSheetTokens.map((tk) => (
         <TokenSheetModal
-          token={openSheetToken}
+          key={tk.tokenSheetId}
+          token={tokens.find((t) => t.tokenSheetId === tk.tokenSheetId) || tk}
           enemies={enemies}
-          onClose={() => setOpenSheetToken(null)}
+          onClose={() => handleCloseSheet(tk.tokenSheetId)}
           highlightText={highlightText}
         />
-      )}
+      ))}
     </div>
   );
 };
