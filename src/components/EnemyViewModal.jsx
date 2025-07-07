@@ -69,8 +69,8 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
   const windowBox = (
     <div
       ref={modalRef}
-      className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none pointer-events-auto"
-      style={{ top: pos.y, left: pos.x }}
+      className="fixed bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none pointer-events-auto"
+      style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
