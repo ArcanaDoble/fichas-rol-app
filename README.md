@@ -255,6 +255,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.2.52:**
 - Nueva dependencia `use-image` para cargar imágenes en el Mapa de Batalla.
+**Resumen de cambios v2.2.53:**
+- Corrige error de compilación por cierre extra de `div` en `App.js`.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
@@ -436,4 +438,5 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ---
 
 **Desarrollado con ❤️ para la comunidad de rol**
+
 
