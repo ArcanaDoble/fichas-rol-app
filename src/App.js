@@ -2965,6 +2965,7 @@ function App() {
             </Boton>
           </div>
         </div>
+        </div>
         <div className="mb-4">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
         </div>
