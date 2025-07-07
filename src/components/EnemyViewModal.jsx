@@ -256,7 +256,6 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
           </div>
         </div>
       </div>
-    </div>
   );
 
   const content = floating ? (
