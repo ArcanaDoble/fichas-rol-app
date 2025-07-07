@@ -2410,6 +2410,7 @@ function App() {
             <h1 className="text-2xl font-bold text-white">👹 Fichas de Enemigos</h1>
             <div className="flex gap-2">
               <Boton color="indigo" onClick={() => setChosenView('canvas')}>Mapa de Batalla</Boton>
+              <Boton color="purple" onClick={() => setChosenView('tools')}>Herramientas</Boton>
               <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
                 ← Volver al Menú
               </Boton>
@@ -3025,6 +3026,9 @@ function App() {
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
           <h1 className="text-2xl font-bold mb-2">Modo Máster</h1>
           <div className="flex flex-wrap gap-2 mb-2">
+            <Boton onClick={() => setChosenView(null)}>
+              ← Menú Máster
+            </Boton>
             <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
             <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
           </div>
