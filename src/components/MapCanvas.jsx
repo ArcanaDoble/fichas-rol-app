@@ -303,7 +303,7 @@ const MapCanvas = ({
   const [selectedId, setSelectedId] = useState(null);
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenId, setSettingsTokenId] = useState(null);
-  const [openSheetId, setOpenSheetId] = useState(null);
+  const [openSheetToken, setOpenSheetToken] = useState(null);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
@@ -640,11 +640,11 @@ const MapCanvas = ({
             const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
             onTokensChange(updated);
           }}
-          onOpenSheet={(id) => setOpenSheetId(id)}
+          onOpenSheet={(tk) => setOpenSheetToken(tk)}
         />
       )}
-      {openSheetId && (
-        <TokenSheetModal sheetId={openSheetId} onClose={() => setOpenSheetId(null)} />
+      {openSheetToken && (
+        <TokenSheetModal token={openSheetToken} enemies={enemies} onClose={() => setOpenSheetToken(null)} />
       )}
     </div>
   );

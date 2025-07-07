@@ -91,7 +91,24 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                 </select>
               </div>
               <div className="text-center">
-                <Boton onClick={() => onOpenSheet(token.tokenSheetId)}>Abrir ficha de personaje</Boton>
+                <Boton
+                  onClick={() => {
+                    const enemy = enemies.find((e) => e.id === enemyId);
+                    const updated = {
+                      ...token,
+                      enemyId: enemyId || null,
+                      url: enemyId ? enemy?.portrait || token.url : token.url,
+                      name: enemyId ? enemy?.name : token.name,
+                      customName: showName ? name : '',
+                      showName,
+                      controlledBy,
+                    };
+                    onUpdate(updated);
+                    onOpenSheet(updated);
+                  }}
+                >
+                  Abrir ficha de personaje
+                </Boton>
               </div>
             </>
           )}
