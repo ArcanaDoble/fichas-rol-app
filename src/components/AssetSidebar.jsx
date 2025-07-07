@@ -15,7 +15,7 @@ import { useDrag } from 'react-dnd';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
-const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
+const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
   const [folders, setFolders] = useState(() => [
     { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
   ]);
@@ -265,7 +265,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
   );
 
   return (
-    <div className="fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+    <div className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}>
       <div className="mb-3">
         <button
           onClick={addFolder}
@@ -317,6 +317,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart }) => {
 AssetSidebar.propTypes = {
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
+  className: PropTypes.string,
 };
 
 const DraggableAssetItem = ({

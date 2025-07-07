@@ -21,6 +21,7 @@
     "react-konva": "^19.0.7",
     "react-scripts": "5.0.1",
     "react-tooltip": "^5.28.1",
+    "use-image": "^1.1.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
