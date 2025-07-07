@@ -2932,10 +2932,9 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-        <div className="sticky top-0 bg-gray-900 pb-2 z-10 pr-80">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-            <div className="flex flex-wrap gap-2">
+        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+          <div className="flex flex-wrap gap-2">
               <Boton
                 size="sm"
                 onClick={() => setChosenView(null)}
@@ -3000,7 +2999,7 @@ function App() {
             onChange={e => setGridOffsetY(parseInt(e.target.value, 10) || 0)}
           />
         </div>
-        <div className="relative">
+        <div className="relative pt-14">
           <div className="h-[80vh] mr-80">
             <MapCanvas
               backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
@@ -3016,7 +3015,7 @@ function App() {
               highlightText={highlightText}
             />
           </div>
-          <AssetSidebar />
+          <AssetSidebar className="top-14" />
         </div>
       </div>
     );
