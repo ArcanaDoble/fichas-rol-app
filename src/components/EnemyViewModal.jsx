@@ -69,7 +69,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
   const windowBox = (
     <div
       ref={modalRef}
-      className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none"
+      className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none pointer-events-auto"
       style={{ top: pos.y, left: pos.x }}
       onClick={(e) => e.stopPropagation()}
     >
