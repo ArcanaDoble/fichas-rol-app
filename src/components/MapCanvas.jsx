@@ -56,9 +56,9 @@ const Token = ({
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const barHeight = cellSize * 0.2;
+  const barHeight = cellSize * 0.15;
   const capsuleW = barHeight * 2;
-  const capsuleGap = cellSize * 0.05;
+  const capsuleGap = cellSize * 0.04;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [hover, setHover] = useState(false);
   const [stats, setStats] = useState({});
@@ -273,7 +273,11 @@ const Token = ({
   };
 
   return (
-    <Group onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <Group
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onDblClick={() => onSettings?.(id)}
+    >
       {img ? (
         <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
       ) : (
@@ -331,7 +335,7 @@ const Token = ({
           const current = Math.min(v.actual ?? 0, max);
           const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
           const rowWidth = max * capsuleW + (max - 1) * capsuleGap;
-          const baseOffset = cellSize * 0.2 + rowIdx * (barHeight + cellSize * 0.05);
+          const baseOffset = 4 + rowIdx * (barHeight + 2);
           const yPos = anchor === 'top'
             ? -height * gridSize / 2 - baseOffset
             : height * gridSize / 2 + baseOffset;
@@ -345,6 +349,7 @@ const Token = ({
                   height={barHeight}
                   fill={c}
                   stroke="#1f2937"
+                  strokeScaleEnabled={false}
                   cornerRadius={barHeight / 2}
                   onClick={(e) => handleStatClick(key, e)}
                 />
