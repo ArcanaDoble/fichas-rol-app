@@ -49,6 +49,8 @@ const Token = ({
   const trRef = useRef();
   const rotateRef = useRef();
   const gearRef = useRef();
+  const textRef = useRef();
+  const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const [hover, setHover] = useState(false);
 
@@ -58,6 +60,8 @@ const Token = ({
     const node = shapeRef.current;
     const handle = rotateRef.current;
     const gear = gearRef.current;
+    const label = textRef.current;
+    const labelGroup = textGroupRef.current;
     if (!node || !handle) return;
     const box = node.getClientRect({ relativeTo: node.getParent() });
     handle.position({
@@ -69,6 +73,10 @@ const Token = ({
         x: box.x - HANDLE_OFFSET,
         y: box.y + box.height + HANDLE_OFFSET,
       });
+    }
+    if (labelGroup && label) {
+      labelGroup.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
+      labelGroup.offsetX(label.width() / 2);
     }
     handle.getLayer().batchDraw();
   };
@@ -199,21 +207,44 @@ const Token = ({
         <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
       )}
       {showName && (customName || name) && (
-        <Text
-          text={customName || name}
-          x={(width * gridSize) / 2}
-          y={height * gridSize + 4}
+        <Group
+          ref={textGroupRef}
+          x={x + (width * gridSize) / 2}
+          y={y + height * gridSize + 4}
           offsetX={(width * gridSize) / 2}
-          fontSize={10}
-          fontStyle="bold"
-          fill="#fff"
-          align="center"
-          shadowColor="#000"
-          shadowBlur={2}
-          shadowOffset={{ x: 1, y: 1 }}
-          shadowOpacity={0.6}
           listening={false}
-        />
+        >
+          {[{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }].map(
+            (o, i) => (
+              <Text
+                key={i}
+                text={customName || name}
+                x={o.x}
+                y={o.y}
+                fontSize={10}
+                fontStyle="bold"
+                fontFamily="sans-serif"
+                fill="#000"
+                align="center"
+                shadowColor="#000"
+                shadowBlur={1}
+                shadowOpacity={0.9}
+              />
+            )
+          )}
+          <Text
+            ref={textRef}
+            text={customName || name}
+            fontSize={10}
+            fontStyle="bold"
+            fontFamily="sans-serif"
+            fill="#fff"
+            align="center"
+            shadowColor="#000"
+            shadowBlur={1}
+            shadowOpacity={0.8}
+          />
+        </Group>
       )}
       {selected && (
         <>
