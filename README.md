@@ -17,7 +17,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Nombre en tokens** - El nombre del personaje aparece justo debajo del token en negrita con contorno negro (text-shadow en cuatro direcciones y leve desenfoque)
 - **Nombre escalable** - La fuente del nombre aumenta si el token ocupa varias casillas
 - **Mini-barras en tokens** - Cada stat se muestra sobre el token mediante cápsulas interactivas y puedes elegir su posición
-- **Iconos de control proporcionales** - Engranaje, círculo de rotación y barras se escalan según el tamaño de la celda
+- **Iconos de control de tamaño fijo** - Engranaje, círculo de rotación y barras mantienen un tamaño constante al hacer zoom
 - **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
 - **Grid ajustable** - Tamaño y desplazamiento de la cuadrícula configurables
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
