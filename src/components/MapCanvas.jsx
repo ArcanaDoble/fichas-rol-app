@@ -697,7 +697,6 @@ const MapCanvas = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
   const groupScale = baseScale * zoom;
-  const cellPixelSize = effectiveGridSize * groupScale;
 
   const [, drop] = useDrop(
     () => ({
@@ -768,7 +767,7 @@ const MapCanvas = ({
                 height={dragShadow.h || 1}
                 angle={dragShadow.angle || 0}
                 gridSize={effectiveGridSize}
-                cellSize={cellPixelSize}
+                cellSize={effectiveGridSize}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={dragShadow.url}
@@ -790,7 +789,7 @@ const MapCanvas = ({
                 height={token.h || 1}
                 angle={token.angle || 0}
                 gridSize={effectiveGridSize}
-                cellSize={cellPixelSize}
+                cellSize={effectiveGridSize}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={token.url}
