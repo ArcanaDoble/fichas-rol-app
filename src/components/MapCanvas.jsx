@@ -198,13 +198,13 @@ const Token = ({
       ) : (
         <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
       )}
-      {showName && (customName || name) && hover && (
+      {showName && (customName || name) && (
         <Text
           text={customName || name}
           x={(width * gridSize) / 2}
           y={height * gridSize + 4}
           offsetX={(width * gridSize) / 2}
-          fontSize={12}
+          fontSize={10}
           fontStyle="bold"
           fill="#fff"
           align="center"
