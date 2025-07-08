@@ -48,6 +48,7 @@ const Token = forwardRef(({
   onTransformEnd,
   onRotate,
   onSettings,
+  onHoverChange,
   tokenSheetId,
 }, ref) => {
   const [img] = useImage(image);
@@ -61,7 +62,6 @@ const Token = forwardRef(({
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
-  const [hover, setHover] = useState(false);
   const [stats, setStats] = useState({});
 
   const SNAP = gridSize / 4;
@@ -282,8 +282,8 @@ const Token = forwardRef(({
   return (
     <Group
       ref={groupRef}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
       onDblClick={() => onSettings?.(id)}
     >
       {img ? (
@@ -396,6 +396,7 @@ Token.propTypes = {
   onTransformEnd: PropTypes.func.isRequired,
   onRotate: PropTypes.func.isRequired,
   onSettings: PropTypes.func,
+  onHoverChange: PropTypes.func,
   tokenSheetId: PropTypes.string,
 };
 
@@ -433,6 +434,7 @@ const MapCanvas = ({
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [hoveredId, setHoveredId] = useState(null);
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
@@ -790,6 +792,7 @@ const MapCanvas = ({
                 onSettings={handleOpenSettings}
                 onTransformEnd={handleSizeChange}
                 onRotate={handleRotateChange}
+                onHoverChange={(h) => setHoveredId(h ? token.id : null)}
               />
             ))}
           </Group>
@@ -802,6 +805,7 @@ const MapCanvas = ({
               stageRef={stageRef}
               onStatClick={(key, e) => tokenRefs.current[token.id]?.handleStatClick(key, e)}
               transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
+              visible={hoveredId === token.id}
             />
           ))}
         </Layer>
