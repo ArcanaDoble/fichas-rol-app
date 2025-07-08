@@ -79,6 +79,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - El botón verde "+" ahora incrementa el recurso hasta su valor base.
 - Otros ajustes menores.
 
+**Resumen de cambios v2.1.11:**
+- Lista completa de jugadores en el campo **Controlado por** al editar un token.
+
 **Resumen de cambios v2.2.0:**
 - Botón **Guardar datos** para respaldar la ficha completa.
 - Botón **RESET** que restaura la ficha al último respaldo guardado.
@@ -464,6 +467,9 @@ src/
 
 ### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
 - ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
+
+### 🔧 **Mejora de selección de controlador (Enero 2025) - v2.1.5**
+- ✅ **Listado completo de jugadores** - Ahora se muestran todos los nombres en "Controlado por" al editar un token
 
 ## 🔄 Historial de cambios previos
 

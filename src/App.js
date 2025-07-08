@@ -481,16 +481,15 @@ function App() {
   // FETCH EXISTING PLAYERS
   // ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (userType === 'player') {
-      getDocs(collection(db, 'players'))
-        .then(snap => {
-          const players = snap.docs.map(d => d.id);
-          setExistingPlayers(players);
-        })
-        .catch(error => {
-          // Error cargando jugadores
-        });
-    }
+    if (!userType) return;
+    getDocs(collection(db, 'players'))
+      .then(snap => {
+        const players = snap.docs.map(d => d.id);
+        setExistingPlayers(players);
+      })
+      .catch(error => {
+        // Error cargando jugadores
+      });
   }, [userType]);
   // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
