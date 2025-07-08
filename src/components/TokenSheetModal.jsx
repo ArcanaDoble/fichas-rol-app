@@ -31,6 +31,21 @@ const TokenSheetModal = ({
       }
       if (!sheet) sheet = { id: sheetId, name: '', stats: {}, atributos: {} };
     }
+    // Use token info if sheet lacks it
+    sheet = {
+      ...sheet,
+      name: token.customName || sheet.name || token.name || '',
+      portrait: sheet.portrait || token.url,
+    };
+    if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
+      sheet.stats = {
+        postura: { actual: 0, total: 0 },
+        vida: { actual: 0, total: 0 },
+        ingenio: { actual: 0, total: 0 },
+        cordura: { actual: 0, total: 0 },
+        armadura: { actual: 0, total: 0 },
+      };
+    }
     setData(sheet);
   }, [sheetId, token, enemies]);
 
