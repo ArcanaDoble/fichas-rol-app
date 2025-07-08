@@ -311,7 +311,7 @@ const Token = ({
           const current = Math.min(v.actual ?? 0, max);
           const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
           const rowWidth = max * 12 + (max - 1) * 2;
-          const baseOffset = gridSize / 2 + rowIdx * (6 + 4);
+          const baseOffset = gridSize / 4 + rowIdx * (6 + 4);
           const yPos = anchor === 'top'
             ? -height * gridSize / 2 - baseOffset
             : height * gridSize / 2 + baseOffset;
@@ -431,7 +431,7 @@ const MapCanvas = ({
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ width: 300, height: 300 });
-  const [imageSize, setImageSize] = useState({ width: 300, height: 300 });
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [baseScale, setBaseScale] = useState(1);
   const [zoom, setZoom] = useState(initialZoom);
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
@@ -445,7 +445,7 @@ const MapCanvas = ({
   const [bg] = useImage(backgroundImage, 'anonymous');
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
-  const effectiveGridSize = gridCells ? imageSize.width / gridCells : gridSize;
+  const effectiveGridSize = imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
 
   const pxToCell = (px, offset) => Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
@@ -474,18 +474,19 @@ const MapCanvas = ({
 
   // Calcula la escala base según el modo seleccionado y centra el mapa
   useEffect(() => {
-    if (!imageSize.width) return;
-    const scaleX = containerSize.width / imageSize.width;
-    const scaleY = containerSize.height / imageSize.height;
+    const refWidth = imageSize.width || gridCells * gridSize || containerSize.width;
+    const refHeight = imageSize.height || gridCells * gridSize || containerSize.height;
+    const scaleX = containerSize.width / refWidth;
+    const scaleY = containerSize.height / refHeight;
     const scale = scaleMode === 'cover' ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
     setBaseScale(scale);
-    const displayWidth = imageSize.width * scale;
-    const displayHeight = imageSize.height * scale;
+    const displayWidth = refWidth * scale;
+    const displayHeight = refHeight * scale;
     setGroupPos({
       x: (containerSize.width - displayWidth) / 2,
       y: (containerSize.height - displayHeight) / 2,
     });
-  }, [containerSize, imageSize, scaleMode]);
+  }, [containerSize, imageSize, gridCells, gridSize, scaleMode]);
 
   const drawGrid = () => {
     const lines = [];
@@ -627,8 +628,8 @@ const MapCanvas = ({
     }
   };
 
-  const mapWidth = Math.round(imageSize.width / effectiveGridSize);
-  const mapHeight = Math.round(imageSize.height / effectiveGridSize);
+  const mapWidth = gridCells || Math.round(imageSize.width / effectiveGridSize);
+  const mapHeight = gridCells || Math.round(imageSize.height / effectiveGridSize);
 
   const handleKeyDown = useCallback((e) => {
     if (selectedId == null) return;
