@@ -39,12 +39,18 @@ const TokenSheetModal = ({
     };
     if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
       sheet.stats = {
-        postura: { actual: 0, total: 0 },
-        vida: { actual: 0, total: 0 },
-        ingenio: { actual: 0, total: 0 },
-        cordura: { actual: 0, total: 0 },
-        armadura: { actual: 0, total: 0 },
+        postura: { base: 0, actual: 0, total: 0 },
+        vida: { base: 0, actual: 0, total: 0 },
+        ingenio: { base: 0, actual: 0, total: 0 },
+        cordura: { base: 0, actual: 0, total: 0 },
+        armadura: { base: 0, actual: 0, total: 0 },
       };
+    } else {
+      Object.keys(sheet.stats).forEach((k) => {
+        const st = sheet.stats[k] || {};
+        if (st.base === undefined) st.base = st.total ?? 0;
+        if (st.total === undefined) st.total = st.base;
+      });
     }
     setData(sheet);
   }, [sheetId, token, enemies]);

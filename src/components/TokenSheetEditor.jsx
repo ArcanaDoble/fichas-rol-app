@@ -37,16 +37,23 @@ const TokenSheetEditor = ({
   if (!sheet || !data) return null;
 
   const updateStat = (stat, field, value) => {
-    setData(prev => ({
-      ...prev,
-      stats: {
-        ...prev.stats,
-        [stat]: {
-          ...prev.stats[stat],
-          [field]: parseInt(value, 10) || 0,
+    setData(prev => {
+      const num = parseInt(value, 10) || 0;
+      const updated = {
+        ...prev.stats[stat],
+        [field]: num,
+      };
+      if (field === 'base' && updated.buff == null) {
+        updated.total = num;
+      }
+      return {
+        ...prev,
+        stats: {
+          ...prev.stats,
+          [stat]: updated,
         },
-      },
-    }));
+      };
+    });
   };
 
   const updateAtributo = (attr, value) => {
@@ -216,16 +223,16 @@ const TokenSheetEditor = ({
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
-                          value={value.actual || 0}
-                          onChange={e => updateStat(stat, 'actual', e.target.value)}
+                          value={value.base ?? value.total ?? 0}
+                          onChange={e => updateStat(stat, 'base', e.target.value)}
                           className="w-16 h-6 text-center bg-gray-600 border-gray-500 text-white text-xs"
                           min="0"
                         />
                         <span className="text-gray-400 text-xs">/</span>
                         <Input
                           type="number"
-                          value={value.total || 0}
-                          onChange={e => updateStat(stat, 'total', e.target.value)}
+                          value={value.actual || 0}
+                          onChange={e => updateStat(stat, 'actual', e.target.value)}
                           className="w-16 h-6 text-center bg-gray-600 border-gray-500 text-white text-xs"
                           min="0"
                         />
