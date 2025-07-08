@@ -349,7 +349,7 @@ const Token = ({
                   height={barHeight}
                   fill={c}
                   stroke="#1f2937"
-                  strokeWidth={1}
+                  strokeWidth={2}
                   strokeScaleEnabled={false}
                   cornerRadius={barHeight / 2}
                   onClick={(e) => handleStatClick(key, e)}
