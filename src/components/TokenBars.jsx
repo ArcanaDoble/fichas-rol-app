@@ -7,7 +7,13 @@ const CAPSULE_W = 18;
 const BAR_HEIGHT = 8;
 const GAP = 2;
 
-const TokenBars = ({ tokenRef, stageRef, onStatClick, transformKey }) => {
+const TokenBars = ({
+  tokenRef,
+  stageRef,
+  onStatClick,
+  transformKey,
+  visible = true,
+}) => {
   const [layout, setLayout] = useState({ x: 0, top: 0, bottom: 0 });
   const [stats, setStats] = useState({});
 
@@ -54,6 +60,8 @@ const TokenBars = ({ tokenRef, stageRef, onStatClick, transformKey }) => {
     .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'bottom')
     .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
 
+  if (!visible) return null;
+
   return (
     <>
       {topStats.map((entry, i) => renderRow(entry, i, 'top'))}
@@ -67,6 +75,7 @@ TokenBars.propTypes = {
   stageRef: PropTypes.shape({ current: PropTypes.any }).isRequired,
   onStatClick: PropTypes.func.isRequired,
   transformKey: PropTypes.string,
+  visible: PropTypes.bool,
 };
 
 export default TokenBars;
