@@ -38,13 +38,23 @@ const TokenSheetEditor = ({
 
   const updateStat = (stat, field, value) => {
     setData(prev => {
-      const num = parseInt(value, 10) || 0;
-      const updated = {
-        ...prev.stats[stat],
-        [field]: num,
-      };
-      if (field === 'base' && updated.buff == null) {
-        updated.total = num;
+      const updated = { ...prev.stats[stat] };
+      if (field === 'showOnToken') {
+        updated.showOnToken = value;
+      } else if (field === 'color') {
+        updated.color = value;
+      } else if (field === 'label') {
+        updated.label = value;
+      } else if (field === 'tokenRow') {
+        updated.tokenRow = parseInt(value, 10) || 0;
+      } else if (field === 'tokenAnchor') {
+        updated.tokenAnchor = value;
+      } else {
+        const num = parseInt(value, 10) || 0;
+        updated[field] = num;
+        if (field === 'base' && updated.buff == null) {
+          updated.total = num;
+        }
       }
       return {
         ...prev,
@@ -53,6 +63,14 @@ const TokenSheetEditor = ({
           [stat]: updated,
         },
       };
+    });
+  };
+
+  const removeStat = stat => {
+    setData(prev => {
+      const copy = { ...prev.stats };
+      delete copy[stat];
+      return { ...prev, stats: copy };
     });
   };
 
@@ -217,9 +235,17 @@ const TokenSheetEditor = ({
               <label className="block text-sm font-medium text-gray-300 mb-2">Estadísticas</label>
               <div className="space-y-3">
                 {Object.entries(data.stats).map(([stat, value]) => (
-                  <div key={stat} className="bg-gray-700 p-3 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium capitalize text-gray-300">{stat}</span>
+                  <div key={stat} className="bg-gray-700 p-3 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Input
+                        type="text"
+                        value={value.label || stat}
+                        onChange={e => updateStat(stat, 'label', e.target.value)}
+                        className="flex-1 text-sm bg-gray-600 border-gray-500 text-white"
+                      />
+                      <Boton size="sm" color="red" onClick={() => removeStat(stat)}>✕</Boton>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
@@ -237,6 +263,38 @@ const TokenSheetEditor = ({
                           min="0"
                         />
                       </div>
+                      <Input
+                        type="number"
+                        className="w-12 h-6 text-center bg-gray-600 border-gray-500 text-white text-xs"
+                        value={value.tokenRow ?? 0}
+                        onChange={e => updateStat(stat, 'tokenRow', e.target.value)}
+                        title="Fila"
+                        min="0"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={value.showOnToken ?? true}
+                          onChange={e => updateStat(stat, 'showOnToken', e.target.checked)}
+                        />
+                        Mostrar en token
+                      </label>
+                      <select
+                        value={value.tokenAnchor || 'top'}
+                        onChange={e => updateStat(stat, 'tokenAnchor', e.target.value)}
+                        className="bg-gray-600 text-white text-xs border-gray-500 h-5 px-1 rounded"
+                      >
+                        <option value="top">Arriba</option>
+                        <option value="bottom">Abajo</option>
+                      </select>
+                      <input
+                        type="color"
+                        value={value.color || '#ffffff'}
+                        onChange={e => updateStat(stat, 'color', e.target.value)}
+                        className="w-8 h-5 p-0 border-none bg-transparent"
+                      />
                     </div>
                   </div>
                 ))}

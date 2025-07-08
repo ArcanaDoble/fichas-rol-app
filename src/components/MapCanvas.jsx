@@ -17,6 +17,7 @@ import { AssetTypes } from './AssetSidebar';
 import TokenSettings from './TokenSettings';
 import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
+import { getResourceColors } from './ResourceBar';
 
 const Token = ({
   id,
@@ -43,6 +44,7 @@ const Token = ({
   onTransformEnd,
   onRotate,
   onSettings,
+  tokenSheetId,
 }) => {
   const [img] = useImage(image);
   const shapeRef = useRef();
@@ -53,8 +55,28 @@ const Token = ({
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const [hover, setHover] = useState(false);
+  const [stats, setStats] = useState({});
 
   const SNAP = gridSize / 4;
+
+  useEffect(() => {
+    if (!tokenSheetId) return;
+    const load = () => {
+      const stored = localStorage.getItem('tokenSheets');
+      if (!stored) return;
+      const sheets = JSON.parse(stored);
+      const sheet = sheets[tokenSheetId];
+      if (sheet && sheet.stats) setStats(sheet.stats);
+    };
+    load();
+    const handler = e => {
+      if (e.detail && e.detail.id === tokenSheetId) {
+        setStats(e.detail.stats || {});
+      }
+    };
+    window.addEventListener('tokenSheetSaved', handler);
+    return () => window.removeEventListener('tokenSheetSaved', handler);
+  }, [tokenSheetId]);
 
   const updateHandle = () => {
     const node = shapeRef.current;
@@ -174,6 +196,37 @@ const Token = ({
     onRotate(id, shapeRef.current.rotation());
   };
 
+  const handleStatClick = (statKey, e) => {
+    if (!draggable) return;
+    e.cancelBubble = true;
+    setStats(prev => {
+      const current = prev[statKey] || {};
+      const max = current.total ?? current.base ?? current.actual ?? 0;
+      const delta = e.evt.shiftKey ? -1 : 1;
+      const next = {
+        ...current,
+        actual: Math.max(0, Math.min(max, (current.actual || 0) + delta)),
+      };
+      const updated = { ...prev, [statKey]: next };
+      if (tokenSheetId) {
+        const stored = localStorage.getItem('tokenSheets');
+        if (stored) {
+          const sheets = JSON.parse(stored);
+          const sheet = sheets[tokenSheetId];
+          if (sheet && sheet.stats) {
+            sheet.stats = updated;
+            sheets[tokenSheetId] = sheet;
+            localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+            window.dispatchEvent(
+              new CustomEvent('tokenSheetSaved', { detail: { id: tokenSheetId, stats: updated } })
+            );
+          }
+        }
+      }
+      return updated;
+    });
+  };
+
   const offX = (width * gridSize) / 2;
   const offY = (height * gridSize) / 2;
 
@@ -246,6 +299,46 @@ const Token = ({
           />
         </Group>
       )}
+      {(() => {
+        const topStats = Object.entries(stats)
+          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'top')
+          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
+        const bottomStats = Object.entries(stats)
+          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'bottom')
+          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
+        const renderRow = ([key, v], rowIdx, anchor) => {
+          const max = v.total ?? v.base ?? 0;
+          const current = Math.min(v.actual ?? 0, max);
+          const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
+          const rowWidth = max * 12 + (max - 1) * 2;
+          const baseOffset = gridSize / 2 + rowIdx * (6 + 4);
+          const yPos = anchor === 'top'
+            ? -height * gridSize / 2 - baseOffset
+            : height * gridSize / 2 + baseOffset;
+          return (
+            <Group key={key} x={x + (width * gridSize) / 2 - rowWidth / 2} y={y + yPos} listening={true}>
+              {colors.map((c, i) => (
+                <Rect
+                  key={i}
+                  x={i * (12 + 2)}
+                  width={12}
+                  height={6}
+                  fill={c}
+                  stroke="#1f2937"
+                  cornerRadius={3}
+                  onClick={(e) => handleStatClick(key, e)}
+                />
+              ))}
+            </Group>
+          );
+        };
+        return (
+          <>
+            {topStats.map((entry, i) => renderRow(entry, i, 'top'))}
+            {bottomStats.map((entry, i) => renderRow(entry, i, 'bottom'))}
+          </>
+        );
+      })()}
       {selected && (
         <>
           <Transformer
@@ -307,6 +400,7 @@ Token.propTypes = {
   onTransformEnd: PropTypes.func.isRequired,
   onRotate: PropTypes.func.isRequired,
   onSettings: PropTypes.func,
+  tokenSheetId: PropTypes.string,
 };
 
 /**
@@ -679,6 +773,7 @@ const MapCanvas = ({
                 name={token.name}
                 customName={token.customName}
                 showName={token.showName}
+                tokenSheetId={token.tokenSheetId}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
                 onDragStart={handleDragStart}

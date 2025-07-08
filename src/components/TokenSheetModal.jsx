@@ -3,6 +3,14 @@ import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
 import TokenSheetEditor from './TokenSheetEditor';
 
+const recursoColor = {
+  postura: '#34d399',
+  vida: '#f87171',
+  ingenio: '#60a5fa',
+  cordura: '#a78bfa',
+  armadura: '#9ca3af',
+};
+
 const TokenSheetModal = ({
   token,
   enemies = [],
@@ -39,17 +47,25 @@ const TokenSheetModal = ({
     };
     if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
       sheet.stats = {
-        postura: { base: 0, actual: 0, total: 0 },
-        vida: { base: 0, actual: 0, total: 0 },
-        ingenio: { base: 0, actual: 0, total: 0 },
-        cordura: { base: 0, actual: 0, total: 0 },
-        armadura: { base: 0, actual: 0, total: 0 },
+        postura: { label: 'postura', base: 0, actual: 0, total: 0, color: recursoColor.postura, showOnToken: true, tokenRow: 0, tokenAnchor: 'top' },
+        vida: { label: 'vida', base: 0, actual: 0, total: 0, color: recursoColor.vida, showOnToken: true, tokenRow: 1, tokenAnchor: 'top' },
+        ingenio: { label: 'ingenio', base: 0, actual: 0, total: 0, color: recursoColor.ingenio, showOnToken: true, tokenRow: 2, tokenAnchor: 'top' },
+        cordura: { label: 'cordura', base: 0, actual: 0, total: 0, color: recursoColor.cordura, showOnToken: true, tokenRow: 3, tokenAnchor: 'top' },
+        armadura: { label: 'armadura', base: 0, actual: 0, total: 0, color: recursoColor.armadura, showOnToken: true, tokenRow: 4, tokenAnchor: 'top' },
       };
     } else {
-      Object.keys(sheet.stats).forEach((k) => {
+      Object.keys(sheet.stats).forEach((k, index) => {
         const st = sheet.stats[k] || {};
         if (st.base === undefined) st.base = st.total ?? 0;
         if (st.total === undefined) st.total = st.base;
+        if (st.color === undefined) st.color = recursoColor[k] || '#ffffff';
+        if (st.showOnToken === undefined) {
+          st.showOnToken = index < 5 ? true : !!(st.base || st.total || st.actual || st.buff);
+        }
+        if (st.label === undefined) st.label = k;
+        if (st.tokenRow === undefined) st.tokenRow = index;
+        if (st.tokenAnchor === undefined) st.tokenAnchor = 'top';
+        sheet.stats[k] = st;
       });
     }
     setData(sheet);
@@ -62,6 +78,7 @@ const TokenSheetModal = ({
     localStorage.setItem('tokenSheets', JSON.stringify(sheets));
     setData(updated);
     setEditing(false);
+    window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
   };
 
   if (!token || !data) return null;

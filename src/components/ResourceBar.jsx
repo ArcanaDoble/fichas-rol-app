@@ -1,7 +1,20 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-const DEFAULT_MAX = 20;
+export const DEFAULT_MAX = 20;
+
+export function getResourceColors({ color, penalizacion = 0, actual = 0, base = 0, buff = 0, max = DEFAULT_MAX }) {
+  const baseEfectiva = Math.max(0, base - penalizacion);
+  const buffLimit = Math.min(buff, max - baseEfectiva);
+
+  return Array.from({ length: max }, (_, i) => {
+    if (i < penalizacion) return '#f87171aa';
+    if (i < penalizacion + actual) return color;
+    if (i < penalizacion + baseEfectiva) return color + '55';
+    if (i < penalizacion + baseEfectiva + buffLimit) return '#facc15';
+    return 'transparent';
+  });
+}
 
 const ResourceBar = ({
   color,
@@ -11,16 +24,7 @@ const ResourceBar = ({
   buff = 0,
   max = DEFAULT_MAX,
 }) => {
-  const baseEfectiva = Math.max(0, base - penalizacion);
-  const buffLimit = Math.min(buff, max - baseEfectiva);
-
-  const circles = Array.from({ length: max }, (_, i) => {
-    if (i < penalizacion) return '#f87171aa';
-    if (i < penalizacion + actual) return color;
-    if (i < penalizacion + baseEfectiva) return color + '55';
-    if (i < penalizacion + baseEfectiva + buffLimit) return '#facc15';
-    return 'transparent';
-  });
+  const circles = getResourceColors({ color, penalizacion, actual, base, buff, max });
 
   return (
     <div
