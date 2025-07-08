@@ -49,6 +49,7 @@ const Token = ({
   const trRef = useRef();
   const rotateRef = useRef();
   const gearRef = useRef();
+  const textRef = useRef();
   const HANDLE_OFFSET = 12;
   const [hover, setHover] = useState(false);
 
@@ -58,6 +59,7 @@ const Token = ({
     const node = shapeRef.current;
     const handle = rotateRef.current;
     const gear = gearRef.current;
+    const label = textRef.current;
     if (!node || !handle) return;
     const box = node.getClientRect({ relativeTo: node.getParent() });
     handle.position({
@@ -69,6 +71,10 @@ const Token = ({
         x: box.x - HANDLE_OFFSET,
         y: box.y + box.height + HANDLE_OFFSET,
       });
+    }
+    if (label) {
+      label.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
+      label.offsetX(label.width() / 2);
     }
     handle.getLayer().batchDraw();
   };
@@ -200,9 +206,10 @@ const Token = ({
       )}
       {showName && (customName || name) && (
         <Text
+          ref={textRef}
           text={customName || name}
-          x={(width * gridSize) / 2}
-          y={height * gridSize + 4}
+          x={x + (width * gridSize) / 2}
+          y={y + height * gridSize + 4}
           offsetX={(width * gridSize) / 2}
           fontSize={10}
           fontStyle="bold"
