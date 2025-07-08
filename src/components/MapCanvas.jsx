@@ -424,6 +424,8 @@ const MapCanvas = ({
   armaduras = [],
   habilidades = [],
   highlightText,
+  userType = 'master',
+  playerName = '',
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -442,6 +444,16 @@ const MapCanvas = ({
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
+
+  const canSeeBars = useCallback((tk) => {
+    if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
+    if (tk.barsVisibility === 'none') return false;
+    if (tk.barsVisibility === 'controlled') {
+      if (userType === 'master') return true;
+      return tk.controlledBy === playerName;
+    }
+    return true;
+  }, [playerName, userType]);
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize = imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
@@ -702,6 +714,7 @@ const MapCanvas = ({
           customName: '',
           showName: false,
           controlledBy: 'master',
+          barsVisibility: 'all',
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -805,7 +818,7 @@ const MapCanvas = ({
               stageRef={stageRef}
               onStatClick={(key, e) => tokenRefs.current[token.id]?.handleStatClick(key, e)}
               transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
-              visible={hoveredId === token.id}
+              visible={hoveredId === token.id && canSeeBars(token)}
             />
           ))}
         </Layer>
@@ -864,6 +877,7 @@ MapCanvas.propTypes = {
       customName: PropTypes.string,
       showName: PropTypes.bool,
       controlledBy: PropTypes.string,
+      barsVisibility: PropTypes.oneOf(['all', 'controlled', 'none']),
       w: PropTypes.number,
       h: PropTypes.number,
       angle: PropTypes.number,
@@ -877,6 +891,8 @@ MapCanvas.propTypes = {
   armaduras: PropTypes.array,
   habilidades: PropTypes.array,
   highlightText: PropTypes.func,
+  userType: PropTypes.oneOf(['master', 'player']),
+  playerName: PropTypes.string,
 };
 
 export default MapCanvas;

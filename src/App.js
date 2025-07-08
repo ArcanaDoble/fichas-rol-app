@@ -3016,6 +3016,8 @@ function App() {
               armaduras={armaduras}
               habilidades={habilidades}
               highlightText={highlightText}
+              userType={userType}
+              playerName={playerName}
             />
           </div>
           <AssetSidebar className="top-14" />
