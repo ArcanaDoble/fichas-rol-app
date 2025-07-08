@@ -226,6 +226,9 @@ const Token = ({
                 fontFamily="sans-serif"
                 fill="#000"
                 align="center"
+                shadowColor="#000"
+                shadowBlur={1}
+                shadowOpacity={0.9}
               />
             )
           )}
