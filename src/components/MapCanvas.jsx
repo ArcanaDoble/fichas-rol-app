@@ -27,6 +27,7 @@ const Token = ({
   angle,
   color,
   image,
+  name,
   customName,
   showName,
   gridSize,
@@ -197,15 +198,20 @@ const Token = ({
       ) : (
         <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
       )}
-      {showName && customName && hover && (
+      {showName && (customName || name) && hover && (
         <Text
-          text={customName}
+          text={customName || name}
           x={(width * gridSize) / 2}
-          y={-20}
+          y={height * gridSize + 4}
           offsetX={(width * gridSize) / 2}
-          fontSize={14}
+          fontSize={12}
+          fontStyle="bold"
           fill="#fff"
           align="center"
+          shadowColor="#000"
+          shadowBlur={2}
+          shadowOffset={{ x: 1, y: 1 }}
+          shadowOpacity={0.6}
           listening={false}
         />
       )}
@@ -261,6 +267,7 @@ Token.propTypes = {
   draggable: PropTypes.bool,
   listening: PropTypes.bool,
   opacity: PropTypes.number,
+  name: PropTypes.string,
   customName: PropTypes.string,
   showName: PropTypes.bool,
   onClick: PropTypes.func,
@@ -617,6 +624,7 @@ const MapCanvas = ({
                 gridOffsetY={gridOffsetY}
                 image={dragShadow.url}
                 color={dragShadow.color}
+                name={dragShadow.name}
                 selected={false}
                 draggable={false}
                 listening={false}
@@ -637,6 +645,9 @@ const MapCanvas = ({
                 gridOffsetY={gridOffsetY}
                 image={token.url}
                 color={token.color}
+                name={token.name}
+                customName={token.customName}
+                showName={token.showName}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
                 onDragStart={handleDragStart}
