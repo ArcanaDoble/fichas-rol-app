@@ -271,6 +271,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.57:**
 - Equipar armas, armaduras y poderes en fichas de token usa el catálogo activo para mostrar todos los datos.
 
+**Resumen de cambios v2.2.58:**
+- Ahora las fichas de token permiten editar sus atributos básicos.
+- Las imágenes dentro de las fichas se muestran completas con `object-contain`.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real

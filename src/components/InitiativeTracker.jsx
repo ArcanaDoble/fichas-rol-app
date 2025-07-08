@@ -867,7 +867,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
                     <img
                       src={previewEnemy.portrait}
                       alt={previewEnemy.name}
-                      className="w-32 h-32 object-cover rounded-lg mx-auto border-2 border-gray-600"
+                      className="w-32 h-32 object-contain rounded-lg mx-auto border-2 border-gray-600"
                     />
                   </div>
                 )}

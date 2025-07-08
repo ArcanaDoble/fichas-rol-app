@@ -29,7 +29,7 @@ const TokenSheetModal = ({
           sheet.id = sheetId;
         }
       }
-      if (!sheet) sheet = { id: sheetId, name: '', stats: {} };
+      if (!sheet) sheet = { id: sheetId, name: '', stats: {}, atributos: {} };
     }
     setData(sheet);
   }, [sheetId, token, enemies]);
