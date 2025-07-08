@@ -37,6 +37,7 @@ const Token = ({
   cellSize,
   zoom,
   maxZoom,
+  groupScale,
   selected,
   draggable = true,
   listening = true,
@@ -59,9 +60,10 @@ const Token = ({
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
   const baseBarHeight = cellSize * 0.15;
-  const barHeight = (baseBarHeight * maxZoom) / zoom;
+  const s = 1 / groupScale;
+  const barHeight = baseBarHeight * s;
   const capsuleW = barHeight * 2;
-  const capsuleGap = (cellSize * 0.04 * maxZoom) / zoom;
+  const capsuleGap = cellSize * 0.04 * s;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [hover, setHover] = useState(false);
   const [stats, setStats] = useState({});
@@ -338,7 +340,7 @@ const Token = ({
           const current = Math.min(v.actual ?? 0, max);
           const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
           const rowWidth = max * capsuleW + (max - 1) * capsuleGap;
-          const baseOffset = (4 + rowIdx * (baseBarHeight + 2)) * (maxZoom / zoom);
+          const baseOffset = (4 + rowIdx * (baseBarHeight + 2)) * s;
           const yPos = anchor === 'top'
             ? -height * gridSize / 2 - baseOffset
             : height * gridSize / 2 + baseOffset;
@@ -352,7 +354,7 @@ const Token = ({
                   height={barHeight}
                   fill={c}
                   stroke="#1f2937"
-                  strokeWidth={6}
+                  strokeWidth={6 * s}
                   strokeScaleEnabled={false}
                   cornerRadius={barHeight / 2}
                   onClick={(e) => handleStatClick(key, e)}
@@ -417,6 +419,7 @@ Token.propTypes = {
   cellSize: PropTypes.number.isRequired,
   zoom: PropTypes.number.isRequired,
   maxZoom: PropTypes.number.isRequired,
+  groupScale: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
@@ -781,6 +784,7 @@ const MapCanvas = ({
                 cellSize={effectiveGridSize}
                 zoom={zoom}
                 maxZoom={maxZoom}
+                groupScale={groupScale}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={dragShadow.url}
@@ -805,6 +809,7 @@ const MapCanvas = ({
                 cellSize={effectiveGridSize}
                 zoom={zoom}
                 maxZoom={maxZoom}
+                groupScale={groupScale}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={token.url}
