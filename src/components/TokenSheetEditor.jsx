@@ -38,13 +38,17 @@ const TokenSheetEditor = ({
 
   const updateStat = (stat, field, value) => {
     setData(prev => {
-      const num = parseInt(value, 10) || 0;
-      const updated = {
-        ...prev.stats[stat],
-        [field]: num,
-      };
-      if (field === 'base' && updated.buff == null) {
-        updated.total = num;
+      const updated = { ...prev.stats[stat] };
+      if (field === 'showOnToken') {
+        updated.showOnToken = value;
+      } else if (field === 'color') {
+        updated.color = value;
+      } else {
+        const num = parseInt(value, 10) || 0;
+        updated[field] = num;
+        if (field === 'base' && updated.buff == null) {
+          updated.total = num;
+        }
       }
       return {
         ...prev,
@@ -237,6 +241,22 @@ const TokenSheetEditor = ({
                           min="0"
                         />
                       </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={value.showOnToken ?? true}
+                          onChange={e => updateStat(stat, 'showOnToken', e.target.checked)}
+                        />
+                        Mostrar en token
+                      </label>
+                      <input
+                        type="color"
+                        value={value.color || '#ffffff'}
+                        onChange={e => updateStat(stat, 'color', e.target.value)}
+                        className="w-8 h-5 p-0 border-none bg-transparent"
+                      />
                     </div>
                   </div>
                 ))}
