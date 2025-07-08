@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
 import {
   Stage,
@@ -17,9 +17,9 @@ import { AssetTypes } from './AssetSidebar';
 import TokenSettings from './TokenSettings';
 import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
-import { getResourceColors } from './ResourceBar';
+import TokenBars from './TokenBars';
 
-const Token = ({
+const Token = forwardRef(({
   id,
   x,
   y,
@@ -37,6 +37,7 @@ const Token = ({
   cellSize,
   zoom,
   maxZoom,
+  groupScale,
   selected,
   draggable = true,
   listening = true,
@@ -48,8 +49,9 @@ const Token = ({
   onRotate,
   onSettings,
   tokenSheetId,
-}) => {
+}, ref) => {
   const [img] = useImage(image);
+  const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
   const rotateRef = useRef();
@@ -58,10 +60,6 @@ const Token = ({
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const baseBarHeight = cellSize * 0.15;
-  const barHeight = (baseBarHeight * maxZoom) / zoom;
-  const capsuleW = barHeight * 2;
-  const capsuleGap = (cellSize * 0.04 * maxZoom) / zoom;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [hover, setHover] = useState(false);
   const [stats, setStats] = useState({});
@@ -250,6 +248,12 @@ const Token = ({
     });
   };
 
+  useImperativeHandle(ref, () => ({
+    node: groupRef.current,
+    getStats: () => stats,
+    handleStatClick,
+  }));
+
   const offX = (width * gridSize) / 2;
   const offY = (height * gridSize) / 2;
 
@@ -277,6 +281,7 @@ const Token = ({
 
   return (
     <Group
+      ref={groupRef}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onDblClick={() => onSettings?.(id)}
@@ -326,48 +331,6 @@ const Token = ({
           />
         </Group>
       )}
-      {(() => {
-        const topStats = Object.entries(stats)
-          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'top')
-          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
-        const bottomStats = Object.entries(stats)
-          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'bottom')
-          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
-        const renderRow = ([key, v], rowIdx, anchor) => {
-          const max = v.total ?? v.base ?? 0;
-          const current = Math.min(v.actual ?? 0, max);
-          const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
-          const rowWidth = max * capsuleW + (max - 1) * capsuleGap;
-          const baseOffset = (4 + rowIdx * (baseBarHeight + 2)) * (maxZoom / zoom);
-          const yPos = anchor === 'top'
-            ? -height * gridSize / 2 - baseOffset
-            : height * gridSize / 2 + baseOffset;
-          return (
-            <Group key={key} x={x + (width * gridSize) / 2 - rowWidth / 2} y={y + yPos} listening={true}>
-              {colors.map((c, i) => (
-                <Rect
-                  key={i}
-                  x={i * (capsuleW + capsuleGap)}
-                  width={capsuleW}
-                  height={barHeight}
-                  fill={c}
-                  stroke="#1f2937"
-                  strokeWidth={6}
-                  strokeScaleEnabled={false}
-                  cornerRadius={barHeight / 2}
-                  onClick={(e) => handleStatClick(key, e)}
-                />
-              ))}
-            </Group>
-          );
-        };
-        return (
-          <>
-            {topStats.map((entry, i) => renderRow(entry, i, 'top'))}
-            {bottomStats.map((entry, i) => renderRow(entry, i, 'bottom'))}
-          </>
-        );
-      })()}
       {selected && (
         <>
           <Transformer
@@ -402,7 +365,7 @@ const Token = ({
       )}
     </Group>
   );
-};
+});
 
 Token.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
@@ -417,6 +380,7 @@ Token.propTypes = {
   cellSize: PropTypes.number.isRequired,
   zoom: PropTypes.number.isRequired,
   maxZoom: PropTypes.number.isRequired,
+  groupScale: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
@@ -472,6 +436,7 @@ const MapCanvas = ({
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  const tokenRefs = useRef({});
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg] = useImage(backgroundImage, 'anonymous');
@@ -781,6 +746,7 @@ const MapCanvas = ({
                 cellSize={effectiveGridSize}
                 zoom={zoom}
                 maxZoom={maxZoom}
+                groupScale={groupScale}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={dragShadow.url}
@@ -794,6 +760,9 @@ const MapCanvas = ({
             )}
             {tokens.map((token) => (
               <Token
+                ref={(el) => {
+                  if (el) tokenRefs.current[token.id] = el;
+                }}
                 key={token.id}
                 id={token.id}
                 x={cellToPx(token.x, gridOffsetX)}
@@ -805,6 +774,7 @@ const MapCanvas = ({
                 cellSize={effectiveGridSize}
                 zoom={zoom}
                 maxZoom={maxZoom}
+                groupScale={groupScale}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={token.url}
@@ -823,6 +793,17 @@ const MapCanvas = ({
               />
             ))}
           </Group>
+        </Layer>
+        <Layer listening>
+          {tokens.map((token) => (
+            <TokenBars
+              key={`bars-${token.id}`}
+              tokenRef={tokenRefs.current[token.id]}
+              stageRef={stageRef}
+              onStatClick={(key, e) => tokenRefs.current[token.id]?.handleStatClick(key, e)}
+              transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
+            />
+          ))}
         </Layer>
         </Stage>
       </div>
