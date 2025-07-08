@@ -314,6 +314,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.68:**
 - Las mini-barras mantienen su grosor visible sin importar el nivel de zoom.
 
+**Resumen de cambios v2.2.69:**
+- Las mini-barras se dibujan en una capa fija y conservan su tamaño en píxeles aunque hagas zoom.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
