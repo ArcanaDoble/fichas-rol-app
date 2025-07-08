@@ -47,11 +47,11 @@ const TokenSheetModal = ({
     };
     if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
       sheet.stats = {
-        postura: { base: 0, actual: 0, total: 0, color: recursoColor.postura, showOnToken: true },
-        vida: { base: 0, actual: 0, total: 0, color: recursoColor.vida, showOnToken: true },
-        ingenio: { base: 0, actual: 0, total: 0, color: recursoColor.ingenio, showOnToken: true },
-        cordura: { base: 0, actual: 0, total: 0, color: recursoColor.cordura, showOnToken: true },
-        armadura: { base: 0, actual: 0, total: 0, color: recursoColor.armadura, showOnToken: true },
+        postura: { label: 'postura', base: 0, actual: 0, total: 0, color: recursoColor.postura, showOnToken: true, tokenRow: 0, tokenAnchor: 'top' },
+        vida: { label: 'vida', base: 0, actual: 0, total: 0, color: recursoColor.vida, showOnToken: true, tokenRow: 1, tokenAnchor: 'top' },
+        ingenio: { label: 'ingenio', base: 0, actual: 0, total: 0, color: recursoColor.ingenio, showOnToken: true, tokenRow: 2, tokenAnchor: 'top' },
+        cordura: { label: 'cordura', base: 0, actual: 0, total: 0, color: recursoColor.cordura, showOnToken: true, tokenRow: 3, tokenAnchor: 'top' },
+        armadura: { label: 'armadura', base: 0, actual: 0, total: 0, color: recursoColor.armadura, showOnToken: true, tokenRow: 4, tokenAnchor: 'top' },
       };
     } else {
       Object.keys(sheet.stats).forEach((k, index) => {
@@ -62,6 +62,9 @@ const TokenSheetModal = ({
         if (st.showOnToken === undefined) {
           st.showOnToken = index < 5 ? true : !!(st.base || st.total || st.actual || st.buff);
         }
+        if (st.label === undefined) st.label = k;
+        if (st.tokenRow === undefined) st.tokenRow = index;
+        if (st.tokenAnchor === undefined) st.tokenAnchor = 'top';
         sheet.stats[k] = st;
       });
     }

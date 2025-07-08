@@ -299,14 +299,22 @@ const Token = ({
           />
         </Group>
       )}
-      {Object.entries(stats)
-        .filter(([, v]) => v && v.showOnToken)
-        .map(([key, v], idx) => {
+      {(() => {
+        const topStats = Object.entries(stats)
+          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'top')
+          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
+        const bottomStats = Object.entries(stats)
+          .filter(([, v]) => v && v.showOnToken && (v.tokenAnchor ?? 'top') === 'bottom')
+          .sort((a, b) => (a[1].tokenRow ?? 0) - (b[1].tokenRow ?? 0));
+        const renderRow = ([key, v], rowIdx, anchor) => {
           const max = v.total ?? v.base ?? 0;
           const current = Math.min(v.actual ?? 0, max);
           const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
           const rowWidth = max * 12 + (max - 1) * 2;
-          const yPos = -height * gridSize / 2 - (idx + 1) * (6 + 4);
+          const baseOffset = gridSize / 2 + rowIdx * (6 + 4);
+          const yPos = anchor === 'top'
+            ? -height * gridSize / 2 - baseOffset
+            : height * gridSize / 2 + baseOffset;
           return (
             <Group key={key} x={x + (width * gridSize) / 2 - rowWidth / 2} y={y + yPos} listening={true}>
               {colors.map((c, i) => (
@@ -323,7 +331,14 @@ const Token = ({
               ))}
             </Group>
           );
-        })}
+        };
+        return (
+          <>
+            {topStats.map((entry, i) => renderRow(entry, i, 'top'))}
+            {bottomStats.map((entry, i) => renderRow(entry, i, 'bottom'))}
+          </>
+        );
+      })()}
       {selected && (
         <>
           <Transformer
