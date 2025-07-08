@@ -34,6 +34,7 @@ const Token = ({
   gridSize,
   gridOffsetX,
   gridOffsetY,
+  cellSize,
   selected,
   draggable = true,
   listening = true,
@@ -54,10 +55,11 @@ const Token = ({
   const textRef = useRef();
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
-  const iconSize = gridSize * 0.15;
-  const barHeight = gridSize * 0.25;
+  const iconSize = cellSize * 0.15;
+  const barHeight = cellSize * 0.2;
   const capsuleW = barHeight * 2;
-  const capsuleGap = gridSize * 0.02;
+  const capsuleGap = cellSize * 0.05;
+  const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [hover, setHover] = useState(false);
   const [stats, setStats] = useState({});
 
@@ -113,15 +115,13 @@ const Token = ({
     }
     if (gearRef.current) {
       gearRef.current.fontSize(iconSize);
-      gearRef.current.width(iconSize);
-      gearRef.current.height(iconSize);
     }
   };
 
   useEffect(() => {
     updateSizes();
     if (selected) updateHandle();
-  }, [gridSize, selected]);
+  }, [cellSize, selected]);
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
@@ -294,7 +294,7 @@ const Token = ({
                 text={customName || name}
                 x={o.x}
                 y={o.y}
-                fontSize={10}
+                fontSize={nameFontSize}
                 fontStyle="bold"
                 fontFamily="sans-serif"
                 fill="#000"
@@ -308,7 +308,7 @@ const Token = ({
           <Text
             ref={textRef}
             text={customName || name}
-            fontSize={10}
+            fontSize={nameFontSize}
             fontStyle="bold"
             fontFamily="sans-serif"
             fill="#fff"
@@ -331,7 +331,7 @@ const Token = ({
           const current = Math.min(v.actual ?? 0, max);
           const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
           const rowWidth = max * capsuleW + (max - 1) * capsuleGap;
-          const baseOffset = gridSize / 4 + rowIdx * (barHeight + gridSize * 0.04);
+          const baseOffset = cellSize * 0.2 + rowIdx * (barHeight + cellSize * 0.05);
           const yPos = anchor === 'top'
             ? -height * gridSize / 2 - baseOffset
             : height * gridSize / 2 + baseOffset;
@@ -405,6 +405,7 @@ Token.propTypes = {
   gridSize: PropTypes.number.isRequired,
   gridOffsetX: PropTypes.number.isRequired,
   gridOffsetY: PropTypes.number.isRequired,
+  cellSize: PropTypes.number.isRequired,
   color: PropTypes.string,
   image: PropTypes.string,
   selected: PropTypes.bool,
@@ -696,6 +697,7 @@ const MapCanvas = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
   const groupScale = baseScale * zoom;
+  const cellPixelSize = effectiveGridSize * groupScale;
 
   const [, drop] = useDrop(
     () => ({
@@ -766,6 +768,7 @@ const MapCanvas = ({
                 height={dragShadow.h || 1}
                 angle={dragShadow.angle || 0}
                 gridSize={effectiveGridSize}
+                cellSize={cellPixelSize}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={dragShadow.url}
@@ -787,6 +790,7 @@ const MapCanvas = ({
                 height={token.h || 1}
                 angle={token.angle || 0}
                 gridSize={effectiveGridSize}
+                cellSize={cellPixelSize}
                 gridOffsetX={gridOffsetX}
                 gridOffsetY={gridOffsetY}
                 image={token.url}
