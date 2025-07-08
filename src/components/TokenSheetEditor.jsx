@@ -296,6 +296,22 @@ const TokenSheetEditor = ({
                         className="w-8 h-5 p-0 border-none bg-transparent"
                       />
                     </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={value.showOnToken ?? true}
+                          onChange={e => updateStat(stat, 'showOnToken', e.target.checked)}
+                        />
+                        Mostrar en token
+                      </label>
+                      <input
+                        type="color"
+                        value={value.color || '#ffffff'}
+                        onChange={e => updateStat(stat, 'color', e.target.value)}
+                        className="w-8 h-5 p-0 border-none bg-transparent"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
