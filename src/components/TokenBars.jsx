@@ -25,7 +25,7 @@ const TokenBars = ({ tokenRef, stageRef, onStatClick, transformKey }) => {
     const current = Math.min(v.actual ?? 0, max);
     const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
     const rowWidth = max * CAPSULE_W + (max - 1) * GAP;
-    const baseOffset = 4 + rowIdx * (BAR_HEIGHT + 2);
+    const baseOffset = 8 + rowIdx * (BAR_HEIGHT + 2);
     const yPos = anchor === 'top' ? layout.top - baseOffset : layout.bottom + baseOffset;
     return (
       <Group key={key} x={layout.x - rowWidth / 2} y={yPos} listening>
