@@ -34,6 +34,7 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
   const [name, setName] = useState(token.customName || '');
   const [showName, setShowName] = useState(token.showName || false);
   const [controlledBy, setControlledBy] = useState(token.controlledBy || 'master');
+  const [barsVisibility, setBarsVisibility] = useState(token.barsVisibility || 'all');
 
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
@@ -45,6 +46,7 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
       customName: showName ? name : '',
       showName,
       controlledBy,
+      barsVisibility,
     });
   };
 
@@ -90,19 +92,28 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block mb-1">Barras visibles para</label>
+                <select value={barsVisibility} onChange={e => setBarsVisibility(e.target.value)} className="w-full bg-gray-700 text-white">
+                  <option value="all">Todos</option>
+                  <option value="controlled">Controlador</option>
+                  <option value="none">Nadie</option>
+                </select>
+              </div>
               <div className="text-center">
                 <Boton
                   onClick={() => {
                     const enemy = enemies.find((e) => e.id === enemyId);
-                    const updated = {
-                      ...token,
-                      enemyId: enemyId || null,
-                      url: enemyId ? enemy?.portrait || token.url : token.url,
-                      name: enemyId ? enemy?.name : token.name,
-                      customName: showName ? name : '',
-                      showName,
-                      controlledBy,
-                    };
+      const updated = {
+        ...token,
+        enemyId: enemyId || null,
+        url: enemyId ? enemy?.portrait || token.url : token.url,
+        name: enemyId ? enemy?.name : token.name,
+        customName: showName ? name : '',
+        showName,
+        controlledBy,
+        barsVisibility,
+      };
                     onUpdate(updated);
                     onOpenSheet(updated);
                   }}
