@@ -202,11 +202,16 @@ const Token = ({
         <Text
           text={customName || name}
           x={(width * gridSize) / 2}
-          y={-20}
+          y={height * gridSize + 4}
           offsetX={(width * gridSize) / 2}
-          fontSize={14}
+          fontSize={12}
+          fontStyle="bold"
           fill="#fff"
           align="center"
+          shadowColor="#000"
+          shadowBlur={2}
+          shadowOffset={{ x: 1, y: 1 }}
+          shadowOpacity={0.6}
           listening={false}
         />
       )}
