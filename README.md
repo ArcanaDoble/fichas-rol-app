@@ -298,6 +298,19 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - La escala del mapa se calcula correctamente cuando no hay imagen de fondo.
 - Las barras de recurso se muestran más cerca del token.
 
+**Resumen de cambios v2.2.64:**
+- Las mini-barras de los tokens vuelven a mostrar un borde oscuro para que el diseño no sea tan plano.
+- El borde se hace un poco más grueso para que sea visible con cualquier zoom.
+
+**Resumen de cambios v2.2.65:**
+- Se aumenta considerablemente el grosor del borde de las mini-barras para darles más presencia.
+
+**Resumen de cambios v2.2.66:**
+- Las barras de recurso mantienen su tamaño aunque cambies el zoom. Se ven siempre como cuando el zoom está al máximo.
+
+**Resumen de cambios v2.2.67:**
+- Las barras de recurso vuelven a escalarse con el zoom para no ocupar demasiado espacio al alejar el mapa.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
