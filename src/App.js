@@ -2432,7 +2432,7 @@ function App() {
                     <img
                       src={enemy.portrait}
                       alt={enemy.name}
-                      className="w-full h-full object-cover object-center"
+                      className="w-full h-full object-contain object-center"
                       style={{ background: '#222' }}
                     />
                   ) : (
@@ -2535,7 +2535,7 @@ function App() {
                         <img
                           src={newEnemy.portrait}
                           alt="Preview"
-                          className="w-full h-full object-cover object-center rounded-lg shadow border border-gray-800"
+                          className="w-full h-full object-contain object-center rounded-lg shadow border border-gray-800"
                           style={{ background: '#222' }}
                         />
                       </div>

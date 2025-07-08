@@ -92,7 +92,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                 <img
                   src={enemy.portrait}
                   alt={enemy.name}
-                  className="w-full h-full object-cover object-center rounded-lg shadow-md border border-gray-800"
+                  className="w-full h-full object-contain object-center rounded-lg shadow-md border border-gray-800"
                   style={{ background: '#222' }}
                 />
               </div>

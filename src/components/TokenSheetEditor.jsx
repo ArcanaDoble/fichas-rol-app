@@ -3,6 +3,16 @@ import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import Input from './Input';
 import Boton from './Boton';
+import AtributoCard from './AtributoCard';
+
+const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
+const atributoColor = {
+  destreza: '#34d399',
+  vigor: '#f87171',
+  intelecto: '#60a5fa',
+  voluntad: '#a78bfa',
+};
+const dadoImgUrl = (d) => `/dados/${d}.png`;
 
 const TokenSheetEditor = ({
   sheet,
@@ -35,6 +45,16 @@ const TokenSheetEditor = ({
           ...prev.stats[stat],
           [field]: parseInt(value, 10) || 0,
         },
+      },
+    }));
+  };
+
+  const updateAtributo = (attr, value) => {
+    setData((prev) => ({
+      ...prev,
+      atributos: {
+        ...prev.atributos,
+        [attr]: value,
       },
     }));
   };
@@ -166,6 +186,23 @@ const TokenSheetEditor = ({
                 className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
                 placeholder="Descripción del personaje"
               />
+            </div>
+          )}
+          {data.atributos && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Atributos</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {atributos.map((attr) => (
+                  <AtributoCard
+                    key={attr}
+                    name={attr}
+                    value={data.atributos[attr] || 'D4'}
+                    color={atributoColor[attr]}
+                    dadoImgUrl={dadoImgUrl}
+                    onChange={(v) => updateAtributo(attr, v)}
+                  />
+                ))}
+              </div>
             </div>
           )}
           {data.stats && (

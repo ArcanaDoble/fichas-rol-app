@@ -45,7 +45,7 @@ const EnemySheet = ({ enemy, onClose, onSave }) => {
         <div className="space-y-4">
           {data.portrait && (
             <div className="text-center">
-              <img src={data.portrait} alt={data.name} className="w-32 h-32 object-cover rounded-lg mx-auto border-2 border-gray-600" />
+              <img src={data.portrait} alt={data.name} className="w-32 h-32 object-contain rounded-lg mx-auto border-2 border-gray-600" />
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
