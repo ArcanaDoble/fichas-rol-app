@@ -104,22 +104,6 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
 
 
-  useEffect(() => {
-    if (!shapeRef.current || !img) return;
-    const node = shapeRef.current;
-    if (tintOpacity > 0) {
-      node.cache({ pixelRatio: window.devicePixelRatio });
-      node.filters([Konva.Filters.RGBA]);
-      node.red(tintRgb.r);
-      node.green(tintRgb.g);
-      node.blue(tintRgb.b);
-      node.alpha(tintOpacity);
-    } else {
-      node.filters([]);
-      node.clearCache();
-    }
-    node.getLayer()?.batchDraw();
-  }, [tintColor, tintOpacity, img]);
 
   useEffect(() => {
     if (!tokenSheetId) return;
@@ -177,6 +161,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
   useEffect(() => {
     updateSizes();
     if (selected) updateHandle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cellSize, selected]);
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
@@ -385,12 +370,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
             {...common}
           />
           {tintOpacity > 0 && (
-            <KonvaImage
-              image={img}
-              opacity={tintOpacity}
-              fill={tintColor}
-              globalCompositeOperation="multiply"
+            <Rect
               {...overlayProps}
+              fill={tintColor}
+              opacity={tintOpacity}
+              listening={false}
+              globalCompositeOperation="source-atop"
             />
           )}
         </>
