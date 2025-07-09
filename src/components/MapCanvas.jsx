@@ -108,7 +108,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
     if (!node || !img) return;
     const tintRgb = hexToRgb(tintColor);
     if (tintOpacity > 0) {
-      node.cache({ pixelRatio: window.devicePixelRatio });
+      node.cache();
       node.filters([Konva.Filters.RGBA]);
       node.red(tintRgb.r);
       node.green(tintRgb.g);

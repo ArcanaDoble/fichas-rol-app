@@ -508,8 +508,7 @@ src/
 
 ### 🖌️ **Mejora de tinte de tokens (Febrero 2025) - v2.1.6**
 - ✅ **Tinte nítido** - El token usa filtro RGBA en lugar de un overlay
-- 🔧 **Nitidez en pantallas retina** - La caché usa el pixelRatio del dispositivo
-
+- 🔧 **Cacheado simple** - Se mantiene la nitidez sin fijar pixelRatio
 
 ## 🔄 Historial de cambios previos
 
