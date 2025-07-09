@@ -37,8 +37,10 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
   const [barsVisibility, setBarsVisibility] = useState(token.barsVisibility || 'all');
   const [auraRadius, setAuraRadius] = useState(token.auraRadius || 0);
   const [auraShape, setAuraShape] = useState(token.auraShape || 'circle');
-  const [auraColor, setAuraColor] = useState(token.auraColor || '#ffff0088');
-
+  const [auraColor, setAuraColor] = useState(token.auraColor || '#ffff00');
+  const [auraOpacity, setAuraOpacity] = useState(
+    typeof token.auraOpacity === 'number' ? token.auraOpacity : 0.25
+  );
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     onUpdate({
@@ -53,6 +55,7 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
       auraRadius,
       auraShape,
       auraColor,
+      auraOpacity,
     });
   };
 
@@ -123,6 +126,7 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
         auraRadius,
         auraShape,
         auraColor,
+        auraOpacity,
       };
                     onUpdate(updated);
                     onOpenSheet(updated);
@@ -149,6 +153,19 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
               <div>
                 <label className="block mb-1">Color</label>
                 <input type="color" value={auraColor} onChange={e => setAuraColor(e.target.value)} className="w-full h-8 p-0 border-0" />
+              </div>
+              <div>
+                <label className="block mb-1">Opacidad</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={auraOpacity}
+                  onChange={e => setAuraOpacity(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-right">{Math.round(auraOpacity * 100)}%</div>
               </div>
             </>
           )}

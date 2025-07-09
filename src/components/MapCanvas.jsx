@@ -19,6 +19,15 @@ import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
 
+const hexToRgba = (hex, alpha = 1) => {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+  const int = parseInt(h, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+};
   const Token = forwardRef(({
   id,
   x,
@@ -52,7 +61,8 @@ import TokenBars from './TokenBars';
   tokenSheetId,
   auraRadius = 0,
   auraShape = 'circle',
-  auraColor = '#ffff0088',
+  auraColor = '#ffff00',
+  auraOpacity = 0.25,
 }, ref) => {
   const [img] = useImage(image);
   const groupRef = useRef();
@@ -253,6 +263,7 @@ import TokenBars from './TokenBars';
 
   useImperativeHandle(ref, () => ({
     node: groupRef.current,
+    shapeNode: shapeRef.current,
     getStats: () => stats,
     handleStatClick,
   }));
@@ -295,7 +306,7 @@ import TokenBars from './TokenBars';
             x={x + offX}
             y={y + offY}
             radius={(Math.max(width, height) / 2 + auraRadius) * gridSize}
-            fill={auraColor}
+            fill={hexToRgba(auraColor, auraOpacity)}
             listening={false}
           />
         ) : (
@@ -306,7 +317,7 @@ import TokenBars from './TokenBars';
             height={(height + auraRadius * 2) * gridSize}
             offsetX={((width + auraRadius * 2) * gridSize) / 2}
             offsetY={((height + auraRadius * 2) * gridSize) / 2}
-            fill={auraColor}
+            fill={hexToRgba(auraColor, auraOpacity)}
             listening={false}
           />
         )
@@ -418,6 +429,7 @@ Token.propTypes = {
   auraRadius: PropTypes.number,
   auraShape: PropTypes.oneOf(['circle', 'square']),
   auraColor: PropTypes.string,
+  auraOpacity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -745,7 +757,8 @@ const MapCanvas = ({
           barsVisibility: 'all',
           auraRadius: 0,
           auraShape: 'circle',
-          auraColor: '#ffff0088',
+          auraColor: '#ffff00',
+          auraOpacity: 0.25,
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -805,6 +818,7 @@ const MapCanvas = ({
                 auraRadius={dragShadow.auraRadius}
                 auraShape={dragShadow.auraShape}
                 auraColor={dragShadow.auraColor}
+                auraOpacity={dragShadow.auraOpacity}
               />
             )}
             {tokens.map((token) => (
@@ -835,6 +849,7 @@ const MapCanvas = ({
                 auraRadius={token.auraRadius}
                 auraShape={token.auraShape}
                 auraColor={token.auraColor}
+                auraOpacity={token.auraOpacity}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
                 onDragStart={handleDragStart}
@@ -921,6 +936,7 @@ MapCanvas.propTypes = {
       auraRadius: PropTypes.number,
       auraShape: PropTypes.oneOf(['circle', 'square']),
       auraColor: PropTypes.string,
+      auraOpacity: PropTypes.number,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
