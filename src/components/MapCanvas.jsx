@@ -161,7 +161,8 @@ const mixColors = (baseHex, tintHex, opacity) => {
   useEffect(() => {
     updateSizes();
     if (selected) updateHandle();
-  }, [cellSize, selected, updateSizes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellSize, selected]);
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
@@ -369,12 +370,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
             {...common}
           />
           {tintOpacity > 0 && (
-            <KonvaImage
-              image={img}
-              opacity={tintOpacity}
-              fill={tintColor}
-              globalCompositeOperation="multiply"
+            <Rect
               {...overlayProps}
+              fill={tintColor}
+              opacity={tintOpacity}
+              listening={false}
+              globalCompositeOperation="source-atop"
             />
           )}
         </>
