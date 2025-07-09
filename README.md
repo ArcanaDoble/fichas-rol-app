@@ -350,6 +350,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - El tinte del token se aplica con el filtro `Konva.Filters.RGBA` directamente sobre la imagen.
 - Se elimina el rectángulo rojo que cubría toda la celda.
 
+**Resumen de cambios v2.2.80:**
+- El tinte cachea la textura para aplicar el filtro y elimina la caché al desactivarlo.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
