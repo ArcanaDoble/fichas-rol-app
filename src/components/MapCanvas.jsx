@@ -320,7 +320,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const offX = (width * gridSize) / 2;
   const offY = (height * gridSize) / 2;
 
-  const common = {
+  const geometry = {
     x: x + offX,
     y: y + offY,
     width: width * gridSize,
@@ -328,6 +328,10 @@ const mixColors = (baseHex, tintHex, opacity) => {
     offsetX: offX,
     offsetY: offY,
     rotation: angle,
+  };
+
+  const common = {
+    ...geometry,
     draggable,
     listening,
     opacity,
@@ -338,8 +342,13 @@ const mixColors = (baseHex, tintHex, opacity) => {
       updateHandle();
     },
     onClick: () => onClick?.(id),
-    stroke: selected ? '#e0e0e0' : undefined,
-    strokeWidth: selected ? 3 : 0,
+  };
+
+  const outline = {
+    ...geometry,
+    stroke: '#e0e0e0',
+    strokeWidth: 3,
+    listening: false,
   };
 
 
@@ -377,6 +386,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
       ) : (
         <Rect ref={shapeRef} fill={fillColor} {...common} />
       )}
+      {selected && <Rect {...outline} />}
       {showName && (customName || name) && (
         <Group
           ref={textGroupRef}
