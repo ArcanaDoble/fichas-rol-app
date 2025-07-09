@@ -24,6 +24,8 @@ import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
+import PageSelector from './components/PageSelector';
+import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -338,18 +340,36 @@ function App() {
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  // Páginas para el Mapa de Batalla
+  const [pages, setPages] = useState(() => {
+    const stored = localStorage.getItem('pages');
+    if (stored) {
+      try { return JSON.parse(stored); } catch { /* ignore */ }
+    }
+    return [{
+      id: nanoid(),
+      name: 'Página 1',
+      background: null,
+      gridSize: 100,
+      gridCells: 30,
+      gridOffsetX: 0,
+      gridOffsetY: 0,
+      tokens: [],
+    }];
+  });
+  const [currentPage, setCurrentPage] = useState(0);
   // Tokens para el Mapa de Batalla
-  const [canvasTokens, setCanvasTokens] = useState([]);
+  const [canvasTokens, setCanvasTokens] = useState(pages[0].tokens || []);
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
     return stored ? JSON.parse(stored) : {};
   });
-  const [canvasBackground, setCanvasBackground] = useState(null);
+  const [canvasBackground, setCanvasBackground] = useState(pages[0].background);
   // Configuración de la cuadrícula del mapa de batalla
-  const [gridSize, setGridSize] = useState(100);
-  const [gridCells, setGridCells] = useState(30);
-  const [gridOffsetX, setGridOffsetX] = useState(0);
-  const [gridOffsetY, setGridOffsetY] = useState(0);
+  const [gridSize, setGridSize] = useState(pages[0].gridSize);
+  const [gridCells, setGridCells] = useState(pages[0].gridCells);
+  const [gridOffsetX, setGridOffsetX] = useState(pages[0].gridOffsetX);
+  const [gridOffsetY, setGridOffsetY] = useState(pages[0].gridOffsetY);
 
   const handleBackgroundUpload = (e) => {
     const file = e.target.files[0];
@@ -357,6 +377,61 @@ function App() {
     const reader = new FileReader();
     reader.onloadend = () => setCanvasBackground(reader.result);
     reader.readAsDataURL(file);
+  };
+
+  // Sincronizar página actual con estados locales
+  useEffect(() => {
+    const p = pages[currentPage];
+    if (!p) return;
+    setCanvasTokens(p.tokens || []);
+    setCanvasBackground(p.background || null);
+    setGridSize(p.gridSize || 1);
+    setGridCells(p.gridCells || 1);
+    setGridOffsetX(p.gridOffsetX || 0);
+    setGridOffsetY(p.gridOffsetY || 0);
+  }, [currentPage]);
+
+  useEffect(() => {
+    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, tokens: canvasTokens } : pg));
+  }, [canvasTokens]);
+
+  useEffect(() => {
+    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, background: canvasBackground } : pg));
+  }, [canvasBackground]);
+
+  useEffect(() => {
+    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY } : pg));
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY]);
+
+  useEffect(() => {
+    localStorage.setItem('pages', JSON.stringify(pages));
+  }, [pages]);
+
+  const addPage = () => {
+    const newPage = {
+      id: nanoid(),
+      name: `Página ${pages.length + 1}`,
+      background: null,
+      gridSize: 100,
+      gridCells: 30,
+      gridOffsetX: 0,
+      gridOffsetY: 0,
+      tokens: [],
+    };
+    setPages((ps) => [...ps, newPage]);
+    setCurrentPage(pages.length);
+  };
+
+  const updatePage = (index, data) => {
+    setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...data } : p)));
+    if (index === currentPage) {
+      if (data.gridSize !== undefined) setGridSize(data.gridSize);
+      if (data.gridCells !== undefined) setGridCells(data.gridCells);
+      if (data.gridOffsetX !== undefined) setGridOffsetX(data.gridOffsetX);
+      if (data.gridOffsetY !== undefined) setGridOffsetY(data.gridOffsetY);
+      if (data.background !== undefined) setCanvasBackground(data.background);
+      if (data.tokens !== undefined) setCanvasTokens(data.tokens);
+    }
   };
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -2965,6 +3040,13 @@ function App() {
             </Boton>
           </div>
         </div>
+        <PageSelector
+          pages={pages}
+          current={currentPage}
+          onSelect={setCurrentPage}
+          onAdd={addPage}
+          onUpdate={updatePage}
+        />
         <div className="mb-4">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
         </div>

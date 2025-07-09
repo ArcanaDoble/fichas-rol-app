@@ -366,6 +366,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - El overlay vuelve a usarse con un `Rect` en modo `source-atop` para evitar el cuadrado opaco.
 - El `useEffect` que ajusta tamaños mantiene solo `[cellSize, selected]` y se ignora la advertencia de ESLint.
 
+**Resumen de cambios v2.2.84:**
+- Nuevo selector de páginas en el Mapa de Batalla con configuración de grid independiente por página.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
