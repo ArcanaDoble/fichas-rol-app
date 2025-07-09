@@ -41,7 +41,6 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
   const [auraOpacity, setAuraOpacity] = useState(
     typeof token.auraOpacity === 'number' ? token.auraOpacity : 0.25
   );
-
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     onUpdate({

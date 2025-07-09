@@ -28,7 +28,6 @@ const hexToRgba = (hex, alpha = 1) => {
   const b = int & 255;
   return `rgba(${r},${g},${b},${alpha})`;
 };
-
   const Token = forwardRef(({
   id,
   x,
