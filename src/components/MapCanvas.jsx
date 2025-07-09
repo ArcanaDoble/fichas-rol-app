@@ -19,7 +19,17 @@ import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
 
-const Token = forwardRef(({
+const hexToRgba = (hex, alpha = 1) => {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+  const int = parseInt(h, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+};
+
+  const Token = forwardRef(({
   id,
   x,
   y,
@@ -50,6 +60,10 @@ const Token = forwardRef(({
   onSettings,
   onHoverChange,
   tokenSheetId,
+  auraRadius = 0,
+  auraShape = 'circle',
+  auraColor = '#ffff00',
+  auraOpacity = 0.25,
 }, ref) => {
   const [img] = useImage(image);
   const groupRef = useRef();
@@ -250,6 +264,7 @@ const Token = forwardRef(({
 
   useImperativeHandle(ref, () => ({
     node: groupRef.current,
+    shapeNode: shapeRef.current,
     getStats: () => stats,
     handleStatClick,
   }));
@@ -286,6 +301,28 @@ const Token = forwardRef(({
       onMouseLeave={() => onHoverChange?.(false)}
       onDblClick={() => onSettings?.(id)}
     >
+      {auraRadius > 0 && (
+        auraShape === 'circle' ? (
+          <Circle
+            x={x + offX}
+            y={y + offY}
+            radius={(Math.max(width, height) / 2 + auraRadius) * gridSize}
+            fill={hexToRgba(auraColor, auraOpacity)}
+            listening={false}
+          />
+        ) : (
+          <Rect
+            x={x + offX}
+            y={y + offY}
+            width={(width + auraRadius * 2) * gridSize}
+            height={(height + auraRadius * 2) * gridSize}
+            offsetX={((width + auraRadius * 2) * gridSize) / 2}
+            offsetY={((height + auraRadius * 2) * gridSize) / 2}
+            fill={hexToRgba(auraColor, auraOpacity)}
+            listening={false}
+          />
+        )
+      )}
       {img ? (
         <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
       ) : (
@@ -390,6 +427,10 @@ Token.propTypes = {
   name: PropTypes.string,
   customName: PropTypes.string,
   showName: PropTypes.bool,
+  auraRadius: PropTypes.number,
+  auraShape: PropTypes.oneOf(['circle', 'square']),
+  auraColor: PropTypes.string,
+  auraOpacity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -715,6 +756,10 @@ const MapCanvas = ({
           showName: false,
           controlledBy: 'master',
           barsVisibility: 'all',
+          auraRadius: 0,
+          auraShape: 'circle',
+          auraColor: '#ffff00',
+          auraOpacity: 0.25,
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -771,6 +816,10 @@ const MapCanvas = ({
                 draggable={false}
                 listening={false}
                 opacity={0.35}
+                auraRadius={dragShadow.auraRadius}
+                auraShape={dragShadow.auraShape}
+                auraColor={dragShadow.auraColor}
+                auraOpacity={dragShadow.auraOpacity}
               />
             )}
             {tokens.map((token) => (
@@ -798,6 +847,10 @@ const MapCanvas = ({
                 customName={token.customName}
                 showName={token.showName}
                 tokenSheetId={token.tokenSheetId}
+                auraRadius={token.auraRadius}
+                auraShape={token.auraShape}
+                auraColor={token.auraColor}
+                auraOpacity={token.auraOpacity}
                 selected={token.id === selectedId}
                 onDragEnd={handleDragEnd}
                 onDragStart={handleDragStart}
@@ -881,6 +934,10 @@ MapCanvas.propTypes = {
       w: PropTypes.number,
       h: PropTypes.number,
       angle: PropTypes.number,
+      auraRadius: PropTypes.number,
+      auraShape: PropTypes.oneOf(['circle', 'square']),
+      auraColor: PropTypes.string,
+      auraOpacity: PropTypes.number,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,

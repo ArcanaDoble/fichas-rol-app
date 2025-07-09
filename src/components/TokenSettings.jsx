@@ -35,6 +35,12 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
   const [showName, setShowName] = useState(token.showName || false);
   const [controlledBy, setControlledBy] = useState(token.controlledBy || 'master');
   const [barsVisibility, setBarsVisibility] = useState(token.barsVisibility || 'all');
+  const [auraRadius, setAuraRadius] = useState(token.auraRadius || 0);
+  const [auraShape, setAuraShape] = useState(token.auraShape || 'circle');
+  const [auraColor, setAuraColor] = useState(token.auraColor || '#ffff00');
+  const [auraOpacity, setAuraOpacity] = useState(
+    typeof token.auraOpacity === 'number' ? token.auraOpacity : 0.25
+  );
 
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
@@ -47,6 +53,10 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
       showName,
       controlledBy,
       barsVisibility,
+      auraRadius,
+      auraShape,
+      auraColor,
+      auraOpacity,
     });
   };
 
@@ -65,6 +75,7 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
           <button onClick={() => setTab('details')} className={`flex-1 p-2 ${tab==='details' ? 'bg-gray-800' : 'bg-gray-700'}`}>Detalles</button>
           <button onClick={() => setTab('notes')} className={`flex-1 p-2 ${tab==='notes' ? 'bg-gray-800' : 'bg-gray-700'}`}>Notas</button>
           <button onClick={() => setTab('light')} className={`flex-1 p-2 ${tab==='light' ? 'bg-gray-800' : 'bg-gray-700'}`}>Iluminación</button>
+          <button onClick={() => setTab('aura')} className={`flex-1 p-2 ${tab==='aura' ? 'bg-gray-800' : 'bg-gray-700'}`}>Aura</button>
         </div>
         <div className="p-3 space-y-3 text-sm">
           {tab === 'details' && (
@@ -113,6 +124,10 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
         showName,
         controlledBy,
         barsVisibility,
+        auraRadius,
+        auraShape,
+        auraColor,
+        auraOpacity,
       };
                     onUpdate(updated);
                     onOpenSheet(updated);
@@ -123,7 +138,39 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
               </div>
             </>
           )}
-          {tab !== 'details' && (
+          {tab === 'aura' && (
+            <>
+              <div>
+                <label className="block mb-1">Radio en casillas</label>
+                <Input type="number" value={auraRadius} onChange={e => setAuraRadius(parseInt(e.target.value,10) || 0)} />
+              </div>
+              <div>
+                <label className="block mb-1">Forma</label>
+                <select value={auraShape} onChange={e => setAuraShape(e.target.value)} className="w-full bg-gray-700 text-white">
+                  <option value="circle">Círculo</option>
+                  <option value="square">Cuadrado</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-1">Color</label>
+                <input type="color" value={auraColor} onChange={e => setAuraColor(e.target.value)} className="w-full h-8 p-0 border-0" />
+              </div>
+              <div>
+                <label className="block mb-1">Opacidad</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={auraOpacity}
+                  onChange={e => setAuraOpacity(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-right">{Math.round(auraOpacity * 100)}%</div>
+              </div>
+            </>
+          )}
+          {tab !== 'details' && tab !== 'aura' && (
             <div className="text-gray-400">(Sin contenido)</div>
           )}
         </div>

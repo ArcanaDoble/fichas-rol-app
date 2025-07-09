@@ -19,7 +19,8 @@ const TokenBars = ({
 
   const update = () => {
     if (!tokenRef?.node || !stageRef.current) return;
-    const rect = tokenRef.node.getClientRect({ relativeTo: stageRef.current });
+    const target = tokenRef.shapeNode || tokenRef.node;
+    const rect = target.getClientRect({ relativeTo: stageRef.current });
     setLayout({ x: rect.x + rect.width / 2, top: rect.y, bottom: rect.y + rect.height });
     if (tokenRef.getStats) setStats(tokenRef.getStats());
   };
@@ -71,7 +72,11 @@ const TokenBars = ({
 };
 
 TokenBars.propTypes = {
-  tokenRef: PropTypes.shape({ node: PropTypes.object, getStats: PropTypes.func }),
+  tokenRef: PropTypes.shape({
+    node: PropTypes.object,
+    shapeNode: PropTypes.object,
+    getStats: PropTypes.func,
+  }),
   stageRef: PropTypes.shape({ current: PropTypes.any }).isRequired,
   onStatClick: PropTypes.func.isRequired,
   transformKey: PropTypes.string,
