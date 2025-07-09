@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // Permite usar variables de entorno para ocultar las claves. Si no se
 // proporcionan (por ejemplo en entornos de pruebas o desarrollo rápido),
@@ -21,3 +22,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const storage = getStorage(app);

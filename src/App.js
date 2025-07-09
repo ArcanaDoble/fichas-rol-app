@@ -29,6 +29,7 @@ import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
+import { uploadFile, uploadDataUrl } from './utils/storage';
 
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -381,12 +382,16 @@ function App() {
     loadPages();
   }, []);
 
-  const handleBackgroundUpload = (e) => {
+  const handleBackgroundUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setCanvasBackground(reader.result);
-    reader.readAsDataURL(file);
+    try {
+      const path = `canvas-backgrounds/${nanoid()}-${file.name}`;
+      const url = await uploadFile(file, path);
+      setCanvasBackground(url);
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   // Sincronizar página actual con estados locales
@@ -414,9 +419,37 @@ function App() {
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY]);
 
   useEffect(() => {
-    pages.forEach(p => {
-      setDoc(doc(db, 'pages', p.id), p);
-    });
+    const syncPages = async () => {
+      const updated = await Promise.all(
+        pages.map(async (p) => {
+          let changed = false;
+          const tokens = await Promise.all(
+            (p.tokens || []).map(async (t) => {
+              if (t.url && t.url.startsWith('data:')) {
+                const url = await uploadDataUrl(
+                  t.url,
+                  `canvas-tokens/${t.id}`
+                );
+                changed = true;
+                return { ...t, url };
+              }
+              return t;
+            })
+          );
+          let bg = p.background;
+          if (bg && bg.startsWith('data:')) {
+            bg = await uploadDataUrl(bg, `canvas-backgrounds/${p.id}`);
+            changed = true;
+          }
+          const newPage = changed ? { ...p, tokens, background: bg } : p;
+          await setDoc(doc(db, 'pages', newPage.id), newPage);
+          return newPage;
+        })
+      );
+      const changedPages = updated.some((u, i) => u !== pages[i]);
+      if (changedPages) setPages(updated);
+    };
+    syncPages();
   }, [pages]);
 
   const addPage = () => {
