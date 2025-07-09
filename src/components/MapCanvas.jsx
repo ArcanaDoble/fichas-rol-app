@@ -18,6 +18,7 @@ import TokenSettings from './TokenSettings';
 import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
+import Konva from 'konva';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
