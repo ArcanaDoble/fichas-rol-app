@@ -109,8 +109,9 @@ const mixColors = (baseHex, tintHex, opacity) => {
     const { r, g, b } = hexToRgb(tintColor);
 
     if (tintOpacity > 0) {
+      const pixelRatio = window.devicePixelRatio * groupScale;
       node.cache({
-        pixelRatio: window.devicePixelRatio,
+        pixelRatio,
       });
       node.filters([Konva.Filters.RGBA]);
       node.red(r);
@@ -122,7 +123,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
       node.clearCache();
     }
     node.getLayer()?.batchDraw();
-  }, [tintColor, tintOpacity, img]);
+  }, [tintColor, tintOpacity, img, groupScale]);
 
 
 
