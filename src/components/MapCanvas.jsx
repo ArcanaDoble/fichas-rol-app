@@ -100,9 +100,9 @@ const mixColors = (baseHex, tintHex, opacity) => {
 
   const SNAP = gridSize / 4;
 
-  const tintRgb = hexToRgb(tintColor);
   const placeholderBase = color || 'red';
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
+
 
   useEffect(() => {
     if (!shapeRef.current || !img) return;
@@ -335,6 +335,18 @@ const mixColors = (baseHex, tintHex, opacity) => {
     strokeWidth: selected ? 3 : 0,
   };
 
+  const overlayProps = {
+    x: x + offX,
+    y: y + offY,
+    width: width * gridSize,
+    height: height * gridSize,
+    offsetX: offX,
+    offsetY: offY,
+    rotation: angle,
+    listening: false,
+    draggable: false,
+  };
+
   return (
     <Group
       ref={groupRef}
@@ -365,12 +377,23 @@ const mixColors = (baseHex, tintHex, opacity) => {
         )
       )}
       {img ? (
-        <KonvaImage
-          ref={shapeRef}
-          image={img}
-          onTransform={updateHandle}
-          {...common}
-        />
+        <>
+          <KonvaImage
+            ref={shapeRef}
+            image={img}
+            onTransform={updateHandle}
+            {...common}
+          />
+          {tintOpacity > 0 && (
+            <KonvaImage
+              image={img}
+              opacity={tintOpacity}
+              fill={tintColor}
+              globalCompositeOperation="multiply"
+              {...overlayProps}
+            />
+          )}
+        </>
       ) : (
         <Rect
           ref={shapeRef}
