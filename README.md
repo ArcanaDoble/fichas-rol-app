@@ -343,6 +343,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.77:**
 - Corrección de error "Konva is not defined" al aplicar el filtro de tinte.
 
+**Resumen de cambios v2.2.78:**
+- Las texturas de los tokens se cargan con `crossOrigin: 'anonymous'` para que el tinte se aplique correctamente.
+
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

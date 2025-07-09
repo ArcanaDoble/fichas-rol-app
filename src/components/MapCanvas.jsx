@@ -84,7 +84,8 @@ const mixColors = (baseHex, tintHex, opacity) => {
   tintColor = '#ff0000',
   tintOpacity = 0,
 }, ref) => {
-  const [img] = useImage(image);
+  // Load token texture with CORS enabled so filters like tint work
+  const [img] = useImage(image, 'anonymous');
   const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
