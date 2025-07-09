@@ -105,6 +105,21 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
 
   useEffect(() => {
+    if (!shapeRef.current || !img) return;
+    const node = shapeRef.current;
+    if (tintOpacity > 0) {
+      node.filters([Konva.Filters.RGBA]);
+      node.red(tintRgb.r);
+      node.green(tintRgb.g);
+      node.blue(tintRgb.b);
+      node.alpha(tintOpacity);
+    } else {
+      node.filters([]);
+    }
+    node.getLayer()?.batchDraw();
+  }, [tintColor, tintOpacity, img]);
+
+  useEffect(() => {
     if (!tokenSheetId) return;
     const load = () => {
       const stored = localStorage.getItem('tokenSheets');
@@ -348,23 +363,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
         )
       )}
       {img ? (
-        <>
-          <KonvaImage
-            ref={shapeRef}
-            image={img}
-            onTransform={updateHandle}
-            {...common}
-          />
-          {tintOpacity > 0 && (
-            <Rect
-              {...common}
-              fill={tintColor}
-              opacity={tintOpacity}
-              listening={false}
-              globalCompositeOperation="source-atop"
-            />
-          )}
-        </>
+        <KonvaImage
+          ref={shapeRef}
+          image={img}
+          onTransform={updateHandle}
+          {...common}
+        />
       ) : (
         <Rect
           ref={shapeRef}
