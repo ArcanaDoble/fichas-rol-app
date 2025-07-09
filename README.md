@@ -29,7 +29,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.2.86**
+> **Versión actual: 2.2.87**
 
 **Resumen de cambios v2.1.1:**
 - Rediseño visual de la vista de enemigos como cartas tipo Magic, con layout responsive y efectos visuales exclusivos.
@@ -377,6 +377,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.86:**
 - El botón "Examinar" para subir el fondo se muestra ahora encima de las miniaturas.
 - Las miniaturas del selector de páginas se han ampliado para mayor visibilidad.
+
+**Resumen de cambios v2.2.87:**
+- Las imágenes del Mapa de Batalla ahora se almacenan en Firebase Storage.
+- Se limita el almacenamiento total a 1GB para prevenir errores de tamaño.
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from 'react-dnd';
+import { uploadFile } from '../utils/storage';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
@@ -67,26 +68,25 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     });
   };
 
-  const fileToDataURL = (file) =>
-    new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    });
-
   const handleFilesUpload = async (folderId, files) => {
     if (!files) return;
     const uploads = await Promise.all(
       Array.from(files).map(async (file) => {
-        const url = await fileToDataURL(file);
         const name = file.name.replace(/\.[^/.]+$/, '');
-        return { id: nanoid(), name, url };
+        const path = `canvas-assets/${nanoid()}-${file.name}`;
+        try {
+          const url = await uploadFile(file, path);
+          return { id: nanoid(), name, url };
+        } catch (e) {
+          alert(e.message);
+          return null;
+        }
       })
     );
     setFolders((fs) =>
       updateFolders(fs, folderId, (f) => ({
         ...f,
-        assets: [...f.assets, ...uploads],
+        assets: [...f.assets, ...uploads.filter(Boolean)],
       }))
     );
   };
