@@ -348,17 +348,23 @@ const mixColors = (baseHex, tintHex, opacity) => {
         )
       )}
       {img ? (
-        <KonvaImage
-          ref={shapeRef}
-          image={img}
-          onTransform={updateHandle}
-          {...common}
-          filters={tintOpacity > 0 ? [Konva.Filters.RGBA] : []}
-          red={tintRgb.r}
-          green={tintRgb.g}
-          blue={tintRgb.b}
-          alpha={tintOpacity}
-        />
+        <>
+          <KonvaImage
+            ref={shapeRef}
+            image={img}
+            onTransform={updateHandle}
+            {...common}
+          />
+          {tintOpacity > 0 && (
+            <Rect
+              {...common}
+              fill={tintColor}
+              opacity={tintOpacity}
+              listening={false}
+              globalCompositeOperation="source-atop"
+            />
+          )}
+        </>
       ) : (
         <Rect
           ref={shapeRef}
