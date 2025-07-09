@@ -106,17 +106,20 @@ const mixColors = (baseHex, tintHex, opacity) => {
   useEffect(() => {
     const node = shapeRef.current;
     if (!node || !img) return;
-    const tintRgb = hexToRgb(tintColor);
+    const { r, g, b } = hexToRgb(tintColor);
+
     if (tintOpacity > 0) {
-      node.cache();
+      node.cache({
+        pixelRatio: window.devicePixelRatio,
+      });
       node.filters([Konva.Filters.RGBA]);
-      node.red(tintRgb.r);
-      node.green(tintRgb.g);
-      node.blue(tintRgb.b);
+      node.red(r);
+      node.green(g);
+      node.blue(b);
       node.alpha(tintOpacity);
     } else {
-      node.clearCache();
       node.filters([]);
+      node.clearCache();
     }
     node.getLayer()?.batchDraw();
   }, [tintColor, tintOpacity, img]);
