@@ -103,6 +103,24 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const placeholderBase = color || 'red';
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
 
+  useEffect(() => {
+    const node = shapeRef.current;
+    if (!node || !img) return;
+    const tintRgb = hexToRgb(tintColor);
+    if (tintOpacity > 0) {
+      node.cache({ pixelRatio: window.devicePixelRatio });
+      node.filters([Konva.Filters.RGBA]);
+      node.red(tintRgb.r);
+      node.green(tintRgb.g);
+      node.blue(tintRgb.b);
+      node.alpha(tintOpacity);
+    } else {
+      node.clearCache();
+      node.filters([]);
+    }
+    node.getLayer()?.batchDraw();
+  }, [tintColor, tintOpacity, img]);
+
 
 
   useEffect(() => {
@@ -320,17 +338,6 @@ const mixColors = (baseHex, tintHex, opacity) => {
     strokeWidth: selected ? 3 : 0,
   };
 
-  const overlayProps = {
-    x: x + offX,
-    y: y + offY,
-    width: width * gridSize,
-    height: height * gridSize,
-    offsetX: offX,
-    offsetY: offY,
-    rotation: angle,
-    listening: false,
-    draggable: false,
-  };
 
   return (
     <Group
@@ -362,30 +369,9 @@ const mixColors = (baseHex, tintHex, opacity) => {
         )
       )}
       {img ? (
-        <>
-          <KonvaImage
-            ref={shapeRef}
-            image={img}
-            onTransform={updateHandle}
-            {...common}
-          />
-          {tintOpacity > 0 && (
-            <Rect
-              {...overlayProps}
-              fill={tintColor}
-              opacity={tintOpacity}
-              listening={false}
-              globalCompositeOperation="source-atop"
-            />
-          )}
-        </>
+        <KonvaImage ref={shapeRef} image={img} {...common} />
       ) : (
-        <Rect
-          ref={shapeRef}
-          fill={fillColor}
-          onTransform={updateHandle}
-          {...common}
-        />
+        <Rect ref={shapeRef} fill={fillColor} {...common} />
       )}
       {showName && (customName || name) && (
         <Group
