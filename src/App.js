@@ -341,35 +341,45 @@ function App() {
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Páginas para el Mapa de Batalla
-  const [pages, setPages] = useState(() => {
-    const stored = localStorage.getItem('pages');
-    if (stored) {
-      try { return JSON.parse(stored); } catch { /* ignore */ }
-    }
-    return [{
-      id: nanoid(),
-      name: 'Página 1',
-      background: null,
-      gridSize: 100,
-      gridCells: 30,
-      gridOffsetX: 0,
-      gridOffsetY: 0,
-      tokens: [],
-    }];
-  });
+  const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   // Tokens para el Mapa de Batalla
-  const [canvasTokens, setCanvasTokens] = useState(pages[0].tokens || []);
+  const [canvasTokens, setCanvasTokens] = useState([]);
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
     return stored ? JSON.parse(stored) : {};
   });
-  const [canvasBackground, setCanvasBackground] = useState(pages[0].background);
+  const [canvasBackground, setCanvasBackground] = useState(null);
   // Configuración de la cuadrícula del mapa de batalla
-  const [gridSize, setGridSize] = useState(pages[0].gridSize);
-  const [gridCells, setGridCells] = useState(pages[0].gridCells);
-  const [gridOffsetX, setGridOffsetX] = useState(pages[0].gridOffsetX);
-  const [gridOffsetY, setGridOffsetY] = useState(pages[0].gridOffsetY);
+  const [gridSize, setGridSize] = useState(100);
+  const [gridCells, setGridCells] = useState(30);
+  const [gridOffsetX, setGridOffsetX] = useState(0);
+  const [gridOffsetY, setGridOffsetY] = useState(0);
+
+  // Cargar páginas desde Firebase al iniciar
+  useEffect(() => {
+    const loadPages = async () => {
+      const snap = await getDocs(collection(db, 'pages'));
+      const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (loaded.length === 0) {
+        const defaultPage = {
+          id: nanoid(),
+          name: 'Página 1',
+          background: null,
+          gridSize: 100,
+          gridCells: 30,
+          gridOffsetX: 0,
+          gridOffsetY: 0,
+          tokens: [],
+        };
+        await setDoc(doc(db, 'pages', defaultPage.id), defaultPage);
+        setPages([defaultPage]);
+      } else {
+        setPages(loaded);
+      }
+    };
+    loadPages();
+  }, []);
 
   const handleBackgroundUpload = (e) => {
     const file = e.target.files[0];
@@ -404,7 +414,9 @@ function App() {
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY]);
 
   useEffect(() => {
-    localStorage.setItem('pages', JSON.stringify(pages));
+    pages.forEach(p => {
+      setDoc(doc(db, 'pages', p.id), p);
+    });
   }, [pages]);
 
   const addPage = () => {
@@ -3049,36 +3061,6 @@ function App() {
         />
         <div className="mb-4">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
-        </div>
-        <div className="flex flex-wrap gap-4 mb-4">
-          <Input
-            type="number"
-            label="Tamaño de celda"
-            className="w-28"
-            value={gridSize}
-            onChange={e => setGridSize(parseInt(e.target.value, 10) || 1)}
-          />
-          <Input
-            type="number"
-            label="Nº casillas"
-            className="w-28"
-            value={gridCells}
-            onChange={e => setGridCells(parseInt(e.target.value, 10) || 1)}
-          />
-          <Input
-            type="number"
-            label="Offset X"
-            className="w-28"
-            value={gridOffsetX}
-            onChange={e => setGridOffsetX(parseInt(e.target.value, 10) || 0)}
-          />
-          <Input
-            type="number"
-            label="Offset Y"
-            className="w-28"
-            value={gridOffsetY}
-            onChange={e => setGridOffsetY(parseInt(e.target.value, 10) || 0)}
-          />
         </div>
         <div className="relative pt-14">
           <div className="h-[80vh] mr-80">

@@ -40,11 +40,20 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
         <div key={p.id} className="relative group">
           <button
             onClick={() => onSelect(i)}
-            className={`px-3 py-1 rounded-lg border border-gray-600 whitespace-nowrap ${
-              i === current ? 'bg-gray-700' : 'bg-gray-800'
+            className={`relative w-24 h-16 rounded-lg border border-gray-600 overflow-hidden ${
+              i === current ? 'ring-2 ring-blue-400' : ''
             }`}
           >
-            {p.name}
+            {p.background && (
+              <img
+                src={p.background}
+                alt="miniatura"
+                className="absolute inset-0 object-cover w-full h-full"
+              />
+            )}
+            <span className="absolute bottom-0 left-0 right-0 bg-gray-800/60 text-xs text-center">
+              {p.name}
+            </span>
           </button>
           <button
             onClick={() => openEdit(i)}
