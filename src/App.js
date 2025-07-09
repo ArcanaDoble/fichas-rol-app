@@ -385,9 +385,13 @@ function App() {
   const handleBackgroundUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Preview locally while uploading
+    const localUrl = URL.createObjectURL(file);
+    setCanvasBackground(localUrl);
     try {
       const path = `canvas-backgrounds/${nanoid()}-${file.name}`;
       const url = await uploadFile(file, path);
+      URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
     } catch (err) {
       alert(err.message);
