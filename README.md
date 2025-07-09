@@ -506,6 +506,10 @@ src/
 - ✅ **Listado completo de jugadores** - Ahora se muestran todos los nombres en "Controlado por" al editar un token
 - ✅ **Ajustes de token en tiempo real** - Los cambios se aplican sin cerrar la ventana de configuración
 
+### 🖌️ **Mejora de tinte de tokens (Febrero 2025) - v2.1.6**
+- ✅ **Tinte nítido** - El token usa filtro RGBA en lugar de un overlay
+- 🔧 **Cacheado con pixelRatio** - La imagen se cachea a la resolución de pantalla para no perder nitidez
+
 ## 🔄 Historial de cambios previos
 
 <details>
