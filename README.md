@@ -509,6 +509,8 @@ src/
 ### 🖌️ **Mejora de tinte de tokens (Febrero 2025) - v2.1.6**
 - ✅ **Tinte nítido** - El token usa filtro RGBA en lugar de un overlay
 - 🔧 **Cacheado con pixelRatio** - La imagen se cachea a la resolución de pantalla para no perder nitidez
+- 🛠️ **pixelRatio ajustado** - El zoom del mapa se tiene en cuenta para evitar desenfoque
+- 🚫 **Selección intacta** - El contorno de selección ya no se tiñe
 
 ## 🔄 Historial de cambios previos
 
