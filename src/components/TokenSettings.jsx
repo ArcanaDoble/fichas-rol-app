@@ -41,6 +41,16 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
   const [auraOpacity, setAuraOpacity] = useState(
     typeof token.auraOpacity === 'number' ? token.auraOpacity : 0.25
   );
+  const [auraVisibility, setAuraVisibility] = useState(
+    token.auraVisibility || 'all'
+  );
+  const [tokenOpacity, setTokenOpacity] = useState(
+    typeof token.opacity === 'number' ? token.opacity : 1
+  );
+  const [tintColor, setTintColor] = useState(token.tintColor || '#ff0000');
+  const [tintOpacity, setTintOpacity] = useState(
+    typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
+  );
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     onUpdate({
@@ -56,12 +66,30 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
       auraShape,
       auraColor,
       auraOpacity,
+      auraVisibility,
+      opacity: tokenOpacity,
+      tintColor,
+      tintOpacity,
     });
   };
 
   useEffect(() => {
     applyChanges();
-  }, [enemyId, name, showName, controlledBy, barsVisibility, auraRadius, auraShape, auraColor, auraOpacity]);
+  }, [
+    enemyId,
+    name,
+    showName,
+    controlledBy,
+    barsVisibility,
+    auraRadius,
+    auraShape,
+    auraColor,
+    auraOpacity,
+    auraVisibility,
+    tokenOpacity,
+    tintColor,
+    tintOpacity,
+  ]);
 
   if (!token) return null;
 
@@ -114,6 +142,36 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                   <option value="none">Nadie</option>
                 </select>
               </div>
+              <div>
+                <label className="block mb-1">Opacidad del token</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={tokenOpacity}
+                  onChange={e => setTokenOpacity(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-right">{Math.round(tokenOpacity * 100)}%</div>
+              </div>
+              <div>
+                <label className="block mb-1">Color de tinte</label>
+                <input type="color" value={tintColor} onChange={e => setTintColor(e.target.value)} className="w-full h-8 p-0 border-0" />
+              </div>
+              <div>
+                <label className="block mb-1">Opacidad del tinte</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={tintOpacity}
+                  onChange={e => setTintOpacity(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-right">{Math.round(tintOpacity * 100)}%</div>
+              </div>
               <div className="text-center">
                 <Boton
                   onClick={() => {
@@ -131,6 +189,10 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                       auraShape,
                       auraColor,
                       auraOpacity,
+                      auraVisibility,
+                      opacity: tokenOpacity,
+                      tintColor,
+                      tintOpacity,
                     };
                     onOpenSheet(updated);
                   }}
@@ -169,6 +231,18 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                   className="w-full"
                 />
                 <div className="text-right">{Math.round(auraOpacity * 100)}%</div>
+              </div>
+              <div>
+                <label className="block mb-1">Visible para</label>
+                <select
+                  value={auraVisibility}
+                  onChange={e => setAuraVisibility(e.target.value)}
+                  className="w-full bg-gray-700 text-white"
+                >
+                  <option value="all">Todos</option>
+                  <option value="controlled">Controlador</option>
+                  <option value="none">Nadie</option>
+                </select>
               </div>
             </>
           )}
