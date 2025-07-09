@@ -357,6 +357,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - La imagen se clona sobre sí misma con `globalCompositeOperation: 'multiply'` para colorear sin perder nitidez.
 - Se elimina el uso del filtro `RGBA` y el cacheado de la textura.
 
+**Resumen de cambios v2.2.82:**
+- Eliminado el último `useEffect` que aplicaba el filtro RGBA en `MapCanvas.jsx`.
+- El overlay colorea el token sin desenfoque ni referencias a `tintRgb`.
+- Añadido `updateSizes` a las dependencias de su `useEffect` correspondiente.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
