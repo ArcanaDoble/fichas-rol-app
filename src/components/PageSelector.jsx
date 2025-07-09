@@ -40,7 +40,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
         <div key={p.id} className="relative group">
           <button
             onClick={() => onSelect(i)}
-            className={`relative w-24 h-16 rounded-lg border border-gray-600 overflow-hidden ${
+            className={`relative w-40 h-28 rounded-lg border border-gray-600 overflow-hidden ${
               i === current ? 'ring-2 ring-blue-400' : ''
             }`}
           >
@@ -51,7 +51,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
                 className="absolute inset-0 object-cover w-full h-full"
               />
             )}
-            <span className="absolute bottom-0 left-0 right-0 bg-gray-800/60 text-xs text-center">
+            <span className="absolute bottom-0 left-0 right-0 bg-gray-800/60 text-sm text-center">
               {p.name}
             </span>
           </button>

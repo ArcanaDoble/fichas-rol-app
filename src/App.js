@@ -3052,6 +3052,9 @@ function App() {
             </Boton>
           </div>
         </div>
+        <div className="mb-4">
+          <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
+        </div>
         <PageSelector
           pages={pages}
           current={currentPage}
@@ -3059,9 +3062,6 @@ function App() {
           onAdd={addPage}
           onUpdate={updatePage}
         />
-        <div className="mb-4">
-          <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
-        </div>
         <div className="relative pt-14">
           <div className="h-[80vh] mr-80">
             <MapCanvas
