@@ -510,6 +510,7 @@ src/
 - ✅ **Tinte nítido** - El token usa filtro RGBA en lugar de un overlay
 - 🔧 **Nitidez en pantallas retina** - La caché usa el pixelRatio del dispositivo
 
+
 ## 🔄 Historial de cambios previos
 
 <details>
