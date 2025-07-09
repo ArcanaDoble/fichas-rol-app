@@ -63,6 +63,9 @@ const hexToRgba = (hex, alpha = 1) => {
   auraShape = 'circle',
   auraColor = '#ffff00',
   auraOpacity = 0.25,
+  showAura = true,
+  tintColor = '#ff0000',
+  tintOpacity = 0,
 }, ref) => {
   const [img] = useImage(image);
   const groupRef = useRef();
@@ -300,7 +303,7 @@ const hexToRgba = (hex, alpha = 1) => {
       onMouseLeave={() => onHoverChange?.(false)}
       onDblClick={() => onSettings?.(id)}
     >
-      {auraRadius > 0 && (
+      {auraRadius > 0 && showAura && (
         auraShape === 'circle' ? (
           <Circle
             x={x + offX}
@@ -323,9 +326,32 @@ const hexToRgba = (hex, alpha = 1) => {
         )
       )}
       {img ? (
-        <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
+        <>
+          <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
+          {tintOpacity > 0 && (
+            <KonvaImage
+              image={img}
+              fill={tintColor}
+              globalCompositeOperation="source-atop"
+              listening={false}
+              opacity={tintOpacity}
+              {...common}
+            />
+          )}
+        </>
       ) : (
-        <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
+        <>
+          <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
+          {tintOpacity > 0 && (
+            <Rect
+              {...common}
+              fill={tintColor}
+              globalCompositeOperation="source-atop"
+              listening={false}
+              opacity={tintOpacity}
+            />
+          )}
+        </>
       )}
       {showName && (customName || name) && (
         <Group
@@ -430,6 +456,9 @@ Token.propTypes = {
   auraShape: PropTypes.oneOf(['circle', 'square']),
   auraColor: PropTypes.string,
   auraOpacity: PropTypes.number,
+  showAura: PropTypes.bool,
+  tintColor: PropTypes.string,
+  tintOpacity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -494,6 +523,19 @@ const MapCanvas = ({
     }
     return true;
   }, [playerName, userType]);
+
+  const canSeeAura = useCallback(
+    (tk) => {
+      if (!tk.auraVisibility || tk.auraVisibility === 'all') return true;
+      if (tk.auraVisibility === 'none') return false;
+      if (tk.auraVisibility === 'controlled') {
+        if (userType === 'master') return true;
+        return tk.controlledBy === playerName;
+      }
+      return true;
+    },
+    [playerName, userType]
+  );
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize = imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
@@ -759,6 +801,10 @@ const MapCanvas = ({
           auraShape: 'circle',
           auraColor: '#ffff00',
           auraOpacity: 0.25,
+          auraVisibility: 'all',
+          opacity: 1,
+          tintColor: '#ff0000',
+          tintOpacity: 0,
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -815,6 +861,9 @@ const MapCanvas = ({
                 draggable={false}
                 listening={false}
                 opacity={0.35}
+                tintColor={dragShadow.tintColor}
+                tintOpacity={dragShadow.tintOpacity}
+                showAura={canSeeAura(dragShadow)}
                 auraRadius={dragShadow.auraRadius}
                 auraShape={dragShadow.auraShape}
                 auraColor={dragShadow.auraColor}
@@ -845,6 +894,10 @@ const MapCanvas = ({
                 name={token.name}
                 customName={token.customName}
                 showName={token.showName}
+                opacity={token.opacity ?? 1}
+                tintColor={token.tintColor}
+                tintOpacity={token.tintOpacity}
+                showAura={canSeeAura(token)}
                 tokenSheetId={token.tokenSheetId}
                 auraRadius={token.auraRadius}
                 auraShape={token.auraShape}
@@ -937,6 +990,10 @@ MapCanvas.propTypes = {
       auraShape: PropTypes.oneOf(['circle', 'square']),
       auraColor: PropTypes.string,
       auraOpacity: PropTypes.number,
+      auraVisibility: PropTypes.oneOf(['all', 'controlled', 'none']),
+      opacity: PropTypes.number,
+      tintColor: PropTypes.string,
+      tintOpacity: PropTypes.number,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
