@@ -346,6 +346,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.78:**
 - Las texturas de los tokens se cargan con `crossOrigin: 'anonymous'` para que el tinte se aplique correctamente.
 
+**Resumen de cambios v2.2.79:**
+- El tinte se superpone únicamente sobre la textura del token usando `source-atop`.
+- Se elimina el rectángulo rojo que cubría toda la celda.
+
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
