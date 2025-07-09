@@ -28,6 +28,22 @@ const hexToRgba = (hex, alpha = 1) => {
   const b = int & 255;
   return `rgba(${r},${g},${b},${alpha})`;
 };
+
+const hexToRgb = (hex) => {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+  const int = parseInt(h, 16);
+  return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
+};
+
+const mixColors = (baseHex, tintHex, opacity) => {
+  const base = hexToRgb(baseHex);
+  const tint = hexToRgb(tintHex);
+  const r = Math.round(base.r * (1 - opacity) + tint.r * opacity);
+  const g = Math.round(base.g * (1 - opacity) + tint.g * opacity);
+  const b = Math.round(base.b * (1 - opacity) + tint.b * opacity);
+  return `rgb(${r},${g},${b})`;
+};
   const Token = forwardRef(({
   id,
   x,
@@ -81,6 +97,10 @@ const hexToRgba = (hex, alpha = 1) => {
   const [stats, setStats] = useState({});
 
   const SNAP = gridSize / 4;
+
+  const tintRgb = hexToRgb(tintColor);
+  const placeholderBase = color || 'red';
+  const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
 
   useEffect(() => {
     if (!tokenSheetId) return;
@@ -326,31 +346,24 @@ const hexToRgba = (hex, alpha = 1) => {
         )
       )}
       {img ? (
-        <>
-          <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
-          {tintOpacity > 0 && (
-            <Rect
-              {...common}
-              fill={tintColor}
-              globalCompositeOperation="source-atop"
-              listening={false}
-              opacity={tintOpacity}
-            />
-          )}
-        </>
+        <KonvaImage
+          ref={shapeRef}
+          image={img}
+          onTransform={updateHandle}
+          {...common}
+          filters={tintOpacity > 0 ? [Konva.Filters.RGBA] : []}
+          red={tintRgb.r}
+          green={tintRgb.g}
+          blue={tintRgb.b}
+          alpha={tintOpacity}
+        />
       ) : (
-        <>
-          <Rect ref={shapeRef} fill={color || 'red'} onTransform={updateHandle} {...common} />
-          {tintOpacity > 0 && (
-            <Rect
-              {...common}
-              fill={tintColor}
-              globalCompositeOperation="source-atop"
-              listening={false}
-              opacity={tintOpacity}
-            />
-          )}
-        </>
+        <Rect
+          ref={shapeRef}
+          fill={fillColor}
+          onTransform={updateHandle}
+          {...common}
+        />
       )}
       {showName && (customName || name) && (
         <Group
