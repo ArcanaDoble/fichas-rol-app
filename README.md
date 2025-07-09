@@ -473,6 +473,7 @@ src/
 
 ### 🔧 **Mejora de selección de controlador (Enero 2025) - v2.1.5**
 - ✅ **Listado completo de jugadores** - Ahora se muestran todos los nombres en "Controlado por" al editar un token
+- ✅ **Ajustes de token en tiempo real** - Los cambios se aplican sin cerrar la ventana de configuración
 
 ## 🔄 Historial de cambios previos
 

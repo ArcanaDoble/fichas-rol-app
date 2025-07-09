@@ -59,6 +59,10 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
     });
   };
 
+  useEffect(() => {
+    applyChanges();
+  }, [enemyId, name, showName, controlledBy, barsVisibility, auraRadius, auraShape, auraColor, auraOpacity]);
+
   if (!token) return null;
 
   const content = (
@@ -114,21 +118,20 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                 <Boton
                   onClick={() => {
                     const enemy = enemies.find((e) => e.id === enemyId);
-      const updated = {
-        ...token,
-        enemyId: enemyId || null,
-        url: enemyId ? enemy?.portrait || token.url : token.url,
-        name: enemyId ? enemy?.name : token.name,
-        customName: showName ? name : '',
-        showName,
-        controlledBy,
-        barsVisibility,
-        auraRadius,
-        auraShape,
-        auraColor,
-        auraOpacity,
-      };
-                    onUpdate(updated);
+                    const updated = {
+                      ...token,
+                      enemyId: enemyId || null,
+                      url: enemyId ? enemy?.portrait || token.url : token.url,
+                      name: enemyId ? enemy?.name : token.name,
+                      customName: showName ? name : '',
+                      showName,
+                      controlledBy,
+                      barsVisibility,
+                      auraRadius,
+                      auraShape,
+                      auraColor,
+                      auraOpacity,
+                    };
                     onOpenSheet(updated);
                   }}
                 >
