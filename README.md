@@ -336,6 +336,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Nueva opción **Aura** con radio, forma, color y opacidad configurables.
 - Selector de visibilidad para el aura y nuevas opciones de opacidad y tinte del token.
 
+**Resumen de cambios v2.2.76:**
+- El tinte del token respeta la forma de la imagen en lugar de cubrir el rectángulo completo.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real

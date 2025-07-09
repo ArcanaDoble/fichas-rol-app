@@ -329,12 +329,13 @@ const hexToRgba = (hex, alpha = 1) => {
         <>
           <KonvaImage ref={shapeRef} image={img} onTransform={updateHandle} {...common} />
           {tintOpacity > 0 && (
-            <Rect
-              {...common}
+            <KonvaImage
+              image={img}
               fill={tintColor}
               globalCompositeOperation="source-atop"
               listening={false}
               opacity={tintOpacity}
+              {...common}
             />
           )}
         </>
