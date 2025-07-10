@@ -445,6 +445,9 @@ function App() {
             bg = await uploadDataUrl(bg, `canvas-backgrounds/${p.id}`);
             changed = true;
           }
+          if (bg && bg.startsWith('blob:')) {
+            return p; // no guardar hasta que termine la subida
+          }
           const newPage = changed ? { ...p, tokens, background: bg } : p;
           await setDoc(doc(db, 'pages', newPage.id), newPage);
           return newPage;

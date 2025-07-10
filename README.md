@@ -521,6 +521,7 @@ src/
 - ✅ **Configuración de seguridad** - Añadidas reglas permisivas para acceso completo a datos
 - ✅ **Archivos de configuración** - Creados `firestore.rules` y `firestore.indexes.json`
 - ✅ **Despliegue actualizado** - Firebase configurado correctamente para producción
+- 🔧 **Fondos de mapa persistentes** - Se evita guardar URLs temporales de tipo `blob:`
 
 ### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
 - ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
