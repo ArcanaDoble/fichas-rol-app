@@ -389,7 +389,7 @@ function App() {
     const localUrl = URL.createObjectURL(file);
     setCanvasBackground(localUrl);
     try {
-      const path = `canvas-backgrounds/${nanoid()}-${file.name}`;
+      const path = `Mapas/${nanoid()}-${file.name}`;
       const url = await uploadFile(file, path);
       URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
@@ -442,7 +442,7 @@ function App() {
           );
           let bg = p.background;
           if (bg && bg.startsWith('data:')) {
-            bg = await uploadDataUrl(bg, `canvas-backgrounds/${p.id}`);
+            bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
             changed = true;
           }
           if (bg && bg.startsWith('blob:')) {
