@@ -520,6 +520,7 @@ src/
 - ✅ **Reglas de Firestore configuradas** - Solucionado error "Missing or insufficient permissions"
 - ✅ **Configuración de seguridad** - Añadidas reglas permisivas para acceso completo a datos
 - ✅ **Archivos de configuración** - Creados `firestore.rules` y `firestore.indexes.json`
+- ✅ **Reglas de Storage añadidas** - Nuevo archivo `storage.rules` con acceso abierto para subir imágenes
 - ✅ **Despliegue actualizado** - Firebase configurado correctamente para producción
 - 🔧 **Fondos de mapa persistentes** - Las imágenes se suben automáticamente a `Mapas/` en Firebase Storage evitando guardar URLs temporales `blob:`
 
