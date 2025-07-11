@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, uploadString, getDownloadURL } from 'firebase/storage';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { storage, db } from '../firebase';
 
@@ -27,14 +27,14 @@ export const uploadFile = async (file, path) => {
 };
 
 export const uploadDataUrl = async (dataUrl, path) => {
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
+  const base64 = dataUrl.split(',')[1] || '';
+  const size = Buffer.from(base64, 'base64').length;
   const current = await getUsage();
-  if (current + blob.size > LIMIT_BYTES) {
+  if (current + size > LIMIT_BYTES) {
     throw new Error('Límite de almacenamiento superado');
   }
   const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, blob);
-  await updateUsage(blob.size);
+  await uploadString(storageRef, dataUrl, 'data_url');
+  await updateUsage(size);
   return getDownloadURL(storageRef);
 };

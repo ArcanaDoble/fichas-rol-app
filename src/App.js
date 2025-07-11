@@ -389,7 +389,8 @@ function App() {
     const localUrl = URL.createObjectURL(file);
     setCanvasBackground(localUrl);
     try {
-      const path = `Mapas/${nanoid()}-${file.name}`;
+      const safeName = encodeURIComponent(file.name);
+      const path = `Mapas/${nanoid()}-${safeName}`;
       const url = await uploadFile(file, path);
       URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
