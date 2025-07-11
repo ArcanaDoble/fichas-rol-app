@@ -393,6 +393,14 @@ function App() {
       const url = await uploadFile(file, path);
       URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
+      const pageId = pages[currentPage]?.id;
+      if (pageId) {
+        const newPage = { ...pages[currentPage], background: url };
+        await setDoc(doc(db, 'pages', pageId), newPage);
+        setPages((ps) =>
+          ps.map((p, i) => (i === currentPage ? newPage : p))
+        );
+      }
     } catch (err) {
       alert(err.message);
     }
