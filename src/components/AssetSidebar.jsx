@@ -96,7 +96,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     const uploads = await Promise.all(
       Array.from(files).map(async (file) => {
         const name = file.name.replace(/\.[^/.]+$/, '');
-        const path = `canvas-assets/${nanoid()}-${file.name}`;
+        const safeName = encodeURIComponent(file.name);
+        const path = `canvas-assets/${nanoid()}-${safeName}`;
         try {
           const url = await uploadFile(file, path);
           return { id: nanoid(), name, url };
