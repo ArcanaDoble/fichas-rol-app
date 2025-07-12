@@ -427,6 +427,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.0:**
 - Los tokens muestran únicamente un spinner mientras se carga su imagen, sin el rectángulo rojo temporal.
 
+**Resumen de cambios v2.3.1:**
+- El mapa de batalla se ajusta automáticamente a la pantalla y ya no requiere scroll en tamaño estándar.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
