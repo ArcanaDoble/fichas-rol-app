@@ -781,6 +781,15 @@ const MapCanvas = ({
   const mapHeight = gridCells || Math.round(imageSize.height / effectiveGridSize);
 
   const handleKeyDown = useCallback((e) => {
+    // Avoid moving the token when typing inside inputs or editable fields
+    const target = e.target;
+    if (
+      target.isContentEditable ||
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+    ) {
+      return;
+    }
+
     if (selectedId == null) return;
     const index = tokens.findIndex((t) => t.id === selectedId);
     if (index === -1) return;
