@@ -19,6 +19,7 @@ import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
+import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 
 const hexToRgba = (hex, alpha = 1) => {
@@ -86,7 +87,8 @@ const mixColors = (baseHex, tintHex, opacity) => {
   tintOpacity = 0,
 }, ref) => {
   // Load token texture with CORS enabled so filters like tint work
-  const [img] = useImage(image, 'anonymous');
+  const [img, imgStatus] = useImage(image, 'anonymous');
+  const isImgLoading = imgStatus !== 'loaded';
   const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
@@ -382,10 +384,20 @@ const mixColors = (baseHex, tintHex, opacity) => {
           />
         )
       )}
-      {img ? (
+      {img && !isImgLoading ? (
         <KonvaImage ref={shapeRef} image={img} {...common} />
       ) : (
-        <Rect ref={shapeRef} fill={fillColor} {...common} />
+        <>
+          <Rect ref={shapeRef} fill={fillColor} {...common} />
+          {isImgLoading && (
+            <KonvaSpinner
+              x={x + offX}
+              y={y + offY}
+              radius={Math.min(width, height) * gridSize * 0.3}
+              color="white"
+            />
+          )}
+        </>
       )}
       {selected && <Rect {...outline} />}
       {showName && (customName || name) && (
