@@ -175,7 +175,6 @@ if (labelGroup && label) {
 }
     handle.getLayer().batchDraw();
   };
-
   useLayoutEffect(() => {
     const label = textRef.current;
     const group = textGroupRef.current;
@@ -184,7 +183,6 @@ if (labelGroup && label) {
       group.getLayer()?.batchDraw();
     }
   }, [customName, name, cellSize]);
-
   const updateSizes = () => {
     if (rotateRef.current) {
       rotateRef.current.radius(iconSize / 2);
