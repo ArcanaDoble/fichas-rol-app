@@ -13,7 +13,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from 'react-dnd';
 import { uploadFile } from '../utils/storage';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
@@ -27,9 +27,10 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
   const [preview, setPreview] = useState(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const snap = await getDoc(doc(db, 'assetSidebar', 'state'));
+    const ref = doc(db, 'assetSidebar', 'state');
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           const normalize = (arr) =>
@@ -40,29 +41,28 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
               open: f.open ?? false,
             }));
           setFolders(normalize(data.folders || []));
-          return;
+        } else {
+          const stored = localStorage.getItem('assetSidebar');
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              const normalize = (arr) =>
+                arr.map((f) => ({
+                  ...f,
+                  assets: f.assets || [],
+                  folders: normalize(f.folders || []),
+                  open: f.open ?? false,
+                }));
+              setFolders(normalize(parsed));
+            } catch {
+              // ignore
+            }
+          }
         }
-      } catch (e) {
-        console.error(e);
-      }
-      const stored = localStorage.getItem('assetSidebar');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          const normalize = (arr) =>
-            arr.map((f) => ({
-              ...f,
-              assets: f.assets || [],
-              folders: normalize(f.folders || []),
-              open: f.open ?? false,
-            }));
-          setFolders(normalize(parsed));
-        } catch {
-          // ignore
-        }
-      }
-    };
-    load();
+      },
+      (error) => console.error(error)
+    );
+    return () => unsub();
   }, []);
 
   useEffect(() => {
