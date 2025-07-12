@@ -433,6 +433,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.2:**
 - El encabezado y controles del Mapa de Batalla se desplazan dejando espacio para la barra lateral de assets.
 
+**Resumen de cambios v2.3.3:**
+- La barra lateral de assets comienza en la parte superior y ocupa toda la altura del lado derecho.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real

@@ -3163,7 +3163,7 @@ function App() {
               playerName={playerName}
             />
           </div>
-          <AssetSidebar className="top-14" />
+          <AssetSidebar />
         </div>
       </div>
     );
