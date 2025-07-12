@@ -13,7 +13,8 @@ const firebaseConfig = {
   projectId:
     process.env.REACT_APP_FIREBASE_PROJECT_ID || 'base-de-datos-noma',
   storageBucket:
-    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'base-de-datos-noma.appspot.com',
+    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
+    'base-de-datos-noma.firebasestorage.app',
   messagingSenderId:
     process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '485513400814',
   appId: process.env.REACT_APP_FIREBASE_APP_ID || '1:485513400814:web:c0c052fafebc41a2eafeff',
