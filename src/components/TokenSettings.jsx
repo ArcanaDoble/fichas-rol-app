@@ -5,7 +5,16 @@ import { FiX } from 'react-icons/fi';
 import Boton from './Boton';
 import Input from './Input';
 
-const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, onOpenSheet }) => {
+const TokenSettings = ({
+  token,
+  enemies = [],
+  players = [],
+  onClose,
+  onUpdate,
+  onOpenSheet,
+  onLayerUp,
+  onLayerDown,
+}) => {
   const [tab, setTab] = useState('details');
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 140 });
   const [dragging, setDragging] = useState(false);
@@ -200,6 +209,14 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                   Abrir ficha de personaje
                 </Boton>
               </div>
+              <div className="flex justify-center gap-2 mt-2">
+                <Boton size="sm" onClick={() => onLayerUp?.(token.id)}>
+                  Subir capa
+                </Boton>
+                <Boton size="sm" onClick={() => onLayerDown?.(token.id)}>
+                  Bajar capa
+                </Boton>
+              </div>
             </>
           )}
           {tab === 'aura' && (
@@ -264,6 +281,8 @@ TokenSettings.propTypes = {
   onClose: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
   onOpenSheet: PropTypes.func.isRequired,
+  onLayerUp: PropTypes.func,
+  onLayerDown: PropTypes.func,
 };
 
 export default TokenSettings;
