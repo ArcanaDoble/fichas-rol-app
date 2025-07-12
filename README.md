@@ -456,6 +456,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.8:**
 - Actualización del arrastre para React DnD v14+ evitando la advertencia `spec.begin`.
 
+**Resumen de cambios v2.3.9:**
+- Se evita el parpadeo en **AssetSidebar** al mover fichas o abrir sus ajustes.
+
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

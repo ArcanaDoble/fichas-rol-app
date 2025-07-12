@@ -714,5 +714,5 @@ const DragLayerPreview = () => {
   );
 };
 
-export default AssetSidebar;
+export default React.memo(AssetSidebar);
 
