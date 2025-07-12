@@ -40,7 +40,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
   };
 
   return (
-    <div className="flex items-center gap-2 mb-4 overflow-x-auto">
+    <div className="flex items-center gap-2 mb-4 overflow-x-auto overflow-y-visible">
       {pages.map((p, i) => (
         <div key={p.id} className="relative group">
           <button
