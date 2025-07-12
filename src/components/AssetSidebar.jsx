@@ -451,21 +451,24 @@ const DraggableAssetItem = ({
       type: AssetTypes.IMAGE,
       item: { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+      begin: () => {
+        onDragStart?.({
+          id: asset.id,
+          name: asset.name,
+          url: asset.url,
+          fromFolderId: folderId,
+        });
+      },
+      end: () => {
+        onDragEnd?.();
+      },
     }),
-    [asset, folderId]
+    [asset, folderId, onDragStart, onDragEnd]
   );
 
   useEffect(() => {
     preview(EMPTY_IMAGE, { captureDraggingState: true });
   }, [preview]);
-
-  useEffect(() => {
-    if (isDragging) {
-      onDragStart?.({ id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId });
-    } else {
-      onDragEnd?.();
-    }
-  }, [isDragging, asset, folderId, onDragStart, onDragEnd]);
   return (
     <div className="text-center text-xs">
       <div
@@ -473,10 +476,11 @@ const DraggableAssetItem = ({
         className="relative group hover:bg-[#2a3344] rounded p-1"
         style={{ opacity: isDragging ? 0.5 : 1 }}
       >
-        <img
-          src={asset.url}
-          alt={asset.name}
-          className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+          <img
+            src={asset.url}
+            alt={asset.name}
+            className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+          onMouseDown={hidePreview}
           onClick={() => onAssetSelect?.(asset)}
           onMouseEnter={(e) => showPreview(asset, e)}
           onMouseMove={movePreview}
