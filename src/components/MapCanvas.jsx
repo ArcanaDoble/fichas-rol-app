@@ -19,6 +19,7 @@ import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
+import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 
 const hexToRgba = (hex, alpha = 1) => {
@@ -84,9 +85,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
   showAura = true,
   tintColor = '#ff0000',
   tintOpacity = 0,
+  showSpinner = true,
 }, ref) => {
   // Load token texture with CORS enabled so filters like tint work
-  const [img] = useImage(image, 'anonymous');
+  const [img, imgStatus] = useImage(image, 'anonymous');
+  const isImgLoading = !!image && imgStatus === 'loading';
+  const loadFailed = !!image && imgStatus === 'failed';
   const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
@@ -385,7 +389,23 @@ const mixColors = (baseHex, tintHex, opacity) => {
       {img ? (
         <KonvaImage ref={shapeRef} image={img} {...common} />
       ) : (
-        <Rect ref={shapeRef} fill={fillColor} {...common} />
+        <>
+          <Rect
+            ref={shapeRef}
+            {...common}
+            fill={isImgLoading ? undefined : fillColor}
+            fillEnabled={!isImgLoading}
+            strokeEnabled={false}
+          />
+          {isImgLoading && showSpinner && (
+            <KonvaSpinner
+              x={x + offX}
+              y={y + offY}
+              radius={Math.min(width, height) * gridSize * 0.3}
+              color="white"
+            />
+          )}
+        </>
       )}
       {selected && <Rect {...outline} />}
       {showName && (customName || name) && (
@@ -902,6 +922,7 @@ const MapCanvas = ({
                 opacity={0.35}
                 tintColor={dragShadow.tintColor}
                 tintOpacity={dragShadow.tintOpacity}
+                showSpinner={false}
                 showAura={canSeeAura(dragShadow)}
                 auraRadius={dragShadow.auraRadius}
                 auraShape={dragShadow.auraShape}
