@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Permite usar variables de entorno para ocultar las claves. Si no se
@@ -23,4 +23,5 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
 export const storage = getStorage(app);
