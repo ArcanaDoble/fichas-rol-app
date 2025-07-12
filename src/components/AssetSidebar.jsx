@@ -26,7 +26,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   const [loaded, setLoaded] = useState(false);
   
   // Image preview data {url, x, y} shown on hover
-  const [preview, setPreview] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const previewRef = useRef(null);
   const isDragging = useDragLayer((monitor) => monitor.isDragging());
 
   useEffect(() => {
@@ -178,18 +179,27 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
     if (isDragging) return;
-    setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
+    setPreviewUrl(asset.url);
+    const el = previewRef.current;
+    if (el) {
+      el.style.top = `${e.clientY + 10}px`;
+      el.style.left = `${e.clientX + 10}px`;
+    }
   };
   const movePreview = (e) => {
     if (isDragging) return;
-    setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
+    const el = previewRef.current;
+    if (el) {
+      el.style.top = `${e.clientY + 10}px`;
+      el.style.left = `${e.clientX + 10}px`;
+    }
   };
   const hidePreview = () => {
-    if (!isDragging) setPreview(null);
+    if (!isDragging) setPreviewUrl(null);
   };
 
   const handleDragStart = () => {
-    setPreview(null);
+    setPreviewUrl(null);
   };
 
   const handleDragEnd = () => {
@@ -375,13 +385,14 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
           ))}
         </AnimatePresence>
       </div>
-      {preview && (
+      {previewUrl && (
         <div
+          ref={previewRef}
           className="pointer-events-none fixed z-50"
-          style={{ top: preview.y + 10, left: preview.x + 10 }}
+          style={{ top: 0, left: 0 }}
         >
           <img
-            src={preview.url}
+            src={previewUrl}
             alt="preview"
             className="max-w-[256px] max-h-[256px]"
           />
