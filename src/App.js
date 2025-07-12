@@ -3096,7 +3096,7 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
-        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
           <div className="flex flex-wrap gap-2">
               <Boton
@@ -3129,17 +3129,19 @@ function App() {
             </Boton>
           </div>
         </div>
-        <div className="mb-4">
+        <div className="mb-4 mr-80">
           <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
         </div>
-        <PageSelector
-          pages={pages}
-          current={currentPage}
-          onSelect={setCurrentPage}
-          onAdd={addPage}
-          onUpdate={updatePage}
-          onDelete={deletePage}
-        />
+        <div className="mr-80">
+          <PageSelector
+            pages={pages}
+            current={currentPage}
+            onSelect={setCurrentPage}
+            onAdd={addPage}
+            onUpdate={updatePage}
+            onDelete={deletePage}
+          />
+        </div>
         <div className="relative pt-14 flex-1 overflow-hidden">
           <div className="h-full mr-80">
             <MapCanvas
@@ -3161,7 +3163,7 @@ function App() {
               playerName={playerName}
             />
           </div>
-          <AssetSidebar className="top-14" />
+          <AssetSidebar />
         </div>
       </div>
     );
