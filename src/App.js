@@ -29,7 +29,11 @@ import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
-import { uploadFile, uploadDataUrl } from './utils/storage';
+import {
+  uploadDataUrl,
+  getOrUploadFile,
+  releaseFile,
+} from './utils/storage';
 
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -389,18 +393,24 @@ function App() {
     const localUrl = URL.createObjectURL(file);
     setCanvasBackground(localUrl);
     try {
-      const safeName = encodeURIComponent(file.name);
-      const path = `Mapas/${nanoid()}-${safeName}`;
-      const url = await uploadFile(file, path);
+      const { url, hash } = await getOrUploadFile(file);
       URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
       const pageId = pages[currentPage]?.id;
       if (pageId) {
-        const newPage = { ...pages[currentPage], background: url };
+        const prevHash = pages[currentPage]?.backgroundHash;
+        const newPage = {
+          ...pages[currentPage],
+          background: url,
+          backgroundHash: hash,
+        };
         await setDoc(doc(db, 'pages', pageId), newPage);
         setPages((ps) =>
           ps.map((p, i) => (i === currentPage ? newPage : p))
         );
+        if (prevHash && prevHash !== hash) {
+          await releaseFile(prevHash);
+        }
       }
     } catch (err) {
       alert(err.message);
@@ -473,6 +483,7 @@ function App() {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
       background: null,
+      backgroundHash: null,
       gridSize: 100,
       gridCells: 30,
       gridOffsetX: 0,
@@ -493,6 +504,22 @@ function App() {
       if (data.background !== undefined) setCanvasBackground(data.background);
       if (data.tokens !== undefined) setCanvasTokens(data.tokens);
     }
+  };
+
+  const deletePage = async (index) => {
+    const p = pages[index];
+    if (!p) return;
+    if (!(await confirm(`¿Eliminar ${p.name}?`))) return;
+    if (p.backgroundHash) {
+      await releaseFile(p.backgroundHash);
+    }
+    await deleteDoc(doc(db, 'pages', p.id));
+    setPages((ps) => ps.filter((_, i) => i !== index));
+    setCurrentPage((cp) => {
+      if (cp > index) return cp - 1;
+      if (cp === index) return Math.max(0, cp - 1);
+      return cp;
+    });
   };
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -3110,6 +3137,7 @@ function App() {
           onSelect={setCurrentPage}
           onAdd={addPage}
           onUpdate={updatePage}
+          onDelete={deletePage}
         />
         <div className="relative pt-14">
           <div className="h-[80vh] mr-80">

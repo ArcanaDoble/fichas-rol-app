@@ -5,7 +5,7 @@ import Modal from './Modal';
 import Input from './Input';
 import Boton from './Boton';
 
-const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
+const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) => {
   const [editIndex, setEditIndex] = useState(null);
   const [pageData, setPageData] = useState({});
 
@@ -31,6 +31,11 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
       gridOffsetX: parseInt(pageData.gridOffsetX, 10) || 0,
       gridOffsetY: parseInt(pageData.gridOffsetY, 10) || 0,
     });
+    closeEdit();
+  };
+
+  const handleDelete = () => {
+    onDelete(editIndex);
     closeEdit();
   };
 
@@ -73,6 +78,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate }) => {
         title="Editar página"
         footer={
           <>
+            <Boton color="red" onClick={handleDelete}>Eliminar</Boton>
             <Boton color="gray" onClick={closeEdit}>Cancelar</Boton>
             <Boton color="green" onClick={handleSave}>Guardar</Boton>
           </>
@@ -129,6 +135,7 @@ PageSelector.propTypes = {
   onSelect: PropTypes.func.isRequired,
   onAdd: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired,
 };
 
 export default PageSelector;
