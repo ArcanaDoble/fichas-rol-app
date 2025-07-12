@@ -25,10 +25,22 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
   
-  // Image preview data {url, x, y} shown on hover
-  const [previewUrl, setPreviewUrl] = useState(null);
+  // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
   const isDragging = useDragLayer((monitor) => monitor.isDragging());
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.className = 'pointer-events-none fixed z-50 hidden';
+    const img = document.createElement('img');
+    img.className = 'max-w-[256px] max-h-[256px]';
+    el.appendChild(img);
+    document.body.appendChild(el);
+    previewRef.current = el;
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
 
   useEffect(() => {
     const ref = doc(db, 'assetSidebar', 'state');
@@ -179,11 +191,13 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
     if (isDragging) return;
-    setPreviewUrl(asset.url);
     const el = previewRef.current;
     if (el) {
+      const img = el.firstChild;
+      if (img) img.src = asset.url;
       el.style.top = `${e.clientY + 10}px`;
       el.style.left = `${e.clientX + 10}px`;
+      el.classList.remove('hidden');
     }
   };
   const movePreview = (e) => {
@@ -195,11 +209,13 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
     }
   };
   const hidePreview = () => {
-    if (!isDragging) setPreviewUrl(null);
+    if (!isDragging && previewRef.current) {
+      previewRef.current.classList.add('hidden');
+    }
   };
 
   const handleDragStart = () => {
-    setPreviewUrl(null);
+    if (previewRef.current) previewRef.current.classList.add('hidden');
   };
 
   const handleDragEnd = () => {
@@ -385,19 +401,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
           ))}
         </AnimatePresence>
       </div>
-      {previewUrl && (
-        <div
-          ref={previewRef}
-          className="pointer-events-none fixed z-50"
-          style={{ top: 0, left: 0 }}
-        >
-          <img
-            src={previewUrl}
-            alt="preview"
-            className="max-w-[256px] max-h-[256px]"
-          />
-        </div>
-      )}
+      {/* previewRef portal appended to body */}
       <DragLayerPreview />
       {windows.map((w) => (
         <FolderWindow
