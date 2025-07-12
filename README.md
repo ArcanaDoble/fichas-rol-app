@@ -82,6 +82,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.1.11:**
 - Lista completa de jugadores en el campo **Controlado por** al editar un token.
 
+**Resumen de cambios v2.1.12:**
+- Indicador de carga en el mapa con spinner mientras se descarga la imagen.
+
 **Resumen de cambios v2.2.0:**
 - Botón **Guardar datos** para respaldar la ficha completa.
 - Botón **RESET** que restaura la ficha al último respaldo guardado.
@@ -566,6 +569,9 @@ src/
 - 🔧 **Cacheado con pixelRatio** - La imagen se cachea a la resolución de pantalla para no perder nitidez
 - 🛠️ **pixelRatio ajustado** - El zoom del mapa se tiene en cuenta para evitar desenfoque
 - 🚫 **Selección intacta** - El contorno de selección ya no se tiñe
+
+### 🌀 **Indicador de carga del mapa (Marzo 2025) - v2.1.7**
+- ✅ Spinner visible mientras se carga la imagen del mapa para evitar pantalla negra
 
 ## 🔄 Historial de cambios previos
 

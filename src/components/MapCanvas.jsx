@@ -18,6 +18,7 @@ import TokenSettings from './TokenSettings';
 import TokenSheetModal from './TokenSheetModal';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
+import LoadingSpinner from './LoadingSpinner';
 import Konva from 'konva';
 
 const hexToRgba = (hex, alpha = 1) => {
@@ -546,7 +547,8 @@ const MapCanvas = ({
   const tokenRefs = useRef({});
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
-  const [bg] = useImage(backgroundImage, 'anonymous');
+  const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
+  const isBgLoading = bgStatus !== 'loaded';
 
   const canSeeBars = useCallback((tk) => {
     if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
@@ -847,7 +849,10 @@ const MapCanvas = ({
   );
 
   return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden">
+    <div ref={containerRef} className="w-full h-full overflow-hidden relative">
+      {isBgLoading && (
+        <LoadingSpinner overlay color="white" text="Cargando mapa..." />
+      )}
       <div ref={drop}>
         <Stage
         ref={stageRef}
