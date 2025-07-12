@@ -12,16 +12,15 @@ import {
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from 'react-dnd';
-import { uploadFile } from '../utils/storage';
+import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
 const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
-  const [folders, setFolders] = useState(() => [
-    { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
-  ]);
+  const [folders, setFolders] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   
   // Image preview data {url, x, y} shown on hover
   const [preview, setPreview] = useState(null);
@@ -57,18 +56,27 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
             } catch {
               // ignore
             }
+          } else {
+            setFolders([
+              { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
+            ]);
           }
         }
+        setLoaded(true);
       },
-      (error) => console.error(error)
+      (error) => {
+        console.error(error);
+        setLoaded(true);
+      }
     );
     return () => unsub();
   }, []);
 
   useEffect(() => {
+    if (!loaded) return;
     localStorage.setItem('assetSidebar', JSON.stringify(folders));
     setDoc(doc(db, 'assetSidebar', 'state'), { folders }).catch(console.error);
-  }, [folders]);
+  }, [folders, loaded]);
 
   const updateFolders = (list, id, updater) =>
     list.map((f) =>
@@ -96,10 +104,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     const uploads = await Promise.all(
       Array.from(files).map(async (file) => {
         const name = file.name.replace(/\.[^/.]+$/, '');
-        const safeName = encodeURIComponent(file.name);
-        const path = `canvas-assets/${nanoid()}-${safeName}`;
         try {
-          const url = await uploadFile(file, path);
+          const { url } = await getOrUploadFile(file, 'canvas-assets');
           return { id: nanoid(), name, url };
         } catch (e) {
           alert(e.message);
@@ -110,7 +116,12 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     setFolders((fs) =>
       updateFolders(fs, folderId, (f) => ({
         ...f,
-        assets: [...f.assets, ...uploads.filter(Boolean)],
+        assets: [
+          ...f.assets,
+          ...uploads.filter(
+            (u) => u && !f.assets.some((a) => a.url === u.url)
+          ),
+        ],
       }))
     );
   };
