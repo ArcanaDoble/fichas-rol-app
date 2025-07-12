@@ -24,6 +24,7 @@ import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
+import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
@@ -377,7 +378,7 @@ function App() {
           gridOffsetY: 0,
           tokens: [],
         };
-        await setDoc(doc(db, 'pages', defaultPage.id), defaultPage);
+        await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         setPages([defaultPage]);
       } else {
         setPages(loaded);
@@ -404,7 +405,7 @@ function App() {
           background: url,
           backgroundHash: hash,
         };
-        await setDoc(doc(db, 'pages', pageId), newPage);
+        await setDoc(doc(db, 'pages', pageId), sanitize(newPage));
         setPages((ps) =>
           ps.map((p, i) => (i === currentPage ? newPage : p))
         );
@@ -468,7 +469,7 @@ function App() {
             return p; // no guardar hasta que termine la subida
           }
           const newPage = changed ? { ...p, tokens, background: bg } : p;
-          await setDoc(doc(db, 'pages', newPage.id), newPage);
+          await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
           return newPage;
         })
       );
