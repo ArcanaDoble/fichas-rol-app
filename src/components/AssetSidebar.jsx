@@ -449,16 +449,12 @@ const DraggableAssetItem = ({
   const [{ isDragging }, drag, preview] = useDrag(
     () => ({
       type: AssetTypes.IMAGE,
-      item: { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId },
-      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
-      begin: () => {
-        onDragStart?.({
-          id: asset.id,
-          name: asset.name,
-          url: asset.url,
-          fromFolderId: folderId,
-        });
+      item: () => {
+        const data = { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId };
+        onDragStart?.(data);
+        return data;
       },
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
       end: () => {
         onDragEnd?.();
       },
