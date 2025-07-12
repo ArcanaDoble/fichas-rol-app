@@ -19,9 +19,8 @@ import { db } from '../firebase';
 export const AssetTypes = { IMAGE: 'asset-image' };
 
 const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
-  const [folders, setFolders] = useState(() => [
-    { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
-  ]);
+  const [folders, setFolders] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   
   // Image preview data {url, x, y} shown on hover
   const [preview, setPreview] = useState(null);
@@ -57,18 +56,27 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
             } catch {
               // ignore
             }
+          } else {
+            setFolders([
+              { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
+            ]);
           }
         }
+        setLoaded(true);
       },
-      (error) => console.error(error)
+      (error) => {
+        console.error(error);
+        setLoaded(true);
+      }
     );
     return () => unsub();
   }, []);
 
   useEffect(() => {
+    if (!loaded) return;
     localStorage.setItem('assetSidebar', JSON.stringify(folders));
     setDoc(doc(db, 'assetSidebar', 'state'), { folders }).catch(console.error);
-  }, [folders]);
+  }, [folders, loaded]);
 
   const updateFolders = (list, id, updater) =>
     list.map((f) =>

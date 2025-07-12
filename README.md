@@ -418,6 +418,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Subida de tokens deduplicada usando hashes SHA-256.
 - Carpetas y tokens del panel de assets se mantienen tras recargar gracias a la caché local de Firestore.
 
+**Resumen de cambios v2.2.98:**
+- Se evita sobrescribir los datos de assets al cargar la página esperando a que Firebase devuelva la información.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
