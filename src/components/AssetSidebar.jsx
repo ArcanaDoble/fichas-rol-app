@@ -25,9 +25,22 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
   
-  // Image preview data {url, x, y} shown on hover
-  const [preview, setPreview] = useState(null);
+  // Preview element shown on hover without triggering re-renders
+  const previewRef = useRef(null);
   const isDragging = useDragLayer((monitor) => monitor.isDragging());
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.className = 'pointer-events-none fixed z-50 hidden';
+    const img = document.createElement('img');
+    img.className = 'max-w-[256px] max-h-[256px]';
+    el.appendChild(img);
+    document.body.appendChild(el);
+    previewRef.current = el;
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
 
   useEffect(() => {
     const ref = doc(db, 'assetSidebar', 'state');
@@ -178,18 +191,31 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
     if (isDragging) return;
-    setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
+    const el = previewRef.current;
+    if (el) {
+      const img = el.firstChild;
+      if (img) img.src = asset.url;
+      el.style.top = `${e.clientY + 10}px`;
+      el.style.left = `${e.clientX + 10}px`;
+      el.classList.remove('hidden');
+    }
   };
   const movePreview = (e) => {
     if (isDragging) return;
-    setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
+    const el = previewRef.current;
+    if (el) {
+      el.style.top = `${e.clientY + 10}px`;
+      el.style.left = `${e.clientX + 10}px`;
+    }
   };
   const hidePreview = () => {
-    if (!isDragging) setPreview(null);
+    if (!isDragging && previewRef.current) {
+      previewRef.current.classList.add('hidden');
+    }
   };
 
   const handleDragStart = () => {
-    setPreview(null);
+    if (previewRef.current) previewRef.current.classList.add('hidden');
   };
 
   const handleDragEnd = () => {
@@ -375,18 +401,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
           ))}
         </AnimatePresence>
       </div>
-      {preview && (
-        <div
-          className="pointer-events-none fixed z-50"
-          style={{ top: preview.y + 10, left: preview.x + 10 }}
-        >
-          <img
-            src={preview.url}
-            alt="preview"
-            className="max-w-[256px] max-h-[256px]"
-          />
-        </div>
-      )}
+      {/* previewRef portal appended to body */}
       <DragLayerPreview />
       {windows.map((w) => (
         <FolderWindow
@@ -434,23 +449,22 @@ const DraggableAssetItem = ({
   const [{ isDragging }, drag, preview] = useDrag(
     () => ({
       type: AssetTypes.IMAGE,
-      item: { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId },
+      item: () => {
+        const data = { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId };
+        onDragStart?.(data);
+        return data;
+      },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+      end: () => {
+        onDragEnd?.();
+      },
     }),
-    [asset, folderId]
+    [asset, folderId, onDragStart, onDragEnd]
   );
 
   useEffect(() => {
     preview(EMPTY_IMAGE, { captureDraggingState: true });
   }, [preview]);
-
-  useEffect(() => {
-    if (isDragging) {
-      onDragStart?.({ id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId });
-    } else {
-      onDragEnd?.();
-    }
-  }, [isDragging, asset, folderId, onDragStart, onDragEnd]);
   return (
     <div className="text-center text-xs">
       <div
@@ -458,10 +472,11 @@ const DraggableAssetItem = ({
         className="relative group hover:bg-[#2a3344] rounded p-1"
         style={{ opacity: isDragging ? 0.5 : 1 }}
       >
-        <img
-          src={asset.url}
-          alt={asset.name}
-          className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+          <img
+            src={asset.url}
+            alt={asset.name}
+            className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+          onMouseDown={hidePreview}
           onClick={() => onAssetSelect?.(asset)}
           onMouseEnter={(e) => showPreview(asset, e)}
           onMouseMove={movePreview}
