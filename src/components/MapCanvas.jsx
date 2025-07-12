@@ -1,4 +1,12 @@
-import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+  useLayoutEffect,
+} from 'react';
 import PropTypes from 'prop-types';
 import {
   Stage,
@@ -90,7 +98,6 @@ const mixColors = (baseHex, tintHex, opacity) => {
   // Load token texture with CORS enabled so filters like tint work
   const [img, imgStatus] = useImage(image, 'anonymous');
   const isImgLoading = !!image && imgStatus === 'loading';
-  const loadFailed = !!image && imgStatus === 'failed';
   const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
