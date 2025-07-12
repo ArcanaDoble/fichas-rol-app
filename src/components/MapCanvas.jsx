@@ -386,7 +386,7 @@ const mixColors = (baseHex, tintHex, opacity) => {
           />
         )
       )}
-      {img ? (
+      {img && !isImgLoading ? (
         <KonvaImage ref={shapeRef} image={img} {...common} />
       ) : (
         <>
