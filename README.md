@@ -19,6 +19,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Mini-barras en tokens** - Cada stat se muestra sobre el token mediante cápsulas interactivas y puedes elegir su posición
 - **Barras compactas** - Las barras de recursos son más pequeñas y están más cerca del token
 - **Corrección de miniaturas** - Vista previa sin parpadeos al pasar el ratón sobre las imágenes del sidebar
+
 - **Ajustes al hacer doble clic** - Haz doble clic en un token para abrir su menú de configuración
 - **Iconos de control de tamaño fijo** - Engranaje, círculo de rotación y barras mantienen un tamaño constante al hacer zoom
 - **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
@@ -451,6 +452,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.3.8:**
 - Actualización del arrastre para React DnD v14+ evitando la advertencia `spec.begin`.
+
 
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
