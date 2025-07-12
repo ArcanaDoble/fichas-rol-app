@@ -11,7 +11,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useDrag } from 'react-dnd';
+import { useDrag, useDrop } from 'react-dnd';
 import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -237,7 +237,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     setZMax((z) => z + 1);
   };
 
-  const renderFolder = (folder, level = 0) => {
+  const FolderItem = ({ folder, level = 0 }) => {
     const [{ isOver }, drop] = useDrop(
       () => ({
         accept: AssetTypes.IMAGE,
@@ -273,7 +273,6 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
             {level === 0 ? (
               <FiFolder className="text-yellow-400" />
             ) : (
-
               <FiFolderPlus className="text-yellow-400 rounded-sm" />
             )}
             <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
@@ -285,59 +284,61 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
             <FiTrash />
           </button>
         </div>
-      <AnimatePresence initial={false}>
-        {folder.open && (
-          <motion.div
-            key="content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden space-y-2"
-          >
-            <div className="flex gap-2">
-              <button
-                onClick={() => addFolder(folder.id)}
-                className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
-              >
-                + Carpeta
-              </button>
-              <label className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150 cursor-pointer">
-                Examinar
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
-                  className="hidden"
-                />
-              </label>
-            </div>
-            {folder.folders.length > 0 && (
-              <div className="space-y-2">
-                {folder.folders.map((sub) => renderFolder(sub, level + 1))}
+        <AnimatePresence initial={false}>
+          {folder.open && (
+            <motion.div
+              key="content"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden space-y-2"
+            >
+              <div className="flex gap-2">
+                <button
+                  onClick={() => addFolder(folder.id)}
+                  className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+                >
+                  + Carpeta
+                </button>
+                <label className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150 cursor-pointer">
+                  Examinar
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
+                    className="hidden"
+                  />
+                </label>
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              {folder.assets.map((asset) => (
-                <DraggableAssetItem
-                  key={asset.id}
-                  asset={asset}
-                  folderId={folder.id}
-                  onAssetSelect={onAssetSelect}
-                  onDragStart={onDragStart}
-                  onRemove={removeAsset}
-                  showPreview={showPreview}
-                  movePreview={movePreview}
-                  hidePreview={hidePreview}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
+              {folder.folders.length > 0 && (
+                <div className="space-y-2">
+                  {folder.folders.map((sub) => (
+                    <FolderItem key={sub.id} folder={sub} level={level + 1} />
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                {folder.assets.map((asset) => (
+                  <DraggableAssetItem
+                    key={asset.id}
+                    asset={asset}
+                    folderId={folder.id}
+                    onAssetSelect={onAssetSelect}
+                    onDragStart={onDragStart}
+                    onRemove={removeAsset}
+                    showPreview={showPreview}
+                    movePreview={movePreview}
+                    hidePreview={hidePreview}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
   };
 
   return (
@@ -352,7 +353,9 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
       </div>
       <div className="flex-1 flex flex-col gap-2">
         <AnimatePresence>
-          {folders.map((folder) => renderFolder(folder, 0))}
+          {folders.map((folder) => (
+            <FolderItem key={folder.id} folder={folder} level={0} />
+          ))}
         </AnimatePresence>
       </div>
       {preview && (

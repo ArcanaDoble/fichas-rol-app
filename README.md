@@ -439,6 +439,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.4:**
 - Puedes mover imágenes entre carpetas arrastrándolas y soltándolas sobre la carpeta de destino.
 
+**Resumen de cambios v2.3.5:**
+- Corrección del drag & drop de tokens en la barra lateral de assets.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
