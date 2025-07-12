@@ -11,10 +11,13 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useDrag, useDrop } from 'react-dnd';
+import { useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+
+const EMPTY_IMAGE = new Image();
+EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
@@ -24,15 +27,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   
   // Image preview data {url, x, y} shown on hover
   const [preview, setPreview] = useState(null);
-  const [dragOverlay, setDragOverlay] = useState(null);
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    if (!dragOverlay) return;
-    const move = (e) => setDragPos({ x: e.clientX, y: e.clientY });
-    window.addEventListener('mousemove', move);
-    return () => window.removeEventListener('mousemove', move);
-  }, [dragOverlay]);
+  const isDragging = useDragLayer((monitor) => monitor.isDragging());
 
   useEffect(() => {
     const ref = doc(db, 'assetSidebar', 'state');
@@ -182,24 +177,23 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
 
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
-    if (dragOverlay) return;
+    if (isDragging) return;
     setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
   };
   const movePreview = (e) => {
-    if (dragOverlay) return;
+    if (isDragging) return;
     setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
   };
   const hidePreview = () => {
-    if (!dragOverlay) setPreview(null);
+    if (!isDragging) setPreview(null);
   };
 
-  const handleDragStart = (data) => {
-    setDragOverlay(data);
+  const handleDragStart = () => {
     setPreview(null);
   };
 
   const handleDragEnd = () => {
-    setDragOverlay(null);
+    // nothing extra
   };
   const findFolder = (list, id) => {
     for (const f of list) {
@@ -393,18 +387,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
           />
         </div>
       )}
-      {dragOverlay && (
-        <div
-          className="pointer-events-none fixed z-50"
-          style={{ top: dragPos.y + 10, left: dragPos.x + 10 }}
-        >
-          <img
-            src={dragOverlay.url}
-            alt={dragOverlay.name}
-            className="w-16 h-16 object-contain"
-          />
-        </div>
-      )}
+      <DragLayerPreview />
       {windows.map((w) => (
         <FolderWindow
           key={w.id}
@@ -448,24 +431,26 @@ const DraggableAssetItem = ({
   movePreview,
   hidePreview,
 }) => {
-  const [{ isDragging }, drag] = useDrag(
+  const [{ isDragging }, drag, preview] = useDrag(
     () => ({
       type: AssetTypes.IMAGE,
-      item: () => {
-        const data = {
-          id: asset.id,
-          name: asset.name,
-          url: asset.url,
-          fromFolderId: folderId,
-        };
-        onDragStart?.(data);
-        return data;
-      },
-      end: () => onDragEnd?.(),
+      item: { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
     }),
-    [asset, folderId, onDragStart, onDragEnd]
+    [asset, folderId]
   );
+
+  useEffect(() => {
+    preview(EMPTY_IMAGE, { captureDraggingState: true });
+  }, [preview]);
+
+  useEffect(() => {
+    if (isDragging) {
+      onDragStart?.({ id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId });
+    } else {
+      onDragEnd?.();
+    }
+  }, [isDragging, asset, folderId, onDragStart, onDragEnd]);
   return (
     <div className="text-center text-xs">
       <div
@@ -691,6 +676,27 @@ FolderWindow.propTypes = {
   showPreview: PropTypes.func.isRequired,
   movePreview: PropTypes.func.isRequired,
   hidePreview: PropTypes.func.isRequired,
+};
+
+const DragLayerPreview = () => {
+  const { isDragging, item, currentOffset } = useDragLayer((monitor) => ({
+    isDragging: monitor.isDragging(),
+    item: monitor.getItem(),
+    currentOffset: monitor.getClientOffset(),
+  }));
+
+  if (!isDragging || !item || !currentOffset) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed z-50"
+      style={{ top: currentOffset.y + 10, left: currentOffset.x + 10 }}
+    >
+      {item.url && (
+        <img src={item.url} alt={item.name} className="w-16 h-16 object-contain" />
+      )}
+    </div>
+  );
 };
 
 export default AssetSidebar;
