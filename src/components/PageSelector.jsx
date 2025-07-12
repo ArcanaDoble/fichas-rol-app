@@ -40,12 +40,12 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
   };
 
   return (
-    <div className="flex items-center gap-2 mb-4 overflow-x-auto overflow-y-visible">
+    <div className="flex items-center gap-2 mb-4 overflow-x-auto overflow-y-visible py-1">
       {pages.map((p, i) => (
-        <div key={p.id} className="relative group">
+        <div key={p.id} className="relative group flex-shrink-0">
           <button
             onClick={() => onSelect(i)}
-            className={`relative w-40 h-28 rounded-lg border border-gray-600 overflow-hidden ${
+            className={`relative w-28 h-20 sm:w-36 sm:h-24 md:w-40 md:h-28 rounded-lg border border-gray-600 overflow-hidden ${
               i === current ? 'ring-2 ring-blue-400' : ''
             }`}
           >
@@ -62,7 +62,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
           </button>
           <button
             onClick={() => openEdit(i)}
-            className="absolute -top-2 -right-2 hidden group-hover:block p-1 bg-gray-700 rounded-full"
+            className="absolute top-1 right-1 p-1 bg-gray-700 hover:bg-gray-600 rounded-full text-white shadow focus:outline-none hidden group-hover:block"
             aria-label="Editar"
           >
             <FiMoreVertical />
