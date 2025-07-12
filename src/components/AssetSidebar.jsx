@@ -12,7 +12,7 @@ import {
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from 'react-dnd';
-import { uploadFile } from '../utils/storage';
+import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -96,10 +96,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     const uploads = await Promise.all(
       Array.from(files).map(async (file) => {
         const name = file.name.replace(/\.[^/.]+$/, '');
-        const safeName = encodeURIComponent(file.name);
-        const path = `canvas-assets/${nanoid()}-${safeName}`;
         try {
-          const url = await uploadFile(file, path);
+          const { url } = await getOrUploadFile(file, 'canvas-assets');
           return { id: nanoid(), name, url };
         } catch (e) {
           alert(e.message);
@@ -110,7 +108,12 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     setFolders((fs) =>
       updateFolders(fs, folderId, (f) => ({
         ...f,
-        assets: [...f.assets, ...uploads.filter(Boolean)],
+        assets: [
+          ...f.assets,
+          ...uploads.filter(
+            (u) => u && !f.assets.some((a) => a.url === u.url)
+          ),
+        ],
       }))
     );
   };
