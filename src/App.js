@@ -30,6 +30,7 @@ import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
+import { ensureZ } from './utils/zOrder';
 import {
   uploadDataUrl,
   getOrUploadFile,
@@ -422,7 +423,7 @@ function App() {
   useEffect(() => {
     const p = pages[currentPage];
     if (!p) return;
-    setCanvasTokens(p.tokens || []);
+    setCanvasTokens(ensureZ(p.tokens || []));
     setCanvasBackground(p.background || null);
     setGridSize(p.gridSize || 1);
     setGridCells(p.gridCells || 1);

@@ -29,6 +29,7 @@ import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
+import { normalizeZ } from '../utils/zOrder';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -739,6 +740,13 @@ const MapCanvas = ({
     setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
   };
 
+  const moveTokenLayer = (id, delta) => {
+    const updated = normalizeZ(
+      tokens.map((t) => (t.id === id ? { ...t, z: (t.z ?? 0) + delta } : t))
+    );
+    onTokensChange(updated);
+  };
+
   // Zoom interactivo con la rueda del ratón
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -848,6 +856,7 @@ const MapCanvas = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
   const groupScale = baseScale * zoom;
+  const orderedTokens = [...tokens].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
   const [, drop] = useDrop(
     () => ({
@@ -865,6 +874,7 @@ const MapCanvas = ({
           id: Date.now(),
           x,
           y,
+          z: tokens.length,
           w: 1,
           h: 1,
           angle: 0,
@@ -953,7 +963,7 @@ const MapCanvas = ({
                 auraOpacity={dragShadow.auraOpacity}
               />
             )}
-            {tokens.map((token) => (
+            {orderedTokens.map((token) => (
               <Token
                 ref={(el) => {
                   if (el) tokenRefs.current[token.id] = el;
@@ -999,7 +1009,7 @@ const MapCanvas = ({
           </Group>
         </Layer>
         <Layer listening>
-          {tokens.map((token) => (
+          {orderedTokens.map((token) => (
             <TokenBars
               key={`bars-${token.id}`}
               tokenRef={tokenRefs.current[token.id]}
@@ -1024,6 +1034,8 @@ const MapCanvas = ({
             onTokensChange(updated);
           }}
           onOpenSheet={handleOpenSheet}
+          onLayerUp={(id2) => moveTokenLayer(id2, 1)}
+          onLayerDown={(id2) => moveTokenLayer(id2, -1)}
         />
       ))}
       {openSheetTokens.map((tk) => (
@@ -1057,6 +1069,7 @@ MapCanvas.propTypes = {
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
       x: PropTypes.number.isRequired,
       y: PropTypes.number.isRequired,
+      z: PropTypes.number,
       url: PropTypes.string,
       name: PropTypes.string,
       color: PropTypes.string,
