@@ -525,8 +525,21 @@ src/
 - ✅ **Archivos de configuración** - Creados `firestore.rules` y `firestore.indexes.json`
 - ✅ **Reglas de Storage añadidas** - Nuevo archivo `storage.rules` con acceso abierto para subir imágenes
 - ✅ **Despliegue actualizado** - Firebase configurado correctamente para producción
+- 🔧 **CORS habilitado en Storage** - Ejecuta `gsutil cors set cors.json gs://<YOUR_BUCKET_NAME>`
+  con este `cors.json`:
+
+```json
+[
+  {
+    "origin": ["*"],
+    "method": ["GET", "POST", "PUT", "HEAD"],
+    "maxAgeSeconds": 3600
+  }
+]
+```
 - 🔧 **Fondos de mapa persistentes** - Las imágenes se suben automáticamente a `Mapas/` en Firebase Storage evitando guardar URLs temporales `blob:`
 - 🔧 **Guardado inmediato de mapas** - Tras la subida, la página se actualiza en Firestore con la URL definitiva
+- 🔧 **Rutas seguras en Storage** - Los archivos se guardan usando `encodeURIComponent` para evitar errores por espacios o acentos
 
 ### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
 - ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
