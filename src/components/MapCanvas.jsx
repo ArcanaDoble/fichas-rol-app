@@ -85,10 +85,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
   showAura = true,
   tintColor = '#ff0000',
   tintOpacity = 0,
+  showSpinner = true,
 }, ref) => {
   // Load token texture with CORS enabled so filters like tint work
   const [img, imgStatus] = useImage(image, 'anonymous');
-  const isImgLoading = imgStatus !== 'loaded';
+  const isImgLoading = !!image && imgStatus === 'loading';
+  const loadFailed = !!image && imgStatus === 'failed';
   const groupRef = useRef();
   const shapeRef = useRef();
   const trRef = useRef();
@@ -388,8 +390,14 @@ const mixColors = (baseHex, tintHex, opacity) => {
         <KonvaImage ref={shapeRef} image={img} {...common} />
       ) : (
         <>
-          <Rect ref={shapeRef} fill={fillColor} {...common} />
-          {isImgLoading && (
+          <Rect
+            ref={shapeRef}
+            {...common}
+            fill={isImgLoading ? undefined : fillColor}
+            fillEnabled={!isImgLoading}
+            strokeEnabled={false}
+          />
+          {isImgLoading && showSpinner && (
             <KonvaSpinner
               x={x + offX}
               y={y + offY}
@@ -914,6 +922,7 @@ const MapCanvas = ({
                 opacity={0.35}
                 tintColor={dragShadow.tintColor}
                 tintOpacity={dragShadow.tintOpacity}
+                showSpinner={false}
                 showAura={canSeeAura(dragShadow)}
                 auraRadius={dragShadow.auraRadius}
                 auraShape={dragShadow.auraShape}
