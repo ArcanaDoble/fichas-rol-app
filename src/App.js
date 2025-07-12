@@ -367,7 +367,10 @@ function App() {
   useEffect(() => {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
-      const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const loaded = snap.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, tokens: ensureZ(data.tokens || []) };
+      });
       if (loaded.length === 0) {
         const defaultPage = {
           id: nanoid(),
