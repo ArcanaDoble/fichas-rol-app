@@ -176,6 +176,11 @@ const mixColors = (baseHex, tintHex, opacity) => {
     handle.getLayer().batchDraw();
   };
 
+  // Ensure controls and name label are correctly positioned on mount
+  useEffect(() => {
+    updateHandle();
+  }, []);
+
   const updateSizes = () => {
     if (rotateRef.current) {
       rotateRef.current.radius(iconSize / 2);
