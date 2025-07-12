@@ -539,6 +539,7 @@ src/
 ```
 - 🔧 **Fondos de mapa persistentes** - Las imágenes se suben automáticamente a `Mapas/` en Firebase Storage evitando guardar URLs temporales `blob:`
 - 🔧 **Guardado inmediato de mapas** - Tras la subida, la página se actualiza en Firestore con la URL definitiva
+- 🔧 **Rutas seguras en Storage** - Los archivos se guardan usando `encodeURIComponent` para evitar errores por espacios o acentos
 
 ### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
 - ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
