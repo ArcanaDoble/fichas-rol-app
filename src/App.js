@@ -428,7 +428,7 @@ function App() {
     setGridCells(p.gridCells || 1);
     setGridOffsetX(p.gridOffsetX || 0);
     setGridOffsetY(p.gridOffsetY || 0);
-  }, [currentPage]);
+  }, [currentPage, pages]);
 
   useEffect(() => {
     setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, tokens: canvasTokens } : pg));
