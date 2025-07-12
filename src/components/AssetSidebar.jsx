@@ -150,6 +150,27 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     );
   };
 
+  const moveAsset = (fromId, toId, asset) => {
+    if (fromId === toId) return;
+    const removeRec = (list) =>
+      list.map((f) => ({
+        ...f,
+        assets:
+          f.id === fromId ? f.assets.filter((a) => a.id !== asset.id) : f.assets,
+        folders: removeRec(f.folders),
+      }));
+    const addRec = (list) =>
+      list.map((f) => ({
+        ...f,
+        assets:
+          f.id === toId && !f.assets.some((a) => a.id === asset.id)
+            ? [...f.assets, asset]
+            : f.assets,
+        folders: addRec(f.folders),
+      }));
+    setFolders((fs) => addRec(removeRec(fs)));
+  };
+
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
     setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
@@ -216,35 +237,54 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
     setZMax((z) => z + 1);
   };
 
-  const renderFolder = (folder, level = 0) => (
-    <motion.div
-      key={folder.id}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className={level > 0 ? 'pl-4 space-y-1' : 'space-y-1'}
-    >
-      <div className="flex items-center justify-between" onDoubleClick={() => openWindow(folder.id)}>
-        <button
-          onClick={() => toggleFolder(folder.id)}
-          className="flex-1 text-left flex items-center gap-2 p-1 rounded transition-colors duration-150 hover:bg-[#2a3344]"
-        >
-          {folder.open ? <FiChevronDown /> : <FiChevronRight />}
-          {level === 0 ? (
-            <FiFolder className="text-yellow-400" />
-          ) : (
+  const renderFolder = (folder, level = 0) => {
+    const [{ isOver }, drop] = useDrop(
+      () => ({
+        accept: AssetTypes.IMAGE,
+        drop: (item) =>
+          moveAsset(item.fromFolderId, folder.id, {
+            id: item.id,
+            name: item.name,
+            url: item.url,
+          }),
+        collect: (monitor) => ({ isOver: monitor.isOver() }),
+      }),
+      [folder]
+    );
 
-            <FiFolderPlus className="text-yellow-400 rounded-sm" />
-          )}
-          <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
-        </button>
-        <button
-          onClick={() => removeFolder(folder.id)}
-          className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+    return (
+      <motion.div
+        ref={drop}
+        key={folder.id}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className={level > 0 ? 'pl-4 space-y-1' : 'space-y-1'}
+      >
+        <div
+          className={`flex items-center justify-between ${isOver ? 'bg-[#2a3344]' : ''}`}
+          onDoubleClick={() => openWindow(folder.id)}
         >
-          <FiTrash />
-        </button>
-      </div>
+          <button
+            onClick={() => toggleFolder(folder.id)}
+            className="flex-1 text-left flex items-center gap-2 p-1 rounded transition-colors duration-150 hover:bg-[#2a3344]"
+          >
+            {folder.open ? <FiChevronDown /> : <FiChevronRight />}
+            {level === 0 ? (
+              <FiFolder className="text-yellow-400" />
+            ) : (
+
+              <FiFolderPlus className="text-yellow-400 rounded-sm" />
+            )}
+            <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
+          </button>
+          <button
+            onClick={() => removeFolder(folder.id)}
+            className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+          >
+            <FiTrash />
+          </button>
+        </div>
       <AnimatePresence initial={false}>
         {folder.open && (
           <motion.div
@@ -298,6 +338,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
       </AnimatePresence>
     </motion.div>
   );
+  };
 
   return (
     <div className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}>
@@ -340,6 +381,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
           onOpenFolder={openWindow}
           onAssetSelect={onAssetSelect}
           onDragStart={onDragStart}
+          onMoveAsset={moveAsset}
           showPreview={showPreview}
           movePreview={movePreview}
           hidePreview={hidePreview}
@@ -369,13 +411,18 @@ const DraggableAssetItem = ({
     () => ({
       type: AssetTypes.IMAGE,
       item: () => {
-        const data = { url: asset.url, name: asset.name };
+        const data = {
+          id: asset.id,
+          name: asset.name,
+          url: asset.url,
+          fromFolderId: folderId,
+        };
         onDragStart?.(data);
         return data;
       },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
     }),
-    [asset, onDragStart]
+    [asset, folderId, onDragStart]
   );
   return (
     <div className="text-center text-xs">
@@ -420,17 +467,33 @@ DraggableAssetItem.propTypes = {
   hidePreview: PropTypes.func.isRequired,
 };
 
-const FolderIcon = ({ folder, onOpen }) => (
-  <div
-    className="text-center text-xs cursor-pointer hover:bg-[#2a3344] rounded p-1"
-    onDoubleClick={() => onOpen(folder.id)}
-  >
-    <div className="relative group">
-      <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 rounded-sm" />
+const FolderIcon = ({ folder, onOpen, onMoveAsset }) => {
+  const [{ isOver }, drop] = useDrop(
+    () => ({
+      accept: AssetTypes.IMAGE,
+      drop: (item) =>
+        onMoveAsset?.(item.fromFolderId, folder.id, {
+          id: item.id,
+          name: item.name,
+          url: item.url,
+        }),
+      collect: (monitor) => ({ isOver: monitor.isOver() }),
+    }),
+    [folder, onMoveAsset]
+  );
+  return (
+    <div
+      ref={drop}
+      className={`text-center text-xs cursor-pointer hover:bg-[#2a3344] rounded p-1 ${isOver ? 'bg-[#2a3344]' : ''}`}
+      onDoubleClick={() => onOpen(folder.id)}
+    >
+      <div className="relative group">
+        <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 rounded-sm" />
+      </div>
+      <span className="truncate block w-16 mx-auto text-gray-300">{folder.name}</span>
     </div>
-    <span className="truncate block w-16 mx-auto text-gray-300">{folder.name}</span>
-  </div>
-);
+  );
+};
 
 FolderIcon.propTypes = {
   folder: PropTypes.shape({
@@ -438,6 +501,7 @@ FolderIcon.propTypes = {
     name: PropTypes.string.isRequired,
   }).isRequired,
   onOpen: PropTypes.func.isRequired,
+  onMoveAsset: PropTypes.func,
 };
 
 const FolderWindow = ({
@@ -452,6 +516,7 @@ const FolderWindow = ({
   onOpenFolder,
   onAssetSelect,
   onDragStart,
+  onMoveAsset,
   showPreview,
   movePreview,
   hidePreview,
@@ -530,7 +595,12 @@ const FolderWindow = ({
           </div>
           <div className="grid grid-cols-2 gap-2">
             {folder.folders.map((sub) => (
-              <FolderIcon key={sub.id} folder={sub} onOpen={onOpenFolder} />
+              <FolderIcon
+                key={sub.id}
+                folder={sub}
+                onOpen={onOpenFolder}
+                onMoveAsset={onMoveAsset}
+              />
             ))}
             {folder.assets.map((asset) => (
               <DraggableAssetItem
@@ -571,6 +641,7 @@ FolderWindow.propTypes = {
   onOpenFolder: PropTypes.func.isRequired,
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
+  onMoveAsset: PropTypes.func,
   showPreview: PropTypes.func.isRequired,
   movePreview: PropTypes.func.isRequired,
   hidePreview: PropTypes.func.isRequired,
