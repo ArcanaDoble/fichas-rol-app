@@ -169,18 +169,20 @@ const mixColors = (baseHex, tintHex, opacity) => {
         y: box.y + box.height + HANDLE_OFFSET,
       });
     }
-    if (labelGroup && label) {
-      labelGroup.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
-      labelGroup.offsetX(label.width() / 2);
-    }
+if (labelGroup && label) {
+  labelGroup.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
+  labelGroup.offsetX(label.width() / 2);
+}
     handle.getLayer().batchDraw();
   };
-
-  // Ensure controls and name label are correctly positioned on mount
-  useEffect(() => {
-    updateHandle();
-  }, []);
-
+  useLayoutEffect(() => {
+    const label = textRef.current;
+    const group = textGroupRef.current;
+    if (label && group) {
+      group.offsetX(label.width() / 2);
+      group.getLayer()?.batchDraw();
+    }
+  }, [customName, name, cellSize]);
   const updateSizes = () => {
     if (rotateRef.current) {
       rotateRef.current.radius(iconSize / 2);
