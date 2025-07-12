@@ -18,12 +18,21 @@ import { db } from '../firebase';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
-const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
+const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' }) => {
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
   
   // Image preview data {url, x, y} shown on hover
   const [preview, setPreview] = useState(null);
+  const [dragOverlay, setDragOverlay] = useState(null);
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!dragOverlay) return;
+    const move = (e) => setDragPos({ x: e.clientX, y: e.clientY });
+    window.addEventListener('mousemove', move);
+    return () => window.removeEventListener('mousemove', move);
+  }, [dragOverlay]);
 
   useEffect(() => {
     const ref = doc(db, 'assetSidebar', 'state');
@@ -173,12 +182,25 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
 
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
+    if (dragOverlay) return;
     setPreview({ url: asset.url, x: e.clientX, y: e.clientY });
   };
   const movePreview = (e) => {
+    if (dragOverlay) return;
     setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null));
   };
-  const hidePreview = () => setPreview(null);
+  const hidePreview = () => {
+    if (!dragOverlay) setPreview(null);
+  };
+
+  const handleDragStart = (data) => {
+    setDragOverlay(data);
+    setPreview(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragOverlay(null);
+  };
   const findFolder = (list, id) => {
     for (const f of list) {
       if (f.id === id) return f;
@@ -326,7 +348,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
                     asset={asset}
                     folderId={folder.id}
                     onAssetSelect={onAssetSelect}
-                    onDragStart={onDragStart}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
                     onRemove={removeAsset}
                     showPreview={showPreview}
                     movePreview={movePreview}
@@ -370,6 +393,18 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
           />
         </div>
       )}
+      {dragOverlay && (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{ top: dragPos.y + 10, left: dragPos.x + 10 }}
+        >
+          <img
+            src={dragOverlay.url}
+            alt={dragOverlay.name}
+            className="w-16 h-16 object-contain"
+          />
+        </div>
+      )}
       {windows.map((w) => (
         <FolderWindow
           key={w.id}
@@ -383,7 +418,8 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
           onRemoveAsset={removeAsset}
           onOpenFolder={openWindow}
           onAssetSelect={onAssetSelect}
-          onDragStart={onDragStart}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
           onMoveAsset={moveAsset}
           showPreview={showPreview}
           movePreview={movePreview}
@@ -397,6 +433,7 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, className = '' }) => {
 AssetSidebar.propTypes = {
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
+  onDragEnd: PropTypes.func,
   className: PropTypes.string,
 };
 
@@ -405,6 +442,7 @@ const DraggableAssetItem = ({
   folderId,
   onAssetSelect,
   onDragStart,
+  onDragEnd,
   onRemove,
   showPreview,
   movePreview,
@@ -423,9 +461,10 @@ const DraggableAssetItem = ({
         onDragStart?.(data);
         return data;
       },
+      end: () => onDragEnd?.(),
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
     }),
-    [asset, folderId, onDragStart]
+    [asset, folderId, onDragStart, onDragEnd]
   );
   return (
     <div className="text-center text-xs">
@@ -464,6 +503,7 @@ DraggableAssetItem.propTypes = {
   folderId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
+  onDragEnd: PropTypes.func,
   onRemove: PropTypes.func.isRequired,
   showPreview: PropTypes.func.isRequired,
   movePreview: PropTypes.func.isRequired,
@@ -519,6 +559,7 @@ const FolderWindow = ({
   onOpenFolder,
   onAssetSelect,
   onDragStart,
+  onDragEnd,
   onMoveAsset,
   showPreview,
   movePreview,
@@ -612,6 +653,7 @@ const FolderWindow = ({
                 folderId={folder.id}
                 onAssetSelect={onAssetSelect}
                 onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
                 onRemove={onRemoveAsset}
                 showPreview={showPreview}
                 movePreview={movePreview}
@@ -644,6 +686,7 @@ FolderWindow.propTypes = {
   onOpenFolder: PropTypes.func.isRequired,
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
+  onDragEnd: PropTypes.func,
   onMoveAsset: PropTypes.func,
   showPreview: PropTypes.func.isRequired,
   movePreview: PropTypes.func.isRequired,
