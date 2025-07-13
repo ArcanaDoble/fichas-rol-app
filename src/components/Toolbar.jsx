@@ -1,11 +1,12 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { FiMousePointer, FiEdit2, FiRuler, FiType } from 'react-icons/fi';
+import { FiMousePointer, FiEdit2, FiType } from 'react-icons/fi';
+import { FaRuler } from 'react-icons/fa';
 
 const tools = [
   { id: 'select', icon: FiMousePointer },
   { id: 'draw', icon: FiEdit2 },
-  { id: 'measure', icon: FiRuler },
+  { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
 ];
 
