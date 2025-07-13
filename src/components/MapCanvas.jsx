@@ -589,6 +589,9 @@ if (labelGroup && label) {
             ref={gearRef}
             text="⚙️"
             fontSize={buttonSize}
+            shadowColor="#000"
+            shadowBlur={2}
+            shadowOpacity={0.6}
             listening
             onClick={() => onSettings?.(id)}
           />
@@ -596,6 +599,9 @@ if (labelGroup && label) {
             ref={estadosRef}
             text="🩸"
             fontSize={buttonSize}
+            shadowColor="#000"
+            shadowBlur={2}
+            shadowOpacity={0.6}
             listening
             onClick={() => onStates?.(id)}
           />
