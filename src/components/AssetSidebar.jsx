@@ -8,6 +8,7 @@ import {
   FiTrash,
   FiFolder,
   FiFolderPlus,
+  FiMessageCircle,
   FiX,
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,6 +16,7 @@ import { useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import Input from './Input';
 
 const EMPTY_IMAGE = new Image();
 EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -24,6 +26,7 @@ export const AssetTypes = { IMAGE: 'asset-image' };
 const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' }) => {
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState('assets');
   
   // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
@@ -385,45 +388,82 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   };
 
   return (
-    <div className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}>
-      <div className="mb-3">
+    <div
+      className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}
+    >
+      <div className="flex gap-2 mb-3">
         <button
-          onClick={addFolder}
-          className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+          onClick={() => setTab('assets')}
+          className={`p-1 rounded flex-1 flex justify-center ${
+            tab === 'assets' ? 'bg-[#374151]' : 'bg-[#1f2937]'
+          }`}
         >
-          + Carpeta
+          <FiFolder />
+        </button>
+        <button
+          onClick={() => setTab('chat')}
+          className={`p-1 rounded flex-1 flex justify-center ${
+            tab === 'chat' ? 'bg-[#374151]' : 'bg-[#1f2937]'
+          }`}
+        >
+          <FiMessageCircle />
         </button>
       </div>
-      <div className="flex-1 flex flex-col gap-2">
-        <AnimatePresence>
-          {folders.map((folder) => (
-            <FolderItem key={folder.id} folder={folder} level={0} />
+
+      {tab === 'assets' && (
+        <>
+          <div className="mb-3">
+            <button
+              onClick={addFolder}
+              className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+            >
+              + Carpeta
+            </button>
+          </div>
+          <div className="flex-1 flex flex-col gap-2">
+            <AnimatePresence>
+              {folders.map((folder) => (
+                <FolderItem key={folder.id} folder={folder} level={0} />
+              ))}
+            </AnimatePresence>
+          </div>
+          {/* previewRef portal appended to body */}
+          <DragLayerPreview />
+          {windows.map((w) => (
+            <FolderWindow
+              key={w.id}
+              folder={findFolder(folders, w.id)}
+              position={w}
+              bringToFront={bringToFront}
+              onClose={closeWindow}
+              onAddFolder={addFolder}
+              onUpload={handleFilesUpload}
+              onRemoveFolder={removeFolder}
+              onRemoveAsset={removeAsset}
+              onOpenFolder={openWindow}
+              onAssetSelect={onAssetSelect}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onMoveAsset={moveAsset}
+              showPreview={showPreview}
+              movePreview={movePreview}
+              hidePreview={hidePreview}
+            />
           ))}
-        </AnimatePresence>
-      </div>
-      {/* previewRef portal appended to body */}
-      <DragLayerPreview />
-      {windows.map((w) => (
-        <FolderWindow
-          key={w.id}
-          folder={findFolder(folders, w.id)}
-          position={w}
-          bringToFront={bringToFront}
-          onClose={closeWindow}
-          onAddFolder={addFolder}
-          onUpload={handleFilesUpload}
-          onRemoveFolder={removeFolder}
-          onRemoveAsset={removeAsset}
-          onOpenFolder={openWindow}
-          onAssetSelect={onAssetSelect}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onMoveAsset={moveAsset}
-          showPreview={showPreview}
-          movePreview={movePreview}
-          hidePreview={hidePreview}
-        />
-      ))}
+        </>
+      )}
+
+      {tab === 'chat' && (
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="flex-1 overflow-y-auto" />
+          <div className="flex gap-2">
+            <Input className="flex-1" placeholder="Mensaje..." />
+            <button className="text-xs bg-[#374151] rounded px-2 py-1" disabled>
+              Enviar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
