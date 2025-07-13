@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { FiMousePointer, FiEdit2, FiType } from 'react-icons/fi';
 import { FaRuler } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const tools = [
   { id: 'select', icon: FiMousePointer },
@@ -36,29 +37,38 @@ const Toolbar = ({
         <Icon />
       </button>
     ))}
-    {activeTool === 'draw' && (
-      <div className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2">
-        <input
-          type="color"
-          value={drawColor}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="w-8 h-8 p-0 border-0"
-        />
-        <div className="flex space-x-1">
-          {brushOptions.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => onBrushSizeChange(id)}
-              className={`px-2 py-1 rounded text-sm ${
-                brushSize === id ? 'bg-gray-700' : 'bg-gray-600'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-    )}
+    <AnimatePresence>
+      {activeTool === 'draw' && (
+        <motion.div
+          key="draw-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2"
+        >
+          <input
+            type="color"
+            value={drawColor}
+            onChange={(e) => onColorChange(e.target.value)}
+            className="w-8 h-8 p-0 border-0"
+          />
+          <div className="flex space-x-1">
+            {brushOptions.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => onBrushSizeChange(id)}
+                className={`px-2 py-1 rounded text-sm ${
+                  brushSize === id ? 'bg-gray-700' : 'bg-gray-600'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </div>
 );
 

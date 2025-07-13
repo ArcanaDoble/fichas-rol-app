@@ -1116,7 +1116,7 @@ const MapCanvas = ({
                 height={imageSize.height}
                 listening={false}
               />
-            ))}
+            )}
             {drawGrid()}
             <Group listening={false}>
               {dragShadow && (
