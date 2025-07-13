@@ -174,8 +174,8 @@ EstadoImg.propTypes = {
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const buttonSize = cellSize * 0.22;
-  const estadoBase = cellSize * 0.3;
+  const buttonSize = cellSize * 0.4;
+  const estadoBase = cellSize * 0.4;
   const estadosInfo = estados
     .map((id) => ESTADOS.find((e) => e.id === id))
     .filter(Boolean);
@@ -190,6 +190,7 @@ EstadoImg.propTypes = {
 
   const placeholderBase = color || 'red';
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
+  const estadoData = estados.map((id) => ESTADOS.find((e) => e.id === id)).filter(Boolean);
 
   useEffect(() => {
     const node = shapeRef.current;
@@ -281,6 +282,9 @@ if (labelGroup && label) {
     }
     if (estadosRef.current) {
       estadosRef.current.fontSize(buttonSize);
+    }
+    if (estadosRef.current) {
+      estadosRef.current.fontSize(iconSize);
     }
   };
 
