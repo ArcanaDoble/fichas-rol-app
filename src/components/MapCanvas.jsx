@@ -174,7 +174,7 @@ EstadoImg.propTypes = {
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const estadoBase = cellSize * 0.2;
+  const estadoBase = cellSize * 0.5;
   const estadosInfo = estados
     .map((id) => ESTADOS.find((e) => e.id === id))
     .filter(Boolean);
