@@ -590,8 +590,8 @@ if (labelGroup && label) {
             text="⚙️"
             fontSize={buttonSize}
             shadowColor="#000"
-            shadowBlur={2}
-            shadowOpacity={0.6}
+            shadowBlur={4}
+            shadowOpacity={0.9}
             listening
             onClick={() => onSettings?.(id)}
           />
@@ -600,8 +600,8 @@ if (labelGroup && label) {
             text="🩸"
             fontSize={buttonSize}
             shadowColor="#000"
-            shadowBlur={2}
-            shadowOpacity={0.6}
+            shadowBlur={4}
+            shadowOpacity={0.9}
             listening
             onClick={() => onStates?.(id)}
           />
