@@ -17,6 +17,7 @@ import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import Input from './Input';
+import { rollExpression } from '../utils/dice';
 
 const EMPTY_IMAGE = new Image();
 EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -338,7 +339,15 @@ const AssetSidebar = ({
     const text = message.trim();
     if (!text) return;
     const author = isMaster ? 'Master' : playerName || 'Anónimo';
-    const newMsg = { id: nanoid(), author, text };
+    let result = null;
+    if (/^[0-9dD+\-*/().,% ]+$/.test(text) && /\d/.test(text)) {
+      try {
+        result = rollExpression(text);
+      } catch {
+        result = null;
+      }
+    }
+    const newMsg = { id: nanoid(), author, text, result };
     setMessages((msgs) => [...msgs, newMsg]);
     setMessage('');
   };
@@ -526,11 +535,29 @@ const AssetSidebar = ({
                 key={m.id}
                 className="bg-gray-700/50 p-2 rounded flex items-start gap-2"
               >
-                <div className="flex-1 mr-2 min-w-0">
-                  <span className="text-blue-400 font-semibold mr-1">
-                    {m.author}:
-                  </span>
-                  <span className="text-gray-200 break-words">{m.text}</span>
+                <div className="flex-1 mr-2 min-w-0 space-y-1">
+                  <div>
+                    <span className="text-blue-400 font-semibold mr-1">
+                      {m.author}:
+                    </span>
+                    <span className="text-gray-200 break-words">{m.text}</span>
+                  </div>
+                  {m.result && (
+                    <div className="text-xs text-gray-300 ml-4 space-y-0.5">
+                      {m.result.details.map((d, i) => (
+                        <div key={i}>
+                          {d.type === 'dice' && (
+                            <span>
+                              {d.formula}: [{d.rolls.join(', ')}] = {d.subtotal}
+                            </span>
+                          )}
+                          {d.type === 'modifier' && <span>Mod: {d.formula}</span>}
+                          {d.type === 'calc' && <span>Resultado: {d.value}</span>}
+                        </div>
+                      ))}
+                      <div className="font-semibold">Total: {m.result.total}</div>
+                    </div>
+                  )}
                 </div>
                 {isMaster && (
                   <button

@@ -477,6 +477,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.14:**
 - El botón para eliminar mensajes se mantiene visible incluso con textos largos.
 
+**Resumen de cambios v2.3.15:**
+- El chat reconoce tiradas como `2d6+1` o cálculos matemáticos y muestra el resultado.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
