@@ -617,6 +617,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Corrección de paréntesis duplicado en **MapCanvas** que impedía compilar la aplicación.
 
+**Resumen de cambios v2.3.18:**
+
+- Animación al desplegar el menú de ajustes de la herramienta de dibujo.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
