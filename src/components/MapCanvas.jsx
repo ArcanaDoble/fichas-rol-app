@@ -174,7 +174,8 @@ EstadoImg.propTypes = {
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const estadoBase = cellSize * 0.5;
+  const buttonSize = cellSize * 0.4;
+  const estadoBase = cellSize * 0.4;
   const estadosInfo = estados
     .map((id) => ESTADOS.find((e) => e.id === id))
     .filter(Boolean);
@@ -254,7 +255,7 @@ EstadoImg.propTypes = {
     }
     if (estadosRef.current) {
       estadosRef.current.position({
-        x: box.x - HANDLE_OFFSET + iconSize + 4,
+        x: box.x - HANDLE_OFFSET + buttonSize + 4,
         y: box.y + box.height + HANDLE_OFFSET,
       });
     }
@@ -277,7 +278,10 @@ if (labelGroup && label) {
       rotateRef.current.radius(iconSize / 2);
     }
     if (gearRef.current) {
-      gearRef.current.fontSize(iconSize);
+      gearRef.current.fontSize(buttonSize);
+    }
+    if (estadosRef.current) {
+      estadosRef.current.fontSize(buttonSize);
     }
     if (estadosRef.current) {
       estadosRef.current.fontSize(iconSize);
@@ -587,14 +591,14 @@ if (labelGroup && label) {
           <Text
             ref={gearRef}
             text="⚙️"
-            fontSize={iconSize}
+            fontSize={buttonSize}
             listening
             onClick={() => onSettings?.(id)}
           />
           <Text
             ref={estadosRef}
             text="🩸"
-            fontSize={iconSize}
+            fontSize={buttonSize}
             listening
             onClick={() => onStates?.(id)}
           />
