@@ -705,6 +705,9 @@ const MapCanvas = ({
   const [lines, setLines] = useState([]);
   const [currentLine, setCurrentLine] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
+  const [measureShape, setMeasureShape] = useState('line');
+  const [measureSnap, setMeasureSnap] = useState('center');
+  const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState([]);
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
@@ -742,6 +745,21 @@ const MapCanvas = ({
 
   const pxToCell = (px, offset) => Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  const snapPoint = useCallback(
+    (x, y) => {
+      if (measureSnap === 'free') return [x, y];
+      const cellX = pxToCell(x, gridOffsetX);
+      const cellY = pxToCell(y, gridOffsetY);
+      if (measureSnap === 'center') {
+        return [
+          cellToPx(cellX + 0.5, gridOffsetX),
+          cellToPx(cellY + 0.5, gridOffsetY),
+        ];
+      }
+      return [cellToPx(cellX, gridOffsetX), cellToPx(cellY, gridOffsetY)];
+    },
+    [measureSnap, gridOffsetX, gridOffsetY, effectiveGridSize]
+  );
 
   // Tamaño del contenedor para ajustar el stage al redimensionar la ventana
   useEffect(() => {
@@ -937,8 +955,9 @@ const MapCanvas = ({
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      [relX, relY] = snapPoint(relX, relY);
       setMeasureLine([relX, relY, relX, relY]);
     }
     if (activeTool === 'text' && e.evt.button === 0) {
@@ -953,8 +972,8 @@ const MapCanvas = ({
   // Actualiza la acción activa según la herramienta
   const handleMouseMove = () => {
     const pointer = stageRef.current.getPointerPosition();
-    const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-    const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+    let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+    let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
     if (currentLine) {
       setCurrentLine((ln) => ({
         ...ln,
@@ -963,6 +982,7 @@ const MapCanvas = ({
       return;
     }
     if (measureLine) {
+      [relX, relY] = snapPoint(relX, relY);
       setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
       return;
     }
@@ -990,6 +1010,98 @@ const MapCanvas = ({
 
   const mapWidth = gridCells || Math.round(imageSize.width / effectiveGridSize);
   const mapHeight = gridCells || Math.round(imageSize.height / effectiveGridSize);
+
+  const measureElement =
+    measureLine && measureVisible && (() => {
+      const [x1, y1, x2, y2] = measureLine;
+      const cellDx = Math.abs(pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX));
+      const cellDy = Math.abs(pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY));
+      let distance = Math.hypot(cellDx, cellDy);
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      let shape;
+      if (measureShape === 'square') {
+        distance = Math.max(cellDx, cellDy);
+        shape = (
+          <Rect
+            x={Math.min(x1, x2)}
+            y={Math.min(y1, y2)}
+            width={Math.abs(dx)}
+            height={Math.abs(dy)}
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'circle') {
+        distance = Math.max(cellDx, cellDy);
+        shape = (
+          <Circle
+            x={x1}
+            y={y1}
+            radius={len}
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'cone') {
+        const half = Math.PI / 6;
+        const p2x = x1 + len * Math.cos(angle + half);
+        const p2y = y1 + len * Math.sin(angle + half);
+        const p3x = x1 + len * Math.cos(angle - half);
+        const p3y = y1 + len * Math.sin(angle - half);
+        shape = (
+          <Line
+            points={[x1, y1, p2x, p2y, p3x, p3y]}
+            closed
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'beam') {
+        const w = effectiveGridSize;
+        const dxp = (w / 2) * Math.cos(angle + Math.PI / 2);
+        const dyp = (w / 2) * Math.sin(angle + Math.PI / 2);
+        shape = (
+          <Line
+            points={[
+              x1 + dxp,
+              y1 + dyp,
+              x2 + dxp,
+              y2 + dyp,
+              x2 - dxp,
+              y2 - dyp,
+              x1 - dxp,
+              y1 - dyp,
+            ]}
+            closed
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else {
+        shape = (
+          <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+        );
+      }
+      return (
+        <>
+          {shape}
+          <Text
+            x={x2}
+            y={y2}
+            text={`${Math.round(distance)} casillas`}
+            fontSize={16}
+            fill="#fff"
+          />
+        </>
+      );
+    })();
 
   const handleKeyDown = useCallback((e) => {
     // Avoid moving the token when typing inside inputs or editable fields
@@ -1239,18 +1351,7 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             ))}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1263,18 +1364,7 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1287,25 +1377,7 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(
-                    Math.hypot(
-                      pxToCell(measureLine[2], gridOffsetX) -
-                        pxToCell(measureLine[0], gridOffsetX),
-                      pxToCell(measureLine[3], gridOffsetY) -
-                        pxToCell(measureLine[1], gridOffsetY)
-                    )
-                  )} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1332,6 +1404,12 @@ const MapCanvas = ({
         onColorChange={setDrawColor}
         brushSize={brushSize}
         onBrushSizeChange={setBrushSize}
+        measureShape={measureShape}
+        onMeasureShapeChange={setMeasureShape}
+        measureSnap={measureSnap}
+        onMeasureSnapChange={setMeasureSnap}
+        measureVisible={measureVisible}
+        onMeasureVisibleChange={setMeasureVisible}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
