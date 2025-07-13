@@ -29,7 +29,7 @@ import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
-import { normalizeZ } from '../utils/zOrder';
+import { normalizeZ, shiftZ } from '../utils/zOrder';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -741,9 +741,7 @@ const MapCanvas = ({
   };
 
   const moveTokenLayer = (id, delta) => {
-    const updated = normalizeZ(
-      tokens.map((t) => (t.id === id ? { ...t, z: (t.z ?? 0) + delta } : t))
-    );
+    const updated = shiftZ(tokens, id, delta);
     onTokensChange(updated);
   };
 
@@ -830,7 +828,7 @@ const MapCanvas = ({
         x += 1;
         break;
       case 'delete':
-        onTokensChange(tokens.filter((t) => t.id !== selectedId));
+        onTokensChange(normalizeZ(tokens.filter((t) => t.id !== selectedId)));
         setSelectedId(null);
         return;
       case 'r': {
