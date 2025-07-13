@@ -20,7 +20,8 @@ import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
 const EMPTY_IMAGE = new Image();
-EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+EMPTY_IMAGE.src =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
@@ -38,7 +39,7 @@ const AssetSidebar = ({
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
   const [chatLoaded, setChatLoaded] = useState(false);
-  
+
   // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
   const isDragging = useDragLayer((monitor) => monitor.isDragging());
@@ -89,7 +90,13 @@ const AssetSidebar = ({
             }
           } else {
             setFolders([
-              { id: nanoid(), name: 'Enemigos', assets: [], folders: [], open: true },
+              {
+                id: nanoid(),
+                name: 'Enemigos',
+                assets: [],
+                folders: [],
+                open: true,
+              },
             ]);
           }
         }
@@ -161,7 +168,13 @@ const AssetSidebar = ({
   const addFolder = (parentId = null) => {
     const name = prompt('Nombre de la carpeta');
     if (!name) return;
-    const newFolder = { id: nanoid(), name, assets: [], folders: [], open: true };
+    const newFolder = {
+      id: nanoid(),
+      name,
+      assets: [],
+      folders: [],
+      open: true,
+    };
     setFolders((fs) => {
       if (!parentId) return [...fs, newFolder];
       return updateFolders(fs, parentId, (f) => ({
@@ -191,18 +204,14 @@ const AssetSidebar = ({
         ...f,
         assets: [
           ...f.assets,
-          ...uploads.filter(
-            (u) => u && !f.assets.some((a) => a.url === u.url)
-          ),
+          ...uploads.filter((u) => u && !f.assets.some((a) => a.url === u.url)),
         ],
       }))
     );
   };
 
   const toggleFolder = (id) => {
-    setFolders((fs) =>
-      updateFolders(fs, id, (f) => ({ ...f, open: !f.open }))
-    );
+    setFolders((fs) => updateFolders(fs, id, (f) => ({ ...f, open: !f.open })));
   };
 
   const removeFolder = (id) => {
@@ -229,7 +238,9 @@ const AssetSidebar = ({
       list.map((f) => ({
         ...f,
         assets:
-          f.id === fromId ? f.assets.filter((a) => a.id !== asset.id) : f.assets,
+          f.id === fromId
+            ? f.assets.filter((a) => a.id !== asset.id)
+            : f.assets,
         folders: removeRec(f.folders),
       }));
     const addRec = (list) =>
@@ -394,7 +405,9 @@ const AssetSidebar = ({
             ) : (
               <FiFolderPlus className="text-yellow-400 rounded-sm" />
             )}
-            <span className="text-gray-200 font-semibold truncate">{folder.name}</span>
+            <span className="text-gray-200 font-semibold truncate">
+              {folder.name}
+            </span>
           </button>
           <button
             onClick={() => removeFolder(folder.id)}
@@ -426,7 +439,9 @@ const AssetSidebar = ({
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => handleFilesUpload(folder.id, e.target.files)}
+                    onChange={(e) =>
+                      handleFilesUpload(folder.id, e.target.files)
+                    }
                     className="hidden"
                   />
                 </label>
@@ -543,19 +558,53 @@ const AssetSidebar = ({
                     <span className="text-gray-200 break-words">{m.text}</span>
                   </div>
                   {m.result && (
-                    <div className="text-xs text-gray-300 ml-4 space-y-0.5">
-                      {m.result.details.map((d, i) => (
-                        <div key={i}>
-                          {d.type === 'dice' && (
-                            <span>
-                              {d.formula}: [{d.rolls.join(', ')}] = {d.subtotal}
-                            </span>
-                          )}
-                          {d.type === 'modifier' && <span>Mod: {d.formula}</span>}
-                          {d.type === 'calc' && <span>Resultado: {d.value}</span>}
-                        </div>
-                      ))}
-                      <div className="font-semibold">Total: {m.result.total}</div>
+                    <div className="bg-green-900/20 border border-green-600/50 rounded p-2 ml-4 text-xs text-gray-100 space-y-1">
+                      <p className="text-center text-green-400 font-semibold">
+                        🎲 Resultado
+                      </p>
+                      <div className="space-y-1">
+                        {m.result.details.map((d, i) => {
+                          const match =
+                            d.type === 'dice'
+                              ? d.formula.match(/d(\d+)/)
+                              : null;
+                          const sides = match ? match[1] : null;
+                          const img =
+                            sides &&
+                            [4, 6, 8, 10, 12, 20, 100].includes(Number(sides))
+                              ? `/dados/calculadora/calculadora-D${sides}.png`
+                              : null;
+                          return (
+                            <div
+                              key={i}
+                              className="bg-gray-800/50 rounded p-1 text-center"
+                            >
+                              {d.type === 'dice' && (
+                                <span className="flex items-center justify-center gap-1">
+                                  {img && (
+                                    <img
+                                      src={img}
+                                      alt={`d${sides}`}
+                                      className="w-4 h-4"
+                                    />
+                                  )}
+                                  {d.formula}: [{d.rolls.join(', ')}] ={' '}
+                                  {d.subtotal}
+                                </span>
+                              )}
+                              {d.type === 'modifier' && (
+                                <span>Modificador: {d.formula}</span>
+                              )}
+                              {d.type === 'calc' && (
+                                <span>Resultado: {d.value}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="text-center text-green-400 font-bold">
+                        Total: {m.result.total}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -617,7 +666,12 @@ const DraggableAssetItem = ({
     () => ({
       type: AssetTypes.IMAGE,
       item: () => {
-        const data = { id: asset.id, name: asset.name, url: asset.url, fromFolderId: folderId };
+        const data = {
+          id: asset.id,
+          name: asset.name,
+          url: asset.url,
+          fromFolderId: folderId,
+        };
         onDragStart?.(data);
         return data;
       },
@@ -639,10 +693,10 @@ const DraggableAssetItem = ({
         className="relative group hover:bg-[#2a3344] rounded p-1"
         style={{ opacity: isDragging ? 0.5 : 1 }}
       >
-          <img
-            src={asset.url}
-            alt={asset.name}
-            className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
+        <img
+          src={asset.url}
+          alt={asset.name}
+          className="w-14 h-14 object-contain rounded cursor-pointer hover:ring-2 hover:ring-blue-500 mx-auto"
           onMouseDown={hidePreview}
           onClick={() => onAssetSelect?.(asset)}
           onMouseEnter={(e) => showPreview(asset, e)}
@@ -656,7 +710,9 @@ const DraggableAssetItem = ({
           <FiTrash />
         </button>
       </div>
-      <span className="truncate block w-14 mx-auto text-gray-300">{asset.name}</span>
+      <span className="truncate block w-14 mx-auto text-gray-300">
+        {asset.name}
+      </span>
     </div>
   );
 };
@@ -667,7 +723,8 @@ DraggableAssetItem.propTypes = {
     name: PropTypes.string.isRequired,
     url: PropTypes.string.isRequired,
   }).isRequired,
-  folderId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  folderId: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+    .isRequired,
   onAssetSelect: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func,
@@ -700,7 +757,9 @@ const FolderIcon = ({ folder, onOpen, onMoveAsset }) => {
       <div className="relative group">
         <FiFolderPlus className="w-12 h-12 mx-auto text-yellow-400 rounded-sm" />
       </div>
-      <span className="truncate block w-16 mx-auto text-gray-300">{folder.name}</span>
+      <span className="truncate block w-16 mx-auto text-gray-300">
+        {folder.name}
+      </span>
     </div>
   );
 };
@@ -875,11 +934,14 @@ const DragLayerPreview = () => {
       style={{ top: currentOffset.y + 10, left: currentOffset.x + 10 }}
     >
       {item.url && (
-        <img src={item.url} alt={item.name} className="w-16 h-16 object-contain" />
+        <img
+          src={item.url}
+          alt={item.name}
+          className="w-16 h-16 object-contain"
+        />
       )}
     </div>
   );
 };
 
 export default React.memo(AssetSidebar);
-
