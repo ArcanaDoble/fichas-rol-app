@@ -739,6 +739,24 @@ const MapCanvas = ({
     setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
   };
 
+  const moveTokenToFront = (id) => {
+    const index = tokens.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const reordered = [...tokens];
+    const [token] = reordered.splice(index, 1);
+    reordered.push(token);
+    onTokensChange(reordered);
+  };
+
+  const moveTokenToBack = (id) => {
+    const index = tokens.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const reordered = [...tokens];
+    const [token] = reordered.splice(index, 1);
+    reordered.unshift(token);
+    onTokensChange(reordered);
+  };
+
   // Zoom interactivo con la rueda del ratón
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -1024,6 +1042,8 @@ const MapCanvas = ({
             onTokensChange(updated);
           }}
           onOpenSheet={handleOpenSheet}
+          onMoveFront={() => moveTokenToFront(id)}
+          onMoveBack={() => moveTokenToBack(id)}
         />
       ))}
       {openSheetTokens.map((tk) => (
