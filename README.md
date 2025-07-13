@@ -22,7 +22,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Ajustes al hacer doble clic** - Haz doble clic en un token para abrir su menú de configuración
 - **Iconos de control de tamaño fijo** - Engranaje, círculo de rotación y barras mantienen un tamaño constante al hacer zoom
 - **Estados en tokens** - Nuevo botón para aplicar condiciones como Envenenado o Cansado y mostrar sus iconos, ahora aún más grandes, sobre la ficha
-- **Botones de estados y ajustes ajustados** - El engranaje y el acceso a estados mantienen un tamaño equilibrado
+- **Botones de estados y ajustes reducidos** - El engranaje y el acceso a estados son un 0.1 más pequeños
 - **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
 - **Grid ajustable** - Tamaño y desplazamiento de la cuadrícula configurables
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
