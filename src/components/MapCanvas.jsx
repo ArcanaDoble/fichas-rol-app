@@ -55,6 +55,58 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const b = Math.round(base.b * (1 - opacity) + tint.b * opacity);
   return `rgb(${r},${g},${b})`;
 };
+
+const TokenAura = ({
+  x,
+  y,
+  width,
+  height,
+  gridSize,
+  auraRadius = 0,
+  auraShape = 'circle',
+  auraColor = '#ffff00',
+  auraOpacity = 0.25,
+  showAura = true,
+}) => {
+  const offX = (width * gridSize) / 2;
+  const offY = (height * gridSize) / 2;
+
+  if (auraRadius <= 0 || !showAura) return null;
+
+  return auraShape === 'circle' ? (
+    <Circle
+      x={x + offX}
+      y={y + offY}
+      radius={(Math.max(width, height) / 2 + auraRadius) * gridSize}
+      fill={hexToRgba(auraColor, auraOpacity)}
+      listening={false}
+    />
+  ) : (
+    <Rect
+      x={x + offX}
+      y={y + offY}
+      width={(width + auraRadius * 2) * gridSize}
+      height={(height + auraRadius * 2) * gridSize}
+      offsetX={((width + auraRadius * 2) * gridSize) / 2}
+      offsetY={((height + auraRadius * 2) * gridSize) / 2}
+      fill={hexToRgba(auraColor, auraOpacity)}
+      listening={false}
+    />
+  );
+};
+
+TokenAura.propTypes = {
+  x: PropTypes.number.isRequired,
+  y: PropTypes.number.isRequired,
+  width: PropTypes.number.isRequired,
+  height: PropTypes.number.isRequired,
+  gridSize: PropTypes.number.isRequired,
+  auraRadius: PropTypes.number,
+  auraShape: PropTypes.oneOf(['circle', 'square']),
+  auraColor: PropTypes.string,
+  auraOpacity: PropTypes.number,
+  showAura: PropTypes.bool,
+};
   const Token = forwardRef(({
   id,
   x,
@@ -739,6 +791,24 @@ const MapCanvas = ({
     setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
   };
 
+  const moveTokenToFront = (id) => {
+    const index = tokens.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const reordered = [...tokens];
+    const [token] = reordered.splice(index, 1);
+    reordered.push(token);
+    onTokensChange(reordered);
+  };
+
+  const moveTokenToBack = (id) => {
+    const index = tokens.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const reordered = [...tokens];
+    const [token] = reordered.splice(index, 1);
+    reordered.unshift(token);
+    onTokensChange(reordered);
+  };
+
   // Zoom interactivo con la rueda del ratón
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -920,6 +990,37 @@ const MapCanvas = ({
               />
             )}
             {drawGrid()}
+            <Group listening={false}>
+              {dragShadow && (
+                <TokenAura
+                  x={cellToPx(dragShadow.x, gridOffsetX)}
+                  y={cellToPx(dragShadow.y, gridOffsetY)}
+                  width={dragShadow.w || 1}
+                  height={dragShadow.h || 1}
+                  gridSize={effectiveGridSize}
+                  auraRadius={dragShadow.auraRadius}
+                  auraShape={dragShadow.auraShape}
+                  auraColor={dragShadow.auraColor}
+                  auraOpacity={dragShadow.auraOpacity}
+                  showAura={canSeeAura(dragShadow)}
+                />
+              )}
+              {tokens.map((token) => (
+                <TokenAura
+                  key={`aura-${token.id}`}
+                  x={cellToPx(token.x, gridOffsetX)}
+                  y={cellToPx(token.y, gridOffsetY)}
+                  width={token.w || 1}
+                  height={token.h || 1}
+                  gridSize={effectiveGridSize}
+                  auraRadius={token.auraRadius}
+                  auraShape={token.auraShape}
+                  auraColor={token.auraColor}
+                  auraOpacity={token.auraOpacity}
+                  showAura={canSeeAura(token)}
+                />
+              ))}
+            </Group>
             {dragShadow && (
               <Token
                 key={`shadow-${dragShadow.id}`}
@@ -946,7 +1047,7 @@ const MapCanvas = ({
                 tintColor={dragShadow.tintColor}
                 tintOpacity={dragShadow.tintOpacity}
                 showSpinner={false}
-                showAura={canSeeAura(dragShadow)}
+                showAura={false}
                 auraRadius={dragShadow.auraRadius}
                 auraShape={dragShadow.auraShape}
                 auraColor={dragShadow.auraColor}
@@ -980,7 +1081,7 @@ const MapCanvas = ({
                 opacity={token.opacity ?? 1}
                 tintColor={token.tintColor}
                 tintOpacity={token.tintOpacity}
-                showAura={canSeeAura(token)}
+                showAura={false}
                 tokenSheetId={token.tokenSheetId}
                 auraRadius={token.auraRadius}
                 auraShape={token.auraShape}
@@ -1024,6 +1125,8 @@ const MapCanvas = ({
             onTokensChange(updated);
           }}
           onOpenSheet={handleOpenSheet}
+          onMoveFront={() => moveTokenToFront(id)}
+          onMoveBack={() => moveTokenToBack(id)}
         />
       ))}
       {openSheetTokens.map((tk) => (
