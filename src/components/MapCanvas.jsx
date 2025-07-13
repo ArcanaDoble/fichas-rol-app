@@ -189,6 +189,7 @@ EstadoImg.propTypes = {
 
   const placeholderBase = color || 'red';
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
+  const estadoData = estados.map((id) => ESTADOS.find((e) => e.id === id)).filter(Boolean);
 
   useEffect(() => {
     const node = shapeRef.current;
