@@ -253,7 +253,7 @@ EstadoImg.propTypes = {
     }
     if (estadosRef.current) {
       estadosRef.current.position({
-        x: box.x + box.width + HANDLE_OFFSET,
+        x: box.x - HANDLE_OFFSET + iconSize + 4,
         y: box.y + box.height + HANDLE_OFFSET,
       });
     }
