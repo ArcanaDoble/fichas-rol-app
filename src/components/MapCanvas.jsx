@@ -174,13 +174,14 @@ EstadoImg.propTypes = {
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
+  const estadoBase = cellSize * 0.2;
   const estadosInfo = estados
     .map((id) => ESTADOS.find((e) => e.id === id))
     .filter(Boolean);
   const estadoSize =
     estadosInfo.length > 0
-      ? Math.min(iconSize, (width * gridSize) / estadosInfo.length)
-      : iconSize;
+      ? Math.min(estadoBase, (width * gridSize) / estadosInfo.length)
+      : estadoBase;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [stats, setStats] = useState({});
 
