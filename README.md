@@ -35,6 +35,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Control de capas** - Desde Ajustes puedes subir o bajar un token para colocarlo encima o debajo de otros
 - **Auras siempre debajo** - El aura de un token nunca se superpone sobre los demás, incluso al cambiar su capa
 - **Barra de herramientas vertical** - Modos de selección, dibujo, medición y texto independientes del zoom
+- **Mapa desplazado** - El mapa se ajusta para que la barra de herramientas no oculte la cabecera ni los controles
 
 ### 🎲 **Gestión de Personajes**
 

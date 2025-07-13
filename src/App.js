@@ -3095,7 +3095,7 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return (
-      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-12 overflow-hidden">
+      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
           <div className="flex flex-wrap gap-2">
