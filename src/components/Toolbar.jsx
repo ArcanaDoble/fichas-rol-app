@@ -17,6 +17,20 @@ const brushOptions = [
   { id: 'large', label: 'L' },
 ];
 
+const shapeOptions = [
+  { id: 'line', label: 'L\u00ednea' },
+  { id: 'square', label: 'Cuadrado' },
+  { id: 'circle', label: 'C\u00edrculo' },
+  { id: 'cone', label: 'Cono' },
+  { id: 'beam', label: 'Haz' },
+];
+
+const snapOptions = [
+  { id: 'center', label: 'Ajustar al centro' },
+  { id: 'corner', label: 'Ajustar a la esquina' },
+  { id: 'free', label: 'Sin ajuste' },
+];
+
 const Toolbar = ({
   activeTool,
   onSelect,
@@ -24,6 +38,12 @@ const Toolbar = ({
   onColorChange,
   brushSize,
   onBrushSizeChange,
+  measureShape,
+  onMeasureShapeChange,
+  measureSnap,
+  onMeasureSnapChange,
+  measureVisible,
+  onMeasureVisibleChange,
 }) => (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2 space-y-2">
     {tools.map(({ id, icon: Icon }) => (
@@ -68,6 +88,56 @@ const Toolbar = ({
           </div>
         </motion.div>
       )}
+      {activeTool === 'measure' && (
+        <motion.div
+          key="measure-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 text-white"
+        >
+          <div>
+            <label className="block mb-1 text-xs">Forma</label>
+            <select
+              value={measureShape}
+              onChange={(e) => onMeasureShapeChange(e.target.value)}
+              className="bg-gray-700 w-full"
+            >
+              {shapeOptions.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1 text-xs">Cuadr\u00edcula</label>
+            <select
+              value={measureSnap}
+              onChange={(e) => onMeasureSnapChange(e.target.value)}
+              className="bg-gray-700 w-full"
+            >
+              {snapOptions.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              id="measure-visible"
+              type="checkbox"
+              checked={measureVisible}
+              onChange={(e) => onMeasureVisibleChange(e.target.checked)}
+            />
+            <label htmlFor="measure-visible" className="text-xs select-none">
+              Visible para todos
+            </label>
+          </div>
+        </motion.div>
+      )}
     </AnimatePresence>
   </div>
 );
@@ -79,6 +149,12 @@ Toolbar.propTypes = {
   onColorChange: PropTypes.func,
   brushSize: PropTypes.string,
   onBrushSizeChange: PropTypes.func,
+  measureShape: PropTypes.string,
+  onMeasureShapeChange: PropTypes.func,
+  measureSnap: PropTypes.string,
+  onMeasureSnapChange: PropTypes.func,
+  measureVisible: PropTypes.bool,
+  onMeasureVisibleChange: PropTypes.func,
 };
 
 export default Toolbar;
