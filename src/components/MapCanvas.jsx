@@ -23,7 +23,9 @@ import useImage from 'use-image';
 import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
 import TokenSettings from './TokenSettings';
+import TokenEstadoMenu from './TokenEstadoMenu';
 import TokenSheetModal from './TokenSheetModal';
+import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
@@ -107,6 +109,16 @@ TokenAura.propTypes = {
   auraOpacity: PropTypes.number,
   showAura: PropTypes.bool,
 };
+
+const EstadoImg = ({ src, ...props }) => {
+  const [img] = useImage(src, 'anonymous');
+  if (!img) return null;
+  return <KonvaImage image={img} listening={false} {...props} />;
+};
+
+EstadoImg.propTypes = {
+  src: PropTypes.string.isRequired,
+};
   const Token = forwardRef(({
   id,
   x,
@@ -136,6 +148,7 @@ TokenAura.propTypes = {
   onTransformEnd,
   onRotate,
   onSettings,
+  onStates,
   onHoverChange,
   tokenSheetId,
   auraRadius = 0,
@@ -146,6 +159,7 @@ TokenAura.propTypes = {
   tintColor = '#ff0000',
   tintOpacity = 0,
   showSpinner = true,
+  estados = [],
 }, ref) => {
   // Load token texture with CORS enabled so filters like tint work
   const [img, imgStatus] = useImage(image, 'anonymous');
@@ -155,10 +169,15 @@ TokenAura.propTypes = {
   const trRef = useRef();
   const rotateRef = useRef();
   const gearRef = useRef();
+  const estadosRef = useRef();
   const textRef = useRef();
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
+  const estadoSize =
+    estadoData.length > 0
+      ? Math.min(iconSize, (width * gridSize) / estadoData.length)
+      : iconSize;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [stats, setStats] = useState({});
 
@@ -166,6 +185,7 @@ TokenAura.propTypes = {
 
   const placeholderBase = color || 'red';
   const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
+  const estadoData = estados.map((id) => ESTADOS.find((e) => e.id === id)).filter(Boolean);
 
   useEffect(() => {
     const node = shapeRef.current;
@@ -228,6 +248,12 @@ TokenAura.propTypes = {
         y: box.y + box.height + HANDLE_OFFSET,
       });
     }
+    if (estadosRef.current) {
+      estadosRef.current.position({
+        x: box.x + box.width + HANDLE_OFFSET,
+        y: box.y + box.height + HANDLE_OFFSET,
+      });
+    }
 if (labelGroup && label) {
   labelGroup.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
   labelGroup.offsetX(label.width() / 2);
@@ -248,6 +274,9 @@ if (labelGroup && label) {
     }
     if (gearRef.current) {
       gearRef.current.fontSize(iconSize);
+    }
+    if (estadosRef.current) {
+      estadosRef.current.fontSize(iconSize);
     }
   };
 
@@ -474,6 +503,20 @@ if (labelGroup && label) {
         </>
       )}
       {selected && <Rect {...outline} />}
+      {estadoData.length > 0 && (
+        <Group listening={false}>
+          {estadoData.map((e, i) => (
+            <EstadoImg
+              key={e.id}
+              src={e.img}
+              x={x + width * gridSize - estadoSize * (i + 1)}
+              y={y - estadoSize - 2}
+              width={estadoSize}
+              height={estadoSize}
+            />
+          ))}
+        </Group>
+      )}
       {showName && (customName || name) && (
         <Group
           ref={textGroupRef}
@@ -544,6 +587,13 @@ if (labelGroup && label) {
             listening
             onClick={() => onSettings?.(id)}
           />
+          <Text
+            ref={estadosRef}
+            text="🩸"
+            fontSize={iconSize}
+            listening
+            onClick={() => onStates?.(id)}
+          />
         </>
       )}
     </Group>
@@ -586,7 +636,9 @@ Token.propTypes = {
   onTransformEnd: PropTypes.func.isRequired,
   onRotate: PropTypes.func.isRequired,
   onSettings: PropTypes.func,
+  onStates: PropTypes.func,
   onHoverChange: PropTypes.func,
+  estados: PropTypes.array,
   tokenSheetId: PropTypes.string,
 };
 
@@ -629,6 +681,7 @@ const MapCanvas = ({
   const [hoveredId, setHoveredId] = useState(null);
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
+  const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const tokenRefs = useRef({});
   const panStart = useRef({ x: 0, y: 0 });
@@ -777,6 +830,14 @@ const MapCanvas = ({
 
   const handleCloseSettings = (id) => {
     setSettingsTokenIds((prev) => prev.filter((sid) => sid !== id));
+  };
+
+  const handleOpenEstados = (id) => {
+    setEstadoTokenIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const handleCloseEstados = (id) => {
+    setEstadoTokenIds((prev) => prev.filter((sid) => sid !== id));
   };
 
   const handleOpenSheet = (token) => {
@@ -954,6 +1015,7 @@ const MapCanvas = ({
           opacity: 1,
           tintColor: '#ff0000',
           tintOpacity: 0,
+          estados: [],
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -1092,9 +1154,11 @@ const MapCanvas = ({
                 onDragStart={handleDragStart}
                 onClick={setSelectedId}
                 onSettings={handleOpenSettings}
+                onStates={handleOpenEstados}
                 onTransformEnd={handleSizeChange}
                 onRotate={handleRotateChange}
                 onHoverChange={(h) => setHoveredId(h ? token.id : null)}
+                estados={token.estados || []}
               />
             ))}
           </Group>
@@ -1127,6 +1191,17 @@ const MapCanvas = ({
           onOpenSheet={handleOpenSheet}
           onMoveFront={() => moveTokenToFront(id)}
           onMoveBack={() => moveTokenToBack(id)}
+        />
+      ))}
+      {estadoTokenIds.map((id) => (
+        <TokenEstadoMenu
+          key={id}
+          token={tokens.find((t) => t.id === id)}
+          onClose={() => handleCloseEstados(id)}
+          onUpdate={(tk) => {
+            const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
+            onTokensChange(updated);
+          }}
         />
       ))}
       {openSheetTokens.map((tk) => (
@@ -1180,6 +1255,7 @@ MapCanvas.propTypes = {
       opacity: PropTypes.number,
       tintColor: PropTypes.string,
       tintOpacity: PropTypes.number,
+      estados: PropTypes.array,
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
