@@ -1278,6 +1278,37 @@ const MapCanvas = ({
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
+            {currentLine && (
+              <Line
+                points={currentLine.points}
+                stroke={currentLine.color}
+                strokeWidth={currentLine.width}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+            {measureLine && (
+              <>
+                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+                <Text
+                  x={measureLine[2]}
+                  y={measureLine[3]}
+                  text={`${Math.round(
+                    Math.hypot(
+                      pxToCell(measureLine[2], gridOffsetX) -
+                        pxToCell(measureLine[0], gridOffsetX),
+                      pxToCell(measureLine[3], gridOffsetY) -
+                        pxToCell(measureLine[1], gridOffsetY)
+                    )
+                  )} casillas`}
+                  fontSize={16}
+                  fill="#fff"
+                />
+              </>
+            )}
+            {texts.map((t, i) => (
+              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
+            ))}
           </Group>
         </Layer>
         <Layer listening>
