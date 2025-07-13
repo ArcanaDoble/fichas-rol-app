@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Boton from './Boton';
 import Input from './Input';
+import { rollExpression } from '../utils/dice';
 
 const DiceCalculator = ({ playerName, onBack }) => {
 
@@ -81,46 +82,15 @@ const DiceCalculator = ({ playerName, onBack }) => {
   // Tirar fórmula o calcular operación matemática
   const rollFormula = () => {
     if (!formula.trim()) return;
-
-    // Si la fórmula NO contiene dados, evalúa como operación matemática
-    if (!/\d+d\d+/i.test(formula)) {
-      try {
-        // Evaluación segura: solo números, operadores y paréntesis
-        // Rechaza cualquier otro caracter
-        const safe = formula.replace(/[^0-9+\-*/().,% ]/g, '');
-        // Permite decimales y porcentajes
-        const safeEval = safe.replace(/(\d+(?:\.\d+)?)%/g, '($1/100)');
-        // eslint-disable-next-line no-eval
-        const total = eval(safeEval);
-        if (typeof total !== 'number' || isNaN(total)) throw new Error('Operación inválida');
-        const resultData = {
-          formula: formula,
-          results: [{ type: 'calc', formula: safe, value: total }],
-          total,
-          timestamp: new Date().toLocaleString(),
-          player: playerName
-        };
-        setResult(resultData);
-        setShowResult(true);
-        saveHistory(resultData);
-        return;
-      } catch (error) {
-        alert('Operación matemática inválida. Solo se permiten números y operaciones básicas.');
-        return;
-      }
-    }
-
-    // Si contiene dados, usa el parser de dados
     try {
-      const parsedResult = parseAndRollFormula(formula);
+      const parsed = rollExpression(formula);
       const resultData = {
-        formula: formula,
-        results: parsedResult.details,
-        total: parsedResult.total,
+        formula: parsed.formula,
+        results: parsed.details,
+        total: parsed.total,
         timestamp: new Date().toLocaleString(),
-        player: playerName
+        player: playerName,
       };
-
       setResult(resultData);
       setShowResult(true);
       saveHistory(resultData);
@@ -129,53 +99,7 @@ const DiceCalculator = ({ playerName, onBack }) => {
     }
   };
 
-  // Parser de fórmulas de dados
-  const parseAndRollFormula = (formula) => {
-    // Limpiar espacios y convertir a minúsculas
-    const cleanFormula = formula.replace(/\s/g, '').toLowerCase();
-    
-    // Regex para encontrar dados y modificadores
-    const diceRegex = /(\d*)d(\d+)/g;
-    const modifierRegex = /[+-]\d+/g;
-    
-    let total = 0;
-    let details = [];
-    
-    // Procesar dados
-    let match;
-    while ((match = diceRegex.exec(cleanFormula)) !== null) {
-      const count = parseInt(match[1]) || 1;
-      const sides = parseInt(match[2]);
-      
-      const rolls = [];
-      for (let i = 0; i < count; i++) {
-        const roll = Math.floor(Math.random() * sides) + 1;
-        rolls.push(roll);
-        total += roll;
-      }
-      
-      details.push({
-        type: 'dice',
-        formula: `${count}d${sides}`,
-        rolls,
-        subtotal: rolls.reduce((sum, roll) => sum + roll, 0)
-      });
-    }
-    
-    // Procesar modificadores
-    const modifiers = cleanFormula.match(modifierRegex) || [];
-    modifiers.forEach(mod => {
-      const value = parseInt(mod);
-      total += value;
-      details.push({
-        type: 'modifier',
-        value,
-        formula: mod
-      });
-    });
-    
-    return { total, details };
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
