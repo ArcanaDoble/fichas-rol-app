@@ -524,9 +524,9 @@ const AssetSidebar = ({
             {messages.map((m) => (
               <div
                 key={m.id}
-                className="bg-gray-700/50 p-2 rounded flex justify-between"
+                className="bg-gray-700/50 p-2 rounded flex items-start gap-2"
               >
-                <div className="flex-1 mr-2">
+                <div className="flex-1 mr-2 min-w-0">
                   <span className="text-blue-400 font-semibold mr-1">
                     {m.author}:
                   </span>
@@ -535,7 +535,7 @@ const AssetSidebar = ({
                 {isMaster && (
                   <button
                     onClick={() => deleteMessage(m.id)}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-red-400 hover:text-red-300 flex-shrink-0"
                   >
                     <FiTrash />
                   </button>
