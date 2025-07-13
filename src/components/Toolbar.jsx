@@ -18,9 +18,9 @@ const brushOptions = [
 ];
 
 const shapeOptions = [
-  { id: 'line', label: 'L\u00ednea' },
+  { id: 'line', label: 'Línea' },
   { id: 'square', label: 'Cuadrado' },
-  { id: 'circle', label: 'C\u00edrculo' },
+  { id: 'circle', label: 'Círculo' },
   { id: 'cone', label: 'Cono' },
   { id: 'beam', label: 'Haz' },
 ];
@@ -65,7 +65,7 @@ const Toolbar = ({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2"
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 w-44"
         >
           <input
             type="color"
@@ -112,7 +112,7 @@ const Toolbar = ({
             </select>
           </div>
           <div>
-            <label className="block mb-1 text-xs">Cuadr\u00edcula</label>
+            <label className="block mb-1 text-xs">Cuadrícula</label>
             <select
               value={measureSnap}
               onChange={(e) => onMeasureSnapChange(e.target.value)}
