@@ -23,12 +23,20 @@ EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAA
 
 export const AssetTypes = { IMAGE: 'asset-image' };
 
-const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' }) => {
+const AssetSidebar = ({
+  onAssetSelect,
+  onDragStart,
+  onDragEnd,
+  className = '',
+  isMaster = false,
+  playerName = '',
+}) => {
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState('assets');
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
+  const [chatLoaded, setChatLoaded] = useState(false);
   
   // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
@@ -94,21 +102,47 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
     return () => unsub();
   }, []);
 
-  // Load chat history from localStorage
+  // Cargar mensajes de chat desde Firebase (con fallback a localStorage)
   useEffect(() => {
-    const stored = localStorage.getItem('sidebarChat');
-    if (stored) {
-      try {
-        setMessages(JSON.parse(stored));
-      } catch {
-        // ignore
+    const ref = doc(db, 'assetSidebar', 'chat');
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          setMessages(snap.data().messages || []);
+        } else {
+          const stored = localStorage.getItem('sidebarChat');
+          if (stored) {
+            try {
+              setMessages(JSON.parse(stored));
+            } catch {
+              // ignore
+            }
+          }
+        }
+        setChatLoaded(true);
+      },
+      (error) => {
+        console.error(error);
+        const stored = localStorage.getItem('sidebarChat');
+        if (stored) {
+          try {
+            setMessages(JSON.parse(stored));
+          } catch {
+            // ignore
+          }
+        }
+        setChatLoaded(true);
       }
-    }
+    );
+    return () => unsub();
   }, []);
 
   useEffect(() => {
+    if (!chatLoaded) return;
     localStorage.setItem('sidebarChat', JSON.stringify(messages));
-  }, [messages]);
+    setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(console.error);
+  }, [messages, chatLoaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -303,9 +337,14 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   const sendMessage = () => {
     const text = message.trim();
     if (!text) return;
-    const newMsg = { id: nanoid(), author: 'Master', text };
+    const author = isMaster ? 'Master' : playerName || 'Anónimo';
+    const newMsg = { id: nanoid(), author, text };
     setMessages((msgs) => [...msgs, newMsg]);
     setMessage('');
+  };
+
+  const deleteMessage = (id) => {
+    setMessages((msgs) => msgs.filter((m) => m.id !== id));
   };
 
   const FolderItem = ({ folder, level = 0 }) => {
@@ -483,11 +522,24 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
         <div className="flex-1 flex flex-col gap-2">
           <div className="flex-1 overflow-y-auto space-y-2">
             {messages.map((m) => (
-              <div key={m.id} className="bg-gray-700/50 p-2 rounded">
-                <span className="text-blue-400 font-semibold mr-1">
-                  {m.author}:
-                </span>
-                <span className="text-gray-200 break-words">{m.text}</span>
+              <div
+                key={m.id}
+                className="bg-gray-700/50 p-2 rounded flex justify-between"
+              >
+                <div className="flex-1 mr-2">
+                  <span className="text-blue-400 font-semibold mr-1">
+                    {m.author}:
+                  </span>
+                  <span className="text-gray-200 break-words">{m.text}</span>
+                </div>
+                {isMaster && (
+                  <button
+                    onClick={() => deleteMessage(m.id)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <FiTrash />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -519,6 +571,8 @@ AssetSidebar.propTypes = {
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func,
   className: PropTypes.string,
+  isMaster: PropTypes.bool,
+  playerName: PropTypes.string,
 };
 
 const DraggableAssetItem = ({
