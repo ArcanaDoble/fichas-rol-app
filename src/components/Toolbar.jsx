@@ -10,7 +10,20 @@ const tools = [
   { id: 'text', icon: FiType },
 ];
 
-const Toolbar = ({ activeTool, onSelect }) => (
+const brushOptions = [
+  { id: 'small', label: 'S' },
+  { id: 'medium', label: 'M' },
+  { id: 'large', label: 'L' },
+];
+
+const Toolbar = ({
+  activeTool,
+  onSelect,
+  drawColor,
+  onColorChange,
+  brushSize,
+  onBrushSizeChange,
+}) => (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2 space-y-2">
     {tools.map(({ id, icon: Icon }) => (
       <button
@@ -23,12 +36,39 @@ const Toolbar = ({ activeTool, onSelect }) => (
         <Icon />
       </button>
     ))}
+    {activeTool === 'draw' && (
+      <div className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2">
+        <input
+          type="color"
+          value={drawColor}
+          onChange={(e) => onColorChange(e.target.value)}
+          className="w-8 h-8 p-0 border-0"
+        />
+        <div className="flex space-x-1">
+          {brushOptions.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => onBrushSizeChange(id)}
+              className={`px-2 py-1 rounded text-sm ${
+                brushSize === id ? 'bg-gray-700' : 'bg-gray-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 
 Toolbar.propTypes = {
   activeTool: PropTypes.string.isRequired,
   onSelect: PropTypes.func.isRequired,
+  drawColor: PropTypes.string,
+  onColorChange: PropTypes.func,
+  brushSize: PropTypes.string,
+  onBrushSizeChange: PropTypes.func,
 };
 
 export default Toolbar;

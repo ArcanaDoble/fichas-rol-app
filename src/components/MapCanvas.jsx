@@ -59,6 +59,12 @@ const mixColors = (baseHex, tintHex, opacity) => {
   return `rgb(${r},${g},${b})`;
 };
 
+const BRUSH_WIDTHS = {
+  small: 2,
+  medium: 4,
+  large: 6,
+};
+
 const TokenAura = ({
   x,
   y,
@@ -700,6 +706,8 @@ const MapCanvas = ({
   const [currentLine, setCurrentLine] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [texts, setTexts] = useState([]);
+  const [drawColor, setDrawColor] = useState('#ffffff');
+  const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
@@ -921,7 +929,11 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      setCurrentLine([relX, relY]);
+      setCurrentLine({
+        points: [relX, relY],
+        color: drawColor,
+        width: BRUSH_WIDTHS[brushSize],
+      });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
@@ -944,7 +956,10 @@ const MapCanvas = ({
     const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
     const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
     if (currentLine) {
-      setCurrentLine((pts) => [...pts, relX, relY]);
+      setCurrentLine((ln) => ({
+        ...ln,
+        points: [...ln.points, relX, relY],
+      }));
       return;
     }
     if (measureLine) {
@@ -1214,21 +1229,36 @@ const MapCanvas = ({
                 listening={activeTool === 'select'}
               />
             ))}
-            {lines.map((pts, i) => (
+            {lines.map((ln, i) => (
               <Line
                 key={`line-${i}`}
-                points={pts}
-                stroke="#fff"
-                strokeWidth={2}
+                points={ln.points}
+                stroke={ln.color}
+                strokeWidth={ln.width}
                 lineCap="round"
                 lineJoin="round"
               />
+            )}
+            {measureLine && (
+              <>
+                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+                <Text
+                  x={measureLine[2]}
+                  y={measureLine[3]}
+                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
+                  fontSize={16}
+                  fill="#fff"
+                />
+              </>
+            )}
+            {texts.map((t, i) => (
+              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
             {currentLine && (
               <Line
-                points={currentLine}
-                stroke="#fff"
-                strokeWidth={2}
+                points={currentLine.points}
+                stroke={currentLine.color}
+                strokeWidth={currentLine.width}
                 lineCap="round"
                 lineJoin="round"
               />
@@ -1264,7 +1294,14 @@ const MapCanvas = ({
         </Layer>
         </Stage>
       </div>
-      <Toolbar activeTool={activeTool} onSelect={setActiveTool} />
+      <Toolbar
+        activeTool={activeTool}
+        onSelect={setActiveTool}
+        drawColor={drawColor}
+        onColorChange={setDrawColor}
+        brushSize={brushSize}
+        onBrushSizeChange={setBrushSize}
+      />
       {settingsTokenIds.map((id) => (
         <TokenSettings
           key={id}
