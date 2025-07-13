@@ -1116,7 +1116,7 @@ const MapCanvas = ({
                 height={imageSize.height}
                 listening={false}
               />
-            )}
+            ))}
             {drawGrid()}
             <Group listening={false}>
               {dragShadow && (
@@ -1238,7 +1238,7 @@ const MapCanvas = ({
                 lineCap="round"
                 lineJoin="round"
               />
-            )}
+            ))}
             {measureLine && (
               <>
                 <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
