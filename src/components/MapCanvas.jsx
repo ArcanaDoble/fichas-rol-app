@@ -1014,16 +1014,16 @@ const MapCanvas = ({
   const measureElement =
     measureLine && measureVisible && (() => {
       const [x1, y1, x2, y2] = measureLine;
-      const distance = Math.hypot(
-        pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX),
-        pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY)
-      );
+      const cellDx = Math.abs(pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX));
+      const cellDy = Math.abs(pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY));
+      let distance = Math.hypot(cellDx, cellDy);
       const dx = x2 - x1;
       const dy = y2 - y1;
       const len = Math.hypot(dx, dy);
       const angle = Math.atan2(dy, dx);
       let shape;
       if (measureShape === 'square') {
+        distance = Math.max(cellDx, cellDy);
         shape = (
           <Rect
             x={Math.min(x1, x2)}
@@ -1036,6 +1036,7 @@ const MapCanvas = ({
           />
         );
       } else if (measureShape === 'circle') {
+        distance = Math.max(cellDx, cellDy);
         shape = (
           <Circle
             x={x1}

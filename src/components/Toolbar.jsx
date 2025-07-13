@@ -65,7 +65,7 @@ const Toolbar = ({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 w-44"
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 w-fit"
         >
           <input
             type="color"
@@ -95,7 +95,7 @@ const Toolbar = ({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 text-white"
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 text-white w-52"
         >
           <div>
             <label className="block mb-1 text-xs">Forma</label>
