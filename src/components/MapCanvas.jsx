@@ -31,6 +31,7 @@ import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
+import Toolbar from './Toolbar';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -694,6 +695,11 @@ const MapCanvas = ({
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  const [activeTool, setActiveTool] = useState('select');
+  const [lines, setLines] = useState([]);
+  const [currentLine, setCurrentLine] = useState(null);
+  const [measureLine, setMeasureLine] = useState(null);
+  const [texts, setTexts] = useState([]);
   const tokenRefs = useRef({});
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
@@ -903,20 +909,49 @@ const MapCanvas = ({
     });
   };
 
-  // Iniciar paneo con el botón central del ratón
+  // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
-    if (e.evt.button === 1) {
+    if (activeTool === 'select' && e.evt.button === 1) {
       e.evt.preventDefault();
       setIsPanning(true);
       panStart.current = stageRef.current.getPointerPosition();
       panOrigin.current = { ...groupPos };
     }
+    if (activeTool === 'draw' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setCurrentLine([relX, relY]);
+    }
+    if (activeTool === 'measure' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setMeasureLine([relX, relY, relX, relY]);
+    }
+    if (activeTool === 'text' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const content = prompt('Texto:', 'Nuevo texto');
+      if (content) setTexts((t) => [...t, { x: relX, y: relY, text: content }]);
+    }
   };
 
-  // Actualiza la posición del grupo durante el paneo
+  // Actualiza la acción activa según la herramienta
   const handleMouseMove = () => {
-    if (!isPanning) return;
     const pointer = stageRef.current.getPointerPosition();
+    const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+    const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+    if (currentLine) {
+      setCurrentLine((pts) => [...pts, relX, relY]);
+      return;
+    }
+    if (measureLine) {
+      setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
+      return;
+    }
+    if (!isPanning) return;
     setGroupPos({
       x: panOrigin.current.x + (pointer.x - panStart.current.x),
       y: panOrigin.current.y + (pointer.y - panStart.current.y),
@@ -924,6 +959,11 @@ const MapCanvas = ({
   };
 
   const stopPanning = () => {
+    if (currentLine) {
+      setLines((ls) => [...ls, currentLine]);
+      setCurrentLine(null);
+    }
+    if (measureLine) setMeasureLine(null);
     if (isPanning) setIsPanning(false);
   };
 
@@ -1170,7 +1210,43 @@ const MapCanvas = ({
                 onRotate={handleRotateChange}
                 onHoverChange={(h) => setHoveredId(h ? token.id : null)}
                 estados={token.estados || []}
+                draggable={activeTool === 'select'}
+                listening={activeTool === 'select'}
               />
+            ))}
+            {lines.map((pts, i) => (
+              <Line
+                key={`line-${i}`}
+                points={pts}
+                stroke="#fff"
+                strokeWidth={2}
+                lineCap="round"
+                lineJoin="round"
+              />
+            ))}
+            {currentLine && (
+              <Line
+                points={currentLine}
+                stroke="#fff"
+                strokeWidth={2}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+            {measureLine && (
+              <>
+                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+                <Text
+                  x={measureLine[2]}
+                  y={measureLine[3]}
+                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
+                  fontSize={16}
+                  fill="#fff"
+                />
+              </>
+            )}
+            {texts.map((t, i) => (
+              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
           </Group>
         </Layer>
@@ -1182,12 +1258,13 @@ const MapCanvas = ({
               stageRef={stageRef}
               onStatClick={(key, e) => tokenRefs.current[token.id]?.handleStatClick(key, e)}
               transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
-              visible={hoveredId === token.id && canSeeBars(token)}
+              visible={activeTool === 'select' && hoveredId === token.id && canSeeBars(token)}
             />
           ))}
         </Layer>
         </Stage>
       </div>
+      <Toolbar activeTool={activeTool} onSelect={setActiveTool} />
       {settingsTokenIds.map((id) => (
         <TokenSettings
           key={id}
