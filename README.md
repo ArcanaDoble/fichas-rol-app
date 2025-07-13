@@ -471,6 +471,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.3.12:**
 - El chat de la barra lateral ahora permite enviar mensajes como "Master" y mantiene el historial.
 
+**Resumen de cambios v2.3.13:**
+- Los mensajes del chat se guardan en Firebase y solo el Máster puede eliminarlos.
+
 ### 🛠️ **Características Técnicas**
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real

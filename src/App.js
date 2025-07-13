@@ -3163,7 +3163,7 @@ function App() {
               playerName={playerName}
             />
           </div>
-          <AssetSidebar />
+          <AssetSidebar isMaster={authenticated} playerName={playerName} />
         </div>
       </div>
     );
