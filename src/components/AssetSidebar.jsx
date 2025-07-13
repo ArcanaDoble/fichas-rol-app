@@ -8,6 +8,7 @@ import {
   FiTrash,
   FiFolder,
   FiFolderPlus,
+  FiMessageCircle,
   FiX,
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,6 +16,7 @@ import { useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { getOrUploadFile } from '../utils/storage';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import Input from './Input';
 
 const EMPTY_IMAGE = new Image();
 EMPTY_IMAGE.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -24,6 +26,9 @@ export const AssetTypes = { IMAGE: 'asset-image' };
 const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' }) => {
   const [folders, setFolders] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState('assets');
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState('');
   
   // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
@@ -88,6 +93,22 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
     );
     return () => unsub();
   }, []);
+
+  // Load chat history from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebarChat');
+    if (stored) {
+      try {
+        setMessages(JSON.parse(stored));
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarChat', JSON.stringify(messages));
+  }, [messages]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -279,6 +300,14 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
     setZMax((z) => z + 1);
   };
 
+  const sendMessage = () => {
+    const text = message.trim();
+    if (!text) return;
+    const newMsg = { id: nanoid(), author: 'Master', text };
+    setMessages((msgs) => [...msgs, newMsg]);
+    setMessage('');
+  };
+
   const FolderItem = ({ folder, level = 0 }) => {
     const [{ isOver }, drop] = useDrop(
       () => ({
@@ -385,45 +414,102 @@ const AssetSidebar = ({ onAssetSelect, onDragStart, onDragEnd, className = '' })
   };
 
   return (
-    <div className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}>
-      <div className="mb-3">
+    <div
+      className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}
+    >
+      <div className="flex gap-2 mb-3">
         <button
-          onClick={addFolder}
-          className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+          onClick={() => setTab('chat')}
+          className={`p-1 rounded flex-1 flex justify-center ${
+            tab === 'chat' ? 'bg-[#374151]' : 'bg-[#1f2937]'
+          }`}
         >
-          + Carpeta
+          <FiMessageCircle />
+        </button>
+        <button
+          onClick={() => setTab('assets')}
+          className={`p-1 rounded flex-1 flex justify-center ${
+            tab === 'assets' ? 'bg-[#374151]' : 'bg-[#1f2937]'
+          }`}
+        >
+          <FiFolder />
         </button>
       </div>
-      <div className="flex-1 flex flex-col gap-2">
-        <AnimatePresence>
-          {folders.map((folder) => (
-            <FolderItem key={folder.id} folder={folder} level={0} />
+
+      {tab === 'assets' && (
+        <>
+          <div className="mb-3">
+            <button
+              onClick={addFolder}
+              className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+            >
+              + Carpeta
+            </button>
+          </div>
+          <div className="flex-1 flex flex-col gap-2">
+            <AnimatePresence>
+              {folders.map((folder) => (
+                <FolderItem key={folder.id} folder={folder} level={0} />
+              ))}
+            </AnimatePresence>
+          </div>
+          {/* previewRef portal appended to body */}
+          <DragLayerPreview />
+          {windows.map((w) => (
+            <FolderWindow
+              key={w.id}
+              folder={findFolder(folders, w.id)}
+              position={w}
+              bringToFront={bringToFront}
+              onClose={closeWindow}
+              onAddFolder={addFolder}
+              onUpload={handleFilesUpload}
+              onRemoveFolder={removeFolder}
+              onRemoveAsset={removeAsset}
+              onOpenFolder={openWindow}
+              onAssetSelect={onAssetSelect}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onMoveAsset={moveAsset}
+              showPreview={showPreview}
+              movePreview={movePreview}
+              hidePreview={hidePreview}
+            />
           ))}
-        </AnimatePresence>
-      </div>
-      {/* previewRef portal appended to body */}
-      <DragLayerPreview />
-      {windows.map((w) => (
-        <FolderWindow
-          key={w.id}
-          folder={findFolder(folders, w.id)}
-          position={w}
-          bringToFront={bringToFront}
-          onClose={closeWindow}
-          onAddFolder={addFolder}
-          onUpload={handleFilesUpload}
-          onRemoveFolder={removeFolder}
-          onRemoveAsset={removeAsset}
-          onOpenFolder={openWindow}
-          onAssetSelect={onAssetSelect}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onMoveAsset={moveAsset}
-          showPreview={showPreview}
-          movePreview={movePreview}
-          hidePreview={hidePreview}
-        />
-      ))}
+        </>
+      )}
+
+      {tab === 'chat' && (
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="flex-1 overflow-y-auto space-y-2">
+            {messages.map((m) => (
+              <div key={m.id} className="bg-gray-700/50 p-2 rounded">
+                <span className="text-blue-400 font-semibold mr-1">
+                  {m.author}:
+                </span>
+                <span className="text-gray-200 break-words">{m.text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1"
+              placeholder="Mensaje..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') sendMessage();
+              }}
+            />
+            <button
+              className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+              onClick={sendMessage}
+            >
+              Enviar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
