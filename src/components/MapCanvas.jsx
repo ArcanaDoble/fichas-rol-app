@@ -174,10 +174,12 @@ EstadoImg.propTypes = {
   const textGroupRef = useRef();
   const HANDLE_OFFSET = 12;
   const iconSize = cellSize * 0.15;
-  const estadoData = estados.map((id) => ESTADOS.find((e) => e.id === id)).filter(Boolean);
+  const estadosInfo = estados
+    .map((id) => ESTADOS.find((e) => e.id === id))
+    .filter(Boolean);
   const estadoSize =
-    estadoData.length > 0
-      ? Math.min(iconSize, (width * gridSize) / estadoData.length)
+    estadosInfo.length > 0
+      ? Math.min(iconSize, (width * gridSize) / estadosInfo.length)
       : iconSize;
   const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
   const [stats, setStats] = useState({});
@@ -504,9 +506,9 @@ if (labelGroup && label) {
         </>
       )}
       {selected && <Rect {...outline} />}
-      {estadoData.length > 0 && (
+      {estadosInfo.length > 0 && (
         <Group listening={false}>
-          {estadoData.map((e, i) => (
+          {estadosInfo.map((e, i) => (
             <EstadoImg
               key={e.id}
               src={e.img}
