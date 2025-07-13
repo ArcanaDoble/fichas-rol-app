@@ -830,7 +830,7 @@ const MapCanvas = ({
         x += 1;
         break;
       case 'delete':
-        onTokensChange(tokens.filter((t) => t.id !== selectedId));
+        onTokensChange(normalizeZ(tokens.filter((t) => t.id !== selectedId)));
         setSelectedId(null);
         return;
       case 'r': {
