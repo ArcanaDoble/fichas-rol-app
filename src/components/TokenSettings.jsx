@@ -5,7 +5,16 @@ import { FiX } from 'react-icons/fi';
 import Boton from './Boton';
 import Input from './Input';
 
-const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, onOpenSheet }) => {
+const TokenSettings = ({
+  token,
+  enemies = [],
+  players = [],
+  onClose,
+  onUpdate,
+  onOpenSheet,
+  onMoveFront,
+  onMoveBack,
+}) => {
   const [tab, setTab] = useState('details');
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 140 });
   const [dragging, setDragging] = useState(false);
@@ -192,13 +201,17 @@ const TokenSettings = ({ token, enemies = [], players = [], onClose, onUpdate, o
                       auraVisibility,
                       opacity: tokenOpacity,
                       tintColor,
-                      tintOpacity,
-                    };
-                    onOpenSheet(updated);
-                  }}
-                >
-                  Abrir ficha de personaje
-                </Boton>
+                    tintOpacity,
+                  };
+                  onOpenSheet(updated);
+                }}
+              >
+                Abrir ficha de personaje
+              </Boton>
+              <div className="flex justify-center gap-2 mt-2">
+                <Boton size="sm" onClick={() => onMoveBack?.()}>Bajar capa</Boton>
+                <Boton size="sm" onClick={() => onMoveFront?.()}>Subir capa</Boton>
+              </div>
               </div>
             </>
           )}
@@ -264,6 +277,8 @@ TokenSettings.propTypes = {
   onClose: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
   onOpenSheet: PropTypes.func.isRequired,
+  onMoveFront: PropTypes.func,
+  onMoveBack: PropTypes.func,
 };
 
 export default TokenSettings;
