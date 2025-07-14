@@ -351,6 +351,7 @@ function App() {
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const prevPagesRef = useRef([]);
+  const pagesLoadedRef = useRef(false);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -385,9 +386,11 @@ function App() {
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         setPages([defaultPage]);
         prevPagesRef.current = [defaultPage];
+        pagesLoadedRef.current = true;
       } else {
         setPages(loaded);
         prevPagesRef.current = loaded;
+        pagesLoadedRef.current = true;
       }
     };
     loadPages();
@@ -438,20 +441,60 @@ function App() {
   }, [currentPage, pages]);
 
   useEffect(() => {
-    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, tokens: canvasTokens } : pg));
-  }, [canvasTokens]);
+    if (!pagesLoadedRef.current) return;
+    const currentTokens = pages[currentPage]?.tokens || [];
+    if (deepEqual(canvasTokens, currentTokens)) return;
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, tokens: canvasTokens } : pg
+      )
+    );
+  }, [canvasTokens, currentPage, pages]);
 
   useEffect(() => {
-    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, lines: canvasLines } : pg));
-  }, [canvasLines]);
+    if (!pagesLoadedRef.current) return;
+    const currentLines = pages[currentPage]?.lines || [];
+    if (deepEqual(canvasLines, currentLines)) return;
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, lines: canvasLines } : pg
+      )
+    );
+  }, [canvasLines, currentPage, pages]);
 
   useEffect(() => {
-    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, background: canvasBackground } : pg));
-  }, [canvasBackground]);
+    if (!pagesLoadedRef.current) return;
+    const currentBg = pages[currentPage]?.background || null;
+    if (deepEqual(canvasBackground, currentBg)) return;
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, background: canvasBackground } : pg
+      )
+    );
+  }, [canvasBackground, currentPage, pages]);
 
   useEffect(() => {
-    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY } : pg));
-  }, [gridSize, gridCells, gridOffsetX, gridOffsetY]);
+    if (!pagesLoadedRef.current) return;
+    const p = pages[currentPage];
+    if (p && deepEqual(
+        { gridSize, gridCells, gridOffsetX, gridOffsetY },
+        {
+          gridSize: p.gridSize,
+          gridCells: p.gridCells,
+          gridOffsetX: p.gridOffsetX,
+          gridOffsetY: p.gridOffsetY,
+        }
+      )) {
+      return;
+    }
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage
+          ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY }
+          : pg
+      )
+    );
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage, pages]);
 
   useEffect(() => {
     const prevPages = prevPagesRef.current;
