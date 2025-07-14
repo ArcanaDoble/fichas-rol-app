@@ -722,7 +722,8 @@ const MapCanvas = ({
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
-  const isBgLoading = bgStatus !== 'loaded';
+  const isBgLoading = bgStatus === 'loading';
+  const isBgError = bgStatus === 'failed';
 
   useEffect(() => {
     setLines(propLines);
@@ -1326,6 +1327,11 @@ const MapCanvas = ({
     <div ref={containerRef} className="w-full h-full overflow-hidden relative">
       {isBgLoading && (
         <LoadingSpinner overlay color="white" text="Cargando mapa..." />
+      )}
+      {isBgError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-800/75 text-white z-10">
+          Error al cargar el mapa
+        </div>
       )}
       <div ref={drop}>
         <Stage

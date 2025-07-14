@@ -815,9 +815,15 @@ src/
 
 - ✅ Spinner visible mientras se carga la imagen del mapa para evitar pantalla negra
 
+
 ### 🛑 **Bloqueo de movimiento al editar token (Abril 2025) - v2.1.8**
 
 - ✅ Al escribir el nombre del token en los ajustes ya no se mueve accidentalmente
+
+### 🗺️ **Corrección de carga de mapas (Julio 2025) - v2.1.9**
+
+- ✅ Se muestra un mensaje de error si la imagen del mapa falla y se oculta el spinner
+- 🔧 Dependencias de ESLint eliminadas para evitar peticiones innecesarias
 
 ## 🔄 Historial de cambios previos
 
