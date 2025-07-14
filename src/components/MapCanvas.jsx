@@ -704,6 +704,7 @@ const MapCanvas = ({
   const [activeTool, setActiveTool] = useState('select');
   const [lines, setLines] = useState([]);
   const [currentLine, setCurrentLine] = useState(null);
+  const [selectedLineId, setSelectedLineId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
@@ -712,6 +713,10 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
+  const lineRefs = useRef({});
+  const lineTrRef = useRef();
+  const undoStack = useRef([]);
+  const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
@@ -824,6 +829,55 @@ const MapCanvas = ({
       );
     }
     return lines;
+  };
+
+  const saveLines = (updater) => {
+    setLines((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      undoStack.current.push(prev);
+      redoStack.current = [];
+      return next;
+    });
+  };
+
+  const undoLines = () => {
+    setLines((prev) => {
+      if (undoStack.current.length === 0) return prev;
+      redoStack.current.push(prev);
+      return undoStack.current.pop();
+    });
+  };
+
+  const redoLines = () => {
+    setLines((prev) => {
+      if (redoStack.current.length === 0) return prev;
+      undoStack.current.push(prev);
+      return redoStack.current.pop();
+    });
+  };
+
+  const handleLineDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    saveLines((ls) => ls.map((ln) => (ln.id === id ? { ...ln, x, y } : ln)));
+  };
+
+  const handleLineTransformEnd = (id, e) => {
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    const newPoints = node
+      .points()
+      .map((p, i) => (i % 2 === 0 ? p * scaleX : p * scaleY));
+    node.points(newPoints);
+    const x = node.x();
+    const y = node.y();
+    saveLines((ls) =>
+      ls.map((ln) => (ln.id === id ? { ...ln, x, y, points: newPoints } : ln))
+    );
   };
 
   const handleDragEnd = (id, evt) => {
@@ -947,6 +1001,7 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setSelectedLineId(null);
       setCurrentLine({
         points: [relX, relY],
         color: drawColor,
@@ -995,8 +1050,23 @@ const MapCanvas = ({
 
   const stopPanning = () => {
     if (currentLine) {
-      setLines((ls) => [...ls, currentLine]);
+      const xs = currentLine.points.filter((_, i) => i % 2 === 0);
+      const ys = currentLine.points.filter((_, i) => i % 2 === 1);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const rel = currentLine.points.map((p, i) =>
+        i % 2 === 0 ? p - minX : p - minY
+      );
+      const finished = {
+        ...currentLine,
+        id: Date.now(),
+        x: minX,
+        y: minY,
+        points: rel,
+      };
+      saveLines((ls) => [...ls, finished]);
       setCurrentLine(null);
+      setSelectedLineId(finished.id);
     }
     if (measureLine) setMeasureLine(null);
     if (isPanning) setIsPanning(false);
@@ -1005,6 +1075,7 @@ const MapCanvas = ({
   const handleStageClick = (e) => {
     if (e.target === stageRef.current) {
       setSelectedId(null);
+      setSelectedLineId(null);
     }
   };
 
@@ -1113,6 +1184,23 @@ const MapCanvas = ({
       return;
     }
 
+    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      undoLines();
+      return;
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redoLines();
+      return;
+    }
+
+    if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
+      saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+      setSelectedLineId(null);
+      return;
+    }
+
     if (selectedId == null) return;
     const index = tokens.findIndex((t) => t.id === selectedId);
     if (index === -1) return;
@@ -1150,12 +1238,32 @@ const MapCanvas = ({
     y = Math.max(0, Math.min(mapHeight - 1, y));
     const updated = tokens.map((t) => (t.id === selectedId ? { ...t, x, y } : t));
     onTokensChange(updated);
-  }, [selectedId, tokens, onTokensChange, mapWidth, mapHeight]);
+  }, [
+    selectedId,
+    tokens,
+    onTokensChange,
+    mapWidth,
+    mapHeight,
+    selectedLineId,
+    lines,
+  ]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const tr = lineTrRef.current;
+    const node = selectedLineId ? lineRefs.current[selectedLineId] : null;
+    if (tr && node && activeTool === 'draw') {
+      tr.nodes([node]);
+      tr.getLayer()?.batchDraw();
+    } else if (tr) {
+      tr.nodes([]);
+      tr.getLayer()?.batchDraw();
+    }
+  }, [selectedLineId, activeTool]);
   const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
@@ -1341,16 +1449,26 @@ const MapCanvas = ({
                 listening={activeTool === 'select'}
               />
             ))}
-            {lines.map((ln, i) => (
+            {lines.map((ln) => (
               <Line
-                key={`line-${i}`}
+                ref={(el) => {
+                  if (el) lineRefs.current[ln.id] = el;
+                }}
+                key={ln.id}
+                x={ln.x}
+                y={ln.y}
                 points={ln.points}
                 stroke={ln.color}
                 strokeWidth={ln.width}
                 lineCap="round"
                 lineJoin="round"
+                draggable={activeTool === 'draw'}
+                onClick={() => setSelectedLineId(ln.id)}
+                onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
+                onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
               />
             ))}
+            {activeTool === 'draw' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
             {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
