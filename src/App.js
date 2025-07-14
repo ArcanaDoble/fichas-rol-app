@@ -1,7 +1,16 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import fetchSheetData from './utils/fetchSheetData';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  onSnapshot,
+} from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
@@ -30,14 +39,11 @@ import { nanoid } from 'nanoid';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
-import {
-  uploadDataUrl,
-  getOrUploadFile,
-  releaseFile,
-} from './utils/storage';
+import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 
-const isTouchDevice = typeof window !== 'undefined' &&
-  (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+const isTouchDevice =
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // Compara dos páginas ignorando el campo updatedAt
 function pageDataEqual(a, b) {
@@ -54,17 +60,17 @@ const MASTER_PASSWORD = '0904';
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
   destreza: '#34d399',
-  vigor:    '#f87171',
-  intelecto:'#60a5fa',
+  vigor: '#f87171',
+  intelecto: '#60a5fa',
   voluntad: '#a78bfa',
 };
 const defaultRecursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
 const recursoColor = {
   postura: '#34d399',
-  vida:    '#f87171',
+  vida: '#f87171',
   ingenio: '#60a5fa',
   cordura: '#a78bfa',
-  armadura:'#9ca3af',
+  armadura: '#9ca3af',
 };
 const recursoInfo = {
   postura: 'Explicación de Postura',
@@ -79,16 +85,16 @@ const defaultStats = defaultRecursos.reduce((acc, r) => {
   return acc;
 }, {});
 
-const defaultResourcesList = defaultRecursos.map(name => ({
+const defaultResourcesList = defaultRecursos.map((name) => ({
   id: name,
   name,
   color: recursoColor[name] || '#ffffff',
-  info: recursoInfo[name] || ''
+  info: recursoInfo[name] || '',
 }));
 
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
-const dadoImgUrl = dado => `/dados/${dado}.png`;
+const dadoImgUrl = (dado) => `/dados/${dado}.png`;
 
 const parseCargaValue = (v) => {
   if (!v) return 0;
@@ -118,24 +124,29 @@ const normalizeName = (name) =>
         .replace(/\s+/g, '')
     : '';
 const ALVARO_KEY = 'alvaro';
-const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => {
+const applyCargaPenalties = (
+  data,
+  armas,
+  armaduras,
+  currentPlayerName = ''
+) => {
   let fisica = 0;
   let mental = 0;
-  data.weapons?.forEach(n => {
-    const w = armas.find(a => a && a.nombre === n);
+  data.weapons?.forEach((n) => {
+    const w = armas.find((a) => a && a.nombre === n);
     if (w) {
       fisica += parseCargaValue(w.cargaFisica || w.cuerpo || w.carga);
       mental += parseCargaValue(w.cargaMental || w.mente);
     }
   });
-  data.armaduras?.forEach(n => {
-    const a = armaduras.find(x => x && x.nombre === n);
+  data.armaduras?.forEach((n) => {
+    const a = armaduras.find((x) => x && x.nombre === n);
     if (a) {
       fisica += parseCargaValue(a.cargaFisica || a.cuerpo || a.carga);
       mental += parseCargaValue(a.cargaMental || a.mente);
     }
   });
-  
+
   const isAlvaro = normalizeName(currentPlayerName).includes(ALVARO_KEY);
   const rfId = data.resistenciaFisica || 'vida';
   const rmId = data.resistenciaMental || 'ingenio';
@@ -159,12 +170,8 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
       if (newStats[rmId].actual > total) newStats[rmId].actual = total;
     }
   }
-  const resistenciaFisica = isAlvaro
-    ? (newStats[rfId]?.total || 0)
-    : rfBase;
-  const resistenciaMental = isAlvaro
-    ? (newStats[rmId]?.total || 0)
-    : rmBase;
+  const resistenciaFisica = isAlvaro ? newStats[rfId]?.total || 0 : rfBase;
+  const resistenciaMental = isAlvaro ? newStats[rmId]?.total || 0 : rmBase;
   if (newStats.postura) {
     const base = newStats.postura.base || 0;
     const buff = newStats.postura.buff || 0;
@@ -172,10 +179,7 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     const baseEfectiva = Math.max(0, base - penal);
     const extraBuff =
       !isAlvaro && (rfId === 'postura' || rmId === 'postura') ? 0 : buff;
-    const total = Math.max(
-      0,
-      Math.min(baseEfectiva + extraBuff, RESOURCE_MAX)
-    );
+    const total = Math.max(0, Math.min(baseEfectiva + extraBuff, RESOURCE_MAX));
     newStats.postura.total = total;
     if (newStats.postura.actual > total) newStats.postura.actual = total;
   }
@@ -188,11 +192,11 @@ const applyCargaPenalties = (data, armas, armaduras, currentPlayerName = '') => 
     newStats.cordura.total = total;
     if (newStats.cordura.actual > total) newStats.cordura.actual = total;
   }
-  
+
   return {
     ...data,
     stats: newStats,
-    cargaAcumulada: { fisica, mental }
+    cargaAcumulada: { fisica, mental },
   };
 };
 function App() {
@@ -200,11 +204,11 @@ function App() {
   // STATES
   // ───────────────────────────────────────────────────────────
   const confirm = useConfirm();
-  const [userType, setUserType]               = useState(null);
-  const [showLogin, setShowLogin]             = useState(false);
-  const [passwordInput, setPasswordInput]     = useState('');
-  const [authenticated, setAuthenticated]     = useState(false);
-  const [authError, setAuthError]             = useState('');
+  const [userType, setUserType] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   const handleLogin = () => {
     if (passwordInput === MASTER_PASSWORD) {
@@ -223,15 +227,15 @@ function App() {
     setAuthenticated(false);
     setAuthError('');
   };
-  const [armas, setArmas]                     = useState([]);
-  const [armaduras, setArmaduras]             = useState([]);
-  const [habilidades, setHabilidades]         = useState([]);
-  const [loading, setLoading]                 = useState(true);
-  const [playerName, setPlayerName]           = useState('');
-  const [nameEntered, setNameEntered]         = useState(false);
+  const [armas, setArmas] = useState([]);
+  const [armaduras, setArmaduras] = useState([]);
+  const [habilidades, setHabilidades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [playerName, setPlayerName] = useState('');
+  const [nameEntered, setNameEntered] = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
   const tooltipCounterRef = useRef(0);
-  const [playerData, setPlayerData]           = useState({
+  const [playerData, setPlayerData] = useState({
     weapons: [],
     armaduras: [],
     poderes: [],
@@ -243,28 +247,117 @@ function App() {
     resistenciaFisica: 'vida',
     resistenciaMental: 'ingenio',
   });
-  const [playerError, setPlayerError]         = useState('');
+  const [playerError, setPlayerError] = useState('');
   const [playerInputArma, setPlayerInputArma] = useState('');
   const [playerInputArmadura, setPlayerInputArmadura] = useState('');
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
   const [playerInputPoder, setPlayerInputPoder] = useState('');
   const [playerPoderError, setPlayerPoderError] = useState('');
-  
+
   // Google Sheets ID
-  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID || '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
-  
+  const sheetId =
+    process.env.REACT_APP_GOOGLE_SHEETS_ID ||
+    '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+
   // Datos de prueba temporales mientras arreglamos Google Sheets
-  const datosPruebaArmas = React.useMemo(() => [
-    { nombre: 'Espada', dano: '1D6', alcance: 'Cuerpo a cuerpo', consumo: '0', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Espada básica', tipoDano: 'físico', valor: '10', tecnologia: 'Baja' },
-    { nombre: 'Daga', dano: '1D4', alcance: 'Cuerpo a cuerpo', consumo: '0', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Daga pequeña', tipoDano: 'físico', valor: '5', tecnologia: 'Baja' },
-    { nombre: 'Pistola', dano: '1D8', alcance: 'Media', consumo: '1', carga: '0', cuerpo: '0', mente: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Pistola básica', tipoDano: 'físico', valor: '50', tecnologia: 'Media' }
-  ], []);
-  
-  const datosPruebaArmaduras = React.useMemo(() => [
-    { nombre: 'Armadura de Cuero', defensa: '1', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura ligera de cuero', valor: '20', tecnologia: 'Baja' },
-    { nombre: 'Armadura de Malla', defensa: '2', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura de malla metálica', valor: '40', tecnologia: 'Baja' },
-    { nombre: 'Armadura Completa', defensa: '3', cuerpo: '0', mente: '0', carga: '0', cargaFisica: '0', cargaMental: '0', rasgos: [], descripcion: 'Armadura completa de metal', valor: '100', tecnologia: 'Baja' }
-  ], []);
+  const datosPruebaArmas = React.useMemo(
+    () => [
+      {
+        nombre: 'Espada',
+        dano: '1D6',
+        alcance: 'Cuerpo a cuerpo',
+        consumo: '0',
+        carga: '0',
+        cuerpo: '0',
+        mente: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Espada básica',
+        tipoDano: 'físico',
+        valor: '10',
+        tecnologia: 'Baja',
+      },
+      {
+        nombre: 'Daga',
+        dano: '1D4',
+        alcance: 'Cuerpo a cuerpo',
+        consumo: '0',
+        carga: '0',
+        cuerpo: '0',
+        mente: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Daga pequeña',
+        tipoDano: 'físico',
+        valor: '5',
+        tecnologia: 'Baja',
+      },
+      {
+        nombre: 'Pistola',
+        dano: '1D8',
+        alcance: 'Media',
+        consumo: '1',
+        carga: '0',
+        cuerpo: '0',
+        mente: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Pistola básica',
+        tipoDano: 'físico',
+        valor: '50',
+        tecnologia: 'Media',
+      },
+    ],
+    []
+  );
+
+  const datosPruebaArmaduras = React.useMemo(
+    () => [
+      {
+        nombre: 'Armadura de Cuero',
+        defensa: '1',
+        cuerpo: '0',
+        mente: '0',
+        carga: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Armadura ligera de cuero',
+        valor: '20',
+        tecnologia: 'Baja',
+      },
+      {
+        nombre: 'Armadura de Malla',
+        defensa: '2',
+        cuerpo: '0',
+        mente: '0',
+        carga: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Armadura de malla metálica',
+        valor: '40',
+        tecnologia: 'Baja',
+      },
+      {
+        nombre: 'Armadura Completa',
+        defensa: '3',
+        cuerpo: '0',
+        mente: '0',
+        carga: '0',
+        cargaFisica: '0',
+        cargaMental: '0',
+        rasgos: [],
+        descripcion: 'Armadura completa de metal',
+        valor: '100',
+        tecnologia: 'Baja',
+      },
+    ],
+    []
+  );
   // Recursos dinámicos (añadir / eliminar)
   const {
     resourcesList,
@@ -291,11 +384,11 @@ function App() {
     cuerpo: '',
     mente: '',
     poder: '',
-    descripcion: ''
+    descripcion: '',
   });
   const [editingAbility, setEditingAbility] = useState(null);
   const [newAbilityError, setNewAbilityError] = useState('');
-  const [searchTerm, setSearchTerm]   = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
   const [editingInfoText, setEditingInfoText] = useState('');
   const [hoveredTipId, setHoveredTipId] = useState(null);
@@ -327,7 +420,7 @@ function App() {
     experiencia: 0,
     dinero: 0,
     notas: '',
-    estados: []
+    estados: [],
   });
   // Estados para equipar items a enemigos
   const [enemyInputArma, setEnemyInputArma] = useState('');
@@ -360,8 +453,11 @@ function App() {
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
-  const prevPagesRef = useRef([]);
   const pagesLoadedRef = useRef(false);
+  const prevTokensRef = useRef([]);
+  const prevLinesRef = useRef([]);
+  const prevBgRef = useRef(null);
+  const prevGridRef = useRef({});
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -380,12 +476,16 @@ function App() {
   useEffect(() => {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
-      const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const loaded = snap.docs.map((d) => {
+        const { tokens, lines, ...meta } = d.data();
+        return { id: d.id, ...meta };
+      });
       if (loaded.length === 0) {
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
           background: null,
+          backgroundHash: null,
           gridSize: 100,
           gridCells: 30,
           gridOffsetX: 0,
@@ -394,14 +494,12 @@ function App() {
           lines: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        setPages([defaultPage]);
-        prevPagesRef.current = [defaultPage];
-        pagesLoadedRef.current = true;
+        const { tokens, lines, ...meta } = defaultPage;
+        setPages([meta]);
       } else {
         setPages(loaded);
-        prevPagesRef.current = loaded;
-        pagesLoadedRef.current = true;
       }
+      pagesLoadedRef.current = true;
     };
     loadPages();
   }, []);
@@ -419,15 +517,18 @@ function App() {
       const pageId = pages[currentPage]?.id;
       if (pageId) {
         const prevHash = pages[currentPage]?.backgroundHash;
-        const newPage = {
-          ...pages[currentPage],
+        await updateDoc(doc(db, 'pages', pageId), {
           background: url,
           backgroundHash: hash,
-        };
-        await setDoc(doc(db, 'pages', pageId), sanitize(newPage));
+        });
         setPages((ps) =>
-          ps.map((p, i) => (i === currentPage ? newPage : p))
+          ps.map((p, i) =>
+            i === currentPage
+              ? { ...p, background: url, backgroundHash: hash }
+              : p
+          )
         );
+        prevBgRef.current = url;
         if (prevHash && prevHash !== hash) {
           await releaseFile(prevHash);
         }
@@ -437,146 +538,114 @@ function App() {
     }
   };
 
-  // Sincronizar página actual con estados locales
+  // Suscribirse a la página actual
   useEffect(() => {
-    const p = pages[currentPage];
-    if (!p) return;
-    setCanvasTokens(p.tokens || []);
-    setCanvasLines(p.lines || []);
-    setCanvasBackground(p.background || null);
-    setGridSize(p.gridSize || 1);
-    setGridCells(p.gridCells || 1);
-    setGridOffsetX(p.gridOffsetX || 0);
-    setGridOffsetY(p.gridOffsetY || 0);
+    if (!pagesLoadedRef.current) return undefined;
+    const page = pages[currentPage];
+    if (!page) return undefined;
+    const unsub = onSnapshot(doc(db, 'pages', page.id), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setCanvasTokens(data.tokens || []);
+      setCanvasLines(data.lines || []);
+      setCanvasBackground(data.background || null);
+      setGridSize(data.gridSize || 1);
+      setGridCells(data.gridCells || 1);
+      setGridOffsetX(data.gridOffsetX || 0);
+      setGridOffsetY(data.gridOffsetY || 0);
+      prevTokensRef.current = data.tokens || [];
+      prevLinesRef.current = data.lines || [];
+      prevBgRef.current = data.background || null;
+      prevGridRef.current = {
+        gridSize: data.gridSize || 1,
+        gridCells: data.gridCells || 1,
+        gridOffsetX: data.gridOffsetX || 0,
+        gridOffsetY: data.gridOffsetY || 0,
+      };
+      setPages((ps) =>
+        ps.map((p, i) =>
+          i === currentPage
+            ? {
+                ...p,
+                name: data.name || p.name,
+                background: data.background || null,
+                backgroundHash: data.backgroundHash || null,
+                gridSize: data.gridSize || 1,
+                gridCells: data.gridCells || 1,
+                gridOffsetX: data.gridOffsetX || 0,
+                gridOffsetY: data.gridOffsetY || 0,
+              }
+            : p
+        )
+      );
+    });
+    return unsub;
   }, [currentPage, pages]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentTokens = pages[currentPage]?.tokens || [];
-    if (deepEqual(canvasTokens, currentTokens)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, tokens: canvasTokens } : pg
-      )
-    );
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+    if (deepEqual(canvasTokens, prevTokensRef.current)) return;
+    prevTokensRef.current = canvasTokens;
+    const saveTokens = async () => {
+      const tokens = await Promise.all(
+        canvasTokens.map(async (t) => {
+          if (t.url && t.url.startsWith('data:')) {
+            const url = await uploadDataUrl(t.url, `canvas-tokens/${t.id}`);
+            return { ...t, url };
+          }
+          return t;
+        })
+      );
+      await updateDoc(doc(db, 'pages', pageId), { tokens });
+    };
+    saveTokens();
   }, [canvasTokens, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentLines = pages[currentPage]?.lines || [];
-    if (deepEqual(canvasLines, currentLines)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, lines: canvasLines } : pg
-      )
-    );
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+    if (deepEqual(canvasLines, prevLinesRef.current)) return;
+    prevLinesRef.current = canvasLines;
+    updateDoc(doc(db, 'pages', pageId), { lines: canvasLines });
   }, [canvasLines, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentBg = pages[currentPage]?.background || null;
-    if (deepEqual(canvasBackground, currentBg)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, background: canvasBackground } : pg
-      )
-    );
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+    if (canvasBackground === prevBgRef.current) return;
+    let bg = canvasBackground;
+    const saveBg = async () => {
+      if (bg && bg.startsWith('blob:')) return;
+      if (bg && bg.startsWith('data:')) {
+        bg = await uploadDataUrl(bg, `Mapas/${pageId}`);
+      }
+      await updateDoc(doc(db, 'pages', pageId), { background: bg });
+      setPages((ps) =>
+        ps.map((p, i) => (i === currentPage ? { ...p, background: bg } : p))
+      );
+      prevBgRef.current = bg;
+    };
+    saveBg();
   }, [canvasBackground, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const p = pages[currentPage];
-    const currentGrid = {
-      gridSize: p?.gridSize,
-      gridCells: p?.gridCells,
-      gridOffsetX: p?.gridOffsetX,
-      gridOffsetY: p?.gridOffsetY,
-    };
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
-    if (deepEqual(newGrid, currentGrid)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage
-          ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY }
-          : pg
-      )
+    if (deepEqual(newGrid, prevGridRef.current)) return;
+    prevGridRef.current = newGrid;
+    updateDoc(doc(db, 'pages', pageId), newGrid);
+    setPages((ps) =>
+      ps.map((p, i) => (i === currentPage ? { ...p, ...newGrid } : p))
     );
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
-// Rate limit estricto para evitar escrituras masivas a Firestore
-const lastSyncRef = useRef(0);
-const syncTimeoutRef = useRef(null);
-const RATE_LIMIT_MS = 10000; // 10 segundos mínimo entre escrituras
-
-useEffect(() => {
-  const prevPages = prevPagesRef.current;
-  const pagesChanged = pages.some((p, i) => {
-    const prev = prevPages[i];
-    if (!prev) return true;
-    return !pageDataEqual(prev, p);
-  });
-  if (!pagesChanged) {
-    prevPagesRef.current = pages;
-    return;
-  }
-
-  const now = Date.now();
-  const doSync = async () => {
-    const updated = await Promise.all(
-      pages.map(async (p, i) => {
-        const prev = prevPages[i] || {};
-        if (pageDataEqual(prev, p)) return prevPages[i];
-
-        const tokens = await Promise.all(
-          (p.tokens || []).map(async (t) => {
-            if (t.url && t.url.startsWith('data:')) {
-              const url = await uploadDataUrl(
-                t.url,
-                `canvas-tokens/${t.id}`
-              );
-              return { ...t, url };
-            }
-            return t;
-          })
-        );
-        let bg = p.background;
-        if (bg && bg.startsWith('data:')) {
-          bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
-        }
-        if (bg && bg.startsWith('blob:')) {
-          return p; // no guardar hasta que termine la subida
-        }
-        const newPage = { ...p, tokens, background: bg, lines: p.lines || [] };
-        await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-        return newPage;
-      })
-    );
-    prevPagesRef.current = updated;
-    lastSyncRef.current = Date.now();
-    syncTimeoutRef.current = null;
-  };
-
-  if (now - lastSyncRef.current > RATE_LIMIT_MS) {
-    doSync();
-  } else {
-    if (!syncTimeoutRef.current) {
-      const delay = RATE_LIMIT_MS - (now - lastSyncRef.current);
-      syncTimeoutRef.current = setTimeout(doSync, delay);
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('Sincronización de páginas a Firestore limitada por rate limit.');
-      }
-    }
-  }
-  // Cleanup
-  return () => {
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
-      syncTimeoutRef.current = null;
-    }
-  };
-}, [pages]);
-
-  const addPage = () => {
+  const addPage = async () => {
     const newPage = {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
@@ -589,11 +658,17 @@ useEffect(() => {
       tokens: [],
       lines: [],
     };
-    setPages((ps) => [...ps, newPage]);
+    await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
+    const { tokens, lines, ...meta } = newPage;
+    setPages((ps) => [...ps, meta]);
     setCurrentPage(pages.length);
   };
 
   const updatePage = (index, data) => {
+    const pageId = pages[index]?.id;
+    if (pageId) {
+      updateDoc(doc(db, 'pages', pageId), data);
+    }
     setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...data } : p)));
     if (index === currentPage) {
       if (data.gridSize !== undefined) setGridSize(data.gridSize);
@@ -623,35 +698,65 @@ useEffect(() => {
   };
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
-    ? armas.filter(a =>
-        a && a.nombre && a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
-      ).slice(0, 5)
+    ? armas
+        .filter(
+          (a) =>
+            a &&
+            a.nombre &&
+            a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   const armaduraSugerencias = playerInputArmadura
-    ? armaduras.filter(a =>
-        a && a.nombre && a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
-      ).slice(0, 5)
+    ? armaduras
+        .filter(
+          (a) =>
+            a &&
+            a.nombre &&
+            a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   const poderSugerencias = playerInputPoder
-    ? habilidades.filter(h =>
-        h && h.nombre && h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
-      ).slice(0, 5)
+    ? habilidades
+        .filter(
+          (h) =>
+            h &&
+            h.nombre &&
+            h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   // Sugerencias dinámicas para inputs de equipo de enemigos
   const enemyArmaSugerencias = enemyInputArma
-    ? armas.filter(a =>
-        a && a.nombre && a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
-      ).slice(0, 5)
+    ? armas
+        .filter(
+          (a) =>
+            a &&
+            a.nombre &&
+            a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   const enemyArmaduraSugerencias = enemyInputArmadura
-    ? armaduras.filter(a =>
-        a && a.nombre && a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
-      ).slice(0, 5)
+    ? armaduras
+        .filter(
+          (a) =>
+            a &&
+            a.nombre &&
+            a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   const enemyPoderSugerencias = enemyInputPoder
-    ? habilidades.filter(h =>
-        h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
-      ).slice(0, 5)
+    ? habilidades
+        .filter(
+          (h) =>
+            h &&
+            h.nombre &&
+            h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
+        )
+        .slice(0, 5)
     : [];
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -683,7 +788,9 @@ useEffect(() => {
     setNewResName('');
     setNewResColor('#ffffff');
     setSearchTerm('');
-    setShowAddResForm(typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+    setShowAddResForm(
+      typeof window !== 'undefined' ? window.innerWidth >= 640 : false
+    );
     setEditingInfoId(null);
     setEditingInfoText('');
     setClaves([]);
@@ -746,11 +853,11 @@ useEffect(() => {
   useEffect(() => {
     if (!userType) return;
     getDocs(collection(db, 'players'))
-      .then(snap => {
-        const players = snap.docs.map(d => d.id);
+      .then((snap) => {
+        const players = snap.docs.map((d) => d.id);
         setExistingPlayers(players);
       })
-      .catch(error => {
+      .catch((error) => {
         // Error cargando jugadores
       });
   }, [userType]);
@@ -767,7 +874,9 @@ useEffect(() => {
       if (rows && rows.length > 0) {
         datos = rows.map((obj) => {
           const rasgos = obj.RASGOS
-            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
+            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
+                s.replace(/[[\]]/g, '').trim()
+              )
             : [];
           return {
             nombre: obj.NOMBRE,
@@ -777,8 +886,14 @@ useEffect(() => {
             carga: obj.CARGA,
             cuerpo: obj.CUERPO,
             mente: obj.MENTE,
-            cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-            cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+            cargaFisica:
+              obj.CARGA_FISICA ||
+              obj['CARGA FISICA'] ||
+              obj.CUERPO ||
+              obj.CARGA ||
+              '',
+            cargaMental:
+              obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
             rasgos,
             descripcion: obj.DESCRIPCIÓN || '',
             tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
@@ -797,8 +912,8 @@ useEffect(() => {
       setLoading(false);
     }
   }, [sheetId, datosPruebaArmas, fetchArmasError]);
-  useEffect(() => { 
-    fetchArmas(); 
+  useEffect(() => {
+    fetchArmas();
   }, [fetchArmas]);
   // ───────────────────────────────────────────────────────────
   // FETCH ARMADURAS
@@ -813,7 +928,9 @@ useEffect(() => {
       if (rows && rows.length > 0) {
         datos = rows.map((obj) => {
           const rasgos = obj.RASGOS
-            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) => s.replace(/[[\]]/g, '').trim())
+            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
+                s.replace(/[[\]]/g, '').trim()
+              )
             : [];
           return {
             nombre: obj.NOMBRE,
@@ -821,8 +938,14 @@ useEffect(() => {
             cuerpo: obj.CUERPO,
             mente: obj.MENTE,
             carga: obj.CARGA,
-            cargaFisica: obj.CARGA_FISICA || obj['CARGA FISICA'] || obj.CUERPO || obj.CARGA || '',
-            cargaMental: obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+            cargaFisica:
+              obj.CARGA_FISICA ||
+              obj['CARGA FISICA'] ||
+              obj.CUERPO ||
+              obj.CARGA ||
+              '',
+            cargaMental:
+              obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
             rasgos,
             descripcion: obj.DESCRIPCIÓN || '',
             valor: obj.VALOR || '',
@@ -840,8 +963,8 @@ useEffect(() => {
       setLoading(false);
     }
   }, [sheetId, datosPruebaArmaduras, fetchArmadurasError]);
-  useEffect(() => { 
-    fetchArmaduras(); 
+  useEffect(() => {
+    fetchArmaduras();
   }, [fetchArmaduras]);
   // ───────────────────────────────────────────────────────────
   // FETCH HABILIDADES
@@ -850,7 +973,7 @@ useEffect(() => {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'abilities'));
-      const datos = snap.docs.map(d => d.data());
+      const datos = snap.docs.map((d) => d.data());
       setHabilidades(datos);
     } catch (e) {
       // Error cargando habilidades
@@ -858,20 +981,24 @@ useEffect(() => {
       setLoading(false);
     }
   }, []);
-  useEffect(() => { fetchHabilidades() }, [fetchHabilidades]);
+  useEffect(() => {
+    fetchHabilidades();
+  }, [fetchHabilidades]);
   // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
   // ───────────────────────────────────────────────────────────
   const fetchEnemies = useCallback(async () => {
     try {
       const snap = await getDocs(collection(db, 'enemies'));
-      const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const datos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setEnemies(datos);
     } catch (e) {
       // Error cargando enemigos
     }
   }, []);
-  useEffect(() => { fetchEnemies() }, [fetchEnemies]);
+  useEffect(() => {
+    fetchEnemies();
+  }, [fetchEnemies]);
   const refreshCatalog = () => {
     fetchArmas();
     fetchArmaduras();
@@ -884,11 +1011,11 @@ useEffect(() => {
   // 1) CARGA DE PLAYER DATA
   const loadPlayer = useCallback(async () => {
     if (!playerName) return;
-    
+
     try {
       const docRef = doc(db, 'players', playerName);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         const data = docSnap.data();
         const recalculated = applyCargaPenalties(
@@ -1001,12 +1128,18 @@ useEffect(() => {
     try {
       await setDoc(doc(db, 'players', playerName), fullData);
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+        window.localStorage.setItem(
+          `player_${playerName}`,
+          JSON.stringify(fullData)
+        );
       }
     } catch (e) {
       // Error guardando en Firestore
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(`player_${playerName}`, JSON.stringify(fullData));
+        window.localStorage.setItem(
+          `player_${playerName}`,
+          JSON.stringify(fullData)
+        );
       }
     }
   };
@@ -1038,10 +1171,7 @@ useEffect(() => {
   };
   const handleIncrease = (r) => {
     const s = { ...playerData.stats[r] };
-    const maxBase = Math.min(
-      RESOURCE_MAX,
-      (s.total || 0) - (s.buff || 0)
-    );
+    const maxBase = Math.min(RESOURCE_MAX, (s.total || 0) - (s.buff || 0));
     s.actual = Math.min(s.actual + 1, maxBase);
     const newStats = { ...playerData.stats, [r]: s };
     savePlayer({ ...playerData, stats: newStats });
@@ -1067,21 +1197,26 @@ useEffect(() => {
     if (id === 'postura') {
       const carga = playerData.cargaAcumulada?.fisica || 0;
       const icono = cargaFisicaIcon(carga);
-      if (!(await confirm(
-        `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
-      ))) return;
+      if (
+        !(await confirm(
+          `¿Estás seguro? Si eliminas Postura, tu carga física ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Postura.`
+        ))
+      )
+        return;
     }
     if (id === 'cordura') {
       const carga = playerData.cargaAcumulada?.mental || 0;
       const icono = cargaMentalIcon(carga);
-      if (!(await confirm(
-        `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
-      ))) return;
+      if (
+        !(await confirm(
+          `¿Estás seguro? Si eliminas Cordura, tu carga mental ${icono} (${carga}) quedará pendiente y ya no podrás ver penalización hasta que vuelvas a crear Cordura.`
+        ))
+      )
+        return;
     }
 
     eliminarRecurso(id);
   };
-
 
   // Funciones para reordenar estadísticas
   const moveStatUp = (index) => {
@@ -1114,7 +1249,15 @@ useEffect(() => {
       }
       await setDoc(doc(db, 'abilities', nombre), newAbility);
       setEditingAbility(null);
-      setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' });
+      setNewAbility({
+        nombre: '',
+        alcance: '',
+        consumo: '',
+        cuerpo: '',
+        mente: '',
+        poder: '',
+        descripcion: '',
+      });
       setNewAbilityError('');
       fetchHabilidades();
     } catch (e) {
@@ -1130,11 +1273,18 @@ useEffect(() => {
       await deleteDoc(doc(db, 'abilities', name));
       if (editingAbility === name) {
         setEditingAbility(null);
-        setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' });
+        setNewAbility({
+          nombre: '',
+          alcance: '',
+          consumo: '',
+          cuerpo: '',
+          mente: '',
+          poder: '',
+          descripcion: '',
+        });
       }
       fetchHabilidades();
-    } catch (e) {
-    }
+    } catch (e) {}
   };
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA ENEMIGOS
@@ -1145,7 +1295,7 @@ useEffect(() => {
       const dataToSave = {
         ...enemyData,
         id: enemyId,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
       await setDoc(doc(db, 'enemies', enemyId), dataToSave);
       fetchEnemies();
@@ -1161,12 +1311,11 @@ useEffect(() => {
       if (selectedEnemy?.id === enemyId) {
         setSelectedEnemy(null);
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   };
   const createNewEnemy = () => {
     const baseAtributos = {};
-    atributos.forEach(k => (baseAtributos[k] = 'D4'));
+    atributos.forEach((k) => (baseAtributos[k] = 'D4'));
     const baseStats = { ...defaultStats };
     setNewEnemy({
       name: '',
@@ -1182,7 +1331,7 @@ useEffect(() => {
       experiencia: 0,
       dinero: 0,
       notas: '',
-      estados: []
+      estados: [],
     });
     setEditingEnemy(null);
     setShowEnemyForm(true);
@@ -1199,7 +1348,9 @@ useEffect(() => {
     setEnemies((prev) => prev.map((e) => (e.id === enemy.id ? enemy : e)));
     setCanvasTokens((prev) =>
       prev.map((t) =>
-        t.enemyId === enemy.id ? { ...t, url: enemy.portrait || t.url, name: enemy.name } : t
+        t.enemyId === enemy.id
+          ? { ...t, url: enemy.portrait || t.url, name: enemy.name }
+          : t
       )
     );
   };
@@ -1212,7 +1363,7 @@ useEffect(() => {
       // Si estamos editando, usar el ID existente; si no, generar uno nuevo
       const enemyToSave = {
         ...newEnemy,
-        id: editingEnemy || `enemy_${Date.now()}`
+        id: editingEnemy || `enemy_${Date.now()}`,
       };
       await saveEnemy(enemyToSave);
       setShowEnemyForm(false);
@@ -1229,7 +1380,7 @@ useEffect(() => {
         experiencia: 0,
         dinero: 0,
         notas: '',
-        estados: []
+        estados: [],
       });
       setEditingEnemy(null);
       setEnemyInputArma('');
@@ -1242,7 +1393,12 @@ useEffect(() => {
       alert('Error al guardar el enemigo: ' + e.message);
     }
   };
-  const resizeImage = (file, maxWidth = 300, maxHeight = 300, quality = 0.8) => {
+  const resizeImage = (
+    file,
+    maxWidth = 300,
+    maxHeight = 300,
+    quality = 0.8
+  ) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -1283,13 +1439,16 @@ useEffect(() => {
         }
         // Verificar tamaño del archivo (máximo 10MB antes de procesar)
         if (file.size > 10 * 1024 * 1024) {
-          alert('La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB');
+          alert(
+            'La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB'
+          );
           return;
         }
         // Redimensionar imagen
         const resizedImage = await resizeImage(file);
         // Verificar que el resultado no sea demasiado grande para Firestore
-        if (resizedImage.length > 900000) { // ~900KB para dejar margen
+        if (resizedImage.length > 900000) {
+          // ~900KB para dejar margen
           // Si aún es muy grande, reducir más la calidad
           const smallerImage = await resizeImage(file, 200, 200, 0.5);
           setNewEnemy({ ...newEnemy, portrait: smallerImage });
@@ -1297,7 +1456,9 @@ useEffect(() => {
           setNewEnemy({ ...newEnemy, portrait: resizedImage });
         }
       } catch (error) {
-        alert('Error al procesar la imagen. Por favor intenta con otra imagen.');
+        alert(
+          'Error al procesar la imagen. Por favor intenta con otra imagen.'
+        );
       }
     }
   };
@@ -1305,125 +1466,178 @@ useEffect(() => {
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
   const handleEnemyEquipWeapon = () => {
-      if (loading) return;
-      const f = armas.find(a => a && a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase()));
-      if (!f) return setEnemyArmaError('Arma no encontrada');
-      if (showEnemyForm) {
-        if (!newEnemy.weapons.some(w => w.nombre === f.nombre)) {
-          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
-          setEnemyInputArma('');
-          setEnemyArmaError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.weapons.some(w => w.nombre === f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, f] });
+    if (loading) return;
+    const f = armas.find(
+      (a) =>
+        a &&
+        a.nombre.toLowerCase().includes(enemyInputArma.trim().toLowerCase())
+    );
+    if (!f) return setEnemyArmaError('Arma no encontrada');
+    if (showEnemyForm) {
+      if (!newEnemy.weapons.some((w) => w.nombre === f.nombre)) {
+        setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, f] });
         setEnemyInputArma('');
         setEnemyArmaError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.weapons.some((w) => w.nombre === f.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        weapons: [...selectedEnemy.weapons, f],
+      });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
+    }
+  };
   const handleEnemyEquipWeaponFromSuggestion = (name) => {
-      const w = armas.find(a => a && a.nombre === name);
-      if (!w) return setEnemyArmaError('Arma no encontrada');
-      if (showEnemyForm) {
-        if (!newEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
-          setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
-          setEnemyInputArma('');
-          setEnemyArmaError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.weapons.some(weapon => weapon.nombre === w.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, weapons: [...selectedEnemy.weapons, w] });
+    const w = armas.find((a) => a && a.nombre === name);
+    if (!w) return setEnemyArmaError('Arma no encontrada');
+    if (showEnemyForm) {
+      if (!newEnemy.weapons.some((weapon) => weapon.nombre === w.nombre)) {
+        setNewEnemy({ ...newEnemy, weapons: [...newEnemy.weapons, w] });
         setEnemyInputArma('');
         setEnemyArmaError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.weapons.some((weapon) => weapon.nombre === w.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        weapons: [...selectedEnemy.weapons, w],
+      });
+      setEnemyInputArma('');
+      setEnemyArmaError('');
+    }
+  };
   const handleEnemyEquipArmor = () => {
-      if (loading) return;
-      const f = armaduras.find(a => a && a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase()));
-      if (!f) return setEnemyArmaduraError('Armadura no encontrada');
-      if (showEnemyForm) {
-        if (!newEnemy.armaduras.some(a => a.nombre === f.nombre)) {
-          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
-          setEnemyInputArmadura('');
-          setEnemyArmaduraError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.armaduras.some(a => a.nombre === f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, f] });
+    if (loading) return;
+    const f = armaduras.find(
+      (a) =>
+        a &&
+        a.nombre.toLowerCase().includes(enemyInputArmadura.trim().toLowerCase())
+    );
+    if (!f) return setEnemyArmaduraError('Armadura no encontrada');
+    if (showEnemyForm) {
+      if (!newEnemy.armaduras.some((a) => a.nombre === f.nombre)) {
+        setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, f] });
         setEnemyInputArmadura('');
         setEnemyArmaduraError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.armaduras.some((a) => a.nombre === f.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        armaduras: [...selectedEnemy.armaduras, f],
+      });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
   const handleEnemyEquipArmorFromSuggestion = (name) => {
-      const a = armaduras.find(x => x && x.nombre === name);
-      if (!a) return setEnemyArmaduraError('Armadura no encontrada');
-      if (showEnemyForm) {
-        if (!newEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
-          setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
-          setEnemyInputArmadura('');
-          setEnemyArmaduraError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.armaduras.some(armor => armor.nombre === a.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, armaduras: [...selectedEnemy.armaduras, a] });
+    const a = armaduras.find((x) => x && x.nombre === name);
+    if (!a) return setEnemyArmaduraError('Armadura no encontrada');
+    if (showEnemyForm) {
+      if (!newEnemy.armaduras.some((armor) => armor.nombre === a.nombre)) {
+        setNewEnemy({ ...newEnemy, armaduras: [...newEnemy.armaduras, a] });
         setEnemyInputArmadura('');
         setEnemyArmaduraError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.armaduras.some((armor) => armor.nombre === a.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        armaduras: [...selectedEnemy.armaduras, a],
+      });
+      setEnemyInputArmadura('');
+      setEnemyArmaduraError('');
+    }
+  };
   const handleEnemyEquipPower = () => {
-      if (loading) return;
-      const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase()));
-      if (!f) return setEnemyPoderError('Poder no encontrado');
-      if (showEnemyForm) {
-        if (!newEnemy.poderes.some(p => p.nombre === f.nombre)) {
-          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
-          setEnemyInputPoder('');
-          setEnemyPoderError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.poderes.some(p => p.nombre === f.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, f] });
+    if (loading) return;
+    const f = habilidades.find(
+      (h) =>
+        h &&
+        h.nombre &&
+        h.nombre.toLowerCase().includes(enemyInputPoder.trim().toLowerCase())
+    );
+    if (!f) return setEnemyPoderError('Poder no encontrado');
+    if (showEnemyForm) {
+      if (!newEnemy.poderes.some((p) => p.nombre === f.nombre)) {
+        setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, f] });
         setEnemyInputPoder('');
         setEnemyPoderError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.poderes.some((p) => p.nombre === f.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        poderes: [...selectedEnemy.poderes, f],
+      });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
+    }
+  };
   const handleEnemyEquipPowerFromSuggestion = (name) => {
-      const h = habilidades.find(x => x && x.nombre === name);
-      if (!h) return setEnemyPoderError('Poder no encontrado');
-      if (showEnemyForm) {
-        if (!newEnemy.poderes.some(power => power.nombre === h.nombre)) {
-          setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
-          setEnemyInputPoder('');
-          setEnemyPoderError('');
-        }
-      } else if (selectedEnemy && !selectedEnemy.poderes.some(power => power.nombre === h.nombre)) {
-        setSelectedEnemy({ ...selectedEnemy, poderes: [...selectedEnemy.poderes, h] });
+    const h = habilidades.find((x) => x && x.nombre === name);
+    if (!h) return setEnemyPoderError('Poder no encontrado');
+    if (showEnemyForm) {
+      if (!newEnemy.poderes.some((power) => power.nombre === h.nombre)) {
+        setNewEnemy({ ...newEnemy, poderes: [...newEnemy.poderes, h] });
         setEnemyInputPoder('');
         setEnemyPoderError('');
       }
-    };
+    } else if (
+      selectedEnemy &&
+      !selectedEnemy.poderes.some((power) => power.nombre === h.nombre)
+    ) {
+      setSelectedEnemy({
+        ...selectedEnemy,
+        poderes: [...selectedEnemy.poderes, h],
+      });
+      setEnemyInputPoder('');
+      setEnemyPoderError('');
+    }
+  };
   const unequipEnemyWeapon = (index) => {
-      if (showEnemyForm) {
-        const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
-        setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
-      } else if (selectedEnemy) {
-        const updatedWeapons = selectedEnemy.weapons.filter((_, i) => i !== index);
-        setSelectedEnemy({ ...selectedEnemy, weapons: updatedWeapons });
-      }
-    };
+    if (showEnemyForm) {
+      const updatedWeapons = newEnemy.weapons.filter((_, i) => i !== index);
+      setNewEnemy({ ...newEnemy, weapons: updatedWeapons });
+    } else if (selectedEnemy) {
+      const updatedWeapons = selectedEnemy.weapons.filter(
+        (_, i) => i !== index
+      );
+      setSelectedEnemy({ ...selectedEnemy, weapons: updatedWeapons });
+    }
+  };
   const unequipEnemyArmor = (index) => {
-      if (showEnemyForm) {
-        const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
-        setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
-      } else if (selectedEnemy) {
-        const updatedArmors = selectedEnemy.armaduras.filter((_, i) => i !== index);
-        setSelectedEnemy({ ...selectedEnemy, armaduras: updatedArmors });
-      }
-    };
+    if (showEnemyForm) {
+      const updatedArmors = newEnemy.armaduras.filter((_, i) => i !== index);
+      setNewEnemy({ ...newEnemy, armaduras: updatedArmors });
+    } else if (selectedEnemy) {
+      const updatedArmors = selectedEnemy.armaduras.filter(
+        (_, i) => i !== index
+      );
+      setSelectedEnemy({ ...selectedEnemy, armaduras: updatedArmors });
+    }
+  };
   const unequipEnemyPower = (index) => {
-      if (showEnemyForm) {
-        const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
-        setNewEnemy({ ...newEnemy, poderes: updatedPowers });
-      } else if (selectedEnemy) {
-        const updatedPowers = selectedEnemy.poderes.filter((_, i) => i !== index);
-        setSelectedEnemy({ ...selectedEnemy, poderes: updatedPowers });
-      }
-    };
+    if (showEnemyForm) {
+      const updatedPowers = newEnemy.poderes.filter((_, i) => i !== index);
+      setNewEnemy({ ...newEnemy, poderes: updatedPowers });
+    } else if (selectedEnemy) {
+      const updatedPowers = selectedEnemy.poderes.filter((_, i) => i !== index);
+      setSelectedEnemy({ ...selectedEnemy, poderes: updatedPowers });
+    }
+  };
   // ───────────────────────────────────────────────────────────
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
@@ -1434,12 +1648,17 @@ useEffect(() => {
     if (loading) return;
     const nombreArma = playerInputArma.trim();
     if (!nombreArma) return setPlayerError('Nombre de arma requerido');
-    
-    const f = armas.find(a => a && a.nombre && a.nombre.toLowerCase().includes(nombreArma.toLowerCase()));
+
+    const f = armas.find(
+      (a) =>
+        a &&
+        a.nombre &&
+        a.nombre.toLowerCase().includes(nombreArma.toLowerCase())
+    );
     if (!f) {
       return setPlayerError('Arma no encontrada');
     }
-    
+
     // Agregar el arma si no está ya equipada
     if (!playerData.weapons.includes(f.nombre)) {
       const newWeapons = [...playerData.weapons, f.nombre];
@@ -1450,13 +1669,16 @@ useEffect(() => {
       setPlayerError('Arma ya equipada');
     }
   };
-  const handlePlayerUnequip = n => {
-    savePlayer({ ...playerData, weapons: playerData.weapons.filter(x => x !== n) });
+  const handlePlayerUnequip = (n) => {
+    savePlayer({
+      ...playerData,
+      weapons: playerData.weapons.filter((x) => x !== n),
+    });
   };
-  const handlePlayerEquipFromSuggestion = name => {
-    const w = armas.find(a => a && a.nombre === name);
+  const handlePlayerEquipFromSuggestion = (name) => {
+    const w = armas.find((a) => a && a.nombre === name);
     if (!w) return setPlayerError('Arma no encontrada');
-    
+
     if (!playerData.weapons.includes(w.nombre)) {
       const newWeapons = [...playerData.weapons, w.nombre];
       savePlayer({ ...playerData, weapons: newWeapons });
@@ -1469,13 +1691,19 @@ useEffect(() => {
   const handlePlayerEquipArmadura = () => {
     if (loading) return;
     const nombreArmadura = playerInputArmadura.trim();
-    if (!nombreArmadura) return setPlayerArmaduraError('Nombre de armadura requerido');
-    
-    const f = armaduras.find(a => a && a.nombre && a.nombre.toLowerCase().includes(nombreArmadura.toLowerCase()));
+    if (!nombreArmadura)
+      return setPlayerArmaduraError('Nombre de armadura requerido');
+
+    const f = armaduras.find(
+      (a) =>
+        a &&
+        a.nombre &&
+        a.nombre.toLowerCase().includes(nombreArmadura.toLowerCase())
+    );
     if (!f) {
       return setPlayerArmaduraError('Armadura no encontrada');
     }
-    
+
     // Agregar la armadura si no está ya equipada
     if (!playerData.armaduras.includes(f.nombre)) {
       const newArmaduras = [...playerData.armaduras, f.nombre];
@@ -1486,14 +1714,16 @@ useEffect(() => {
       setPlayerArmaduraError('Armadura ya equipada');
     }
   };
-  const handlePlayerUnequipArmadura = n => {
-    savePlayer({ ...playerData, armaduras: playerData.armaduras.filter(x => x !== n) });
+  const handlePlayerUnequipArmadura = (n) => {
+    savePlayer({
+      ...playerData,
+      armaduras: playerData.armaduras.filter((x) => x !== n),
+    });
   };
-  const handlePlayerEquipArmaduraFromSuggestion = name => {
-    const a = armaduras.find(x => x && x.nombre === name);
+  const handlePlayerEquipArmaduraFromSuggestion = (name) => {
+    const a = armaduras.find((x) => x && x.nombre === name);
     if (!a) return setPlayerArmaduraError('Armadura no encontrada');
-    
-    
+
     if (!playerData.armaduras.includes(a.nombre)) {
       const newArmaduras = [...playerData.armaduras, a.nombre];
       savePlayer({ ...playerData, armaduras: newArmaduras });
@@ -1505,7 +1735,12 @@ useEffect(() => {
   };
   const handlePlayerEquipPoder = () => {
     if (loading) return;
-    const f = habilidades.find(h => h && h.nombre && h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase()));
+    const f = habilidades.find(
+      (h) =>
+        h &&
+        h.nombre &&
+        h.nombre.toLowerCase().includes(playerInputPoder.trim().toLowerCase())
+    );
     if (!f) return setPlayerPoderError('Poder no encontrado');
     if (!playerData.poderes.includes(f.nombre)) {
       savePlayer({ ...playerData, poderes: [...playerData.poderes, f.nombre] });
@@ -1513,11 +1748,14 @@ useEffect(() => {
       setPlayerPoderError('');
     }
   };
-  const handlePlayerUnequipPoder = n => {
-    savePlayer({ ...playerData, poderes: playerData.poderes.filter(x => x !== n) });
+  const handlePlayerUnequipPoder = (n) => {
+    savePlayer({
+      ...playerData,
+      poderes: playerData.poderes.filter((x) => x !== n),
+    });
   };
-  const handlePlayerEquipPoderFromSuggestion = name => {
-    const h = habilidades.find(x => x && x.nombre === name);
+  const handlePlayerEquipPoderFromSuggestion = (name) => {
+    const h = habilidades.find((x) => x && x.nombre === name);
     if (!h) return setPlayerPoderError('Poder no encontrado');
     if (!playerData.poderes.includes(h.nombre)) {
       savePlayer({ ...playerData, poderes: [...playerData.poderes, h.nombre] });
@@ -1530,14 +1768,14 @@ useEffect(() => {
   // ────────────────────────────────
   const handleClaveChange = (id, field, val) => {
     const v = parseInt(val) || 0;
-    const list = claves.map(c =>
+    const list = claves.map((c) =>
       c.id === id ? { ...c, [field]: Math.max(0, Math.min(v, CLAVE_MAX)) } : c
     );
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
   const handleClaveIncrement = (id, delta) => {
-    const list = claves.map(c => {
+    const list = claves.map((c) => {
       if (c.id !== id) return c;
       const newActual = Math.max(
         0,
@@ -1548,8 +1786,8 @@ useEffect(() => {
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
-  const handleClaveReset = id => {
-    const list = claves.map(c =>
+  const handleClaveReset = (id) => {
+    const list = claves.map((c) =>
       c.id === id ? { ...c, actual: c.total } : c
     );
     setClaves(list);
@@ -1577,17 +1815,17 @@ useEffect(() => {
     setNewClaveTotal(0);
     setNewClaveError('');
   };
-  const handleRemoveClave = id => {
-    const list = claves.filter(c => c.id !== id);
+  const handleRemoveClave = (id) => {
+    const list = claves.filter((c) => c.id !== id);
     setClaves(list);
     savePlayer({ ...playerData, claves: list }, undefined, list);
   };
   // ────────────────────────────────
   // Estados handlers
   // ────────────────────────────────
-  const toggleEstado = id => {
+  const toggleEstado = (id) => {
     const list = estados.includes(id)
-      ? estados.filter(e => e !== id)
+      ? estados.filter((e) => e !== id)
       : [...estados, id];
     setEstados(list);
     savePlayer({ ...playerData, estados: list }, undefined, undefined, list);
@@ -1599,7 +1837,7 @@ useEffect(() => {
   };
   const finishEditInfo = () => {
     if (!editingInfoId) return;
-    const newList = resourcesList.map(r =>
+    const newList = resourcesList.map((r) =>
       r.id === editingInfoId ? { ...r, info: editingInfoText } : r
     );
     setResourcesList(newList);
@@ -1607,19 +1845,19 @@ useEffect(() => {
     setEditingInfoId(null);
     setEditingInfoText('');
   };
-  const togglePinnedTip = id => {
-    setPinnedTipId(prev => (prev === id ? null : id));
+  const togglePinnedTip = (id) => {
+    setPinnedTipId((prev) => (prev === id ? null : id));
   };
   // ────────────────────────────────
   // Glosario handlers
   // (ahora gestionados por el hook useGlossary)
 
-  const highlightText = text => {
+  const highlightText = (text) => {
     if (!text) return text;
     let parts = [text];
-    glossary.forEach(term => {
+    glossary.forEach((term) => {
       const regex = new RegExp(`(${term.word})`, 'gi');
-      parts = parts.flatMap(part => {
+      parts = parts.flatMap((part) => {
         if (typeof part !== 'string') return [part];
         return part.split(regex).map((p, i) => {
           if (p.toLowerCase() === term.word.toLowerCase()) {
@@ -1652,7 +1890,7 @@ useEffect(() => {
 
   // Renderizar tooltips por separado para evitar errores de hidratación
   const renderTooltips = () => {
-    return glossary.map(term => {
+    return glossary.map((term) => {
       const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
       return (
         <Tooltip
@@ -1667,15 +1905,21 @@ useEffect(() => {
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;
-  const iconoDano = tipo => {
+  const iconoDano = (tipo) => {
     if (!tipo) return null;
     switch (tipo.toLowerCase()) {
-      case 'físico':    return <GiFist className="inline" />;
-      case 'fuego':     return <FaFire className="inline" />;
-      case 'eléctrico': return <FaBolt className="inline" />;
-      case 'hielo':     return <FaSnowflake className="inline" />;
-      case 'radiación': return <FaRadiationAlt className="inline" />;
-      default: return null;
+      case 'físico':
+        return <GiFist className="inline" />;
+      case 'fuego':
+        return <FaFire className="inline" />;
+      case 'eléctrico':
+        return <FaBolt className="inline" />;
+      case 'hielo':
+        return <FaSnowflake className="inline" />;
+      case 'radiación':
+        return <FaRadiationAlt className="inline" />;
+      default:
+        return null;
     }
   };
   // ───────────────────────────────────────────────────────────
@@ -1702,7 +1946,10 @@ useEffect(() => {
         </div>
         {/* Círculos decorativos */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div
+          className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        ></div>
         <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1716,7 +1963,9 @@ useEffect(() => {
           </div>
           {/* Pregunta principal */}
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-white mb-2">¿Quién eres?</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">
+              ¿Quién eres?
+            </h2>
           </div>
           {/* Opciones minimalistas */}
           <div className="flex flex-col gap-4">
@@ -1728,7 +1977,9 @@ useEffect(() => {
             >
               <div className="flex flex-col items-center">
                 <span>Soy Jugador</span>
-                <span className="text-sm opacity-70 font-normal">Gestiona tu personaje</span>
+                <span className="text-sm opacity-70 font-normal">
+                  Gestiona tu personaje
+                </span>
               </div>
             </Boton>
             <Boton
@@ -1742,14 +1993,18 @@ useEffect(() => {
             >
               <div className="flex flex-col items-center">
                 <span>Soy Máster</span>
-                <span className="text-sm opacity-70 font-normal">Herramientas avanzadas</span>
+                <span className="text-sm opacity-70 font-normal">
+                  Herramientas avanzadas
+                </span>
               </div>
             </Boton>
           </div>
           {/* Footer minimalista */}
           <div className="text-center space-y-2 border-t border-gray-700 pt-6">
             <p className="text-sm font-medium text-gray-400">Versión 2.1.9</p>
-            <p className="text-xs text-gray-500">Animación de dados mejorada.</p>
+            <p className="text-xs text-gray-500">
+              Animación de dados mejorada.
+            </p>
           </div>
         </div>
       </div>
@@ -1776,7 +2031,10 @@ useEffect(() => {
         </div>
         {/* Efectos de fondo */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div
+          className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        ></div>
         <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1794,8 +2052,8 @@ useEffect(() => {
               type="password"
               placeholder="Contraseña de máster"
               value={passwordInput}
-              onChange={e => setPasswordInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               className="w-full text-center"
               size="lg"
             />
@@ -1849,7 +2107,10 @@ useEffect(() => {
         </div>
         {/* Efectos de fondo */}
         <div className="absolute top-20 left-10 w-32 h-32 bg-green-500/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div
+          className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        ></div>
         <div className="w-full max-w-lg rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           {/* Header minimalista */}
           <div className="text-center space-y-4">
@@ -1899,8 +2160,8 @@ useEffect(() => {
             <Input
               placeholder="Nombre de tu personaje"
               value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && enterPlayer()}
+              onChange={(e) => setPlayerName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && enterPlayer()}
               className="w-full text-center"
               size="lg"
               clearable
@@ -1931,35 +2192,49 @@ useEffect(() => {
   }
   // CALCULADORA DE DADOS
   if (userType === 'player' && nameEntered && showDiceCalculator) {
-    return <DiceCalculator playerName={playerName} onBack={() => setShowDiceCalculator(false)} />;
+    return (
+      <DiceCalculator
+        playerName={playerName}
+        onBack={() => setShowDiceCalculator(false)}
+      />
+    );
   }
   // MINIJUEGO BARRA-REFLEJOS
   if (userType === 'player' && nameEntered && showBarraReflejos) {
-    return <BarraReflejos playerName={playerName} onBack={() => setShowBarraReflejos(false)} />;
+    return (
+      <BarraReflejos
+        playerName={playerName}
+        onBack={() => setShowBarraReflejos(false)}
+      />
+    );
   }
   // SISTEMA DE INICIATIVA
   if (userType === 'player' && nameEntered && showInitiativeTracker) {
-    return <InitiativeTracker 
-      playerName={playerName} 
-      isMaster={authenticated} 
-      glossary={glossary}
-      playerEquipment={{
-        weapons: playerData.weapons,
-        armaduras: playerData.armaduras,
-        poderes: playerData.poderes
-      }}
-      armas={armas}
-      armaduras={armaduras}
-      habilidades={habilidades}
-      onBack={() => setShowInitiativeTracker(false)} 
-    />;
+    return (
+      <InitiativeTracker
+        playerName={playerName}
+        isMaster={authenticated}
+        glossary={glossary}
+        playerEquipment={{
+          weapons: playerData.weapons,
+          armaduras: playerData.armaduras,
+          poderes: playerData.poderes,
+        }}
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        onBack={() => setShowInitiativeTracker(false)}
+      />
+    );
   }
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
-          <h1 className="text-2xl font-bold text-center mb-2">Ficha de {playerName}</h1>
+          <h1 className="text-2xl font-bold text-center mb-2">
+            Ficha de {playerName}
+          </h1>
           {/* Botones de herramientas */}
           <div className="mb-4 flex gap-3 justify-center">
             {/* Botón de calculadora de dados */}
@@ -1989,10 +2264,12 @@ useEffect(() => {
               Res. Física:
               <select
                 value={playerData.resistenciaFisica}
-                onChange={e => handleResistenciaChange('fisica', e.target.value)}
+                onChange={(e) =>
+                  handleResistenciaChange('fisica', e.target.value)
+                }
                 className="bg-gray-700 text-white px-1 rounded"
               >
-                {resourcesList.map(r => (
+                {resourcesList.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
@@ -2003,10 +2280,12 @@ useEffect(() => {
               Res. Mental:
               <select
                 value={playerData.resistenciaMental}
-                onChange={e => handleResistenciaChange('mental', e.target.value)}
+                onChange={(e) =>
+                  handleResistenciaChange('mental', e.target.value)
+                }
                 className="bg-gray-700 text-white px-1 rounded"
               >
-                {resourcesList.map(r => (
+                {resourcesList.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
@@ -2015,9 +2294,12 @@ useEffect(() => {
               ({playerData.stats[playerData.resistenciaMental]?.total ?? 0})
             </span>
             <span>
-              Carga física total: {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0})
-              {'   |   '}
-              Carga mental total: {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0})
+              Carga física total:{' '}
+              {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} (
+              {playerData.cargaAcumulada?.fisica || 0}){'   |   '}
+              Carga mental total:{' '}
+              {cargaMentalIcon(playerData.cargaAcumulada?.mental)} (
+              {playerData.cargaAcumulada?.mental || 0})
             </span>
           </div>
           {/* Botones Volver / Eliminar */}
@@ -2026,44 +2308,59 @@ useEffect(() => {
               color="gray"
               className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
               onClick={volverAlMenu}
-            >Volver al menú</Boton>
+            >
+              Volver al menú
+            </Boton>
             <Boton
               color="red"
               className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
               onClick={eliminarFichaJugador}
-            >Eliminar ficha</Boton>
+            >
+              Eliminar ficha
+            </Boton>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 mb-6 w-full justify-center">
             <Boton
               color="blue"
               className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
               onClick={guardarDatosFicha}
-            >Guardar datos</Boton>
+            >
+              Guardar datos
+            </Boton>
             <Boton
               color="yellow"
               className="py-3 px-6 rounded-lg font-extrabold text-base tracking-wide shadow-sm w-full sm:w-auto"
               onClick={resetearFichaDesdeBackup}
-            >RESET</Boton>
+            >
+              RESET
+            </Boton>
           </div>
           {/* ATRIBUTOS */}
           <h2 className="text-xl font-semibold text-center mb-4">Atributos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 w-full">
-            {atributos.map(attr => (
+            {atributos.map((attr) => (
               <AtributoCard
                 key={attr}
                 name={attr}
                 value={playerData.atributos[attr] || 'D4'}
                 color={atributoColor[attr]}
                 dadoImgUrl={dadoImgUrl}
-                onChange={v => handleAtributoChange(attr, v)}
+                onChange={(v) => handleAtributoChange(attr, v)}
               />
             ))}
           </div>
           {/* ESTADÍSTICAS */}
-          <h2 className="text-xl font-semibold text-center mb-2">Estadísticas</h2>
+          <h2 className="text-xl font-semibold text-center mb-2">
+            Estadísticas
+          </h2>
           <div className="flex flex-col gap-4 w-full mb-8">
             {resourcesList.map(({ id: r, name, color, info }, index) => {
-              const s = playerData.stats[r] || { base: 0, total: 0, actual: 0, buff: 0 };
+              const s = playerData.stats[r] || {
+                base: 0,
+                total: 0,
+                actual: 0,
+                buff: 0,
+              };
               const baseV = Math.min(s.base || 0, RESOURCE_MAX);
               const actualV = Math.min(s.actual || 0, RESOURCE_MAX);
               const buffV = s.buff || 0;
@@ -2076,13 +2373,22 @@ useEffect(() => {
               let penalizacion = 0;
               let baseEfectiva = baseV;
               if (r === 'postura') {
-                penalizacion = Math.max(0, cargaFisicaTotal - resistenciaFisica);
+                penalizacion = Math.max(
+                  0,
+                  cargaFisicaTotal - resistenciaFisica
+                );
                 baseEfectiva = Math.max(0, baseV - penalizacion);
               } else if (r === 'cordura') {
-                penalizacion = Math.max(0, cargaMentalTotal - resistenciaMental);
+                penalizacion = Math.max(
+                  0,
+                  cargaMentalTotal - resistenciaMental
+                );
                 baseEfectiva = Math.max(0, baseV - penalizacion);
               }
-              const overflowBuf = Math.max(0, buffV - (RESOURCE_MAX - baseEfectiva));
+              const overflowBuf = Math.max(
+                0,
+                buffV - (RESOURCE_MAX - baseEfectiva)
+              );
               return (
                 <motion.div
                   key={r}
@@ -2095,9 +2401,11 @@ useEffect(() => {
                     {editingInfoId === r ? (
                       <textarea
                         value={editingInfoText}
-                        onChange={e => setEditingInfoText(e.target.value)}
+                        onChange={(e) => setEditingInfoText(e.target.value)}
                         onBlur={finishEditInfo}
-                        onKeyDown={e => e.key === 'Enter' && !e.shiftKey && finishEditInfo()}
+                        onKeyDown={(e) =>
+                          e.key === 'Enter' && !e.shiftKey && finishEditInfo()
+                        }
                         className="absolute left-1/2 -translate-x-1/2 bg-gray-700 text-white p-2 rounded-lg text-sm focus:outline-none w-[90vw] sm:w-72 h-24 resize-none border border-blue-400 shadow-lg"
                         autoFocus
                       />
@@ -2106,7 +2414,9 @@ useEffect(() => {
                         className="absolute left-1/2 transform -translate-x-1/2 font-bold text-lg capitalize cursor-pointer"
                         data-tooltip-id={`tip-${r}`}
                         data-tooltip-content={info}
-                        onClick={isTouchDevice ? undefined : () => togglePinnedTip(r)}
+                        onClick={
+                          isTouchDevice ? undefined : () => togglePinnedTip(r)
+                        }
                         onDoubleClick={() => startEditInfo(r, info)}
                         onMouseEnter={() => setHoveredTipId(r)}
                         onMouseLeave={() => setHoveredTipId(null)}
@@ -2119,7 +2429,10 @@ useEffect(() => {
                         id={`tip-${r}`}
                         place="top"
                         openOnClick={isTouchDevice}
-                        isOpen={!isTouchDevice && (hoveredTipId === r || pinnedTipId === r)}
+                        isOpen={
+                          !isTouchDevice &&
+                          (hoveredTipId === r || pinnedTipId === r)
+                        }
                         className="max-w-[90vw] sm:max-w-xs whitespace-pre-line break-words"
                       />
                     )}
@@ -2168,9 +2481,11 @@ useEffect(() => {
                         type="number"
                         min={0}
                         max={RESOURCE_MAX}
-                        value={baseV === 0 ? "" : baseV}
+                        value={baseV === 0 ? '' : baseV}
                         placeholder="0"
-                        onChange={e => handleStatChange(r, "base", e.target.value)}
+                        onChange={(e) =>
+                          handleStatChange(r, 'base', e.target.value)
+                        }
                         className="w-14 text-center"
                       />
                       <span className="font-semibold">/</span>
@@ -2178,9 +2493,11 @@ useEffect(() => {
                         type="number"
                         min={0}
                         max={RESOURCE_MAX}
-                        value={actualV === 0 ? "" : actualV}
+                        value={actualV === 0 ? '' : actualV}
                         placeholder="0"
-                        onChange={e => handleStatChange(r, "actual", e.target.value)}
+                        onChange={(e) =>
+                          handleStatChange(r, 'actual', e.target.value)
+                        }
                         className="w-14 text-center"
                       />
                       <Boton
@@ -2233,14 +2550,20 @@ useEffect(() => {
               );
             })}
           </div>
-          {!playerData.stats["postura"] && (
+          {!playerData.stats['postura'] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Postura; tu carga física {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} ({playerData.cargaAcumulada?.fisica || 0}) está pendiente sin penalizar.
+              No tienes Postura; tu carga física{' '}
+              {cargaFisicaIcon(playerData.cargaAcumulada?.fisica)} (
+              {playerData.cargaAcumulada?.fisica || 0}) está pendiente sin
+              penalizar.
             </div>
           )}
-          {!playerData.stats["cordura"] && (
+          {!playerData.stats['cordura'] && (
             <div className="text-center text-sm text-gray-400 mb-2">
-              No tienes Cordura; tu carga mental {cargaMentalIcon(playerData.cargaAcumulada?.mental)} ({playerData.cargaAcumulada?.mental || 0}) está pendiente sin penalizar.
+              No tienes Cordura; tu carga mental{' '}
+              {cargaMentalIcon(playerData.cargaAcumulada?.mental)} (
+              {playerData.cargaAcumulada?.mental || 0}) está pendiente sin
+              penalizar.
             </div>
           )}
           {/* FORMULARIO "Añadir recurso" */}
@@ -2275,7 +2598,7 @@ useEffect(() => {
                       type="text"
                       placeholder="Nombre de la nueva estadística"
                       value={newResName}
-                      onChange={e => setNewResName(e.target.value)}
+                      onChange={(e) => setNewResName(e.target.value)}
                       className="w-full text-center sm:flex-1"
                     />
                     <div className="flex items-center justify-center gap-2 mt-2 sm:mt-0">
@@ -2283,7 +2606,7 @@ useEffect(() => {
                       <input
                         type="color"
                         value={newResColor}
-                        onChange={e => setNewResColor(e.target.value)}
+                        onChange={(e) => setNewResColor(e.target.value)}
                         className="w-10 h-8 border-none p-0 rounded"
                       />
                     </div>
@@ -2296,7 +2619,9 @@ useEffect(() => {
                     Añadir recurso
                   </Boton>
                   {newResError && (
-                    <p className="text-red-400 mt-1 text-center">{newResError}</p>
+                    <p className="text-red-400 mt-1 text-center">
+                      {newResError}
+                    </p>
                   )}
                 </div>
               )}
@@ -2308,8 +2633,11 @@ useEffect(() => {
             <p className="text-gray-400 text-center mb-4">No tienes claves.</p>
           ) : (
             <div className="flex flex-col gap-4 w-full mb-4">
-              {claves.map(c => (
-                <div key={c.id} className="bg-gray-800 rounded-xl p-4 shadow w-full">
+              {claves.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-gray-800 rounded-xl p-4 shadow w-full"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold flex items-center gap-2">
                       <span
@@ -2339,7 +2667,9 @@ useEffect(() => {
                       min={0}
                       max={CLAVE_MAX}
                       value={c.actual}
-                      onChange={e => handleClaveChange(c.id, 'actual', e.target.value)}
+                      onChange={(e) =>
+                        handleClaveChange(c.id, 'actual', e.target.value)
+                      }
                       className="w-14 text-center"
                     />
                     <span className="font-semibold">/</span>
@@ -2348,7 +2678,9 @@ useEffect(() => {
                       min={0}
                       max={CLAVE_MAX}
                       value={c.total}
-                      onChange={e => handleClaveChange(c.id, 'total', e.target.value)}
+                      onChange={(e) =>
+                        handleClaveChange(c.id, 'total', e.target.value)
+                      }
                       className="w-14 text-center"
                     />
                     <Boton
@@ -2408,7 +2740,7 @@ useEffect(() => {
                   type="text"
                   placeholder="Nombre de la clave"
                   value={newClaveName}
-                  onChange={e => setNewClaveName(e.target.value)}
+                  onChange={(e) => setNewClaveName(e.target.value)}
                   className="w-full text-center"
                 />
                 <div className="flex items-center justify-center gap-2">
@@ -2416,7 +2748,7 @@ useEffect(() => {
                   <input
                     type="color"
                     value={newClaveColor}
-                    onChange={e => setNewClaveColor(e.target.value)}
+                    onChange={(e) => setNewClaveColor(e.target.value)}
                     className="w-10 h-8 border-none p-0 rounded"
                   />
                 </div>
@@ -2426,7 +2758,7 @@ useEffect(() => {
                   max={CLAVE_MAX}
                   placeholder="Total"
                   value={newClaveTotal}
-                  onChange={e => setNewClaveTotal(e.target.value)}
+                  onChange={(e) => setNewClaveTotal(e.target.value)}
                   className="w-full text-center"
                 />
                 <Boton
@@ -2437,7 +2769,9 @@ useEffect(() => {
                   Añadir clave
                 </Boton>
                 {newClaveError && (
-                  <p className="text-red-400 mt-1 text-center">{newClaveError}</p>
+                  <p className="text-red-400 mt-1 text-center">
+                    {newClaveError}
+                  </p>
                 )}
               </div>
             )}
@@ -2454,23 +2788,27 @@ useEffect(() => {
           </div>
           {/* EQUIPAR ARMA */}
           <div className="mt-4 mb-6 flex flex-col items-center w-full relative">
-            <label className="block font-semibold mb-1 text-center">Equipa un arma:</label>
+            <label className="block font-semibold mb-1 text-center">
+              Equipa un arma:
+            </label>
             <div className="flex justify-center w-full">
               <div className="relative w-full max-w-md">
                 <Input
                   placeholder="Busca un arma"
                   value={playerInputArma}
-                  onChange={e => setPlayerInputArma(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquip()}
+                  onChange={(e) => setPlayerInputArma(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePlayerEquip()}
                   className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
                 />
                 {armaSugerencias.length > 0 && (
                   <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                    {armaSugerencias.map(a => (
+                    {armaSugerencias.map((a) => (
                       <li
                         key={a.nombre}
                         className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                        onClick={() => handlePlayerEquipFromSuggestion(a.nombre)}
+                        onClick={() =>
+                          handlePlayerEquipFromSuggestion(a.nombre)
+                        }
                       >
                         {a.nombre}
                       </li>
@@ -2479,12 +2817,18 @@ useEffect(() => {
                 )}
               </div>
             </div>
-            {playerError && <p className="text-red-400 mt-1 text-center">{playerError}</p>}
+            {playerError && (
+              <p className="text-red-400 mt-1 text-center">{playerError}</p>
+            )}
           </div>
           {/* ARMAS EQUIPADAS */}
-          <h2 className="text-xl font-semibold text-center mb-2">Armas Equipadas</h2>
+          <h2 className="text-xl font-semibold text-center mb-2">
+            Armas Equipadas
+          </h2>
           {playerData.weapons.length === 0 ? (
-            <p className="text-gray-400 text-center">No tienes armas equipadas.</p>
+            <p className="text-gray-400 text-center">
+              No tienes armas equipadas.
+            </p>
           ) : (
             <div
               className={`${
@@ -2494,50 +2838,87 @@ useEffect(() => {
               } gap-4 w-full`}
             >
               {playerData.weapons.map((n, i) => {
-                const a = armas.find(x => x.nombre === n);
-                return a && (
-                  <Tarjeta key={i} variant="weapon" className="w-full flex flex-col items-center text-center">
-                    <p className="font-bold text-lg">{a.nombre}</p>
-                    <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
-                    <p><strong>Alcance:</strong> {a.alcance}</p>
-                    <p><strong>Consumo:</strong> {a.consumo}</p>
-                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.map((r,ri) => (
-                      <React.Fragment key={ri}>
-                        {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                      </React.Fragment>
-                    ))}</p>
-                    {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    <Boton
-                      color="red"
-                      className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
-                      onClick={() => handlePlayerUnequip(a.nombre)}
-                    >Desequipar</Boton>
-                  </Tarjeta>
+                const a = armas.find((x) => x.nombre === n);
+                return (
+                  a && (
+                    <Tarjeta
+                      key={i}
+                      variant="weapon"
+                      className="w-full flex flex-col items-center text-center"
+                    >
+                      <p className="font-bold text-lg">{a.nombre}</p>
+                      <p>
+                        <strong>Daño:</strong> {dadoIcono()} {a.dano}{' '}
+                        {iconoDano(a.tipoDano)}
+                      </p>
+                      <p>
+                        <strong>Alcance:</strong> {a.alcance}
+                      </p>
+                      <p>
+                        <strong>Consumo:</strong> {a.consumo}
+                      </p>
+                      <p>
+                        <strong>Carga física:</strong>{' '}
+                        {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                          ? '🔲'.repeat(
+                              parseCargaValue(a.cargaFisica ?? a.carga)
+                            )
+                          : '❌'}
+                      </p>
+                      <p>
+                        <strong>Carga mental:</strong>{' '}
+                        {cargaMentalIcon(a.cargaMental)}
+                      </p>
+                      <p>
+                        <strong>Rasgos:</strong>{' '}
+                        {a.rasgos.map((r, ri) => (
+                          <React.Fragment key={ri}>
+                            {highlightText(r)}
+                            {ri < a.rasgos.length - 1 ? ', ' : ''}
+                          </React.Fragment>
+                        ))}
+                      </p>
+                      {a.descripcion && (
+                        <p className="italic">{highlightText(a.descripcion)}</p>
+                      )}
+                      <Boton
+                        color="red"
+                        className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
+                        onClick={() => handlePlayerUnequip(a.nombre)}
+                      >
+                        Desequipar
+                      </Boton>
+                    </Tarjeta>
+                  )
                 );
               })}
             </div>
           )}
           {/* EQUIPAR ARMADURA */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
-            <label className="block font-semibold mb-1 text-center">Equipa una armadura:</label>
+            <label className="block font-semibold mb-1 text-center">
+              Equipa una armadura:
+            </label>
             <div className="flex justify-center w-full">
               <div className="relative w-full max-w-md">
                 <Input
                   placeholder="Busca una armadura"
                   value={playerInputArmadura}
-                  onChange={e => setPlayerInputArmadura(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipArmadura()}
+                  onChange={(e) => setPlayerInputArmadura(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handlePlayerEquipArmadura()
+                  }
                   className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
                 />
                 {armaduraSugerencias.length > 0 && (
                   <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                    {armaduraSugerencias.map(a => (
+                    {armaduraSugerencias.map((a) => (
                       <li
                         key={a.nombre}
                         className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                        onClick={() => handlePlayerEquipArmaduraFromSuggestion(a.nombre)}
+                        onClick={() =>
+                          handlePlayerEquipArmaduraFromSuggestion(a.nombre)
+                        }
                       >
                         {a.nombre}
                       </li>
@@ -2546,12 +2927,20 @@ useEffect(() => {
                 )}
               </div>
             </div>
-            {playerArmaduraError && <p className="text-red-400 mt-1 text-center">{playerArmaduraError}</p>}
+            {playerArmaduraError && (
+              <p className="text-red-400 mt-1 text-center">
+                {playerArmaduraError}
+              </p>
+            )}
           </div>
           {/* ARMADURAS EQUIPADAS */}
-          <h2 className="text-xl font-semibold text-center mb-2">Armaduras Equipadas</h2>
+          <h2 className="text-xl font-semibold text-center mb-2">
+            Armaduras Equipadas
+          </h2>
           {playerData.armaduras.length === 0 ? (
-            <p className="text-gray-400 text-center">No tienes armaduras equipadas.</p>
+            <p className="text-gray-400 text-center">
+              No tienes armaduras equipadas.
+            </p>
           ) : (
             <div
               className={`${
@@ -2561,48 +2950,82 @@ useEffect(() => {
               } gap-4 w-full`}
             >
               {playerData.armaduras.map((n, i) => {
-                const a = armaduras.find(x => x.nombre === n);
-                return a && (
-                  <Tarjeta key={i} variant="armor" className="w-full flex flex-col items-center text-center">
-                    <p className="font-bold text-lg">{a.nombre}</p>
-                    <p><strong>Defensa:</strong> {a.defensa}</p>
-                    <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                    <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                    <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                      <React.Fragment key={ri}>
-                        {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                      </React.Fragment>
-                    )) : '❌'}</p>
-                    {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
-                    <Boton
-                      color="red"
-                      className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
-                      onClick={() => handlePlayerUnequipArmadura(a.nombre)}
-                    >Desequipar</Boton>
-                  </Tarjeta>
+                const a = armaduras.find((x) => x.nombre === n);
+                return (
+                  a && (
+                    <Tarjeta
+                      key={i}
+                      variant="armor"
+                      className="w-full flex flex-col items-center text-center"
+                    >
+                      <p className="font-bold text-lg">{a.nombre}</p>
+                      <p>
+                        <strong>Defensa:</strong> {a.defensa}
+                      </p>
+                      <p>
+                        <strong>Carga física:</strong>{' '}
+                        {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                          ? '🔲'.repeat(
+                              parseCargaValue(a.cargaFisica ?? a.carga)
+                            )
+                          : '❌'}
+                      </p>
+                      <p>
+                        <strong>Carga mental:</strong>{' '}
+                        {cargaMentalIcon(a.cargaMental)}
+                      </p>
+                      <p>
+                        <strong>Rasgos:</strong>{' '}
+                        {a.rasgos.length
+                          ? a.rasgos.map((r, ri) => (
+                              <React.Fragment key={ri}>
+                                {highlightText(r)}
+                                {ri < a.rasgos.length - 1 ? ', ' : ''}
+                              </React.Fragment>
+                            ))
+                          : '❌'}
+                      </p>
+                      {a.descripcion && (
+                        <p className="italic">{highlightText(a.descripcion)}</p>
+                      )}
+                      <Boton
+                        color="red"
+                        className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
+                        onClick={() => handlePlayerUnequipArmadura(a.nombre)}
+                      >
+                        Desequipar
+                      </Boton>
+                    </Tarjeta>
+                  )
                 );
               })}
             </div>
           )}
           {/* EQUIPAR PODER */}
           <div className="mt-8 mb-6 flex flex-col items-center w-full relative">
-            <label className="block font-semibold mb-1 text-center">Equipa un poder:</label>
+            <label className="block font-semibold mb-1 text-center">
+              Equipa un poder:
+            </label>
             <div className="flex justify-center w-full">
               <div className="relative w-full max-w-md">
                 <Input
                   placeholder="Busca un poder"
                   value={playerInputPoder}
-                  onChange={e => setPlayerInputPoder(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handlePlayerEquipPoder()}
+                  onChange={(e) => setPlayerInputPoder(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handlePlayerEquipPoder()
+                  }
                   className="w-full mb-1 rounded-lg bg-gray-700 border border-gray-600 text-white font-semibold text-base shadow px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-center"
                 />
                 {poderSugerencias.length > 0 && (
                   <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                    {poderSugerencias.map(a => (
+                    {poderSugerencias.map((a) => (
                       <li
                         key={a.nombre}
                         className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                        onClick={() => handlePlayerEquipPoderFromSuggestion(a.nombre)}
+                        onClick={() =>
+                          handlePlayerEquipPoderFromSuggestion(a.nombre)
+                        }
                       >
                         {a.nombre}
                       </li>
@@ -2611,12 +3034,20 @@ useEffect(() => {
                 )}
               </div>
             </div>
-            {playerPoderError && <p className="text-red-400 mt-1 text-center">{playerPoderError}</p>}
+            {playerPoderError && (
+              <p className="text-red-400 mt-1 text-center">
+                {playerPoderError}
+              </p>
+            )}
           </div>
           {/* PODERES EQUIPADOS */}
-          <h2 className="text-xl font-semibold text-center mb-2">Poderes Equipados</h2>
+          <h2 className="text-xl font-semibold text-center mb-2">
+            Poderes Equipados
+          </h2>
           {playerData.poderes.length === 0 ? (
-            <p className="text-gray-400 text-center">No tienes poderes equipados.</p>
+            <p className="text-gray-400 text-center">
+              No tienes poderes equipados.
+            </p>
           ) : (
             <div
               className={`${
@@ -2626,22 +3057,42 @@ useEffect(() => {
               } gap-4 w-full`}
             >
               {playerData.poderes.map((n, i) => {
-                const p = habilidades.find(x => x.nombre === n);
-                return p && (
-                  <Tarjeta key={i} variant="power" className="w-full flex flex-col items-center text-center">
-                    <p className="font-bold text-lg">{p.nombre}</p>
-                    <p><strong>Alcance:</strong> {p.alcance}</p>
-                    <p><strong>Consumo:</strong> {p.consumo}</p>
-                    <p><strong>Cuerpo:</strong> {p.cuerpo}</p>
-                    <p><strong>Mente:</strong> {p.mente}</p>
-                    <p><strong>Poder:</strong> {p.poder}</p>
-                    {p.descripcion && <p className="italic">{highlightText(p.descripcion)}</p>}
-                    <Boton
-                      color="red"
-                      className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
-                      onClick={() => handlePlayerUnequipPoder(p.nombre)}
-                    >Desequipar</Boton>
-                  </Tarjeta>
+                const p = habilidades.find((x) => x.nombre === n);
+                return (
+                  p && (
+                    <Tarjeta
+                      key={i}
+                      variant="power"
+                      className="w-full flex flex-col items-center text-center"
+                    >
+                      <p className="font-bold text-lg">{p.nombre}</p>
+                      <p>
+                        <strong>Alcance:</strong> {p.alcance}
+                      </p>
+                      <p>
+                        <strong>Consumo:</strong> {p.consumo}
+                      </p>
+                      <p>
+                        <strong>Cuerpo:</strong> {p.cuerpo}
+                      </p>
+                      <p>
+                        <strong>Mente:</strong> {p.mente}
+                      </p>
+                      <p>
+                        <strong>Poder:</strong> {p.poder}
+                      </p>
+                      {p.descripcion && (
+                        <p className="italic">{highlightText(p.descripcion)}</p>
+                      )}
+                      <Boton
+                        color="red"
+                        className="py-3 px-4 rounded-lg font-extrabold text-base tracking-wide shadow-sm max-w-xs w-full mx-auto mt-4"
+                        onClick={() => handlePlayerUnequipPoder(p.nombre)}
+                      >
+                        Desequipar
+                      </Boton>
+                    </Tarjeta>
+                  )
                 );
               })}
             </div>
@@ -2656,37 +3107,54 @@ useEffect(() => {
     return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
   if (userType === 'master' && authenticated && chosenView === 'initiative') {
-    return <InitiativeTracker 
-      playerName="Master" 
-      isMaster={true} 
-      enemies={enemies}
-      glossary={glossary}
-      onBack={() => setChosenView(null)} 
-    />;
+    return (
+      <InitiativeTracker
+        playerName="Master"
+        isMaster={true}
+        enemies={enemies}
+        glossary={glossary}
+        onBack={() => setChosenView(null)}
+      />
+    );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-white">👹 Fichas de Enemigos</h1>
+            <h1 className="text-2xl font-bold text-white">
+              👹 Fichas de Enemigos
+            </h1>
             <div className="flex gap-2">
-              <Boton color="indigo" onClick={() => setChosenView('canvas')}>Mapa de Batalla</Boton>
-              <Boton color="purple" onClick={() => setChosenView('tools')}>Herramientas</Boton>
-              <Boton onClick={() => setChosenView(null)} className="bg-gray-700 hover:bg-gray-600">
+              <Boton color="indigo" onClick={() => setChosenView('canvas')}>
+                Mapa de Batalla
+              </Boton>
+              <Boton color="purple" onClick={() => setChosenView('tools')}>
+                Herramientas
+              </Boton>
+              <Boton
+                onClick={() => setChosenView(null)}
+                className="bg-gray-700 hover:bg-gray-600"
+              >
                 ← Volver al Menú
               </Boton>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Boton color="green" onClick={createNewEnemy}>Crear Nuevo Enemigo</Boton>
+            <Boton color="green" onClick={createNewEnemy}>
+              Crear Nuevo Enemigo
+            </Boton>
             <Boton onClick={refreshCatalog}>Refrescar</Boton>
           </div>
         </div>
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {enemies.map((enemy) => (
-            <Tarjeta key={enemy.id} variant="magic" className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl">
+            <Tarjeta
+              key={enemy.id}
+              variant="magic"
+              className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl"
+            >
               <div className="flex flex-col h-full">
                 {/* Imagen tipo Magic */}
                 <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30">
@@ -2698,14 +3166,23 @@ useEffect(() => {
                       style={{ background: '#222' }}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">👹</div>
+                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">
+                      👹
+                    </div>
                   )}
                 </div>
                 {/* Nombre y descripción */}
                 <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
-                  <h3 className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider" style={{ textShadow: '0 2px 8px #000a' }}>{enemy.name}</h3>
+                  <h3
+                    className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider"
+                    style={{ textShadow: '0 2px 8px #000a' }}
+                  >
+                    {enemy.name}
+                  </h3>
                   {enemy.description && (
-                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">{enemy.description}</p>
+                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">
+                      {enemy.description}
+                    </p>
                   )}
                 </div>
                 {/* Acciones */}
@@ -2745,7 +3222,9 @@ useEffect(() => {
         {enemies.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-400 text-lg">No hay enemigos creados</p>
-            <p className="text-gray-500 text-sm mt-2">Crea tu primer enemigo para empezar</p>
+            <p className="text-gray-500 text-sm mt-2">
+              Crea tu primer enemigo para empezar
+            </p>
           </div>
         )}
         {/* Modal para crear/editar enemigo */}
@@ -2775,17 +3254,23 @@ useEffect(() => {
                 <div className="space-y-4">
                   {/* Nombre */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">Nombre</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Nombre
+                    </label>
                     <Input
                       value={newEnemy.name}
-                      onChange={(e) => setNewEnemy({...newEnemy, name: e.target.value})}
+                      onChange={(e) =>
+                        setNewEnemy({ ...newEnemy, name: e.target.value })
+                      }
                       placeholder="Nombre del enemigo"
                       className="w-full"
                     />
                   </div>
                   {/* Retrato */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">Retrato</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Retrato
+                    </label>
                     <input
                       type="file"
                       accept="image/*"
@@ -2805,10 +3290,17 @@ useEffect(() => {
                   </div>
                   {/* Descripción */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">Descripción</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Descripción
+                    </label>
                     <textarea
                       value={newEnemy.description}
-                      onChange={(e) => setNewEnemy({...newEnemy, description: e.target.value})}
+                      onChange={(e) =>
+                        setNewEnemy({
+                          ...newEnemy,
+                          description: e.target.value,
+                        })
+                      }
                       placeholder="Descripción del enemigo"
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
                     />
@@ -2816,21 +3308,35 @@ useEffect(() => {
                   {/* Nivel y Experiencia */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Nivel</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Nivel
+                      </label>
                       <Input
                         type="number"
                         value={newEnemy.nivel}
-                        onChange={(e) => setNewEnemy({...newEnemy, nivel: parseInt(e.target.value) || 1})}
+                        onChange={(e) =>
+                          setNewEnemy({
+                            ...newEnemy,
+                            nivel: parseInt(e.target.value) || 1,
+                          })
+                        }
                         min="1"
                         className="w-full"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Experiencia</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Experiencia
+                      </label>
                       <Input
                         type="number"
                         value={newEnemy.experiencia}
-                        onChange={(e) => setNewEnemy({...newEnemy, experiencia: parseInt(e.target.value) || 0})}
+                        onChange={(e) =>
+                          setNewEnemy({
+                            ...newEnemy,
+                            experiencia: parseInt(e.target.value) || 0,
+                          })
+                        }
                         min="0"
                         className="w-full"
                       />
@@ -2838,21 +3344,32 @@ useEffect(() => {
                   </div>
                   {/* Dinero */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">Dinero</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Dinero
+                    </label>
                     <Input
                       type="number"
                       value={newEnemy.dinero}
-                      onChange={(e) => setNewEnemy({...newEnemy, dinero: parseInt(e.target.value) || 0})}
+                      onChange={(e) =>
+                        setNewEnemy({
+                          ...newEnemy,
+                          dinero: parseInt(e.target.value) || 0,
+                        })
+                      }
                       min="0"
                       className="w-full"
                     />
                   </div>
                   {/* Notas */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">Notas</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Notas
+                    </label>
                     <textarea
                       value={newEnemy.notas}
-                      onChange={(e) => setNewEnemy({...newEnemy, notas: e.target.value})}
+                      onChange={(e) =>
+                        setNewEnemy({ ...newEnemy, notas: e.target.value })
+                      }
                       placeholder="Notas adicionales sobre el enemigo"
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
                     />
@@ -2864,20 +3381,30 @@ useEffect(() => {
                   <div>
                     <h3 className="text-lg font-semibold mb-2">Atributos</h3>
                     <div className="grid grid-cols-2 gap-2">
-                      {atributos.map(attr => (
+                      {atributos.map((attr) => (
                         <div key={attr} className="flex items-center gap-2">
-                          <label className="text-sm font-medium w-16">{attr}:</label>
+                          <label className="text-sm font-medium w-16">
+                            {attr}:
+                          </label>
                           <select
                             value={newEnemy.atributos[attr] || 'D4'}
                             onChange={(e) => {
-                              const newAtributos = { ...newEnemy.atributos, [attr]: e.target.value };
-                              const updatedEnemy = { ...newEnemy, atributos: newAtributos };
+                              const newAtributos = {
+                                ...newEnemy.atributos,
+                                [attr]: e.target.value,
+                              };
+                              const updatedEnemy = {
+                                ...newEnemy,
+                                atributos: newAtributos,
+                              };
                               setNewEnemy(updatedEnemy);
                             }}
                             className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                           >
-                            {DADOS.map(dado => (
-                              <option key={dado} value={dado}>{dado}</option>
+                            {DADOS.map((dado) => (
+                              <option key={dado} value={dado}>
+                                {dado}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -2888,19 +3415,37 @@ useEffect(() => {
                   <div>
                     <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
                     <div className="space-y-3">
-                      {defaultRecursos.map(recurso => {
-                        const stat = newEnemy.stats[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
+                      {defaultRecursos.map((recurso) => {
+                        const stat = newEnemy.stats[recurso] || {
+                          base: 0,
+                          total: 0,
+                          actual: 0,
+                          buff: 0,
+                        };
                         const color = recursoColor[recurso] || '#ffffff';
                         return (
                           <div key={recurso} className="space-y-2">
                             {/* Línea minimalista como en fichas de jugador */}
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium capitalize" style={{ color }}>{recurso}</span>
+                              <span
+                                className="text-sm font-medium capitalize"
+                                style={{ color }}
+                              >
+                                {recurso}
+                              </span>
                               <div className="flex gap-2 text-xs">
-                                <span className="text-gray-400">Base: {stat.base}</span>
-                                <span className="text-green-400">+{stat.buff}</span>
-                                <span className="text-blue-400">= {stat.total}</span>
-                                <span className="text-yellow-400">({stat.actual})</span>
+                                <span className="text-gray-400">
+                                  Base: {stat.base}
+                                </span>
+                                <span className="text-green-400">
+                                  +{stat.buff}
+                                </span>
+                                <span className="text-blue-400">
+                                  = {stat.total}
+                                </span>
+                                <span className="text-yellow-400">
+                                  ({stat.actual})
+                                </span>
                               </div>
                             </div>
                             {/* Controles de edición */}
@@ -2911,11 +3456,21 @@ useEffect(() => {
                                 value={stat.base}
                                 onChange={(e) => {
                                   const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
-                                  newStats[recurso].base = parseInt(e.target.value) || 0;
-                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  if (!newStats[recurso])
+                                    newStats[recurso] = {
+                                      base: 0,
+                                      total: 0,
+                                      actual: 0,
+                                      buff: 0,
+                                    };
+                                  newStats[recurso].base =
+                                    parseInt(e.target.value) || 0;
+                                  newStats[recurso].total =
+                                    newStats[recurso].base +
+                                    newStats[recurso].buff;
                                   if (newStats[recurso].actual === 0) {
-                                    newStats[recurso].actual = newStats[recurso].total;
+                                    newStats[recurso].actual =
+                                      newStats[recurso].total;
                                   }
                                   setNewEnemy({ ...newEnemy, stats: newStats });
                                 }}
@@ -2927,9 +3482,18 @@ useEffect(() => {
                                 value={stat.buff}
                                 onChange={(e) => {
                                   const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
-                                  newStats[recurso].buff = parseInt(e.target.value) || 0;
-                                  newStats[recurso].total = newStats[recurso].base + newStats[recurso].buff;
+                                  if (!newStats[recurso])
+                                    newStats[recurso] = {
+                                      base: 0,
+                                      total: 0,
+                                      actual: 0,
+                                      buff: 0,
+                                    };
+                                  newStats[recurso].buff =
+                                    parseInt(e.target.value) || 0;
+                                  newStats[recurso].total =
+                                    newStats[recurso].base +
+                                    newStats[recurso].buff;
                                   setNewEnemy({ ...newEnemy, stats: newStats });
                                 }}
                                 className="text-sm"
@@ -2940,8 +3504,15 @@ useEffect(() => {
                                 value={stat.actual}
                                 onChange={(e) => {
                                   const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso]) newStats[recurso] = { base: 0, total: 0, actual: 0, buff: 0 };
-                                  newStats[recurso].actual = parseInt(e.target.value) || 0;
+                                  if (!newStats[recurso])
+                                    newStats[recurso] = {
+                                      base: 0,
+                                      total: 0,
+                                      actual: 0,
+                                      buff: 0,
+                                    };
+                                  newStats[recurso].actual =
+                                    parseInt(e.target.value) || 0;
                                   setNewEnemy({ ...newEnemy, stats: newStats });
                                 }}
                                 className="text-sm"
@@ -2970,22 +3541,30 @@ useEffect(() => {
                               <p className="font-bold">{weapon.nombre}</p>
                             </div>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
+                              <span className="font-medium">Daño:</span>{' '}
+                              {dadoIcono()} {weapon.dano}{' '}
+                              {iconoDano(weapon.tipoDano)}
                             </p>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Alcance:</span> {weapon.alcance}
+                              <span className="font-medium">Alcance:</span>{' '}
+                              {weapon.alcance}
                             </p>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Consumo:</span> {weapon.consumo}
+                              <span className="font-medium">Consumo:</span>{' '}
+                              {weapon.consumo}
                             </p>
                             {weapon.rasgos && weapon.rasgos.length > 0 && (
                               <p className="text-xs mb-1">
-                                <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                                <span className="font-medium">Rasgos:</span>{' '}
+                                {highlightText(weapon.rasgos.join(', '))}
                               </p>
                             )}
                             {weapon.descripcion && (
                               <p className="text-xs text-gray-300">
-                                <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+                                <span className="font-medium">
+                                  Descripción:
+                                </span>{' '}
+                                {highlightText(weapon.descripcion)}
                               </p>
                             )}
                           </div>
@@ -3006,23 +3585,31 @@ useEffect(() => {
                       placeholder="Buscar arma para equipar"
                       value={enemyInputArma}
                       onChange={(e) => setEnemyInputArma(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipWeapon()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && handleEnemyEquipWeapon()
+                      }
                       className="flex-1 text-sm"
                     />
                     {enemyArmaSugerencias.length > 0 && (
                       <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                        {enemyArmaSugerencias.map(a => (
+                        {enemyArmaSugerencias.map((a) => (
                           <li
                             key={a.nombre}
                             className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                            onClick={() => handleEnemyEquipWeaponFromSuggestion(a.nombre)}
+                            onClick={() =>
+                              handleEnemyEquipWeaponFromSuggestion(a.nombre)
+                            }
                           >
                             {a.nombre}
                           </li>
                         ))}
                       </ul>
                     )}
-                    {enemyArmaError && <p className="text-red-400 text-xs mt-1">{enemyArmaError}</p>}
+                    {enemyArmaError && (
+                      <p className="text-red-400 text-xs mt-1">
+                        {enemyArmaError}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Armaduras Equipadas */}
@@ -3038,16 +3625,21 @@ useEffect(() => {
                               <p className="font-bold">{armor.nombre}</p>
                             </div>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Defensa:</span> {armor.defensa}
+                              <span className="font-medium">Defensa:</span>{' '}
+                              {armor.defensa}
                             </p>
                             {armor.rasgos && armor.rasgos.length > 0 && (
                               <p className="text-xs mb-1">
-                                <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                                <span className="font-medium">Rasgos:</span>{' '}
+                                {highlightText(armor.rasgos.join(', '))}
                               </p>
                             )}
                             {armor.descripcion && (
                               <p className="text-xs text-gray-300">
-                                <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+                                <span className="font-medium">
+                                  Descripción:
+                                </span>{' '}
+                                {highlightText(armor.descripcion)}
                               </p>
                             )}
                           </div>
@@ -3068,23 +3660,31 @@ useEffect(() => {
                       placeholder="Buscar armadura para equipar"
                       value={enemyInputArmadura}
                       onChange={(e) => setEnemyInputArmadura(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipArmor()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && handleEnemyEquipArmor()
+                      }
                       className="flex-1 text-sm"
                     />
                     {enemyArmaduraSugerencias.length > 0 && (
                       <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                        {enemyArmaduraSugerencias.map(a => (
+                        {enemyArmaduraSugerencias.map((a) => (
                           <li
                             key={a.nombre}
                             className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                            onClick={() => handleEnemyEquipArmorFromSuggestion(a.nombre)}
+                            onClick={() =>
+                              handleEnemyEquipArmorFromSuggestion(a.nombre)
+                            }
                           >
                             {a.nombre}
                           </li>
                         ))}
                       </ul>
                     )}
-                    {enemyArmaduraError && <p className="text-red-400 text-xs mt-1">{enemyArmaduraError}</p>}
+                    {enemyArmaduraError && (
+                      <p className="text-red-400 text-xs mt-1">
+                        {enemyArmaduraError}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Poderes Equipados */}
@@ -3100,17 +3700,23 @@ useEffect(() => {
                               <p className="font-bold">{power.nombre}</p>
                             </div>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Alcance:</span> {power.alcance}
+                              <span className="font-medium">Alcance:</span>{' '}
+                              {power.alcance}
                             </p>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Consumo:</span> {power.consumo}
+                              <span className="font-medium">Consumo:</span>{' '}
+                              {power.consumo}
                             </p>
                             <p className="text-xs mb-1">
-                              <span className="font-medium">Poder:</span> {power.poder}
+                              <span className="font-medium">Poder:</span>{' '}
+                              {power.poder}
                             </p>
                             {power.descripcion && (
                               <p className="text-xs text-gray-300">
-                                <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+                                <span className="font-medium">
+                                  Descripción:
+                                </span>{' '}
+                                {highlightText(power.descripcion)}
                               </p>
                             )}
                           </div>
@@ -3131,23 +3737,31 @@ useEffect(() => {
                       placeholder="Buscar poder para equipar"
                       value={enemyInputPoder}
                       onChange={(e) => setEnemyInputPoder(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleEnemyEquipPower()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && handleEnemyEquipPower()
+                      }
                       className="flex-1 text-sm"
                     />
                     {enemyPoderSugerencias.length > 0 && (
                       <ul className="absolute top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full text-left z-10">
-                        {enemyPoderSugerencias.map(a => (
+                        {enemyPoderSugerencias.map((a) => (
                           <li
                             key={a.nombre}
                             className="px-4 py-2 cursor-pointer hover:bg-gray-700"
-                            onClick={() => handleEnemyEquipPowerFromSuggestion(a.nombre)}
+                            onClick={() =>
+                              handleEnemyEquipPowerFromSuggestion(a.nombre)
+                            }
                           >
                             {a.nombre}
                           </li>
                         ))}
                       </ul>
                     )}
-                    {enemyPoderError && <p className="text-red-400 text-xs mt-1">{enemyPoderError}</p>}
+                    {enemyPoderError && (
+                      <p className="text-red-400 text-xs mt-1">
+                        {enemyPoderError}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3198,13 +3812,13 @@ useEffect(() => {
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
           <div className="flex flex-wrap gap-2">
-              <Boton
-                size="sm"
-                onClick={() => setChosenView(null)}
-                className="bg-gray-700 hover:bg-gray-600"
-              >
-                ← Menú Máster
-              </Boton>
+            <Boton
+              size="sm"
+              onClick={() => setChosenView(null)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Menú Máster
+            </Boton>
             <Boton
               size="sm"
               color="red"
@@ -3229,7 +3843,11 @@ useEffect(() => {
           </div>
         </div>
         <div className="mb-4 mr-80">
-          <input type="file" accept="image/*" onChange={handleBackgroundUpload} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleBackgroundUpload}
+          />
         </div>
         <div className="mr-80">
           <PageSelector
@@ -3244,7 +3862,9 @@ useEffect(() => {
         <div className="relative pt-14 flex-1 overflow-hidden">
           <div className="h-full mr-80">
             <MapCanvas
-              backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
+              backgroundImage={
+                canvasBackground || 'https://via.placeholder.com/800x600'
+              }
               gridSize={gridSize}
               gridCells={gridCells}
               gridOffsetX={gridOffsetX}
@@ -3275,9 +3895,7 @@ useEffect(() => {
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
           <h1 className="text-2xl font-bold mb-2">Modo Máster</h1>
           <div className="flex flex-wrap gap-2 mb-2">
-            <Boton onClick={() => setChosenView(null)}>
-              ← Menú Máster
-            </Boton>
+            <Boton onClick={() => setChosenView(null)}>← Menú Máster</Boton>
             <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
             <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
           </div>
@@ -3285,37 +3903,64 @@ useEffect(() => {
             <Input
               placeholder="Buscar en el catálogo"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full max-w-md text-center"
             />
           </div>
         </div>
-        <Collapsible title={editingTerm ? `Editar término: ${editingTerm}` : 'Añadir término destacado'} defaultOpen={false}>
+        <Collapsible
+          title={
+            editingTerm
+              ? `Editar término: ${editingTerm}`
+              : 'Añadir término destacado'
+          }
+          defaultOpen={false}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
               placeholder="Palabra"
               value={newTerm.word}
-              onChange={e => setNewTerm(t => ({ ...t, word: e.target.value }))}
+              onChange={(e) =>
+                setNewTerm((t) => ({ ...t, word: e.target.value }))
+              }
             />
             <input
               type="color"
               value={newTerm.color}
-              onChange={e => setNewTerm(t => ({ ...t, color: e.target.value }))}
+              onChange={(e) =>
+                setNewTerm((t) => ({ ...t, color: e.target.value }))
+              }
               className="w-10 h-8 border-none p-0 rounded"
             />
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
               value={newTerm.info}
-              onChange={e => setNewTerm(t => ({ ...t, info: e.target.value }))}
+              onChange={(e) =>
+                setNewTerm((t) => ({ ...t, info: e.target.value }))
+              }
             />
             <div className="sm:col-span-2 flex justify-between items-center">
               {editingTerm && (
-                <Boton color="gray" onClick={() => { setEditingTerm(null); setNewTerm({ word: '', color: '#ffff00', info: '' }); }}>Cancelar</Boton>
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setEditingTerm(null);
+                    setNewTerm({ word: '', color: '#ffff00', info: '' });
+                  }}
+                >
+                  Cancelar
+                </Boton>
               )}
-              <Boton color="green" onClick={saveTerm}>{editingTerm ? 'Actualizar' : 'Guardar'} término</Boton>
+              <Boton color="green" onClick={saveTerm}>
+                {editingTerm ? 'Actualizar' : 'Guardar'} término
+              </Boton>
             </div>
-            {newTermError && <p className="text-red-400 text-center sm:col-span-2">{newTermError}</p>}
+            {newTermError && (
+              <p className="text-red-400 text-center sm:col-span-2">
+                {newTermError}
+              </p>
+            )}
           </div>
         </Collapsible>
         <Collapsible title="Glosario" defaultOpen={false}>
@@ -3326,175 +3971,371 @@ useEffect(() => {
               {glossary.map((t, i) => (
                 <li key={i} className="flex justify-between items-center">
                   <span className="mr-2">
-                    <span style={{ color: t.color }} className="font-bold">{t.word}</span> - {t.info}
+                    <span style={{ color: t.color }} className="font-bold">
+                      {t.word}
+                    </span>{' '}
+                    - {t.info}
                   </span>
                   <div className="flex gap-2">
-                    <Boton color="blue" onClick={() => startEditTerm(t)} className="px-2 py-1 text-sm">Editar</Boton>
-                    <Boton color="red" onClick={() => deleteTerm(t.word)} className="px-2 py-1 text-sm">Borrar</Boton>
+                    <Boton
+                      color="blue"
+                      onClick={() => startEditTerm(t)}
+                      className="px-2 py-1 text-sm"
+                    >
+                      Editar
+                    </Boton>
+                    <Boton
+                      color="red"
+                      onClick={() => deleteTerm(t.word)}
+                      className="px-2 py-1 text-sm"
+                    >
+                      Borrar
+                    </Boton>
                   </div>
                 </li>
               ))}
             </ul>
           )}
         </Collapsible>
-        <Collapsible title={editingAbility ? `Editar habilidad: ${editingAbility}` : "Crear nueva habilidad"} defaultOpen={false}>
+        <Collapsible
+          title={
+            editingAbility
+              ? `Editar habilidad: ${editingAbility}`
+              : 'Crear nueva habilidad'
+          }
+          defaultOpen={false}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
               placeholder="Nombre"
               value={newAbility.nombre}
-              onChange={e => setNewAbility(a => ({ ...a, nombre: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, nombre: e.target.value }))
+              }
             />
             <Input
               placeholder="Alcance"
               value={newAbility.alcance}
-              onChange={e => setNewAbility(a => ({ ...a, alcance: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, alcance: e.target.value }))
+              }
             />
             <Input
               placeholder="Consumo"
               value={newAbility.consumo}
-              onChange={e => setNewAbility(a => ({ ...a, consumo: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, consumo: e.target.value }))
+              }
             />
             <Input
               placeholder="Cuerpo"
               value={newAbility.cuerpo}
-              onChange={e => setNewAbility(a => ({ ...a, cuerpo: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, cuerpo: e.target.value }))
+              }
             />
             <Input
               placeholder="Mente"
               value={newAbility.mente}
-              onChange={e => setNewAbility(a => ({ ...a, mente: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, mente: e.target.value }))
+              }
             />
             <Input
               placeholder="Poder"
               value={newAbility.poder}
-              onChange={e => setNewAbility(a => ({ ...a, poder: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, poder: e.target.value }))
+              }
             />
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
               value={newAbility.descripcion}
-              onChange={e => setNewAbility(a => ({ ...a, descripcion: e.target.value }))}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, descripcion: e.target.value }))
+              }
             />
             <div className="sm:col-span-2 flex justify-between items-center">
               {editingAbility && (
-                <Boton color="gray" onClick={() => { setEditingAbility(null); setNewAbility({ nombre: '', alcance: '', consumo: '', cuerpo: '', mente: '', poder: '', descripcion: '' }); }}>Cancelar</Boton>
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setEditingAbility(null);
+                    setNewAbility({
+                      nombre: '',
+                      alcance: '',
+                      consumo: '',
+                      cuerpo: '',
+                      mente: '',
+                      poder: '',
+                      descripcion: '',
+                    });
+                  }}
+                >
+                  Cancelar
+                </Boton>
               )}
-              <Boton color="green" onClick={agregarHabilidad}>{editingAbility ? 'Actualizar' : 'Guardar'} habilidad</Boton>
+              <Boton color="green" onClick={agregarHabilidad}>
+                {editingAbility ? 'Actualizar' : 'Guardar'} habilidad
+              </Boton>
             </div>
-            {newAbilityError && <p className="text-red-400 text-center sm:col-span-2">{newAbilityError}</p>}
+            {newAbilityError && (
+              <p className="text-red-400 text-center sm:col-span-2">
+                {newAbilityError}
+              </p>
+            )}
           </div>
         </Collapsible>
-        {loading
-          ? <p>Cargando catálogo…</p>
-          : (
-            <>
-              {/* Mostrar pestañas solo si hay búsqueda activa */}
-              {searchTerm.trim() && (
-                <>
-                  {/* Mostrar Armas si hay coincidencias */}
-                  {(() => {
-                    const armasFiltradas = armas.filter(a =>
-                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-                    return armasFiltradas.length > 0 && (
-                      <Collapsible title={`Armas (${armasFiltradas.length})`} defaultOpen={true}>
+        {loading ? (
+          <p>Cargando catálogo…</p>
+        ) : (
+          <>
+            {/* Mostrar pestañas solo si hay búsqueda activa */}
+            {searchTerm.trim() && (
+              <>
+                {/* Mostrar Armas si hay coincidencias */}
+                {(() => {
+                  const armasFiltradas = armas.filter(
+                    (a) =>
+                      a.nombre
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase()) ||
+                      a.descripcion
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase())
+                  );
+                  return (
+                    armasFiltradas.length > 0 && (
+                      <Collapsible
+                        title={`Armas (${armasFiltradas.length})`}
+                        defaultOpen={true}
+                      >
                         {armasFiltradas.map((a, i) => (
                           <Tarjeta key={`arma-${i}`} variant="weapon">
                             <p className="font-bold text-lg">{a.nombre}</p>
-                            <p><strong>Daño:</strong> {dadoIcono()} {a.dano} {iconoDano(a.tipoDano)}</p>
-                            <p><strong>Alcance:</strong> {a.alcance}</p>
-                            <p><strong>Consumo:</strong> {a.consumo}</p>
-                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                              <React.Fragment key={ri}>
-                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                              </React.Fragment>
-                            )) : '❌'}</p>
-                            <p><strong>Valor:</strong> {a.valor}</p>
-                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                            <p>
+                              <strong>Daño:</strong> {dadoIcono()} {a.dano}{' '}
+                              {iconoDano(a.tipoDano)}
+                            </p>
+                            <p>
+                              <strong>Alcance:</strong> {a.alcance}
+                            </p>
+                            <p>
+                              <strong>Consumo:</strong> {a.consumo}
+                            </p>
+                            <p>
+                              <strong>Carga física:</strong>{' '}
+                              {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                                ? '🔲'.repeat(
+                                    parseCargaValue(a.cargaFisica ?? a.carga)
+                                  )
+                                : '❌'}
+                            </p>
+                            <p>
+                              <strong>Carga mental:</strong>{' '}
+                              {cargaMentalIcon(a.cargaMental)}
+                            </p>
+                            <p>
+                              <strong>Rasgos:</strong>{' '}
+                              {a.rasgos.length
+                                ? a.rasgos.map((r, ri) => (
+                                    <React.Fragment key={ri}>
+                                      {highlightText(r)}
+                                      {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                    </React.Fragment>
+                                  ))
+                                : '❌'}
+                            </p>
+                            <p>
+                              <strong>Valor:</strong> {a.valor}
+                            </p>
+                            {a.tecnologia && (
+                              <p>
+                                <strong>Tecnología:</strong> {a.tecnologia}
+                              </p>
+                            )}
+                            {a.descripcion && (
+                              <p className="italic">
+                                {highlightText(a.descripcion)}
+                              </p>
+                            )}
                           </Tarjeta>
                         ))}
                       </Collapsible>
-                    );
-                  })()}
-                  {/* Mostrar Armaduras si hay coincidencias */}
-                  {(() => {
-                    const armadurasFiltradas = armaduras.filter(a =>
-                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-                    return armadurasFiltradas.length > 0 && (
-                      <Collapsible title={`Armaduras (${armadurasFiltradas.length})`} defaultOpen={true}>
+                    )
+                  );
+                })()}
+                {/* Mostrar Armaduras si hay coincidencias */}
+                {(() => {
+                  const armadurasFiltradas = armaduras.filter(
+                    (a) =>
+                      a.nombre
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase()) ||
+                      a.descripcion
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase())
+                  );
+                  return (
+                    armadurasFiltradas.length > 0 && (
+                      <Collapsible
+                        title={`Armaduras (${armadurasFiltradas.length})`}
+                        defaultOpen={true}
+                      >
                         {armadurasFiltradas.map((a, i) => (
                           <Tarjeta key={`armadura-${i}`} variant="armor">
                             <p className="font-bold text-lg">{a.nombre}</p>
-                            <p><strong>Defensa:</strong> {a.defensa}</p>
-                            <p><strong>Carga física:</strong> {parseCargaValue(a.cargaFisica ?? a.carga) > 0 ? '🔲'.repeat(parseCargaValue(a.cargaFisica ?? a.carga)) : '❌'}</p>
-                            <p><strong>Carga mental:</strong> {cargaMentalIcon(a.cargaMental)}</p>
-                            <p><strong>Rasgos:</strong> {a.rasgos.length ? a.rasgos.map((r,ri)=>(
-                              <React.Fragment key={ri}>
-                                {highlightText(r)}{ri < a.rasgos.length-1 ? ', ' : ''}
-                              </React.Fragment>
-                            )) : '❌'}</p>
-                            <p><strong>Valor:</strong> {a.valor}</p>
-                            {a.tecnologia && <p><strong>Tecnología:</strong> {a.tecnologia}</p>}
-                            {a.descripcion && <p className="italic">{highlightText(a.descripcion)}</p>}
+                            <p>
+                              <strong>Defensa:</strong> {a.defensa}
+                            </p>
+                            <p>
+                              <strong>Carga física:</strong>{' '}
+                              {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                                ? '🔲'.repeat(
+                                    parseCargaValue(a.cargaFisica ?? a.carga)
+                                  )
+                                : '❌'}
+                            </p>
+                            <p>
+                              <strong>Carga mental:</strong>{' '}
+                              {cargaMentalIcon(a.cargaMental)}
+                            </p>
+                            <p>
+                              <strong>Rasgos:</strong>{' '}
+                              {a.rasgos.length
+                                ? a.rasgos.map((r, ri) => (
+                                    <React.Fragment key={ri}>
+                                      {highlightText(r)}
+                                      {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                    </React.Fragment>
+                                  ))
+                                : '❌'}
+                            </p>
+                            <p>
+                              <strong>Valor:</strong> {a.valor}
+                            </p>
+                            {a.tecnologia && (
+                              <p>
+                                <strong>Tecnología:</strong> {a.tecnologia}
+                              </p>
+                            )}
+                            {a.descripcion && (
+                              <p className="italic">
+                                {highlightText(a.descripcion)}
+                              </p>
+                            )}
                           </Tarjeta>
                         ))}
                       </Collapsible>
-                    );
-                  })()}
-                  {/* Mostrar Habilidades si hay coincidencias */}
-                  {(() => {
-                    const habilidadesFiltradas = habilidades.filter(h =>
-                      h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-                    return habilidadesFiltradas.length > 0 && (
-                      <Collapsible title={`Habilidades (${habilidadesFiltradas.length})`} defaultOpen={true}>
+                    )
+                  );
+                })()}
+                {/* Mostrar Habilidades si hay coincidencias */}
+                {(() => {
+                  const habilidadesFiltradas = habilidades.filter(
+                    (h) =>
+                      h.nombre
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase()) ||
+                      (h.descripcion || '')
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase())
+                  );
+                  return (
+                    habilidadesFiltradas.length > 0 && (
+                      <Collapsible
+                        title={`Habilidades (${habilidadesFiltradas.length})`}
+                        defaultOpen={true}
+                      >
                         {habilidadesFiltradas.map((h, i) => (
                           <Tarjeta key={`hab-${i}`} variant="power">
                             <p className="font-bold text-lg">{h.nombre}</p>
-                            <p><strong>Alcance:</strong> {h.alcance}</p>
-                            <p><strong>Consumo:</strong> {h.consumo}</p>
-                            <p><strong>Cuerpo:</strong> {h.cuerpo}</p>
-                            <p><strong>Mente:</strong> {h.mente}</p>
-                            <p><strong>Poder:</strong> {h.poder}</p>
-                            {h.descripcion && <p className="italic">{highlightText(h.descripcion)}</p>}
+                            <p>
+                              <strong>Alcance:</strong> {h.alcance}
+                            </p>
+                            <p>
+                              <strong>Consumo:</strong> {h.consumo}
+                            </p>
+                            <p>
+                              <strong>Cuerpo:</strong> {h.cuerpo}
+                            </p>
+                            <p>
+                              <strong>Mente:</strong> {h.mente}
+                            </p>
+                            <p>
+                              <strong>Poder:</strong> {h.poder}
+                            </p>
+                            {h.descripcion && (
+                              <p className="italic">
+                                {highlightText(h.descripcion)}
+                              </p>
+                            )}
                             <div className="flex justify-end gap-2 mt-2">
-                              <Boton color="blue" onClick={() => startEditAbility(h)} className="px-2 py-1 text-sm">Editar</Boton>
-                              <Boton color="red" onClick={() => deleteAbility(h.nombre)} className="px-2 py-1 text-sm">Borrar</Boton>
+                              <Boton
+                                color="blue"
+                                onClick={() => startEditAbility(h)}
+                                className="px-2 py-1 text-sm"
+                              >
+                                Editar
+                              </Boton>
+                              <Boton
+                                color="red"
+                                onClick={() => deleteAbility(h.nombre)}
+                                className="px-2 py-1 text-sm"
+                              >
+                                Borrar
+                              </Boton>
                             </div>
                           </Tarjeta>
                         ))}
                       </Collapsible>
-                    );
-                  })()}
-                </>
-              )}
-              {/* Mostrar mensaje cuando no hay búsqueda activa */}
-              {!searchTerm.trim() && (
+                    )
+                  );
+                })()}
+              </>
+            )}
+            {/* Mostrar mensaje cuando no hay búsqueda activa */}
+            {!searchTerm.trim() && (
+              <div className="text-center py-8">
+                <p className="text-gray-400 text-lg">
+                  Usa el buscador para explorar el catálogo
+                </p>
+                <p className="text-gray-500 text-sm mt-2">
+                  Las pestañas se abrirán automáticamente cuando busques
+                </p>
+              </div>
+            )}
+            {/* Mostrar mensaje cuando no hay resultados */}
+            {searchTerm.trim() &&
+              armas.filter(
+                (a) =>
+                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+              ).length === 0 &&
+              armaduras.filter(
+                (a) =>
+                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+              ).length === 0 &&
+              habilidades.filter(
+                (h) =>
+                  h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (h.descripcion || '')
+                    .toLowerCase()
+                    .includes(searchTerm.toLowerCase())
+              ).length === 0 && (
                 <div className="text-center py-8">
-                  <p className="text-gray-400 text-lg">Usa el buscador para explorar el catálogo</p>
-                  <p className="text-gray-500 text-sm mt-2">Las pestañas se abrirán automáticamente cuando busques</p>
+                  <p className="text-gray-400 text-lg">
+                    No se encontraron resultados para "{searchTerm}"
+                  </p>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Intenta con otros términos de búsqueda
+                  </p>
                 </div>
               )}
-              {/* Mostrar mensaje cuando no hay resultados */}
-              {searchTerm.trim() &&
-                armas.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
-                armaduras.filter(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
-                habilidades.filter(h => h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (h.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-gray-400 text-lg">No se encontraron resultados para "{searchTerm}"</p>
-                  <p className="text-gray-500 text-sm mt-2">Intenta con otros términos de búsqueda</p>
-                </div>
-              )}
-            </>
-          )
-        }
+          </>
+        )}
       </div>
     );
   }
