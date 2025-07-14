@@ -454,43 +454,34 @@ function App() {
     if (!pagesLoadedRef.current) return;
     const currentTokens = pages[currentPage]?.tokens || [];
     if (deepEqual(canvasTokens, currentTokens)) return;
-    // Solo actualiza si realmente cambió
-    if (!deepEqual(canvasTokens, currentTokens)) {
-      setPages(ps =>
-        ps.map((pg, i) =>
-          i === currentPage ? { ...pg, tokens: canvasTokens } : pg
-        )
-      );
-    }
-  }, [canvasTokens, currentPage, pages]);
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, tokens: canvasTokens } : pg
+      )
+    );
+  }, [canvasTokens, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
     const currentLines = pages[currentPage]?.lines || [];
     if (deepEqual(canvasLines, currentLines)) return;
-    // Solo actualiza si realmente cambió
-    if (!deepEqual(canvasLines, currentLines)) {
-      setPages(ps =>
-        ps.map((pg, i) =>
-          i === currentPage ? { ...pg, lines: canvasLines } : pg
-        )
-      );
-    }
-  }, [canvasLines, currentPage, pages]);
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, lines: canvasLines } : pg
+      )
+    );
+  }, [canvasLines, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
     const currentBg = pages[currentPage]?.background || null;
     if (deepEqual(canvasBackground, currentBg)) return;
-    // Solo actualiza si realmente cambió
-    if (!deepEqual(canvasBackground, currentBg)) {
-      setPages(ps =>
-        ps.map((pg, i) =>
-          i === currentPage ? { ...pg, background: canvasBackground } : pg
-        )
-      );
-    }
-  }, [canvasBackground, currentPage, pages]);
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage ? { ...pg, background: canvasBackground } : pg
+      )
+    );
+  }, [canvasBackground, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
@@ -503,17 +494,14 @@ function App() {
     };
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
     if (deepEqual(newGrid, currentGrid)) return;
-    // Solo actualiza si realmente cambió
-    if (!deepEqual(newGrid, currentGrid)) {
-      setPages(ps =>
-        ps.map((pg, i) =>
-          i === currentPage
-            ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY }
-            : pg
-        )
-      );
-    }
-  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage, pages]);
+    setPages(ps =>
+      ps.map((pg, i) =>
+        i === currentPage
+          ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY }
+          : pg
+      )
+    );
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
   useEffect(() => {
     const prevPages = prevPagesRef.current;
