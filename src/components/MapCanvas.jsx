@@ -65,6 +65,8 @@ const BRUSH_WIDTHS = {
   large: 6,
 };
 
+const MAX_LINES = 100;
+
 const TokenAura = ({
   x,
   y,
@@ -842,10 +844,11 @@ const MapCanvas = ({
   const saveLines = (updater) => {
     setLines((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
+      const limited = next.slice(-MAX_LINES);
       undoStack.current.push(prev);
       redoStack.current = [];
-      onLinesChange(next);
-      return next;
+      onLinesChange(limited);
+      return limited;
     });
   };
 
@@ -1208,7 +1211,10 @@ const MapCanvas = ({
       return;
     }
 
-    if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
+    if (
+      selectedLineId != null &&
+      ['delete', 'backspace'].includes(e.key.toLowerCase())
+    ) {
       saveLines(lines.filter((ln) => ln.id !== selectedLineId));
       setSelectedLineId(null);
       return;
@@ -1232,6 +1238,7 @@ const MapCanvas = ({
         x += 1;
         break;
       case 'delete':
+      case 'backspace':
         onTokensChange(tokens.filter((t) => t.id !== selectedId));
         setSelectedId(null);
         return;
