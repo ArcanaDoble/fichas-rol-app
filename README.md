@@ -623,6 +623,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Animación al desplegar el menú de ajustes de la herramienta de dibujo.
 
+**Resumen de cambios v2.3.19:**
+
+- Los trazos del mapa se guardan en Firebase con todas sus propiedades.
+- Cambiar de página ya no muestra los trazos de la anterior.
+- Puede eliminarse un trazo seleccionado con Supr o Backspace.
+- Se limita a 100 el número de trazos para optimizar almacenamiento.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
