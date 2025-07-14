@@ -628,6 +628,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Se evita la ráfaga inicial de peticiones POST a Firestore al cargar la barra
   lateral de assets.
 
+**Resumen de cambios v2.3.20:**
+
+- Sincronización de páginas optimizada para evitar envíos repetidos a Firestore.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

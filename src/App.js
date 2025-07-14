@@ -38,6 +38,7 @@ import {
 
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const MASTER_PASSWORD = '0904';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
@@ -349,6 +350,7 @@ function App() {
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
+  const prevPagesRef = useRef([]);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -382,8 +384,10 @@ function App() {
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         setPages([defaultPage]);
+        prevPagesRef.current = [defaultPage];
       } else {
         setPages(loaded);
+        prevPagesRef.current = loaded;
       }
     };
     loadPages();
@@ -450,10 +454,39 @@ function App() {
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY]);
 
   useEffect(() => {
+    const prevPages = prevPagesRef.current;
+    const pagesChanged = pages.some((p, i) => {
+      const prev = prevPages[i];
+      if (!prev) return true;
+      return (
+        !deepEqual(prev.tokens, p.tokens) ||
+        !deepEqual(prev.lines, p.lines) ||
+        prev.background !== p.background ||
+        prev.gridSize !== p.gridSize ||
+        prev.gridCells !== p.gridCells ||
+        prev.gridOffsetX !== p.gridOffsetX ||
+        prev.gridOffsetY !== p.gridOffsetY
+      );
+    });
+    if (!pagesChanged) {
+      prevPagesRef.current = pages;
+      return;
+    }
     const syncPages = async () => {
       const updated = await Promise.all(
-        pages.map(async (p) => {
-          let changed = false;
+        pages.map(async (p, i) => {
+          const prev = prevPages[i] || {};
+          const dataChanged =
+            !deepEqual(prev.tokens, p.tokens) ||
+            !deepEqual(prev.lines, p.lines) ||
+            prev.background !== p.background ||
+            prev.gridSize !== p.gridSize ||
+            prev.gridCells !== p.gridCells ||
+            prev.gridOffsetX !== p.gridOffsetX ||
+            prev.gridOffsetY !== p.gridOffsetY;
+
+          if (!dataChanged) return prevPages[i];
+
           const tokens = await Promise.all(
             (p.tokens || []).map(async (t) => {
               if (t.url && t.url.startsWith('data:')) {
@@ -461,7 +494,6 @@ function App() {
                   t.url,
                   `canvas-tokens/${t.id}`
                 );
-                changed = true;
                 return { ...t, url };
               }
               return t;
@@ -470,7 +502,6 @@ function App() {
           let bg = p.background;
           if (bg && bg.startsWith('data:')) {
             bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
-            changed = true;
           }
           if (bg && bg.startsWith('blob:')) {
             return p; // no guardar hasta que termine la subida
@@ -480,8 +511,8 @@ function App() {
           return newPage;
         })
       );
-      const changedPages = updated.some((u, i) => u !== pages[i]);
-      if (changedPages) setPages(updated);
+      prevPagesRef.current = updated;
+      setPages(updated);
     };
     syncPages();
   }, [pages]);
