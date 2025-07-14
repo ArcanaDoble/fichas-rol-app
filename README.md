@@ -623,6 +623,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Animación al desplegar el menú de ajustes de la herramienta de dibujo.
 
+**Resumen de cambios v2.3.19:**
+
+- Los trazos dibujados se guardan por página y pueden editarse con la herramienta de selección.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

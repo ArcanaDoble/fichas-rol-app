@@ -677,6 +677,8 @@ const MapCanvas = ({
   scaleMode = 'contain',
   tokens,
   onTokensChange,
+  lines = [],
+  onLinesChange = () => {},
   enemies = [],
   onEnemyUpdate,
   players = [],
@@ -702,7 +704,6 @@ const MapCanvas = ({
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const [activeTool, setActiveTool] = useState('select');
-  const [lines, setLines] = useState([]);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
@@ -832,28 +833,24 @@ const MapCanvas = ({
   };
 
   const saveLines = (updater) => {
-    setLines((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      undoStack.current.push(prev);
-      redoStack.current = [];
-      return next;
-    });
+    const next = typeof updater === 'function' ? updater(lines) : updater;
+    undoStack.current.push(lines);
+    redoStack.current = [];
+    onLinesChange(next);
   };
 
   const undoLines = () => {
-    setLines((prev) => {
-      if (undoStack.current.length === 0) return prev;
-      redoStack.current.push(prev);
-      return undoStack.current.pop();
-    });
+    if (undoStack.current.length === 0) return;
+    const prev = undoStack.current.pop();
+    redoStack.current.push(lines);
+    onLinesChange(prev);
   };
 
   const redoLines = () => {
-    setLines((prev) => {
-      if (redoStack.current.length === 0) return prev;
-      undoStack.current.push(prev);
-      return redoStack.current.pop();
-    });
+    if (redoStack.current.length === 0) return;
+    const next = redoStack.current.pop();
+    undoStack.current.push(lines);
+    onLinesChange(next);
   };
 
   const handleLineDragEnd = (id, e) => {
@@ -1256,7 +1253,7 @@ const MapCanvas = ({
   useEffect(() => {
     const tr = lineTrRef.current;
     const node = selectedLineId ? lineRefs.current[selectedLineId] : null;
-    if (tr && node && activeTool === 'draw') {
+    if (tr && node && activeTool === 'select') {
       tr.nodes([node]);
       tr.getLayer()?.batchDraw();
     } else if (tr) {
@@ -1462,13 +1459,15 @@ const MapCanvas = ({
                 strokeWidth={ln.width}
                 lineCap="round"
                 lineJoin="round"
-                draggable={activeTool === 'draw'}
-                onClick={() => setSelectedLineId(ln.id)}
+                draggable={activeTool === 'select'}
+                onClick={() => activeTool === 'select' && setSelectedLineId(ln.id)}
                 onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
                 onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
               />
             ))}
-            {activeTool === 'draw' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
+            {activeTool === 'select' && (
+              <Transformer ref={lineTrRef} rotateEnabled={false} />
+            )}
             {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
@@ -1611,6 +1610,17 @@ MapCanvas.propTypes = {
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
+  lines: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      points: PropTypes.arrayOf(PropTypes.number).isRequired,
+      color: PropTypes.string,
+      width: PropTypes.number,
+    })
+  ),
+  onLinesChange: PropTypes.func,
   enemies: PropTypes.array,
   onEnemyUpdate: PropTypes.func,
   players: PropTypes.array,
