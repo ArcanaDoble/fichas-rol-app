@@ -686,6 +686,8 @@ const MapCanvas = ({
   highlightText,
   userType = 'master',
   playerName = '',
+  lines: propLines = [],
+  onLinesChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -702,7 +704,7 @@ const MapCanvas = ({
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const [activeTool, setActiveTool] = useState('select');
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
@@ -721,6 +723,12 @@ const MapCanvas = ({
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
   const isBgLoading = bgStatus !== 'loaded';
+
+  useEffect(() => {
+    setLines(propLines);
+    undoStack.current = [];
+    redoStack.current = [];
+  }, [propLines]);
 
   const canSeeBars = useCallback((tk) => {
     if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
@@ -836,6 +844,7 @@ const MapCanvas = ({
       const next = typeof updater === 'function' ? updater(prev) : updater;
       undoStack.current.push(prev);
       redoStack.current = [];
+      onLinesChange(next);
       return next;
     });
   };
@@ -844,7 +853,9 @@ const MapCanvas = ({
     setLines((prev) => {
       if (undoStack.current.length === 0) return prev;
       redoStack.current.push(prev);
-      return undoStack.current.pop();
+      const next = undoStack.current.pop();
+      onLinesChange(next);
+      return next;
     });
   };
 
@@ -852,7 +863,9 @@ const MapCanvas = ({
     setLines((prev) => {
       if (redoStack.current.length === 0) return prev;
       undoStack.current.push(prev);
-      return redoStack.current.pop();
+      const next = redoStack.current.pop();
+      onLinesChange(next);
+      return next;
     });
   };
 
@@ -1256,7 +1269,7 @@ const MapCanvas = ({
   useEffect(() => {
     const tr = lineTrRef.current;
     const node = selectedLineId ? lineRefs.current[selectedLineId] : null;
-    if (tr && node && activeTool === 'draw') {
+    if (tr && node && activeTool === 'select') {
       tr.nodes([node]);
       tr.getLayer()?.batchDraw();
     } else if (tr) {
@@ -1462,13 +1475,13 @@ const MapCanvas = ({
                 strokeWidth={ln.width}
                 lineCap="round"
                 lineJoin="round"
-                draggable={activeTool === 'draw'}
+                draggable={activeTool === 'select'}
                 onClick={() => setSelectedLineId(ln.id)}
                 onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
                 onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
               />
             ))}
-            {activeTool === 'draw' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
+            {activeTool === 'select' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
             {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
@@ -1620,6 +1633,8 @@ MapCanvas.propTypes = {
   highlightText: PropTypes.func,
   userType: PropTypes.oneOf(['master', 'player']),
   playerName: PropTypes.string,
+  lines: PropTypes.array,
+  onLinesChange: PropTypes.func,
 };
 
 export default MapCanvas;
