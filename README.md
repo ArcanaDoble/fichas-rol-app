@@ -707,6 +707,8 @@ src/
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
 - **Consumo de velocidad inteligente** - Las píldoras muestran el consumo real basado en emojis 🟡 del equipamiento
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
+- **Corrección de desincronización** - Las páginas ya no se actualizan antes de
+  cargarse por completo
 
 #### v2.1.1 (junio 2024)
 
