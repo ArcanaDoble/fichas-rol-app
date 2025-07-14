@@ -295,7 +295,6 @@ if (labelGroup && label) {
   useEffect(() => {
     updateSizes();
     if (selected) updateHandle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cellSize, selected]);
   useEffect(() => {
     if (selected && trRef.current && shapeRef.current) {
