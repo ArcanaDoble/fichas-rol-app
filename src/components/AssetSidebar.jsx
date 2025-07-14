@@ -34,9 +34,11 @@ const AssetSidebar = ({
   playerName = '',
 }) => {
   const [folders, setFolders] = useState([]);
+  const prevFoldersRef = useRef([]);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState('assets');
   const [messages, setMessages] = useState([]);
+  const prevMessagesRef = useRef([]);
   const [message, setMessage] = useState('');
   const [chatLoaded, setChatLoaded] = useState(false);
 
@@ -154,20 +156,26 @@ const AssetSidebar = ({
     if (!chatLoaded) return;
     if (initialChat.current) {
       initialChat.current = false;
+      prevMessagesRef.current = messages;
       return;
     }
+    if (JSON.stringify(prevMessagesRef.current) === JSON.stringify(messages)) return;
     localStorage.setItem('sidebarChat', JSON.stringify(messages));
     setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(console.error);
+    prevMessagesRef.current = messages;
   }, [messages, chatLoaded]);
 
   useEffect(() => {
     if (!loaded) return;
     if (initialFolders.current) {
       initialFolders.current = false;
+      prevFoldersRef.current = folders;
       return;
     }
+    if (JSON.stringify(prevFoldersRef.current) === JSON.stringify(folders)) return;
     localStorage.setItem('assetSidebar', JSON.stringify(folders));
     setDoc(doc(db, 'assetSidebar', 'state'), { folders }).catch(console.error);
+    prevFoldersRef.current = folders;
   }, [folders, loaded]);
 
   const updateFolders = (list, id, updater) =>
