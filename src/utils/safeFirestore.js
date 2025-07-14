@@ -10,16 +10,19 @@ import {
   increment as fbIncrement,
 } from 'firebase/firestore';
 
-const lastCall = new Map();
-const LIMIT_MS = 1000;
+const callHistory = new Map();
+const WINDOW_MS = 1000;
+const MAX_CALLS = 50;
 
 function throttle(key) {
   const now = Date.now();
-  const prev = lastCall.get(key) || 0;
-  if (now - prev < LIMIT_MS) {
-    throw new Error('Peticiones demasiado seguidas. Intentar más tarde.');
+  const timestamps = callHistory.get(key) || [];
+  const recent = timestamps.filter(ts => now - ts < WINDOW_MS);
+  if (recent.length >= MAX_CALLS) {
+    throw new Error('Demasiadas peticiones. Espera un momento e intenta de nuevo.');
   }
-  lastCall.set(key, now);
+  recent.push(now);
+  callHistory.set(key, recent);
 }
 
 export const doc = (...args) => fbDoc(...args);
