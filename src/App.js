@@ -557,7 +557,7 @@ function App() {
         })
       );
       prevPagesRef.current = updated;
-      setPages(updated);
+      // NO hacer setPages(updated) aquí para evitar bucles infinitos
     };
     syncPages();
   }, [pages]);
