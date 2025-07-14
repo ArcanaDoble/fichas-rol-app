@@ -1495,23 +1495,6 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
-            {currentLine && (
-              <Line
-                points={currentLine.points}
-                stroke={currentLine.color}
-                strokeWidth={currentLine.width}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
           </Group>
         </Layer>
         <Layer listening>
