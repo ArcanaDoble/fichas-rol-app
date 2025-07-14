@@ -3158,6 +3158,7 @@ function App() {
         <div className="relative pt-14 flex-1 overflow-hidden">
           <div className="h-full mr-80">
             <MapCanvas
+              key={currentPage}
               backgroundImage={canvasBackground || 'https://via.placeholder.com/800x600'}
               gridSize={gridSize}
               gridCells={gridCells}

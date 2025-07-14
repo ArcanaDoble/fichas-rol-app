@@ -65,6 +65,8 @@ const BRUSH_WIDTHS = {
   large: 6,
 };
 
+const MAX_LINES = 100;
+
 const TokenAura = ({
   x,
   y,
@@ -688,6 +690,8 @@ const MapCanvas = ({
   highlightText,
   userType = 'master',
   playerName = '',
+  lines: propLines = [],
+  onLinesChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -722,6 +726,12 @@ const MapCanvas = ({
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
   const isBgLoading = bgStatus !== 'loaded';
+
+  useEffect(() => {
+    setLines(propLines);
+    undoStack.current = [];
+    redoStack.current = [];
+  }, [propLines]);
 
   const canSeeBars = useCallback((tk) => {
     if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
@@ -1192,7 +1202,10 @@ const MapCanvas = ({
       return;
     }
 
-    if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
+    if (
+      selectedLineId != null &&
+      ['delete', 'backspace'].includes(e.key.toLowerCase())
+    ) {
       saveLines(lines.filter((ln) => ln.id !== selectedLineId));
       setSelectedLineId(null);
       return;
@@ -1216,6 +1229,7 @@ const MapCanvas = ({
         x += 1;
         break;
       case 'delete':
+      case 'backspace':
         onTokensChange(tokens.filter((t) => t.id !== selectedId));
         setSelectedId(null);
         return;
@@ -1494,10 +1508,6 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
           </Group>
         </Layer>
         <Layer listening>
@@ -1630,6 +1640,8 @@ MapCanvas.propTypes = {
   highlightText: PropTypes.func,
   userType: PropTypes.oneOf(['master', 'player']),
   playerName: PropTypes.string,
+  lines: PropTypes.array,
+  onLinesChange: PropTypes.func,
 };
 
 export default MapCanvas;

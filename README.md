@@ -38,7 +38,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Mapa desplazado** - El mapa se ajusta para que la barra de herramientas no oculte la cabecera ni los controles
 - **Ajustes de dibujo** - Selector de color y tamaño de pincel con menú ajustado al contenido
 - **Ajustes de regla** - Formas (línea, cuadrado, círculo, cono, haz), opciones de cuadrícula, visibilidad para todos y menú más amplio
-- **Dibujos editables** - Los trazos se pueden mover, redimensionar y eliminar. Incluye deshacer (Ctrl+Z) y rehacer (Ctrl+Y)
+- **Dibujos editables** - Selecciona con el cursor para mover, redimensionar o borrar con Delete. Cada página guarda sus propios trazos con deshacer (Ctrl+Z) y rehacer (Ctrl+Y)
 
 ### 🎲 **Gestión de Personajes**
 
@@ -700,6 +700,7 @@ src/
 - **Mejoras en Sistema de Velocidad** - Los jugadores ahora pueden eliminar sus propios participantes, no solo el master
 - **Botón de papelera mejorado** - Color rojo consistente con el sistema de velocidad en inventario y línea de sucesos
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
+- **Corrección de trazos al dibujar** - Las líneas ya no parpadean ni desaparecen al moverlas
 - **Consumo de velocidad inteligente** - Las píldoras muestran el consumo real basado en emojis 🟡 del equipamiento
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
 
