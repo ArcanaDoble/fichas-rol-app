@@ -1,7 +1,7 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import fetchSheetData from './utils/fetchSheetData';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from './utils/safeFirestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';

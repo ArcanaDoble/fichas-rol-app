@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc } from '../utils/safeFirestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
