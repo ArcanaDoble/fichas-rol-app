@@ -351,6 +351,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
+  // Líneas dibujadas en el mapa de batalla
+  const [canvasLines, setCanvasLines] = useState([]);
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
     return stored ? JSON.parse(stored) : {};
@@ -377,11 +379,12 @@ function App() {
           gridOffsetX: 0,
           gridOffsetY: 0,
           tokens: [],
+          lines: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         setPages([defaultPage]);
       } else {
-        setPages(loaded);
+        setPages(loaded.map(p => ({ lines: [], ...p })));
       }
     };
     loadPages();
@@ -423,6 +426,7 @@ function App() {
     const p = pages[currentPage];
     if (!p) return;
     setCanvasTokens(p.tokens || []);
+    setCanvasLines(p.lines || []);
     setCanvasBackground(p.background || null);
     setGridSize(p.gridSize || 1);
     setGridCells(p.gridCells || 1);
@@ -433,6 +437,10 @@ function App() {
   useEffect(() => {
     setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, tokens: canvasTokens } : pg));
   }, [canvasTokens]);
+
+  useEffect(() => {
+    setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, lines: canvasLines } : pg));
+  }, [canvasLines]);
 
   useEffect(() => {
     setPages(ps => ps.map((pg, i) => i === currentPage ? { ...pg, background: canvasBackground } : pg));
@@ -468,7 +476,10 @@ function App() {
           if (bg && bg.startsWith('blob:')) {
             return p; // no guardar hasta que termine la subida
           }
-          const newPage = changed ? { ...p, tokens, background: bg } : p;
+          const newPage = changed
+            ? { ...p, tokens, background: bg }
+            : { ...p };
+          newPage.lines = p.lines || [];
           await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
           return newPage;
         })
@@ -490,6 +501,7 @@ function App() {
       gridOffsetX: 0,
       gridOffsetY: 0,
       tokens: [],
+      lines: [],
     };
     setPages((ps) => [...ps, newPage]);
     setCurrentPage(pages.length);
@@ -504,6 +516,7 @@ function App() {
       if (data.gridOffsetY !== undefined) setGridOffsetY(data.gridOffsetY);
       if (data.background !== undefined) setCanvasBackground(data.background);
       if (data.tokens !== undefined) setCanvasTokens(data.tokens);
+      if (data.lines !== undefined) setCanvasLines(data.lines);
     }
   };
 
@@ -3152,6 +3165,8 @@ function App() {
               gridOffsetY={gridOffsetY}
               tokens={canvasTokens}
               onTokensChange={setCanvasTokens}
+              lines={canvasLines}
+              onLinesChange={setCanvasLines}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
