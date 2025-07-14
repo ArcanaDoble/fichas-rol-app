@@ -94,7 +94,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Animación de dados mejorada con deslizamiento en la dirección del control.
 - Nuevos botones **Guardar datos** y **RESET** para respaldar y restaurar la ficha.
 - Nuevo botón dorado **BUFF** para aplicar bonificaciones a las estadísticas.
-- Otros cambios y ajustes menores.
+- Corrección de carga de mapas; se muestra un mensaje de error si la imagen falla.
+- Dependencias de ESLint eliminadas para evitar peticiones innecesarias.
 
 **Resumen de cambios v2.1.10:**
 
@@ -815,9 +816,15 @@ src/
 
 - ✅ Spinner visible mientras se carga la imagen del mapa para evitar pantalla negra
 
+
 ### 🛑 **Bloqueo de movimiento al editar token (Abril 2025) - v2.1.8**
 
 - ✅ Al escribir el nombre del token en los ajustes ya no se mueve accidentalmente
+
+### 🗺️ **Corrección de carga de mapas (Julio 2025) - v2.1.9**
+
+- ✅ Se muestra un mensaje de error si la imagen del mapa falla y se oculta el spinner
+- 🔧 Dependencias de ESLint eliminadas para evitar peticiones innecesarias
 
 ## 🔄 Historial de cambios previos
 
