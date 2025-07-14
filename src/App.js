@@ -39,6 +39,16 @@ import {
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// Compara dos páginas ignorando el campo updatedAt
+function pageDataEqual(a, b) {
+  if (!a || !b) return false;
+  const omit = (obj) => {
+    if (!obj) return obj;
+    const { updatedAt, ...rest } = obj;
+    return rest;
+  };
+  return JSON.stringify(omit(a)) === JSON.stringify(omit(b));
+}
 const MASTER_PASSWORD = '0904';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
@@ -458,15 +468,7 @@ function App() {
     const pagesChanged = pages.some((p, i) => {
       const prev = prevPages[i];
       if (!prev) return true;
-      return (
-        !deepEqual(prev.tokens, p.tokens) ||
-        !deepEqual(prev.lines, p.lines) ||
-        prev.background !== p.background ||
-        prev.gridSize !== p.gridSize ||
-        prev.gridCells !== p.gridCells ||
-        prev.gridOffsetX !== p.gridOffsetX ||
-        prev.gridOffsetY !== p.gridOffsetY
-      );
+      return !pageDataEqual(prev, p);
     });
     if (!pagesChanged) {
       prevPagesRef.current = pages;
@@ -476,16 +478,7 @@ function App() {
       const updated = await Promise.all(
         pages.map(async (p, i) => {
           const prev = prevPages[i] || {};
-          const dataChanged =
-            !deepEqual(prev.tokens, p.tokens) ||
-            !deepEqual(prev.lines, p.lines) ||
-            prev.background !== p.background ||
-            prev.gridSize !== p.gridSize ||
-            prev.gridCells !== p.gridCells ||
-            prev.gridOffsetX !== p.gridOffsetX ||
-            prev.gridOffsetY !== p.gridOffsetY;
-
-          if (!dataChanged) return prevPages[i];
+          if (pageDataEqual(prev, p)) return prevPages[i];
 
           const tokens = await Promise.all(
             (p.tokens || []).map(async (t) => {
