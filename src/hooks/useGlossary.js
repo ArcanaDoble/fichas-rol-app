@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { collection, getDocs, setDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, setDoc, deleteDoc, doc } from '../utils/safeFirestore';
 import { db } from '../firebase';
 
 export default function useGlossary() {

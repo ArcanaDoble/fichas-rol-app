@@ -14,7 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { getOrUploadFile } from '../utils/storage';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from '../utils/safeFirestore';
 import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';

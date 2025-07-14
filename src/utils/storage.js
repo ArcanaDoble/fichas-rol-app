@@ -14,7 +14,7 @@ import {
   updateDoc,
   increment,
   deleteDoc,
-} from 'firebase/firestore';
+} from './safeFirestore';
 import { db } from '../firebase';
 
 const storage = getStorage();

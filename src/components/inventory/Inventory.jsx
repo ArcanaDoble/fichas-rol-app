@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useDrop } from 'react-dnd';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from '../../utils/safeFirestore';
 import { db } from '../../firebase';
 import Slot from './Slot';
 import ItemToken, { ItemTypes } from './ItemToken';
