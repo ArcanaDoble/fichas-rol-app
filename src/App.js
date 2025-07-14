@@ -503,52 +503,78 @@ function App() {
     );
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
-  useEffect(() => {
-    const prevPages = prevPagesRef.current;
-    const pagesChanged = pages.some((p, i) => {
-      const prev = prevPages[i];
-      if (!prev) return true;
-      return !pageDataEqual(prev, p);
-    });
-    if (!pagesChanged) {
-      prevPagesRef.current = pages;
-      return;
-    }
-    const syncPages = async () => {
-      const updated = await Promise.all(
-        pages.map(async (p, i) => {
-          const prev = prevPages[i] || {};
-          if (pageDataEqual(prev, p)) return prevPages[i];
+// Rate limit estricto para evitar escrituras masivas a Firestore
+const lastSyncRef = useRef(0);
+const syncTimeoutRef = useRef(null);
+const RATE_LIMIT_MS = 10000; // 10 segundos mínimo entre escrituras
 
-          const tokens = await Promise.all(
-            (p.tokens || []).map(async (t) => {
-              if (t.url && t.url.startsWith('data:')) {
-                const url = await uploadDataUrl(
-                  t.url,
-                  `canvas-tokens/${t.id}`
-                );
-                return { ...t, url };
-              }
-              return t;
-            })
-          );
-          let bg = p.background;
-          if (bg && bg.startsWith('data:')) {
-            bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
-          }
-          if (bg && bg.startsWith('blob:')) {
-            return p; // no guardar hasta que termine la subida
-          }
-          const newPage = { ...p, tokens, background: bg, lines: p.lines || [] };
-          await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-          return newPage;
-        })
-      );
-      prevPagesRef.current = updated;
-      // NO hacer setPages(updated) aquí para evitar bucles infinitos
-    };
-    syncPages();
-  }, [pages]);
+useEffect(() => {
+  const prevPages = prevPagesRef.current;
+  const pagesChanged = pages.some((p, i) => {
+    const prev = prevPages[i];
+    if (!prev) return true;
+    return !pageDataEqual(prev, p);
+  });
+  if (!pagesChanged) {
+    prevPagesRef.current = pages;
+    return;
+  }
+
+  const now = Date.now();
+  const doSync = async () => {
+    const updated = await Promise.all(
+      pages.map(async (p, i) => {
+        const prev = prevPages[i] || {};
+        if (pageDataEqual(prev, p)) return prevPages[i];
+
+        const tokens = await Promise.all(
+          (p.tokens || []).map(async (t) => {
+            if (t.url && t.url.startsWith('data:')) {
+              const url = await uploadDataUrl(
+                t.url,
+                `canvas-tokens/${t.id}`
+              );
+              return { ...t, url };
+            }
+            return t;
+          })
+        );
+        let bg = p.background;
+        if (bg && bg.startsWith('data:')) {
+          bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
+        }
+        if (bg && bg.startsWith('blob:')) {
+          return p; // no guardar hasta que termine la subida
+        }
+        const newPage = { ...p, tokens, background: bg, lines: p.lines || [] };
+        await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
+        return newPage;
+      })
+    );
+    prevPagesRef.current = updated;
+    lastSyncRef.current = Date.now();
+    syncTimeoutRef.current = null;
+  };
+
+  if (now - lastSyncRef.current > RATE_LIMIT_MS) {
+    doSync();
+  } else {
+    if (!syncTimeoutRef.current) {
+      const delay = RATE_LIMIT_MS - (now - lastSyncRef.current);
+      syncTimeoutRef.current = setTimeout(doSync, delay);
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Sincronización de páginas a Firestore limitada por rate limit.');
+      }
+    }
+  }
+  // Cleanup
+  return () => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+  };
+}, [pages]);
 
   const addPage = () => {
     const newPage = {
