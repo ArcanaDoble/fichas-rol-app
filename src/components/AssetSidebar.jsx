@@ -40,6 +40,10 @@ const AssetSidebar = ({
   const [message, setMessage] = useState('');
   const [chatLoaded, setChatLoaded] = useState(false);
 
+  // Flags para evitar sobrescribir datos justo tras la carga inicial
+  const initialFolders = useRef(true);
+  const initialChat = useRef(true);
+
   // Preview element shown on hover without triggering re-renders
   const previewRef = useRef(null);
   const isDragging = useDragLayer((monitor) => monitor.isDragging());
@@ -148,12 +152,20 @@ const AssetSidebar = ({
 
   useEffect(() => {
     if (!chatLoaded) return;
+    if (initialChat.current) {
+      initialChat.current = false;
+      return;
+    }
     localStorage.setItem('sidebarChat', JSON.stringify(messages));
     setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(console.error);
   }, [messages, chatLoaded]);
 
   useEffect(() => {
     if (!loaded) return;
+    if (initialFolders.current) {
+      initialFolders.current = false;
+      return;
+    }
     localStorage.setItem('assetSidebar', JSON.stringify(folders));
     setDoc(doc(db, 'assetSidebar', 'state'), { folders }).catch(console.error);
   }, [folders, loaded]);
