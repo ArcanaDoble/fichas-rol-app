@@ -641,6 +641,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Límite de 50 peticiones por segundo para evitar bucles sin afectar a múltiples usuarios.
 
+**Resumen de cambios v2.3.23:**
+
+- Sincronización optimizada de páginas: solo la página activa se guarda en Firestore con debounce de 500 ms.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

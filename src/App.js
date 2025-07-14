@@ -1,7 +1,7 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import fetchSheetData from './utils/fetchSheetData';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from './utils/safeFirestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot } from './utils/safeFirestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
@@ -27,14 +27,11 @@ import AssetSidebar from './components/AssetSidebar';
 import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 import { nanoid } from 'nanoid';
+import debounce from 'lodash.debounce';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
-import {
-  uploadDataUrl,
-  getOrUploadFile,
-  releaseFile,
-} from './utils/storage';
+import { getOrUploadFile, releaseFile } from './utils/storage';
 
 const isTouchDevice = typeof window !== 'undefined' &&
   (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
@@ -358,9 +355,10 @@ function App() {
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Páginas para el Mapa de Batalla
-  const [pages, setPages] = useState([]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const prevPagesRef = useRef([]);
+  const [pages, setPages] = useState({});
+  const [currentPageId, setCurrentPageId] = useState(null);
+  const prevSavedRef = useRef(null);
+  const unsubscribeRef = useRef(null);
   const pagesLoadedRef = useRef(false);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
@@ -380,8 +378,11 @@ function App() {
   useEffect(() => {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
-      const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (loaded.length === 0) {
+      const loaded = {};
+      snap.forEach(d => {
+        loaded[d.id] = { id: d.id, ...d.data() };
+      });
+      if (Object.keys(loaded).length === 0) {
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
@@ -394,13 +395,16 @@ function App() {
           lines: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        setPages([defaultPage]);
-        prevPagesRef.current = [defaultPage];
+        setPages({ [defaultPage.id]: defaultPage });
         pagesLoadedRef.current = true;
+        setCurrentPageId(defaultPage.id);
+        prevSavedRef.current = defaultPage;
       } else {
         setPages(loaded);
-        prevPagesRef.current = loaded;
         pagesLoadedRef.current = true;
+        const firstId = Object.keys(loaded)[0];
+        setCurrentPageId(firstId);
+        prevSavedRef.current = loaded[firstId];
       }
     };
     loadPages();
@@ -416,18 +420,16 @@ function App() {
       const { url, hash } = await getOrUploadFile(file);
       URL.revokeObjectURL(localUrl);
       setCanvasBackground(url);
-      const pageId = pages[currentPage]?.id;
-      if (pageId) {
-        const prevHash = pages[currentPage]?.backgroundHash;
+      const pageId = currentPageId;
+      const page = pages[pageId];
+      if (page) {
+        const prevHash = page.backgroundHash;
         const newPage = {
-          ...pages[currentPage],
+          ...page,
           background: url,
           backgroundHash: hash,
         };
-        await setDoc(doc(db, 'pages', pageId), sanitize(newPage));
-        setPages((ps) =>
-          ps.map((p, i) => (i === currentPage ? newPage : p))
-        );
+        setPages(ps => ({ ...ps, [pageId]: newPage }));
         if (prevHash && prevHash !== hash) {
           await releaseFile(prevHash);
         }
@@ -439,7 +441,7 @@ function App() {
 
   // Sincronizar página actual con estados locales
   useEffect(() => {
-    const p = pages[currentPage];
+    const p = pages[currentPageId];
     if (!p) return;
     setCanvasTokens(p.tokens || []);
     setCanvasLines(p.lines || []);
@@ -448,44 +450,44 @@ function App() {
     setGridCells(p.gridCells || 1);
     setGridOffsetX(p.gridOffsetX || 0);
     setGridOffsetY(p.gridOffsetY || 0);
-  }, [currentPage, pages]);
+  }, [currentPageId, pages]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentTokens = pages[currentPage]?.tokens || [];
+    const page = pages[currentPageId];
+    const currentTokens = page?.tokens || [];
     if (deepEqual(canvasTokens, currentTokens)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, tokens: canvasTokens } : pg
-      )
-    );
-  }, [canvasTokens, currentPage]);
+    setPages(ps => ({
+      ...ps,
+      [currentPageId]: { ...page, tokens: canvasTokens },
+    }));
+  }, [canvasTokens, currentPageId]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentLines = pages[currentPage]?.lines || [];
+    const page = pages[currentPageId];
+    const currentLines = page?.lines || [];
     if (deepEqual(canvasLines, currentLines)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, lines: canvasLines } : pg
-      )
-    );
-  }, [canvasLines, currentPage]);
+    setPages(ps => ({
+      ...ps,
+      [currentPageId]: { ...page, lines: canvasLines },
+    }));
+  }, [canvasLines, currentPageId]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const currentBg = pages[currentPage]?.background || null;
+    const page = pages[currentPageId];
+    const currentBg = page?.background || null;
     if (deepEqual(canvasBackground, currentBg)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage ? { ...pg, background: canvasBackground } : pg
-      )
-    );
-  }, [canvasBackground, currentPage]);
+    setPages(ps => ({
+      ...ps,
+      [currentPageId]: { ...page, background: canvasBackground },
+    }));
+  }, [canvasBackground, currentPageId]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
-    const p = pages[currentPage];
+    const p = pages[currentPageId];
     const currentGrid = {
       gridSize: p?.gridSize,
       gridCells: p?.gridCells,
@@ -494,92 +496,66 @@ function App() {
     };
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
     if (deepEqual(newGrid, currentGrid)) return;
-    setPages(ps =>
-      ps.map((pg, i) =>
-        i === currentPage
-          ? { ...pg, gridSize, gridCells, gridOffsetX, gridOffsetY }
-          : pg
-      )
-    );
-  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
+    setPages(ps => ({
+      ...ps,
+      [currentPageId]: {
+        ...p,
+        gridSize,
+        gridCells,
+        gridOffsetX,
+        gridOffsetY,
+      },
+    }));
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPageId]);
 
-// Rate limit estricto para evitar escrituras masivas a Firestore
-const lastSyncRef = useRef(0);
-const syncTimeoutRef = useRef(null);
-const RATE_LIMIT_MS = 10000; // 10 segundos mínimo entre escrituras
+const savePageDebounced = useRef(null);
 
 useEffect(() => {
-  const prevPages = prevPagesRef.current;
-  const pagesChanged = pages.some((p, i) => {
-    const prev = prevPages[i];
-    if (!prev) return true;
-    return !pageDataEqual(prev, p);
+  if (!currentPageId) return;
+  if (unsubscribeRef.current) {
+    unsubscribeRef.current();
+  }
+  const unsub = onSnapshot(doc(db, 'pages', currentPageId), (snap) => {
+    if (snap.exists()) {
+      const data = { id: currentPageId, ...snap.data() };
+      prevSavedRef.current = data;
+      setPages((ps) => ({ ...ps, [currentPageId]: data }));
+    }
   });
-  if (!pagesChanged) {
-    prevPagesRef.current = pages;
-    return;
-  }
-
-  const now = Date.now();
-  const doSync = async () => {
-    const updated = await Promise.all(
-      pages.map(async (p, i) => {
-        const prev = prevPages[i] || {};
-        if (pageDataEqual(prev, p)) return prevPages[i];
-
-        const tokens = await Promise.all(
-          (p.tokens || []).map(async (t) => {
-            if (t.url && t.url.startsWith('data:')) {
-              const url = await uploadDataUrl(
-                t.url,
-                `canvas-tokens/${t.id}`
-              );
-              return { ...t, url };
-            }
-            return t;
-          })
-        );
-        let bg = p.background;
-        if (bg && bg.startsWith('data:')) {
-          bg = await uploadDataUrl(bg, `Mapas/${p.id}`);
-        }
-        if (bg && bg.startsWith('blob:')) {
-          return p; // no guardar hasta que termine la subida
-        }
-        const newPage = { ...p, tokens, background: bg, lines: p.lines || [] };
-        await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-        return newPage;
-      })
-    );
-    prevPagesRef.current = updated;
-    lastSyncRef.current = Date.now();
-    syncTimeoutRef.current = null;
-  };
-
-  if (now - lastSyncRef.current > RATE_LIMIT_MS) {
-    doSync();
-  } else {
-    if (!syncTimeoutRef.current) {
-      const delay = RATE_LIMIT_MS - (now - lastSyncRef.current);
-      syncTimeoutRef.current = setTimeout(doSync, delay);
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('Sincronización de páginas a Firestore limitada por rate limit.');
-      }
-    }
-  }
-  // Cleanup
+  unsubscribeRef.current = unsub;
   return () => {
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
-      syncTimeoutRef.current = null;
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
     }
   };
-}, [pages]);
+}, [currentPageId]);
+
+useEffect(() => {
+  if (!currentPageId) return;
+  if (savePageDebounced.current) {
+    savePageDebounced.current.cancel();
+  }
+  savePageDebounced.current = debounce(async (page) => {
+    const changed = !deepEqual(page, prevSavedRef.current);
+    if (!changed) return;
+    await setDoc(doc(db, 'pages', currentPageId), sanitize(page));
+    prevSavedRef.current = page;
+  }, 500);
+}, [currentPageId]);
+
+useEffect(() => {
+  const page = pages[currentPageId];
+  if (!page || !savePageDebounced.current) return;
+  savePageDebounced.current(page);
+  return () => savePageDebounced.current.cancel();
+}, [currentPageId, pages[currentPageId]]);
 
   const addPage = () => {
+    const count = Object.keys(pages).length;
     const newPage = {
       id: nanoid(),
-      name: `Página ${pages.length + 1}`,
+      name: `Página ${count + 1}`,
       background: null,
       backgroundHash: null,
       gridSize: 100,
@@ -589,13 +565,13 @@ useEffect(() => {
       tokens: [],
       lines: [],
     };
-    setPages((ps) => [...ps, newPage]);
-    setCurrentPage(pages.length);
+    setPages(ps => ({ ...ps, [newPage.id]: newPage }));
+    setCurrentPageId(newPage.id);
   };
 
-  const updatePage = (index, data) => {
-    setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...data } : p)));
-    if (index === currentPage) {
+  const updatePage = (id, data) => {
+    setPages(ps => ({ ...ps, [id]: { ...ps[id], ...data } }));
+    if (id === currentPageId) {
       if (data.gridSize !== undefined) setGridSize(data.gridSize);
       if (data.gridCells !== undefined) setGridCells(data.gridCells);
       if (data.gridOffsetX !== undefined) setGridOffsetX(data.gridOffsetX);
@@ -606,20 +582,23 @@ useEffect(() => {
     }
   };
 
-  const deletePage = async (index) => {
-    const p = pages[index];
+  const deletePage = async (id) => {
+    const p = pages[id];
     if (!p) return;
     if (!(await confirm(`¿Eliminar ${p.name}?`))) return;
     if (p.backgroundHash) {
       await releaseFile(p.backgroundHash);
     }
-    await deleteDoc(doc(db, 'pages', p.id));
-    setPages((ps) => ps.filter((_, i) => i !== index));
-    setCurrentPage((cp) => {
-      if (cp > index) return cp - 1;
-      if (cp === index) return Math.max(0, cp - 1);
-      return cp;
+    await deleteDoc(doc(db, 'pages', id));
+    setPages(ps => {
+      const copy = { ...ps };
+      delete copy[id];
+      return copy;
     });
+    if (id === currentPageId) {
+      const remaining = Object.keys(pages).filter(pid => pid !== id);
+      setCurrentPageId(remaining[0] || null);
+    }
   };
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -3233,9 +3212,9 @@ useEffect(() => {
         </div>
         <div className="mr-80">
           <PageSelector
-            pages={pages}
-            current={currentPage}
-            onSelect={setCurrentPage}
+            pages={Object.values(pages)}
+            currentId={currentPageId}
+            onSelect={setCurrentPageId}
             onAdd={addPage}
             onUpdate={updatePage}
             onDelete={deletePage}

@@ -5,12 +5,12 @@ import Modal from './Modal';
 import Input from './Input';
 import Boton from './Boton';
 
-const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) => {
-  const [editIndex, setEditIndex] = useState(null);
+const PageSelector = ({ pages, currentId, onSelect, onAdd, onUpdate, onDelete }) => {
+  const [editId, setEditId] = useState(null);
   const [pageData, setPageData] = useState({});
 
-  const openEdit = (index) => {
-    const p = pages[index];
+  const openEdit = (id) => {
+    const p = pages.find(pg => pg.id === id);
     setPageData({
       name: p.name,
       gridSize: p.gridSize,
@@ -18,13 +18,13 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
       gridOffsetX: p.gridOffsetX,
       gridOffsetY: p.gridOffsetY,
     });
-    setEditIndex(index);
+    setEditId(id);
   };
 
-  const closeEdit = () => setEditIndex(null);
+  const closeEdit = () => setEditId(null);
 
   const handleSave = () => {
-    onUpdate(editIndex, {
+    onUpdate(editId, {
       name: pageData.name,
       gridSize: parseInt(pageData.gridSize, 10) || 1,
       gridCells: parseInt(pageData.gridCells, 10) || 1,
@@ -35,18 +35,18 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
   };
 
   const handleDelete = () => {
-    onDelete(editIndex);
+    onDelete(editId);
     closeEdit();
   };
 
   return (
     <div className="flex items-center gap-2 mb-4 overflow-x-auto overflow-y-visible py-1">
-      {pages.map((p, i) => (
+      {pages.map((p) => (
         <div key={p.id} className="relative group flex-shrink-0">
           <button
-            onClick={() => onSelect(i)}
+            onClick={() => onSelect(p.id)}
             className={`relative w-28 h-20 sm:w-36 sm:h-24 md:w-40 md:h-28 rounded-lg border border-gray-600 overflow-hidden ${
-              i === current ? 'ring-2 ring-blue-400' : ''
+              p.id === currentId ? 'ring-2 ring-blue-400' : ''
             }`}
           >
             {p.background && (
@@ -61,7 +61,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
             </span>
           </button>
           <button
-            onClick={() => openEdit(i)}
+            onClick={() => openEdit(p.id)}
             className="absolute top-1 right-1 p-1 bg-gray-700 hover:bg-gray-600 rounded-full text-white shadow focus:outline-none hidden group-hover:block"
             aria-label="Editar"
           >
@@ -73,7 +73,7 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
         Nueva página
       </Boton>
       <Modal
-        isOpen={editIndex !== null}
+        isOpen={editId !== null}
         onClose={closeEdit}
         title="Editar página"
         footer={
@@ -131,7 +131,7 @@ PageSelector.propTypes = {
       gridOffsetY: PropTypes.number.isRequired,
     })
   ).isRequired,
-  current: PropTypes.number.isRequired,
+  currentId: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
   onAdd: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
