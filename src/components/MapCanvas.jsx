@@ -686,6 +686,8 @@ const MapCanvas = ({
   highlightText,
   userType = 'master',
   playerName = '',
+  lines: propLines = [],
+  onLinesChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -702,17 +704,31 @@ const MapCanvas = ({
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
   const [activeTool, setActiveTool] = useState('select');
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
+  const [selectedLineId, setSelectedLineId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
+  const [measureShape, setMeasureShape] = useState('line');
+  const [measureSnap, setMeasureSnap] = useState('center');
+  const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState([]);
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
+  const lineRefs = useRef({});
+  const lineTrRef = useRef();
+  const undoStack = useRef([]);
+  const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
   const isBgLoading = bgStatus !== 'loaded';
+
+  useEffect(() => {
+    setLines(propLines);
+    undoStack.current = [];
+    redoStack.current = [];
+  }, [propLines]);
 
   const canSeeBars = useCallback((tk) => {
     if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
@@ -742,6 +758,21 @@ const MapCanvas = ({
 
   const pxToCell = (px, offset) => Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  const snapPoint = useCallback(
+    (x, y) => {
+      if (measureSnap === 'free') return [x, y];
+      const cellX = pxToCell(x, gridOffsetX);
+      const cellY = pxToCell(y, gridOffsetY);
+      if (measureSnap === 'center') {
+        return [
+          cellToPx(cellX + 0.5, gridOffsetX),
+          cellToPx(cellY + 0.5, gridOffsetY),
+        ];
+      }
+      return [cellToPx(cellX, gridOffsetX), cellToPx(cellY, gridOffsetY)];
+    },
+    [measureSnap, gridOffsetX, gridOffsetY, effectiveGridSize]
+  );
 
   // Tamaño del contenedor para ajustar el stage al redimensionar la ventana
   useEffect(() => {
@@ -806,6 +837,60 @@ const MapCanvas = ({
       );
     }
     return lines;
+  };
+
+  const saveLines = (updater) => {
+    setLines((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      undoStack.current.push(prev);
+      redoStack.current = [];
+      onLinesChange(next);
+      return next;
+    });
+  };
+
+  const undoLines = () => {
+    setLines((prev) => {
+      if (undoStack.current.length === 0) return prev;
+      redoStack.current.push(prev);
+      const next = undoStack.current.pop();
+      onLinesChange(next);
+      return next;
+    });
+  };
+
+  const redoLines = () => {
+    setLines((prev) => {
+      if (redoStack.current.length === 0) return prev;
+      undoStack.current.push(prev);
+      const next = redoStack.current.pop();
+      onLinesChange(next);
+      return next;
+    });
+  };
+
+  const handleLineDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    saveLines((ls) => ls.map((ln) => (ln.id === id ? { ...ln, x, y } : ln)));
+  };
+
+  const handleLineTransformEnd = (id, e) => {
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    const newPoints = node
+      .points()
+      .map((p, i) => (i % 2 === 0 ? p * scaleX : p * scaleY));
+    node.points(newPoints);
+    const x = node.x();
+    const y = node.y();
+    saveLines((ls) =>
+      ls.map((ln) => (ln.id === id ? { ...ln, x, y, points: newPoints } : ln))
+    );
   };
 
   const handleDragEnd = (id, evt) => {
@@ -929,6 +1014,7 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setSelectedLineId(null);
       setCurrentLine({
         points: [relX, relY],
         color: drawColor,
@@ -937,8 +1023,9 @@ const MapCanvas = ({
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      [relX, relY] = snapPoint(relX, relY);
       setMeasureLine([relX, relY, relX, relY]);
     }
     if (activeTool === 'text' && e.evt.button === 0) {
@@ -953,8 +1040,8 @@ const MapCanvas = ({
   // Actualiza la acción activa según la herramienta
   const handleMouseMove = () => {
     const pointer = stageRef.current.getPointerPosition();
-    const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-    const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+    let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+    let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
     if (currentLine) {
       setCurrentLine((ln) => ({
         ...ln,
@@ -963,6 +1050,7 @@ const MapCanvas = ({
       return;
     }
     if (measureLine) {
+      [relX, relY] = snapPoint(relX, relY);
       setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
       return;
     }
@@ -975,8 +1063,23 @@ const MapCanvas = ({
 
   const stopPanning = () => {
     if (currentLine) {
-      setLines((ls) => [...ls, currentLine]);
+      const xs = currentLine.points.filter((_, i) => i % 2 === 0);
+      const ys = currentLine.points.filter((_, i) => i % 2 === 1);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const rel = currentLine.points.map((p, i) =>
+        i % 2 === 0 ? p - minX : p - minY
+      );
+      const finished = {
+        ...currentLine,
+        id: Date.now(),
+        x: minX,
+        y: minY,
+        points: rel,
+      };
+      saveLines((ls) => [...ls, finished]);
       setCurrentLine(null);
+      setSelectedLineId(finished.id);
     }
     if (measureLine) setMeasureLine(null);
     if (isPanning) setIsPanning(false);
@@ -985,11 +1088,104 @@ const MapCanvas = ({
   const handleStageClick = (e) => {
     if (e.target === stageRef.current) {
       setSelectedId(null);
+      setSelectedLineId(null);
     }
   };
 
   const mapWidth = gridCells || Math.round(imageSize.width / effectiveGridSize);
   const mapHeight = gridCells || Math.round(imageSize.height / effectiveGridSize);
+
+  const measureElement =
+    measureLine && measureVisible && (() => {
+      const [x1, y1, x2, y2] = measureLine;
+      const cellDx = Math.abs(pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX));
+      const cellDy = Math.abs(pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY));
+      let distance = Math.hypot(cellDx, cellDy);
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      let shape;
+      if (measureShape === 'square') {
+        distance = Math.max(cellDx, cellDy);
+        shape = (
+          <Rect
+            x={Math.min(x1, x2)}
+            y={Math.min(y1, y2)}
+            width={Math.abs(dx)}
+            height={Math.abs(dy)}
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'circle') {
+        distance = Math.max(cellDx, cellDy);
+        shape = (
+          <Circle
+            x={x1}
+            y={y1}
+            radius={len}
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'cone') {
+        const half = Math.PI / 6;
+        const p2x = x1 + len * Math.cos(angle + half);
+        const p2y = y1 + len * Math.sin(angle + half);
+        const p3x = x1 + len * Math.cos(angle - half);
+        const p3y = y1 + len * Math.sin(angle - half);
+        shape = (
+          <Line
+            points={[x1, y1, p2x, p2y, p3x, p3y]}
+            closed
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else if (measureShape === 'beam') {
+        const w = effectiveGridSize;
+        const dxp = (w / 2) * Math.cos(angle + Math.PI / 2);
+        const dyp = (w / 2) * Math.sin(angle + Math.PI / 2);
+        shape = (
+          <Line
+            points={[
+              x1 + dxp,
+              y1 + dyp,
+              x2 + dxp,
+              y2 + dyp,
+              x2 - dxp,
+              y2 - dyp,
+              x1 - dxp,
+              y1 - dyp,
+            ]}
+            closed
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        );
+      } else {
+        shape = (
+          <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+        );
+      }
+      return (
+        <>
+          {shape}
+          <Text
+            x={x2}
+            y={y2}
+            text={`${Math.round(distance)} casillas`}
+            fontSize={16}
+            fill="#fff"
+          />
+        </>
+      );
+    })();
 
   const handleKeyDown = useCallback((e) => {
     // Avoid moving the token when typing inside inputs or editable fields
@@ -998,6 +1194,23 @@ const MapCanvas = ({
       target.isContentEditable ||
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
     ) {
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      undoLines();
+      return;
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redoLines();
+      return;
+    }
+
+    if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
+      saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+      setSelectedLineId(null);
       return;
     }
 
@@ -1038,12 +1251,32 @@ const MapCanvas = ({
     y = Math.max(0, Math.min(mapHeight - 1, y));
     const updated = tokens.map((t) => (t.id === selectedId ? { ...t, x, y } : t));
     onTokensChange(updated);
-  }, [selectedId, tokens, onTokensChange, mapWidth, mapHeight]);
+  }, [
+    selectedId,
+    tokens,
+    onTokensChange,
+    mapWidth,
+    mapHeight,
+    selectedLineId,
+    lines,
+  ]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const tr = lineTrRef.current;
+    const node = selectedLineId ? lineRefs.current[selectedLineId] : null;
+    if (tr && node && activeTool === 'select') {
+      tr.nodes([node]);
+      tr.getLayer()?.batchDraw();
+    } else if (tr) {
+      tr.nodes([]);
+      tr.getLayer()?.batchDraw();
+    }
+  }, [selectedLineId, activeTool]);
   const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
@@ -1229,28 +1462,27 @@ const MapCanvas = ({
                 listening={activeTool === 'select'}
               />
             ))}
-            {lines.map((ln, i) => (
+            {lines.map((ln) => (
               <Line
-                key={`line-${i}`}
+                ref={(el) => {
+                  if (el) lineRefs.current[ln.id] = el;
+                }}
+                key={ln.id}
+                x={ln.x}
+                y={ln.y}
                 points={ln.points}
                 stroke={ln.color}
                 strokeWidth={ln.width}
                 lineCap="round"
                 lineJoin="round"
+                draggable={activeTool === 'select'}
+                onClick={() => setSelectedLineId(ln.id)}
+                onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
+                onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
               />
             ))}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {activeTool === 'select' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1263,18 +1495,7 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(Math.hypot(pxToCell(measureLine[2], gridOffsetX) - pxToCell(measureLine[0], gridOffsetX), pxToCell(measureLine[3], gridOffsetY) - pxToCell(measureLine[1], gridOffsetY)))} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1287,25 +1508,7 @@ const MapCanvas = ({
                 lineJoin="round"
               />
             )}
-            {measureLine && (
-              <>
-                <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
-                <Text
-                  x={measureLine[2]}
-                  y={measureLine[3]}
-                  text={`${Math.round(
-                    Math.hypot(
-                      pxToCell(measureLine[2], gridOffsetX) -
-                        pxToCell(measureLine[0], gridOffsetX),
-                      pxToCell(measureLine[3], gridOffsetY) -
-                        pxToCell(measureLine[1], gridOffsetY)
-                    )
-                  )} casillas`}
-                  fontSize={16}
-                  fill="#fff"
-                />
-              </>
-            )}
+            {measureElement}
             {texts.map((t, i) => (
               <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
             ))}
@@ -1332,6 +1535,12 @@ const MapCanvas = ({
         onColorChange={setDrawColor}
         brushSize={brushSize}
         onBrushSizeChange={setBrushSize}
+        measureShape={measureShape}
+        onMeasureShapeChange={setMeasureShape}
+        measureSnap={measureSnap}
+        onMeasureSnapChange={setMeasureSnap}
+        measureVisible={measureVisible}
+        onMeasureVisibleChange={setMeasureVisible}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -1424,6 +1633,8 @@ MapCanvas.propTypes = {
   highlightText: PropTypes.func,
   userType: PropTypes.oneOf(['master', 'player']),
   playerName: PropTypes.string,
+  lines: PropTypes.array,
+  onLinesChange: PropTypes.func,
 };
 
 export default MapCanvas;
