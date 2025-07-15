@@ -15,6 +15,7 @@ import {
   Line,
   Image as KonvaImage,
   Group,
+  Path,
   Transformer,
   Circle,
   Text,
@@ -74,6 +75,8 @@ const BRUSH_WIDTHS = {
   medium: 4,
   large: 6,
 };
+
+const DEFAULT_WALL_LENGTH = 50;
 
 const TokenAura = ({
   x,
@@ -727,6 +730,8 @@ const MapCanvas = ({
   playerName = '',
   lines: propLines = [],
   onLinesChange = () => {},
+  walls: propWalls = [],
+  onWallsChange = () => {},
   texts: propTexts = [],
   onTextsChange = () => {},
 }) => {
@@ -751,6 +756,8 @@ const MapCanvas = ({
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
+  const [walls, setWalls] = useState(propWalls);
+  const [selectedWallId, setSelectedWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
@@ -770,6 +777,7 @@ const MapCanvas = ({
   const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
+  const wallRefs = useRef({});
   const lineTrRef = useRef();
   const textRefs = useRef({});
   const textTrRef = useRef();
@@ -786,6 +794,10 @@ const MapCanvas = ({
     undoStack.current = [];
     redoStack.current = [];
   }, [propLines]);
+
+  useEffect(() => {
+    setWalls(propWalls);
+  }, [propWalls]);
 
   useEffect(() => {
     setTexts(propTexts);
@@ -920,6 +932,20 @@ const MapCanvas = ({
     });
   };
 
+  const updateWalls = (updater) => {
+    setWalls((prev) =>
+      typeof updater === 'function' ? updater(prev) : updater
+    );
+  };
+
+  const saveWalls = (updater) => {
+    setWalls((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      onWallsChange(next);
+      return next;
+    });
+  };
+
   const updateTexts = (updater) => {
     setTexts((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -953,6 +979,36 @@ const MapCanvas = ({
     const x = node.x();
     const y = node.y();
     saveLines((ls) => ls.map((ln) => (ln.id === id ? { ...ln, x, y } : ln)));
+  };
+
+  const handleWallDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    saveWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
+  };
+
+  const handleWallPointDrag = (id, index, e, save = false) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    const updater = (ws) =>
+      ws.map((w) => {
+        if (w.id !== id) return w;
+        const abs = [
+          w.x + w.points[0],
+          w.y + w.points[1],
+          w.x + w.points[2],
+          w.y + w.points[3],
+        ];
+        abs[index * 2] = x;
+        abs[index * 2 + 1] = y;
+        const minX = Math.min(abs[0], abs[2]);
+        const minY = Math.min(abs[1], abs[3]);
+        const rel = [abs[0] - minX, abs[1] - minY, abs[2] - minX, abs[3] - minY];
+        return { ...w, x: minX, y: minY, points: rel };
+      });
+    if (save) saveWalls(updater); else updateWalls(updater);
   };
 
   const handleLineTransformEnd = (id, e) => {
@@ -1134,6 +1190,22 @@ const MapCanvas = ({
         width: BRUSH_WIDTHS[brushSize],
       });
     }
+    if (activeTool === 'wall' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setSelectedWallId(null);
+      const wall = {
+        id: Date.now(),
+        x: relX,
+        y: relY,
+        points: [0, 0, DEFAULT_WALL_LENGTH, 0],
+        color: '#ff6600',
+        width: 4,
+      };
+      saveWalls((ws) => [...ws, wall]);
+      setSelectedWallId(wall.id);
+    }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
@@ -1210,6 +1282,7 @@ const MapCanvas = ({
     if (e.target === stageRef.current) {
       setSelectedId(null);
       setSelectedLineId(null);
+      setSelectedWallId(null);
       setSelectedTextId(null);
     }
   };
@@ -1348,6 +1421,11 @@ const MapCanvas = ({
         setSelectedLineId(null);
         return;
       }
+      if (selectedWallId != null && e.key.toLowerCase() === 'delete') {
+        saveWalls(walls.filter((w) => w.id !== selectedWallId));
+        setSelectedWallId(null);
+        return;
+      }
 
       if (selectedTextId != null) {
         const idx = texts.findIndex((t) => t.id === selectedTextId);
@@ -1428,7 +1506,9 @@ const MapCanvas = ({
       mapHeight,
       selectedLineId,
       lines,
+      walls,
       selectedTextId,
+      selectedWallId,
       texts,
     ]
   );
@@ -1536,7 +1616,10 @@ const MapCanvas = ({
           onMouseUp={stopPanning}
           onMouseLeave={stopPanning}
           onClick={handleStageClick}
-          style={{ background: '#000' }}
+          style={{
+            background: '#000',
+            cursor: activeTool === 'wall' ? 'crosshair' : 'default',
+          }}
         >
           <Layer>
             <Group
@@ -1739,6 +1822,119 @@ const MapCanvas = ({
               {measureElement}
             </Group>
           </Layer>
+          <Layer>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {walls.map((wl) => (
+                <React.Fragment key={wl.id}>
+                  <Line
+                    ref={(el) => {
+                      if (el) wallRefs.current[wl.id] = el;
+                    }}
+                    x={wl.x}
+                    y={wl.y}
+                    points={wl.points}
+                    stroke={wl.color}
+                    strokeWidth={wl.width}
+                    lineCap="round"
+                    lineJoin="round"
+                    draggable={activeTool === 'select'}
+                    onClick={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
+                  />
+                  <Circle
+                    x={wl.x + wl.points[0]}
+                    y={wl.y + wl.points[1]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e, true)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
+                  {/* Door icon at midpoint */}
+                  <Group
+                    x={wl.x + (wl.points[0] + wl.points[2]) / 2}
+                    y={wl.y + (wl.points[1] + wl.points[3]) / 2}
+                    rotation={
+                      (Math.atan2(
+                        wl.points[3] - wl.points[1],
+                        wl.points[2] - wl.points[0]
+                      ) /
+                        Math.PI) *
+                      180
+                    }
+                    listening={false}
+                  >
+                    <Path
+                      data="M14 12v.01"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Path
+                      data="M3 21h18"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Path
+                      data="M6 21v-16a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v16"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                  </Group>
+                  <Circle
+                    x={wl.x + wl.points[2]}
+                    y={wl.y + wl.points[3]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e, true)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
+                </React.Fragment>
+              ))}
+            </Group>
+          </Layer>
           <Layer listening>
             {tokens.map((token) => (
               <TokenBars
@@ -1868,6 +2064,17 @@ MapCanvas.propTypes = {
   playerName: PropTypes.string,
   lines: PropTypes.array,
   onLinesChange: PropTypes.func,
+  walls: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      points: PropTypes.arrayOf(PropTypes.number).isRequired,
+      color: PropTypes.string,
+      width: PropTypes.number,
+    })
+  ),
+  onWallsChange: PropTypes.func,
   texts: PropTypes.array,
   onTextsChange: PropTypes.func,
 };
