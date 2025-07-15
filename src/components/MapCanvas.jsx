@@ -1002,7 +1002,6 @@ const MapCanvas = ({
       })
     );
   };
-
   const handleLineTransformEnd = (id, e) => {
     const node = e.target;
     const scaleX = node.scaleX();
