@@ -980,6 +980,28 @@ const MapCanvas = ({
     updateWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
   };
 
+  const handleWallPointDrag = (id, index, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    updateWalls((ws) =>
+      ws.map((w) => {
+        if (w.id !== id) return w;
+        const abs = [
+          w.x + w.points[0],
+          w.y + w.points[1],
+          w.x + w.points[2],
+          w.y + w.points[3],
+        ];
+        abs[index * 2] = x;
+        abs[index * 2 + 1] = y;
+        const minX = Math.min(abs[0], abs[2]);
+        const minY = Math.min(abs[1], abs[3]);
+        const rel = [abs[0] - minX, abs[1] - minY, abs[2] - minX, abs[3] - minY];
+        return { ...w, x: minX, y: minY, points: rel };
+      })
+    );
+  };
   const handleLineTransformEnd = (id, e) => {
     const node = e.target;
     const scaleX = node.scaleX();
@@ -1165,7 +1187,7 @@ const MapCanvas = ({
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
       setSelectedWallId(null);
       setCurrentWall({
-        points: [relX, relY],
+        points: [relX, relY, relX, relY],
         color: '#ff6600',
         width: 4,
       });
@@ -1209,7 +1231,7 @@ const MapCanvas = ({
     if (currentWall) {
       setCurrentWall((ln) => ({
         ...ln,
-        points: [...ln.points, relX, relY],
+        points: [ln.points[0], ln.points[1], relX, relY],
       }));
       return;
     }
@@ -1606,7 +1628,10 @@ const MapCanvas = ({
           onMouseUp={stopPanning}
           onMouseLeave={stopPanning}
           onClick={handleStageClick}
-          style={{ background: '#000' }}
+          style={{
+            background: '#000',
+            cursor: activeTool === 'wall' ? 'crosshair' : 'default',
+          }}
         >
           <Layer>
             <Group
@@ -1817,27 +1842,64 @@ const MapCanvas = ({
               scaleY={groupScale}
             >
               {walls.map((wl) => (
-                <Line
-                  ref={(el) => {
-                    if (el) wallRefs.current[wl.id] = el;
-                  }}
-                  key={wl.id}
-                  x={wl.x}
-                  y={wl.y}
-                  points={wl.points}
-                  stroke={wl.color}
-                  strokeWidth={wl.width}
-                  lineCap="round"
-                  lineJoin="round"
-                  draggable={activeTool === 'select'}
-                  onClick={() => {
-                    setSelectedWallId(wl.id);
-                    setSelectedId(null);
-                    setSelectedLineId(null);
-                    setSelectedTextId(null);
-                  }}
-                  onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
-                />
+                <React.Fragment key={wl.id}>
+                  <Line
+                    ref={(el) => {
+                      if (el) wallRefs.current[wl.id] = el;
+                    }}
+                    x={wl.x}
+                    y={wl.y}
+                    points={wl.points}
+                    stroke={wl.color}
+                    strokeWidth={wl.width}
+                    lineCap="round"
+                    lineJoin="round"
+                    draggable={activeTool === 'select'}
+                    onClick={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
+                  />
+                  {activeTool === 'select' && selectedWallId === wl.id && (
+                    <>
+                      <Circle
+                        x={wl.x + wl.points[0]}
+                        y={wl.y + wl.points[1]}
+                        radius={6}
+                        fill="#ff6600"
+                        draggable
+                        onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
+                        onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e)}
+                        onMouseEnter={() =>
+                          (stageRef.current.container().style.cursor = 'crosshair')
+                        }
+                        onMouseLeave={() =>
+                          (stageRef.current.container().style.cursor =
+                            activeTool === 'wall' ? 'crosshair' : 'default')
+                        }
+                      />
+                      <Circle
+                        x={wl.x + wl.points[2]}
+                        y={wl.y + wl.points[3]}
+                        radius={6}
+                        fill="#ff6600"
+                        draggable
+                        onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
+                        onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e)}
+                        onMouseEnter={() =>
+                          (stageRef.current.container().style.cursor = 'crosshair')
+                        }
+                        onMouseLeave={() =>
+                          (stageRef.current.container().style.cursor =
+                            activeTool === 'wall' ? 'crosshair' : 'default')
+                        }
+                      />
+                    </>
+                  )}
+                </React.Fragment>
               ))}
               {currentWall && (
                 <Line
@@ -1979,7 +2041,16 @@ MapCanvas.propTypes = {
   playerName: PropTypes.string,
   lines: PropTypes.array,
   onLinesChange: PropTypes.func,
-  walls: PropTypes.array,
+  walls: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      points: PropTypes.arrayOf(PropTypes.number).isRequired,
+      color: PropTypes.string,
+      width: PropTypes.number,
+    })
+  ),
   onWallsChange: PropTypes.func,
   texts: PropTypes.array,
   onTextsChange: PropTypes.func,
