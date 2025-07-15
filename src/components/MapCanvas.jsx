@@ -758,7 +758,7 @@ const MapCanvas = ({
   const [editingTextId, setEditingTextId] = useState(null);
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
-    bgColor: 'rgba(0,0,0,0)',
+    bgColor: 'rgba(0,0,0,0.5)',
     fontFamily: 'Arial',
     fontSize: 20,
     bold: false,
@@ -1772,7 +1772,8 @@ const MapCanvas = ({
             onChange={handleTextareaChange}
             onBlur={closeTextarea}
             placeholder="Texto"
-            className="absolute bg-transparent text-white border-none outline-none resize-none whitespace-pre"
+            autoFocus
+            className="absolute bg-transparent text-white border border-gray-500 outline-none resize-none whitespace-pre"
             style={{
               left,
               top,
