@@ -523,7 +523,7 @@ const AssetSidebar = ({
         <>
           <div className="mb-3">
             <button
-              onClick={addFolder}
+              onClick={() => addFolder()}
               className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
             >
               + Carpeta
