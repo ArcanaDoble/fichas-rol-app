@@ -1242,6 +1242,13 @@ const MapCanvas = ({
       }));
       return;
     }
+    if (currentWall) {
+      setCurrentWall((ln) => ({
+        ...ln,
+        points: [ln.points[0], ln.points[1], relX, relY],
+      }));
+      return;
+    }
     if (measureLine) {
       [relX, relY] = snapPoint(relX, relY);
       setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
@@ -1273,6 +1280,25 @@ const MapCanvas = ({
       saveLines((ls) => [...ls, finished]);
       setCurrentLine(null);
       setSelectedLineId(finished.id);
+    }
+    if (currentWall) {
+      const xs = currentWall.points.filter((_, i) => i % 2 === 0);
+      const ys = currentWall.points.filter((_, i) => i % 2 === 1);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const rel = currentWall.points.map((p, i) =>
+        i % 2 === 0 ? p - minX : p - minY
+      );
+      const finished = {
+        ...currentWall,
+        id: Date.now(),
+        x: minX,
+        y: minY,
+        points: rel,
+      };
+      saveWalls((ws) => [...ws, finished]);
+      setCurrentWall(null);
+      setSelectedWallId(finished.id);
     }
     if (measureLine) setMeasureLine(null);
     if (isPanning) setIsPanning(false);
