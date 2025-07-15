@@ -1002,6 +1002,7 @@ const MapCanvas = ({
       })
     );
   };
+
   const handleLineTransformEnd = (id, e) => {
     const node = e.target;
     const scaleX = node.scaleX();
@@ -1863,42 +1864,50 @@ const MapCanvas = ({
                     }}
                     onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
                   />
-                  {activeTool === 'select' && selectedWallId === wl.id && (
-                    <>
-                      <Circle
-                        x={wl.x + wl.points[0]}
-                        y={wl.y + wl.points[1]}
-                        radius={6}
-                        fill="#ff6600"
-                        draggable
-                        onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
-                        onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e)}
-                        onMouseEnter={() =>
-                          (stageRef.current.container().style.cursor = 'crosshair')
-                        }
-                        onMouseLeave={() =>
-                          (stageRef.current.container().style.cursor =
-                            activeTool === 'wall' ? 'crosshair' : 'default')
-                        }
-                      />
-                      <Circle
-                        x={wl.x + wl.points[2]}
-                        y={wl.y + wl.points[3]}
-                        radius={6}
-                        fill="#ff6600"
-                        draggable
-                        onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
-                        onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e)}
-                        onMouseEnter={() =>
-                          (stageRef.current.container().style.cursor = 'crosshair')
-                        }
-                        onMouseLeave={() =>
-                          (stageRef.current.container().style.cursor =
-                            activeTool === 'wall' ? 'crosshair' : 'default')
-                        }
-                      />
-                    </>
-                  )}
+                  <Circle
+                    x={wl.x + wl.points[0]}
+                    y={wl.y + wl.points[1]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
+                  <Circle
+                    x={wl.x + wl.points[2]}
+                    y={wl.y + wl.points[3]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
                 </React.Fragment>
               ))}
               {currentWall && (

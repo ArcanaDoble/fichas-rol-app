@@ -457,6 +457,7 @@ function App() {
   const prevTokensRef = useRef([]);
   const prevLinesRef = useRef([]);
   const prevWallsRef = useRef([]);
+  const wallSaveTimeout = useRef(null);
   const prevTextsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
@@ -637,7 +638,16 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasWalls, prevWallsRef.current)) return;
     prevWallsRef.current = canvasWalls;
-    updateDoc(doc(db, 'pages', pageId), { walls: canvasWalls });
+    if (wallSaveTimeout.current) clearTimeout(wallSaveTimeout.current);
+    wallSaveTimeout.current = setTimeout(() => {
+      updateDoc(doc(db, 'pages', pageId), { walls: canvasWalls });
+    }, 200);
+    return () => {
+      if (wallSaveTimeout.current) {
+        clearTimeout(wallSaveTimeout.current);
+        wallSaveTimeout.current = null;
+      }
+    };
   }, [canvasWalls, currentPage]);
 
   useEffect(() => {
