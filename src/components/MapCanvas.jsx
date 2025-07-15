@@ -1130,13 +1130,13 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      const content = prompt('Texto:', 'Nuevo texto');
-      if (content !== null) {
-        setTexts((t) => [
-          ...t,
-          { id: nanoid(), x: relX, y: relY, text: content, ...textOptions },
-        ]);
-      }
+      const id = nanoid();
+      const bgColor = textOptions.bgColor || 'rgba(0,0,0,0)';
+      setTexts((t) => [
+        ...t,
+        { id, x: relX, y: relY, text: '', ...textOptions, bgColor },
+      ]);
+      setSelectedTextId(id);
     }
   };
 
@@ -1192,6 +1192,7 @@ const MapCanvas = ({
     if (e.target === stageRef.current) {
       setSelectedId(null);
       setSelectedLineId(null);
+      setSelectedTextId(null);
     }
   };
 
@@ -1634,7 +1635,11 @@ const MapCanvas = ({
                   selected={token.id === selectedId}
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
-                  onClick={setSelectedId}
+                  onClick={() => {
+                    setSelectedId(token.id);
+                    setSelectedLineId(null);
+                    setSelectedTextId(null);
+                  }}
                   onSettings={handleOpenSettings}
                   onStates={handleOpenEstados}
                   onTransformEnd={handleSizeChange}
@@ -1659,7 +1664,11 @@ const MapCanvas = ({
                   lineCap="round"
                   lineJoin="round"
                   draggable={activeTool === 'select'}
-                  onClick={() => setSelectedLineId(ln.id)}
+                  onClick={() => {
+                    setSelectedLineId(ln.id);
+                    setSelectedId(null);
+                    setSelectedTextId(null);
+                  }}
                   onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
                   onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
                 />

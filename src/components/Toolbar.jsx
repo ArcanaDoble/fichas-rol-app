@@ -31,7 +31,17 @@ const snapOptions = [
   { id: 'free', label: 'Sin ajuste' },
 ];
 
-const fontOptions = ['Arial', 'Times New Roman', 'Courier New', 'Verdana'];
+const fontOptions = [
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Georgia',
+  'Courier New',
+  'Comic Sans MS',
+  'Trebuchet MS',
+  'Impact',
+  'Verdana',
+];
 
 const Toolbar = ({
   activeTool,
