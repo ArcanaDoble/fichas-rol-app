@@ -662,6 +662,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Se vuelve al sistema de edición mediante ventana emergente. Al crear un texto se solicita el contenido con `prompt` y al hacer doble clic sobre él se puede modificar.
 - Los textos siguen pudiéndose redimensionar manualmente con el transformador.
 
+**Resumen de cambios v2.3.26:**
+
+- Los textos del mapa ahora se guardan por página. Al crear un texto en una
+  página no aparece en el resto, funcionando igual que los trazos de dibujo.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

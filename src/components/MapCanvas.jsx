@@ -727,6 +727,8 @@ const MapCanvas = ({
   playerName = '',
   lines: propLines = [],
   onLinesChange = () => {},
+  texts: propTexts = [],
+  onTextsChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -753,7 +755,7 @@ const MapCanvas = ({
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
   const [measureVisible, setMeasureVisible] = useState(true);
-  const [texts, setTexts] = useState([]);
+  const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
@@ -784,6 +786,10 @@ const MapCanvas = ({
     undoStack.current = [];
     redoStack.current = [];
   }, [propLines]);
+
+  useEffect(() => {
+    setTexts(propTexts);
+  }, [propTexts]);
 
   const canSeeBars = useCallback(
     (tk) => {
@@ -914,6 +920,14 @@ const MapCanvas = ({
     });
   };
 
+  const updateTexts = (updater) => {
+    setTexts((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      onTextsChange(next);
+      return next;
+    });
+  };
+
   const undoLines = () => {
     setLines((prev) => {
       if (undoStack.current.length === 0) return prev;
@@ -962,7 +976,7 @@ const MapCanvas = ({
     const node = e.target;
     const x = node.x();
     const y = node.y();
-    setTexts((ts) => ts.map((t) => (t.id === id ? { ...t, x, y } : t)));
+    updateTexts((ts) => ts.map((t) => (t.id === id ? { ...t, x, y } : t)));
   };
 
   const handleTextTransformEnd = (id, e) => {
@@ -974,7 +988,7 @@ const MapCanvas = ({
     node.scaleY(1);
     const textNode = node.findOne('Text');
     const newFontSize = (textNode.fontSize() || 0) * ((scaleX + scaleY) / 2);
-    setTexts((ts) =>
+    updateTexts((ts) =>
       ts.map((t) => (t.id === id ? { ...t, fontSize: newFontSize } : t))
     );
     node.getLayer().batchDraw();
@@ -985,7 +999,9 @@ const MapCanvas = ({
     if (!current) return;
     const content = prompt('Texto:', current.text);
     if (content !== null) {
-      setTexts((ts) => ts.map((t) => (t.id === id ? { ...t, text: content } : t)));
+      updateTexts((ts) =>
+        ts.map((t) => (t.id === id ? { ...t, text: content } : t))
+      );
     }
   };
 
@@ -1133,7 +1149,7 @@ const MapCanvas = ({
       const bgColor = textOptions.bgColor || 'rgba(0,0,0,0)';
       const content = prompt('Texto:', '');
       if (content !== null) {
-        setTexts((t) => [
+        updateTexts((t) => [
           ...t,
           { id, x: relX, y: relY, text: content, ...textOptions, bgColor },
         ]);
@@ -1351,13 +1367,13 @@ const MapCanvas = ({
               x += 5;
               break;
             case 'delete':
-              setTexts(texts.filter((t) => t.id !== selectedTextId));
+              updateTexts(texts.filter((t) => t.id !== selectedTextId));
               setSelectedTextId(null);
               return;
             default:
               break;
           }
-          setTexts((ts) =>
+          updateTexts((ts) =>
             ts.map((t) => (t.id === selectedTextId ? { ...t, x, y } : t))
           );
           return;
@@ -1852,6 +1868,8 @@ MapCanvas.propTypes = {
   playerName: PropTypes.string,
   lines: PropTypes.array,
   onLinesChange: PropTypes.func,
+  texts: PropTypes.array,
+  onTextsChange: PropTypes.func,
 };
 
 export default MapCanvas;
