@@ -15,6 +15,7 @@ import {
   Line,
   Image as KonvaImage,
   Group,
+  Path,
   Transformer,
   Circle,
   Text,
@@ -74,6 +75,8 @@ const BRUSH_WIDTHS = {
   medium: 4,
   large: 6,
 };
+
+const DEFAULT_WALL_LENGTH = 50;
 
 const TokenAura = ({
   x,
@@ -754,7 +757,6 @@ const MapCanvas = ({
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
   const [walls, setWalls] = useState(propWalls);
-  const [currentWall, setCurrentWall] = useState(null);
   const [selectedWallId, setSelectedWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
@@ -1193,11 +1195,16 @@ const MapCanvas = ({
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
       setSelectedWallId(null);
-      setCurrentWall({
-        points: [relX, relY, relX, relY],
+      const wall = {
+        id: Date.now(),
+        x: relX,
+        y: relY,
+        points: [0, 0, DEFAULT_WALL_LENGTH, 0],
         color: '#ff6600',
         width: 4,
-      });
+      };
+      saveWalls((ws) => [...ws, wall]);
+      setSelectedWallId(wall.id);
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
@@ -1892,6 +1899,42 @@ const MapCanvas = ({
                         activeTool === 'wall' ? 'crosshair' : 'default')
                     }
                   />
+                  {/* Door icon at midpoint */}
+                  <Group
+                    x={wl.x + (wl.points[0] + wl.points[2]) / 2}
+                    y={wl.y + (wl.points[1] + wl.points[3]) / 2}
+                    rotation={
+                      (Math.atan2(
+                        wl.points[3] - wl.points[1],
+                        wl.points[2] - wl.points[0]
+                      ) /
+                        Math.PI) *
+                      180
+                    }
+                    listening={false}
+                  >
+                    <Path
+                      data="M14 12v.01"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Path
+                      data="M3 21h18"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Path
+                      data="M6 21v-16a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v16"
+                      stroke={wl.color}
+                      strokeWidth={2}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                  </Group>
                   <Circle
                     x={wl.x + wl.points[2]}
                     y={wl.y + wl.points[3]}
@@ -1916,15 +1959,6 @@ const MapCanvas = ({
                   />
                 </React.Fragment>
               ))}
-              {currentWall && (
-                <Line
-                  points={currentWall.points}
-                  stroke={currentWall.color}
-                  strokeWidth={currentWall.width}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              )}
             </Group>
           </Layer>
           <Layer listening>
