@@ -456,12 +456,14 @@ function App() {
   const pagesLoadedRef = useRef(false);
   const prevTokensRef = useRef([]);
   const prevLinesRef = useRef([]);
+  const prevWallsRef = useRef([]);
   const prevTextsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
+  const [canvasWalls, setCanvasWalls] = useState([]);
   const [canvasTexts, setCanvasTexts] = useState([]);
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
@@ -479,7 +481,7 @@ function App() {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
       const loaded = snap.docs.map((d) => {
-        const { tokens, lines, texts, ...meta } = d.data();
+        const { tokens, lines, texts, walls, ...meta } = d.data();
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
@@ -494,10 +496,11 @@ function App() {
           gridOffsetY: 0,
           tokens: [],
           lines: [],
+          walls: [],
           texts: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        const { tokens, lines, texts, ...meta } = defaultPage;
+        const { tokens, lines, walls, texts, ...meta } = defaultPage;
         setPages([meta]);
       } else {
         setPages(loaded);
@@ -551,6 +554,7 @@ function App() {
       const data = snap.data();
       setCanvasTokens(data.tokens || []);
       setCanvasLines(data.lines || []);
+      setCanvasWalls(data.walls || []);
       setCanvasTexts(data.texts || []);
       setCanvasBackground(data.background || null);
       setGridSize(data.gridSize || 1);
@@ -559,6 +563,7 @@ function App() {
       setGridOffsetY(data.gridOffsetY || 0);
       prevTokensRef.current = data.tokens || [];
       prevLinesRef.current = data.lines || [];
+      prevWallsRef.current = data.walls || [];
       prevTextsRef.current = data.texts || [];
       prevBgRef.current = data.background || null;
       prevGridRef.current = {
@@ -630,6 +635,15 @@ function App() {
     if (!pagesLoadedRef.current) return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
+    if (deepEqual(canvasWalls, prevWallsRef.current)) return;
+    prevWallsRef.current = canvasWalls;
+    updateDoc(doc(db, 'pages', pageId), { walls: canvasWalls });
+  }, [canvasWalls, currentPage]);
+
+  useEffect(() => {
+    if (!pagesLoadedRef.current) return;
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
     if (canvasBackground === prevBgRef.current) return;
     let bg = canvasBackground;
     const saveBg = async () => {
@@ -671,10 +685,11 @@ function App() {
       gridOffsetY: 0,
       tokens: [],
       lines: [],
+      walls: [],
       texts: [],
     };
     await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-    const { tokens, lines, texts, ...meta } = newPage;
+    const { tokens, lines, walls, texts, ...meta } = newPage;
     setPages((ps) => [...ps, meta]);
     setCurrentPage(pages.length);
   };
@@ -693,6 +708,7 @@ function App() {
       if (data.background !== undefined) setCanvasBackground(data.background);
       if (data.tokens !== undefined) setCanvasTokens(data.tokens);
       if (data.lines !== undefined) setCanvasLines(data.lines);
+      if (data.walls !== undefined) setCanvasWalls(data.walls);
       if (data.texts !== undefined) setCanvasTexts(data.texts);
     }
   };
@@ -3891,6 +3907,8 @@ function App() {
               onTextsChange={setCanvasTexts}
               lines={canvasLines}
               onLinesChange={setCanvasLines}
+              walls={canvasWalls}
+              onWallsChange={setCanvasWalls}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
