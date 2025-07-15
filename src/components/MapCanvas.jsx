@@ -1773,7 +1773,7 @@ const MapCanvas = ({
             onBlur={closeTextarea}
             placeholder="Texto"
             autoFocus
-            className="absolute bg-transparent text-white border border-gray-500 outline-none resize-none whitespace-pre"
+            className="absolute border border-gray-500 outline-none resize whitespace-pre"
             style={{
               left,
               top,
@@ -1784,6 +1784,8 @@ const MapCanvas = ({
               minWidth: '1ch',
               minHeight: t.fontSize,
               transform: `translate(-4px,-4px)`,
+              backgroundColor: t.bgColor,
+              color: t.fill,
             }}
           />
         );
