@@ -31,6 +31,18 @@ const snapOptions = [
   { id: 'free', label: 'Sin ajuste' },
 ];
 
+const fontOptions = [
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Georgia',
+  'Courier New',
+  'Comic Sans MS',
+  'Trebuchet MS',
+  'Impact',
+  'Verdana',
+];
+
 const Toolbar = ({
   activeTool,
   onSelect,
@@ -44,6 +56,8 @@ const Toolbar = ({
   onMeasureSnapChange,
   measureVisible,
   onMeasureVisibleChange,
+  textOptions,
+  onTextOptionsChange,
 }) => (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2 space-y-2">
     {tools.map(({ id, icon: Icon }) => (
@@ -138,6 +152,115 @@ const Toolbar = ({
           </div>
         </motion.div>
       )}
+      {activeTool === 'text' && (
+        <motion.div
+          key="text-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 top-2 bg-gray-800 p-2 rounded shadow-lg space-y-2 text-white w-56"
+        >
+          <div>
+            <label className="block mb-1 text-xs">Color texto</label>
+            <input
+              type="color"
+              value={textOptions.fill}
+              onChange={(e) =>
+                onTextOptionsChange({ ...textOptions, fill: e.target.value })
+              }
+              className="w-8 h-8 p-0 border-0"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-xs">Color fondo</label>
+            <input
+              type="color"
+              value={textOptions.bgColor}
+              onChange={(e) =>
+                onTextOptionsChange({ ...textOptions, bgColor: e.target.value })
+              }
+              className="w-8 h-8 p-0 border-0"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-xs">Fuente</label>
+            <select
+              value={textOptions.fontFamily}
+              onChange={(e) =>
+                onTextOptionsChange({
+                  ...textOptions,
+                  fontFamily: e.target.value,
+                })
+              }
+              className="bg-gray-700 w-full"
+            >
+              {fontOptions.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1 text-xs">Tamaño</label>
+            <input
+              type="number"
+              value={textOptions.fontSize}
+              min={8}
+              max={72}
+              onChange={(e) =>
+                onTextOptionsChange({
+                  ...textOptions,
+                  fontSize: parseInt(e.target.value, 10) || 1,
+                })
+              }
+              className="bg-gray-700 w-full"
+            />
+          </div>
+          <div className="flex space-x-1">
+            <button
+              onClick={() =>
+                onTextOptionsChange({
+                  ...textOptions,
+                  bold: !textOptions.bold,
+                })
+              }
+              className={`px-2 py-1 rounded text-sm ${
+                textOptions.bold ? 'bg-gray-700' : 'bg-gray-600'
+              }`}
+            >
+              N
+            </button>
+            <button
+              onClick={() =>
+                onTextOptionsChange({
+                  ...textOptions,
+                  italic: !textOptions.italic,
+                })
+              }
+              className={`px-2 py-1 rounded text-sm ${
+                textOptions.italic ? 'bg-gray-700' : 'bg-gray-600'
+              }`}
+            >
+              I
+            </button>
+            <button
+              onClick={() =>
+                onTextOptionsChange({
+                  ...textOptions,
+                  underline: !textOptions.underline,
+                })
+              }
+              className={`px-2 py-1 rounded text-sm ${
+                textOptions.underline ? 'bg-gray-700' : 'bg-gray-600'
+              }`}
+            >
+              S
+            </button>
+          </div>
+        </motion.div>
+      )}
     </AnimatePresence>
   </div>
 );
@@ -155,6 +278,16 @@ Toolbar.propTypes = {
   onMeasureSnapChange: PropTypes.func,
   measureVisible: PropTypes.bool,
   onMeasureVisibleChange: PropTypes.func,
+  textOptions: PropTypes.shape({
+    fill: PropTypes.string,
+    bgColor: PropTypes.string,
+    fontFamily: PropTypes.string,
+    fontSize: PropTypes.number,
+    bold: PropTypes.bool,
+    italic: PropTypes.bool,
+    underline: PropTypes.bool,
+  }),
+  onTextOptionsChange: PropTypes.func,
 };
 
 export default Toolbar;

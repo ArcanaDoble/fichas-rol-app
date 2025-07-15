@@ -18,6 +18,8 @@ import {
   Transformer,
   Circle,
   Text,
+  Label,
+  Tag,
 } from 'react-konva';
 import useImage from 'use-image';
 import { useDrop } from 'react-dnd';
@@ -35,7 +37,11 @@ import Toolbar from './Toolbar';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
-  if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+  if (h.length === 3)
+    h = h
+      .split('')
+      .map((ch) => ch + ch)
+      .join('');
   const int = parseInt(h, 16);
   const r = (int >> 16) & 255;
   const g = (int >> 8) & 255;
@@ -45,7 +51,11 @@ const hexToRgba = (hex, alpha = 1) => {
 
 const hexToRgb = (hex) => {
   let h = hex.replace('#', '');
-  if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+  if (h.length === 3)
+    h = h
+      .split('')
+      .map((ch) => ch + ch)
+      .join('');
   const int = parseInt(h, 16);
   return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
 };
@@ -126,418 +136,443 @@ const EstadoImg = ({ src, ...props }) => {
 EstadoImg.propTypes = {
   src: PropTypes.string.isRequired,
 };
-  const Token = forwardRef(({
-  id,
-  x,
-  y,
-  width,
-  height,
-  angle,
-  color,
-  image,
-  name,
-  customName,
-  showName,
-  gridSize,
-  gridOffsetX,
-  gridOffsetY,
-  cellSize,
-  zoom,
-  maxZoom,
-  groupScale,
-  selected,
-  draggable = true,
-  listening = true,
-  opacity = 1,
-  onDragEnd,
-  onDragStart,
-  onClick,
-  onTransformEnd,
-  onRotate,
-  onSettings,
-  onStates,
-  onHoverChange,
-  tokenSheetId,
-  auraRadius = 0,
-  auraShape = 'circle',
-  auraColor = '#ffff00',
-  auraOpacity = 0.25,
-  showAura = true,
-  tintColor = '#ff0000',
-  tintOpacity = 0,
-  showSpinner = true,
-  estados = [],
-}, ref) => {
-  // Load token texture with CORS enabled so filters like tint work
-  const [img, imgStatus] = useImage(image, 'anonymous');
-  const isImgLoading = !!image && imgStatus === 'loading';
-  const groupRef = useRef();
-  const shapeRef = useRef();
-  const trRef = useRef();
-  const rotateRef = useRef();
-  const gearRef = useRef();
-  const estadosRef = useRef();
-  const textRef = useRef();
-  const textGroupRef = useRef();
-  const HANDLE_OFFSET = 12;
-  const iconSize = cellSize * 0.15;
-  const buttonSize = cellSize * 0.3;
-  const estadoBase = cellSize * 0.3;
-  const estadosInfo = estados
-    .map((id) => ESTADOS.find((e) => e.id === id))
-    .filter(Boolean);
-  const estadoSize =
-    estadosInfo.length > 0
-      ? Math.min(estadoBase, (width * gridSize) / estadosInfo.length)
-      : estadoBase;
-  const nameFontSize = Math.max(10, cellSize * 0.12 * Math.min(Math.max(width, height), 2));
-  const [stats, setStats] = useState({});
+const Token = forwardRef(
+  (
+    {
+      id,
+      x,
+      y,
+      width,
+      height,
+      angle,
+      color,
+      image,
+      name,
+      customName,
+      showName,
+      gridSize,
+      gridOffsetX,
+      gridOffsetY,
+      cellSize,
+      zoom,
+      maxZoom,
+      groupScale,
+      selected,
+      draggable = true,
+      listening = true,
+      opacity = 1,
+      onDragEnd,
+      onDragStart,
+      onClick,
+      onTransformEnd,
+      onRotate,
+      onSettings,
+      onStates,
+      onHoverChange,
+      tokenSheetId,
+      auraRadius = 0,
+      auraShape = 'circle',
+      auraColor = '#ffff00',
+      auraOpacity = 0.25,
+      showAura = true,
+      tintColor = '#ff0000',
+      tintOpacity = 0,
+      showSpinner = true,
+      estados = [],
+    },
+    ref
+  ) => {
+    // Load token texture with CORS enabled so filters like tint work
+    const [img, imgStatus] = useImage(image, 'anonymous');
+    const isImgLoading = !!image && imgStatus === 'loading';
+    const groupRef = useRef();
+    const shapeRef = useRef();
+    const trRef = useRef();
+    const rotateRef = useRef();
+    const gearRef = useRef();
+    const estadosRef = useRef();
+    const textRef = useRef();
+    const textGroupRef = useRef();
+    const HANDLE_OFFSET = 12;
+    const iconSize = cellSize * 0.15;
+    const buttonSize = cellSize * 0.3;
+    const estadoBase = cellSize * 0.3;
+    const estadosInfo = estados
+      .map((id) => ESTADOS.find((e) => e.id === id))
+      .filter(Boolean);
+    const estadoSize =
+      estadosInfo.length > 0
+        ? Math.min(estadoBase, (width * gridSize) / estadosInfo.length)
+        : estadoBase;
+    const nameFontSize = Math.max(
+      10,
+      cellSize * 0.12 * Math.min(Math.max(width, height), 2)
+    );
+    const [stats, setStats] = useState({});
 
-  const SNAP = gridSize / 4;
+    const SNAP = gridSize / 4;
 
-  const placeholderBase = color || 'red';
-  const fillColor = tintOpacity > 0 ? mixColors(placeholderBase, tintColor, tintOpacity) : placeholderBase;
-  const estadoData = estados.map((id) => ESTADOS.find((e) => e.id === id)).filter(Boolean);
+    const placeholderBase = color || 'red';
+    const fillColor =
+      tintOpacity > 0
+        ? mixColors(placeholderBase, tintColor, tintOpacity)
+        : placeholderBase;
+    const estadoData = estados
+      .map((id) => ESTADOS.find((e) => e.id === id))
+      .filter(Boolean);
 
-  useEffect(() => {
-    const node = shapeRef.current;
-    if (!node || !img) return;
-    const { r, g, b } = hexToRgb(tintColor);
+    useEffect(() => {
+      const node = shapeRef.current;
+      if (!node || !img) return;
+      const { r, g, b } = hexToRgb(tintColor);
 
-    if (tintOpacity > 0) {
-      const pixelRatio = window.devicePixelRatio * groupScale;
-      node.cache({
-        pixelRatio,
+      if (tintOpacity > 0) {
+        const pixelRatio = window.devicePixelRatio * groupScale;
+        node.cache({
+          pixelRatio,
+        });
+        node.filters([Konva.Filters.RGBA]);
+        node.red(r);
+        node.green(g);
+        node.blue(b);
+        node.alpha(tintOpacity);
+      } else {
+        node.filters([]);
+        node.clearCache();
+      }
+      node.getLayer()?.batchDraw();
+    }, [tintColor, tintOpacity, img, groupScale]);
+
+    useEffect(() => {
+      if (!tokenSheetId) return;
+      const load = () => {
+        const stored = localStorage.getItem('tokenSheets');
+        if (!stored) return;
+        const sheets = JSON.parse(stored);
+        const sheet = sheets[tokenSheetId];
+        if (sheet && sheet.stats) setStats(sheet.stats);
+      };
+      load();
+      const handler = (e) => {
+        if (e.detail && e.detail.id === tokenSheetId) {
+          setStats(e.detail.stats || {});
+        }
+      };
+      window.addEventListener('tokenSheetSaved', handler);
+      return () => window.removeEventListener('tokenSheetSaved', handler);
+    }, [tokenSheetId]);
+
+    const updateHandle = () => {
+      const node = shapeRef.current;
+      const handle = rotateRef.current;
+      const gear = gearRef.current;
+      const label = textRef.current;
+      const labelGroup = textGroupRef.current;
+      if (!node || !handle) return;
+      const box = node.getClientRect({ relativeTo: node.getParent() });
+      handle.position({
+        x: box.x + box.width + HANDLE_OFFSET,
+        y: box.y - HANDLE_OFFSET,
       });
-      node.filters([Konva.Filters.RGBA]);
-      node.red(r);
-      node.green(g);
-      node.blue(b);
-      node.alpha(tintOpacity);
-    } else {
-      node.filters([]);
-      node.clearCache();
-    }
-    node.getLayer()?.batchDraw();
-  }, [tintColor, tintOpacity, img, groupScale]);
-
-
-
-  useEffect(() => {
-    if (!tokenSheetId) return;
-    const load = () => {
-      const stored = localStorage.getItem('tokenSheets');
-      if (!stored) return;
-      const sheets = JSON.parse(stored);
-      const sheet = sheets[tokenSheetId];
-      if (sheet && sheet.stats) setStats(sheet.stats);
+      if (gear) {
+        gear.position({
+          x: box.x - HANDLE_OFFSET,
+          y: box.y + box.height + HANDLE_OFFSET,
+        });
+      }
+      if (estadosRef.current) {
+        estadosRef.current.position({
+          x: box.x - HANDLE_OFFSET + buttonSize + 4,
+          y: box.y + box.height + HANDLE_OFFSET,
+        });
+      }
+      if (labelGroup && label) {
+        labelGroup.position({
+          x: box.x + box.width / 2,
+          y: box.y + box.height + 4,
+        });
+        labelGroup.offsetX(label.width() / 2);
+      }
+      handle.getLayer().batchDraw();
     };
-    load();
-    const handler = e => {
-      if (e.detail && e.detail.id === tokenSheetId) {
-        setStats(e.detail.stats || {});
+    useLayoutEffect(() => {
+      const label = textRef.current;
+      const group = textGroupRef.current;
+      if (label && group) {
+        group.offsetX(label.width() / 2);
+        group.getLayer()?.batchDraw();
+      }
+    }, [customName, name, cellSize]);
+    const updateSizes = () => {
+      if (rotateRef.current) {
+        rotateRef.current.radius(iconSize / 2);
+      }
+      if (gearRef.current) {
+        gearRef.current.fontSize(buttonSize);
+      }
+      if (estadosRef.current) {
+        estadosRef.current.fontSize(buttonSize);
       }
     };
-    window.addEventListener('tokenSheetSaved', handler);
-    return () => window.removeEventListener('tokenSheetSaved', handler);
-  }, [tokenSheetId]);
 
-  const updateHandle = () => {
-    const node = shapeRef.current;
-    const handle = rotateRef.current;
-    const gear = gearRef.current;
-    const label = textRef.current;
-    const labelGroup = textGroupRef.current;
-    if (!node || !handle) return;
-    const box = node.getClientRect({ relativeTo: node.getParent() });
-    handle.position({
-      x: box.x + box.width + HANDLE_OFFSET,
-      y: box.y - HANDLE_OFFSET,
-    });
-    if (gear) {
-      gear.position({
-        x: box.x - HANDLE_OFFSET,
-        y: box.y + box.height + HANDLE_OFFSET,
-      });
-    }
-    if (estadosRef.current) {
-      estadosRef.current.position({
-        x: box.x - HANDLE_OFFSET + buttonSize + 4,
-        y: box.y + box.height + HANDLE_OFFSET,
-      });
-    }
-if (labelGroup && label) {
-  labelGroup.position({ x: box.x + box.width / 2, y: box.y + box.height + 4 });
-  labelGroup.offsetX(label.width() / 2);
-}
-    handle.getLayer().batchDraw();
-  };
-  useLayoutEffect(() => {
-    const label = textRef.current;
-    const group = textGroupRef.current;
-    if (label && group) {
-      group.offsetX(label.width() / 2);
-      group.getLayer()?.batchDraw();
-    }
-  }, [customName, name, cellSize]);
-  const updateSizes = () => {
-    if (rotateRef.current) {
-      rotateRef.current.radius(iconSize / 2);
-    }
-    if (gearRef.current) {
-      gearRef.current.fontSize(buttonSize);
-    }
-    if (estadosRef.current) {
-      estadosRef.current.fontSize(buttonSize);
-    }
-  };
+    useEffect(() => {
+      updateSizes();
+      if (selected) updateHandle();
+    }, [cellSize, selected]);
+    useEffect(() => {
+      if (selected && trRef.current && shapeRef.current) {
+        trRef.current.nodes([shapeRef.current]);
+        trRef.current.getLayer().batchDraw();
+        updateHandle();
+      }
+    }, [selected]);
 
-  useEffect(() => {
-    updateSizes();
-    if (selected) updateHandle();
-  }, [cellSize, selected]);
-  useEffect(() => {
-    if (selected && trRef.current && shapeRef.current) {
-      trRef.current.nodes([shapeRef.current]);
-      trRef.current.getLayer().batchDraw();
+    useEffect(() => {
+      if (selected) updateHandle();
+    }, [x, y, width, height, angle, selected]);
+
+    const snapBox = (box) => {
+      const threshold = gridSize;
+      const snap =
+        box.width < threshold && box.height < threshold ? SNAP : gridSize;
+
+      box.x = Math.round(box.x / snap) * snap;
+      box.y = Math.round(box.y / snap) * snap;
+
+      if (snap === SNAP) {
+        box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
+        box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
+      } else {
+        const cells = Math.max(
+          1,
+          Math.round(Math.max(box.width, box.height) / gridSize)
+        );
+        box.width = cells * gridSize;
+        box.height = cells * gridSize;
+      }
+
+      return box;
+    };
+
+    const handleTransformStart = () => {
+      if (shapeRef.current) shapeRef.current.draggable(false);
+    };
+
+    const handleTransformEnd = () => {
+      if (shapeRef.current) shapeRef.current.draggable(true);
+      const node = shapeRef.current;
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      node.scaleX(1);
+      node.scaleY(1);
+
+      let newWidth = node.width() * scaleX;
+      let newHeight = node.height() * scaleY;
+
+      const subCell = newWidth < gridSize && newHeight < gridSize;
+      const snap = subCell ? SNAP : gridSize;
+
+      let left = node.x() - node.offsetX();
+      let top = node.y() - node.offsetY();
+      left = Math.round(left / snap) * snap;
+      top = Math.round(top / snap) * snap;
+
+      if (subCell) {
+        newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
+        newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
+      } else {
+        const cells = Math.max(
+          1,
+          Math.round(Math.max(newWidth, newHeight) / gridSize)
+        );
+        newWidth = cells * gridSize;
+        newHeight = cells * gridSize;
+      }
+
+      node.width(newWidth);
+      node.height(newHeight);
+      node.offsetX(newWidth / 2);
+      node.offsetY(newHeight / 2);
+
+      node.position({ x: left + newWidth / 2, y: top + newHeight / 2 });
+
       updateHandle();
-    }
-  }, [selected]);
+      onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, left, top);
+    };
 
-  useEffect(() => {
-    if (selected) updateHandle();
-  }, [x, y, width, height, angle, selected]);
+    const handleRotateMove = (e) => {
+      const node = shapeRef.current;
+      const stage = node.getStage();
+      const pointer = stage.getPointerPosition();
+      const center = node.getAbsolutePosition();
+      let angle =
+        (Math.atan2(pointer.y - center.y, pointer.x - center.x) * 180) /
+        Math.PI;
+      if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
+      const snapped = Math.round(angle / 90) * 90;
+      if (Math.abs(angle - snapped) <= 7) angle = snapped;
+      node.rotation(angle);
+      updateHandle();
+    };
 
-  const snapBox = (box) => {
-    const threshold = gridSize;
-    const snap = box.width < threshold && box.height < threshold ? SNAP : gridSize;
+    const handleRotateEnd = () => {
+      updateHandle();
+      onRotate(id, shapeRef.current.rotation());
+    };
 
-    box.x = Math.round(box.x / snap) * snap;
-    box.y = Math.round(box.y / snap) * snap;
-
-    if (snap === SNAP) {
-      box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
-      box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
-    } else {
-      const cells = Math.max(1, Math.round(Math.max(box.width, box.height) / gridSize));
-      box.width = cells * gridSize;
-      box.height = cells * gridSize;
-    }
-
-    return box;
-  };
-
-  const handleTransformStart = () => {
-    if (shapeRef.current) shapeRef.current.draggable(false);
-  };
-
-  const handleTransformEnd = () => {
-    if (shapeRef.current) shapeRef.current.draggable(true);
-    const node = shapeRef.current;
-    const scaleX = node.scaleX();
-    const scaleY = node.scaleY();
-    node.scaleX(1);
-    node.scaleY(1);
-
-    let newWidth = node.width() * scaleX;
-    let newHeight = node.height() * scaleY;
-
-    const subCell = newWidth < gridSize && newHeight < gridSize;
-    const snap = subCell ? SNAP : gridSize;
-
-    let left = node.x() - node.offsetX();
-    let top = node.y() - node.offsetY();
-    left = Math.round(left / snap) * snap;
-    top = Math.round(top / snap) * snap;
-
-    if (subCell) {
-      newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
-      newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
-    } else {
-      const cells = Math.max(1, Math.round(Math.max(newWidth, newHeight) / gridSize));
-      newWidth = cells * gridSize;
-      newHeight = cells * gridSize;
-    }
-
-    node.width(newWidth);
-    node.height(newHeight);
-    node.offsetX(newWidth / 2);
-    node.offsetY(newHeight / 2);
-
-    node.position({ x: left + newWidth / 2, y: top + newHeight / 2 });
-
-    updateHandle();
-    onTransformEnd(id, newWidth / gridSize, newHeight / gridSize, left, top);
-  };
-
-  const handleRotateMove = (e) => {
-    const node = shapeRef.current;
-    const stage = node.getStage();
-    const pointer = stage.getPointerPosition();
-    const center = node.getAbsolutePosition();
-    let angle =
-      (Math.atan2(pointer.y - center.y, pointer.x - center.x) * 180) /
-      Math.PI;
-    if (e.evt.shiftKey) angle = Math.round(angle / 15) * 15;
-    const snapped = Math.round(angle / 90) * 90;
-    if (Math.abs(angle - snapped) <= 7) angle = snapped;
-    node.rotation(angle);
-    updateHandle();
-  };
-
-  const handleRotateEnd = () => {
-    updateHandle();
-    onRotate(id, shapeRef.current.rotation());
-  };
-
-  const handleStatClick = (statKey, e) => {
-    if (!draggable) return;
-    e.cancelBubble = true;
-    setStats(prev => {
-      const current = prev[statKey] || {};
-      const max = current.total ?? current.base ?? current.actual ?? 0;
-      const delta = e.evt.shiftKey ? -1 : 1;
-      const next = {
-        ...current,
-        actual: Math.max(0, Math.min(max, (current.actual || 0) + delta)),
-      };
-      const updated = { ...prev, [statKey]: next };
-      if (tokenSheetId) {
-        const stored = localStorage.getItem('tokenSheets');
-        if (stored) {
-          const sheets = JSON.parse(stored);
-          const sheet = sheets[tokenSheetId];
-          if (sheet && sheet.stats) {
-            sheet.stats = updated;
-            sheets[tokenSheetId] = sheet;
-            localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-            window.dispatchEvent(
-              new CustomEvent('tokenSheetSaved', { detail: { id: tokenSheetId, stats: updated } })
-            );
+    const handleStatClick = (statKey, e) => {
+      if (!draggable) return;
+      e.cancelBubble = true;
+      setStats((prev) => {
+        const current = prev[statKey] || {};
+        const max = current.total ?? current.base ?? current.actual ?? 0;
+        const delta = e.evt.shiftKey ? -1 : 1;
+        const next = {
+          ...current,
+          actual: Math.max(0, Math.min(max, (current.actual || 0) + delta)),
+        };
+        const updated = { ...prev, [statKey]: next };
+        if (tokenSheetId) {
+          const stored = localStorage.getItem('tokenSheets');
+          if (stored) {
+            const sheets = JSON.parse(stored);
+            const sheet = sheets[tokenSheetId];
+            if (sheet && sheet.stats) {
+              sheet.stats = updated;
+              sheets[tokenSheetId] = sheet;
+              localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+              window.dispatchEvent(
+                new CustomEvent('tokenSheetSaved', {
+                  detail: { id: tokenSheetId, stats: updated },
+                })
+              );
+            }
           }
         }
-      }
-      return updated;
-    });
-  };
+        return updated;
+      });
+    };
 
-  useImperativeHandle(ref, () => ({
-    node: groupRef.current,
-    shapeNode: shapeRef.current,
-    getStats: () => stats,
-    handleStatClick,
-  }));
+    useImperativeHandle(ref, () => ({
+      node: groupRef.current,
+      shapeNode: shapeRef.current,
+      getStats: () => stats,
+      handleStatClick,
+    }));
 
-  const offX = (width * gridSize) / 2;
-  const offY = (height * gridSize) / 2;
+    const offX = (width * gridSize) / 2;
+    const offY = (height * gridSize) / 2;
 
-  const geometry = {
-    x: x + offX,
-    y: y + offY,
-    width: width * gridSize,
-    height: height * gridSize,
-    offsetX: offX,
-    offsetY: offY,
-    rotation: angle,
-  };
+    const geometry = {
+      x: x + offX,
+      y: y + offY,
+      width: width * gridSize,
+      height: height * gridSize,
+      offsetX: offX,
+      offsetY: offY,
+      rotation: angle,
+    };
 
-  const common = {
-    ...geometry,
-    draggable,
-    listening,
-    opacity,
-    onDragStart: () => onDragStart?.(id),
-    onDragMove: updateHandle,
-    onDragEnd: (e) => {
-      onDragEnd(id, e);
-      updateHandle();
-    },
-    onClick: () => onClick?.(id),
-  };
+    const common = {
+      ...geometry,
+      draggable,
+      listening,
+      opacity,
+      onDragStart: () => onDragStart?.(id),
+      onDragMove: updateHandle,
+      onDragEnd: (e) => {
+        onDragEnd(id, e);
+        updateHandle();
+      },
+      onClick: () => onClick?.(id),
+    };
 
-  const outline = {
-    ...geometry,
-    stroke: '#e0e0e0',
-    strokeWidth: 3,
-    listening: false,
-  };
+    const outline = {
+      ...geometry,
+      stroke: '#e0e0e0',
+      strokeWidth: 3,
+      listening: false,
+    };
 
-
-  return (
-    <Group
-      ref={groupRef}
-      onMouseEnter={() => onHoverChange?.(true)}
-      onMouseLeave={() => onHoverChange?.(false)}
-      onDblClick={() => onSettings?.(id)}
-    >
-      {auraRadius > 0 && showAura && (
-        auraShape === 'circle' ? (
-          <Circle
-            x={x + offX}
-            y={y + offY}
-            radius={(Math.max(width, height) / 2 + auraRadius) * gridSize}
-            fill={hexToRgba(auraColor, auraOpacity)}
-            listening={false}
-          />
-        ) : (
-          <Rect
-            x={x + offX}
-            y={y + offY}
-            width={(width + auraRadius * 2) * gridSize}
-            height={(height + auraRadius * 2) * gridSize}
-            offsetX={((width + auraRadius * 2) * gridSize) / 2}
-            offsetY={((height + auraRadius * 2) * gridSize) / 2}
-            fill={hexToRgba(auraColor, auraOpacity)}
-            listening={false}
-          />
-        )
-      )}
-      {img && !isImgLoading ? (
-        <KonvaImage ref={shapeRef} image={img} {...common} />
-      ) : (
-        <>
-          <Rect
-            ref={shapeRef}
-            {...common}
-            fill={isImgLoading ? undefined : fillColor}
-            fillEnabled={!isImgLoading}
-            strokeEnabled={false}
-          />
-          {isImgLoading && showSpinner && (
-            <KonvaSpinner
+    return (
+      <Group
+        ref={groupRef}
+        onMouseEnter={() => onHoverChange?.(true)}
+        onMouseLeave={() => onHoverChange?.(false)}
+        onDblClick={() => onSettings?.(id)}
+      >
+        {auraRadius > 0 &&
+          showAura &&
+          (auraShape === 'circle' ? (
+            <Circle
               x={x + offX}
               y={y + offY}
-              radius={Math.min(width, height) * gridSize * 0.3}
-              color="white"
+              radius={(Math.max(width, height) / 2 + auraRadius) * gridSize}
+              fill={hexToRgba(auraColor, auraOpacity)}
+              listening={false}
             />
-          )}
-        </>
-      )}
-      {selected && <Rect {...outline} />}
-      {estadosInfo.length > 0 && (
-        <Group listening={false}>
-          {estadosInfo.map((e, i) => (
-            <EstadoImg
-              key={e.id}
-              src={e.img}
-              x={x + width * gridSize - estadoSize * (i + 1)}
-              y={y - estadoSize - 2}
-              width={estadoSize}
-              height={estadoSize}
+          ) : (
+            <Rect
+              x={x + offX}
+              y={y + offY}
+              width={(width + auraRadius * 2) * gridSize}
+              height={(height + auraRadius * 2) * gridSize}
+              offsetX={((width + auraRadius * 2) * gridSize) / 2}
+              offsetY={((height + auraRadius * 2) * gridSize) / 2}
+              fill={hexToRgba(auraColor, auraOpacity)}
+              listening={false}
             />
           ))}
-        </Group>
-      )}
-      {showName && (customName || name) && (
-        <Group
-          ref={textGroupRef}
-          x={x + (width * gridSize) / 2}
-          y={y + height * gridSize + 4}
-          offsetX={(width * gridSize) / 2}
-          listening={false}
-        >
-          {[{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }].map(
-            (o, i) => (
+        {img && !isImgLoading ? (
+          <KonvaImage ref={shapeRef} image={img} {...common} />
+        ) : (
+          <>
+            <Rect
+              ref={shapeRef}
+              {...common}
+              fill={isImgLoading ? undefined : fillColor}
+              fillEnabled={!isImgLoading}
+              strokeEnabled={false}
+            />
+            {isImgLoading && showSpinner && (
+              <KonvaSpinner
+                x={x + offX}
+                y={y + offY}
+                radius={Math.min(width, height) * gridSize * 0.3}
+                color="white"
+              />
+            )}
+          </>
+        )}
+        {selected && <Rect {...outline} />}
+        {estadosInfo.length > 0 && (
+          <Group listening={false}>
+            {estadosInfo.map((e, i) => (
+              <EstadoImg
+                key={e.id}
+                src={e.img}
+                x={x + width * gridSize - estadoSize * (i + 1)}
+                y={y - estadoSize - 2}
+                width={estadoSize}
+                height={estadoSize}
+              />
+            ))}
+          </Group>
+        )}
+        {showName && (customName || name) && (
+          <Group
+            ref={textGroupRef}
+            x={x + (width * gridSize) / 2}
+            y={y + height * gridSize + 4}
+            offsetX={(width * gridSize) / 2}
+            listening={false}
+          >
+            {[
+              { x: 1, y: 1 },
+              { x: -1, y: 1 },
+              { x: -1, y: -1 },
+              { x: 1, y: -1 },
+            ].map((o, i) => (
               <Text
                 key={i}
                 text={customName || name}
@@ -552,70 +587,75 @@ if (labelGroup && label) {
                 shadowBlur={1}
                 shadowOpacity={0.9}
               />
-            )
-          )}
-          <Text
-            ref={textRef}
-            text={customName || name}
-            fontSize={nameFontSize}
-            fontStyle="bold"
-            fontFamily="sans-serif"
-            fill="#fff"
-            align="center"
-            shadowColor="#000"
-            shadowBlur={1}
-            shadowOpacity={0.8}
-          />
-        </Group>
-      )}
-      {selected && (
-        <>
-          <Transformer
-            ref={trRef}
-            enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-            rotateEnabled={false}
-            boundBoxFunc={(oldBox, newBox) => snapBox(newBox)}
-            onTransformStart={handleTransformStart}
-            onTransform={updateHandle}
-            onTransformEnd={handleTransformEnd}
-          />
-          <Circle
-            ref={rotateRef}
-            x={width * gridSize}
-            y={-12}
-            radius={iconSize / 2}
-            fill="#fff"
-            stroke="#000"
-            strokeWidth={1}
-            draggable
-            onDragMove={handleRotateMove}
-            onDragEnd={handleRotateEnd}
-          />
-          <Text
-            ref={gearRef}
-            text="⚙️"
-            fontSize={buttonSize}
-            shadowColor="#000"
-            shadowBlur={4}
-            shadowOpacity={0.9}
-            listening
-            onClick={() => onSettings?.(id)}
-          />
-          <Text
-            ref={estadosRef}
-            text="🩸"
-            fontSize={buttonSize}
-            shadowColor="#000"
-            shadowBlur={4}
-            shadowOpacity={0.9}
-            listening
-            onClick={() => onStates?.(id)}
-          />
-        </>
-      )}
-    </Group>
-  );
-});
+            ))}
+            <Text
+              ref={textRef}
+              text={customName || name}
+              fontSize={nameFontSize}
+              fontStyle="bold"
+              fontFamily="sans-serif"
+              fill="#fff"
+              align="center"
+              shadowColor="#000"
+              shadowBlur={1}
+              shadowOpacity={0.8}
+            />
+          </Group>
+        )}
+        {selected && (
+          <>
+            <Transformer
+              ref={trRef}
+              enabledAnchors={[
+                'top-left',
+                'top-right',
+                'bottom-left',
+                'bottom-right',
+              ]}
+              rotateEnabled={false}
+              boundBoxFunc={(oldBox, newBox) => snapBox(newBox)}
+              onTransformStart={handleTransformStart}
+              onTransform={updateHandle}
+              onTransformEnd={handleTransformEnd}
+            />
+            <Circle
+              ref={rotateRef}
+              x={width * gridSize}
+              y={-12}
+              radius={iconSize / 2}
+              fill="#fff"
+              stroke="#000"
+              strokeWidth={1}
+              draggable
+              onDragMove={handleRotateMove}
+              onDragEnd={handleRotateEnd}
+            />
+            <Text
+              ref={gearRef}
+              text="⚙️"
+              fontSize={buttonSize}
+              shadowColor="#000"
+              shadowBlur={4}
+              shadowOpacity={0.9}
+              listening
+              onClick={() => onSettings?.(id)}
+            />
+            <Text
+              ref={estadosRef}
+              text="🩸"
+              fontSize={buttonSize}
+              shadowColor="#000"
+              shadowBlur={4}
+              shadowOpacity={0.9}
+              listening
+              onClick={() => onStates?.(id)}
+            />
+          </>
+        )}
+      </Group>
+    );
+  }
+);
 
 Token.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
@@ -690,7 +730,10 @@ const MapCanvas = ({
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
-  const [containerSize, setContainerSize] = useState({ width: 300, height: 300 });
+  const [containerSize, setContainerSize] = useState({
+    width: 300,
+    height: 300,
+  });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [baseScale, setBaseScale] = useState(1);
   const [zoom, setZoom] = useState(initialZoom);
@@ -711,11 +754,23 @@ const MapCanvas = ({
   const [measureSnap, setMeasureSnap] = useState('center');
   const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState([]);
+  const [selectedTextId, setSelectedTextId] = useState(null);
+  const [textOptions, setTextOptions] = useState({
+    fill: '#ffffff',
+    bgColor: 'rgba(0,0,0,0.5)',
+    fontFamily: 'Arial',
+    fontSize: 20,
+    bold: false,
+    italic: false,
+    underline: false,
+  });
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
   const lineTrRef = useRef();
+  const textRefs = useRef({});
+  const textTrRef = useRef();
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
@@ -730,15 +785,18 @@ const MapCanvas = ({
     redoStack.current = [];
   }, [propLines]);
 
-  const canSeeBars = useCallback((tk) => {
-    if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
-    if (tk.barsVisibility === 'none') return false;
-    if (tk.barsVisibility === 'controlled') {
-      if (userType === 'master') return true;
-      return tk.controlledBy === playerName;
-    }
-    return true;
-  }, [playerName, userType]);
+  const canSeeBars = useCallback(
+    (tk) => {
+      if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
+      if (tk.barsVisibility === 'none') return false;
+      if (tk.barsVisibility === 'controlled') {
+        if (userType === 'master') return true;
+        return tk.controlledBy === playerName;
+      }
+      return true;
+    },
+    [playerName, userType]
+  );
 
   const canSeeAura = useCallback(
     (tk) => {
@@ -754,9 +812,11 @@ const MapCanvas = ({
   );
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
-  const effectiveGridSize = imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
+  const effectiveGridSize =
+    imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
 
-  const pxToCell = (px, offset) => Math.round((px - offset) / effectiveGridSize);
+  const pxToCell = (px, offset) =>
+    Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
   const snapPoint = useCallback(
     (x, y) => {
@@ -798,11 +858,16 @@ const MapCanvas = ({
 
   // Calcula la escala base según el modo seleccionado y centra el mapa
   useEffect(() => {
-    const refWidth = imageSize.width || gridCells * gridSize || containerSize.width;
-    const refHeight = imageSize.height || gridCells * gridSize || containerSize.height;
+    const refWidth =
+      imageSize.width || gridCells * gridSize || containerSize.width;
+    const refHeight =
+      imageSize.height || gridCells * gridSize || containerSize.height;
     const scaleX = containerSize.width / refWidth;
     const scaleY = containerSize.height / refHeight;
-    const scale = scaleMode === 'cover' ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+    const scale =
+      scaleMode === 'cover'
+        ? Math.max(scaleX, scaleY)
+        : Math.min(scaleX, scaleY);
     setBaseScale(scale);
     const displayWidth = refWidth * scale;
     const displayHeight = refHeight * scale;
@@ -893,6 +958,39 @@ const MapCanvas = ({
     );
   };
 
+  const handleTextDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    setTexts((ts) => ts.map((t) => (t.id === id ? { ...t, x, y } : t)));
+  };
+
+  const handleTextTransformEnd = (id, e) => {
+    const node = textRefs.current[id];
+    if (!node) return;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    const textNode = node.findOne('Text');
+    const newFontSize = (textNode.fontSize() || 0) * ((scaleX + scaleY) / 2);
+    setTexts((ts) =>
+      ts.map((t) => (t.id === id ? { ...t, fontSize: newFontSize } : t))
+    );
+    node.getLayer().batchDraw();
+  };
+
+  const handleTextEdit = (id) => {
+    const current = texts.find((t) => t.id === id);
+    if (!current) return;
+    const content = prompt('Texto:', current.text);
+    if (content !== null) {
+      setTexts((ts) =>
+        ts.map((t) => (t.id === id ? { ...t, text: content } : t))
+      );
+    }
+  };
+
   const handleDragEnd = (id, evt) => {
     const node = evt?.target;
     if (!node) return;
@@ -923,9 +1021,7 @@ const MapCanvas = ({
   const handleSizeChange = (id, w, h, px, py) => {
     const x = pxToCell(px, gridOffsetX);
     const y = pxToCell(py, gridOffsetY);
-    const updated = tokens.map((t) =>
-      t.id === id ? { ...t, w, h, x, y } : t
-    );
+    const updated = tokens.map((t) => (t.id === id ? { ...t, w, h, x, y } : t));
     onTokensChange(updated);
   };
 
@@ -959,7 +1055,9 @@ const MapCanvas = ({
   };
 
   const handleCloseSheet = (sheetId) => {
-    setOpenSheetTokens((prev) => prev.filter((t) => t.tokenSheetId !== sheetId));
+    setOpenSheetTokens((prev) =>
+      prev.filter((t) => t.tokenSheetId !== sheetId)
+    );
   };
 
   const moveTokenToFront = (id) => {
@@ -1032,8 +1130,13 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      const content = prompt('Texto:', 'Nuevo texto');
-      if (content) setTexts((t) => [...t, { x: relX, y: relY, text: content }]);
+      const id = nanoid();
+      const bgColor = textOptions.bgColor || 'rgba(0,0,0,0)';
+      setTexts((t) => [
+        ...t,
+        { id, x: relX, y: relY, text: '', ...textOptions, bgColor },
+      ]);
+      setSelectedTextId(id);
     }
   };
 
@@ -1089,17 +1192,25 @@ const MapCanvas = ({
     if (e.target === stageRef.current) {
       setSelectedId(null);
       setSelectedLineId(null);
+      setSelectedTextId(null);
     }
   };
 
   const mapWidth = gridCells || Math.round(imageSize.width / effectiveGridSize);
-  const mapHeight = gridCells || Math.round(imageSize.height / effectiveGridSize);
+  const mapHeight =
+    gridCells || Math.round(imageSize.height / effectiveGridSize);
 
   const measureElement =
-    measureLine && measureVisible && (() => {
+    measureLine &&
+    measureVisible &&
+    (() => {
       const [x1, y1, x2, y2] = measureLine;
-      const cellDx = Math.abs(pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX));
-      const cellDy = Math.abs(pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY));
+      const cellDx = Math.abs(
+        pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX)
+      );
+      const cellDy = Math.abs(
+        pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY)
+      );
       let distance = Math.hypot(cellDx, cellDy);
       const dx = x2 - x1;
       const dy = y2 - y1;
@@ -1170,7 +1281,12 @@ const MapCanvas = ({
         );
       } else {
         shape = (
-          <Line points={measureLine} stroke="cyan" strokeWidth={2} dash={[4, 4]} />
+          <Line
+            points={measureLine}
+            stroke="cyan"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
         );
       }
       return (
@@ -1187,79 +1303,117 @@ const MapCanvas = ({
       );
     })();
 
-  const handleKeyDown = useCallback((e) => {
-    // Avoid moving the token when typing inside inputs or editable fields
-    const target = e.target;
-    if (
-      target.isContentEditable ||
-      ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
-    ) {
-      return;
-    }
-
-    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      undoLines();
-      return;
-    }
-    if (e.ctrlKey && e.key.toLowerCase() === 'y') {
-      e.preventDefault();
-      redoLines();
-      return;
-    }
-
-    if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
-      saveLines(lines.filter((ln) => ln.id !== selectedLineId));
-      setSelectedLineId(null);
-      return;
-    }
-
-    if (selectedId == null) return;
-    const index = tokens.findIndex((t) => t.id === selectedId);
-    if (index === -1) return;
-    let { x, y } = tokens[index];
-    switch (e.key.toLowerCase()) {
-      case 'w':
-        y -= 1;
-        break;
-      case 's':
-        y += 1;
-        break;
-      case 'a':
-        x -= 1;
-        break;
-      case 'd':
-        x += 1;
-        break;
-      case 'delete':
-        onTokensChange(tokens.filter((t) => t.id !== selectedId));
-        setSelectedId(null);
-        return;
-      case 'r': {
-        const delta = e.shiftKey ? -90 : 90;
-        const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
-        const rotated = tokens.map((t) =>
-          t.id === selectedId ? { ...t, angle: updatedAngle } : t
-        );
-        onTokensChange(rotated);
+  const handleKeyDown = useCallback(
+    (e) => {
+      // Avoid moving the token when typing inside inputs or editable fields
+      const target = e.target;
+      if (
+        target.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      ) {
         return;
       }
-      default:
+
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undoLines();
         return;
-    }
-    x = Math.max(0, Math.min(mapWidth - 1, x));
-    y = Math.max(0, Math.min(mapHeight - 1, y));
-    const updated = tokens.map((t) => (t.id === selectedId ? { ...t, x, y } : t));
-    onTokensChange(updated);
-  }, [
-    selectedId,
-    tokens,
-    onTokensChange,
-    mapWidth,
-    mapHeight,
-    selectedLineId,
-    lines,
-  ]);
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redoLines();
+        return;
+      }
+
+      if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
+        saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+        setSelectedLineId(null);
+        return;
+      }
+
+      if (selectedTextId != null) {
+        const idx = texts.findIndex((t) => t.id === selectedTextId);
+        if (idx !== -1) {
+          let { x, y } = texts[idx];
+          switch (e.key.toLowerCase()) {
+            case 'w':
+              y -= 5;
+              break;
+            case 's':
+              y += 5;
+              break;
+            case 'a':
+              x -= 5;
+              break;
+            case 'd':
+              x += 5;
+              break;
+            case 'delete':
+              setTexts(texts.filter((t) => t.id !== selectedTextId));
+              setSelectedTextId(null);
+              return;
+            default:
+              break;
+          }
+          setTexts((ts) =>
+            ts.map((t) => (t.id === selectedTextId ? { ...t, x, y } : t))
+          );
+          return;
+        }
+      }
+
+      if (selectedId == null) return;
+      const index = tokens.findIndex((t) => t.id === selectedId);
+      if (index === -1) return;
+      let { x, y } = tokens[index];
+      switch (e.key.toLowerCase()) {
+        case 'w':
+          y -= 1;
+          break;
+        case 's':
+          y += 1;
+          break;
+        case 'a':
+          x -= 1;
+          break;
+        case 'd':
+          x += 1;
+          break;
+        case 'delete':
+          onTokensChange(tokens.filter((t) => t.id !== selectedId));
+          setSelectedId(null);
+          return;
+        case 'r': {
+          const delta = e.shiftKey ? -90 : 90;
+          const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
+          const rotated = tokens.map((t) =>
+            t.id === selectedId ? { ...t, angle: updatedAngle } : t
+          );
+          onTokensChange(rotated);
+          return;
+        }
+        default:
+          return;
+      }
+      x = Math.max(0, Math.min(mapWidth - 1, x));
+      y = Math.max(0, Math.min(mapHeight - 1, y));
+      const updated = tokens.map((t) =>
+        t.id === selectedId ? { ...t, x, y } : t
+      );
+      onTokensChange(updated);
+    },
+    [
+      selectedId,
+      tokens,
+      onTokensChange,
+      mapWidth,
+      mapHeight,
+      selectedLineId,
+      lines,
+      selectedTextId,
+      texts,
+    ]
+  );
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -1277,6 +1431,18 @@ const MapCanvas = ({
       tr.getLayer()?.batchDraw();
     }
   }, [selectedLineId, activeTool]);
+
+  useEffect(() => {
+    const tr = textTrRef.current;
+    const node = selectedTextId ? textRefs.current[selectedTextId] : null;
+    if (tr && node && activeTool === 'select') {
+      tr.nodes([node]);
+      tr.getLayer()?.batchDraw();
+    } else if (tr) {
+      tr.nodes([]);
+      tr.getLayer()?.batchDraw();
+    }
+  }, [selectedTextId, activeTool]);
   const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
@@ -1319,7 +1485,15 @@ const MapCanvas = ({
         onTokensChange([...tokens, newToken]);
       },
     }),
-    [tokens, groupPos, groupScale, mapWidth, mapHeight, gridOffsetX, gridOffsetY]
+    [
+      tokens,
+      groupPos,
+      groupScale,
+      mapWidth,
+      mapHeight,
+      gridOffsetX,
+      gridOffsetY,
+    ]
   );
 
   return (
@@ -1334,203 +1508,233 @@ const MapCanvas = ({
       )}
       <div ref={drop}>
         <Stage
-        ref={stageRef}
-        width={containerSize.width}
-        height={containerSize.height}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={stopPanning}
-        onMouseLeave={stopPanning}
-        onClick={handleStageClick}
-        style={{ background: '#000' }}
-      >
-        <Layer>
-          <Group x={groupPos.x} y={groupPos.y} scaleX={groupScale} scaleY={groupScale}>
-            {bg && (
-              <KonvaImage
-                image={bg}
-                width={imageSize.width}
-                height={imageSize.height}
-                listening={false}
-              />
-            )}
-            {drawGrid()}
-            <Group listening={false}>
+          ref={stageRef}
+          width={containerSize.width}
+          height={containerSize.height}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={stopPanning}
+          onMouseLeave={stopPanning}
+          onClick={handleStageClick}
+          style={{ background: '#000' }}
+        >
+          <Layer>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {bg && (
+                <KonvaImage
+                  image={bg}
+                  width={imageSize.width}
+                  height={imageSize.height}
+                  listening={false}
+                />
+              )}
+              {drawGrid()}
+              <Group listening={false}>
+                {dragShadow && (
+                  <TokenAura
+                    x={cellToPx(dragShadow.x, gridOffsetX)}
+                    y={cellToPx(dragShadow.y, gridOffsetY)}
+                    width={dragShadow.w || 1}
+                    height={dragShadow.h || 1}
+                    gridSize={effectiveGridSize}
+                    auraRadius={dragShadow.auraRadius}
+                    auraShape={dragShadow.auraShape}
+                    auraColor={dragShadow.auraColor}
+                    auraOpacity={dragShadow.auraOpacity}
+                    showAura={canSeeAura(dragShadow)}
+                  />
+                )}
+                {tokens.map((token) => (
+                  <TokenAura
+                    key={`aura-${token.id}`}
+                    x={cellToPx(token.x, gridOffsetX)}
+                    y={cellToPx(token.y, gridOffsetY)}
+                    width={token.w || 1}
+                    height={token.h || 1}
+                    gridSize={effectiveGridSize}
+                    auraRadius={token.auraRadius}
+                    auraShape={token.auraShape}
+                    auraColor={token.auraColor}
+                    auraOpacity={token.auraOpacity}
+                    showAura={canSeeAura(token)}
+                  />
+                ))}
+              </Group>
               {dragShadow && (
-                <TokenAura
+                <Token
+                  key={`shadow-${dragShadow.id}`}
+                  id={dragShadow.id}
                   x={cellToPx(dragShadow.x, gridOffsetX)}
                   y={cellToPx(dragShadow.y, gridOffsetY)}
                   width={dragShadow.w || 1}
                   height={dragShadow.h || 1}
+                  angle={dragShadow.angle || 0}
                   gridSize={effectiveGridSize}
+                  cellSize={effectiveGridSize}
+                  zoom={zoom}
+                  maxZoom={maxZoom}
+                  groupScale={groupScale}
+                  gridOffsetX={gridOffsetX}
+                  gridOffsetY={gridOffsetY}
+                  image={dragShadow.url}
+                  color={dragShadow.color}
+                  name={dragShadow.name}
+                  selected={false}
+                  draggable={false}
+                  listening={false}
+                  opacity={0.35}
+                  tintColor={dragShadow.tintColor}
+                  tintOpacity={dragShadow.tintOpacity}
+                  showSpinner={false}
+                  showAura={false}
                   auraRadius={dragShadow.auraRadius}
                   auraShape={dragShadow.auraShape}
                   auraColor={dragShadow.auraColor}
                   auraOpacity={dragShadow.auraOpacity}
-                  showAura={canSeeAura(dragShadow)}
                 />
               )}
               {tokens.map((token) => (
-                <TokenAura
-                  key={`aura-${token.id}`}
+                <Token
+                  ref={(el) => {
+                    if (el) tokenRefs.current[token.id] = el;
+                  }}
+                  key={token.id}
+                  id={token.id}
                   x={cellToPx(token.x, gridOffsetX)}
                   y={cellToPx(token.y, gridOffsetY)}
                   width={token.w || 1}
                   height={token.h || 1}
+                  angle={token.angle || 0}
                   gridSize={effectiveGridSize}
+                  cellSize={effectiveGridSize}
+                  zoom={zoom}
+                  maxZoom={maxZoom}
+                  groupScale={groupScale}
+                  gridOffsetX={gridOffsetX}
+                  gridOffsetY={gridOffsetY}
+                  image={token.url}
+                  color={token.color}
+                  name={token.name}
+                  customName={token.customName}
+                  showName={token.showName}
+                  opacity={token.opacity ?? 1}
+                  tintColor={token.tintColor}
+                  tintOpacity={token.tintOpacity}
+                  showAura={false}
+                  tokenSheetId={token.tokenSheetId}
                   auraRadius={token.auraRadius}
                   auraShape={token.auraShape}
                   auraColor={token.auraColor}
                   auraOpacity={token.auraOpacity}
-                  showAura={canSeeAura(token)}
+                  selected={token.id === selectedId}
+                  onDragEnd={handleDragEnd}
+                  onDragStart={handleDragStart}
+                  onClick={() => {
+                    setSelectedId(token.id);
+                    setSelectedLineId(null);
+                    setSelectedTextId(null);
+                  }}
+                  onSettings={handleOpenSettings}
+                  onStates={handleOpenEstados}
+                  onTransformEnd={handleSizeChange}
+                  onRotate={handleRotateChange}
+                  onHoverChange={(h) => setHoveredId(h ? token.id : null)}
+                  estados={token.estados || []}
+                  draggable={activeTool === 'select'}
+                  listening={activeTool === 'select'}
                 />
               ))}
+              {lines.map((ln) => (
+                <Line
+                  ref={(el) => {
+                    if (el) lineRefs.current[ln.id] = el;
+                  }}
+                  key={ln.id}
+                  x={ln.x}
+                  y={ln.y}
+                  points={ln.points}
+                  stroke={ln.color}
+                  strokeWidth={ln.width}
+                  lineCap="round"
+                  lineJoin="round"
+                  draggable={activeTool === 'select'}
+                  onClick={() => {
+                    setSelectedLineId(ln.id);
+                    setSelectedId(null);
+                    setSelectedTextId(null);
+                  }}
+                  onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
+                  onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
+                />
+              ))}
+              {activeTool === 'select' && (
+                <Transformer ref={lineTrRef} rotateEnabled={false} />
+              )}
+              {texts.map((t) => (
+                <Label
+                  key={t.id}
+                  ref={(el) => {
+                    if (el) textRefs.current[t.id] = el;
+                  }}
+                  x={t.x}
+                  y={t.y}
+                  draggable={activeTool === 'select'}
+                  onDragEnd={(e) => handleTextDragEnd(t.id, e)}
+                  onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
+                  onClick={() => setSelectedTextId(t.id)}
+                  onDblClick={() => handleTextEdit(t.id)}
+                >
+                  <Tag fill={t.bgColor} />
+                  <Text
+                    text={t.text}
+                    fill={t.fill}
+                    fontFamily={t.fontFamily}
+                    fontSize={t.fontSize}
+                    fontStyle={`${t.bold ? 'bold ' : ''}${t.italic ? 'italic' : ''}`}
+                    textDecoration={t.underline ? 'underline' : ''}
+                    padding={4}
+                  />
+                </Label>
+              ))}
+              {activeTool === 'select' && (
+                <Transformer ref={textTrRef} rotateEnabled={false} />
+              )}
+              {currentLine && (
+                <Line
+                  points={currentLine.points}
+                  stroke={currentLine.color}
+                  strokeWidth={currentLine.width}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+              {measureElement}
             </Group>
-            {dragShadow && (
-              <Token
-                key={`shadow-${dragShadow.id}`}
-                id={dragShadow.id}
-                x={cellToPx(dragShadow.x, gridOffsetX)}
-                y={cellToPx(dragShadow.y, gridOffsetY)}
-                width={dragShadow.w || 1}
-                height={dragShadow.h || 1}
-                angle={dragShadow.angle || 0}
-                gridSize={effectiveGridSize}
-                cellSize={effectiveGridSize}
-                zoom={zoom}
-                maxZoom={maxZoom}
-                groupScale={groupScale}
-                gridOffsetX={gridOffsetX}
-                gridOffsetY={gridOffsetY}
-                image={dragShadow.url}
-                color={dragShadow.color}
-                name={dragShadow.name}
-                selected={false}
-                draggable={false}
-                listening={false}
-                opacity={0.35}
-                tintColor={dragShadow.tintColor}
-                tintOpacity={dragShadow.tintOpacity}
-                showSpinner={false}
-                showAura={false}
-                auraRadius={dragShadow.auraRadius}
-                auraShape={dragShadow.auraShape}
-                auraColor={dragShadow.auraColor}
-                auraOpacity={dragShadow.auraOpacity}
-              />
-            )}
+          </Layer>
+          <Layer listening>
             {tokens.map((token) => (
-              <Token
-                ref={(el) => {
-                  if (el) tokenRefs.current[token.id] = el;
-                }}
-                key={token.id}
-                id={token.id}
-                x={cellToPx(token.x, gridOffsetX)}
-                y={cellToPx(token.y, gridOffsetY)}
-                width={token.w || 1}
-                height={token.h || 1}
-                angle={token.angle || 0}
-                gridSize={effectiveGridSize}
-                cellSize={effectiveGridSize}
-                zoom={zoom}
-                maxZoom={maxZoom}
-                groupScale={groupScale}
-                gridOffsetX={gridOffsetX}
-                gridOffsetY={gridOffsetY}
-                image={token.url}
-                color={token.color}
-                name={token.name}
-                customName={token.customName}
-                showName={token.showName}
-                opacity={token.opacity ?? 1}
-                tintColor={token.tintColor}
-                tintOpacity={token.tintOpacity}
-                showAura={false}
-                tokenSheetId={token.tokenSheetId}
-                auraRadius={token.auraRadius}
-                auraShape={token.auraShape}
-                auraColor={token.auraColor}
-                auraOpacity={token.auraOpacity}
-                selected={token.id === selectedId}
-                onDragEnd={handleDragEnd}
-                onDragStart={handleDragStart}
-                onClick={setSelectedId}
-                onSettings={handleOpenSettings}
-                onStates={handleOpenEstados}
-                onTransformEnd={handleSizeChange}
-                onRotate={handleRotateChange}
-                onHoverChange={(h) => setHoveredId(h ? token.id : null)}
-                estados={token.estados || []}
-                draggable={activeTool === 'select'}
-                listening={activeTool === 'select'}
+              <TokenBars
+                key={`bars-${token.id}`}
+                tokenRef={tokenRefs.current[token.id]}
+                stageRef={stageRef}
+                onStatClick={(key, e) =>
+                  tokenRefs.current[token.id]?.handleStatClick(key, e)
+                }
+                transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
+                visible={
+                  activeTool === 'select' &&
+                  hoveredId === token.id &&
+                  canSeeBars(token)
+                }
               />
             ))}
-            {lines.map((ln) => (
-              <Line
-                ref={(el) => {
-                  if (el) lineRefs.current[ln.id] = el;
-                }}
-                key={ln.id}
-                x={ln.x}
-                y={ln.y}
-                points={ln.points}
-                stroke={ln.color}
-                strokeWidth={ln.width}
-                lineCap="round"
-                lineJoin="round"
-                draggable={activeTool === 'select'}
-                onClick={() => setSelectedLineId(ln.id)}
-                onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
-                onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
-              />
-            ))}
-            {activeTool === 'select' && <Transformer ref={lineTrRef} rotateEnabled={false} />}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
-            {currentLine && (
-              <Line
-                points={currentLine.points}
-                stroke={currentLine.color}
-                strokeWidth={currentLine.width}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
-            {currentLine && (
-              <Line
-                points={currentLine.points}
-                stroke={currentLine.color}
-                strokeWidth={currentLine.width}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
-            {measureElement}
-            {texts.map((t, i) => (
-              <Text key={`text-${i}`} x={t.x} y={t.y} text={t.text} fontSize={20} fill="#fff" />
-            ))}
-          </Group>
-        </Layer>
-        <Layer listening>
-          {tokens.map((token) => (
-            <TokenBars
-              key={`bars-${token.id}`}
-              tokenRef={tokenRefs.current[token.id]}
-              stageRef={stageRef}
-              onStatClick={(key, e) => tokenRefs.current[token.id]?.handleStatClick(key, e)}
-              transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
-              visible={activeTool === 'select' && hoveredId === token.id && canSeeBars(token)}
-            />
-          ))}
-        </Layer>
+          </Layer>
         </Stage>
       </div>
       <Toolbar
@@ -1546,6 +1750,8 @@ const MapCanvas = ({
         onMeasureSnapChange={setMeasureSnap}
         measureVisible={measureVisible}
         onMeasureVisibleChange={setMeasureVisible}
+        textOptions={textOptions}
+        onTextOptionsChange={setTextOptions}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
