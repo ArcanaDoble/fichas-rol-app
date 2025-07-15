@@ -667,6 +667,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Los textos del mapa ahora se guardan por página. Al crear un texto en una
   página no aparece en el resto, funcionando igual que los trazos de dibujo.
 
+**Resumen de cambios v2.3.27:**
+
+- Corrección al crear carpetas en el Asset Sidebar. El botón "+ Carpeta" ahora
+  crea correctamente carpetas en la raíz.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
