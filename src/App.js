@@ -562,25 +562,25 @@ function App() {
         gridOffsetX: data.gridOffsetX || 0,
         gridOffsetY: data.gridOffsetY || 0,
       };
-      setPages((ps) =>
-        ps.map((p, i) =>
-          i === currentPage
-            ? {
-                ...p,
-                name: data.name || p.name,
-                background: data.background || null,
-                backgroundHash: data.backgroundHash || null,
-                gridSize: data.gridSize || 1,
-                gridCells: data.gridCells || 1,
-                gridOffsetX: data.gridOffsetX || 0,
-                gridOffsetY: data.gridOffsetY || 0,
-              }
-            : p
-        )
-      );
+      setPages((ps) => {
+        const existing = ps[currentPage];
+        const meta = {
+          ...existing,
+          id: page.id,
+          name: data.name || existing?.name,
+          background: data.background || null,
+          backgroundHash: data.backgroundHash || null,
+          gridSize: data.gridSize || 1,
+          gridCells: data.gridCells || 1,
+          gridOffsetX: data.gridOffsetX || 0,
+          gridOffsetY: data.gridOffsetY || 0,
+        };
+        if (pageDataEqual(existing, meta)) return ps;
+        return ps.map((p, i) => (i === currentPage ? meta : p));
+      });
     });
     return unsub;
-  }, [currentPage, pages]);
+  }, [currentPage, pages[currentPage]?.id]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
