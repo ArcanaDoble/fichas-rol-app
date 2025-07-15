@@ -1710,7 +1710,10 @@ const MapCanvas = ({
                   onClick={() => setSelectedTextId(t.id)}
                   onDblClick={() => handleTextEdit(t.id)}
                 >
-                  <Tag fill={t.bgColor} />
+                  <Tag
+                    fill={t.bgColor}
+                    {...(!t.text ? { width: t.fontSize, height: t.fontSize } : {})}
+                  />
                   <Text
                     text={t.text}
                     fill={t.fill}
