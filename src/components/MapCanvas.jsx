@@ -1768,6 +1768,7 @@ const MapCanvas = ({
             value={t.text}
             onChange={handleTextareaChange}
             onBlur={closeTextarea}
+            placeholder="Texto"
             className="absolute bg-transparent text-white border-none outline-none resize-none whitespace-pre"
             style={{
               left,
@@ -1776,6 +1777,8 @@ const MapCanvas = ({
               fontFamily: t.fontFamily,
               fontStyle: `${t.bold ? 'bold ' : ''}${t.italic ? 'italic' : ''}`,
               textDecoration: t.underline ? 'underline' : 'none',
+              minWidth: '1ch',
+              minHeight: t.fontSize,
               transform: `translate(-4px,-4px)`,
             }}
           />
