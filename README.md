@@ -652,6 +652,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Los cuadros de texto creados en el mapa ahora tienen un tamaño mínimo inicial para ser visibles al colocarlos.
 
+**Resumen de cambios v2.3.24:**
+
+- Los textos creados en el mapa cuentan con un fondo semitransparente por defecto y el cuadro de edición aparece enfocado con un borde visible.
+- Al editar un texto, el área de edición muestra el mismo color y fondo del texto y se puede redimensionar manualmente.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
