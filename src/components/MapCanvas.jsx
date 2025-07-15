@@ -755,9 +755,10 @@ const MapCanvas = ({
   const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState([]);
   const [selectedTextId, setSelectedTextId] = useState(null);
+  const [editingTextId, setEditingTextId] = useState(null);
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
-    bgColor: 'rgba(0,0,0,0.5)',
+    bgColor: 'rgba(0,0,0,0)',
     fontFamily: 'Arial',
     fontSize: 20,
     bold: false,
@@ -771,6 +772,7 @@ const MapCanvas = ({
   const lineTrRef = useRef();
   const textRefs = useRef({});
   const textTrRef = useRef();
+  const textareaRef = useRef();
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
@@ -983,12 +985,22 @@ const MapCanvas = ({
   const handleTextEdit = (id) => {
     const current = texts.find((t) => t.id === id);
     if (!current) return;
-    const content = prompt('Texto:', current.text);
-    if (content !== null) {
-      setTexts((ts) =>
-        ts.map((t) => (t.id === id ? { ...t, text: content } : t))
-      );
-    }
+    setSelectedTextId(id);
+    setEditingTextId(id);
+  };
+
+  const handleTextareaChange = (e) => {
+    const value = e.target.value;
+    const id = editingTextId;
+    setTexts((ts) => ts.map((t) => (t.id === id ? { ...t, text: value } : t)));
+    e.target.style.height = 'auto';
+    e.target.style.width = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
+    e.target.style.width = `${e.target.scrollWidth}px`;
+  };
+
+  const closeTextarea = () => {
+    setEditingTextId(null);
   };
 
   const handleDragEnd = (id, evt) => {
@@ -1137,6 +1149,7 @@ const MapCanvas = ({
         { id, x: relX, y: relY, text: '', ...textOptions, bgColor },
       ]);
       setSelectedTextId(id);
+      setEditingTextId(id);
     }
   };
 
@@ -1443,6 +1456,13 @@ const MapCanvas = ({
       tr.getLayer()?.batchDraw();
     }
   }, [selectedTextId, activeTool]);
+
+  useEffect(() => {
+    if (editingTextId && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
+    }
+  }, [editingTextId]);
   const groupScale = baseScale * zoom;
 
   const [, drop] = useDrop(
@@ -1737,6 +1757,30 @@ const MapCanvas = ({
           </Layer>
         </Stage>
       </div>
+      {editingTextId && (() => {
+        const t = texts.find((txt) => txt.id === editingTextId);
+        if (!t) return null;
+        const left = groupPos.x + t.x * groupScale;
+        const top = groupPos.y + t.y * groupScale;
+        return (
+          <textarea
+            ref={textareaRef}
+            value={t.text}
+            onChange={handleTextareaChange}
+            onBlur={closeTextarea}
+            className="absolute bg-transparent text-white border-none outline-none resize-none whitespace-pre"
+            style={{
+              left,
+              top,
+              fontSize: t.fontSize,
+              fontFamily: t.fontFamily,
+              fontStyle: `${t.bold ? 'bold ' : ''}${t.italic ? 'italic' : ''}`,
+              textDecoration: t.underline ? 'underline' : 'none',
+              transform: `translate(-4px,-4px)`,
+            }}
+          />
+        );
+      })()}
       <Toolbar
         activeTool={activeTool}
         onSelect={setActiveTool}
