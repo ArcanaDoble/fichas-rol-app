@@ -672,6 +672,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Corrección al crear carpetas en el Asset Sidebar. El botón "+ Carpeta" ahora
   crea correctamente carpetas en la raíz.
 
+**Resumen de cambios v2.3.28:**
+
+- Añadido buscador de tokens en la sección de assets para localizar imágenes por nombre.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

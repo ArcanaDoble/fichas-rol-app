@@ -41,6 +41,7 @@ const AssetSidebar = ({
   const prevMessagesRef = useRef([]);
   const [message, setMessage] = useState('');
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [tokenSearch, setTokenSearch] = useState('');
 
   // Flags para evitar sobrescribir datos justo tras la carga inicial
   const initialFolders = useRef(true);
@@ -366,6 +367,20 @@ const AssetSidebar = ({
     setZMax((z) => z + 1);
   };
 
+  const searchAssets = (list, term, path = []) => {
+    let results = [];
+    for (const f of list) {
+      const newPath = [...path, f.name];
+      results = results.concat(
+        f.assets
+          .filter((a) => a.name.toLowerCase().includes(term))
+          .map((a) => ({ asset: a, folderId: f.id, path: newPath }))
+      );
+      results = results.concat(searchAssets(f.folders, term, newPath));
+    }
+    return results;
+  };
+
   const sendMessage = () => {
     const text = message.trim();
     if (!text) return;
@@ -529,13 +544,46 @@ const AssetSidebar = ({
               + Carpeta
             </button>
           </div>
-          <div className="flex-1 flex flex-col gap-2">
-            <AnimatePresence>
-              {folders.map((folder) => (
-                <FolderItem key={folder.id} folder={folder} level={0} />
-              ))}
-            </AnimatePresence>
+          <div className="mb-3">
+            <Input
+              placeholder="Buscar token..."
+              value={tokenSearch}
+              onChange={(e) => setTokenSearch(e.target.value)}
+              clearable
+            />
           </div>
+          {tokenSearch.trim() ? (
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2">
+                {searchAssets(folders, tokenSearch.trim().toLowerCase()).map((r) => (
+                  <div key={r.asset.id} className="text-center text-xs">
+                    <DraggableAssetItem
+                      asset={r.asset}
+                      folderId={r.folderId}
+                      onAssetSelect={onAssetSelect}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onRemove={removeAsset}
+                      showPreview={showPreview}
+                      movePreview={movePreview}
+                      hidePreview={hidePreview}
+                    />
+                    <span className="block text-gray-400 truncate w-full">
+                      {r.path.join(' / ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col gap-2">
+              <AnimatePresence>
+                {folders.map((folder) => (
+                  <FolderItem key={folder.id} folder={folder} level={0} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
           {/* previewRef portal appended to body */}
           <DragLayerPreview />
           {windows.map((w) => (
