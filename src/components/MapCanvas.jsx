@@ -727,6 +727,8 @@ const MapCanvas = ({
   playerName = '',
   lines: propLines = [],
   onLinesChange = () => {},
+  walls: propWalls = [],
+  onWallsChange = () => {},
   texts: propTexts = [],
   onTextsChange = () => {},
 }) => {
@@ -751,6 +753,9 @@ const MapCanvas = ({
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
+  const [walls, setWalls] = useState(propWalls);
+  const [currentWall, setCurrentWall] = useState(null);
+  const [selectedWallId, setSelectedWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
@@ -770,6 +775,7 @@ const MapCanvas = ({
   const [brushSize, setBrushSize] = useState('medium');
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
+  const wallRefs = useRef({});
   const lineTrRef = useRef();
   const textRefs = useRef({});
   const textTrRef = useRef();
@@ -786,6 +792,10 @@ const MapCanvas = ({
     undoStack.current = [];
     redoStack.current = [];
   }, [propLines]);
+
+  useEffect(() => {
+    setWalls(propWalls);
+  }, [propWalls]);
 
   useEffect(() => {
     setTexts(propTexts);
@@ -920,6 +930,20 @@ const MapCanvas = ({
     });
   };
 
+  const updateWalls = (updater) => {
+    setWalls((prev) =>
+      typeof updater === 'function' ? updater(prev) : updater
+    );
+  };
+
+  const saveWalls = (updater) => {
+    setWalls((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      onWallsChange(next);
+      return next;
+    });
+  };
+
   const updateTexts = (updater) => {
     setTexts((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -953,6 +977,36 @@ const MapCanvas = ({
     const x = node.x();
     const y = node.y();
     saveLines((ls) => ls.map((ln) => (ln.id === id ? { ...ln, x, y } : ln)));
+  };
+
+  const handleWallDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    saveWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
+  };
+
+  const handleWallPointDrag = (id, index, e, save = false) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    const updater = (ws) =>
+      ws.map((w) => {
+        if (w.id !== id) return w;
+        const abs = [
+          w.x + w.points[0],
+          w.y + w.points[1],
+          w.x + w.points[2],
+          w.y + w.points[3],
+        ];
+        abs[index * 2] = x;
+        abs[index * 2 + 1] = y;
+        const minX = Math.min(abs[0], abs[2]);
+        const minY = Math.min(abs[1], abs[3]);
+        const rel = [abs[0] - minX, abs[1] - minY, abs[2] - minX, abs[3] - minY];
+        return { ...w, x: minX, y: minY, points: rel };
+      });
+    if (save) saveWalls(updater); else updateWalls(updater);
   };
 
   const handleLineTransformEnd = (id, e) => {
@@ -1134,6 +1188,17 @@ const MapCanvas = ({
         width: BRUSH_WIDTHS[brushSize],
       });
     }
+    if (activeTool === 'wall' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      setSelectedWallId(null);
+      setCurrentWall({
+        points: [relX, relY, relX, relY],
+        color: '#ff6600',
+        width: 4,
+      });
+    }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
@@ -1170,6 +1235,13 @@ const MapCanvas = ({
       }));
       return;
     }
+    if (currentWall) {
+      setCurrentWall((ln) => ({
+        ...ln,
+        points: [ln.points[0], ln.points[1], relX, relY],
+      }));
+      return;
+    }
     if (measureLine) {
       [relX, relY] = snapPoint(relX, relY);
       setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
@@ -1202,6 +1274,25 @@ const MapCanvas = ({
       setCurrentLine(null);
       setSelectedLineId(finished.id);
     }
+    if (currentWall) {
+      const xs = currentWall.points.filter((_, i) => i % 2 === 0);
+      const ys = currentWall.points.filter((_, i) => i % 2 === 1);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const rel = currentWall.points.map((p, i) =>
+        i % 2 === 0 ? p - minX : p - minY
+      );
+      const finished = {
+        ...currentWall,
+        id: Date.now(),
+        x: minX,
+        y: minY,
+        points: rel,
+      };
+      saveWalls((ws) => [...ws, finished]);
+      setCurrentWall(null);
+      setSelectedWallId(finished.id);
+    }
     if (measureLine) setMeasureLine(null);
     if (isPanning) setIsPanning(false);
   };
@@ -1210,6 +1301,7 @@ const MapCanvas = ({
     if (e.target === stageRef.current) {
       setSelectedId(null);
       setSelectedLineId(null);
+      setSelectedWallId(null);
       setSelectedTextId(null);
     }
   };
@@ -1348,6 +1440,11 @@ const MapCanvas = ({
         setSelectedLineId(null);
         return;
       }
+      if (selectedWallId != null && e.key.toLowerCase() === 'delete') {
+        saveWalls(walls.filter((w) => w.id !== selectedWallId));
+        setSelectedWallId(null);
+        return;
+      }
 
       if (selectedTextId != null) {
         const idx = texts.findIndex((t) => t.id === selectedTextId);
@@ -1428,7 +1525,9 @@ const MapCanvas = ({
       mapHeight,
       selectedLineId,
       lines,
+      walls,
       selectedTextId,
+      selectedWallId,
       texts,
     ]
   );
@@ -1536,7 +1635,10 @@ const MapCanvas = ({
           onMouseUp={stopPanning}
           onMouseLeave={stopPanning}
           onClick={handleStageClick}
-          style={{ background: '#000' }}
+          style={{
+            background: '#000',
+            cursor: activeTool === 'wall' ? 'crosshair' : 'default',
+          }}
         >
           <Layer>
             <Group
@@ -1739,6 +1841,92 @@ const MapCanvas = ({
               {measureElement}
             </Group>
           </Layer>
+          <Layer>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {walls.map((wl) => (
+                <React.Fragment key={wl.id}>
+                  <Line
+                    ref={(el) => {
+                      if (el) wallRefs.current[wl.id] = el;
+                    }}
+                    x={wl.x}
+                    y={wl.y}
+                    points={wl.points}
+                    stroke={wl.color}
+                    strokeWidth={wl.width}
+                    lineCap="round"
+                    lineJoin="round"
+                    draggable={activeTool === 'select'}
+                    onClick={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
+                  />
+                  <Circle
+                    x={wl.x + wl.points[0]}
+                    y={wl.y + wl.points[1]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e, true)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
+                  <Circle
+                    x={wl.x + wl.points[2]}
+                    y={wl.y + wl.points[3]}
+                    radius={6}
+                    fill="#ff6600"
+                    draggable={activeTool === 'select'}
+                    onMouseDown={() => {
+                      setSelectedWallId(wl.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                    }}
+                    onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e, true)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'crosshair')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
+                  />
+                </React.Fragment>
+              ))}
+              {currentWall && (
+                <Line
+                  points={currentWall.points}
+                  stroke={currentWall.color}
+                  strokeWidth={currentWall.width}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+            </Group>
+          </Layer>
           <Layer listening>
             {tokens.map((token) => (
               <TokenBars
@@ -1868,6 +2056,17 @@ MapCanvas.propTypes = {
   playerName: PropTypes.string,
   lines: PropTypes.array,
   onLinesChange: PropTypes.func,
+  walls: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      points: PropTypes.arrayOf(PropTypes.number).isRequired,
+      color: PropTypes.string,
+      width: PropTypes.number,
+    })
+  ),
+  onWallsChange: PropTypes.func,
   texts: PropTypes.array,
   onTextsChange: PropTypes.func,
 };
