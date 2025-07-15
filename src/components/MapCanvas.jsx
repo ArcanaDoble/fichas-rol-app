@@ -931,6 +931,12 @@ const MapCanvas = ({
   };
 
   const updateWalls = (updater) => {
+    setWalls((prev) =>
+      typeof updater === 'function' ? updater(prev) : updater
+    );
+  };
+
+  const saveWalls = (updater) => {
     setWalls((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       onWallsChange(next);
@@ -977,14 +983,14 @@ const MapCanvas = ({
     const node = e.target;
     const x = node.x();
     const y = node.y();
-    updateWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
+    saveWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
   };
 
-  const handleWallPointDrag = (id, index, e) => {
+  const handleWallPointDrag = (id, index, e, save = false) => {
     const node = e.target;
     const x = node.x();
     const y = node.y();
-    updateWalls((ws) =>
+    const updater = (ws) =>
       ws.map((w) => {
         if (w.id !== id) return w;
         const abs = [
@@ -999,8 +1005,8 @@ const MapCanvas = ({
         const minY = Math.min(abs[1], abs[3]);
         const rel = [abs[0] - minX, abs[1] - minY, abs[2] - minX, abs[3] - minY];
         return { ...w, x: minX, y: minY, points: rel };
-      })
-    );
+      });
+    if (save) saveWalls(updater); else updateWalls(updater);
   };
 
   const handleLineTransformEnd = (id, e) => {
@@ -1283,7 +1289,7 @@ const MapCanvas = ({
         y: minY,
         points: rel,
       };
-      updateWalls((ws) => [...ws, finished]);
+      saveWalls((ws) => [...ws, finished]);
       setCurrentWall(null);
       setSelectedWallId(finished.id);
     }
@@ -1435,7 +1441,7 @@ const MapCanvas = ({
         return;
       }
       if (selectedWallId != null && e.key.toLowerCase() === 'delete') {
-        updateWalls(walls.filter((w) => w.id !== selectedWallId));
+        saveWalls(walls.filter((w) => w.id !== selectedWallId));
         setSelectedWallId(null);
         return;
       }
@@ -1877,7 +1883,7 @@ const MapCanvas = ({
                       setSelectedTextId(null);
                     }}
                     onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
-                    onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e, true)}
                     onMouseEnter={() =>
                       (stageRef.current.container().style.cursor = 'crosshair')
                     }
@@ -1899,7 +1905,7 @@ const MapCanvas = ({
                       setSelectedTextId(null);
                     }}
                     onDragMove={(e) => handleWallPointDrag(wl.id, 1, e)}
-                    onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e)}
+                    onDragEnd={(e) => handleWallPointDrag(wl.id, 1, e, true)}
                     onMouseEnter={() =>
                       (stageRef.current.container().style.cursor = 'crosshair')
                     }
