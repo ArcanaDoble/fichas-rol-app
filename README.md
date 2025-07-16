@@ -679,6 +679,36 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Añadido buscador de tokens en la sección de assets para localizar imágenes por nombre.
 
+**Resumen de cambios v2.4.0:**
+
+- **Sistema de Capas implementado** - Organización del contenido del mapa en 3 capas independientes:
+  - **Capa Fichas** (verde) - Capa principal para tokens y elementos de jugadores
+  - **Capa Master** (fucsia) - Capa intermedia para contenido específico del máster
+  - **Capa Luz** (amarillo) - Capa para efectos de iluminación y elementos visuales
+- **Filtrado por capas** - Solo se muestran elementos de la capa activa seleccionada
+- **Asignación automática** - Los nuevos elementos se crean en la capa actualmente seleccionada
+- **Guardado independiente** - Cada elemento mantiene su información de capa en Firebase
+- **Interfaz intuitiva** - Sección "Capas" en la parte inferior del toolbar con iconos distintivos
+
+**Resumen de cambios v2.4.1:**
+
+- **Detección de colisiones con muros** - Los tokens no pueden atravesar muros con puertas cerradas o secretas
+- **Bloqueo independiente de capas** - Los muros bloquean tokens sin importar en qué capa estén
+- **Prevención de colocación** - No se pueden colocar tokens en posiciones bloqueadas por muros
+- **Movimiento WASD restringido** - Las teclas de movimiento respetan las colisiones con muros
+- **Feedback visual** - Los tokens regresan a su posición original si se intenta colocar en área bloqueada
+
+**Resumen de cambios v2.4.2:**
+
+- **Sistema de puertas interactivas** - Los jugadores pueden interactuar con puertas desde la capa "fichas"
+- **Iconos de puertas realistas** - Diseño sutil con marco rectangular y manija que representa visualmente una puerta
+- **Orientación automática** - Las puertas se orientan según la dirección del muro (vertical u horizontal)
+- **Interacción intuitiva** - Click en el icono para alternar entre cerrada/abierta
+- **Visibilidad controlada** - Solo se muestran puertas cerradas y abiertas (no secretas) desde la capa fichas
+- **Posicionamiento preciso** - Los iconos aparecen centrados en el punto medio del segmento del muro
+- **Colores distintivos** - Marrón para cerradas, verde claro para abiertas con manijas doradas/verdes
+- **Área de click amplia** - Fácil interacción sin necesidad de precisión extrema
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

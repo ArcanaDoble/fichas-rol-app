@@ -91,6 +91,97 @@ const DOOR_PATHS = {
   ],
 };
 
+// Componente para mostrar puertas interactivas en la capa fichas
+const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
+  const [x1, y1, x2, y2] = wall.points;
+  
+  // Calcular el punto central exacto del segmento del muro
+  const centerX = wall.x + (x1 + x2) / 2;
+  const centerY = wall.y + (y1 + y2) / 2;
+  
+  // Calcular la orientación del muro para orientar la puerta
+  const wallAngle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+  const isVertical = Math.abs(wallAngle) > 45 && Math.abs(wallAngle) < 135;
+  
+  // Tamaño más sutil y proporcional
+  const doorWidth = effectiveGridSize * 0.6;
+  const doorHeight = effectiveGridSize * 0.15;
+  
+  // Solo mostrar puertas cerradas y abiertas (no secretas) desde la capa fichas
+  if (wall.door === 'secret') return null;
+  
+  // Colores más sutiles y realistas
+  const doorColor = wall.door === 'closed' ? '#8B4513' : '#90EE90'; // Marrón para cerrada, verde claro para abierta
+  const handleColor = wall.door === 'closed' ? '#FFD700' : '#32CD32'; // Dorado para cerrada, verde para abierta
+  
+  return (
+    <Group>
+      {/* Marco de la puerta */}
+      <Rect
+        x={centerX}
+        y={centerY}
+        width={isVertical ? doorHeight : doorWidth}
+        height={isVertical ? doorWidth : doorHeight}
+        offsetX={isVertical ? doorHeight / 2 : doorWidth / 2}
+        offsetY={isVertical ? doorWidth / 2 : doorHeight / 2}
+        fill={doorColor}
+        stroke="#654321"
+        strokeWidth={2}
+        cornerRadius={2}
+        onClick={() => onToggle(wall.id)}
+        onTap={() => onToggle(wall.id)}
+        listening={true}
+        opacity={0.9}
+      />
+      
+      {/* Manija/indicador de la puerta */}
+      <Circle
+        x={centerX + (isVertical ? 0 : (wall.door === 'closed' ? -doorWidth * 0.3 : doorWidth * 0.3))}
+        y={centerY + (isVertical ? (wall.door === 'closed' ? -doorWidth * 0.3 : doorWidth * 0.3) : 0)}
+        radius={3}
+        fill={handleColor}
+        stroke="#000000"
+        strokeWidth={1}
+        onClick={() => onToggle(wall.id)}
+        onTap={() => onToggle(wall.id)}
+        listening={true}
+      />
+      
+      {/* Indicador sutil de estado (solo aparece al hacer hover) */}
+      <Text
+        x={centerX}
+        y={centerY - (isVertical ? doorWidth / 2 + 15 : doorHeight / 2 + 15)}
+        text={wall.door === 'closed' ? '🔒' : '🔓'}
+        fontSize={12}
+        fill={handleColor}
+        align="center"
+        verticalAlign="middle"
+        onClick={() => onToggle(wall.id)}
+        onTap={() => onToggle(wall.id)}
+        listening={true}
+        opacity={0.7}
+      />
+      
+      {/* Área de click más grande pero invisible */}
+      <Circle
+        x={centerX}
+        y={centerY}
+        radius={Math.max(doorWidth, doorHeight) / 2 + 10}
+        fill="transparent"
+        onClick={() => onToggle(wall.id)}
+        onTap={() => onToggle(wall.id)}
+        listening={true}
+      />
+    </Group>
+  );
+};
+
+InteractiveDoor.propTypes = {
+  wall: PropTypes.object.isRequired,
+  effectiveGridSize: PropTypes.number.isRequired,
+  onToggle: PropTypes.func.isRequired,
+};
+
 const TokenAura = ({
   x,
   y,
@@ -816,6 +907,26 @@ const MapCanvas = ({
     setSelectedTextId(null);
   };
 
+  // Función para alternar el estado de las puertas (solo desde capa fichas)
+  const handleDoorToggle = useCallback((wallId) => {
+    if (activeLayer !== 'fichas') return; // Solo permitir desde capa fichas
+    
+    const updatedWalls = walls.map(wall => {
+      if (wall.id === wallId) {
+        // Solo alternar entre cerrado y abierto (no tocar secretas)
+        if (wall.door === 'closed') {
+          return { ...wall, door: 'open' };
+        } else if (wall.door === 'open') {
+          return { ...wall, door: 'closed' };
+        }
+      }
+      return wall;
+    });
+    
+    setWalls(updatedWalls);
+    onWallsChange(updatedWalls);
+  }, [walls, activeLayer, onWallsChange]);
+
 
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
@@ -879,8 +990,8 @@ const MapCanvas = ({
   const isPositionBlocked = useCallback((x, y) => {
     // Verificar todos los muros, independientemente de la capa
     return walls.some(wall => {
-      // Solo bloquear si la puerta está cerrada
-      if (wall.door !== 'closed') return false;
+      // Solo bloquear si la puerta está cerrada o secreta
+      if (wall.door !== 'closed' && wall.door !== 'secret') return false;
       
       // Obtener las coordenadas del muro
       const [x1, y1, x2, y2] = wall.points;
@@ -908,6 +1019,80 @@ const MapCanvas = ({
       );
     });
   }, [walls, effectiveGridSize]);
+
+  // Función para alternar el estado de una puerta
+  const toggleDoor = useCallback((wallId) => {
+    const updatedWalls = walls.map(wall => {
+      if (wall.id === wallId) {
+        // Solo permitir alternar entre cerrada y abierta (no secreta)
+        if (wall.door === 'closed') {
+          return { ...wall, door: 'open' };
+        } else if (wall.door === 'open') {
+          return { ...wall, door: 'closed' };
+        }
+      }
+      return wall;
+    });
+    onWallsChange(updatedWalls);
+  }, [walls, onWallsChange]);
+
+  // Función auxiliar para calcular si un punto está cerca de un segmento de muro
+  const isNearWallSegment = useCallback((x, y, wall, threshold = 20) => {
+    const [x1, y1, x2, y2] = wall.points;
+    const wallX1 = wall.x + x1;
+    const wallY1 = wall.y + y1;
+    const wallX2 = wall.x + x2;
+    const wallY2 = wall.y + y2;
+    
+    // Calcular la distancia del punto al segmento de línea
+    const A = x - wallX1;
+    const B = y - wallY1;
+    const C = wallX2 - wallX1;
+    const D = wallY2 - wallY1;
+    
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    
+    if (lenSq === 0) return Math.sqrt(A * A + B * B) <= threshold;
+    
+    let param = dot / lenSq;
+    param = Math.max(0, Math.min(1, param));
+    
+    const xx = wallX1 + param * C;
+    const yy = wallY1 + param * D;
+    
+    const dx = x - xx;
+    const dy = y - yy;
+    
+    return Math.sqrt(dx * dx + dy * dy) <= threshold;
+  }, []);
+
+  // Función para sugerir la mejor posición para una puerta en un muro
+  const suggestDoorPosition = useCallback((wall) => {
+    const [x1, y1, x2, y2] = wall.points;
+    
+    // Calcular el punto medio del segmento
+    const centerX = wall.x + (x1 + x2) / 2;
+    const centerY = wall.y + (y1 + y2) / 2;
+    
+    // Ajustar a la cuadrícula más cercana
+    const gridCenterX = Math.round(centerX / effectiveGridSize) * effectiveGridSize;
+    const gridCenterY = Math.round(centerY / effectiveGridSize) * effectiveGridSize;
+    
+    return { x: gridCenterX, y: gridCenterY };
+  }, [effectiveGridSize]);
+
+  // Filtrar muros que deben mostrar iconos interactivos
+  const getInteractiveDoors = useCallback(() => {
+    if (activeLayer === 'fichas') {
+      // En la capa fichas, mostrar iconos solo para muros de otras capas
+      return walls.filter(wall => 
+        (wall.layer && wall.layer !== 'fichas') && 
+        (wall.door === 'closed' || wall.door === 'open')
+      );
+    }
+    return [];
+  }, [walls, activeLayer]);
 
   const pxToCell = (px, offset) =>
     Math.round((px - offset) / effectiveGridSize);
@@ -2091,6 +2276,25 @@ const MapCanvas = ({
                 }
               />
             ))}
+          </Layer>
+          
+          {/* Capa de puertas interactivas - debe estar dentro del Group principal */}
+          <Layer listening>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {getInteractiveDoors().map((wall) => (
+                <InteractiveDoor
+                  key={`door-icon-${wall.id}`}
+                  wall={wall}
+                  effectiveGridSize={effectiveGridSize}
+                  onToggle={toggleDoor}
+                />
+              ))}
+            </Group>
           </Layer>
         </Stage>
       </div>
