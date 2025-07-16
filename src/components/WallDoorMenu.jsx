@@ -9,9 +9,15 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
   const [door, setDoor] = useState(wall.door || 'closed');
   const [color, setColor] = useState(wall.color || '#ff6600');
 
-  useEffect(() => {
-    onUpdate({ ...wall, door, color });
-  }, [door, color]);
+  const handleDoor = (newDoor) => {
+    setDoor(newDoor);
+    onUpdate({ ...wall, door: newDoor, color });
+  };
+
+  const handleColor = (newColor) => {
+    setColor(newColor);
+    onUpdate({ ...wall, door, color: newColor });
+  };
 
   const content = (
     <div className="fixed inset-0 flex items-center justify-center z-50">
@@ -27,7 +33,7 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
             className="w-full flex items-center justify-between"
             color={door === 'secret' ? 'blue' : 'gray'}
             size="sm"
-            onClick={() => setDoor('secret')}
+            onClick={() => handleDoor('secret')}
           >
             <span className="flex items-center gap-2">
               <RiDoorClosedLine />
@@ -39,7 +45,7 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
             className="w-full flex items-center justify-between"
             color={door === 'closed' ? 'blue' : 'gray'}
             size="sm"
-            onClick={() => setDoor('closed')}
+            onClick={() => handleDoor('closed')}
           >
             <RiDoorClosedLine />
             <span>Puerta Cerrada</span>
@@ -48,7 +54,7 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
             className="w-full flex items-center justify-between"
             color={door === 'open' ? 'blue' : 'gray'}
             size="sm"
-            onClick={() => setDoor('open')}
+            onClick={() => handleDoor('open')}
           >
             <RiDoorOpenLine />
             <span>Puerta Abierta</span>
@@ -59,7 +65,7 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
           <input
             type="color"
             value={color}
-            onChange={(e) => setColor(e.target.value)}
+            onChange={(e) => handleColor(e.target.value)}
             className="w-full h-8 p-0 border-0"
           />
         </div>
