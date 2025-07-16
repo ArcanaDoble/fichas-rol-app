@@ -756,6 +756,7 @@ const MapCanvas = ({
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
+  const [currentWall, setCurrentWall] = useState(null);
   const [walls, setWalls] = useState(propWalls);
   const [selectedWallId, setSelectedWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
@@ -1195,16 +1196,13 @@ const MapCanvas = ({
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
       setSelectedWallId(null);
-      const wall = {
-        id: Date.now(),
+      setCurrentWall({
         x: relX,
         y: relY,
-        points: [0, 0, DEFAULT_WALL_LENGTH, 0],
+        points: [relX, relY, relX, relY],
         color: '#ff6600',
         width: 4,
-      };
-      saveWalls((ws) => [...ws, wall]);
-      setSelectedWallId(wall.id);
+      });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
@@ -1243,9 +1241,9 @@ const MapCanvas = ({
       return;
     }
     if (currentWall) {
-      setCurrentWall((ln) => ({
-        ...ln,
-        points: [ln.points[0], ln.points[1], relX, relY],
+      setCurrentWall((wl) => ({
+        ...wl,
+        points: [wl.points[0], wl.points[1], relX, relY],
       }));
       return;
     }
@@ -1841,6 +1839,15 @@ const MapCanvas = ({
                   points={currentLine.points}
                   stroke={currentLine.color}
                   strokeWidth={currentLine.width}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+              {currentWall && (
+                <Line
+                  points={currentWall.points}
+                  stroke={currentWall.color}
+                  strokeWidth={currentWall.width}
                   lineCap="round"
                   lineJoin="round"
                 />
