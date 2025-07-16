@@ -2,11 +2,13 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { FiMousePointer, FiEdit2, FiType } from 'react-icons/fi';
 import { FaRuler } from 'react-icons/fa';
+import { GiBrickWall } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const tools = [
   { id: 'select', icon: FiMousePointer },
   { id: 'draw', icon: FiEdit2 },
+  { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
 ];
