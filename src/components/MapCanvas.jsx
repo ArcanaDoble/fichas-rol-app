@@ -747,6 +747,8 @@ const MapCanvas = ({
   onWallsChange = () => {},
   texts: propTexts = [],
   onTextsChange = () => {},
+  activeLayer: propActiveLayer = 'fichas',
+  onLayerChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -790,6 +792,29 @@ const MapCanvas = ({
   });
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
+  const [activeLayer, setActiveLayer] = useState(propActiveLayer);
+
+  // Sincronizar con la prop externa
+  useEffect(() => {
+    setActiveLayer(propActiveLayer);
+  }, [propActiveLayer]);
+
+  // Filtrar elementos por capa activa
+  const filteredTokens = tokens.filter(token => (token.layer || 'fichas') === activeLayer);
+  const filteredLines = lines.filter(line => (line.layer || 'fichas') === activeLayer);
+  const filteredWalls = walls.filter(wall => (wall.layer || 'fichas') === activeLayer);
+  const filteredTexts = texts.filter(text => (text.layer || 'fichas') === activeLayer);
+
+  // Función para cambiar de capa
+  const handleLayerChange = (newLayer) => {
+    setActiveLayer(newLayer);
+    onLayerChange(newLayer);
+    // Limpiar selecciones al cambiar de capa
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+  };
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
   const wallRefs = useRef({});
@@ -1203,6 +1228,7 @@ const MapCanvas = ({
         points: [relX, relY],
         color: drawColor,
         width: BRUSH_WIDTHS[brushSize],
+        layer: activeLayer,
       });
     }
     if (activeTool === 'wall' && e.evt.button === 0) {
@@ -1217,6 +1243,7 @@ const MapCanvas = ({
         color: '#ff6600',
         width: 4,
         door: 'closed',
+        layer: activeLayer,
       });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
@@ -1236,7 +1263,7 @@ const MapCanvas = ({
       if (content !== null) {
         updateTexts((t) => [
           ...t,
-          { id, x: relX, y: relY, text: content, ...textOptions, bgColor },
+          { id, x: relX, y: relY, text: content, ...textOptions, bgColor, layer: activeLayer },
         ]);
         setSelectedTextId(id);
       }
@@ -1619,6 +1646,7 @@ const MapCanvas = ({
           tintColor: '#ff0000',
           tintOpacity: 0,
           estados: [],
+          layer: activeLayer,
         };
         onTokensChange([...tokens, newToken]);
       },
@@ -1691,7 +1719,7 @@ const MapCanvas = ({
                     showAura={canSeeAura(dragShadow)}
                   />
                 )}
-                {tokens.map((token) => (
+                {filteredTokens.map((token) => (
                   <TokenAura
                     key={`aura-${token.id}`}
                     x={cellToPx(token.x, gridOffsetX)}
@@ -1740,7 +1768,7 @@ const MapCanvas = ({
                   auraOpacity={dragShadow.auraOpacity}
                 />
               )}
-              {tokens.map((token) => (
+              {filteredTokens.map((token) => (
                 <Token
                   ref={(el) => {
                     if (el) tokenRefs.current[token.id] = el;
@@ -1791,7 +1819,7 @@ const MapCanvas = ({
                   listening={activeTool === 'select'}
                 />
               ))}
-              {lines.map((ln) => (
+              {filteredLines.map((ln) => (
                 <Line
                   ref={(el) => {
                     if (el) lineRefs.current[ln.id] = el;
@@ -1817,7 +1845,7 @@ const MapCanvas = ({
               {activeTool === 'select' && (
                 <Transformer ref={lineTrRef} rotateEnabled={false} />
               )}
-              {texts.map((t) => (
+              {filteredTexts.map((t) => (
                 <Label
                   key={t.id}
                   ref={(el) => {
@@ -1877,7 +1905,7 @@ const MapCanvas = ({
               scaleX={groupScale}
               scaleY={groupScale}
             >
-              {walls.map((wl) => (
+              {filteredWalls.map((wl) => (
                 <React.Fragment key={wl.id}>
                   <Line
                     ref={(el) => {
@@ -1973,7 +2001,7 @@ const MapCanvas = ({
             </Group>
           </Layer>
           <Layer listening>
-            {tokens.map((token) => (
+            {filteredTokens.map((token) => (
               <TokenBars
                 key={`bars-${token.id}`}
                 tokenRef={tokenRefs.current[token.id]}
@@ -2007,6 +2035,8 @@ const MapCanvas = ({
         onMeasureVisibleChange={setMeasureVisible}
         textOptions={textOptions}
         onTextOptionsChange={setTextOptions}
+        activeLayer={activeLayer}
+        onLayerChange={handleLayerChange}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -2124,6 +2154,8 @@ MapCanvas.propTypes = {
   onWallsChange: PropTypes.func,
   texts: PropTypes.array,
   onTextsChange: PropTypes.func,
+  activeLayer: PropTypes.string,
+  onLayerChange: PropTypes.func,
 };
 
 export default MapCanvas;

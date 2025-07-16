@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { FiMousePointer, FiEdit2, FiType } from 'react-icons/fi';
-import { FaRuler } from 'react-icons/fa';
+import { FiMousePointer, FiEdit2, FiType, FiUsers, FiShield } from 'react-icons/fi';
+import { FaRuler, FaSun } from 'react-icons/fa';
 import { GiBrickWall } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -60,19 +60,62 @@ const Toolbar = ({
   onMeasureVisibleChange,
   textOptions,
   onTextOptionsChange,
+  activeLayer = 'fichas',
+  onLayerChange,
 }) => (
-  <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2 space-y-2">
-    {tools.map(({ id, icon: Icon }) => (
-      <button
-        key={id}
-        onClick={() => onSelect(id)}
-        className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-          activeTool === id ? 'bg-gray-700' : 'bg-gray-800 hover:bg-gray-700'
-        }`}
-      >
-        <Icon />
-      </button>
-    ))}
+  <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
+    <div className="flex flex-col items-center space-y-2 flex-1">
+      {tools.map(({ id, icon: Icon }) => (
+        <button
+          key={id}
+          onClick={() => onSelect(id)}
+          className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+            activeTool === id ? 'bg-gray-700' : 'bg-gray-800 hover:bg-gray-700'
+          }`}
+        >
+          <Icon />
+        </button>
+      ))}
+    </div>
+    
+    {/* Sección de Capas */}
+    <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
+      <div className="text-xs text-gray-300 font-medium">Capas</div>
+      <div className="flex flex-col items-center space-y-1">
+        <button
+          onClick={() => onLayerChange && onLayerChange('fichas')}
+          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+            activeLayer === 'fichas' ? 'bg-green-600' : 'bg-gray-800 hover:bg-gray-700'
+          }`}
+          title="Capa de Fichas"
+        >
+          <FiUsers className="text-sm" />
+        </button>
+        <div className="text-xs text-gray-300">Fichas</div>
+        
+        <button
+          onClick={() => onLayerChange && onLayerChange('master')}
+          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+            activeLayer === 'master' ? 'bg-fuchsia-600' : 'bg-gray-800 hover:bg-gray-700'
+          }`}
+          title="Capa de Master"
+        >
+          <FiShield className="text-sm" />
+        </button>
+        <div className="text-xs text-gray-300">Master</div>
+        
+        <button
+          onClick={() => onLayerChange && onLayerChange('luz')}
+          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+            activeLayer === 'luz' ? 'bg-yellow-600' : 'bg-gray-800 hover:bg-gray-700'
+          }`}
+          title="Capa de Luz"
+        >
+          <FaSun className="text-sm" />
+        </button>
+        <div className="text-xs text-gray-300">Luz</div>
+      </div>
+    </div>
     <AnimatePresence>
       {activeTool === 'draw' && (
         <motion.div
@@ -290,6 +333,8 @@ Toolbar.propTypes = {
     underline: PropTypes.bool,
   }),
   onTextOptionsChange: PropTypes.func,
+  activeLayer: PropTypes.string,
+  onLayerChange: PropTypes.func,
 };
 
 export default Toolbar;

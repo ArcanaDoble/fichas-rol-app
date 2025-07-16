@@ -466,6 +466,7 @@ function App() {
   const [canvasLines, setCanvasLines] = useState([]);
   const [canvasWalls, setCanvasWalls] = useState([]);
   const [canvasTexts, setCanvasTexts] = useState([]);
+  const [activeLayer, setActiveLayer] = useState('fichas');
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
     return stored ? JSON.parse(stored) : {};
@@ -3928,6 +3929,8 @@ function App() {
               highlightText={highlightText}
               userType={userType}
               playerName={playerName}
+              activeLayer={activeLayer}
+              onLayerChange={setActiveLayer}
             />
           </div>
           <AssetSidebar isMaster={authenticated} playerName={playerName} />
