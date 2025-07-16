@@ -815,6 +815,40 @@ const MapCanvas = ({
     setSelectedWallId(null);
     setSelectedTextId(null);
   };
+
+  // Función para detectar colisiones con muros (independiente de la capa)
+  const isPositionBlocked = useCallback((x, y) => {
+    // Verificar todos los muros, independientemente de la capa
+    return walls.some(wall => {
+      // Solo bloquear si la puerta está cerrada
+      if (wall.door !== 'closed') return false;
+      
+      // Obtener las coordenadas del muro
+      const [x1, y1, x2, y2] = wall.points;
+      const wallX = wall.x;
+      const wallY = wall.y;
+      
+      // Calcular el área ocupada por el muro
+      const minX = wallX + Math.min(x1, x2);
+      const maxX = wallX + Math.max(x1, x2);
+      const minY = wallY + Math.min(y1, y2);
+      const maxY = wallY + Math.max(y1, y2);
+      
+      // Convertir coordenadas del muro a celdas de la cuadrícula
+      const wallCellMinX = Math.floor(minX / effectiveGridSize);
+      const wallCellMaxX = Math.floor(maxX / effectiveGridSize);
+      const wallCellMinY = Math.floor(minY / effectiveGridSize);
+      const wallCellMaxY = Math.floor(maxY / effectiveGridSize);
+      
+      // Verificar si la posición del token intersecta con el muro
+      return (
+        x >= wallCellMinX && 
+        x <= wallCellMaxX &&
+        y >= wallCellMinY && 
+        y <= wallCellMaxY
+      );
+    });
+  }, [walls, effectiveGridSize]);
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
   const wallRefs = useRef({});
@@ -1111,6 +1145,22 @@ const MapCanvas = ({
     const top = node.y() - offY;
     const col = Math.round((left - gridOffsetX) / effectiveGridSize);
     const row = Math.round((top - gridOffsetY) / effectiveGridSize);
+    
+    // Verificar colisiones con muros antes de colocar el token
+    if (isPositionBlocked(col, row)) {
+      // Si la posición está bloqueada, devolver el token a su posición original
+      const originalToken = tokens.find(t => t.id === id);
+      if (originalToken) {
+        node.position({
+          x: originalToken.x * effectiveGridSize + offX + gridOffsetX,
+          y: originalToken.y * effectiveGridSize + offY + gridOffsetY,
+        });
+        node.getLayer().batchDraw();
+      }
+      setDragShadow(null);
+      return;
+    }
+    
     node.position({
       x: col * effectiveGridSize + offX + gridOffsetX,
       y: row * effectiveGridSize + offY + gridOffsetY,
@@ -1528,18 +1578,21 @@ const MapCanvas = ({
       const index = tokens.findIndex((t) => t.id === selectedId);
       if (index === -1) return;
       let { x, y } = tokens[index];
+      let newX = x;
+      let newY = y;
+      
       switch (e.key.toLowerCase()) {
         case 'w':
-          y -= 1;
+          newY = y - 1;
           break;
         case 's':
-          y += 1;
+          newY = y + 1;
           break;
         case 'a':
-          x -= 1;
+          newX = x - 1;
           break;
         case 'd':
-          x += 1;
+          newX = x + 1;
           break;
         case 'delete':
           onTokensChange(tokens.filter((t) => t.id !== selectedId));
@@ -1557,10 +1610,19 @@ const MapCanvas = ({
         default:
           return;
       }
-      x = Math.max(0, Math.min(mapWidth - 1, x));
-      y = Math.max(0, Math.min(mapHeight - 1, y));
+      
+      // Aplicar límites del mapa
+      newX = Math.max(0, Math.min(mapWidth - 1, newX));
+      newY = Math.max(0, Math.min(mapHeight - 1, newY));
+      
+      // Verificar colisiones con muros (independiente de la capa)
+      if (isPositionBlocked(newX, newY)) {
+        // Si la posición está bloqueada, no mover el token
+        return;
+      }
+      
       const updated = tokens.map((t) =>
-        t.id === selectedId ? { ...t, x, y } : t
+        t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
       onTokensChange(updated);
     },
@@ -1576,6 +1638,7 @@ const MapCanvas = ({
       selectedTextId,
       selectedWallId,
       texts,
+      isPositionBlocked,
     ]
   );
 
@@ -1622,6 +1685,13 @@ const MapCanvas = ({
         const cellY = pxToCell(relY, gridOffsetY);
         const x = Math.max(0, Math.min(mapWidth - 1, cellX));
         const y = Math.max(0, Math.min(mapHeight - 1, cellY));
+        
+        // Verificar colisiones con muros antes de crear el token
+        if (isPositionBlocked(x, y)) {
+          // Si la posición está bloqueada, no crear el token
+          return;
+        }
+        
         const newToken = {
           id: Date.now(),
           x,
@@ -1659,6 +1729,8 @@ const MapCanvas = ({
       mapHeight,
       gridOffsetX,
       gridOffsetY,
+      activeLayer,
+      isPositionBlocked,
     ]
   );
 
