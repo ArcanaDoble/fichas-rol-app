@@ -35,6 +35,7 @@ import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
+import WallDoorMenu from './WallDoorMenu';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -77,6 +78,19 @@ const BRUSH_WIDTHS = {
 };
 
 const DEFAULT_WALL_LENGTH = 50;
+
+const DOOR_PATHS = {
+  closed: [
+    'M2.99805 21V19H4.99805V4C4.99805 3.44772 5.44576 3 5.99805 3H17.998C18.5503 3 18.998 3.44772 18.998 4V19H20.998V21H2.99805ZM16.998 5H6.99805V19H16.998V5ZM14.998 11V13H12.998V11H14.998Z',
+  ],
+  open: [
+    'M1.99805 21.0001V19.0001L3.99805 18.9999V4.83465C3.99805 4.35136 4.34367 3.93723 4.81916 3.85078L14.2907 2.12868C14.6167 2.0694 14.9291 2.28564 14.9884 2.61167C14.9948 2.64708 14.998 2.68301 14.998 2.719V3.9999L18.998 4.00007C19.5503 4.00007 19.998 4.44779 19.998 5.00007V18.9999L21.998 19.0001V21.0001H17.998V6.00007L14.998 5.9999V21.0001H1.99805ZM12.998 4.3965L5.99805 5.66923V19.0001H12.998V4.3965ZM11.998 11.0001V13.0001H9.99805V11.0001H11.998Z',
+  ],
+  secret: [
+    'M2.99805 21V19H4.99805V4C4.99805 3.44772 5.44576 3 5.99805 3H17.998C18.5503 3 18.998 3.44772 18.998 4V19H20.998V21H2.99805ZM16.998 5H6.99805V19H16.998V5ZM14.998 11V13H12.998V11H14.998Z',
+    'M17.8827 19.2968C16.1814 20.3755 14.1638 21.0002 12.0003 21.0002C6.60812 21.0002 2.12215 17.1204 1.18164 12.0002C1.61832 9.62282 2.81932 7.5129 4.52047 5.93457L1.39366 2.80777L2.80788 1.39355L22.6069 21.1925L21.1927 22.6068L17.8827 19.2968ZM5.9356 7.3497C4.60673 8.56015 3.6378 10.1672 3.22278 12.0002C4.14022 16.0521 7.7646 19.0002 12.0003 19.0002C13.5997 19.0002 15.112 18.5798 16.4243 17.8384L14.396 15.8101C13.7023 16.2472 12.8808 16.5002 12.0003 16.5002C9.51498 16.5002 7.50026 14.4854 7.50026 12.0002C7.50026 11.1196 7.75317 10.2981 8.19031 9.60442L5.9356 7.3497ZM12.9139 14.328L9.67246 11.0866C9.5613 11.3696 9.50026 11.6777 9.50026 12.0002C9.50026 13.3809 10.6196 14.5002 12.0003 14.5002C12.3227 14.5002 12.6309 14.4391 12.9139 14.328ZM20.8068 16.5925L19.376 15.1617C20.0319 14.2268 20.5154 13.1586 20.7777 12.0002C19.8603 7.94818 16.2359 5.00016 12.0003 5.00016C11.1544 5.00016 10.3329 5.11773 9.55249 5.33818L7.97446 3.76015C9.22127 3.26959 10.5793 3.00016 12.0003 3.00016C17.3924 3.00016 21.8784 6.87992 22.8189 12.0002C22.5067 13.6998 21.8038 15.2628 20.8068 16.5925ZM11.7229 7.50857C11.8146 7.50299 11.9071 7.50016 12.0003 7.50016C14.4855 7.50016 16.5003 9.51488 16.5003 12.0002C16.5003 12.0933 16.4974 12.1858 16.4919 12.2775L11.7229 7.50857Z',
+  ],
+};
 
 const TokenAura = ({
   x,
@@ -759,6 +773,7 @@ const MapCanvas = ({
   const [currentWall, setCurrentWall] = useState(null);
   const [walls, setWalls] = useState(propWalls);
   const [selectedWallId, setSelectedWallId] = useState(null);
+  const [doorMenuWallId, setDoorMenuWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
@@ -1202,6 +1217,7 @@ const MapCanvas = ({
         points: [relX, relY, relX, relY],
         color: '#ff6600',
         width: 4,
+        door: 'closed',
       });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
@@ -1918,29 +1934,18 @@ const MapCanvas = ({
                         Math.PI) *
                       180
                     }
-                    listening={false}
+                    onClick={() => setDoorMenuWallId(wl.id)}
                   >
-                    <Path
-                      data="M14 12v.01"
-                      stroke={wl.color}
-                      strokeWidth={2}
-                      lineCap="round"
-                      lineJoin="round"
-                    />
-                    <Path
-                      data="M3 21h18"
-                      stroke={wl.color}
-                      strokeWidth={2}
-                      lineCap="round"
-                      lineJoin="round"
-                    />
-                    <Path
-                      data="M6 21v-16a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v16"
-                      stroke={wl.color}
-                      strokeWidth={2}
-                      lineCap="round"
-                      lineJoin="round"
-                    />
+                    {DOOR_PATHS[wl.door || 'closed'].map((d, i) => (
+                      <Path
+                        key={i}
+                        data={d}
+                        stroke={wl.color}
+                        strokeWidth={2}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ))}
                   </Group>
                   <Circle
                     x={wl.x + wl.points[2]}
@@ -2043,6 +2048,15 @@ const MapCanvas = ({
           highlightText={highlightText}
         />
       ))}
+      {doorMenuWallId != null && (
+        <WallDoorMenu
+          wall={walls.find((w) => w.id === doorMenuWallId)}
+          onClose={() => setDoorMenuWallId(null)}
+          onUpdate={(w) => {
+            saveWalls((ws) => ws.map((wl) => (wl.id === w.id ? w : wl)));
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -2105,6 +2119,7 @@ MapCanvas.propTypes = {
       points: PropTypes.arrayOf(PropTypes.number).isRequired,
       color: PropTypes.string,
       width: PropTypes.number,
+      door: PropTypes.oneOf(['secret', 'closed', 'open']),
     })
   ),
   onWallsChange: PropTypes.func,
