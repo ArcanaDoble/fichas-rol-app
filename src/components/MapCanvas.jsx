@@ -36,7 +36,7 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
-import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
+import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -875,6 +875,27 @@ const MapCanvas = ({
   const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
+
+  // Estados para selección múltiple
+  const [selectedTokens, setSelectedTokens] = useState([]);
+  const [selectedLines, setSelectedLines] = useState([]);
+  const [selectedWalls, setSelectedWalls] = useState([]);
+  const [selectedTexts, setSelectedTexts] = useState([]);
+
+  // Estados para cuadro de selección
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionBox, setSelectionBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
+
+  // Estado para clipboard (copiar/pegar)
+  const [clipboard, setClipboard] = useState(null);
+
+  // Estado para tracking de posición del cursor
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // Estado para vista previa de pegado
+  const [showPastePreview, setShowPastePreview] = useState(false);
+
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
     bgColor: 'rgba(0,0,0,0.5)',
@@ -892,10 +913,59 @@ const MapCanvas = ({
   const [lightPolygons, setLightPolygons] = useState({});
   const [combinedLight, setCombinedLight] = useState([]);
 
+  // Estados para el sistema de visión de jugadores
+  const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
+  const [combinedPlayerVision, setCombinedPlayerVision] = useState([]);
+
+  // Estado para simulación de vista de jugador
+  const [playerViewMode, setPlayerViewMode] = useState(false);
+  const [simulatedPlayer, setSimulatedPlayer] = useState('');
+
   // Sincronizar con la prop externa
   useEffect(() => {
     setActiveLayer(propActiveLayer);
   }, [propActiveLayer]);
+
+  // Event listener para Ctrl + L (simulación de vista de jugador)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'l' && userType === 'master') {
+        e.preventDefault();
+
+        if (!playerViewMode) {
+          // Activar modo simulación - mostrar lista de jugadores disponibles
+          const availablePlayers = [...new Set(tokens.map(t => t.controlledBy).filter(Boolean))];
+
+          if (availablePlayers.length === 0) {
+            alert('No hay tokens controlados por jugadores para simular');
+            return;
+          }
+
+          if (availablePlayers.length === 1) {
+            setSimulatedPlayer(availablePlayers[0]);
+            setPlayerViewMode(true);
+          } else {
+            const selectedPlayer = prompt(
+              `Selecciona el jugador a simular:\n${availablePlayers.map((p, i) => `${i + 1}. ${p}`).join('\n')}`,
+              '1'
+            );
+            const playerIndex = parseInt(selectedPlayer) - 1;
+            if (playerIndex >= 0 && playerIndex < availablePlayers.length) {
+              setSimulatedPlayer(availablePlayers[playerIndex]);
+              setPlayerViewMode(true);
+            }
+          }
+        } else {
+          // Desactivar modo simulación
+          setPlayerViewMode(false);
+          setSimulatedPlayer('');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userType, playerViewMode, tokens]);
 
   // Sistema de visibilidad cruzada entre capas
   const getVisibleElements = (elements, currentLayer) => {
@@ -957,6 +1027,184 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    clearMultiSelection();
+  };
+
+  // Funciones para manejo de selección múltiple
+  const clearMultiSelection = () => {
+    setSelectedTokens([]);
+    setSelectedLines([]);
+    setSelectedWalls([]);
+    setSelectedTexts([]);
+  };
+
+  const clearAllSelections = () => {
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+    clearMultiSelection();
+  };
+
+  // Función para verificar si un punto está dentro de un rectángulo
+  const isPointInRect = (point, rect) => {
+    return point.x >= rect.x &&
+           point.x <= rect.x + rect.width &&
+           point.y >= rect.y &&
+           point.y <= rect.y + rect.height;
+  };
+
+  // Función para convertir posición de pantalla a coordenadas del mapa
+  const screenToMapCoordinates = (screenX, screenY) => {
+    const relX = (screenX - groupPos.x) / (baseScale * zoom);
+    const relY = (screenY - groupPos.y) / (baseScale * zoom);
+    return { x: relX, y: relY };
+  };
+
+  // Función para ajustar coordenadas a la grilla
+  const snapToGrid = (x, y) => {
+    const gridX = Math.round(x / effectiveGridSize) * effectiveGridSize;
+    const gridY = Math.round(y / effectiveGridSize) * effectiveGridSize;
+    return { x: gridX, y: gridY };
+  };
+
+  // Función para convertir coordenadas del mapa a celdas de grilla
+  const mapToGridCoordinates = (mapX, mapY) => {
+    const gridX = Math.round(mapX / effectiveGridSize);
+    const gridY = Math.round(mapY / effectiveGridSize);
+    return { x: gridX, y: gridY };
+  };
+
+  // Función para asegurar que las coordenadas estén dentro de los límites del mapa
+  const clampToMapBounds = (x, y) => {
+    const clampedX = Math.max(0, Math.min(mapWidth - 1, x));
+    const clampedY = Math.max(0, Math.min(mapHeight - 1, y));
+    return { x: clampedX, y: clampedY };
+  };
+
+  // Función para calcular el centro de un grupo de elementos
+  const calculateElementsCenter = (elements, elementType) => {
+    if (elements.length === 0) return { x: 0, y: 0 };
+
+    let totalX = 0, totalY = 0;
+
+    elements.forEach(element => {
+      switch (elementType) {
+        case 'tokens':
+          totalX += element.x;
+          totalY += element.y;
+          break;
+        case 'lines':
+          totalX += element.x;
+          totalY += element.y;
+          break;
+        case 'walls':
+          // Para muros, calcular el centro real usando la base + puntos relativos
+          const [x1, y1, x2, y2] = element.points;
+          const centerX = element.x + (x1 + x2) / 2;
+          const centerY = element.y + (y1 + y2) / 2;
+          totalX += centerX / effectiveGridSize; // Convertir a coordenadas de grid
+          totalY += centerY / effectiveGridSize;
+          break;
+        case 'texts':
+          totalX += element.x / effectiveGridSize;
+          totalY += element.y / effectiveGridSize;
+          break;
+        default:
+          break;
+      }
+    });
+
+    return {
+      x: totalX / elements.length,
+      y: totalY / elements.length
+    };
+  };
+
+  // Función para obtener la posición de pegado inteligente
+  const getSmartPastePosition = () => {
+    // Verificar si el cursor está dentro del área visible del stage
+    const stageRect = stageRef.current?.container().getBoundingClientRect();
+    if (!stageRect) {
+      // Fallback: centro de la vista actual
+      const centerX = containerSize.width / 2;
+      const centerY = containerSize.height / 2;
+      return screenToMapCoordinates(centerX, centerY);
+    }
+
+    // Verificar si la posición del mouse está dentro del stage
+    const isMouseInStage = mousePosition.x >= stageRect.left &&
+                          mousePosition.x <= stageRect.right &&
+                          mousePosition.y >= stageRect.top &&
+                          mousePosition.y <= stageRect.bottom;
+
+    if (isMouseInStage) {
+      // Usar posición del cursor relativa al stage
+      const relativeX = mousePosition.x - stageRect.left;
+      const relativeY = mousePosition.y - stageRect.top;
+      return screenToMapCoordinates(relativeX, relativeY);
+    } else {
+      // Cursor fuera del stage: usar centro de la vista actual
+      const centerX = containerSize.width / 2;
+      const centerY = containerSize.height / 2;
+      return screenToMapCoordinates(centerX, centerY);
+    }
+  };
+
+  // Función para verificar si un elemento está dentro del cuadro de selección
+  const isElementInSelectionBox = (element, box, elementType) => {
+    if (box.width === 0 || box.height === 0) return false;
+
+    // Normalizar el cuadro de selección (en caso de que se arrastre hacia atrás)
+    const normalizedBox = {
+      x: Math.min(box.x, box.x + box.width),
+      y: Math.min(box.y, box.y + box.height),
+      width: Math.abs(box.width),
+      height: Math.abs(box.height)
+    };
+
+    switch (elementType) {
+      case 'token': {
+        const tokenX = element.x * effectiveGridSize;
+        const tokenY = element.y * effectiveGridSize;
+        const tokenWidth = element.w * effectiveGridSize;
+        const tokenHeight = element.h * effectiveGridSize;
+
+        // Verificar si el token intersecta con el cuadro de selección
+        return !(tokenX + tokenWidth < normalizedBox.x ||
+                tokenX > normalizedBox.x + normalizedBox.width ||
+                tokenY + tokenHeight < normalizedBox.y ||
+                tokenY > normalizedBox.y + normalizedBox.height);
+      }
+      case 'line': {
+        // Para líneas, verificar si algún punto está dentro del cuadro
+        for (let i = 0; i < element.points.length; i += 2) {
+          const pointX = element.x + element.points[i];
+          const pointY = element.y + element.points[i + 1];
+          if (isPointInRect({ x: pointX, y: pointY }, normalizedBox)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case 'wall': {
+        // Para muros, verificar si algún punto está dentro del cuadro
+        for (let i = 0; i < element.points.length; i += 2) {
+          const pointX = element.x + element.points[i];
+          const pointY = element.y + element.points[i + 1];
+          if (isPointInRect({ x: pointX, y: pointY }, normalizedBox)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case 'text': {
+        // Para textos, verificar si el punto está dentro del cuadro
+        return isPointInRect({ x: element.x, y: element.y }, normalizedBox);
+      }
+      default:
+        return false;
+    }
   };
 
   // Función para alternar el estado de las puertas (solo desde capa fichas)
@@ -1038,6 +1286,59 @@ const MapCanvas = ({
   const effectiveGridSize =
     imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
 
+  // Función para verificar si un token es visible para el jugador actual
+  const isTokenVisibleToPlayer = useCallback((token) => {
+    // Si no estamos en modo jugador, mostrar todos los tokens (modo master)
+    const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+    if (!isPlayerMode) {
+      return true;
+    }
+
+    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+    if (!effectivePlayerName) {
+      return true;
+    }
+
+    // Encontrar el token del jugador actual
+    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
+    if (!playerToken) {
+      return true;
+    }
+
+    // Si el token es del propio jugador, siempre es visible
+    if (token.controlledBy === effectivePlayerName) {
+      return true;
+    }
+
+    // Verificar si el jugador tiene visión habilitada
+    const visionEnabled = playerToken.vision?.enabled !== false;
+    if (!visionEnabled) {
+      return false;
+    }
+
+    // Obtener el polígono de visión del jugador
+    const playerVisionData = playerVisionPolygons[playerToken.id];
+    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+      return true; // Si no hay polígono de visión, mostrar por defecto
+    }
+
+    // Calcular el centro del token a verificar
+    const tokenCenter = {
+      x: (token.x + token.w / 2) * effectiveGridSize,
+      y: (token.y + token.h / 2) * effectiveGridSize
+    };
+
+    // Verificar si el centro del token está dentro del polígono de visión del jugador
+    return isPointVisible(tokenCenter, playerVisionData.polygon);
+  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons, effectiveGridSize]);
+
+  // Los tokens siempre mantienen opacidad completa - la visibilidad se controla solo por sombras
+  const getTokenOpacity = useCallback((token) => {
+    // Todos los tokens siempre tienen opacidad completa
+    // La visibilidad se controla únicamente a través de la capa de sombras/oscuridad
+    return 1;
+  }, []);
+
   // Función para calcular polígonos de visibilidad para tokens con luz
   const calculateLightPolygons = useCallback(() => {
     const newPolygons = {};
@@ -1076,6 +1377,52 @@ const MapCanvas = ({
   useEffect(() => {
     calculateLightPolygons();
   }, [calculateLightPolygons]);
+
+  // Función para calcular polígonos de visión para todos los tokens
+  const calculatePlayerVisionPolygons = useCallback(() => {
+    const newPolygons = {};
+
+    // Calcular visión para todos los tokens que tienen visión habilitada
+    tokens.forEach(token => {
+      // Verificar si el token tiene visión habilitada
+      const visionEnabled = token.vision?.enabled !== false; // Por defecto true
+      const visionRange = token.vision?.range || 10; // Rango por defecto de 10 casillas
+
+      if (visionEnabled && visionRange > 0) {
+        const origin = {
+          x: (token.x + token.w / 2) * effectiveGridSize,
+          y: (token.y + token.h / 2) * effectiveGridSize
+        };
+
+        // Calcular el polígono de visión usando ray casting
+        const polygon = computeVisibility(origin, walls, {
+          rays: 360, // Más rayos para mayor precisión en visión
+          maxDistance: visionRange * effectiveGridSize
+        });
+
+        newPolygons[token.id] = {
+          polygon,
+          tokenId: token.id,
+          controlledBy: token.controlledBy,
+          visionRange: visionRange
+        };
+      }
+    });
+
+    setPlayerVisionPolygons(newPolygons);
+
+    // Combinar todos los polígonos de visión
+    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
+    const combined = combineVisibilityPolygons(allPolygons);
+    setCombinedPlayerVision(combined);
+  }, [tokens, walls, effectiveGridSize]);
+
+  // Recalcular polígonos de visión cuando cambien las dependencias
+  useEffect(() => {
+    calculatePlayerVisionPolygons();
+  }, [calculatePlayerVisionPolygons]);
+
+
 
   // Función para detectar colisiones con muros (independiente de la capa)
   const isPositionBlocked = useCallback((x, y) => {
@@ -1271,12 +1618,56 @@ const MapCanvas = ({
     return { x: gridCenterX, y: gridCenterY };
   }, [effectiveGridSize]);
 
+  // Función para verificar si una puerta es visible para el jugador actual
+  const isDoorVisibleToPlayer = useCallback((wall) => {
+    // Si no estamos en modo jugador, mostrar todas las puertas (modo master)
+    const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+    if (!isPlayerMode) {
+      return true;
+    }
+
+    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+    if (!effectivePlayerName) {
+      return true;
+    }
+
+    // Encontrar el token del jugador actual
+    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
+    if (!playerToken) {
+      return true;
+    }
+
+    // Verificar si el jugador tiene visión habilitada
+    const visionEnabled = playerToken.vision?.enabled !== false;
+    if (!visionEnabled) {
+      return false;
+    }
+
+    // Obtener el polígono de visión del jugador
+    const playerVisionData = playerVisionPolygons[playerToken.id];
+    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+      return true; // Si no hay polígono de visión, mostrar por defecto
+    }
+
+    // Calcular el centro de la puerta
+    const [x1, y1, x2, y2] = wall.points;
+    const doorCenter = {
+      x: wall.x + (x1 + x2) / 2,
+      y: wall.y + (y1 + y2) / 2
+    };
+
+    // Verificar si el centro de la puerta está dentro del polígono de visión del jugador
+    return isPointVisible(doorCenter, playerVisionData.polygon);
+  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons]);
+
   // Filtrar muros que deben mostrar iconos interactivos
+  // Ahora siempre devuelve las puertas - la visibilidad se controla por la capa de sombras
   const getInteractiveDoors = useCallback(() => {
     if (activeLayer === 'fichas') {
       // En la capa fichas, mostrar iconos solo para muros de otras capas
-      return walls.filter(wall => 
-        (wall.layer && wall.layer !== 'fichas') && 
+      // Las puertas siempre se cargan pero la visibilidad se controla por sombras
+      return walls.filter(wall =>
+        (wall.layer && wall.layer !== 'fichas') &&
         (wall.door === 'closed' || wall.door === 'open')
       );
     }
@@ -1321,8 +1712,11 @@ const MapCanvas = ({
   useEffect(() => {
     if (bg) {
       setImageSize({ width: bg.width, height: bg.height });
+    } else if (backgroundImage && backgroundImage.startsWith('data:image')) {
+      // Para data URLs generados, usar dimensiones por defecto
+      setImageSize({ width: 1500, height: 1000 });
     }
-  }, [bg]);
+  }, [bg, backgroundImage]);
 
   // Calcula la escala base según el modo seleccionado y centra el mapa
   useEffect(() => {
@@ -1681,6 +2075,23 @@ const MapCanvas = ({
       panStart.current = stageRef.current.getPointerPosition();
       panOrigin.current = { ...groupPos };
     }
+
+    // Iniciar selección múltiple con botón izquierdo en herramienta select
+    if (activeTool === 'select' && e.evt.button === 0 && e.target === stageRef.current) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+      // Si no se mantiene Ctrl, limpiar selección anterior
+      const isCtrlPressed = e?.evt?.ctrlKey || false;
+      if (!isCtrlPressed) {
+        clearAllSelections();
+      }
+
+      setIsSelecting(true);
+      setSelectionStart({ x: relX, y: relY });
+      setSelectionBox({ x: relX, y: relY, width: 0, height: 0 });
+    }
     if (activeTool === 'draw' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
@@ -1733,10 +2144,27 @@ const MapCanvas = ({
   };
 
   // Actualiza la acción activa según la herramienta
-  const handleMouseMove = () => {
+  const handleMouseMove = (e) => {
     const pointer = stageRef.current.getPointerPosition();
     let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
     let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+    // Actualizar posición global del mouse para el sistema de pegado
+    if (e?.evt) {
+      setMousePosition({ x: e.evt.clientX, y: e.evt.clientY });
+    }
+
+    // Actualizar cuadro de selección
+    if (isSelecting) {
+      setSelectionBox({
+        x: selectionStart.x,
+        y: selectionStart.y,
+        width: relX - selectionStart.x,
+        height: relY - selectionStart.y
+      });
+      return;
+    }
+
     if (currentLine) {
       setCurrentLine((ln) => ({
         ...ln,
@@ -1764,6 +2192,39 @@ const MapCanvas = ({
   };
 
   const stopPanning = () => {
+    // Finalizar selección múltiple
+    if (isSelecting) {
+      // Filtrar elementos por capa actual
+      const filteredTokens = tokens.filter(token => token.layer === activeLayer);
+      const filteredLines = lines.filter(line => line.layer === activeLayer);
+      const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
+      const filteredTexts = texts.filter(text => text.layer === activeLayer);
+
+      // Encontrar elementos dentro del cuadro de selección
+      const selectedTokensInBox = filteredTokens.filter(token =>
+        isElementInSelectionBox(token, selectionBox, 'token')
+      );
+      const selectedLinesInBox = filteredLines.filter(line =>
+        isElementInSelectionBox(line, selectionBox, 'line')
+      );
+      const selectedWallsInBox = filteredWalls.filter(wall =>
+        isElementInSelectionBox(wall, selectionBox, 'wall')
+      );
+      const selectedTextsInBox = filteredTexts.filter(text =>
+        isElementInSelectionBox(text, selectionBox, 'text')
+      );
+
+      // Actualizar selecciones múltiples
+      setSelectedTokens(prev => [...prev, ...selectedTokensInBox.map(t => t.id)]);
+      setSelectedLines(prev => [...prev, ...selectedLinesInBox.map(l => l.id)]);
+      setSelectedWalls(prev => [...prev, ...selectedWallsInBox.map(w => w.id)]);
+      setSelectedTexts(prev => [...prev, ...selectedTextsInBox.map(t => t.id)]);
+
+      setIsSelecting(false);
+      setSelectionBox({ x: 0, y: 0, width: 0, height: 0 });
+      return;
+    }
+
     if (currentLine) {
       const xs = currentLine.points.filter((_, i) => i % 2 === 0);
       const ys = currentLine.points.filter((_, i) => i % 2 === 1);
@@ -1808,10 +2269,15 @@ const MapCanvas = ({
 
   const handleStageClick = (e) => {
     if (e.target === stageRef.current) {
-      setSelectedId(null);
-      setSelectedLineId(null);
-      setSelectedWallId(null);
-      setSelectedTextId(null);
+      // Solo limpiar selecciones si no se está manteniendo Ctrl
+      const isCtrlPressed = e?.evt?.ctrlKey || false;
+      if (!isCtrlPressed) {
+        setSelectedId(null);
+        setSelectedLineId(null);
+        setSelectedWallId(null);
+        setSelectedTextId(null);
+        clearMultiSelection();
+      }
     }
   };
 
@@ -1933,6 +2399,172 @@ const MapCanvas = ({
         return;
       }
 
+      // Copiar elementos seleccionados
+      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        const clipboardData = {
+          tokens: selectedTokens.length > 0 ? tokens.filter(t => selectedTokens.includes(t.id)) :
+                  selectedId ? [tokens.find(t => t.id === selectedId)] : [],
+          lines: selectedLines.length > 0 ? lines.filter(l => selectedLines.includes(l.id)) :
+                 selectedLineId ? [lines.find(l => l.id === selectedLineId)] : [],
+          walls: selectedWalls.length > 0 ? walls.filter(w => selectedWalls.includes(w.id)) :
+                 selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
+          texts: selectedTexts.length > 0 ? texts.filter(t => selectedTexts.includes(t.id)) :
+                 selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
+        };
+
+        // Solo copiar si hay elementos seleccionados
+        if (clipboardData.tokens.length > 0 || clipboardData.lines.length > 0 ||
+            clipboardData.walls.length > 0 || clipboardData.texts.length > 0) {
+          setClipboard(clipboardData);
+        }
+        return;
+      }
+
+      // Seleccionar todos los elementos de la capa actual
+      if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const filteredTokens = tokens.filter(token => token.layer === activeLayer);
+        const filteredLines = lines.filter(line => line.layer === activeLayer);
+        const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
+        const filteredTexts = texts.filter(text => text.layer === activeLayer);
+
+        setSelectedTokens(filteredTokens.map(t => t.id));
+        setSelectedLines(filteredLines.map(l => l.id));
+        setSelectedWalls(filteredWalls.map(w => w.id));
+        setSelectedTexts(filteredTexts.map(t => t.id));
+
+        // Limpiar selecciones individuales
+        setSelectedId(null);
+        setSelectedLineId(null);
+        setSelectedWallId(null);
+        setSelectedTextId(null);
+        return;
+      }
+
+      // Pegar elementos del clipboard
+      if (e.ctrlKey && e.key.toLowerCase() === 'v' && clipboard) {
+        e.preventDefault();
+
+        // Obtener posición inteligente de pegado
+        const pastePosition = getSmartPastePosition();
+        const pasteGridPos = mapToGridCoordinates(pastePosition.x, pastePosition.y);
+
+        // Calcular centros de cada tipo de elemento para posicionamiento relativo
+        const tokensCenter = calculateElementsCenter(clipboard.tokens, 'tokens');
+        const linesCenter = calculateElementsCenter(clipboard.lines, 'lines');
+        const wallsCenter = calculateElementsCenter(clipboard.walls, 'walls');
+        const textsCenter = calculateElementsCenter(clipboard.texts, 'texts');
+
+        // Pegar tokens
+        if (clipboard.tokens.length > 0) {
+          const newTokens = clipboard.tokens.map(token => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = token.x - tokensCenter.x;
+            const relativeY = token.y - tokensCenter.y;
+
+            // Aplicar offset al punto de pegado y asegurar límites
+            const finalPos = clampToMapBounds(
+              pasteGridPos.x + relativeX,
+              pasteGridPos.y + relativeY
+            );
+
+            return {
+              ...token,
+              id: Date.now() + Math.random(),
+              tokenSheetId: nanoid(),
+              x: finalPos.x,
+              y: finalPos.y,
+              layer: activeLayer
+            };
+          });
+          onTokensChange([...tokens, ...newTokens]);
+        }
+
+        // Pegar líneas
+        if (clipboard.lines.length > 0) {
+          const newLines = clipboard.lines.map(line => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = line.x - (linesCenter.x * effectiveGridSize);
+            const relativeY = line.y - (linesCenter.y * effectiveGridSize);
+
+            // Aplicar offset al punto de pegado
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+
+            return {
+              ...line,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
+          saveLines([...lines, ...newLines]);
+        }
+
+        // Pegar muros
+        if (clipboard.walls.length > 0) {
+          const newWalls = clipboard.walls.map(wall => {
+            // Calcular el centro real del muro original
+            const [x1, y1, x2, y2] = wall.points;
+            const wallCenterX = wall.x + (x1 + x2) / 2;
+            const wallCenterY = wall.y + (y1 + y2) / 2;
+
+            // Calcular offset relativo al centro del grupo (wallsCenter ya está en pixels)
+            const relativeX = wallCenterX - (wallsCenter.x * effectiveGridSize);
+            const relativeY = wallCenterY - (wallsCenter.y * effectiveGridSize);
+
+            // Calcular la nueva posición del centro
+            const newCenterX = pastePosition.x + relativeX;
+            const newCenterY = pastePosition.y + relativeY;
+
+            // Calcular la nueva posición base del muro
+            const finalX = newCenterX - (x1 + x2) / 2;
+            const finalY = newCenterY - (y1 + y2) / 2;
+
+            return {
+              ...wall,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
+          saveWalls([...walls, ...newWalls]);
+        }
+
+        // Pegar textos
+        if (clipboard.texts.length > 0) {
+          const newTexts = clipboard.texts.map(text => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = text.x - (textsCenter.x * effectiveGridSize);
+            const relativeY = text.y - (textsCenter.y * effectiveGridSize);
+
+            // Aplicar offset al punto de pegado
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+
+            return {
+              ...text,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
+          updateTexts([...texts, ...newTexts]);
+        }
+        return;
+      }
+
+      // Deseleccionar todo con Escape
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearAllSelections();
+        return;
+      }
+
       if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undoLines();
@@ -1944,14 +2576,45 @@ const MapCanvas = ({
         return;
       }
 
-      if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
-        saveLines(lines.filter((ln) => ln.id !== selectedLineId));
-        setSelectedLineId(null);
-        return;
-      }
-      if (selectedWallId != null && e.key.toLowerCase() === 'delete') {
-        saveWalls(walls.filter((w) => w.id !== selectedWallId));
-        setSelectedWallId(null);
+      // Eliminar elementos seleccionados (múltiples o individuales)
+      if (e.key.toLowerCase() === 'delete') {
+        e.preventDefault();
+
+        // Eliminar selección múltiple
+        if (selectedTokens.length > 0) {
+          onTokensChange(tokens.filter(t => !selectedTokens.includes(t.id)));
+          setSelectedTokens([]);
+        }
+        if (selectedLines.length > 0) {
+          saveLines(lines.filter(l => !selectedLines.includes(l.id)));
+          setSelectedLines([]);
+        }
+        if (selectedWalls.length > 0) {
+          saveWalls(walls.filter(w => !selectedWalls.includes(w.id)));
+          setSelectedWalls([]);
+        }
+        if (selectedTexts.length > 0) {
+          updateTexts(texts.filter(t => !selectedTexts.includes(t.id)));
+          setSelectedTexts([]);
+        }
+
+        // Eliminar selección individual si no hay selección múltiple
+        if (selectedLineId != null && selectedLines.length === 0) {
+          saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+          setSelectedLineId(null);
+        }
+        if (selectedWallId != null && selectedWalls.length === 0) {
+          saveWalls(walls.filter((w) => w.id !== selectedWallId));
+          setSelectedWallId(null);
+        }
+        if (selectedTextId != null && selectedTexts.length === 0) {
+          updateTexts(texts.filter((t) => t.id !== selectedTextId));
+          setSelectedTextId(null);
+        }
+        if (selectedId != null && selectedTokens.length === 0) {
+          onTokensChange(tokens.filter((t) => t.id !== selectedId));
+          setSelectedId(null);
+        }
         return;
       }
 
@@ -1986,13 +2649,65 @@ const MapCanvas = ({
         }
       }
 
+      // Mover múltiples tokens seleccionados
+      if (selectedTokens.length > 0) {
+        let deltaX = 0, deltaY = 0;
+
+        switch (e.key.toLowerCase()) {
+          case 'w':
+            deltaY = -1;
+            break;
+          case 's':
+            deltaY = 1;
+            break;
+          case 'a':
+            deltaX = -1;
+            break;
+          case 'd':
+            deltaX = 1;
+            break;
+          case 'r': {
+            const delta = e.shiftKey ? -90 : 90;
+            const rotated = tokens.map((t) => {
+              if (selectedTokens.includes(t.id)) {
+                const updatedAngle = ((t.angle || 0) + delta + 360) % 360;
+                return { ...t, angle: updatedAngle };
+              }
+              return t;
+            });
+            onTokensChange(rotated);
+            return;
+          }
+          default:
+            break;
+        }
+
+        if (deltaX !== 0 || deltaY !== 0) {
+          const updated = tokens.map((t) => {
+            if (selectedTokens.includes(t.id)) {
+              const newX = Math.max(0, Math.min(mapWidth - 1, t.x + deltaX));
+              const newY = Math.max(0, Math.min(mapHeight - 1, t.y + deltaY));
+
+              // Verificar colisiones con muros
+              if (!isPositionBlocked(newX, newY)) {
+                return { ...t, x: newX, y: newY };
+              }
+            }
+            return t;
+          });
+          onTokensChange(updated);
+        }
+        return;
+      }
+
+      // Mover token individual seleccionado
       if (selectedId == null) return;
       const index = tokens.findIndex((t) => t.id === selectedId);
       if (index === -1) return;
       let { x, y } = tokens[index];
       let newX = x;
       let newY = y;
-      
+
       switch (e.key.toLowerCase()) {
         case 'w':
           newY = y - 1;
@@ -2006,10 +2721,6 @@ const MapCanvas = ({
         case 'd':
           newX = x + 1;
           break;
-        case 'delete':
-          onTokensChange(tokens.filter((t) => t.id !== selectedId));
-          setSelectedId(null);
-          return;
         case 'r': {
           const delta = e.shiftKey ? -90 : 90;
           const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
@@ -2022,17 +2733,17 @@ const MapCanvas = ({
         default:
           return;
       }
-      
+
       // Aplicar límites del mapa
       newX = Math.max(0, Math.min(mapWidth - 1, newX));
       newY = Math.max(0, Math.min(mapHeight - 1, newY));
-      
+
       // Verificar colisiones con muros (independiente de la capa)
       if (isPositionBlocked(newX, newY)) {
         // Si la posición está bloqueada, no mover el token
         return;
       }
-      
+
       const updated = tokens.map((t) =>
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
@@ -2051,6 +2762,27 @@ const MapCanvas = ({
       selectedWallId,
       texts,
       isPositionBlocked,
+      selectedTokens,
+      selectedLines,
+      selectedWalls,
+      selectedTexts,
+      clipboard,
+      groupPos,
+      baseScale,
+      zoom,
+      effectiveGridSize,
+      activeLayer,
+      saveLines,
+      saveWalls,
+      updateTexts,
+      undoLines,
+      redoLines,
+      getSmartPastePosition,
+      mapToGridCoordinates,
+      calculateElementsCenter,
+      clampToMapBounds,
+      containerSize,
+      mousePosition,
     ]
   );
 
@@ -2058,6 +2790,16 @@ const MapCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Listener global para tracking de posición del mouse
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
+  }, []);
 
   useEffect(() => {
     const tr = lineTrRef.current;
@@ -2276,7 +3018,7 @@ const MapCanvas = ({
                   name={token.name}
                   customName={token.customName}
                   showName={token.showName}
-                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1)}
+                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                   tintColor={token.tintColor}
                   tintOpacity={token.tintOpacity}
                   showAura={false}
@@ -2285,13 +3027,25 @@ const MapCanvas = ({
                   auraShape={token.auraShape}
                   auraColor={token.auraColor}
                   auraOpacity={token.auraOpacity}
-                  selected={token.id === selectedId}
+                  selected={token.id === selectedId || selectedTokens.includes(token.id)}
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
-                  onClick={() => {
-                    setSelectedId(token.id);
-                    setSelectedLineId(null);
-                    setSelectedTextId(null);
+                  onClick={(e) => {
+                    const isCtrlPressed = e?.evt?.ctrlKey || false;
+                    if (isCtrlPressed) {
+                      // Selección múltiple con Ctrl
+                      if (selectedTokens.includes(token.id)) {
+                        setSelectedTokens(prev => prev.filter(id => id !== token.id));
+                      } else {
+                        setSelectedTokens(prev => [...prev, token.id]);
+                      }
+                    } else {
+                      // Selección individual
+                      setSelectedId(token.id);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                      clearMultiSelection();
+                    }
                   }}
                   onSettings={handleOpenSettings}
                   onStates={handleOpenEstados}
@@ -2312,18 +3066,30 @@ const MapCanvas = ({
                   x={ln.x}
                   y={ln.y}
                   points={ln.points}
-                  stroke={ln.color}
-                  strokeWidth={ln.width}
+                  stroke={selectedLines.includes(ln.id) ? '#0066ff' : ln.color}
+                  strokeWidth={selectedLines.includes(ln.id) ? ln.width + 2 : ln.width}
                   lineCap="round"
                   lineJoin="round"
                   opacity={ln.crossLayerOpacity || 1}
                   draggable={activeTool === 'select' && !ln.isBackground}
                   listening={!ln.isBackground}
-                  onClick={() => {
+                  onClick={(e) => {
                     if (!ln.isBackground) {
-                      setSelectedLineId(ln.id);
-                      setSelectedId(null);
-                      setSelectedTextId(null);
+                      const isCtrlPressed = e?.evt?.ctrlKey || false;
+                      if (isCtrlPressed) {
+                        // Selección múltiple con Ctrl
+                        if (selectedLines.includes(ln.id)) {
+                          setSelectedLines(prev => prev.filter(id => id !== ln.id));
+                        } else {
+                          setSelectedLines(prev => [...prev, ln.id]);
+                        }
+                      } else {
+                        // Selección individual
+                        setSelectedLineId(ln.id);
+                        setSelectedId(null);
+                        setSelectedTextId(null);
+                        clearMultiSelection();
+                      }
                     }
                   }}
                   onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
@@ -2344,11 +3110,29 @@ const MapCanvas = ({
                   draggable={activeTool === 'select'}
                   onDragEnd={(e) => handleTextDragEnd(t.id, e)}
                   onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
-                  onClick={() => setSelectedTextId(t.id)}
+                  onClick={(e) => {
+                    const isCtrlPressed = e?.evt?.ctrlKey || false;
+                    if (isCtrlPressed) {
+                      // Selección múltiple con Ctrl
+                      if (selectedTexts.includes(t.id)) {
+                        setSelectedTexts(prev => prev.filter(id => id !== t.id));
+                      } else {
+                        setSelectedTexts(prev => [...prev, t.id]);
+                      }
+                    } else {
+                      // Selección individual
+                      setSelectedTextId(t.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      clearMultiSelection();
+                    }
+                  }}
                   onDblClick={() => handleTextEdit(t.id)}
                 >
                   <Tag
                     fill={t.bgColor}
+                    stroke={selectedTexts.includes(t.id) ? '#0066ff' : undefined}
+                    strokeWidth={selectedTexts.includes(t.id) ? 2 : 0}
                     {...(!t.text ? { width: t.fontSize, height: t.fontSize } : {})}
                   />
                   <Text
@@ -2402,19 +3186,31 @@ const MapCanvas = ({
                     x={wl.x}
                     y={wl.y}
                     points={wl.points}
-                    stroke={wl.color}
-                    strokeWidth={wl.width}
+                    stroke={selectedWalls.includes(wl.id) ? '#0066ff' : wl.color}
+                    strokeWidth={selectedWalls.includes(wl.id) ? wl.width + 2 : wl.width}
                     lineCap="round"
                     lineJoin="round"
                     opacity={wl.crossLayerOpacity || 1}
                     draggable={activeTool === 'select' && !wl.isBackground}
                     listening={!wl.isBackground}
-                    onClick={() => {
+                    onClick={(e) => {
                       if (!wl.isBackground) {
-                        setSelectedWallId(wl.id);
-                        setSelectedId(null);
-                        setSelectedLineId(null);
-                        setSelectedTextId(null);
+                        const isCtrlPressed = e?.evt?.ctrlKey || false;
+                        if (isCtrlPressed) {
+                          // Selección múltiple con Ctrl
+                          if (selectedWalls.includes(wl.id)) {
+                            setSelectedWalls(prev => prev.filter(id => id !== wl.id));
+                          } else {
+                            setSelectedWalls(prev => [...prev, wl.id]);
+                          }
+                        } else {
+                          // Selección individual
+                          setSelectedWallId(wl.id);
+                          setSelectedId(null);
+                          setSelectedLineId(null);
+                          setSelectedTextId(null);
+                          clearMultiSelection();
+                        }
                       }
                     }}
                     onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
@@ -2598,7 +3394,7 @@ const MapCanvas = ({
           </Layer>
 
           {/* Capa de oscuridad - solo si está habilitada */}
-          {enableDarkness && combinedLight.length >= 3 && (
+          {enableDarkness && (
             <Layer listening={false}>
               <Group
                 x={groupPos.x}
@@ -2616,20 +3412,55 @@ const MapCanvas = ({
                   listening={false}
                 />
 
-                {/* Polígono combinado que revela las áreas iluminadas */}
-                <Line
-                  points={combinedLight.flatMap(point => [point.x, point.y])}
-                  closed={true}
-                  fill="rgba(0, 0, 0, 1)"
-                  globalCompositeOperation="destination-out"
-                  listening={false}
-                  perfectDrawEnabled={false}
-                />
+                {/* Polígono combinado que revela las áreas iluminadas - solo si hay luz */}
+                {combinedLight.length >= 3 && (
+                  <Line
+                    points={combinedLight.flatMap(point => [point.x, point.y])}
+                    closed={true}
+                    fill="rgba(0, 0, 0, 1)"
+                    globalCompositeOperation="destination-out"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                )}
               </Group>
             </Layer>
           )}
 
-          {/* Capa de puertas interactivas - debe estar dentro del Group principal */}
+          {/* Capa de visión - mostrar polígonos de visión de tokens (solo en modo master) */}
+          {!playerViewMode && userType === 'master' && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                {/* Renderizar polígonos de visión para tokens con visión habilitada */}
+                {Object.values(playerVisionPolygons).map(visionData => {
+                  if (!visionData.polygon || visionData.polygon.length < 3) return null;
+
+                  const token = tokens.find(t => t.id === visionData.tokenId);
+                  if (!token) return null;
+
+                  return (
+                    <Line
+                      key={`vision-${visionData.tokenId}`}
+                      points={visionData.polygon.flatMap(point => [point.x, point.y])}
+                      closed={true}
+                      fill="rgba(255, 255, 0, 0.1)"
+                      stroke="rgba(255, 255, 0, 0.3)"
+                      strokeWidth={2}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  );
+                })}
+              </Group>
+            </Layer>
+          )}
+
+          {/* Capa de puertas interactivas - renderizada antes de las sombras para que sean ocluidas */}
           <Layer listening>
             <Group
               x={groupPos.x}
@@ -2647,6 +3478,112 @@ const MapCanvas = ({
               ))}
             </Group>
           </Layer>
+
+          {/* Capa de sombras para bloquear visión - renderizada encima de todos los tokens y puertas */}
+          {(() => {
+            // Determinar si estamos en modo jugador real o simulado
+            const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+            const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+
+            if (!isPlayerMode || !effectivePlayerName) {
+              return null;
+            }
+
+            const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+            if (!playerToken) {
+              return null;
+            }
+
+            // Verificar si el jugador tiene visión habilitada
+            const visionEnabled = playerToken.vision?.enabled !== false;
+            if (!visionEnabled) {
+              return (
+                <Layer listening={false}>
+                  <Group
+                    x={groupPos.x}
+                    y={groupPos.y}
+                    scaleX={groupScale}
+                    scaleY={groupScale}
+                  >
+                    {/* Oscuridad completa si no tiene visión */}
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={imageSize.width || 3000}
+                      height={imageSize.height || 3000}
+                      fill="rgba(0, 0, 0, 1)"
+                      listening={false}
+                    />
+                  </Group>
+                </Layer>
+              );
+            }
+
+            // Obtener el polígono de visión del jugador
+            const playerVisionData = playerVisionPolygons[playerToken.id];
+            if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+              return null;
+            }
+
+            return (
+              <Layer listening={false}>
+                <Group
+                  x={groupPos.x}
+                  y={groupPos.y}
+                  scaleX={groupScale}
+                  scaleY={groupScale}
+                >
+                  {/* Rectángulo negro que cubre todo el mapa - opacidad completa para oclusión total */}
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={imageSize.width || 3000}
+                    height={imageSize.height || 3000}
+                    fill="rgba(0, 0, 0, 1)"
+                    listening={false}
+                  />
+
+                  {/* Polígono de visión del jugador que revela las áreas visibles */}
+                  <Line
+                    points={playerVisionData.polygon.flatMap(point => [point.x, point.y])}
+                    closed={true}
+                    fill="rgba(0, 0, 0, 1)"
+                    globalCompositeOperation="destination-out"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                </Group>
+              </Layer>
+            );
+          })()}
+
+
+
+
+
+          {/* Cuadro de selección múltiple */}
+          {isSelecting && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                <Rect
+                  x={selectionBox.x}
+                  y={selectionBox.y}
+                  width={selectionBox.width}
+                  height={selectionBox.height}
+                  stroke="#0066ff"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  fill="rgba(0, 102, 255, 0.1)"
+                  listening={false}
+                />
+              </Group>
+            </Layer>
+          )}
         </Stage>
       </div>
       <Toolbar
@@ -2714,6 +3651,54 @@ const MapCanvas = ({
             saveWalls((ws) => ws.map((wl) => (wl.id === w.id ? w : wl)));
           }}
         />
+      )}
+
+      {/* Indicador de modo simulación */}
+      {userType === 'master' && playerViewMode && (
+        <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">👁️ Simulando vista de:</span>
+            <span className="font-bold">{simulatedPlayer}</span>
+            <span className="text-xs opacity-75">(Ctrl+L para salir)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Contador de selección múltiple */}
+      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
+        <div className="absolute top-4 right-4 bg-green-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">📋 Seleccionados:</span>
+            <span className="font-bold">
+              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
+            </span>
+            <span className="text-xs opacity-75">
+              ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
+              {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
+              {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
+              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
+            </span>
+          </div>
+          <div className="text-xs opacity-75 mt-1">
+            Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de clipboard */}
+      {clipboard && (
+        <div className="absolute bottom-4 right-4 bg-purple-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">📋 Clipboard:</span>
+            <span className="font-bold">
+              {(clipboard.tokens?.length || 0) + (clipboard.lines?.length || 0) +
+               (clipboard.walls?.length || 0) + (clipboard.texts?.length || 0)} elementos
+            </span>
+          </div>
+          <div className="text-xs opacity-75">
+            Ctrl+V para pegar en la posición del cursor
+          </div>
+        </div>
       )}
     </div>
   );

@@ -488,12 +488,15 @@ function App() {
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
+        // Crear canvas con fondo blanco y grid negro para la página por defecto
+        const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
+
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
-          background: null,
+          background: defaultBackground, // Usar directamente el data URL
           backgroundHash: null,
-          gridSize: 100,
+          gridSize: 50,
           gridCells: 30,
           gridOffsetX: 0,
           gridOffsetY: 0,
@@ -688,13 +691,71 @@ function App() {
     );
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
+  // Función para crear un canvas con fondo blanco y grid negro
+  const createDefaultGridCanvas = (width = 1500, height = 1000, cellSize = 50) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      // Fondo blanco
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      // Borde negro
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, width - 2, height - 2);
+
+      // Grid negro
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
+
+      // Líneas verticales
+      for (let x = cellSize; x < width; x += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+
+      // Líneas horizontales
+      for (let y = cellSize; y < height; y += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error creando canvas por defecto:', error);
+      // Fallback: usar una imagen simple
+      return 'data:image/svg+xml;base64,' + btoa(`
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="white" stroke="black" stroke-width="2"/>
+          <defs>
+            <pattern id="grid" width="${cellSize}" height="${cellSize}" patternUnits="userSpaceOnUse">
+              <path d="M ${cellSize} 0 L 0 0 0 ${cellSize}" fill="none" stroke="black" stroke-width="1"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+      `);
+    }
+  };
+
   const addPage = async () => {
+    // Crear canvas con fondo blanco y grid negro
+    const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
+
     const newPage = {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
-      background: null,
+      background: defaultBackground, // Usar directamente el data URL
       backgroundHash: null,
-      gridSize: 100,
+      gridSize: 50,
       gridCells: 30,
       gridOffsetX: 0,
       gridOffsetY: 0,

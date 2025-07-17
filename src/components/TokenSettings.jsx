@@ -66,6 +66,10 @@ const TokenSettings = ({
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
+
+  // Estados para configuración de visión
+  const [visionEnabled, setVisionEnabled] = useState(token.vision?.enabled !== false); // Por defecto true
+  const [visionRange, setVisionRange] = useState(token.vision?.range || 10); // Rango por defecto de 10 casillas
   
   // Ref para debouncing
   const debounceRef = useRef(null);
@@ -101,23 +105,27 @@ const TokenSettings = ({
           color: lightColor,
           opacity: lightOpacity,
         },
+        vision: {
+          enabled: visionEnabled,
+          range: visionRange,
+        },
       });
     }, 300); // Esperar 300ms antes de aplicar cambios
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
     tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
-    lightColor, lightOpacity, onUpdate
+    lightColor, lightOpacity, visionEnabled, visionRange, onUpdate
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
-    onUpdate({
+    const updatedToken = {
       ...token,
       enemyId: enemyId || null,
       url: enemyId ? enemy?.portrait || token.url : token.url,
-      name: enemyId ? enemy?.name : token.name,
+      name: enemyId ? enemy?.name || token.name : token.name,
       customName: showName ? name : '',
       showName,
       controlledBy,
@@ -136,7 +144,13 @@ const TokenSettings = ({
         color: lightColor,
         opacity: lightOpacity,
       },
-    });
+      vision: {
+        enabled: visionEnabled,
+        range: visionRange,
+      },
+    };
+    console.log('Updating token with vision:', visionEnabled, updatedToken);
+    onUpdate(updatedToken);
   };
 
   // useEffect para cambios inmediatos (no relacionados con luz)
@@ -158,6 +172,7 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
+    visionEnabled, // Cambio inmediato para visión
   ]);
 
   // useEffect con debouncing para cambios de luz (color e intensidad)
@@ -327,14 +342,44 @@ const TokenSettings = ({
           {tab === 'light' && (
             <>
               <div className="flex items-center gap-2">
-                <input 
-                  id="lightEnabled" 
-                  type="checkbox" 
-                  checked={lightEnabled} 
-                  onChange={e => setLightEnabled(e.target.checked)} 
+                <input
+                  id="lightEnabled"
+                  type="checkbox"
+                  checked={lightEnabled}
+                  onChange={e => setLightEnabled(e.target.checked)}
                 />
                 <label htmlFor="lightEnabled">Emite luz</label>
               </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="visionEnabled"
+                  type="checkbox"
+                  checked={visionEnabled}
+                  onChange={e => {
+                    console.log('Vision changed:', e.target.checked);
+                    setVisionEnabled(e.target.checked);
+                  }}
+                />
+                <label htmlFor="visionEnabled">Tiene visión</label>
+              </div>
+
+              {visionEnabled && (
+                <div>
+                  <label className="block mb-1">Rango de visión (casillas)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={visionRange}
+                    onChange={e => setVisionRange(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    👁️ Distancia máxima que puede ver este token. Los muros bloquearán la visión.
+                  </div>
+                </div>
+              )}
+
               {lightEnabled && (
                 <>
                   <div>
