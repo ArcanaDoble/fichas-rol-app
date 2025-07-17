@@ -66,6 +66,7 @@ const TokenSettings = ({
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
+  const [visionEnabled, setVisionEnabled] = useState(token.light?.vision !== false); // Por defecto true
   
   // Ref para debouncing
   const debounceRef = useRef(null);
@@ -100,6 +101,7 @@ const TokenSettings = ({
           radius: lightRadius,
           color: lightColor,
           opacity: lightOpacity,
+          vision: visionEnabled,
         },
       });
     }, 300); // Esperar 300ms antes de aplicar cambios
@@ -107,17 +109,17 @@ const TokenSettings = ({
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
     tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
-    lightColor, lightOpacity, onUpdate
+    lightColor, lightOpacity, visionEnabled, onUpdate
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
-    onUpdate({
+    const updatedToken = {
       ...token,
       enemyId: enemyId || null,
       url: enemyId ? enemy?.portrait || token.url : token.url,
-      name: enemyId ? enemy?.name : token.name,
+      name: enemyId ? enemy?.name || token.name : token.name,
       customName: showName ? name : '',
       showName,
       controlledBy,
@@ -135,8 +137,11 @@ const TokenSettings = ({
         radius: lightRadius,
         color: lightColor,
         opacity: lightOpacity,
+        vision: visionEnabled,
       },
-    });
+    };
+    console.log('Updating token with vision:', visionEnabled, updatedToken);
+    onUpdate(updatedToken);
   };
 
   // useEffect para cambios inmediatos (no relacionados con luz)
@@ -158,6 +163,7 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
+    visionEnabled, // Cambio inmediato para visión
   ]);
 
   // useEffect con debouncing para cambios de luz (color e intensidad)
@@ -327,13 +333,26 @@ const TokenSettings = ({
           {tab === 'light' && (
             <>
               <div className="flex items-center gap-2">
-                <input 
-                  id="lightEnabled" 
-                  type="checkbox" 
-                  checked={lightEnabled} 
-                  onChange={e => setLightEnabled(e.target.checked)} 
+                <input
+                  id="lightEnabled"
+                  type="checkbox"
+                  checked={lightEnabled}
+                  onChange={e => setLightEnabled(e.target.checked)}
                 />
                 <label htmlFor="lightEnabled">Emite luz</label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="visionEnabled"
+                  type="checkbox"
+                  checked={visionEnabled}
+                  onChange={e => {
+                    console.log('Vision changed:', e.target.checked);
+                    setVisionEnabled(e.target.checked);
+                  }}
+                />
+                <label htmlFor="visionEnabled">Tiene visión</label>
               </div>
               {lightEnabled && (
                 <>

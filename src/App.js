@@ -489,28 +489,14 @@ function App() {
       });
       if (loaded.length === 0) {
         // Crear canvas con fondo blanco y grid negro para la página por defecto
-        const defaultBackground = createDefaultGridCanvas(3000, 2000, 100);
-
-        // Subir la imagen a Firebase Storage
-        let backgroundUrl = null;
-        let backgroundHash = null;
-
-        try {
-          const result = await uploadDataUrl(defaultBackground, 'Mapas/');
-          backgroundUrl = result.url;
-          backgroundHash = result.hash;
-        } catch (error) {
-          console.error('Error subiendo fondo por defecto:', error);
-          // Si falla la subida, usar el data URL directamente
-          backgroundUrl = defaultBackground;
-        }
+        const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
 
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
-          background: backgroundUrl,
-          backgroundHash: backgroundHash,
-          gridSize: 100,
+          background: defaultBackground, // Usar directamente el data URL
+          backgroundHash: null,
+          gridSize: 50,
           gridCells: 30,
           gridOffsetX: 0,
           gridOffsetY: 0,
@@ -706,68 +692,70 @@ function App() {
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
   // Función para crear un canvas con fondo blanco y grid negro
-  const createDefaultGridCanvas = (width = 3000, height = 2000, cellSize = 100) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+  const createDefaultGridCanvas = (width = 1500, height = 1000, cellSize = 50) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
 
-    // Fondo blanco
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
+      // Fondo blanco
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
 
-    // Borde negro
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, width - 4, height - 4);
+      // Borde negro
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, width - 2, height - 2);
 
-    // Grid negro
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
+      // Grid negro
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
 
-    // Líneas verticales
-    for (let x = cellSize; x < width; x += cellSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
+      // Líneas verticales
+      for (let x = cellSize; x < width; x += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+
+      // Líneas horizontales
+      for (let y = cellSize; y < height; y += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error creando canvas por defecto:', error);
+      // Fallback: usar una imagen simple
+      return 'data:image/svg+xml;base64,' + btoa(`
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="white" stroke="black" stroke-width="2"/>
+          <defs>
+            <pattern id="grid" width="${cellSize}" height="${cellSize}" patternUnits="userSpaceOnUse">
+              <path d="M ${cellSize} 0 L 0 0 0 ${cellSize}" fill="none" stroke="black" stroke-width="1"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+      `);
     }
-
-    // Líneas horizontales
-    for (let y = cellSize; y < height; y += cellSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    return canvas.toDataURL('image/png');
   };
 
   const addPage = async () => {
     // Crear canvas con fondo blanco y grid negro
-    const defaultBackground = createDefaultGridCanvas(3000, 2000, 100);
-
-    // Subir la imagen a Firebase Storage
-    let backgroundUrl = null;
-    let backgroundHash = null;
-
-    try {
-      const result = await uploadDataUrl(defaultBackground, 'Mapas/');
-      backgroundUrl = result.url;
-      backgroundHash = result.hash;
-    } catch (error) {
-      console.error('Error subiendo fondo por defecto:', error);
-      // Si falla la subida, usar el data URL directamente
-      backgroundUrl = defaultBackground;
-    }
+    const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
 
     const newPage = {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
-      background: backgroundUrl,
-      backgroundHash: backgroundHash,
-      gridSize: 100,
+      background: defaultBackground, // Usar directamente el data URL
+      backgroundHash: null,
+      gridSize: 50,
       gridCells: 30,
       gridOffsetX: 0,
       gridOffsetY: 0,

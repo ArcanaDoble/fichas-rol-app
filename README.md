@@ -711,6 +711,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Canvas blanco con grid negro y bordes predeterminado al crear páginas.
 - Listo para usar inmediatamente sin necesidad de subir imagen de fondo.
 
+**Resumen de cambios v2.4.8:**
+
+- Sistema de visión individual para tokens en ajustes de iluminación.
+- Botón "Tiene visión" que controla si el token puede ver el mapa.
+- Oscuridad completa (100%) para jugadores sin visión activa.
+- Solo pueden ver su propia ficha cuando la visión está desactivada.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS

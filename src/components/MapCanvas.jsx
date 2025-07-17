@@ -892,10 +892,58 @@ const MapCanvas = ({
   const [lightPolygons, setLightPolygons] = useState({});
   const [combinedLight, setCombinedLight] = useState([]);
 
+  // Estado para simulación de vista de jugador
+  const [playerViewMode, setPlayerViewMode] = useState(false);
+  const [simulatedPlayer, setSimulatedPlayer] = useState('');
+
   // Sincronizar con la prop externa
   useEffect(() => {
     setActiveLayer(propActiveLayer);
   }, [propActiveLayer]);
+
+  // Event listener para Ctrl + L (simulación de vista de jugador)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'l' && userType === 'master') {
+        e.preventDefault();
+
+        if (!playerViewMode) {
+          // Activar modo simulación - mostrar lista de jugadores disponibles
+          const availablePlayers = [...new Set(tokens.map(t => t.controlledBy).filter(Boolean))];
+
+          if (availablePlayers.length === 0) {
+            alert('No hay tokens controlados por jugadores para simular');
+            return;
+          }
+
+          if (availablePlayers.length === 1) {
+            setSimulatedPlayer(availablePlayers[0]);
+            setPlayerViewMode(true);
+            console.log('Simulando vista del jugador:', availablePlayers[0]);
+          } else {
+            const selectedPlayer = prompt(
+              `Selecciona el jugador a simular:\n${availablePlayers.map((p, i) => `${i + 1}. ${p}`).join('\n')}`,
+              '1'
+            );
+            const playerIndex = parseInt(selectedPlayer) - 1;
+            if (playerIndex >= 0 && playerIndex < availablePlayers.length) {
+              setSimulatedPlayer(availablePlayers[playerIndex]);
+              setPlayerViewMode(true);
+              console.log('Simulando vista del jugador:', availablePlayers[playerIndex]);
+            }
+          }
+        } else {
+          // Desactivar modo simulación
+          setPlayerViewMode(false);
+          setSimulatedPlayer('');
+          console.log('Saliendo del modo simulación de jugador');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userType, playerViewMode, tokens]);
 
   // Sistema de visibilidad cruzada entre capas
   const getVisibleElements = (elements, currentLayer) => {
@@ -1274,14 +1322,29 @@ const MapCanvas = ({
   // Filtrar muros que deben mostrar iconos interactivos
   const getInteractiveDoors = useCallback(() => {
     if (activeLayer === 'fichas') {
+      // Verificar si el jugador actual tiene visión
+      const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+      const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+
+      if (isPlayerMode && effectivePlayerName) {
+        const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+        const visionValue = playerToken?.light?.vision;
+        const hasVision = visionValue === undefined ? true : visionValue;
+
+        // Si no tiene visión, no mostrar puertas interactivas
+        if (!hasVision) {
+          return [];
+        }
+      }
+
       // En la capa fichas, mostrar iconos solo para muros de otras capas
-      return walls.filter(wall => 
-        (wall.layer && wall.layer !== 'fichas') && 
+      return walls.filter(wall =>
+        (wall.layer && wall.layer !== 'fichas') &&
         (wall.door === 'closed' || wall.door === 'open')
       );
     }
     return [];
-  }, [walls, activeLayer]);
+  }, [walls, activeLayer, userType, playerViewMode, playerName, simulatedPlayer, tokens]);
 
   const pxToCell = (px, offset) =>
     Math.round((px - offset) / effectiveGridSize);
@@ -1321,8 +1384,11 @@ const MapCanvas = ({
   useEffect(() => {
     if (bg) {
       setImageSize({ width: bg.width, height: bg.height });
+    } else if (backgroundImage && backgroundImage.startsWith('data:image')) {
+      // Para data URLs generados, usar dimensiones por defecto
+      setImageSize({ width: 1500, height: 1000 });
     }
-  }, [bg]);
+  }, [bg, backgroundImage]);
 
   // Calcula la escala base según el modo seleccionado y centra el mapa
   useEffect(() => {
@@ -2598,7 +2664,7 @@ const MapCanvas = ({
           </Layer>
 
           {/* Capa de oscuridad - solo si está habilitada */}
-          {enableDarkness && combinedLight.length >= 3 && (
+          {enableDarkness && (
             <Layer listening={false}>
               <Group
                 x={groupPos.x}
@@ -2616,15 +2682,99 @@ const MapCanvas = ({
                   listening={false}
                 />
 
-                {/* Polígono combinado que revela las áreas iluminadas */}
-                <Line
-                  points={combinedLight.flatMap(point => [point.x, point.y])}
-                  closed={true}
+                {/* Polígono combinado que revela las áreas iluminadas - solo si hay luz */}
+                {combinedLight.length >= 3 && (
+                  <Line
+                    points={combinedLight.flatMap(point => [point.x, point.y])}
+                    closed={true}
+                    fill="rgba(0, 0, 0, 1)"
+                    globalCompositeOperation="destination-out"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                )}
+              </Group>
+            </Layer>
+          )}
+
+          {/* Capa de oscuridad personal - para jugadores sin visión */}
+          {(() => {
+            // Determinar si estamos en modo jugador real o simulado
+            const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+            const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+
+            console.log('Checking vision conditions:', {
+              userType,
+              playerName,
+              playerViewMode,
+              simulatedPlayer,
+              isPlayerMode,
+              effectivePlayerName,
+              tokensCount: tokens.length,
+              allTokens: tokens.map(t => ({ id: t.id, controlledBy: t.controlledBy, light: t.light }))
+            });
+
+            if (!isPlayerMode || !effectivePlayerName) {
+              console.log('Not in player mode or no player name, skipping vision check');
+              return false;
+            }
+
+            const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+            const visionValue = playerToken?.light?.vision;
+            const hasVision = visionValue === undefined ? true : visionValue; // Por defecto true si no está definido
+
+            console.log('Vision check:', {
+              effectivePlayerName,
+              playerToken: playerToken ? { id: playerToken.id, controlledBy: playerToken.controlledBy, light: playerToken.light } : null,
+              visionValue,
+              hasVision,
+              shouldShowDarkness: !hasVision
+            });
+
+            return !hasVision ? playerToken : false;
+          })() && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                {/* Oscuridad completa para jugadores sin visión */}
+                <Rect
+                  x={0}
+                  y={0}
+                  width={imageSize.width || 3000}
+                  height={imageSize.height || 3000}
                   fill="rgba(0, 0, 0, 1)"
-                  globalCompositeOperation="destination-out"
                   listening={false}
-                  perfectDrawEnabled={false}
                 />
+
+                {/* Revelar solo el token del jugador */}
+                {(() => {
+                  const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+                  const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+                  const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+
+                  if (!playerToken) return null;
+
+                  const tokenX = playerToken.x * effectiveGridSize;
+                  const tokenY = playerToken.y * effectiveGridSize;
+                  const tokenWidth = playerToken.w * effectiveGridSize;
+                  const tokenHeight = playerToken.h * effectiveGridSize;
+
+                  return (
+                    <Rect
+                      x={tokenX}
+                      y={tokenY}
+                      width={tokenWidth}
+                      height={tokenHeight}
+                      fill="rgba(0, 0, 0, 1)"
+                      globalCompositeOperation="destination-out"
+                      listening={false}
+                    />
+                  );
+                })()}
               </Group>
             </Layer>
           )}
@@ -2714,6 +2864,17 @@ const MapCanvas = ({
             saveWalls((ws) => ws.map((wl) => (wl.id === w.id ? w : wl)));
           }}
         />
+      )}
+
+      {/* Indicador de modo simulación */}
+      {userType === 'master' && playerViewMode && (
+        <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">👁️ Simulando vista de:</span>
+            <span className="font-bold">{simulatedPlayer}</span>
+            <span className="text-xs opacity-75">(Ctrl+L para salir)</span>
+          </div>
+        </div>
       )}
     </div>
   );
