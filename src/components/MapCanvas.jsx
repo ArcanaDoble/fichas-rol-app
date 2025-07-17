@@ -36,6 +36,7 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
+import PortalConfigMenu from './PortalConfigMenu';
 import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
 
 const hexToRgba = (hex, alpha = 1) => {
@@ -843,6 +844,12 @@ const MapCanvas = ({
   onLayerChange = () => {},
   enableDarkness = true,
   darknessOpacity = 0.7,
+  // Props para portales
+  portals: propPortals = [],
+  onPortalsChange = () => {},
+  pages = [],
+  currentPage = 0,
+  onPageChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -908,7 +915,12 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
-  
+
+  // Estados para portales
+  const [portals, setPortals] = useState(propPortals);
+  const [selectedPortalId, setSelectedPortalId] = useState(null);
+  const [portalConfigId, setPortalConfigId] = useState(null);
+
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
   const [combinedLight, setCombinedLight] = useState([]);
@@ -1198,6 +1210,43 @@ const MapCanvas = ({
         return false;
     }
   };
+
+  // Funciones para manejo de portales
+  const savePortals = useCallback((newPortals) => {
+    setPortals(newPortals);
+    onPortalsChange(newPortals);
+  }, [onPortalsChange]);
+
+  const handlePortalClick = useCallback((portalId) => {
+    if (activeLayer === 'fichas') {
+      // En capa fichas: activar portal (transportar jugador)
+      const portal = portals.find(p => p.id === portalId);
+      if (portal && portal.isConnected && portal.targetPageId && portal.targetPortalId) {
+        // Encontrar la página de destino
+        const targetPageIndex = pages.findIndex(p => p.id === portal.targetPageId);
+        if (targetPageIndex !== -1) {
+          // Cambiar a la página de destino
+          onPageChange(targetPageIndex);
+
+          // TODO: Posicionar el token del jugador en el portal de destino
+          // Esto se implementará cuando tengamos acceso a los tokens del jugador
+        }
+      }
+    } else {
+      // En capas master/luz: configurar portal
+      setPortalConfigId(portalId);
+    }
+  }, [activeLayer, portals, pages, onPageChange]);
+
+  const handlePortalUpdate = useCallback((updatedPortal) => {
+    const newPortals = portals.map(p => p.id === updatedPortal.id ? updatedPortal : p);
+    savePortals(newPortals);
+  }, [portals, savePortals]);
+
+  const handlePortalDelete = useCallback((portalId) => {
+    const newPortals = portals.filter(p => p.id !== portalId);
+    savePortals(newPortals);
+  }, [portals, savePortals]);
 
   // Función para alternar el estado de las puertas (solo desde capa fichas)
   const handleDoorToggle = useCallback((wallId) => {
@@ -2003,6 +2052,38 @@ const MapCanvas = ({
           { id, x: relX, y: relY, text: content, ...textOptions, bgColor, layer: activeLayer },
         ]);
         setSelectedTextId(id);
+      }
+    }
+
+    // Crear portal
+    if (activeTool === 'portal' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+      // Convertir a coordenadas de grilla para tokens
+      const gridX = Math.round(relX / effectiveGridSize);
+      const gridY = Math.round(relY / effectiveGridSize);
+
+      const id = nanoid();
+      const newPortal = {
+        id,
+        x: gridX,
+        y: gridY,
+        name: `Portal ${id.slice(0, 8)}`,
+        layer: activeLayer,
+        targetPageId: null,
+        targetPortalId: null,
+        isConnected: false,
+        direction: 0, // Rotación del portal en grados
+      };
+
+      savePortals([...portals, newPortal]);
+      setSelectedPortalId(id);
+
+      // Si estamos en capas master/luz, abrir configuración inmediatamente
+      if (activeLayer !== 'fichas') {
+        setPortalConfigId(id);
       }
     }
   };
@@ -3147,6 +3228,112 @@ const MapCanvas = ({
               ))}
             </Group>
           </Layer>
+
+          {/* Capa de portales */}
+          <Layer listening>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {portals
+                .filter(portal => portal.layer === activeLayer)
+                .map((portal) => {
+                  const portalX = portal.x * effectiveGridSize;
+                  const portalY = portal.y * effectiveGridSize;
+                  const isSelected = portal.id === selectedPortalId;
+                  const isConnected = portal.isConnected;
+
+                  return (
+                    <Group key={portal.id}>
+                      {/* Base del portal */}
+                      <Circle
+                        x={portalX}
+                        y={portalY}
+                        radius={effectiveGridSize * 0.4}
+                        fill={isConnected ? '#4f46e5' : '#6b7280'}
+                        stroke={isSelected ? '#fbbf24' : '#1f2937'}
+                        strokeWidth={isSelected ? 3 : 2}
+                        opacity={activeLayer === 'fichas' ? 0.8 : 0.6}
+                        onClick={() => handlePortalClick(portal.id)}
+                        onMouseEnter={() => {
+                          stageRef.current.container().style.cursor =
+                            activeLayer === 'fichas' ? 'pointer' : 'crosshair';
+                        }}
+                        onMouseLeave={() => {
+                          stageRef.current.container().style.cursor = 'default';
+                        }}
+                      />
+
+                      {/* Anillo interior */}
+                      <Circle
+                        x={portalX}
+                        y={portalY}
+                        radius={effectiveGridSize * 0.25}
+                        fill="transparent"
+                        stroke={isConnected ? '#a5b4fc' : '#9ca3af'}
+                        strokeWidth={2}
+                        opacity={0.7}
+                        listening={false}
+                      />
+
+                      {/* Flecha direccional */}
+                      <Group
+                        x={portalX}
+                        y={portalY}
+                        rotation={portal.direction || 0}
+                      >
+                        <Line
+                          points={[0, -effectiveGridSize * 0.15, 0, effectiveGridSize * 0.15]}
+                          stroke="#ffffff"
+                          strokeWidth={3}
+                          lineCap="round"
+                          listening={false}
+                        />
+                        <Line
+                          points={[
+                            -effectiveGridSize * 0.08, effectiveGridSize * 0.05,
+                            0, effectiveGridSize * 0.15,
+                            effectiveGridSize * 0.08, effectiveGridSize * 0.05
+                          ]}
+                          stroke="#ffffff"
+                          strokeWidth={3}
+                          lineCap="round"
+                          lineJoin="round"
+                          listening={false}
+                        />
+                      </Group>
+
+                      {/* Indicador de conexión */}
+                      {isConnected && (
+                        <Circle
+                          x={portalX + effectiveGridSize * 0.25}
+                          y={portalY - effectiveGridSize * 0.25}
+                          radius={4}
+                          fill="#10b981"
+                          listening={false}
+                        />
+                      )}
+
+                      {/* Nombre del portal (solo en capas master/luz) */}
+                      {activeLayer !== 'fichas' && (
+                        <Text
+                          x={portalX - effectiveGridSize * 0.3}
+                          y={portalY + effectiveGridSize * 0.5}
+                          text={portal.name}
+                          fontSize={12}
+                          fill="#ffffff"
+                          fontFamily="Arial"
+                          listening={false}
+                        />
+                      )}
+                    </Group>
+                  );
+                })}
+            </Group>
+          </Layer>
+
           <Layer listening>
             {filteredTokens.map((token) => (
               <TokenBars
@@ -3425,6 +3612,9 @@ const MapCanvas = ({
         onTextOptionsChange={setTextOptions}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
+        pages={pages}
+        currentPage={currentPage}
+        onPageChange={onPageChange}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -3472,6 +3662,18 @@ const MapCanvas = ({
           onUpdate={(w) => {
             saveWalls((ws) => ws.map((wl) => (wl.id === w.id ? w : wl)));
           }}
+        />
+      )}
+
+      {/* Menú de configuración de portales */}
+      {portalConfigId && (
+        <PortalConfigMenu
+          portal={portals.find(p => p.id === portalConfigId)}
+          pages={pages}
+          currentPage={currentPage}
+          onClose={() => setPortalConfigId(null)}
+          onUpdate={handlePortalUpdate}
+          onDelete={handlePortalDelete}
         />
       )}
 
@@ -3594,6 +3796,28 @@ MapCanvas.propTypes = {
   onLayerChange: PropTypes.func,
   enableDarkness: PropTypes.bool,
   darknessOpacity: PropTypes.number,
+  portals: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      name: PropTypes.string,
+      layer: PropTypes.string,
+      targetPageId: PropTypes.string,
+      targetPortalId: PropTypes.string,
+      isConnected: PropTypes.bool,
+      direction: PropTypes.number,
+    })
+  ),
+  onPortalsChange: PropTypes.func,
+  pages: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+    })
+  ),
+  currentPage: PropTypes.number,
+  onPageChange: PropTypes.func,
 };
 
 export default MapCanvas;
