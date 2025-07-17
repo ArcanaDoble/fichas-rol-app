@@ -68,8 +68,8 @@ const PortalConfigMenu = ({
       <div className="space-y-4">
         {/* Información del portal */}
         <div className="bg-gray-100 p-3 rounded">
-          <div className="text-sm font-medium text-gray-700 mb-2">Portal Actual</div>
-          <div className="text-xs text-gray-600">
+          <div className="text-sm font-medium text-gray-900 mb-2">Portal Actual</div>
+          <div className="text-xs text-gray-800">
             <div>ID: {portal.id.slice(0, 8)}...</div>
             <div>Posición: ({Math.round(portal.x)}, {Math.round(portal.y)})</div>
             <div>Página: {pages[currentPage]?.name}</div>
@@ -78,7 +78,7 @@ const PortalConfigMenu = ({
 
         {/* Nombre del portal */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-900 mb-1">
             Nombre del Portal
           </label>
           <input
@@ -92,7 +92,7 @@ const PortalConfigMenu = ({
 
         {/* Selección de página destino */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-900 mb-1">
             Página de Destino
           </label>
           <select
@@ -119,7 +119,7 @@ const PortalConfigMenu = ({
         {/* Selección de portal destino */}
         {selectedTargetPage !== -1 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-900 mb-1">
               Portal de Destino
             </label>
             {targetPortals.length > 0 ? (
@@ -136,7 +136,7 @@ const PortalConfigMenu = ({
                 ))}
               </select>
             ) : (
-              <div className="text-sm text-gray-500 italic p-2 bg-gray-50 rounded">
+              <div className="text-sm text-gray-700 italic p-2 bg-gray-50 rounded">
                 No hay portales en la página "{pages[selectedTargetPage]?.name}".
                 <br />
                 Crea un portal en esa página primero.
@@ -147,20 +147,20 @@ const PortalConfigMenu = ({
 
         {/* Estado de conexión */}
         <div className="bg-gray-50 p-3 rounded">
-          <div className="text-sm font-medium text-gray-700 mb-1">Estado</div>
+          <div className="text-sm font-medium text-gray-900 mb-1">Estado</div>
           <div className={`text-sm ${
-            selectedTargetPage !== -1 && selectedTargetPortal 
-              ? 'text-green-600' 
-              : 'text-orange-600'
+            selectedTargetPage !== -1 && selectedTargetPortal
+              ? 'text-green-700'
+              : 'text-orange-700'
           }`}>
-            {selectedTargetPage !== -1 && selectedTargetPortal 
-              ? '✅ Portal conectado y funcional' 
+            {selectedTargetPage !== -1 && selectedTargetPortal
+              ? '✅ Portal conectado y funcional'
               : '⚠️ Portal no conectado'}
           </div>
         </div>
 
         {/* Instrucciones */}
-        <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+        <div className="text-xs text-gray-700 bg-blue-50 p-2 rounded">
           <strong>💡 Cómo funciona:</strong>
           <ul className="mt-1 space-y-1">
             <li>• Los portales conectan dos páginas diferentes</li>

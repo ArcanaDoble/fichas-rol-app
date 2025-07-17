@@ -1127,6 +1127,66 @@ const MapCanvas = ({
     };
   };
 
+  // Función para calcular posición de destino basada en dirección del portal
+  const calculatePortalDestination = (portalX, portalY, direction) => {
+    let destX = portalX;
+    let destY = portalY;
+
+    switch (direction) {
+      case 0:   // 0° (arriba)
+        destY = portalY - 1;
+        break;
+      case 90:  // 90° (derecha)
+        destX = portalX + 1;
+        break;
+      case 180: // 180° (abajo)
+        destY = portalY + 1;
+        break;
+      case 270: // 270° (izquierda)
+        destX = portalX - 1;
+        break;
+      default:
+        // Para ángulos intermedios, usar el más cercano
+        const normalizedAngle = ((direction % 360) + 360) % 360;
+        if (normalizedAngle < 45 || normalizedAngle >= 315) {
+          destY = portalY - 1; // arriba
+        } else if (normalizedAngle < 135) {
+          destX = portalX + 1; // derecha
+        } else if (normalizedAngle < 225) {
+          destY = portalY + 1; // abajo
+        } else {
+          destX = portalX - 1; // izquierda
+        }
+        break;
+    }
+
+    // Aplicar límites del mapa
+    const clampedPos = clampToMapBounds(destX, destY);
+
+    // Verificar si la posición está ocupada
+    if (isPositionBlocked(clampedPos.x, clampedPos.y)) {
+      // Buscar casilla adyacente disponible
+      const adjacentPositions = [
+        { x: clampedPos.x, y: clampedPos.y - 1 }, // arriba
+        { x: clampedPos.x + 1, y: clampedPos.y }, // derecha
+        { x: clampedPos.x, y: clampedPos.y + 1 }, // abajo
+        { x: clampedPos.x - 1, y: clampedPos.y }, // izquierda
+      ];
+
+      for (const pos of adjacentPositions) {
+        const validPos = clampToMapBounds(pos.x, pos.y);
+        if (!isPositionBlocked(validPos.x, validPos.y)) {
+          return validPos;
+        }
+      }
+
+      // Si no hay casillas adyacentes disponibles, usar la posición original del portal
+      return { x: portalX, y: portalY };
+    }
+
+    return clampedPos;
+  };
+
   // Función para obtener la posición de pegado inteligente
   const getSmartPastePosition = () => {
     // Verificar si el cursor está dentro del área visible del stage
@@ -1221,17 +1281,45 @@ const MapCanvas = ({
 
   const handlePortalClick = useCallback((portalId, e) => {
     if (activeLayer === 'fichas') {
-      // En capa fichas: activar portal (transportar jugador)
-      const portal = portals.find(p => p.id === portalId);
-      if (portal && portal.isConnected && portal.targetPageId && portal.targetPortalId) {
-        // Encontrar la página de destino
-        const targetPageIndex = pages.findIndex(p => p.id === portal.targetPageId);
-        if (targetPageIndex !== -1) {
-          // Cambiar a la página de destino
-          onPageChange(targetPageIndex);
+      // En capa fichas: comportamiento diferente según tipo de usuario
+      if (userType === 'master') {
+        // Master en capa fichas: seleccionar portal para poder eliminarlo
+        setSelectedPortalId(portalId);
 
-          // TODO: Posicionar el token del jugador en el portal de destino
-          // Esto se implementará cuando tengamos acceso a los tokens del jugador
+        // Limpiar otras selecciones
+        setSelectedId(null);
+        setSelectedLineId(null);
+        setSelectedWallId(null);
+        setSelectedTextId(null);
+        clearMultiSelection();
+
+        // Si es doble clic, abrir configuración
+        if (e && e.detail === 2) {
+          setPortalConfigId(portalId);
+        }
+      } else {
+        // Jugador en capa fichas: activar portal (transportar)
+        const portal = portals.find(p => p.id === portalId);
+        if (portal && portal.isConnected && portal.targetPageId && portal.targetPortalId) {
+          // Encontrar la página de destino
+          const targetPageIndex = pages.findIndex(p => p.id === portal.targetPageId);
+          if (targetPageIndex !== -1) {
+            // Cambiar a la página de destino
+            onPageChange(targetPageIndex);
+
+            // TODO: Implementar posicionamiento del token del jugador
+            // Cuando se implemente, usar calculatePortalDestination para posicionar
+            // const targetPage = pages[targetPageIndex];
+            // const targetPortal = targetPage.portals?.find(p => p.id === portal.targetPortalId);
+            // if (targetPortal) {
+            //   const destination = calculatePortalDestination(
+            //     targetPortal.x,
+            //     targetPortal.y,
+            //     targetPortal.direction || 0
+            //   );
+            //   // Mover token del jugador a destination.x, destination.y
+            // }
+          }
         }
       }
     } else {
@@ -1250,7 +1338,7 @@ const MapCanvas = ({
         setPortalConfigId(portalId);
       }
     }
-  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection]);
+  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection, userType]);
 
   const handlePortalUpdate = useCallback((updatedPortal) => {
     const newPortals = portals.map(p => p.id === updatedPortal.id ? updatedPortal : p);
@@ -2549,8 +2637,8 @@ const MapCanvas = ({
           setSelectedTexts([]);
         }
 
-        // Eliminar portal seleccionado individualmente
-        if (selectedPortalId != null) {
+        // Eliminar portal seleccionado individualmente (solo masters)
+        if (selectedPortalId != null && userType === 'master') {
           const newPortals = portals.filter(p => p.id !== selectedPortalId);
           savePortals(newPortals);
           setSelectedPortalId(null);
@@ -2706,6 +2794,20 @@ const MapCanvas = ({
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
       onTokensChange(updated);
+
+      // Rotar portal seleccionado con tecla R
+      if (selectedPortalId != null && e.key.toLowerCase() === 'r' && userType === 'master') {
+        const delta = e.shiftKey ? -90 : 90;
+        const updatedPortals = portals.map((portal) => {
+          if (portal.id === selectedPortalId) {
+            const newDirection = ((portal.direction || 0) + delta + 360) % 360;
+            return { ...portal, direction: newDirection };
+          }
+          return portal;
+        });
+        savePortals(updatedPortals);
+        return;
+      }
     },
     [
       selectedId,
@@ -2744,6 +2846,7 @@ const MapCanvas = ({
       selectedPortalId,
       portals,
       savePortals,
+      userType,
     ]
   );
 
@@ -3281,10 +3384,34 @@ const MapCanvas = ({
                         stroke={isSelected ? '#fbbf24' : (isConnected ? '#4f46e5' : '#1f2937')}
                         strokeWidth={isSelected ? 4 : 2}
                         opacity={activeLayer === 'fichas' ? 0.8 : 0.6}
+                        draggable={activeLayer !== 'fichas' && userType === 'master'}
                         onClick={(e) => handlePortalClick(portal.id, e.evt)}
+                        onDragEnd={(e) => {
+                          if (activeLayer !== 'fichas' && userType === 'master') {
+                            const newX = Math.round(e.target.x() / effectiveGridSize);
+                            const newY = Math.round(e.target.y() / effectiveGridSize);
+                            const clampedPos = clampToMapBounds(newX, newY);
+
+                            const updatedPortals = portals.map(p =>
+                              p.id === portal.id
+                                ? { ...p, x: clampedPos.x, y: clampedPos.y }
+                                : p
+                            );
+                            savePortals(updatedPortals);
+
+                            // Reposicionar el elemento visual
+                            e.target.x(clampedPos.x * effectiveGridSize);
+                            e.target.y(clampedPos.y * effectiveGridSize);
+                          }
+                        }}
                         onMouseEnter={() => {
-                          stageRef.current.container().style.cursor =
-                            activeLayer === 'fichas' ? 'pointer' : 'crosshair';
+                          if (activeLayer === 'fichas') {
+                            stageRef.current.container().style.cursor = 'pointer';
+                          } else if (userType === 'master') {
+                            stageRef.current.container().style.cursor = 'move';
+                          } else {
+                            stageRef.current.container().style.cursor = 'crosshair';
+                          }
                         }}
                         onMouseLeave={() => {
                           stageRef.current.container().style.cursor = 'default';
