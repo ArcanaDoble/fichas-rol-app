@@ -459,6 +459,7 @@ function App() {
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
   const prevTextsRef = useRef([]);
+  const prevPortalsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
   // Tokens para el Mapa de Batalla
@@ -577,6 +578,7 @@ function App() {
       prevLinesRef.current = data.lines || [];
       prevWallsRef.current = data.walls || [];
       prevTextsRef.current = data.texts || [];
+      prevPortalsRef.current = data.portals || [];
       prevBgRef.current = data.background || null;
       prevGridRef.current = {
         gridSize: data.gridSize || 1,
@@ -639,6 +641,8 @@ function App() {
     if (!pagesLoadedRef.current) return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
+    if (deepEqual(canvasPortals, prevPortalsRef.current)) return;
+    prevPortalsRef.current = canvasPortals;
     updateDoc(doc(db, 'pages', pageId), { portals: canvasPortals });
   }, [canvasPortals, currentPage]);
 
