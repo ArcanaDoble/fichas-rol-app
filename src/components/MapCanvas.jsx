@@ -1851,7 +1851,8 @@ const MapCanvas = ({
       const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
 
       // Si no se mantiene Ctrl, limpiar selección anterior
-      if (!e.evt.ctrlKey) {
+      const isCtrlPressed = e?.evt?.ctrlKey || false;
+      if (!isCtrlPressed) {
         clearAllSelections();
       }
 
@@ -2032,7 +2033,8 @@ const MapCanvas = ({
   const handleStageClick = (e) => {
     if (e.target === stageRef.current) {
       // Solo limpiar selecciones si no se está manteniendo Ctrl
-      if (!e.evt.ctrlKey) {
+      const isCtrlPressed = e?.evt?.ctrlKey || false;
+      if (!isCtrlPressed) {
         setSelectedId(null);
         setSelectedLineId(null);
         setSelectedWallId(null);
@@ -2722,7 +2724,8 @@ const MapCanvas = ({
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
                   onClick={(e) => {
-                    if (e.evt.ctrlKey) {
+                    const isCtrlPressed = e?.evt?.ctrlKey || false;
+                    if (isCtrlPressed) {
                       // Selección múltiple con Ctrl
                       if (selectedTokens.includes(token.id)) {
                         setSelectedTokens(prev => prev.filter(id => id !== token.id));
@@ -2765,7 +2768,8 @@ const MapCanvas = ({
                   listening={!ln.isBackground}
                   onClick={(e) => {
                     if (!ln.isBackground) {
-                      if (e.evt.ctrlKey) {
+                      const isCtrlPressed = e?.evt?.ctrlKey || false;
+                      if (isCtrlPressed) {
                         // Selección múltiple con Ctrl
                         if (selectedLines.includes(ln.id)) {
                           setSelectedLines(prev => prev.filter(id => id !== ln.id));
@@ -2800,7 +2804,8 @@ const MapCanvas = ({
                   onDragEnd={(e) => handleTextDragEnd(t.id, e)}
                   onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
                   onClick={(e) => {
-                    if (e.evt.ctrlKey) {
+                    const isCtrlPressed = e?.evt?.ctrlKey || false;
+                    if (isCtrlPressed) {
                       // Selección múltiple con Ctrl
                       if (selectedTexts.includes(t.id)) {
                         setSelectedTexts(prev => prev.filter(id => id !== t.id));
@@ -2883,7 +2888,8 @@ const MapCanvas = ({
                     listening={!wl.isBackground}
                     onClick={(e) => {
                       if (!wl.isBackground) {
-                        if (e.evt.ctrlKey) {
+                        const isCtrlPressed = e?.evt?.ctrlKey || false;
+                        if (isCtrlPressed) {
                           // Selección múltiple con Ctrl
                           if (selectedWalls.includes(wl.id)) {
                             setSelectedWalls(prev => prev.filter(id => id !== wl.id));
