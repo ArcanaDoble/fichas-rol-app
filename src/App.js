@@ -477,6 +477,7 @@ function App() {
   const [gridCells, setGridCells] = useState(30);
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
+  const [enableDarkness, setEnableDarkness] = useState(true);
 
   // Cargar páginas desde Firebase al iniciar
   useEffect(() => {
@@ -496,6 +497,8 @@ function App() {
           gridCells: 30,
           gridOffsetX: 0,
           gridOffsetY: 0,
+          enableDarkness: true,
+          darknessOpacity: 0.7,
           tokens: [],
           lines: [],
           walls: [],
@@ -563,6 +566,7 @@ function App() {
       setGridCells(data.gridCells || 1);
       setGridOffsetX(data.gridOffsetX || 0);
       setGridOffsetY(data.gridOffsetY || 0);
+      setEnableDarkness(data.enableDarkness !== undefined ? data.enableDarkness : true);
       prevTokensRef.current = data.tokens || [];
       prevLinesRef.current = data.lines || [];
       prevWallsRef.current = data.walls || [];
@@ -694,6 +698,8 @@ function App() {
       gridCells: 30,
       gridOffsetX: 0,
       gridOffsetY: 0,
+      enableDarkness: true,
+      darknessOpacity: 0.7,
       tokens: [],
       lines: [],
       walls: [],
@@ -716,6 +722,7 @@ function App() {
       if (data.gridCells !== undefined) setGridCells(data.gridCells);
       if (data.gridOffsetX !== undefined) setGridOffsetX(data.gridOffsetX);
       if (data.gridOffsetY !== undefined) setGridOffsetY(data.gridOffsetY);
+      if (data.enableDarkness !== undefined) setEnableDarkness(data.enableDarkness);
       if (data.background !== undefined) setCanvasBackground(data.background);
       if (data.tokens !== undefined) setCanvasTokens(data.tokens);
       if (data.lines !== undefined) setCanvasLines(data.lines);
