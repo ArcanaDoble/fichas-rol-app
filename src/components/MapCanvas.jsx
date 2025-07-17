@@ -875,6 +875,21 @@ const MapCanvas = ({
   const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
+
+  // Estados para selección múltiple
+  const [selectedTokens, setSelectedTokens] = useState([]);
+  const [selectedLines, setSelectedLines] = useState([]);
+  const [selectedWalls, setSelectedWalls] = useState([]);
+  const [selectedTexts, setSelectedTexts] = useState([]);
+
+  // Estados para cuadro de selección
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionBox, setSelectionBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
+
+  // Estado para clipboard (copiar/pegar)
+  const [clipboard, setClipboard] = useState(null);
+
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
     bgColor: 'rgba(0,0,0,0.5)',
@@ -1005,6 +1020,87 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    clearMultiSelection();
+  };
+
+  // Funciones para manejo de selección múltiple
+  const clearMultiSelection = () => {
+    setSelectedTokens([]);
+    setSelectedLines([]);
+    setSelectedWalls([]);
+    setSelectedTexts([]);
+  };
+
+  const clearAllSelections = () => {
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+    clearMultiSelection();
+  };
+
+  // Función para verificar si un punto está dentro de un rectángulo
+  const isPointInRect = (point, rect) => {
+    return point.x >= rect.x &&
+           point.x <= rect.x + rect.width &&
+           point.y >= rect.y &&
+           point.y <= rect.y + rect.height;
+  };
+
+  // Función para verificar si un elemento está dentro del cuadro de selección
+  const isElementInSelectionBox = (element, box, elementType) => {
+    if (box.width === 0 || box.height === 0) return false;
+
+    // Normalizar el cuadro de selección (en caso de que se arrastre hacia atrás)
+    const normalizedBox = {
+      x: Math.min(box.x, box.x + box.width),
+      y: Math.min(box.y, box.y + box.height),
+      width: Math.abs(box.width),
+      height: Math.abs(box.height)
+    };
+
+    switch (elementType) {
+      case 'token': {
+        const tokenX = element.x * effectiveGridSize;
+        const tokenY = element.y * effectiveGridSize;
+        const tokenWidth = element.w * effectiveGridSize;
+        const tokenHeight = element.h * effectiveGridSize;
+
+        // Verificar si el token intersecta con el cuadro de selección
+        return !(tokenX + tokenWidth < normalizedBox.x ||
+                tokenX > normalizedBox.x + normalizedBox.width ||
+                tokenY + tokenHeight < normalizedBox.y ||
+                tokenY > normalizedBox.y + normalizedBox.height);
+      }
+      case 'line': {
+        // Para líneas, verificar si algún punto está dentro del cuadro
+        for (let i = 0; i < element.points.length; i += 2) {
+          const pointX = element.x + element.points[i];
+          const pointY = element.y + element.points[i + 1];
+          if (isPointInRect({ x: pointX, y: pointY }, normalizedBox)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case 'wall': {
+        // Para muros, verificar si algún punto está dentro del cuadro
+        for (let i = 0; i < element.points.length; i += 2) {
+          const pointX = element.x + element.points[i];
+          const pointY = element.y + element.points[i + 1];
+          if (isPointInRect({ x: pointX, y: pointY }, normalizedBox)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case 'text': {
+        // Para textos, verificar si el punto está dentro del cuadro
+        return isPointInRect({ x: element.x, y: element.y }, normalizedBox);
+      }
+      default:
+        return false;
+    }
   };
 
   // Función para alternar el estado de las puertas (solo desde capa fichas)
@@ -1747,6 +1843,22 @@ const MapCanvas = ({
       panStart.current = stageRef.current.getPointerPosition();
       panOrigin.current = { ...groupPos };
     }
+
+    // Iniciar selección múltiple con botón izquierdo en herramienta select
+    if (activeTool === 'select' && e.evt.button === 0 && e.target === stageRef.current) {
+      const pointer = stageRef.current.getPointerPosition();
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+      // Si no se mantiene Ctrl, limpiar selección anterior
+      if (!e.evt.ctrlKey) {
+        clearAllSelections();
+      }
+
+      setIsSelecting(true);
+      setSelectionStart({ x: relX, y: relY });
+      setSelectionBox({ x: relX, y: relY, width: 0, height: 0 });
+    }
     if (activeTool === 'draw' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
       const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
@@ -1803,6 +1915,18 @@ const MapCanvas = ({
     const pointer = stageRef.current.getPointerPosition();
     let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
     let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+    // Actualizar cuadro de selección
+    if (isSelecting) {
+      setSelectionBox({
+        x: selectionStart.x,
+        y: selectionStart.y,
+        width: relX - selectionStart.x,
+        height: relY - selectionStart.y
+      });
+      return;
+    }
+
     if (currentLine) {
       setCurrentLine((ln) => ({
         ...ln,
@@ -1830,6 +1954,39 @@ const MapCanvas = ({
   };
 
   const stopPanning = () => {
+    // Finalizar selección múltiple
+    if (isSelecting) {
+      // Filtrar elementos por capa actual
+      const filteredTokens = tokens.filter(token => token.layer === activeLayer);
+      const filteredLines = lines.filter(line => line.layer === activeLayer);
+      const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
+      const filteredTexts = texts.filter(text => text.layer === activeLayer);
+
+      // Encontrar elementos dentro del cuadro de selección
+      const selectedTokensInBox = filteredTokens.filter(token =>
+        isElementInSelectionBox(token, selectionBox, 'token')
+      );
+      const selectedLinesInBox = filteredLines.filter(line =>
+        isElementInSelectionBox(line, selectionBox, 'line')
+      );
+      const selectedWallsInBox = filteredWalls.filter(wall =>
+        isElementInSelectionBox(wall, selectionBox, 'wall')
+      );
+      const selectedTextsInBox = filteredTexts.filter(text =>
+        isElementInSelectionBox(text, selectionBox, 'text')
+      );
+
+      // Actualizar selecciones múltiples
+      setSelectedTokens(prev => [...prev, ...selectedTokensInBox.map(t => t.id)]);
+      setSelectedLines(prev => [...prev, ...selectedLinesInBox.map(l => l.id)]);
+      setSelectedWalls(prev => [...prev, ...selectedWallsInBox.map(w => w.id)]);
+      setSelectedTexts(prev => [...prev, ...selectedTextsInBox.map(t => t.id)]);
+
+      setIsSelecting(false);
+      setSelectionBox({ x: 0, y: 0, width: 0, height: 0 });
+      return;
+    }
+
     if (currentLine) {
       const xs = currentLine.points.filter((_, i) => i % 2 === 0);
       const ys = currentLine.points.filter((_, i) => i % 2 === 1);
@@ -1874,10 +2031,14 @@ const MapCanvas = ({
 
   const handleStageClick = (e) => {
     if (e.target === stageRef.current) {
-      setSelectedId(null);
-      setSelectedLineId(null);
-      setSelectedWallId(null);
-      setSelectedTextId(null);
+      // Solo limpiar selecciones si no se está manteniendo Ctrl
+      if (!e.evt.ctrlKey) {
+        setSelectedId(null);
+        setSelectedLineId(null);
+        setSelectedWallId(null);
+        setSelectedTextId(null);
+        clearMultiSelection();
+      }
     }
   };
 
@@ -1999,6 +2160,118 @@ const MapCanvas = ({
         return;
       }
 
+      // Copiar elementos seleccionados
+      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        const clipboardData = {
+          tokens: selectedTokens.length > 0 ? tokens.filter(t => selectedTokens.includes(t.id)) :
+                  selectedId ? [tokens.find(t => t.id === selectedId)] : [],
+          lines: selectedLines.length > 0 ? lines.filter(l => selectedLines.includes(l.id)) :
+                 selectedLineId ? [lines.find(l => l.id === selectedLineId)] : [],
+          walls: selectedWalls.length > 0 ? walls.filter(w => selectedWalls.includes(w.id)) :
+                 selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
+          texts: selectedTexts.length > 0 ? texts.filter(t => selectedTexts.includes(t.id)) :
+                 selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
+        };
+
+        // Solo copiar si hay elementos seleccionados
+        if (clipboardData.tokens.length > 0 || clipboardData.lines.length > 0 ||
+            clipboardData.walls.length > 0 || clipboardData.texts.length > 0) {
+          setClipboard(clipboardData);
+        }
+        return;
+      }
+
+      // Seleccionar todos los elementos de la capa actual
+      if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const filteredTokens = tokens.filter(token => token.layer === activeLayer);
+        const filteredLines = lines.filter(line => line.layer === activeLayer);
+        const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
+        const filteredTexts = texts.filter(text => text.layer === activeLayer);
+
+        setSelectedTokens(filteredTokens.map(t => t.id));
+        setSelectedLines(filteredLines.map(l => l.id));
+        setSelectedWalls(filteredWalls.map(w => w.id));
+        setSelectedTexts(filteredTexts.map(t => t.id));
+
+        // Limpiar selecciones individuales
+        setSelectedId(null);
+        setSelectedLineId(null);
+        setSelectedWallId(null);
+        setSelectedTextId(null);
+        return;
+      }
+
+      // Pegar elementos del clipboard
+      if (e.ctrlKey && e.key.toLowerCase() === 'v' && clipboard) {
+        e.preventDefault();
+        const pointer = stageRef.current.getPointerPosition();
+        const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+        const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+        // Calcular offset para pegar cerca del cursor
+        const offsetX = Math.floor(relX / effectiveGridSize);
+        const offsetY = Math.floor(relY / effectiveGridSize);
+
+        // Pegar tokens
+        if (clipboard.tokens.length > 0) {
+          const newTokens = clipboard.tokens.map(token => ({
+            ...token,
+            id: Date.now() + Math.random(),
+            tokenSheetId: nanoid(),
+            x: token.x + offsetX,
+            y: token.y + offsetY,
+            layer: activeLayer
+          }));
+          onTokensChange([...tokens, ...newTokens]);
+        }
+
+        // Pegar líneas
+        if (clipboard.lines.length > 0) {
+          const newLines = clipboard.lines.map(line => ({
+            ...line,
+            id: Date.now() + Math.random(),
+            x: line.x + (offsetX * effectiveGridSize),
+            y: line.y + (offsetY * effectiveGridSize),
+            layer: activeLayer
+          }));
+          saveLines([...lines, ...newLines]);
+        }
+
+        // Pegar muros
+        if (clipboard.walls.length > 0) {
+          const newWalls = clipboard.walls.map(wall => ({
+            ...wall,
+            id: Date.now() + Math.random(),
+            x: wall.x + (offsetX * effectiveGridSize),
+            y: wall.y + (offsetY * effectiveGridSize),
+            layer: activeLayer
+          }));
+          saveWalls([...walls, ...newWalls]);
+        }
+
+        // Pegar textos
+        if (clipboard.texts.length > 0) {
+          const newTexts = clipboard.texts.map(text => ({
+            ...text,
+            id: Date.now() + Math.random(),
+            x: text.x + (offsetX * effectiveGridSize),
+            y: text.y + (offsetY * effectiveGridSize),
+            layer: activeLayer
+          }));
+          updateTexts([...texts, ...newTexts]);
+        }
+        return;
+      }
+
+      // Deseleccionar todo con Escape
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearAllSelections();
+        return;
+      }
+
       if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undoLines();
@@ -2010,14 +2283,45 @@ const MapCanvas = ({
         return;
       }
 
-      if (selectedLineId != null && e.key.toLowerCase() === 'delete') {
-        saveLines(lines.filter((ln) => ln.id !== selectedLineId));
-        setSelectedLineId(null);
-        return;
-      }
-      if (selectedWallId != null && e.key.toLowerCase() === 'delete') {
-        saveWalls(walls.filter((w) => w.id !== selectedWallId));
-        setSelectedWallId(null);
+      // Eliminar elementos seleccionados (múltiples o individuales)
+      if (e.key.toLowerCase() === 'delete') {
+        e.preventDefault();
+
+        // Eliminar selección múltiple
+        if (selectedTokens.length > 0) {
+          onTokensChange(tokens.filter(t => !selectedTokens.includes(t.id)));
+          setSelectedTokens([]);
+        }
+        if (selectedLines.length > 0) {
+          saveLines(lines.filter(l => !selectedLines.includes(l.id)));
+          setSelectedLines([]);
+        }
+        if (selectedWalls.length > 0) {
+          saveWalls(walls.filter(w => !selectedWalls.includes(w.id)));
+          setSelectedWalls([]);
+        }
+        if (selectedTexts.length > 0) {
+          updateTexts(texts.filter(t => !selectedTexts.includes(t.id)));
+          setSelectedTexts([]);
+        }
+
+        // Eliminar selección individual si no hay selección múltiple
+        if (selectedLineId != null && selectedLines.length === 0) {
+          saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+          setSelectedLineId(null);
+        }
+        if (selectedWallId != null && selectedWalls.length === 0) {
+          saveWalls(walls.filter((w) => w.id !== selectedWallId));
+          setSelectedWallId(null);
+        }
+        if (selectedTextId != null && selectedTexts.length === 0) {
+          updateTexts(texts.filter((t) => t.id !== selectedTextId));
+          setSelectedTextId(null);
+        }
+        if (selectedId != null && selectedTokens.length === 0) {
+          onTokensChange(tokens.filter((t) => t.id !== selectedId));
+          setSelectedId(null);
+        }
         return;
       }
 
@@ -2052,13 +2356,65 @@ const MapCanvas = ({
         }
       }
 
+      // Mover múltiples tokens seleccionados
+      if (selectedTokens.length > 0) {
+        let deltaX = 0, deltaY = 0;
+
+        switch (e.key.toLowerCase()) {
+          case 'w':
+            deltaY = -1;
+            break;
+          case 's':
+            deltaY = 1;
+            break;
+          case 'a':
+            deltaX = -1;
+            break;
+          case 'd':
+            deltaX = 1;
+            break;
+          case 'r': {
+            const delta = e.shiftKey ? -90 : 90;
+            const rotated = tokens.map((t) => {
+              if (selectedTokens.includes(t.id)) {
+                const updatedAngle = ((t.angle || 0) + delta + 360) % 360;
+                return { ...t, angle: updatedAngle };
+              }
+              return t;
+            });
+            onTokensChange(rotated);
+            return;
+          }
+          default:
+            break;
+        }
+
+        if (deltaX !== 0 || deltaY !== 0) {
+          const updated = tokens.map((t) => {
+            if (selectedTokens.includes(t.id)) {
+              const newX = Math.max(0, Math.min(mapWidth - 1, t.x + deltaX));
+              const newY = Math.max(0, Math.min(mapHeight - 1, t.y + deltaY));
+
+              // Verificar colisiones con muros
+              if (!isPositionBlocked(newX, newY)) {
+                return { ...t, x: newX, y: newY };
+              }
+            }
+            return t;
+          });
+          onTokensChange(updated);
+        }
+        return;
+      }
+
+      // Mover token individual seleccionado
       if (selectedId == null) return;
       const index = tokens.findIndex((t) => t.id === selectedId);
       if (index === -1) return;
       let { x, y } = tokens[index];
       let newX = x;
       let newY = y;
-      
+
       switch (e.key.toLowerCase()) {
         case 'w':
           newY = y - 1;
@@ -2072,10 +2428,6 @@ const MapCanvas = ({
         case 'd':
           newX = x + 1;
           break;
-        case 'delete':
-          onTokensChange(tokens.filter((t) => t.id !== selectedId));
-          setSelectedId(null);
-          return;
         case 'r': {
           const delta = e.shiftKey ? -90 : 90;
           const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
@@ -2088,17 +2440,17 @@ const MapCanvas = ({
         default:
           return;
       }
-      
+
       // Aplicar límites del mapa
       newX = Math.max(0, Math.min(mapWidth - 1, newX));
       newY = Math.max(0, Math.min(mapHeight - 1, newY));
-      
+
       // Verificar colisiones con muros (independiente de la capa)
       if (isPositionBlocked(newX, newY)) {
         // Si la posición está bloqueada, no mover el token
         return;
       }
-      
+
       const updated = tokens.map((t) =>
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
@@ -2117,6 +2469,21 @@ const MapCanvas = ({
       selectedWallId,
       texts,
       isPositionBlocked,
+      selectedTokens,
+      selectedLines,
+      selectedWalls,
+      selectedTexts,
+      clipboard,
+      groupPos,
+      baseScale,
+      zoom,
+      effectiveGridSize,
+      activeLayer,
+      saveLines,
+      saveWalls,
+      updateTexts,
+      undoLines,
+      redoLines,
     ]
   );
 
@@ -2351,13 +2718,24 @@ const MapCanvas = ({
                   auraShape={token.auraShape}
                   auraColor={token.auraColor}
                   auraOpacity={token.auraOpacity}
-                  selected={token.id === selectedId}
+                  selected={token.id === selectedId || selectedTokens.includes(token.id)}
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
-                  onClick={() => {
-                    setSelectedId(token.id);
-                    setSelectedLineId(null);
-                    setSelectedTextId(null);
+                  onClick={(e) => {
+                    if (e.evt.ctrlKey) {
+                      // Selección múltiple con Ctrl
+                      if (selectedTokens.includes(token.id)) {
+                        setSelectedTokens(prev => prev.filter(id => id !== token.id));
+                      } else {
+                        setSelectedTokens(prev => [...prev, token.id]);
+                      }
+                    } else {
+                      // Selección individual
+                      setSelectedId(token.id);
+                      setSelectedLineId(null);
+                      setSelectedTextId(null);
+                      clearMultiSelection();
+                    }
                   }}
                   onSettings={handleOpenSettings}
                   onStates={handleOpenEstados}
@@ -2378,18 +2756,29 @@ const MapCanvas = ({
                   x={ln.x}
                   y={ln.y}
                   points={ln.points}
-                  stroke={ln.color}
-                  strokeWidth={ln.width}
+                  stroke={selectedLines.includes(ln.id) ? '#0066ff' : ln.color}
+                  strokeWidth={selectedLines.includes(ln.id) ? ln.width + 2 : ln.width}
                   lineCap="round"
                   lineJoin="round"
                   opacity={ln.crossLayerOpacity || 1}
                   draggable={activeTool === 'select' && !ln.isBackground}
                   listening={!ln.isBackground}
-                  onClick={() => {
+                  onClick={(e) => {
                     if (!ln.isBackground) {
-                      setSelectedLineId(ln.id);
-                      setSelectedId(null);
-                      setSelectedTextId(null);
+                      if (e.evt.ctrlKey) {
+                        // Selección múltiple con Ctrl
+                        if (selectedLines.includes(ln.id)) {
+                          setSelectedLines(prev => prev.filter(id => id !== ln.id));
+                        } else {
+                          setSelectedLines(prev => [...prev, ln.id]);
+                        }
+                      } else {
+                        // Selección individual
+                        setSelectedLineId(ln.id);
+                        setSelectedId(null);
+                        setSelectedTextId(null);
+                        clearMultiSelection();
+                      }
                     }
                   }}
                   onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
@@ -2410,11 +2799,28 @@ const MapCanvas = ({
                   draggable={activeTool === 'select'}
                   onDragEnd={(e) => handleTextDragEnd(t.id, e)}
                   onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
-                  onClick={() => setSelectedTextId(t.id)}
+                  onClick={(e) => {
+                    if (e.evt.ctrlKey) {
+                      // Selección múltiple con Ctrl
+                      if (selectedTexts.includes(t.id)) {
+                        setSelectedTexts(prev => prev.filter(id => id !== t.id));
+                      } else {
+                        setSelectedTexts(prev => [...prev, t.id]);
+                      }
+                    } else {
+                      // Selección individual
+                      setSelectedTextId(t.id);
+                      setSelectedId(null);
+                      setSelectedLineId(null);
+                      clearMultiSelection();
+                    }
+                  }}
                   onDblClick={() => handleTextEdit(t.id)}
                 >
                   <Tag
                     fill={t.bgColor}
+                    stroke={selectedTexts.includes(t.id) ? '#0066ff' : undefined}
+                    strokeWidth={selectedTexts.includes(t.id) ? 2 : 0}
                     {...(!t.text ? { width: t.fontSize, height: t.fontSize } : {})}
                   />
                   <Text
@@ -2468,19 +2874,30 @@ const MapCanvas = ({
                     x={wl.x}
                     y={wl.y}
                     points={wl.points}
-                    stroke={wl.color}
-                    strokeWidth={wl.width}
+                    stroke={selectedWalls.includes(wl.id) ? '#0066ff' : wl.color}
+                    strokeWidth={selectedWalls.includes(wl.id) ? wl.width + 2 : wl.width}
                     lineCap="round"
                     lineJoin="round"
                     opacity={wl.crossLayerOpacity || 1}
                     draggable={activeTool === 'select' && !wl.isBackground}
                     listening={!wl.isBackground}
-                    onClick={() => {
+                    onClick={(e) => {
                       if (!wl.isBackground) {
-                        setSelectedWallId(wl.id);
-                        setSelectedId(null);
-                        setSelectedLineId(null);
-                        setSelectedTextId(null);
+                        if (e.evt.ctrlKey) {
+                          // Selección múltiple con Ctrl
+                          if (selectedWalls.includes(wl.id)) {
+                            setSelectedWalls(prev => prev.filter(id => id !== wl.id));
+                          } else {
+                            setSelectedWalls(prev => [...prev, wl.id]);
+                          }
+                        } else {
+                          // Selección individual
+                          setSelectedWallId(wl.id);
+                          setSelectedId(null);
+                          setSelectedLineId(null);
+                          setSelectedTextId(null);
+                          clearMultiSelection();
+                        }
                       }
                     }}
                     onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
@@ -2797,6 +3214,30 @@ const MapCanvas = ({
               ))}
             </Group>
           </Layer>
+
+          {/* Cuadro de selección múltiple */}
+          {isSelecting && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                <Rect
+                  x={selectionBox.x}
+                  y={selectionBox.y}
+                  width={selectionBox.width}
+                  height={selectionBox.height}
+                  stroke="#0066ff"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  fill="rgba(0, 102, 255, 0.1)"
+                  listening={false}
+                />
+              </Group>
+            </Layer>
+          )}
         </Stage>
       </div>
       <Toolbar
@@ -2873,6 +3314,27 @@ const MapCanvas = ({
             <span className="text-sm font-medium">👁️ Simulando vista de:</span>
             <span className="font-bold">{simulatedPlayer}</span>
             <span className="text-xs opacity-75">(Ctrl+L para salir)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Contador de selección múltiple */}
+      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
+        <div className="absolute top-4 right-4 bg-green-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">📋 Seleccionados:</span>
+            <span className="font-bold">
+              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
+            </span>
+            <span className="text-xs opacity-75">
+              ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
+              {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
+              {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
+              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
+            </span>
+          </div>
+          <div className="text-xs opacity-75 mt-1">
+            Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
           </div>
         </div>
       )}
