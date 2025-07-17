@@ -1304,21 +1304,27 @@ const MapCanvas = ({
           // Encontrar la página de destino
           const targetPageIndex = pages.findIndex(p => p.id === portal.targetPageId);
           if (targetPageIndex !== -1) {
-            // Cambiar a la página de destino
-            onPageChange(targetPageIndex);
+            // Buscar el token del jugador actual
+            const playerToken = tokens.find(token =>
+              token.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)
+            );
 
-            // TODO: Implementar posicionamiento del token del jugador
-            // Cuando se implemente, usar calculatePortalDestination para posicionar
-            // const targetPage = pages[targetPageIndex];
-            // const targetPortal = targetPage.portals?.find(p => p.id === portal.targetPortalId);
-            // if (targetPortal) {
-            //   const destination = calculatePortalDestination(
-            //     targetPortal.x,
-            //     targetPortal.y,
-            //     targetPortal.direction || 0
-            //   );
-            //   // Mover token del jugador a destination.x, destination.y
-            // }
+            if (playerToken) {
+              // Cambiar a la página de destino
+              onPageChange(targetPageIndex);
+
+              // Programar el posicionamiento del token para después del cambio de página
+              setTimeout(() => {
+                // Buscar el portal de destino en la nueva página
+                // Nota: Esto requerirá acceso a los portales de la página de destino
+                // Por ahora, simplemente cambiar la página
+                console.log('Portal activado - cambio a página:', targetPageIndex);
+                console.log('Token del jugador encontrado:', playerToken.id);
+                console.log('Portal destino:', portal.targetPortalId);
+              }, 100);
+            } else {
+              console.warn('No se encontró token del jugador para transportar');
+            }
           }
         }
       }
@@ -1338,7 +1344,7 @@ const MapCanvas = ({
         setPortalConfigId(portalId);
       }
     }
-  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection, userType]);
+  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection, userType, tokens, playerName, simulatedPlayer]);
 
   const handlePortalUpdate = useCallback((updatedPortal) => {
     const newPortals = portals.map(p => p.id === updatedPortal.id ? updatedPortal : p);
@@ -1348,6 +1354,18 @@ const MapCanvas = ({
   const handlePortalDelete = useCallback((portalId) => {
     const newPortals = portals.filter(p => p.id !== portalId);
     savePortals(newPortals);
+  }, [portals, savePortals]);
+
+  const handlePortalRotate = useCallback((portalId, clockwise = true) => {
+    const delta = clockwise ? 90 : -90;
+    const updatedPortals = portals.map((portal) => {
+      if (portal.id === portalId) {
+        const newDirection = ((portal.direction || 0) + delta + 360) % 360;
+        return { ...portal, direction: newDirection };
+      }
+      return portal;
+    });
+    savePortals(updatedPortals);
   }, [portals, savePortals]);
 
   // Función para alternar el estado de las puertas (solo desde capa fichas)
@@ -2182,11 +2200,6 @@ const MapCanvas = ({
 
       savePortals([...portals, newPortal]);
       setSelectedPortalId(id);
-
-      // Si estamos en capas master/luz, abrir configuración inmediatamente
-      if (activeLayer !== 'fichas') {
-        setPortalConfigId(id);
-      }
     }
   };
 
@@ -2795,19 +2808,7 @@ const MapCanvas = ({
       );
       onTokensChange(updated);
 
-      // Rotar portal seleccionado con tecla R
-      if (selectedPortalId != null && e.key.toLowerCase() === 'r' && userType === 'master') {
-        const delta = e.shiftKey ? -90 : 90;
-        const updatedPortals = portals.map((portal) => {
-          if (portal.id === selectedPortalId) {
-            const newDirection = ((portal.direction || 0) + delta + 360) % 360;
-            return { ...portal, direction: newDirection };
-          }
-          return portal;
-        });
-        savePortals(updatedPortals);
-        return;
-      }
+
     },
     [
       selectedId,
@@ -3392,8 +3393,9 @@ const MapCanvas = ({
                             const newY = Math.round(e.target.y() / effectiveGridSize);
                             const clampedPos = clampToMapBounds(newX, newY);
 
+                            // Solo actualizar el portal actual de esta página
                             const updatedPortals = portals.map(p =>
-                              p.id === portal.id
+                              p.id === portal.id && p.layer === activeLayer
                                 ? { ...p, x: clampedPos.x, y: clampedPos.y }
                                 : p
                             );
@@ -3479,6 +3481,39 @@ const MapCanvas = ({
                           fontFamily="Arial"
                           listening={false}
                         />
+                      )}
+
+                      {/* Botón de rotación (solo cuando está seleccionado y en capas master/luz) */}
+                      {isSelected && activeLayer !== 'fichas' && userType === 'master' && (
+                        <Group>
+                          <Circle
+                            x={portalX + effectiveGridSize * 0.6}
+                            y={portalY - effectiveGridSize * 0.6}
+                            radius={12}
+                            fill="#3b82f6"
+                            stroke="#1e40af"
+                            strokeWidth={2}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              handlePortalRotate(portal.id, true);
+                            }}
+                            onMouseEnter={() => {
+                              stageRef.current.container().style.cursor = 'pointer';
+                            }}
+                            onMouseLeave={() => {
+                              stageRef.current.container().style.cursor = 'default';
+                            }}
+                          />
+                          <Text
+                            x={portalX + effectiveGridSize * 0.6 - 6}
+                            y={portalY - effectiveGridSize * 0.6 - 6}
+                            text="↻"
+                            fontSize={12}
+                            fill="#ffffff"
+                            fontFamily="Arial"
+                            listening={false}
+                          />
+                        </Group>
                       )}
                     </Group>
                   );
