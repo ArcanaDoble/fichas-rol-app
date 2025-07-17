@@ -488,11 +488,28 @@ function App() {
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
+        // Crear canvas con fondo blanco y grid negro para la página por defecto
+        const defaultBackground = createDefaultGridCanvas(3000, 2000, 100);
+
+        // Subir la imagen a Firebase Storage
+        let backgroundUrl = null;
+        let backgroundHash = null;
+
+        try {
+          const result = await uploadDataUrl(defaultBackground, 'Mapas/');
+          backgroundUrl = result.url;
+          backgroundHash = result.hash;
+        } catch (error) {
+          console.error('Error subiendo fondo por defecto:', error);
+          // Si falla la subida, usar el data URL directamente
+          backgroundUrl = defaultBackground;
+        }
+
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
-          background: null,
-          backgroundHash: null,
+          background: backgroundUrl,
+          backgroundHash: backgroundHash,
           gridSize: 100,
           gridCells: 30,
           gridOffsetX: 0,
@@ -688,12 +705,68 @@ function App() {
     );
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
+  // Función para crear un canvas con fondo blanco y grid negro
+  const createDefaultGridCanvas = (width = 3000, height = 2000, cellSize = 100) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo blanco
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    // Borde negro
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, width - 4, height - 4);
+
+    // Grid negro
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+
+    // Líneas verticales
+    for (let x = cellSize; x < width; x += cellSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    // Líneas horizontales
+    for (let y = cellSize; y < height; y += cellSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    return canvas.toDataURL('image/png');
+  };
+
   const addPage = async () => {
+    // Crear canvas con fondo blanco y grid negro
+    const defaultBackground = createDefaultGridCanvas(3000, 2000, 100);
+
+    // Subir la imagen a Firebase Storage
+    let backgroundUrl = null;
+    let backgroundHash = null;
+
+    try {
+      const result = await uploadDataUrl(defaultBackground, 'Mapas/');
+      backgroundUrl = result.url;
+      backgroundHash = result.hash;
+    } catch (error) {
+      console.error('Error subiendo fondo por defecto:', error);
+      // Si falla la subida, usar el data URL directamente
+      backgroundUrl = defaultBackground;
+    }
+
     const newPage = {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
-      background: null,
-      backgroundHash: null,
+      background: backgroundUrl,
+      backgroundHash: backgroundHash,
       gridSize: 100,
       gridCells: 30,
       gridOffsetX: 0,

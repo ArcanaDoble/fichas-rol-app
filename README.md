@@ -705,6 +705,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Sistema de sombras avanzado con polígonos combinados de iluminación y opacidad configurable.
 - Opción para activar/desactivar la oscuridad por página en los ajustes del mapa.
 
+**Resumen de cambios v2.4.7:**
+
+- Fondo automático con grid para nuevas páginas del mapa de batalla.
+- Canvas blanco con grid negro y bordes predeterminado al crear páginas.
+- Listo para usar inmediatamente sin necesidad de subir imagen de fondo.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
