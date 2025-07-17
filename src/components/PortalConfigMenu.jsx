@@ -3,13 +3,14 @@ import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
 
-const PortalConfigMenu = ({ 
-  portal, 
-  pages, 
-  currentPage, 
-  onClose, 
-  onUpdate, 
-  onDelete 
+const PortalConfigMenu = ({
+  portal,
+  pages,
+  currentPage,
+  onClose,
+  onUpdate,
+  onDelete,
+  currentPagePortals = [] // Portales de la página actual
 }) => {
   const [selectedTargetPage, setSelectedTargetPage] = useState(
     portal.targetPageId ? pages.findIndex(p => p.id === portal.targetPageId) : -1
@@ -17,24 +18,23 @@ const PortalConfigMenu = ({
   const [selectedTargetPortal, setSelectedTargetPortal] = useState(portal.targetPortalId || '');
   const [portalName, setPortalName] = useState(portal.name || '');
 
-  // Obtener todos los portales de todas las páginas excepto el actual
+  // Obtener todos los portales disponibles para conectar (de la página actual por ahora)
   const getAllAvailablePortals = () => {
     const allPortals = [];
-    pages.forEach((page, pageIndex) => {
-      if (page.portals && page.portals.length > 0) {
-        page.portals.forEach(pagePortal => {
-          // No incluir el portal actual
-          if (pagePortal.id !== portal.id) {
-            allPortals.push({
-              ...pagePortal,
-              pageIndex,
-              pageName: page.name,
-              displayName: `${pagePortal.name || `Portal ${pagePortal.id.slice(0, 8)}`} (${page.name})`
-            });
-          }
+
+    // Por ahora, mostrar solo portales de la página actual excepto el portal actual
+    currentPagePortals.forEach(pagePortal => {
+      // No incluir el portal actual
+      if (pagePortal.id !== portal.id) {
+        allPortals.push({
+          ...pagePortal,
+          pageIndex: currentPage,
+          pageName: pages[currentPage]?.name || 'Página Actual',
+          displayName: `${pagePortal.name || `Portal ${pagePortal.id.slice(0, 8)}`}`
         });
       }
     });
+
     return allPortals;
   };
 
@@ -99,7 +99,7 @@ const PortalConfigMenu = ({
             value={portalName}
             onChange={(e) => setPortalName(e.target.value)}
             placeholder={`Portal ${portal.id.slice(0, 8)}`}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 bg-white"
           />
         </div>
 
@@ -112,7 +112,7 @@ const PortalConfigMenu = ({
             <select
               value={selectedTargetPortal}
               onChange={(e) => setSelectedTargetPortal(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
             >
               <option value="">Seleccionar portal...</option>
               {availablePortals.map((targetPortal) => (
@@ -179,6 +179,7 @@ PortalConfigMenu.propTypes = {
   onClose: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
+  currentPagePortals: PropTypes.array,
 };
 
 export default PortalConfigMenu;

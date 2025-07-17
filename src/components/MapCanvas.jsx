@@ -3858,6 +3858,7 @@ const MapCanvas = ({
           portal={portals.find(p => p.id === portalConfigId)}
           pages={pages}
           currentPage={currentPage}
+          currentPagePortals={portals}
           onClose={() => setPortalConfigId(null)}
           onUpdate={handlePortalUpdate}
           onDelete={handlePortalDelete}
