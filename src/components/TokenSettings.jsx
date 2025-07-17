@@ -60,6 +60,12 @@ const TokenSettings = ({
   const [tintOpacity, setTintOpacity] = useState(
     typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
   );
+  
+  // Estados para configuración de luz
+  const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
+  const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
+  const [lightColor, setLightColor] = useState(token.light?.color || '#ffff88');
+  const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.3);
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     onUpdate({
@@ -79,6 +85,12 @@ const TokenSettings = ({
       opacity: tokenOpacity,
       tintColor,
       tintOpacity,
+      light: {
+        enabled: lightEnabled,
+        radius: lightRadius,
+        color: lightColor,
+        opacity: lightOpacity,
+      },
     });
   };
 
@@ -98,6 +110,10 @@ const TokenSettings = ({
     tokenOpacity,
     tintColor,
     tintOpacity,
+    lightEnabled,
+    lightRadius,
+    lightColor,
+    lightOpacity,
   ]);
 
   if (!token) return null;
@@ -259,7 +275,62 @@ const TokenSettings = ({
               </div>
             </>
           )}
-          {tab !== 'details' && tab !== 'aura' && (
+          {tab === 'light' && (
+            <>
+              <div className="flex items-center gap-2">
+                <input 
+                  id="lightEnabled" 
+                  type="checkbox" 
+                  checked={lightEnabled} 
+                  onChange={e => setLightEnabled(e.target.checked)} 
+                />
+                <label htmlFor="lightEnabled">Emite luz</label>
+              </div>
+              {lightEnabled && (
+                <>
+                  <div>
+                    <label className="block mb-1">Radio de luz (casillas)</label>
+                    <Input 
+                      type="number" 
+                      min="1" 
+                      max="20" 
+                      value={lightRadius} 
+                      onChange={e => setLightRadius(parseInt(e.target.value, 10) || 1)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">Color de la luz</label>
+                    <input 
+                      type="color" 
+                      value={lightColor} 
+                      onChange={e => setLightColor(e.target.value)} 
+                      className="w-full h-8 p-0 border-0" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">Intensidad de la luz</label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="0.8"
+                      step="0.05"
+                      value={lightOpacity}
+                      onChange={e => setLightOpacity(parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                    <div className="text-right">{Math.round(lightOpacity * 100)}%</div>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-2">
+                    💡 La luz revelará áreas ocultas por muros y creará zonas iluminadas realistas
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          {tab === 'notes' && (
+            <div className="text-gray-400">(Funcionalidad de notas pendiente)</div>
+          )}
+          {tab !== 'details' && tab !== 'aura' && tab !== 'light' && tab !== 'notes' && (
             <div className="text-gray-400">(Sin contenido)</div>
           )}
         </div>

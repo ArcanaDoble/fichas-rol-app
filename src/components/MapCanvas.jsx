@@ -36,6 +36,7 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
+import { computeVisibility } from '../utils/visibility';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -884,6 +885,41 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
+  
+  // Estados para el sistema de iluminación
+  const [lightPolygons, setLightPolygons] = useState({});
+
+  // Función para calcular polígonos de visibilidad para tokens con luz
+  const calculateLightPolygons = useCallback(() => {
+    const newPolygons = {};
+    
+    tokens.forEach(token => {
+      if (token.light && token.light.enabled && token.light.radius > 0) {
+        const origin = {
+          x: (token.x + token.w / 2) * effectiveGridSize,
+          y: (token.y + token.h / 2) * effectiveGridSize
+        };
+        
+        const polygon = computeVisibility(origin, walls, {
+          rays: 64,
+          maxDistance: token.light.radius * effectiveGridSize
+        });
+        
+        newPolygons[token.id] = {
+          polygon,
+          color: token.light.color || '#ffff88',
+          opacity: token.light.opacity || 0.3
+        };
+      }
+    });
+    
+    setLightPolygons(newPolygons);
+  }, [tokens, walls, effectiveGridSize]);
+
+  // Recalcular polígonos cuando cambien tokens o muros
+  useEffect(() => {
+    calculateLightPolygons();
+  }, [calculateLightPolygons]);
 
   // Sincronizar con la prop externa
   useEffect(() => {
@@ -2276,6 +2312,38 @@ const MapCanvas = ({
                 }
               />
             ))}
+          </Layer>
+          
+          {/* Capa de iluminación */}
+          <Layer listening={false}>
+            <Group
+              x={groupPos.x}
+              y={groupPos.y}
+              scaleX={groupScale}
+              scaleY={groupScale}
+            >
+              {Object.entries(lightPolygons).map(([tokenId, lightData]) => {
+                if (!lightData.polygon || lightData.polygon.length < 3) return null;
+                
+                // Convertir polígono a puntos para Konva
+                const points = [];
+                lightData.polygon.forEach(point => {
+                  points.push(point.x, point.y);
+                });
+                
+                return (
+                  <Line
+                    key={`light-${tokenId}`}
+                    points={points}
+                    closed={true}
+                    fill={lightData.color}
+                    opacity={lightData.opacity}
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                );
+              })}
+            </Group>
           </Layer>
           
           {/* Capa de puertas interactivas - debe estar dentro del Group principal */}
