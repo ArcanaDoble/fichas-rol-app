@@ -712,7 +712,31 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.4.3:**
 
 - **Sistema de iluminación y visibilidad** - Cálculo realista de áreas iluminadas con ray casting
-- **Configuración de luz en tokens** - Cada token puede emitir luz con radio, color e intensidad personalizables
+- **Configuración de luz en tokens** - Cada token puede tener su propia fuente de luz configurable
+- **Polígonos de visibilidad** - Cálculo dinámico de áreas visibles considerando obstáculos
+- **Bloqueo por muros** - Los muros cerrados y secretos bloquean la luz, las puertas abiertas no
+- **Renderizado optimizado** - Sistema eficiente de cálculo de sombras y áreas iluminadas
+
+**Resumen de cambios v2.4.4:**
+
+- **Sistema de snap para muros** - Conexión automática de extremos de muros cercanos
+- **Eliminación de huecos** - Los extremos de muros se conectan perfectamente sin espacios
+- **Distancia de snap configurable** - Conexión automática cuando los extremos están a menos de 15 píxeles
+- **Feedback visual** - Los extremos se mueven visualmente a la posición exacta de conexión
+- **Prevención de filtrado de luz** - No más luz que se "filtra" por conexiones imperfectas entre muros
+
+**Resumen de cambios v2.4.5:**
+
+- **Algoritmo de visibilidad mejorado** - Corrección completa de artefactos de iluminación
+- **Precisión matemática aumentada** - Epsilon más estricto (1e-12) para cálculos de intersección
+- **Detección de esquinas robusta** - Múltiples rayos por esquina de muro para captura perfecta
+- **Eliminación de "saltos" de luz** - La luz ahora sigue consistentemente los contornos de muros
+- **Suavizado inteligente eliminado** - Removido el suavizado que causaba artefactos en áreas abiertas
+- **Normalización de ángulos** - Mejor manejo del rango [0, 2π) para evitar problemas de ordenamiento
+- **Filtrado optimizado** - Solo eliminación de duplicados sin alterar distancias calculadas
+- **Fallback robusto** - Círculo perfecto de respaldo para casos de polígonos inválidos
+- **Mayor densidad de rayos** - 180 rayos base más cientos adicionales en puntos críticos
+- **Rendimiento optimizado** - A pesar de más rayos, algoritmo más eficiente y precisouede emitir luz con radio, color e intensidad personalizables
 - **Algoritmo de visibilidad avanzado** - Ray casting que respeta muros cerrados y secretos como obstáculos
 - **Renderizado de zonas iluminadas** - Polígonos de luz que se superponen de forma realista en el mapa
 - **Interfaz de configuración** - Nueva pestaña "Luz" en ajustes de tokens con controles intuitivos

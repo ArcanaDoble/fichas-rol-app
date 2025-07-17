@@ -1001,8 +1001,10 @@ const MapCanvas = ({
           y: (token.y + token.h / 2) * effectiveGridSize
         };
         
+        // Aumentar significativamente el número de rayos para mayor precisión
+        // Especialmente importante para evitar "saltos" de luz
         const polygon = computeVisibility(origin, walls, {
-          rays: 64,
+          rays: 180, // Aumentado de 64 a 180 para mayor precisión
           maxDistance: token.light.radius * effectiveGridSize
         });
         
@@ -1056,6 +1058,77 @@ const MapCanvas = ({
     });
   }, [walls, effectiveGridSize]);
 
+  // Función para conectar automáticamente extremos de muros cercanos
+  const snapWallEndpoints = useCallback((walls) => {
+    const SNAP_DISTANCE = effectiveGridSize * 0.25; // Distancia de snap (1/4 de celda)
+    const connectedWalls = [...walls];
+    
+    for (let i = 0; i < connectedWalls.length; i++) {
+      const wall1 = connectedWalls[i];
+      const [x1_1, y1_1, x2_1, y2_1] = wall1.points;
+      
+      // Extremos del primer muro en coordenadas absolutas
+      const wall1_start = { x: wall1.x + x1_1, y: wall1.y + y1_1 };
+      const wall1_end = { x: wall1.x + x2_1, y: wall1.y + y2_1 };
+      
+      for (let j = i + 1; j < connectedWalls.length; j++) {
+        const wall2 = connectedWalls[j];
+        const [x1_2, y1_2, x2_2, y2_2] = wall2.points;
+        
+        // Extremos del segundo muro en coordenadas absolutas
+        const wall2_start = { x: wall2.x + x1_2, y: wall2.y + y1_2 };
+        const wall2_end = { x: wall2.x + x2_2, y: wall2.y + y2_2 };
+        
+        // Verificar todas las combinaciones de extremos
+        const connections = [
+          { w1_point: wall1_start, w1_isStart: true, w2_point: wall2_start, w2_isStart: true },
+          { w1_point: wall1_start, w1_isStart: true, w2_point: wall2_end, w2_isStart: false },
+          { w1_point: wall1_end, w1_isStart: false, w2_point: wall2_start, w2_isStart: true },
+          { w1_point: wall1_end, w1_isStart: false, w2_point: wall2_end, w2_isStart: false }
+        ];
+        
+        connections.forEach(conn => {
+          const distance = Math.sqrt(
+            Math.pow(conn.w1_point.x - conn.w2_point.x, 2) + 
+            Math.pow(conn.w1_point.y - conn.w2_point.y, 2)
+          );
+          
+          if (distance > 0 && distance <= SNAP_DISTANCE) {
+            // Calcular punto medio para la conexión
+            const midX = (conn.w1_point.x + conn.w2_point.x) / 2;
+            const midY = (conn.w1_point.y + conn.w2_point.y) / 2;
+            
+            // Actualizar el primer muro
+            const newWall1Points = [...wall1.points];
+            if (conn.w1_isStart) {
+              newWall1Points[0] = midX - wall1.x;
+              newWall1Points[1] = midY - wall1.y;
+            } else {
+              newWall1Points[2] = midX - wall1.x;
+              newWall1Points[3] = midY - wall1.y;
+            }
+            connectedWalls[i] = { ...wall1, points: newWall1Points };
+            
+            // Actualizar el segundo muro
+            const newWall2Points = [...wall2.points];
+            if (conn.w2_isStart) {
+              newWall2Points[0] = midX - wall2.x;
+              newWall2Points[1] = midY - wall2.y;
+            } else {
+              newWall2Points[2] = midX - wall2.x;
+              newWall2Points[3] = midY - wall2.y;
+            }
+            connectedWalls[j] = { ...wall2, points: newWall2Points };
+          }
+        });
+      }
+    }
+    
+    return connectedWalls;
+  }, [effectiveGridSize]);
+
+
+
   // Función para alternar el estado de una puerta
   const toggleDoor = useCallback((wallId) => {
     const updatedWalls = walls.map(wall => {
@@ -1071,6 +1144,33 @@ const MapCanvas = ({
     });
     onWallsChange(updatedWalls);
   }, [walls, onWallsChange]);
+
+  // Función para encontrar el punto de conexión más cercano
+  const findNearestWallEndpoint = useCallback((x, y, threshold = 25) => {
+    let nearestPoint = null;
+    let minDistance = threshold;
+    
+    walls.forEach(wall => {
+      const [x1, y1, x2, y2] = wall.points;
+      const endpoints = [
+        { x: wall.x + x1, y: wall.y + y1 },
+        { x: wall.x + x2, y: wall.y + y2 }
+      ];
+      
+      endpoints.forEach(endpoint => {
+        const distance = Math.sqrt(
+          Math.pow(x - endpoint.x, 2) + Math.pow(y - endpoint.y, 2)
+        );
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestPoint = endpoint;
+        }
+      });
+    });
+    
+    return nearestPoint;
+  }, [walls]);
 
   // Función auxiliar para calcular si un punto está cerca de un segmento de muro
   const isNearWallSegment = useCallback((x, y, wall, threshold = 20) => {
@@ -1285,10 +1385,46 @@ const MapCanvas = ({
     saveWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
   };
 
+  // Función para encontrar puntos de snap cercanos
+  const findSnapPoint = (x, y, currentWallId, snapDistance = 15) => {
+    for (const wall of walls) {
+      if (wall.id === currentWallId) continue;
+      
+      // Obtener los puntos absolutos del muro
+      const points = [
+        { x: wall.x + wall.points[0], y: wall.y + wall.points[1] },
+        { x: wall.x + wall.points[2], y: wall.y + wall.points[3] }
+      ];
+      
+      // Verificar distancia a cada punto
+      for (const point of points) {
+        const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
+        if (distance <= snapDistance) {
+          return { x: point.x, y: point.y, snapped: true };
+        }
+      }
+    }
+    return { x, y, snapped: false };
+  };
+
   const handleWallPointDrag = (id, index, e, save = false) => {
     const node = e.target;
-    const x = node.x();
-    const y = node.y();
+    let x = node.x();
+    let y = node.y();
+    
+    // Aplicar snap si estamos guardando (al soltar)
+    if (save) {
+      const snapResult = findSnapPoint(x, y, id);
+      x = snapResult.x;
+      y = snapResult.y;
+      
+      // Actualizar la posición visual del nodo si hubo snap
+      if (snapResult.snapped) {
+        node.x(x);
+        node.y(y);
+      }
+    }
+    
     const updater = (ws) =>
       ws.map((w) => {
         if (w.id !== id) return w;
@@ -2322,65 +2458,76 @@ const MapCanvas = ({
               scaleX={groupScale}
               scaleY={groupScale}
             >
-              {Object.entries(lightPolygons).map(([tokenId, lightData]) => {
-                if (!lightData.polygon || lightData.polygon.length < 3) return null;
-                
-                // Encontrar el token para obtener su posición
-                const token = tokens.find(t => t.id === tokenId);
-                if (!token) return null;
-                
+              {/* Renderizar luz básica para todos los tokens con luz */}
+              {tokens.filter(token => 
+                token.light && 
+                token.light.enabled && 
+                token.light.radius && 
+                token.light.radius > 0
+              ).map(token => {
                 const centerX = (token.x + token.w / 2) * effectiveGridSize;
                 const centerY = (token.y + token.h / 2) * effectiveGridSize;
                 const radius = token.light.radius * effectiveGridSize;
+                const color = token.light.color || '#ffa500';
+                const opacity = Math.max(0.2, token.light.opacity || 0.4);
                 
-                // Convertir polígono a puntos para Konva
-                const points = [];
-                lightData.polygon.forEach(point => {
-                  points.push(point.x, point.y);
-                });
+                // Verificar si hay polígono de visibilidad para este token
+                const lightData = lightPolygons[token.id];
+                const hasWallBlocking = lightData && lightData.polygon && lightData.polygon.length >= 3;
                 
-                return (
-                  <Group key={`light-${tokenId}`}>
-                    {/* Gradiente radial para efecto más realista */}
-                    <Circle
-                      x={centerX}
-                      y={centerY}
-                      radius={radius * 0.3}
-                      fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-                      fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-                      fillRadialGradientStartRadius={0}
-                      fillRadialGradientEndRadius={radius * 0.3}
-                      fillRadialGradientColorStops={[
-                        0, `${lightData.color}${Math.round(lightData.opacity * 255).toString(16).padStart(2, '0')}`,
-                        0.7, `${lightData.color}${Math.round(lightData.opacity * 0.5 * 255).toString(16).padStart(2, '0')}`,
-                        1, `${lightData.color}00`
-                      ]}
-                      listening={false}
-                      perfectDrawEnabled={false}
-                    />
-                    
-                    {/* Área de visibilidad principal */}
-                    <Line
-                      points={points}
-                      closed={true}
-                      fill={lightData.color}
-                      opacity={lightData.opacity * 0.6}
-                      listening={false}
-                      perfectDrawEnabled={false}
-                    />
-                    
-                    {/* Borde suave para transición */}
-                    <Line
-                      points={points}
-                      closed={true}
-                      stroke={lightData.color}
-                      strokeWidth={2}
-                      opacity={lightData.opacity * 0.3}
-                      listening={false}
-                      perfectDrawEnabled={false}
-                    />
-                  </Group>
-                );
+                if (hasWallBlocking) {
+                  // Si hay muros, usar el polígono de visibilidad
+                  const points = [];
+                  lightData.polygon.forEach(point => {
+                    points.push(point.x, point.y);
+                  });
+                  
+                  return (
+                    <Group key={`wall-blocked-light-${token.id}`}>
+                      {/* Luz limitada por muros usando polígono de visibilidad */}
+                      <Line
+                        points={points}
+                        closed={true}
+                        fillRadialGradientStartPoint={{ x: centerX, y: centerY }}
+                        fillRadialGradientEndPoint={{ x: centerX, y: centerY }}
+                        fillRadialGradientStartRadius={0}
+                        fillRadialGradientEndRadius={radius}
+                        fillRadialGradientColorStops={[
+                          0, hexToRgba(color, opacity * 0.8),
+                          0.3, hexToRgba(color, opacity * 0.6),
+                          0.6, hexToRgba(color, opacity * 0.3),
+                          0.85, hexToRgba(color, opacity * 0.1),
+                          1, hexToRgba(color, 0)
+                        ]}
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                    </Group>
+                  );
+                } else {
+                  // Si no hay muros o no se calculó el polígono, usar círculo simple
+                  return (
+                    <Group key={`simple-light-${token.id}`}>
+                      <Circle
+                        x={centerX}
+                        y={centerY}
+                        radius={radius}
+                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientStartRadius={0}
+                        fillRadialGradientEndRadius={radius}
+                        fillRadialGradientColorStops={[
+                          0, hexToRgba(color, opacity * 0.8),
+                          0.3, hexToRgba(color, opacity * 0.6),
+                          0.6, hexToRgba(color, opacity * 0.3),
+                          0.85, hexToRgba(color, opacity * 0.1),
+                          1, hexToRgba(color, 0)
+                        ]}
+                        listening={false}
+                      />
+                    </Group>
+                  );
+                }
               })}
             </Group>
           </Layer>

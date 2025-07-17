@@ -22,16 +22,22 @@ function raySegmentIntersection(ray, segment) {
   
   const denominator = dx1 * dy2 - dy1 * dx2;
   
+  // Usar epsilon más estricto para mejor precisión
+  const EPSILON = 1e-12;
+  
   // Líneas paralelas
-  if (Math.abs(denominator) < 1e-10) {
+  if (Math.abs(denominator) < EPSILON) {
     return null;
   }
   
   const t1 = (dx2 * dy3 - dy2 * dx3) / denominator;
   const t2 = (dx1 * dy3 - dy1 * dx3) / denominator;
   
+  // Usar tolerancia más estricta para evitar errores de precisión
+  const TOLERANCE = 1e-10;
+  
   // Verificar que la intersección esté en el rayo (t1 >= 0) y en el segmento (0 <= t2 <= 1)
-  if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
+  if (t1 >= TOLERANCE && t2 >= -TOLERANCE && t2 <= 1 + TOLERANCE) {
     return {
       x: origin.x + t1 * dx1,
       y: origin.y + t1 * dy1,
@@ -49,6 +55,7 @@ function raySegmentIntersection(ray, segment) {
  */
 function wallToSegments(wall) {
   // Solo considerar muros cerrados y secretos como obstáculos para la luz
+  // Las puertas abiertas no bloquean la luz
   if (wall.door === 'open') {
     return [];
   }
@@ -59,9 +66,30 @@ function wallToSegments(wall) {
   const endX = wall.x + x2;
   const endY = wall.y + y2;
   
+  // Asegurar que el segmento tenga longitud mínima para evitar problemas de precisión
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  
+  if (length < 1) {
+    return []; // Ignorar muros muy pequeños
+  }
+  
+  // Extender ligeramente el muro en ambas direcciones para evitar huecos
+  // Calculamos la dirección normalizada
+  const dirX = dx / length;
+  const dirY = dy / length;
+  
+  // Extendemos 2 unidades en cada extremo
+  const extensionLength = 2;
+  const extendedStartX = startX - dirX * extensionLength;
+  const extendedStartY = startY - dirY * extensionLength;
+  const extendedEndX = endX + dirX * extensionLength;
+  const extendedEndY = endY + dirY * extensionLength;
+  
   return [{
-    start: { x: startX, y: startY },
-    end: { x: endX, y: endY }
+    start: { x: extendedStartX, y: extendedStartY },
+    end: { x: extendedEndX, y: extendedEndY }
   }];
 }
 
@@ -72,7 +100,7 @@ function wallToSegments(wall) {
  * @param {Object} options - Opciones de configuración
  * @returns {Array} Array de puntos que forman el polígono visible
  */
-export function computeVisibility(origin, walls, { rays = 360, maxDistance = 500 } = {}) {
+export function computeVisibility(origin, walls, { rays = 720, maxDistance = 500 } = {}) {
   // Convertir muros a segmentos
   const segments = [];
   walls.forEach(wall => {
@@ -80,33 +108,68 @@ export function computeVisibility(origin, walls, { rays = 360, maxDistance = 500
     segments.push(...wallSegments);
   });
   
-  // Generar ángulos para los rayos
-  const angles = [];
-  const angleStep = (2 * Math.PI) / rays;
-  
-  for (let i = 0; i < rays; i++) {
-    angles.push(i * angleStep);
+  // Si no hay muros, devolver un círculo completo
+  if (segments.length === 0) {
+    const points = [];
+    const angleStep = (2 * Math.PI) / 64; // Más puntos para círculo suave
+    for (let i = 0; i < 64; i++) {
+      const angle = i * angleStep;
+      points.push({
+        x: origin.x + Math.cos(angle) * maxDistance,
+        y: origin.y + Math.sin(angle) * maxDistance,
+        angle: angle
+      });
+    }
+    return points;
   }
   
-  // Para cada esquina de los muros, agregar rayos ligeramente desplazados
-  // Esto ayuda a capturar mejor las esquinas y bordes
+  // Recopilar todos los puntos críticos (esquinas de muros)
+  const criticalPoints = new Set();
+  
   segments.forEach(segment => {
     [segment.start, segment.end].forEach(point => {
       const dx = point.x - origin.x;
       const dy = point.y - origin.y;
-      const angle = Math.atan2(dy, dx);
+      const distance = Math.sqrt(dx * dx + dy * dy);
       
-      // Agregar rayos ligeramente antes y después de cada esquina
-      angles.push(angle - 0.001);
-      angles.push(angle);
-      angles.push(angle + 0.001);
+      // Solo considerar puntos dentro del rango de luz
+      if (distance > 0.1 && distance <= maxDistance) {
+        const angle = Math.atan2(dy, dx);
+        
+        // Agregar múltiples rayos alrededor de cada esquina para capturar correctamente los bordes
+        const offsets = [-0.01, -0.005, -0.001, 0, 0.001, 0.005, 0.01];
+        offsets.forEach(offset => {
+          criticalPoints.add(angle + offset);
+        });
+      }
     });
   });
+  
+  // Generar ángulos base uniformemente distribuidos
+  const baseAngles = [];
+  const angleStep = (2 * Math.PI) / rays;
+  for (let i = 0; i < rays; i++) {
+    baseAngles.push(i * angleStep);
+  }
+  
+  // Combinar ángulos base con puntos críticos
+  const allAngles = [...baseAngles, ...Array.from(criticalPoints)];
+  
+  // Normalizar ángulos al rango [0, 2π) para evitar problemas de ordenamiento
+  const normalizedAngles = allAngles.map(angle => {
+    let normalized = angle % (2 * Math.PI);
+    if (normalized < 0) normalized += 2 * Math.PI;
+    return normalized;
+  });
+  
+  // Eliminar duplicados con mayor precisión y ordenar
+  const uniqueAngles = [...new Set(normalizedAngles.map(a => Math.round(a * 1000000) / 1000000))];
+  uniqueAngles.sort((a, b) => a - b);
   
   // Calcular intersecciones para cada rayo
   const intersections = [];
   
-  angles.forEach(angle => {
+  uniqueAngles.forEach(angle => {
     const direction = {
       x: Math.cos(angle),
       y: Math.sin(angle)
@@ -116,15 +179,16 @@ export function computeVisibility(origin, walls, { rays = 360, maxDistance = 500
     let closestIntersection = null;
     let minDistance = maxDistance;
     
-    // Encontrar la intersección más cercana
+    // Encontrar la intersección más cercana con mayor precisión
     segments.forEach(segment => {
       const intersection = raySegmentIntersection(ray, segment);
-      if (intersection && intersection.distance < minDistance) {
+      if (intersection && intersection.distance > 0.01 && intersection.distance < minDistance) {
         minDistance = intersection.distance;
         closestIntersection = {
           x: intersection.x,
           y: intersection.y,
-          angle: angle
+          angle: angle,
+          distance: intersection.distance
         };
       }
     });
@@ -134,27 +198,52 @@ export function computeVisibility(origin, walls, { rays = 360, maxDistance = 500
       closestIntersection = {
         x: origin.x + direction.x * maxDistance,
         y: origin.y + direction.y * maxDistance,
-        angle: angle
+        angle: angle,
+        distance: maxDistance
       };
     }
     
     intersections.push(closestIntersection);
   });
   
-  // Ordenar por ángulo y eliminar duplicados muy cercanos
+  // Ordenar por ángulo para crear polígono correcto
   intersections.sort((a, b) => a.angle - b.angle);
   
+  // Filtrar puntos muy cercanos para evitar artefactos, pero sin suavizado agresivo
   const filteredIntersections = [];
-  const threshold = 2; // Distancia mínima entre puntos
+  const MIN_ANGLE_DIFF = 0.001; // Diferencia mínima de ángulo para considerar puntos separados
   
-  intersections.forEach(point => {
-    const lastPoint = filteredIntersections[filteredIntersections.length - 1];
-    if (!lastPoint || 
-        Math.abs(point.x - lastPoint.x) > threshold || 
-        Math.abs(point.y - lastPoint.y) > threshold) {
-      filteredIntersections.push(point);
+  for (let i = 0; i < intersections.length; i++) {
+    const current = intersections[i];
+    const lastAdded = filteredIntersections[filteredIntersections.length - 1];
+    
+    // Solo agregar si es suficientemente diferente del último punto agregado
+    if (!lastAdded || 
+        Math.abs(current.angle - lastAdded.angle) > MIN_ANGLE_DIFF ||
+        Math.abs(current.distance - lastAdded.distance) > 1) {
+      filteredIntersections.push({
+        x: current.x,
+        y: current.y,
+        angle: current.angle
+      });
     }
-  });
+  }
+  
+  // Asegurar que tenemos suficientes puntos para formar un polígono válido
+  if (filteredIntersections.length < 3) {
+    // Fallback: crear un círculo simple
+    const fallbackPoints = [];
+    const angleStep = (2 * Math.PI) / 32;
+    for (let i = 0; i < 32; i++) {
+      const angle = i * angleStep;
+      fallbackPoints.push({
+        x: origin.x + Math.cos(angle) * maxDistance,
+        y: origin.y + Math.sin(angle) * maxDistance,
+        angle: angle
+      });
+    }
+    return fallbackPoints;
+  }
   
   return filteredIntersections;
 }
