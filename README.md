@@ -681,69 +681,27 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.4.0:**
 
-- **Sistema de Capas implementado** - Organización del contenido del mapa en 3 capas independientes:
-  - **Capa Fichas** (verde) - Capa principal para tokens y elementos de jugadores
-  - **Capa Master** (fucsia) - Capa intermedia para contenido específico del máster
-  - **Capa Luz** (amarillo) - Capa para efectos de iluminación y elementos visuales
-- **Filtrado por capas** - Solo se muestran elementos de la capa activa seleccionada
-- **Asignación automática** - Los nuevos elementos se crean en la capa actualmente seleccionada
-- **Guardado independiente** - Cada elemento mantiene su información de capa en Firebase
-- **Interfaz intuitiva** - Sección "Capas" en la parte inferior del toolbar con iconos distintivos
+- Sistema de Capas implementado con organización del contenido del mapa en 3 capas independientes.
+- Filtrado por capas y asignación automática de nuevos elementos a la capa seleccionada.
 
 **Resumen de cambios v2.4.1:**
 
-- **Detección de colisiones con muros** - Los tokens no pueden atravesar muros con puertas cerradas o secretas
-- **Bloqueo independiente de capas** - Los muros bloquean tokens sin importar en qué capa estén
-- **Prevención de colocación** - No se pueden colocar tokens en posiciones bloqueadas por muros
-- **Movimiento WASD restringido** - Las teclas de movimiento respetan las colisiones con muros
-- **Feedback visual** - Los tokens regresan a su posición original si se intenta colocar en área bloqueada
+- Detección de colisiones con muros para tokens y prevención de colocación en áreas bloqueadas.
+- Movimiento WASD restringido que respeta las colisiones con muros.
 
 **Resumen de cambios v2.4.2:**
 
-- **Sistema de puertas interactivas** - Los jugadores pueden interactuar con puertas desde la capa "fichas"
-- **Iconos de puertas realistas** - Diseño sutil con marco rectangular y manija que representa visualmente una puerta
-- **Orientación automática** - Las puertas se orientan según la dirección del muro (vertical u horizontal)
-- **Interacción intuitiva** - Click en el icono para alternar entre cerrada/abierta
-- **Visibilidad controlada** - Solo se muestran puertas cerradas y abiertas (no secretas) desde la capa fichas
-- **Posicionamiento preciso** - Los iconos aparecen centrados en el punto medio del segmento del muro
-- **Colores distintivos** - Marrón para cerradas, verde claro para abiertas con manijas doradas/verdes
-- **Área de click amplia** - Fácil interacción sin necesidad de precisión extrema
+- Sistema de puertas interactivas con iconos realistas y orientación automática.
+- Interacción intuitiva para alternar entre cerrada/abierta desde la capa fichas.
 
 **Resumen de cambios v2.4.3:**
 
-- **Sistema de iluminación y visibilidad** - Cálculo realista de áreas iluminadas con ray casting
-- **Configuración de luz en tokens** - Cada token puede configurar su radio de luz y tipo de iluminación
-- **Botón de subida de mapa estético** - Nuevo diseño minimalista para el botón "Subir Mapa" que sigue la estética del resto de la aplicación con gradiente gris, icono de upload y efectos hover consistentesuede tener su propia fuente de luz configurable
-- **Polígonos de visibilidad** - Cálculo dinámico de áreas visibles considerando obstáculos
-- **Bloqueo por muros** - Los muros cerrados y secretos bloquean la luz, las puertas abiertas no
-- **Renderizado optimizado** - Sistema eficiente de cálculo de sombras y áreas iluminadas
+- Sistema de iluminación y visibilidad con cálculo realista de áreas iluminadas usando ray casting.
+- Configuración de luz en tokens con radio, color e intensidad personalizables.
 
-**Resumen de cambios v2.4.4:**
+**Resumen de cambios v2.4.6:**
 
-- **Sistema de snap para muros** - Conexión automática de extremos de muros cercanos
-- **Eliminación de huecos** - Los extremos de muros se conectan perfectamente sin espacios
-- **Distancia de snap configurable** - Conexión automática cuando los extremos están a menos de 15 píxeles
-- **Feedback visual** - Los extremos se mueven visualmente a la posición exacta de conexión
-- **Prevención de filtrado de luz** - No más luz que se "filtra" por conexiones imperfectas entre muros
-
-**Resumen de cambios v2.4.5:**
-
-- **Algoritmo de visibilidad mejorado** - Corrección completa de artefactos de iluminación
-- **Precisión matemática aumentada** - Epsilon más estricto (1e-12) para cálculos de intersección
-- **Detección de esquinas robusta** - Múltiples rayos por esquina de muro para captura perfecta
-- **Eliminación de "saltos" de luz** - La luz ahora sigue consistentemente los contornos de muros
-- **Suavizado inteligente eliminado** - Removido el suavizado que causaba artefactos en áreas abiertas
-- **Normalización de ángulos** - Mejor manejo del rango [0, 2π) para evitar problemas de ordenamiento
-- **Filtrado optimizado** - Solo eliminación de duplicados sin alterar distancias calculadas
-- **Fallback robusto** - Círculo perfecto de respaldo para casos de polígonos inválidos
-- **Mayor densidad de rayos** - 180 rayos base más cientos adicionales en puntos críticos
-- **Rendimiento optimizado** - A pesar de más rayos, algoritmo más eficiente y precisouede emitir luz con radio, color e intensidad personalizables
-- **Algoritmo de visibilidad avanzado** - Ray casting que respeta muros cerrados y secretos como obstáculos
-- **Renderizado de zonas iluminadas** - Polígonos de luz que se superponen de forma realista en el mapa
-- **Interfaz de configuración** - Nueva pestaña "Luz" en ajustes de tokens con controles intuitivos
-- **Pruebas automatizadas** - Suite completa de tests para validar el algoritmo de visibilidad
-- **Optimización de rendimiento** - Cálculo eficiente con 64 rayos y filtrado de puntos duplicados
-- **Integración con capas** - El sistema de luz funciona independientemente del sistema de capas existente
+- Corrección del sistema de oscuridad para que funcione correctamente en todas las páginas del mapa de batalla.
 
 ### 🛠️ **Características Técnicas**
 
