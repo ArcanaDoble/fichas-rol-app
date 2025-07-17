@@ -1038,6 +1038,7 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    setSelectedPortalId(null);
     clearMultiSelection();
   };
 
@@ -1054,6 +1055,7 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    setSelectedPortalId(null);
     clearMultiSelection();
   };
 
@@ -1217,7 +1219,7 @@ const MapCanvas = ({
     onPortalsChange(newPortals);
   }, [onPortalsChange]);
 
-  const handlePortalClick = useCallback((portalId) => {
+  const handlePortalClick = useCallback((portalId, e) => {
     if (activeLayer === 'fichas') {
       // En capa fichas: activar portal (transportar jugador)
       const portal = portals.find(p => p.id === portalId);
@@ -1233,10 +1235,22 @@ const MapCanvas = ({
         }
       }
     } else {
-      // En capas master/luz: configurar portal
-      setPortalConfigId(portalId);
+      // En capas master/luz: seleccionar portal y opcionalmente configurar
+      setSelectedPortalId(portalId);
+
+      // Limpiar otras selecciones
+      setSelectedId(null);
+      setSelectedLineId(null);
+      setSelectedWallId(null);
+      setSelectedTextId(null);
+      clearMultiSelection();
+
+      // Si es doble clic, abrir configuración
+      if (e && e.detail === 2) {
+        setPortalConfigId(portalId);
+      }
     }
-  }, [activeLayer, portals, pages, onPageChange]);
+  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection]);
 
   const handlePortalUpdate = useCallback((updatedPortal) => {
     const newPortals = portals.map(p => p.id === updatedPortal.id ? updatedPortal : p);
@@ -2221,6 +2235,7 @@ const MapCanvas = ({
         setSelectedLineId(null);
         setSelectedWallId(null);
         setSelectedTextId(null);
+        setSelectedPortalId(null);
         clearMultiSelection();
       }
     }
@@ -2534,6 +2549,13 @@ const MapCanvas = ({
           setSelectedTexts([]);
         }
 
+        // Eliminar portal seleccionado individualmente
+        if (selectedPortalId != null) {
+          const newPortals = portals.filter(p => p.id !== selectedPortalId);
+          savePortals(newPortals);
+          setSelectedPortalId(null);
+        }
+
         // Eliminar selección individual si no hay selección múltiple
         if (selectedLineId != null && selectedLines.length === 0) {
           saveLines(lines.filter((ln) => ln.id !== selectedLineId));
@@ -2719,6 +2741,9 @@ const MapCanvas = ({
       clampToMapBounds,
       containerSize,
       mousePosition,
+      selectedPortalId,
+      portals,
+      savePortals,
     ]
   );
 
@@ -3253,10 +3278,10 @@ const MapCanvas = ({
                         y={portalY}
                         radius={effectiveGridSize * 0.4}
                         fill={isConnected ? '#4f46e5' : '#6b7280'}
-                        stroke={isSelected ? '#fbbf24' : '#1f2937'}
-                        strokeWidth={isSelected ? 3 : 2}
+                        stroke={isSelected ? '#fbbf24' : (isConnected ? '#4f46e5' : '#1f2937')}
+                        strokeWidth={isSelected ? 4 : 2}
                         opacity={activeLayer === 'fichas' ? 0.8 : 0.6}
-                        onClick={() => handlePortalClick(portal.id)}
+                        onClick={(e) => handlePortalClick(portal.id, e.evt)}
                         onMouseEnter={() => {
                           stageRef.current.container().style.cursor =
                             activeLayer === 'fichas' ? 'pointer' : 'crosshair';
@@ -3689,22 +3714,26 @@ const MapCanvas = ({
       )}
 
       {/* Contador de selección múltiple */}
-      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
+      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0 || selectedPortalId) && (
         <div className="absolute top-4 right-4 bg-green-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">📋 Seleccionados:</span>
             <span className="font-bold">
-              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
+              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length + (selectedPortalId ? 1 : 0)}
             </span>
             <span className="text-xs opacity-75">
               ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
               {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
               {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
-              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
+              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`}
+              {selectedPortalId && ` 1 portal`})
             </span>
           </div>
           <div className="text-xs opacity-75 mt-1">
-            Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+            {selectedPortalId && !selectedTokens.length && !selectedLines.length && !selectedWalls.length && !selectedTexts.length
+              ? 'Delete: Eliminar portal | Doble clic: Configurar | Escape: Deseleccionar'
+              : 'Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar'
+            }
           </div>
         </div>
       )}
