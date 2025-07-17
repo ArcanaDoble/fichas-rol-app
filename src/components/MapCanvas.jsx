@@ -36,8 +36,7 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
-import PortalConfigMenu from './PortalConfigMenu';
-import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
+import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -844,12 +843,6 @@ const MapCanvas = ({
   onLayerChange = () => {},
   enableDarkness = true,
   darknessOpacity = 0.7,
-  // Props para portales
-  portals: propPortals = [],
-  onPortalsChange = () => {},
-  pages = [],
-  currentPage = 0,
-  onPageChange = () => {},
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -915,15 +908,14 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
-
-  // Estados para portales
-  const [portals, setPortals] = useState(propPortals);
-  const [selectedPortalId, setSelectedPortalId] = useState(null);
-  const [portalConfigId, setPortalConfigId] = useState(null);
-
+  
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
   const [combinedLight, setCombinedLight] = useState([]);
+
+  // Estados para el sistema de visión de jugadores
+  const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
+  const [combinedPlayerVision, setCombinedPlayerVision] = useState([]);
 
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
@@ -952,7 +944,6 @@ const MapCanvas = ({
           if (availablePlayers.length === 1) {
             setSimulatedPlayer(availablePlayers[0]);
             setPlayerViewMode(true);
-            console.log('Simulando vista del jugador:', availablePlayers[0]);
           } else {
             const selectedPlayer = prompt(
               `Selecciona el jugador a simular:\n${availablePlayers.map((p, i) => `${i + 1}. ${p}`).join('\n')}`,
@@ -962,14 +953,12 @@ const MapCanvas = ({
             if (playerIndex >= 0 && playerIndex < availablePlayers.length) {
               setSimulatedPlayer(availablePlayers[playerIndex]);
               setPlayerViewMode(true);
-              console.log('Simulando vista del jugador:', availablePlayers[playerIndex]);
             }
           }
         } else {
           // Desactivar modo simulación
           setPlayerViewMode(false);
           setSimulatedPlayer('');
-          console.log('Saliendo del modo simulación de jugador');
         }
       }
     };
@@ -1038,7 +1027,6 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
-    setSelectedPortalId(null);
     clearMultiSelection();
   };
 
@@ -1055,7 +1043,6 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
-    setSelectedPortalId(null);
     clearMultiSelection();
   };
 
@@ -1108,9 +1095,16 @@ const MapCanvas = ({
           totalY += element.y;
           break;
         case 'lines':
-        case 'walls':
           totalX += element.x;
           totalY += element.y;
+          break;
+        case 'walls':
+          // Para muros, calcular el centro real usando la base + puntos relativos
+          const [x1, y1, x2, y2] = element.points;
+          const centerX = element.x + (x1 + x2) / 2;
+          const centerY = element.y + (y1 + y2) / 2;
+          totalX += centerX / effectiveGridSize; // Convertir a coordenadas de grid
+          totalY += centerY / effectiveGridSize;
           break;
         case 'texts':
           totalX += element.x / effectiveGridSize;
@@ -1125,66 +1119,6 @@ const MapCanvas = ({
       x: totalX / elements.length,
       y: totalY / elements.length
     };
-  };
-
-  // Función para calcular posición de destino basada en dirección del portal
-  const calculatePortalDestination = (portalX, portalY, direction) => {
-    let destX = portalX;
-    let destY = portalY;
-
-    switch (direction) {
-      case 0:   // 0° (arriba)
-        destY = portalY - 1;
-        break;
-      case 90:  // 90° (derecha)
-        destX = portalX + 1;
-        break;
-      case 180: // 180° (abajo)
-        destY = portalY + 1;
-        break;
-      case 270: // 270° (izquierda)
-        destX = portalX - 1;
-        break;
-      default:
-        // Para ángulos intermedios, usar el más cercano
-        const normalizedAngle = ((direction % 360) + 360) % 360;
-        if (normalizedAngle < 45 || normalizedAngle >= 315) {
-          destY = portalY - 1; // arriba
-        } else if (normalizedAngle < 135) {
-          destX = portalX + 1; // derecha
-        } else if (normalizedAngle < 225) {
-          destY = portalY + 1; // abajo
-        } else {
-          destX = portalX - 1; // izquierda
-        }
-        break;
-    }
-
-    // Aplicar límites del mapa
-    const clampedPos = clampToMapBounds(destX, destY);
-
-    // Verificar si la posición está ocupada
-    if (isPositionBlocked(clampedPos.x, clampedPos.y)) {
-      // Buscar casilla adyacente disponible
-      const adjacentPositions = [
-        { x: clampedPos.x, y: clampedPos.y - 1 }, // arriba
-        { x: clampedPos.x + 1, y: clampedPos.y }, // derecha
-        { x: clampedPos.x, y: clampedPos.y + 1 }, // abajo
-        { x: clampedPos.x - 1, y: clampedPos.y }, // izquierda
-      ];
-
-      for (const pos of adjacentPositions) {
-        const validPos = clampToMapBounds(pos.x, pos.y);
-        if (!isPositionBlocked(validPos.x, validPos.y)) {
-          return validPos;
-        }
-      }
-
-      // Si no hay casillas adyacentes disponibles, usar la posición original del portal
-      return { x: portalX, y: portalY };
-    }
-
-    return clampedPos;
   };
 
   // Función para obtener la posición de pegado inteligente
@@ -1273,101 +1207,6 @@ const MapCanvas = ({
     }
   };
 
-  // Funciones para manejo de portales
-  const savePortals = useCallback((newPortals) => {
-    setPortals(newPortals);
-    onPortalsChange(newPortals);
-  }, [onPortalsChange]);
-
-  const handlePortalClick = useCallback((portalId, e) => {
-    if (activeLayer === 'fichas') {
-      // En capa fichas: comportamiento diferente según tipo de usuario
-      if (userType === 'master') {
-        // Master en capa fichas: seleccionar portal para poder eliminarlo
-        setSelectedPortalId(portalId);
-
-        // Limpiar otras selecciones
-        setSelectedId(null);
-        setSelectedLineId(null);
-        setSelectedWallId(null);
-        setSelectedTextId(null);
-        clearMultiSelection();
-
-        // Si es doble clic, abrir configuración
-        if (e && e.detail === 2) {
-          setPortalConfigId(portalId);
-        }
-      } else {
-        // Jugador en capa fichas: activar portal (transportar)
-        const portal = portals.find(p => p.id === portalId);
-        if (portal && portal.isConnected && portal.targetPageId && portal.targetPortalId) {
-          // Encontrar la página de destino
-          const targetPageIndex = pages.findIndex(p => p.id === portal.targetPageId);
-          if (targetPageIndex !== -1) {
-            // Buscar el token del jugador actual
-            const playerToken = tokens.find(token =>
-              token.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)
-            );
-
-            if (playerToken) {
-              // Cambiar a la página de destino
-              onPageChange(targetPageIndex);
-
-              // Programar el posicionamiento del token para después del cambio de página
-              setTimeout(() => {
-                // Buscar el portal de destino en la nueva página
-                // Nota: Esto requerirá acceso a los portales de la página de destino
-                // Por ahora, simplemente cambiar la página
-                console.log('Portal activado - cambio a página:', targetPageIndex);
-                console.log('Token del jugador encontrado:', playerToken.id);
-                console.log('Portal destino:', portal.targetPortalId);
-              }, 100);
-            } else {
-              console.warn('No se encontró token del jugador para transportar');
-            }
-          }
-        }
-      }
-    } else {
-      // En capas master/luz: seleccionar portal y opcionalmente configurar
-      setSelectedPortalId(portalId);
-
-      // Limpiar otras selecciones
-      setSelectedId(null);
-      setSelectedLineId(null);
-      setSelectedWallId(null);
-      setSelectedTextId(null);
-      clearMultiSelection();
-
-      // Si es doble clic, abrir configuración
-      if (e && e.detail === 2) {
-        setPortalConfigId(portalId);
-      }
-    }
-  }, [activeLayer, portals, pages, onPageChange, clearMultiSelection, userType, tokens, playerName, simulatedPlayer]);
-
-  const handlePortalUpdate = useCallback((updatedPortal) => {
-    const newPortals = portals.map(p => p.id === updatedPortal.id ? updatedPortal : p);
-    savePortals(newPortals);
-  }, [portals, savePortals]);
-
-  const handlePortalDelete = useCallback((portalId) => {
-    const newPortals = portals.filter(p => p.id !== portalId);
-    savePortals(newPortals);
-  }, [portals, savePortals]);
-
-  const handlePortalRotate = useCallback((portalId, clockwise = true) => {
-    const delta = clockwise ? 90 : -90;
-    const updatedPortals = portals.map((portal) => {
-      if (portal.id === portalId) {
-        const newDirection = ((portal.direction || 0) + delta + 360) % 360;
-        return { ...portal, direction: newDirection };
-      }
-      return portal;
-    });
-    savePortals(updatedPortals);
-  }, [portals, savePortals]);
-
   // Función para alternar el estado de las puertas (solo desde capa fichas)
   const handleDoorToggle = useCallback((wallId) => {
     if (activeLayer !== 'fichas') return; // Solo permitir desde capa fichas
@@ -1447,6 +1286,59 @@ const MapCanvas = ({
   const effectiveGridSize =
     imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
 
+  // Función para verificar si un token es visible para el jugador actual
+  const isTokenVisibleToPlayer = useCallback((token) => {
+    // Si no estamos en modo jugador, mostrar todos los tokens (modo master)
+    const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+    if (!isPlayerMode) {
+      return true;
+    }
+
+    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+    if (!effectivePlayerName) {
+      return true;
+    }
+
+    // Encontrar el token del jugador actual
+    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
+    if (!playerToken) {
+      return true;
+    }
+
+    // Si el token es del propio jugador, siempre es visible
+    if (token.controlledBy === effectivePlayerName) {
+      return true;
+    }
+
+    // Verificar si el jugador tiene visión habilitada
+    const visionEnabled = playerToken.vision?.enabled !== false;
+    if (!visionEnabled) {
+      return false;
+    }
+
+    // Obtener el polígono de visión del jugador
+    const playerVisionData = playerVisionPolygons[playerToken.id];
+    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+      return true; // Si no hay polígono de visión, mostrar por defecto
+    }
+
+    // Calcular el centro del token a verificar
+    const tokenCenter = {
+      x: (token.x + token.w / 2) * effectiveGridSize,
+      y: (token.y + token.h / 2) * effectiveGridSize
+    };
+
+    // Verificar si el centro del token está dentro del polígono de visión del jugador
+    return isPointVisible(tokenCenter, playerVisionData.polygon);
+  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons, effectiveGridSize]);
+
+  // Los tokens siempre mantienen opacidad completa - la visibilidad se controla solo por sombras
+  const getTokenOpacity = useCallback((token) => {
+    // Todos los tokens siempre tienen opacidad completa
+    // La visibilidad se controla únicamente a través de la capa de sombras/oscuridad
+    return 1;
+  }, []);
+
   // Función para calcular polígonos de visibilidad para tokens con luz
   const calculateLightPolygons = useCallback(() => {
     const newPolygons = {};
@@ -1485,6 +1377,52 @@ const MapCanvas = ({
   useEffect(() => {
     calculateLightPolygons();
   }, [calculateLightPolygons]);
+
+  // Función para calcular polígonos de visión para todos los tokens
+  const calculatePlayerVisionPolygons = useCallback(() => {
+    const newPolygons = {};
+
+    // Calcular visión para todos los tokens que tienen visión habilitada
+    tokens.forEach(token => {
+      // Verificar si el token tiene visión habilitada
+      const visionEnabled = token.vision?.enabled !== false; // Por defecto true
+      const visionRange = token.vision?.range || 10; // Rango por defecto de 10 casillas
+
+      if (visionEnabled && visionRange > 0) {
+        const origin = {
+          x: (token.x + token.w / 2) * effectiveGridSize,
+          y: (token.y + token.h / 2) * effectiveGridSize
+        };
+
+        // Calcular el polígono de visión usando ray casting
+        const polygon = computeVisibility(origin, walls, {
+          rays: 360, // Más rayos para mayor precisión en visión
+          maxDistance: visionRange * effectiveGridSize
+        });
+
+        newPolygons[token.id] = {
+          polygon,
+          tokenId: token.id,
+          controlledBy: token.controlledBy,
+          visionRange: visionRange
+        };
+      }
+    });
+
+    setPlayerVisionPolygons(newPolygons);
+
+    // Combinar todos los polígonos de visión
+    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
+    const combined = combineVisibilityPolygons(allPolygons);
+    setCombinedPlayerVision(combined);
+  }, [tokens, walls, effectiveGridSize]);
+
+  // Recalcular polígonos de visión cuando cambien las dependencias
+  useEffect(() => {
+    calculatePlayerVisionPolygons();
+  }, [calculatePlayerVisionPolygons]);
+
+
 
   // Función para detectar colisiones con muros (independiente de la capa)
   const isPositionBlocked = useCallback((x, y) => {
@@ -1680,32 +1618,61 @@ const MapCanvas = ({
     return { x: gridCenterX, y: gridCenterY };
   }, [effectiveGridSize]);
 
+  // Función para verificar si una puerta es visible para el jugador actual
+  const isDoorVisibleToPlayer = useCallback((wall) => {
+    // Si no estamos en modo jugador, mostrar todas las puertas (modo master)
+    const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+    if (!isPlayerMode) {
+      return true;
+    }
+
+    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+    if (!effectivePlayerName) {
+      return true;
+    }
+
+    // Encontrar el token del jugador actual
+    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
+    if (!playerToken) {
+      return true;
+    }
+
+    // Verificar si el jugador tiene visión habilitada
+    const visionEnabled = playerToken.vision?.enabled !== false;
+    if (!visionEnabled) {
+      return false;
+    }
+
+    // Obtener el polígono de visión del jugador
+    const playerVisionData = playerVisionPolygons[playerToken.id];
+    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+      return true; // Si no hay polígono de visión, mostrar por defecto
+    }
+
+    // Calcular el centro de la puerta
+    const [x1, y1, x2, y2] = wall.points;
+    const doorCenter = {
+      x: wall.x + (x1 + x2) / 2,
+      y: wall.y + (y1 + y2) / 2
+    };
+
+    // Verificar si el centro de la puerta está dentro del polígono de visión del jugador
+    return isPointVisible(doorCenter, playerVisionData.polygon);
+  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons]);
+
   // Filtrar muros que deben mostrar iconos interactivos
+  // Ahora siempre devuelve las puertas - la visibilidad se controla por la capa de sombras
   const getInteractiveDoors = useCallback(() => {
     if (activeLayer === 'fichas') {
-      // Verificar si el jugador actual tiene visión
-      const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-      const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-
-      if (isPlayerMode && effectivePlayerName) {
-        const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
-        const visionValue = playerToken?.light?.vision;
-        const hasVision = visionValue === undefined ? true : visionValue;
-
-        // Si no tiene visión, no mostrar puertas interactivas
-        if (!hasVision) {
-          return [];
-        }
-      }
-
       // En la capa fichas, mostrar iconos solo para muros de otras capas
+      // Las puertas siempre se cargan pero la visibilidad se controla por sombras
       return walls.filter(wall =>
         (wall.layer && wall.layer !== 'fichas') &&
         (wall.door === 'closed' || wall.door === 'open')
       );
     }
     return [];
-  }, [walls, activeLayer, userType, playerViewMode, playerName, simulatedPlayer, tokens]);
+  }, [walls, activeLayer]);
 
   const pxToCell = (px, offset) =>
     Math.round((px - offset) / effectiveGridSize);
@@ -2174,33 +2141,6 @@ const MapCanvas = ({
         setSelectedTextId(id);
       }
     }
-
-    // Crear portal
-    if (activeTool === 'portal' && e.evt.button === 0) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-
-      // Convertir a coordenadas de grilla para tokens
-      const gridX = Math.round(relX / effectiveGridSize);
-      const gridY = Math.round(relY / effectiveGridSize);
-
-      const id = nanoid();
-      const newPortal = {
-        id,
-        x: gridX,
-        y: gridY,
-        name: `Portal ${id.slice(0, 8)}`,
-        layer: activeLayer,
-        targetPageId: null,
-        targetPortalId: null,
-        isConnected: false,
-        direction: 0, // Rotación del portal en grados
-      };
-
-      savePortals([...portals, newPortal]);
-      setSelectedPortalId(id);
-    }
   };
 
   // Actualiza la acción activa según la herramienta
@@ -2336,7 +2276,6 @@ const MapCanvas = ({
         setSelectedLineId(null);
         setSelectedWallId(null);
         setSelectedTextId(null);
-        setSelectedPortalId(null);
         clearMultiSelection();
       }
     }
@@ -2567,13 +2506,22 @@ const MapCanvas = ({
         // Pegar muros
         if (clipboard.walls.length > 0) {
           const newWalls = clipboard.walls.map(wall => {
-            // Calcular offset relativo al centro del grupo
-            const relativeX = wall.x - (wallsCenter.x * effectiveGridSize);
-            const relativeY = wall.y - (wallsCenter.y * effectiveGridSize);
+            // Calcular el centro real del muro original
+            const [x1, y1, x2, y2] = wall.points;
+            const wallCenterX = wall.x + (x1 + x2) / 2;
+            const wallCenterY = wall.y + (y1 + y2) / 2;
 
-            // Aplicar offset al punto de pegado
-            const finalX = pastePosition.x + relativeX;
-            const finalY = pastePosition.y + relativeY;
+            // Calcular offset relativo al centro del grupo (wallsCenter ya está en pixels)
+            const relativeX = wallCenterX - (wallsCenter.x * effectiveGridSize);
+            const relativeY = wallCenterY - (wallsCenter.y * effectiveGridSize);
+
+            // Calcular la nueva posición del centro
+            const newCenterX = pastePosition.x + relativeX;
+            const newCenterY = pastePosition.y + relativeY;
+
+            // Calcular la nueva posición base del muro
+            const finalX = newCenterX - (x1 + x2) / 2;
+            const finalY = newCenterY - (y1 + y2) / 2;
 
             return {
               ...wall,
@@ -2648,13 +2596,6 @@ const MapCanvas = ({
         if (selectedTexts.length > 0) {
           updateTexts(texts.filter(t => !selectedTexts.includes(t.id)));
           setSelectedTexts([]);
-        }
-
-        // Eliminar portal seleccionado individualmente (solo masters)
-        if (selectedPortalId != null && userType === 'master') {
-          const newPortals = portals.filter(p => p.id !== selectedPortalId);
-          savePortals(newPortals);
-          setSelectedPortalId(null);
         }
 
         // Eliminar selección individual si no hay selección múltiple
@@ -2807,8 +2748,6 @@ const MapCanvas = ({
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
       onTokensChange(updated);
-
-
     },
     [
       selectedId,
@@ -2844,10 +2783,6 @@ const MapCanvas = ({
       clampToMapBounds,
       containerSize,
       mousePosition,
-      selectedPortalId,
-      portals,
-      savePortals,
-      userType,
     ]
   );
 
@@ -3083,7 +3018,7 @@ const MapCanvas = ({
                   name={token.name}
                   customName={token.customName}
                   showName={token.showName}
-                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1)}
+                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                   tintColor={token.tintColor}
                   tintOpacity={token.tintOpacity}
                   showAura={false}
@@ -3357,170 +3292,6 @@ const MapCanvas = ({
               ))}
             </Group>
           </Layer>
-
-          {/* Capa de portales */}
-          <Layer listening>
-            <Group
-              x={groupPos.x}
-              y={groupPos.y}
-              scaleX={groupScale}
-              scaleY={groupScale}
-            >
-              {portals
-                .filter(portal => portal.layer === activeLayer)
-                .map((portal) => {
-                  const portalX = portal.x * effectiveGridSize;
-                  const portalY = portal.y * effectiveGridSize;
-                  const isSelected = portal.id === selectedPortalId;
-                  const isConnected = portal.isConnected;
-
-                  return (
-                    <Group key={portal.id}>
-                      {/* Base del portal */}
-                      <Circle
-                        x={portalX}
-                        y={portalY}
-                        radius={effectiveGridSize * 0.4}
-                        fill={isConnected ? '#4f46e5' : '#6b7280'}
-                        stroke={isSelected ? '#fbbf24' : (isConnected ? '#4f46e5' : '#1f2937')}
-                        strokeWidth={isSelected ? 4 : 2}
-                        opacity={activeLayer === 'fichas' ? 0.8 : 0.6}
-                        draggable={activeLayer !== 'fichas' && userType === 'master'}
-                        onClick={(e) => handlePortalClick(portal.id, e.evt)}
-                        onDragEnd={(e) => {
-                          if (activeLayer !== 'fichas' && userType === 'master') {
-                            const newX = Math.round(e.target.x() / effectiveGridSize);
-                            const newY = Math.round(e.target.y() / effectiveGridSize);
-                            const clampedPos = clampToMapBounds(newX, newY);
-
-                            // Solo actualizar el portal actual de esta página
-                            const updatedPortals = portals.map(p =>
-                              p.id === portal.id && p.layer === activeLayer
-                                ? { ...p, x: clampedPos.x, y: clampedPos.y }
-                                : p
-                            );
-                            savePortals(updatedPortals);
-
-                            // Reposicionar el elemento visual
-                            e.target.x(clampedPos.x * effectiveGridSize);
-                            e.target.y(clampedPos.y * effectiveGridSize);
-                          }
-                        }}
-                        onMouseEnter={() => {
-                          if (activeLayer === 'fichas') {
-                            stageRef.current.container().style.cursor = 'pointer';
-                          } else if (userType === 'master') {
-                            stageRef.current.container().style.cursor = 'move';
-                          } else {
-                            stageRef.current.container().style.cursor = 'crosshair';
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          stageRef.current.container().style.cursor = 'default';
-                        }}
-                      />
-
-                      {/* Anillo interior */}
-                      <Circle
-                        x={portalX}
-                        y={portalY}
-                        radius={effectiveGridSize * 0.25}
-                        fill="transparent"
-                        stroke={isConnected ? '#a5b4fc' : '#9ca3af'}
-                        strokeWidth={2}
-                        opacity={0.7}
-                        listening={false}
-                      />
-
-                      {/* Flecha direccional */}
-                      <Group
-                        x={portalX}
-                        y={portalY}
-                        rotation={portal.direction || 0}
-                      >
-                        <Line
-                          points={[0, -effectiveGridSize * 0.15, 0, effectiveGridSize * 0.15]}
-                          stroke="#ffffff"
-                          strokeWidth={3}
-                          lineCap="round"
-                          listening={false}
-                        />
-                        <Line
-                          points={[
-                            -effectiveGridSize * 0.08, effectiveGridSize * 0.05,
-                            0, effectiveGridSize * 0.15,
-                            effectiveGridSize * 0.08, effectiveGridSize * 0.05
-                          ]}
-                          stroke="#ffffff"
-                          strokeWidth={3}
-                          lineCap="round"
-                          lineJoin="round"
-                          listening={false}
-                        />
-                      </Group>
-
-                      {/* Indicador de conexión */}
-                      {isConnected && (
-                        <Circle
-                          x={portalX + effectiveGridSize * 0.25}
-                          y={portalY - effectiveGridSize * 0.25}
-                          radius={4}
-                          fill="#10b981"
-                          listening={false}
-                        />
-                      )}
-
-                      {/* Nombre del portal (solo en capas master/luz) */}
-                      {activeLayer !== 'fichas' && (
-                        <Text
-                          x={portalX - effectiveGridSize * 0.3}
-                          y={portalY + effectiveGridSize * 0.5}
-                          text={portal.name}
-                          fontSize={12}
-                          fill="#ffffff"
-                          fontFamily="Arial"
-                          listening={false}
-                        />
-                      )}
-
-                      {/* Botón de rotación (solo cuando está seleccionado y en capas master/luz) */}
-                      {isSelected && activeLayer !== 'fichas' && userType === 'master' && (
-                        <Group>
-                          <Circle
-                            x={portalX + effectiveGridSize * 0.6}
-                            y={portalY - effectiveGridSize * 0.6}
-                            radius={12}
-                            fill="#3b82f6"
-                            stroke="#1e40af"
-                            strokeWidth={2}
-                            onClick={(e) => {
-                              e.cancelBubble = true;
-                              handlePortalRotate(portal.id, true);
-                            }}
-                            onMouseEnter={() => {
-                              stageRef.current.container().style.cursor = 'pointer';
-                            }}
-                            onMouseLeave={() => {
-                              stageRef.current.container().style.cursor = 'default';
-                            }}
-                          />
-                          <Text
-                            x={portalX + effectiveGridSize * 0.6 - 6}
-                            y={portalY - effectiveGridSize * 0.6 - 6}
-                            text="↻"
-                            fontSize={12}
-                            fill="#ffffff"
-                            fontFamily="Arial"
-                            listening={false}
-                          />
-                        </Group>
-                      )}
-                    </Group>
-                  );
-                })}
-            </Group>
-          </Layer>
-
           <Layer listening>
             {filteredTokens.map((token) => (
               <TokenBars
@@ -3656,42 +3427,8 @@ const MapCanvas = ({
             </Layer>
           )}
 
-          {/* Capa de oscuridad personal - para jugadores sin visión */}
-          {(() => {
-            // Determinar si estamos en modo jugador real o simulado
-            const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-            const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-
-            console.log('Checking vision conditions:', {
-              userType,
-              playerName,
-              playerViewMode,
-              simulatedPlayer,
-              isPlayerMode,
-              effectivePlayerName,
-              tokensCount: tokens.length,
-              allTokens: tokens.map(t => ({ id: t.id, controlledBy: t.controlledBy, light: t.light }))
-            });
-
-            if (!isPlayerMode || !effectivePlayerName) {
-              console.log('Not in player mode or no player name, skipping vision check');
-              return false;
-            }
-
-            const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
-            const visionValue = playerToken?.light?.vision;
-            const hasVision = visionValue === undefined ? true : visionValue; // Por defecto true si no está definido
-
-            console.log('Vision check:', {
-              effectivePlayerName,
-              playerToken: playerToken ? { id: playerToken.id, controlledBy: playerToken.controlledBy, light: playerToken.light } : null,
-              visionValue,
-              hasVision,
-              shouldShowDarkness: !hasVision
-            });
-
-            return !hasVision ? playerToken : false;
-          })() && (
+          {/* Capa de visión - mostrar polígonos de visión de tokens (solo en modo master) */}
+          {!playerViewMode && userType === 'master' && (
             <Layer listening={false}>
               <Group
                 x={groupPos.x}
@@ -3699,46 +3436,31 @@ const MapCanvas = ({
                 scaleX={groupScale}
                 scaleY={groupScale}
               >
-                {/* Oscuridad completa para jugadores sin visión */}
-                <Rect
-                  x={0}
-                  y={0}
-                  width={imageSize.width || 3000}
-                  height={imageSize.height || 3000}
-                  fill="rgba(0, 0, 0, 1)"
-                  listening={false}
-                />
+                {/* Renderizar polígonos de visión para tokens con visión habilitada */}
+                {Object.values(playerVisionPolygons).map(visionData => {
+                  if (!visionData.polygon || visionData.polygon.length < 3) return null;
 
-                {/* Revelar solo el token del jugador */}
-                {(() => {
-                  const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-                  const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-                  const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
-
-                  if (!playerToken) return null;
-
-                  const tokenX = playerToken.x * effectiveGridSize;
-                  const tokenY = playerToken.y * effectiveGridSize;
-                  const tokenWidth = playerToken.w * effectiveGridSize;
-                  const tokenHeight = playerToken.h * effectiveGridSize;
+                  const token = tokens.find(t => t.id === visionData.tokenId);
+                  if (!token) return null;
 
                   return (
-                    <Rect
-                      x={tokenX}
-                      y={tokenY}
-                      width={tokenWidth}
-                      height={tokenHeight}
-                      fill="rgba(0, 0, 0, 1)"
-                      globalCompositeOperation="destination-out"
+                    <Line
+                      key={`vision-${visionData.tokenId}`}
+                      points={visionData.polygon.flatMap(point => [point.x, point.y])}
+                      closed={true}
+                      fill="rgba(255, 255, 0, 0.1)"
+                      stroke="rgba(255, 255, 0, 0.3)"
+                      strokeWidth={2}
                       listening={false}
+                      perfectDrawEnabled={false}
                     />
                   );
-                })()}
+                })}
               </Group>
             </Layer>
           )}
 
-          {/* Capa de puertas interactivas - debe estar dentro del Group principal */}
+          {/* Capa de puertas interactivas - renderizada antes de las sombras para que sean ocluidas */}
           <Layer listening>
             <Group
               x={groupPos.x}
@@ -3756,6 +3478,88 @@ const MapCanvas = ({
               ))}
             </Group>
           </Layer>
+
+          {/* Capa de sombras para bloquear visión - renderizada encima de todos los tokens y puertas */}
+          {(() => {
+            // Determinar si estamos en modo jugador real o simulado
+            const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+            const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
+
+            if (!isPlayerMode || !effectivePlayerName) {
+              return null;
+            }
+
+            const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+            if (!playerToken) {
+              return null;
+            }
+
+            // Verificar si el jugador tiene visión habilitada
+            const visionEnabled = playerToken.vision?.enabled !== false;
+            if (!visionEnabled) {
+              return (
+                <Layer listening={false}>
+                  <Group
+                    x={groupPos.x}
+                    y={groupPos.y}
+                    scaleX={groupScale}
+                    scaleY={groupScale}
+                  >
+                    {/* Oscuridad completa si no tiene visión */}
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={imageSize.width || 3000}
+                      height={imageSize.height || 3000}
+                      fill="rgba(0, 0, 0, 1)"
+                      listening={false}
+                    />
+                  </Group>
+                </Layer>
+              );
+            }
+
+            // Obtener el polígono de visión del jugador
+            const playerVisionData = playerVisionPolygons[playerToken.id];
+            if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
+              return null;
+            }
+
+            return (
+              <Layer listening={false}>
+                <Group
+                  x={groupPos.x}
+                  y={groupPos.y}
+                  scaleX={groupScale}
+                  scaleY={groupScale}
+                >
+                  {/* Rectángulo negro que cubre todo el mapa - opacidad completa para oclusión total */}
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={imageSize.width || 3000}
+                    height={imageSize.height || 3000}
+                    fill="rgba(0, 0, 0, 1)"
+                    listening={false}
+                  />
+
+                  {/* Polígono de visión del jugador que revela las áreas visibles */}
+                  <Line
+                    points={playerVisionData.polygon.flatMap(point => [point.x, point.y])}
+                    closed={true}
+                    fill="rgba(0, 0, 0, 1)"
+                    globalCompositeOperation="destination-out"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                </Group>
+              </Layer>
+            );
+          })()}
+
+
+
+
 
           {/* Cuadro de selección múltiple */}
           {isSelecting && (
@@ -3799,9 +3603,6 @@ const MapCanvas = ({
         onTextOptionsChange={setTextOptions}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
-        pages={pages}
-        currentPage={currentPage}
-        onPageChange={onPageChange}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -3852,19 +3653,6 @@ const MapCanvas = ({
         />
       )}
 
-      {/* Menú de configuración de portales */}
-      {portalConfigId && (
-        <PortalConfigMenu
-          portal={portals.find(p => p.id === portalConfigId)}
-          pages={pages}
-          currentPage={currentPage}
-          currentPagePortals={portals}
-          onClose={() => setPortalConfigId(null)}
-          onUpdate={handlePortalUpdate}
-          onDelete={handlePortalDelete}
-        />
-      )}
-
       {/* Indicador de modo simulación */}
       {userType === 'master' && playerViewMode && (
         <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
@@ -3877,26 +3665,22 @@ const MapCanvas = ({
       )}
 
       {/* Contador de selección múltiple */}
-      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0 || selectedPortalId) && (
+      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
         <div className="absolute top-4 right-4 bg-green-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">📋 Seleccionados:</span>
             <span className="font-bold">
-              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length + (selectedPortalId ? 1 : 0)}
+              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
             </span>
             <span className="text-xs opacity-75">
               ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
               {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
               {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
-              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`}
-              {selectedPortalId && ` 1 portal`})
+              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
             </span>
           </div>
           <div className="text-xs opacity-75 mt-1">
-            {selectedPortalId && !selectedTokens.length && !selectedLines.length && !selectedWalls.length && !selectedTexts.length
-              ? 'Delete: Eliminar portal | Doble clic: Configurar | Escape: Deseleccionar'
-              : 'Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar'
-            }
+            Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
           </div>
         </div>
       )}
@@ -3988,28 +3772,6 @@ MapCanvas.propTypes = {
   onLayerChange: PropTypes.func,
   enableDarkness: PropTypes.bool,
   darknessOpacity: PropTypes.number,
-  portals: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
-      x: PropTypes.number.isRequired,
-      y: PropTypes.number.isRequired,
-      name: PropTypes.string,
-      layer: PropTypes.string,
-      targetPageId: PropTypes.string,
-      targetPortalId: PropTypes.string,
-      isConnected: PropTypes.bool,
-      direction: PropTypes.number,
-    })
-  ),
-  onPortalsChange: PropTypes.func,
-  pages: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
-      name: PropTypes.string.isRequired,
-    })
-  ),
-  currentPage: PropTypes.number,
-  onPageChange: PropTypes.func,
 };
 
 export default MapCanvas;

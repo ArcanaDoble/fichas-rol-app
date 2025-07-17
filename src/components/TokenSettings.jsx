@@ -66,7 +66,10 @@ const TokenSettings = ({
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
-  const [visionEnabled, setVisionEnabled] = useState(token.light?.vision !== false); // Por defecto true
+
+  // Estados para configuración de visión
+  const [visionEnabled, setVisionEnabled] = useState(token.vision?.enabled !== false); // Por defecto true
+  const [visionRange, setVisionRange] = useState(token.vision?.range || 10); // Rango por defecto de 10 casillas
   
   // Ref para debouncing
   const debounceRef = useRef(null);
@@ -101,7 +104,10 @@ const TokenSettings = ({
           radius: lightRadius,
           color: lightColor,
           opacity: lightOpacity,
-          vision: visionEnabled,
+        },
+        vision: {
+          enabled: visionEnabled,
+          range: visionRange,
         },
       });
     }, 300); // Esperar 300ms antes de aplicar cambios
@@ -109,7 +115,7 @@ const TokenSettings = ({
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
     tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
-    lightColor, lightOpacity, visionEnabled, onUpdate
+    lightColor, lightOpacity, visionEnabled, visionRange, onUpdate
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
@@ -137,7 +143,10 @@ const TokenSettings = ({
         radius: lightRadius,
         color: lightColor,
         opacity: lightOpacity,
-        vision: visionEnabled,
+      },
+      vision: {
+        enabled: visionEnabled,
+        range: visionRange,
       },
     };
     console.log('Updating token with vision:', visionEnabled, updatedToken);
@@ -354,6 +363,23 @@ const TokenSettings = ({
                 />
                 <label htmlFor="visionEnabled">Tiene visión</label>
               </div>
+
+              {visionEnabled && (
+                <div>
+                  <label className="block mb-1">Rango de visión (casillas)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={visionRange}
+                    onChange={e => setVisionRange(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    👁️ Distancia máxima que puede ver este token. Los muros bloquearán la visión.
+                  </div>
+                </div>
+              )}
+
               {lightEnabled && (
                 <>
                   <div>

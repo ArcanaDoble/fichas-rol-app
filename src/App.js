@@ -459,7 +459,6 @@ function App() {
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
   const prevTextsRef = useRef([]);
-  const prevPortalsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
   // Tokens para el Mapa de Batalla
@@ -467,7 +466,6 @@ function App() {
   const [canvasLines, setCanvasLines] = useState([]);
   const [canvasWalls, setCanvasWalls] = useState([]);
   const [canvasTexts, setCanvasTexts] = useState([]);
-  const [canvasPortals, setCanvasPortals] = useState([]);
   const [activeLayer, setActiveLayer] = useState('fichas');
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
@@ -508,7 +506,6 @@ function App() {
           lines: [],
           walls: [],
           texts: [],
-          portals: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         const { tokens, lines, walls, texts, ...meta } = defaultPage;
@@ -567,7 +564,6 @@ function App() {
       setCanvasLines(data.lines || []);
       setCanvasWalls(data.walls || []);
       setCanvasTexts(data.texts || []);
-      setCanvasPortals(data.portals || []);
       setCanvasBackground(data.background || null);
       setGridSize(data.gridSize || 1);
       setGridCells(data.gridCells || 1);
@@ -578,7 +574,6 @@ function App() {
       prevLinesRef.current = data.lines || [];
       prevWallsRef.current = data.walls || [];
       prevTextsRef.current = data.texts || [];
-      prevPortalsRef.current = data.portals || [];
       prevBgRef.current = data.background || null;
       prevGridRef.current = {
         gridSize: data.gridSize || 1,
@@ -635,16 +630,6 @@ function App() {
     prevTextsRef.current = canvasTexts;
     updateDoc(doc(db, 'pages', pageId), { texts: canvasTexts });
   }, [canvasTexts, currentPage]);
-
-  // Guardar portales
-  useEffect(() => {
-    if (!pagesLoadedRef.current) return;
-    const pageId = pages[currentPage]?.id;
-    if (!pageId) return;
-    if (deepEqual(canvasPortals, prevPortalsRef.current)) return;
-    prevPortalsRef.current = canvasPortals;
-    updateDoc(doc(db, 'pages', pageId), { portals: canvasPortals });
-  }, [canvasPortals, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
@@ -780,10 +765,9 @@ function App() {
       lines: [],
       walls: [],
       texts: [],
-      portals: [],
     };
     await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-    const { tokens, lines, walls, texts, portals, ...meta } = newPage;
+    const { tokens, lines, walls, texts, ...meta } = newPage;
     setPages((ps) => [...ps, meta]);
     setCurrentPage(pages.length);
   };
@@ -4021,11 +4005,6 @@ function App() {
               onLinesChange={setCanvasLines}
               walls={canvasWalls}
               onWallsChange={setCanvasWalls}
-              portals={canvasPortals}
-              onPortalsChange={setCanvasPortals}
-              pages={pages}
-              currentPage={currentPage}
-              onPageChange={setCurrentPage}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
