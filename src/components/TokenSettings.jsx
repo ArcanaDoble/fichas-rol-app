@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
 
@@ -110,7 +112,7 @@ const TokenSettings = ({
           range: visionRange,
         },
       });
-    }, 300); // Esperar 300ms antes de aplicar cambios
+    }, 800); // Esperar 800ms antes de aplicar cambios (optimizado para evitar spam a Firebase)
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
@@ -153,12 +155,11 @@ const TokenSettings = ({
     onUpdate(updatedToken);
   };
 
-  // useEffect para cambios inmediatos (no relacionados con luz)
+  // useEffect para cambios inmediatos (no relacionados con texto/luz)
   useEffect(() => {
     applyChanges();
   }, [
     enemyId,
-    name,
     showName,
     controlledBy,
     barsVisibility,
@@ -175,10 +176,50 @@ const TokenSettings = ({
     visionEnabled, // Cambio inmediato para visión
   ]);
 
-  // useEffect con debouncing para cambios de luz (color e intensidad)
+  // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
     debouncedApplyChanges();
-  }, [lightColor, lightOpacity, debouncedApplyChanges]);
+  }, [name, lightColor, lightOpacity, debouncedApplyChanges]);
+
+  // Función para agregar el token al sistema de velocidad
+  const addToInitiativeSystem = async () => {
+    try {
+      const initiativeRef = doc(db, 'initiative', 'current');
+      const initiativeDoc = await getDoc(initiativeRef);
+
+      let participants = [];
+      if (initiativeDoc.exists()) {
+        participants = initiativeDoc.data().participants || [];
+      }
+
+      // Verificar si ya existe un participante con el mismo nombre
+      const tokenDisplayName = showName && name ? name : (token.name || 'Token sin nombre');
+      const existingParticipant = participants.find(p => p.name === tokenDisplayName);
+
+      if (existingParticipant) {
+        alert(`Ya existe un participante llamado "${tokenDisplayName}" en el sistema de velocidad.`);
+        return;
+      }
+
+      // Crear nuevo participante
+      const newParticipant = {
+        id: Date.now().toString(),
+        name: tokenDisplayName,
+        speed: 0,
+        type: controlledBy === 'master' ? 'enemy' : 'player',
+        addedBy: controlledBy === 'master' ? 'master' : controlledBy
+      };
+
+      // Agregar al sistema
+      const updatedParticipants = [...participants, newParticipant];
+      await updateDoc(initiativeRef, { participants: updatedParticipants });
+
+      alert(`"${tokenDisplayName}" ha sido agregado al sistema de velocidad.`);
+    } catch (error) {
+      console.error('Error al agregar al sistema de velocidad:', error);
+      alert('Error al agregar al sistema de velocidad. Inténtalo de nuevo.');
+    }
+  };
 
   if (!token) return null;
 
@@ -287,6 +328,12 @@ const TokenSettings = ({
                 }}
               >
                 Abrir ficha de personaje
+              </Boton>
+              <Boton
+                onClick={addToInitiativeSystem}
+                className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white mt-2"
+              >
+                ⚡ Añadir al Sistema de Velocidad
               </Boton>
               <div className="flex justify-center gap-2 mt-2">
                 <Boton size="sm" onClick={() => onMoveBack?.()}>Bajar capa</Boton>
