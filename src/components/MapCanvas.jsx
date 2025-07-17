@@ -889,38 +889,6 @@ const MapCanvas = ({
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
 
-  // Función para calcular polígonos de visibilidad para tokens con luz
-  const calculateLightPolygons = useCallback(() => {
-    const newPolygons = {};
-    
-    tokens.forEach(token => {
-      if (token.light && token.light.enabled && token.light.radius > 0) {
-        const origin = {
-          x: (token.x + token.w / 2) * effectiveGridSize,
-          y: (token.y + token.h / 2) * effectiveGridSize
-        };
-        
-        const polygon = computeVisibility(origin, walls, {
-          rays: 64,
-          maxDistance: token.light.radius * effectiveGridSize
-        });
-        
-        newPolygons[token.id] = {
-          polygon,
-          color: token.light.color || '#ffff88',
-          opacity: token.light.opacity || 0.3
-        };
-      }
-    });
-    
-    setLightPolygons(newPolygons);
-  }, [tokens, walls, effectiveGridSize]);
-
-  // Recalcular polígonos cuando cambien tokens o muros
-  useEffect(() => {
-    calculateLightPolygons();
-  }, [calculateLightPolygons]);
-
   // Sincronizar con la prop externa
   useEffect(() => {
     setActiveLayer(propActiveLayer);
@@ -1021,6 +989,38 @@ const MapCanvas = ({
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize =
     imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
+
+  // Función para calcular polígonos de visibilidad para tokens con luz
+  const calculateLightPolygons = useCallback(() => {
+    const newPolygons = {};
+    
+    tokens.forEach(token => {
+      if (token.light && token.light.enabled && token.light.radius > 0) {
+        const origin = {
+          x: (token.x + token.w / 2) * effectiveGridSize,
+          y: (token.y + token.h / 2) * effectiveGridSize
+        };
+        
+        const polygon = computeVisibility(origin, walls, {
+          rays: 64,
+          maxDistance: token.light.radius * effectiveGridSize
+        });
+        
+        newPolygons[token.id] = {
+          polygon,
+          color: token.light.color || '#ffff88',
+          opacity: token.light.opacity || 0.3
+        };
+      }
+    });
+    
+    setLightPolygons(newPolygons);
+  }, [tokens, walls, effectiveGridSize]);
+
+  // Recalcular polígonos cuando cambien tokens o muros
+  useEffect(() => {
+    calculateLightPolygons();
+  }, [calculateLightPolygons]);
 
   // Función para detectar colisiones con muros (independiente de la capa)
   const isPositionBlocked = useCallback((x, y) => {
