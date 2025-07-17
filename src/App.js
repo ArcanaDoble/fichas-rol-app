@@ -3948,6 +3948,8 @@ function App() {
               playerName={playerName}
               activeLayer={activeLayer}
               onLayerChange={setActiveLayer}
+              enableDarkness={enableDarkness}
+              darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
             />
           </div>
           <AssetSidebar isMaster={authenticated} playerName={playerName} />

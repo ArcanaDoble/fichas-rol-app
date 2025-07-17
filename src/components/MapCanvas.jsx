@@ -36,7 +36,7 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
-import { computeVisibility } from '../utils/visibility';
+import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -841,6 +841,8 @@ const MapCanvas = ({
   onTextsChange = () => {},
   activeLayer: propActiveLayer = 'fichas',
   onLayerChange = () => {},
+  enableDarkness = true,
+  darknessOpacity = 0.7,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -888,6 +890,7 @@ const MapCanvas = ({
   
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
+  const [combinedLight, setCombinedLight] = useState([]);
 
   // Sincronizar con la prop externa
   useEffect(() => {
@@ -1060,8 +1063,13 @@ const MapCanvas = ({
         };
       }
     });
-    
+
     setLightPolygons(newPolygons);
+
+    // Combinar todos los polígonos de luz en uno solo
+    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
+    const combined = combineVisibilityPolygons(allPolygons);
+    setCombinedLight(combined);
   }, [tokens, walls, effectiveGridSize]);
 
   // Recalcular polígonos cuando cambien tokens o muros
@@ -2588,7 +2596,39 @@ const MapCanvas = ({
               })}
             </Group>
           </Layer>
-          
+
+          {/* Capa de oscuridad - solo si está habilitada */}
+          {enableDarkness && combinedLight.length >= 3 && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                {/* Rectángulo negro que cubre todo el mapa */}
+                <Rect
+                  x={0}
+                  y={0}
+                  width={imageSize.width || 3000}
+                  height={imageSize.height || 3000}
+                  fill={`rgba(0, 0, 0, ${darknessOpacity})`}
+                  listening={false}
+                />
+
+                {/* Polígono combinado que revela las áreas iluminadas */}
+                <Line
+                  points={combinedLight.flatMap(point => [point.x, point.y])}
+                  closed={true}
+                  fill="rgba(0, 0, 0, 1)"
+                  globalCompositeOperation="destination-out"
+                  listening={false}
+                  perfectDrawEnabled={false}
+                />
+              </Group>
+            </Layer>
+          )}
+
           {/* Capa de puertas interactivas - debe estar dentro del Group principal */}
           <Layer listening>
             <Group
@@ -2745,6 +2785,8 @@ MapCanvas.propTypes = {
   onTextsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
+  enableDarkness: PropTypes.bool,
+  darknessOpacity: PropTypes.number,
 };
 
 export default MapCanvas;

@@ -17,6 +17,8 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
       gridCells: p.gridCells,
       gridOffsetX: p.gridOffsetX,
       gridOffsetY: p.gridOffsetY,
+      enableDarkness: p.enableDarkness !== undefined ? p.enableDarkness : true,
+      darknessOpacity: p.darknessOpacity !== undefined ? p.darknessOpacity : 0.7,
     });
     setEditIndex(index);
   };
@@ -30,6 +32,8 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
       gridCells: parseInt(pageData.gridCells, 10) || 1,
       gridOffsetX: parseInt(pageData.gridOffsetX, 10) || 0,
       gridOffsetY: parseInt(pageData.gridOffsetY, 10) || 0,
+      enableDarkness: pageData.enableDarkness,
+      darknessOpacity: parseFloat(pageData.darknessOpacity) || 0.7,
     });
     closeEdit();
   };
@@ -118,6 +122,36 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
             value={pageData.gridOffsetY || 0}
             onChange={e => setPageData({ ...pageData, gridOffsetY: e.target.value })}
           />
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="enableDarkness"
+              checked={pageData.enableDarkness || false}
+              onChange={e => setPageData({ ...pageData, enableDarkness: e.target.checked })}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <label htmlFor="enableDarkness" className="text-sm font-medium text-gray-300">
+              Activar sistema de oscuridad en esta página
+            </label>
+          </div>
+
+          {pageData.enableDarkness && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">
+                Opacidad de la oscuridad: {Math.round((pageData.darknessOpacity || 0.7) * 100)}%
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={pageData.darknessOpacity || 0.7}
+                onChange={e => setPageData({ ...pageData, darknessOpacity: parseFloat(e.target.value) })}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+          )}
         </div>
       </Modal>
     </div>
