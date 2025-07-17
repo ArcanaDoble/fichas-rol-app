@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -64,8 +64,53 @@ const TokenSettings = ({
   // Estados para configuración de luz
   const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
-  const [lightColor, setLightColor] = useState(token.light?.color || '#ffff88');
-  const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.3);
+  const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
+  const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
+  
+  // Ref para debouncing
+  const debounceRef = useRef(null);
+  
+  // Función con debouncing para evitar múltiples actualizaciones a Firebase
+  const debouncedApplyChanges = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      const enemy = enemies.find((e) => e.id === enemyId);
+      onUpdate({
+        ...token,
+        enemyId: enemyId || null,
+        url: enemyId ? enemy?.portrait || token.url : token.url,
+        name: enemyId ? enemy?.name : token.name,
+        customName: showName ? name : '',
+        showName,
+        controlledBy,
+        barsVisibility,
+        auraRadius,
+        auraShape,
+        auraColor,
+        auraOpacity,
+        auraVisibility,
+        opacity: tokenOpacity,
+        tintColor,
+        tintOpacity,
+        light: {
+          enabled: lightEnabled,
+          radius: lightRadius,
+          color: lightColor,
+          opacity: lightOpacity,
+        },
+      });
+    }, 300); // Esperar 300ms antes de aplicar cambios
+  }, [
+    token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
+    auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
+    tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
+    lightColor, lightOpacity, onUpdate
+  ]);
+
+  // Función inmediata para cambios que no requieren debouncing
   const applyChanges = () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     onUpdate({
@@ -94,6 +139,7 @@ const TokenSettings = ({
     });
   };
 
+  // useEffect para cambios inmediatos (no relacionados con luz)
   useEffect(() => {
     applyChanges();
   }, [
@@ -112,9 +158,12 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
-    lightColor,
-    lightOpacity,
   ]);
+
+  // useEffect con debouncing para cambios de luz (color e intensidad)
+  useEffect(() => {
+    debouncedApplyChanges();
+  }, [lightColor, lightOpacity, debouncedApplyChanges]);
 
   if (!token) return null;
 
@@ -300,6 +349,32 @@ const TokenSettings = ({
                   </div>
                   <div>
                     <label className="block mb-1">Color de la luz</label>
+                    <div className="flex gap-2 mb-2">
+                      <button 
+                        onClick={() => setLightColor('#ffa500')} 
+                        className="w-8 h-8 rounded border-2 border-gray-400" 
+                        style={{backgroundColor: '#ffa500'}} 
+                        title="Antorcha (naranja cálido)"
+                      />
+                      <button 
+                        onClick={() => setLightColor('#ffff88')} 
+                        className="w-8 h-8 rounded border-2 border-gray-400" 
+                        style={{backgroundColor: '#ffff88'}} 
+                        title="Vela (amarillo suave)"
+                      />
+                      <button 
+                        onClick={() => setLightColor('#87ceeb')} 
+                        className="w-8 h-8 rounded border-2 border-gray-400" 
+                        style={{backgroundColor: '#87ceeb'}} 
+                        title="Luz mágica (azul)"
+                      />
+                      <button 
+                        onClick={() => setLightColor('#ffffff')} 
+                        className="w-8 h-8 rounded border-2 border-gray-400" 
+                        style={{backgroundColor: '#ffffff'}} 
+                        title="Luz brillante (blanco)"
+                      />
+                    </div>
                     <input 
                       type="color" 
                       value={lightColor} 

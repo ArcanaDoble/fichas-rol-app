@@ -2325,6 +2325,14 @@ const MapCanvas = ({
               {Object.entries(lightPolygons).map(([tokenId, lightData]) => {
                 if (!lightData.polygon || lightData.polygon.length < 3) return null;
                 
+                // Encontrar el token para obtener su posición
+                const token = tokens.find(t => t.id === tokenId);
+                if (!token) return null;
+                
+                const centerX = (token.x + token.w / 2) * effectiveGridSize;
+                const centerY = (token.y + token.h / 2) * effectiveGridSize;
+                const radius = token.light.radius * effectiveGridSize;
+                
                 // Convertir polígono a puntos para Konva
                 const points = [];
                 lightData.polygon.forEach(point => {
@@ -2332,15 +2340,46 @@ const MapCanvas = ({
                 });
                 
                 return (
-                  <Line
-                    key={`light-${tokenId}`}
-                    points={points}
-                    closed={true}
-                    fill={lightData.color}
-                    opacity={lightData.opacity}
-                    listening={false}
-                    perfectDrawEnabled={false}
-                  />
+                  <Group key={`light-${tokenId}`}>
+                    {/* Gradiente radial para efecto más realista */}
+                    <Circle
+                      x={centerX}
+                      y={centerY}
+                      radius={radius * 0.3}
+                      fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                      fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                      fillRadialGradientStartRadius={0}
+                      fillRadialGradientEndRadius={radius * 0.3}
+                      fillRadialGradientColorStops={[
+                        0, `${lightData.color}${Math.round(lightData.opacity * 255).toString(16).padStart(2, '0')}`,
+                        0.7, `${lightData.color}${Math.round(lightData.opacity * 0.5 * 255).toString(16).padStart(2, '0')}`,
+                        1, `${lightData.color}00`
+                      ]}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                    
+                    {/* Área de visibilidad principal */}
+                    <Line
+                      points={points}
+                      closed={true}
+                      fill={lightData.color}
+                      opacity={lightData.opacity * 0.6}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                    
+                    {/* Borde suave para transición */}
+                    <Line
+                      points={points}
+                      closed={true}
+                      stroke={lightData.color}
+                      strokeWidth={2}
+                      opacity={lightData.opacity * 0.3}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  </Group>
                 );
               })}
             </Group>
