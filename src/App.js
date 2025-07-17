@@ -3886,11 +3886,28 @@ function App() {
           </div>
         </div>
         <div className="mb-4 mr-80">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleBackgroundUpload}
-          />
+          <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-semibold tracking-wide rounded-lg bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 focus:ring-gray-500 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-95 transform shadow-md hover:shadow-lg cursor-pointer text-white">
+            <svg 
+              className="w-4 h-4" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
+              />
+            </svg>
+            Subir Mapa
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleBackgroundUpload}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+          </label>
         </div>
         <div className="mr-80">
           <PageSelector

@@ -69,9 +69,13 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
           </button>
         </div>
       ))}
-      <Boton size="sm" color="green" onClick={onAdd} icon={<FiPlus />}>
-        Nueva página
-      </Boton>
+      <button
+        onClick={onAdd}
+        className="flex-shrink-0 w-28 h-20 sm:w-36 sm:h-24 md:w-40 md:h-28 rounded-lg border-2 border-dashed border-gray-600 hover:border-green-500 active:border-green-400 bg-transparent hover:bg-gray-800/20 flex items-center justify-center transition-all duration-200 group"
+        aria-label="Nueva página"
+      >
+        <FiPlus className="w-8 h-8 text-gray-600 group-hover:text-green-500 group-active:text-green-400 transition-colors duration-200" />
+      </button>
       <Modal
         isOpen={editIndex !== null}
         onClose={closeEdit}

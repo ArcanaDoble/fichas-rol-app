@@ -894,11 +894,56 @@ const MapCanvas = ({
     setActiveLayer(propActiveLayer);
   }, [propActiveLayer]);
 
-  // Filtrar elementos por capa activa
-  const filteredTokens = tokens.filter(token => (token.layer || 'fichas') === activeLayer);
-  const filteredLines = lines.filter(line => (line.layer || 'fichas') === activeLayer);
-  const filteredWalls = walls.filter(wall => (wall.layer || 'fichas') === activeLayer);
-  const filteredTexts = texts.filter(text => (text.layer || 'fichas') === activeLayer);
+  // Sistema de visibilidad cruzada entre capas
+  const getVisibleElements = (elements, currentLayer) => {
+    const visible = [];
+    const background = [];
+    
+    elements.forEach(element => {
+      const elementLayer = element.layer || 'fichas';
+      
+      if (elementLayer === currentLayer) {
+        // Elementos de la capa actual - opacidad normal
+        visible.push({ ...element, crossLayerOpacity: 1, isBackground: false });
+      } else {
+        // Elementos de otras capas - opacidad reducida según la capa actual
+        let opacity = 1;
+        
+        if (currentLayer === 'master') {
+          // Capa Master ve Fichas con opacidad reducida
+          if (elementLayer === 'fichas') {
+            opacity = 0.4; // Un poco más visible para mejor referencia
+          }
+        } else if (currentLayer === 'luz') {
+          // Capa Luz ve Master y Fichas con opacidad reducida
+          if (elementLayer === 'master') {
+            opacity = 0.35; // Master un poco más visible que Fichas
+          } else if (elementLayer === 'fichas') {
+            opacity = 0.25; // Fichas más tenue
+          }
+        }
+        
+        // Solo agregar si debe ser visible (Fichas no ve otras capas)
+        if (currentLayer !== 'fichas' && opacity < 1) {
+          background.push({ ...element, crossLayerOpacity: opacity, isBackground: true });
+        }
+      }
+    });
+    
+    return { visible, background };
+  };
+
+  // Obtener elementos visibles y de fondo para cada tipo
+  const tokenLayers = getVisibleElements(tokens, activeLayer);
+  const lineLayers = getVisibleElements(lines, activeLayer);
+  const wallLayers = getVisibleElements(walls, activeLayer);
+  const textLayers = getVisibleElements(texts, activeLayer);
+
+  // Combinar elementos principales y de fondo
+  const filteredTokens = [...tokenLayers.background, ...tokenLayers.visible];
+  const filteredLines = [...lineLayers.background, ...lineLayers.visible];
+  const filteredWalls = [...wallLayers.background, ...wallLayers.visible];
+  const filteredTexts = [...textLayers.background, ...textLayers.visible];
 
   // Función para cambiar de capa
   const handleLayerChange = (newLayer) => {
@@ -2161,7 +2206,7 @@ const MapCanvas = ({
                     auraRadius={token.auraRadius}
                     auraShape={token.auraShape}
                     auraColor={token.auraColor}
-                    auraOpacity={token.auraOpacity}
+                    auraOpacity={(token.auraOpacity || 0.25) * (token.crossLayerOpacity || 1)}
                     showAura={canSeeAura(token)}
                   />
                 ))}
@@ -2223,7 +2268,7 @@ const MapCanvas = ({
                   name={token.name}
                   customName={token.customName}
                   showName={token.showName}
-                  opacity={token.opacity ?? 1}
+                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1)}
                   tintColor={token.tintColor}
                   tintOpacity={token.tintOpacity}
                   showAura={false}
@@ -2263,11 +2308,15 @@ const MapCanvas = ({
                   strokeWidth={ln.width}
                   lineCap="round"
                   lineJoin="round"
-                  draggable={activeTool === 'select'}
+                  opacity={ln.crossLayerOpacity || 1}
+                  draggable={activeTool === 'select' && !ln.isBackground}
+                  listening={!ln.isBackground}
                   onClick={() => {
-                    setSelectedLineId(ln.id);
-                    setSelectedId(null);
-                    setSelectedTextId(null);
+                    if (!ln.isBackground) {
+                      setSelectedLineId(ln.id);
+                      setSelectedId(null);
+                      setSelectedTextId(null);
+                    }
                   }}
                   onDragEnd={(e) => handleLineDragEnd(ln.id, e)}
                   onTransformEnd={(e) => handleLineTransformEnd(ln.id, e)}
@@ -2349,12 +2398,16 @@ const MapCanvas = ({
                     strokeWidth={wl.width}
                     lineCap="round"
                     lineJoin="round"
-                    draggable={activeTool === 'select'}
+                    opacity={wl.crossLayerOpacity || 1}
+                    draggable={activeTool === 'select' && !wl.isBackground}
+                    listening={!wl.isBackground}
                     onClick={() => {
-                      setSelectedWallId(wl.id);
-                      setSelectedId(null);
-                      setSelectedLineId(null);
-                      setSelectedTextId(null);
+                      if (!wl.isBackground) {
+                        setSelectedWallId(wl.id);
+                        setSelectedId(null);
+                        setSelectedLineId(null);
+                        setSelectedTextId(null);
+                      }
                     }}
                     onDragEnd={(e) => handleWallDragEnd(wl.id, e)}
                   />
@@ -2363,12 +2416,16 @@ const MapCanvas = ({
                     y={wl.y + wl.points[1]}
                     radius={6}
                     fill="#ff6600"
-                    draggable={activeTool === 'select'}
+                    opacity={wl.crossLayerOpacity || 1}
+                    draggable={activeTool === 'select' && !wl.isBackground}
+                    listening={!wl.isBackground}
                     onMouseDown={() => {
-                      setSelectedWallId(wl.id);
-                      setSelectedId(null);
-                      setSelectedLineId(null);
-                      setSelectedTextId(null);
+                      if (!wl.isBackground) {
+                        setSelectedWallId(wl.id);
+                        setSelectedId(null);
+                        setSelectedLineId(null);
+                        setSelectedTextId(null);
+                      }
                     }}
                     onDragMove={(e) => handleWallPointDrag(wl.id, 0, e)}
                     onDragEnd={(e) => handleWallPointDrag(wl.id, 0, e, true)}
