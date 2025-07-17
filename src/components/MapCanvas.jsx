@@ -890,6 +890,12 @@ const MapCanvas = ({
   // Estado para clipboard (copiar/pegar)
   const [clipboard, setClipboard] = useState(null);
 
+  // Estado para tracking de posición del cursor
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // Estado para vista previa de pegado
+  const [showPastePreview, setShowPastePreview] = useState(false);
+
   const [textOptions, setTextOptions] = useState({
     fill: '#ffffff',
     bgColor: 'rgba(0,0,0,0.5)',
@@ -1045,6 +1051,96 @@ const MapCanvas = ({
            point.x <= rect.x + rect.width &&
            point.y >= rect.y &&
            point.y <= rect.y + rect.height;
+  };
+
+  // Función para convertir posición de pantalla a coordenadas del mapa
+  const screenToMapCoordinates = (screenX, screenY) => {
+    const relX = (screenX - groupPos.x) / (baseScale * zoom);
+    const relY = (screenY - groupPos.y) / (baseScale * zoom);
+    return { x: relX, y: relY };
+  };
+
+  // Función para ajustar coordenadas a la grilla
+  const snapToGrid = (x, y) => {
+    const gridX = Math.round(x / effectiveGridSize) * effectiveGridSize;
+    const gridY = Math.round(y / effectiveGridSize) * effectiveGridSize;
+    return { x: gridX, y: gridY };
+  };
+
+  // Función para convertir coordenadas del mapa a celdas de grilla
+  const mapToGridCoordinates = (mapX, mapY) => {
+    const gridX = Math.round(mapX / effectiveGridSize);
+    const gridY = Math.round(mapY / effectiveGridSize);
+    return { x: gridX, y: gridY };
+  };
+
+  // Función para asegurar que las coordenadas estén dentro de los límites del mapa
+  const clampToMapBounds = (x, y) => {
+    const clampedX = Math.max(0, Math.min(mapWidth - 1, x));
+    const clampedY = Math.max(0, Math.min(mapHeight - 1, y));
+    return { x: clampedX, y: clampedY };
+  };
+
+  // Función para calcular el centro de un grupo de elementos
+  const calculateElementsCenter = (elements, elementType) => {
+    if (elements.length === 0) return { x: 0, y: 0 };
+
+    let totalX = 0, totalY = 0;
+
+    elements.forEach(element => {
+      switch (elementType) {
+        case 'tokens':
+          totalX += element.x;
+          totalY += element.y;
+          break;
+        case 'lines':
+        case 'walls':
+          totalX += element.x;
+          totalY += element.y;
+          break;
+        case 'texts':
+          totalX += element.x / effectiveGridSize;
+          totalY += element.y / effectiveGridSize;
+          break;
+        default:
+          break;
+      }
+    });
+
+    return {
+      x: totalX / elements.length,
+      y: totalY / elements.length
+    };
+  };
+
+  // Función para obtener la posición de pegado inteligente
+  const getSmartPastePosition = () => {
+    // Verificar si el cursor está dentro del área visible del stage
+    const stageRect = stageRef.current?.container().getBoundingClientRect();
+    if (!stageRect) {
+      // Fallback: centro de la vista actual
+      const centerX = containerSize.width / 2;
+      const centerY = containerSize.height / 2;
+      return screenToMapCoordinates(centerX, centerY);
+    }
+
+    // Verificar si la posición del mouse está dentro del stage
+    const isMouseInStage = mousePosition.x >= stageRect.left &&
+                          mousePosition.x <= stageRect.right &&
+                          mousePosition.y >= stageRect.top &&
+                          mousePosition.y <= stageRect.bottom;
+
+    if (isMouseInStage) {
+      // Usar posición del cursor relativa al stage
+      const relativeX = mousePosition.x - stageRect.left;
+      const relativeY = mousePosition.y - stageRect.top;
+      return screenToMapCoordinates(relativeX, relativeY);
+    } else {
+      // Cursor fuera del stage: usar centro de la vista actual
+      const centerX = containerSize.width / 2;
+      const centerY = containerSize.height / 2;
+      return screenToMapCoordinates(centerX, centerY);
+    }
   };
 
   // Función para verificar si un elemento está dentro del cuadro de selección
@@ -1912,10 +2008,15 @@ const MapCanvas = ({
   };
 
   // Actualiza la acción activa según la herramienta
-  const handleMouseMove = () => {
+  const handleMouseMove = (e) => {
     const pointer = stageRef.current.getPointerPosition();
     let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
     let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+
+    // Actualizar posición global del mouse para el sistema de pegado
+    if (e?.evt) {
+      setMousePosition({ x: e.evt.clientX, y: e.evt.clientY });
+    }
 
     // Actualizar cuadro de selección
     if (isSelecting) {
@@ -2208,60 +2309,105 @@ const MapCanvas = ({
       // Pegar elementos del clipboard
       if (e.ctrlKey && e.key.toLowerCase() === 'v' && clipboard) {
         e.preventDefault();
-        const pointer = stageRef.current.getPointerPosition();
-        const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-        const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
 
-        // Calcular offset para pegar cerca del cursor
-        const offsetX = Math.floor(relX / effectiveGridSize);
-        const offsetY = Math.floor(relY / effectiveGridSize);
+        // Obtener posición inteligente de pegado
+        const pastePosition = getSmartPastePosition();
+        const pasteGridPos = mapToGridCoordinates(pastePosition.x, pastePosition.y);
+
+        // Calcular centros de cada tipo de elemento para posicionamiento relativo
+        const tokensCenter = calculateElementsCenter(clipboard.tokens, 'tokens');
+        const linesCenter = calculateElementsCenter(clipboard.lines, 'lines');
+        const wallsCenter = calculateElementsCenter(clipboard.walls, 'walls');
+        const textsCenter = calculateElementsCenter(clipboard.texts, 'texts');
 
         // Pegar tokens
         if (clipboard.tokens.length > 0) {
-          const newTokens = clipboard.tokens.map(token => ({
-            ...token,
-            id: Date.now() + Math.random(),
-            tokenSheetId: nanoid(),
-            x: token.x + offsetX,
-            y: token.y + offsetY,
-            layer: activeLayer
-          }));
+          const newTokens = clipboard.tokens.map(token => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = token.x - tokensCenter.x;
+            const relativeY = token.y - tokensCenter.y;
+
+            // Aplicar offset al punto de pegado y asegurar límites
+            const finalPos = clampToMapBounds(
+              pasteGridPos.x + relativeX,
+              pasteGridPos.y + relativeY
+            );
+
+            return {
+              ...token,
+              id: Date.now() + Math.random(),
+              tokenSheetId: nanoid(),
+              x: finalPos.x,
+              y: finalPos.y,
+              layer: activeLayer
+            };
+          });
           onTokensChange([...tokens, ...newTokens]);
         }
 
         // Pegar líneas
         if (clipboard.lines.length > 0) {
-          const newLines = clipboard.lines.map(line => ({
-            ...line,
-            id: Date.now() + Math.random(),
-            x: line.x + (offsetX * effectiveGridSize),
-            y: line.y + (offsetY * effectiveGridSize),
-            layer: activeLayer
-          }));
+          const newLines = clipboard.lines.map(line => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = line.x - (linesCenter.x * effectiveGridSize);
+            const relativeY = line.y - (linesCenter.y * effectiveGridSize);
+
+            // Aplicar offset al punto de pegado
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+
+            return {
+              ...line,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
           saveLines([...lines, ...newLines]);
         }
 
         // Pegar muros
         if (clipboard.walls.length > 0) {
-          const newWalls = clipboard.walls.map(wall => ({
-            ...wall,
-            id: Date.now() + Math.random(),
-            x: wall.x + (offsetX * effectiveGridSize),
-            y: wall.y + (offsetY * effectiveGridSize),
-            layer: activeLayer
-          }));
+          const newWalls = clipboard.walls.map(wall => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = wall.x - (wallsCenter.x * effectiveGridSize);
+            const relativeY = wall.y - (wallsCenter.y * effectiveGridSize);
+
+            // Aplicar offset al punto de pegado
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+
+            return {
+              ...wall,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
           saveWalls([...walls, ...newWalls]);
         }
 
         // Pegar textos
         if (clipboard.texts.length > 0) {
-          const newTexts = clipboard.texts.map(text => ({
-            ...text,
-            id: Date.now() + Math.random(),
-            x: text.x + (offsetX * effectiveGridSize),
-            y: text.y + (offsetY * effectiveGridSize),
-            layer: activeLayer
-          }));
+          const newTexts = clipboard.texts.map(text => {
+            // Calcular offset relativo al centro del grupo
+            const relativeX = text.x - (textsCenter.x * effectiveGridSize);
+            const relativeY = text.y - (textsCenter.y * effectiveGridSize);
+
+            // Aplicar offset al punto de pegado
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+
+            return {
+              ...text,
+              id: Date.now() + Math.random(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer
+            };
+          });
           updateTexts([...texts, ...newTexts]);
         }
         return;
@@ -2486,6 +2632,12 @@ const MapCanvas = ({
       updateTexts,
       undoLines,
       redoLines,
+      getSmartPastePosition,
+      mapToGridCoordinates,
+      calculateElementsCenter,
+      clampToMapBounds,
+      containerSize,
+      mousePosition,
     ]
   );
 
@@ -2493,6 +2645,16 @@ const MapCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Listener global para tracking de posición del mouse
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
+  }, []);
 
   useEffect(() => {
     const tr = lineTrRef.current;
@@ -3341,6 +3503,22 @@ const MapCanvas = ({
           </div>
           <div className="text-xs opacity-75 mt-1">
             Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de clipboard */}
+      {clipboard && (
+        <div className="absolute bottom-4 right-4 bg-purple-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">📋 Clipboard:</span>
+            <span className="font-bold">
+              {(clipboard.tokens?.length || 0) + (clipboard.lines?.length || 0) +
+               (clipboard.walls?.length || 0) + (clipboard.texts?.length || 0)} elementos
+            </span>
+          </div>
+          <div className="text-xs opacity-75">
+            Ctrl+V para pegar en la posición del cursor
           </div>
         </div>
       )}
