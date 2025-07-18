@@ -64,7 +64,7 @@ const Toolbar = ({
   onLayerChange,
   isPlayerView = false,
 }) => {
-  // Filtrar herramientas para jugadores (solo: select, draw, measure, text)
+  // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
     ? tools.filter(tool => ['select', 'draw', 'measure', 'text'].includes(tool.id))
     : tools;
@@ -84,9 +84,8 @@ const Toolbar = ({
         </button>
       ))}
     </div>
-
-    {/* Sección de Capas - Solo visible para masters */}
-    {!isPlayerView && (
+    
+    {/* Sección de Capas */}
     <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
       <div className="text-xs text-gray-300 font-medium">Capas</div>
       <div className="flex flex-col items-center space-y-1">
@@ -124,7 +123,6 @@ const Toolbar = ({
         <div className="text-xs text-gray-300">Luz</div>
       </div>
     </div>
-    )}
     <AnimatePresence>
       {activeTool === 'draw' && (
         <motion.div
@@ -317,7 +315,8 @@ const Toolbar = ({
       )}
     </AnimatePresence>
   </div>
-);
+  );
+};
 
 Toolbar.propTypes = {
   activeTool: PropTypes.string.isRequired,
