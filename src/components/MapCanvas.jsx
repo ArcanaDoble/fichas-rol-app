@@ -1008,28 +1008,22 @@ const MapCanvas = ({
         clearTimeout(saveTimeouts[type]);
       }
 
-      // Debouncing: esperar 300ms antes de guardar
+      // Debouncing: esperar 100ms antes de guardar (optimizado)
       saveTimeouts[type] = setTimeout(async () => {
         try {
-          // Validaciones de seguridad para jugadores
-          let filteredData = data;
-
-          if (type === 'tokens') {
-            // Jugadores solo pueden modificar tokens que controlan
-            filteredData = data.filter(token =>
-              token.controlledBy === playerName || token.controlledBy === 'master'
-            );
-          }
+          // Para tokens, la validación ya se hizo en handleTokensChange
+          // Solo guardamos los datos que ya están validados
+          let dataToSave = data;
 
           // Actualizar referencia previa
-          prevData[type] = filteredData;
+          prevData[type] = dataToSave;
 
           // Guardar en Firebase
-          await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
+          await updateDoc(doc(db, 'pages', pageId), { [type]: dataToSave });
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
         }
-      }, 300);
+      }, 100);
     };
 
     return { saveToFirebase, prevData };
@@ -1039,20 +1033,39 @@ const MapCanvas = ({
   const handleTokensChange = useCallback((newTokens) => {
     // Validaciones de seguridad para jugadores
     if (isPlayerView) {
-      // Verificar que el jugador solo modifique tokens que controla
-      const validTokens = newTokens.filter(token => {
-        const originalToken = tokens.find(t => t.id === token.id);
-        // Si es un token nuevo o el jugador lo controla, permitir
-        return !originalToken || originalToken.controlledBy === playerName || token.controlledBy === playerName;
+      // Para jugadores: solo permitir cambios en tokens que controlan
+      // Mantener todos los tokens existentes y solo actualizar los que el jugador puede modificar
+      const updatedTokens = tokens.map(existingToken => {
+        // Buscar si este token tiene una actualización en newTokens
+        const updatedToken = newTokens.find(t => t.id === existingToken.id);
+
+        if (updatedToken) {
+          // Verificar si el jugador puede modificar este token
+          if (existingToken.controlledBy === playerName) {
+            return updatedToken; // Permitir la actualización
+          } else {
+            return existingToken; // Mantener el token original (no permitir cambios)
+          }
+        }
+
+        return existingToken; // Mantener tokens que no fueron modificados
       });
+
+      // Agregar tokens nuevos solo si el jugador los controla
+      const newTokensToAdd = newTokens.filter(newToken => {
+        const isNewToken = !tokens.find(t => t.id === newToken.id);
+        return isNewToken && newToken.controlledBy === playerName;
+      });
+
+      const finalTokens = [...updatedTokens, ...newTokensToAdd];
 
       // Usar syncManager para guardar en Firebase
       if (syncManager) {
-        syncManager.saveToFirebase('tokens', validTokens);
+        syncManager.saveToFirebase('tokens', finalTokens);
       }
 
       // Actualizar estado local
-      onTokensChange(validTokens);
+      onTokensChange(finalTokens);
     } else {
       // Para Master, usar el flujo normal
       onTokensChange(newTokens);
@@ -1191,6 +1204,24 @@ const MapCanvas = ({
     setSelectedTextId(null);
     clearMultiSelection();
   };
+
+  // Funciones para validar permisos de selección
+  const canSelectElement = useCallback((element, elementType) => {
+    if (userType === 'master') return true; // Master puede seleccionar todo
+
+    switch (elementType) {
+      case 'token':
+        return element.controlledBy === playerName;
+      case 'line':
+        return element.createdBy === playerName || !element.createdBy; // Permitir líneas sin creador por compatibilidad
+      case 'wall':
+        return element.createdBy === playerName || !element.createdBy; // Permitir muros sin creador por compatibilidad
+      case 'text':
+        return element.createdBy === playerName || !element.createdBy; // Permitir textos sin creador por compatibilidad
+      default:
+        return false;
+    }
+  }, [userType, playerName]);
 
   // Funciones para manejo de selección múltiple
   const clearMultiSelection = () => {
@@ -1420,10 +1451,13 @@ const MapCanvas = ({
 
   const canSeeBars = useCallback(
     (tk) => {
+      // El Master SIEMPRE puede ver las barras, independientemente de la configuración
+      if (userType === 'master') return true;
+
+      // Para jugadores, aplicar las reglas de visibilidad
       if (!tk.barsVisibility || tk.barsVisibility === 'all') return true;
       if (tk.barsVisibility === 'none') return false;
       if (tk.barsVisibility === 'controlled') {
-        if (userType === 'master') return true;
         return tk.controlledBy === playerName;
       }
       return true;
@@ -2107,6 +2141,24 @@ const MapCanvas = ({
   const handleDragEnd = (id, evt) => {
     const node = evt?.target;
     if (!node) return;
+
+    // Validación de permisos para jugadores
+    if (isPlayerView) {
+      const token = tokens.find(t => t.id === id);
+      if (!token || token.controlledBy !== playerName) {
+        // Si el jugador no puede mover este token, devolverlo a su posición original
+        if (token) {
+          node.position({
+            x: token.x * effectiveGridSize + node.offsetX() + gridOffsetX,
+            y: token.y * effectiveGridSize + node.offsetY() + gridOffsetY,
+          });
+          node.getLayer().batchDraw();
+        }
+        setDragShadow(null);
+        return;
+      }
+    }
+
     const offX = node.offsetX();
     const offY = node.offsetY();
     const left = node.x() - offX;
@@ -2264,6 +2316,7 @@ const MapCanvas = ({
         color: drawColor,
         width: BRUSH_WIDTHS[brushSize],
         layer: activeLayer,
+        createdBy: playerName, // Agregar información del creador
       });
     }
     if (activeTool === 'wall' && e.evt.button === 0) {
@@ -2279,6 +2332,7 @@ const MapCanvas = ({
         width: 4,
         door: 'closed',
         layer: activeLayer,
+        createdBy: playerName, // Agregar información del creador
       });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
@@ -2298,7 +2352,7 @@ const MapCanvas = ({
       if (content !== null) {
         updateTexts((t) => [
           ...t,
-          { id, x: relX, y: relY, text: content, ...textOptions, bgColor, layer: activeLayer },
+          { id, x: relX, y: relY, text: content, ...textOptions, bgColor, layer: activeLayer, createdBy: playerName },
         ]);
         setSelectedTextId(id);
       }
@@ -2362,18 +2416,18 @@ const MapCanvas = ({
       const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
       const filteredTexts = texts.filter(text => text.layer === activeLayer);
 
-      // Encontrar elementos dentro del cuadro de selección
+      // Encontrar elementos dentro del cuadro de selección y validar permisos
       const selectedTokensInBox = filteredTokens.filter(token =>
-        isElementInSelectionBox(token, selectionBox, 'token')
+        isElementInSelectionBox(token, selectionBox, 'token') && canSelectElement(token, 'token')
       );
       const selectedLinesInBox = filteredLines.filter(line =>
-        isElementInSelectionBox(line, selectionBox, 'line')
+        isElementInSelectionBox(line, selectionBox, 'line') && canSelectElement(line, 'line')
       );
       const selectedWallsInBox = filteredWalls.filter(wall =>
-        isElementInSelectionBox(wall, selectionBox, 'wall')
+        isElementInSelectionBox(wall, selectionBox, 'wall') && canSelectElement(wall, 'wall')
       );
       const selectedTextsInBox = filteredTexts.filter(text =>
-        isElementInSelectionBox(text, selectionBox, 'text')
+        isElementInSelectionBox(text, selectionBox, 'text') && canSelectElement(text, 'text')
       );
 
       // Actualizar selecciones múltiples
@@ -2583,13 +2637,21 @@ const MapCanvas = ({
         return;
       }
 
-      // Seleccionar todos los elementos de la capa actual
+      // Seleccionar todos los elementos de la capa actual (con validación de permisos)
       if (e.ctrlKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        const filteredTokens = tokens.filter(token => token.layer === activeLayer);
-        const filteredLines = lines.filter(line => line.layer === activeLayer);
-        const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
-        const filteredTexts = texts.filter(text => text.layer === activeLayer);
+        const filteredTokens = tokens.filter(token =>
+          token.layer === activeLayer && canSelectElement(token, 'token')
+        );
+        const filteredLines = lines.filter(line =>
+          line.layer === activeLayer && canSelectElement(line, 'line')
+        );
+        const filteredWalls = walls.filter(wall =>
+          wall.layer === activeLayer && canSelectElement(wall, 'wall')
+        );
+        const filteredTexts = texts.filter(text =>
+          text.layer === activeLayer && canSelectElement(text, 'text')
+        );
 
         setSelectedTokens(filteredTokens.map(t => t.id));
         setSelectedLines(filteredLines.map(l => l.id));
@@ -2832,6 +2894,10 @@ const MapCanvas = ({
             const delta = e.shiftKey ? -90 : 90;
             const rotated = tokens.map((t) => {
               if (selectedTokens.includes(t.id)) {
+                // Validación de permisos para jugadores
+                if (isPlayerView && t.controlledBy !== playerName) {
+                  return t; // No permitir rotación si no controla el token
+                }
                 const updatedAngle = ((t.angle || 0) + delta + 360) % 360;
                 return { ...t, angle: updatedAngle };
               }
@@ -2847,6 +2913,11 @@ const MapCanvas = ({
         if (deltaX !== 0 || deltaY !== 0) {
           const updated = tokens.map((t) => {
             if (selectedTokens.includes(t.id)) {
+              // Validación de permisos para jugadores
+              if (isPlayerView && t.controlledBy !== playerName) {
+                return t; // No permitir movimiento si no controla el token
+              }
+
               const newX = Math.max(0, Math.min(mapWidth - 1, t.x + deltaX));
               const newY = Math.max(0, Math.min(mapHeight - 1, t.y + deltaY));
 
@@ -2866,6 +2937,12 @@ const MapCanvas = ({
       if (selectedId == null) return;
       const index = tokens.findIndex((t) => t.id === selectedId);
       if (index === -1) return;
+
+      // Validación de permisos para jugadores
+      if (isPlayerView && tokens[index].controlledBy !== playerName) {
+        return; // No permitir movimiento si no controla el token
+      }
+
       let { x, y } = tokens[index];
       let newX = x;
       let newY = y;
@@ -2884,6 +2961,7 @@ const MapCanvas = ({
           newX = x + 1;
           break;
         case 'r': {
+          // Validación de permisos para jugadores ya hecha arriba
           const delta = e.shiftKey ? -90 : 90;
           const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
           const rotated = tokens.map((t) =>
@@ -3193,6 +3271,11 @@ const MapCanvas = ({
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
                   onClick={(e) => {
+                    // Validar permisos de selección
+                    if (!canSelectElement(token, 'token')) {
+                      return; // Bloquear selección si no tiene permisos
+                    }
+
                     const isCtrlPressed = e?.evt?.ctrlKey || false;
                     if (isCtrlPressed) {
                       // Selección múltiple con Ctrl
@@ -3237,6 +3320,11 @@ const MapCanvas = ({
                   listening={!ln.isBackground}
                   onClick={(e) => {
                     if (!ln.isBackground) {
+                      // Validar permisos de selección
+                      if (!canSelectElement(ln, 'line')) {
+                        return; // Bloquear selección si no tiene permisos
+                      }
+
                       const isCtrlPressed = e?.evt?.ctrlKey || false;
                       if (isCtrlPressed) {
                         // Selección múltiple con Ctrl
@@ -3273,6 +3361,11 @@ const MapCanvas = ({
                   onDragEnd={(e) => handleTextDragEnd(t.id, e)}
                   onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
                   onClick={(e) => {
+                    // Validar permisos de selección
+                    if (!canSelectElement(t, 'text')) {
+                      return; // Bloquear selección si no tiene permisos
+                    }
+
                     const isCtrlPressed = e?.evt?.ctrlKey || false;
                     if (isCtrlPressed) {
                       // Selección múltiple con Ctrl
@@ -3357,6 +3450,11 @@ const MapCanvas = ({
                     listening={!wl.isBackground}
                     onClick={(e) => {
                       if (!wl.isBackground) {
+                        // Validar permisos de selección
+                        if (!canSelectElement(wl, 'wall')) {
+                          return; // Bloquear selección si no tiene permisos
+                        }
+
                         const isCtrlPressed = e?.evt?.ctrlKey || false;
                         if (isCtrlPressed) {
                           // Selección múltiple con Ctrl

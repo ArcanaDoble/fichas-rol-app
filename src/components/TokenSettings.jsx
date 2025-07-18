@@ -292,6 +292,9 @@ const TokenSettings = ({
                   <option value="controlled">Controlador</option>
                   <option value="none">Nadie</option>
                 </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  El Master siempre puede ver las barras independientemente de esta configuración
+                </p>
               </div>
               <div>
                 <label className="block mb-1">Opacidad del token</label>
