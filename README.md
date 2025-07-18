@@ -963,6 +963,10 @@ src/
 
 - ✅ Comparaciones profundas centralizadas en `src/utils/deepEqual.js`
 
+### 🛡️ **Cancelación de guardados al cambiar de página (Abril 2026) - v2.4.15**
+
+- ✅ Guardados pendientes de tokens, líneas, muros, textos y fondo se cancelan al cambiar de página
+
 ## 🔄 Historial de cambios previos
 
 <details>
