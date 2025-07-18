@@ -65,7 +65,11 @@ const AssetSidebar = ({
   }, []);
 
   useEffect(() => {
-    const ref = doc(db, 'assetSidebar', 'state');
+    // Determinar el documento de Firebase según el tipo de usuario
+    const docPath = isMaster ? 'assetSidebar' : `players/${playerName}/assets`;
+    const docId = isMaster ? 'state' : 'folders';
+    const ref = doc(db, docPath, docId);
+
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -80,7 +84,9 @@ const AssetSidebar = ({
             }));
           setFolders(normalize(data.folders || []));
         } else {
-          const stored = localStorage.getItem('assetSidebar');
+          // Configuración inicial diferente para jugadores vs master
+          const localStorageKey = isMaster ? 'assetSidebar' : `assetSidebar_${playerName}`;
+          const stored = localStorage.getItem(localStorageKey);
           if (stored) {
             try {
               const parsed = JSON.parse(stored);
@@ -96,15 +102,27 @@ const AssetSidebar = ({
               // ignore
             }
           } else {
-            setFolders([
-              {
-                id: nanoid(),
-                name: 'Enemigos',
-                assets: [],
-                folders: [],
-                open: true,
-              },
-            ]);
+            // Carpetas por defecto diferentes para jugadores
+            const defaultFolders = isMaster
+              ? [
+                  {
+                    id: nanoid(),
+                    name: 'Enemigos',
+                    assets: [],
+                    folders: [],
+                    open: true,
+                  },
+                ]
+              : [
+                  {
+                    id: nanoid(),
+                    name: 'Mis Tokens',
+                    assets: [],
+                    folders: [],
+                    open: true,
+                  },
+                ];
+            setFolders(defaultFolders);
           }
         }
         setLoaded(true);
@@ -115,7 +133,7 @@ const AssetSidebar = ({
       }
     );
     return () => unsub();
-  }, []);
+  }, [isMaster, playerName]);
 
   // Cargar mensajes de chat desde Firebase (con fallback a localStorage)
   useEffect(() => {
@@ -174,10 +192,18 @@ const AssetSidebar = ({
       return;
     }
     if (JSON.stringify(prevFoldersRef.current) === JSON.stringify(folders)) return;
-    localStorage.setItem('assetSidebar', JSON.stringify(folders));
-    setDoc(doc(db, 'assetSidebar', 'state'), { folders }).catch(console.error);
+
+    // Guardar en localStorage con clave específica por usuario
+    const localStorageKey = isMaster ? 'assetSidebar' : `assetSidebar_${playerName}`;
+    localStorage.setItem(localStorageKey, JSON.stringify(folders));
+
+    // Guardar en Firebase con estructura separada por usuario
+    const docPath = isMaster ? 'assetSidebar' : `players/${playerName}/assets`;
+    const docId = isMaster ? 'state' : 'folders';
+    setDoc(doc(db, docPath, docId), { folders }).catch(console.error);
+
     prevFoldersRef.current = folders;
-  }, [folders, loaded]);
+  }, [folders, loaded, isMaster, playerName]);
 
   const updateFolders = (list, id, updater) =>
     list.map((f) =>
@@ -212,7 +238,9 @@ const AssetSidebar = ({
       Array.from(files).map(async (file) => {
         const name = file.name.replace(/\.[^/.]+$/, '');
         try {
-          const { url } = await getOrUploadFile(file, 'canvas-assets');
+          // Usar rutas específicas por usuario para organizar assets
+          const basePath = isMaster ? 'canvas-assets' : `canvas-assets/players/${playerName}`;
+          const { url } = await getOrUploadFile(file, basePath);
           return { id: nanoid(), name, url };
         } catch (e) {
           alert(e.message);
@@ -379,6 +407,24 @@ const AssetSidebar = ({
       results = results.concat(searchAssets(f.folders, term, newPath));
     }
     return results;
+  };
+
+  // Función para generar color único basado en el nombre del jugador
+  const getPlayerColor = (playerName) => {
+    if (!playerName || playerName === 'Master') return '#10b981'; // Verde para master
+
+    // Generar hash simple del nombre
+    let hash = 0;
+    for (let i = 0; i < playerName.length; i++) {
+      hash = playerName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    // Convertir hash a color HSL para mejor distribución de colores
+    const hue = Math.abs(hash) % 360;
+    const saturation = 65 + (Math.abs(hash) % 20); // 65-85%
+    const lightness = 55 + (Math.abs(hash) % 15); // 55-70%
+
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
   };
 
   const sendMessage = () => {
@@ -620,7 +666,10 @@ const AssetSidebar = ({
               >
                 <div className="flex-1 mr-2 min-w-0 space-y-1">
                   <div>
-                    <span className="text-blue-400 font-semibold mr-1">
+                    <span
+                      className="font-semibold mr-1"
+                      style={{ color: getPlayerColor(m.author) }}
+                    >
                       {m.author}:
                     </span>
                     <span className="text-gray-200 break-words">{m.text}</span>

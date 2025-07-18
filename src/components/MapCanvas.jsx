@@ -843,6 +843,7 @@ const MapCanvas = ({
   onLayerChange = () => {},
   enableDarkness = true,
   darknessOpacity = 0.7,
+  isPlayerView = false,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -3603,6 +3604,7 @@ const MapCanvas = ({
         onTextOptionsChange={setTextOptions}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
+        isPlayerView={isPlayerView}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -3618,6 +3620,8 @@ const MapCanvas = ({
           onOpenSheet={handleOpenSheet}
           onMoveFront={() => moveTokenToFront(id)}
           onMoveBack={() => moveTokenToBack(id)}
+          isPlayerView={isPlayerView}
+          currentPlayerName={playerName}
         />
       ))}
       {estadoTokenIds.map((id) => (

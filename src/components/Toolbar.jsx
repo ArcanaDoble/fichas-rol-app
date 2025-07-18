@@ -62,10 +62,18 @@ const Toolbar = ({
   onTextOptionsChange,
   activeLayer = 'fichas',
   onLayerChange,
-}) => (
+  isPlayerView = false,
+}) => {
+  // Filtrar herramientas para jugadores (solo: select, draw, measure, text)
+  const availableTools = isPlayerView
+    ? tools.filter(tool => ['select', 'draw', 'measure', 'text'].includes(tool.id))
+    : tools;
+
+  return (
+  <>
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
     <div className="flex flex-col items-center space-y-2 flex-1">
-      {tools.map(({ id, icon: Icon }) => (
+      {availableTools.map(({ id, icon: Icon }) => (
         <button
           key={id}
           onClick={() => onSelect(id)}
@@ -77,8 +85,9 @@ const Toolbar = ({
         </button>
       ))}
     </div>
-    
-    {/* Sección de Capas */}
+
+    {/* Sección de Capas - Solo visible para masters */}
+    {!isPlayerView && (
     <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
       <div className="text-xs text-gray-300 font-medium">Capas</div>
       <div className="flex flex-col items-center space-y-1">
@@ -116,6 +125,7 @@ const Toolbar = ({
         <div className="text-xs text-gray-300">Luz</div>
       </div>
     </div>
+    )}
     <AnimatePresence>
       {activeTool === 'draw' && (
         <motion.div
@@ -308,6 +318,7 @@ const Toolbar = ({
       )}
     </AnimatePresence>
   </div>
+  </>
 );
 
 Toolbar.propTypes = {
@@ -335,6 +346,7 @@ Toolbar.propTypes = {
   onTextOptionsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
+  isPlayerView: PropTypes.bool,
 };
 
 export default Toolbar;

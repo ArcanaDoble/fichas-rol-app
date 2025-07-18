@@ -450,6 +450,8 @@ function App() {
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  // Mapa de Batalla para jugadores
+  const [showPlayerBattleMap, setShowPlayerBattleMap] = useState(false);
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -914,6 +916,7 @@ function App() {
     setShowDiceCalculator(false);
     setShowBarraReflejos(false);
     setShowInitiativeTracker(false);
+    setShowPlayerBattleMap(false);
   };
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
@@ -2338,6 +2341,103 @@ function App() {
       />
     );
   }
+  // MAPA DE BATALLA PARA JUGADORES
+  if (userType === 'player' && nameEntered && showPlayerBattleMap) {
+    // Buscar el token del jugador en todas las páginas
+    let playerToken = null;
+    let playerPageIndex = 0;
+
+    for (let i = 0; i < pages.length; i++) {
+      const pageTokens = pages[i]?.tokens || [];
+      const foundToken = pageTokens.find(token => token.controlledBy === playerName);
+      if (foundToken) {
+        playerToken = foundToken;
+        playerPageIndex = i;
+        break;
+      }
+    }
+
+    // Si no se encuentra el token, usar la página actual
+    const effectivePageIndex = playerToken ? playerPageIndex : currentPage;
+    const effectivePage = pages[effectivePageIndex] || pages[0];
+
+    return (
+      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+          <div className="flex flex-wrap gap-2">
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+            <Boton
+              size="sm"
+              color="green"
+              onClick={() => setShowInitiativeTracker(true)}
+            >
+              ⚡ Sistema de Velocidad
+            </Boton>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <MapCanvas
+            userType="player"
+            playerName={playerName}
+            playerViewMode={true}
+            simulatedPlayer={playerName}
+            tokens={effectivePage?.tokens || []}
+            onTokensChange={(newTokens) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].tokens = newTokens;
+                setPages(updatedPages);
+              }
+            }}
+            lines={effectivePage?.lines || []}
+            onLinesChange={(newLines) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].lines = newLines;
+                setPages(updatedPages);
+              }
+            }}
+            walls={effectivePage?.walls || []}
+            onWallsChange={(newWalls) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].walls = newWalls;
+                setPages(updatedPages);
+              }
+            }}
+            texts={effectivePage?.texts || []}
+            onTextsChange={(newTexts) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].texts = newTexts;
+                setPages(updatedPages);
+              }
+            }}
+            backgroundImage={effectivePage?.backgroundImage}
+            imageSize={effectivePage?.imageSize}
+            gridCells={effectivePage?.gridCells}
+            gridSize={effectivePage?.gridSize || 50}
+            gridOffsetX={effectivePage?.gridOffsetX || 0}
+            gridOffsetY={effectivePage?.gridOffsetY || 0}
+            enableDarkness={effectivePage?.enableDarkness || false}
+            darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+            activeLayer="fichas"
+            enemies={[]}
+            players={[playerName]}
+            highlightText={highlightText}
+            isPlayerView={true}
+          />
+        </div>
+      </div>
+    );
+  }
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
@@ -2368,6 +2468,14 @@ function App() {
               className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
             >
               ⚡
+            </Boton>
+            {/* Botón de Mapa de Batalla */}
+            <Boton
+              onClick={() => setShowPlayerBattleMap(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              title="Mapa de Batalla"
+            >
+              🗺️
             </Boton>
           </div>
           <div className="mb-4 text-center text-sm text-gray-300 flex flex-col gap-1">

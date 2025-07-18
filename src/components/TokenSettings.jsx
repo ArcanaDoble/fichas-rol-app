@@ -16,6 +16,8 @@ const TokenSettings = ({
   onOpenSheet,
   onMoveFront,
   onMoveBack,
+  isPlayerView = false,
+  currentPlayerName = '',
 }) => {
   const [tab, setTab] = useState('details');
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 140 });
@@ -221,7 +223,15 @@ const TokenSettings = ({
     }
   };
 
+  // Verificar permisos para jugadores
+  const canEditToken = !isPlayerView || token.controlledBy === currentPlayerName;
+
   if (!token) return null;
+
+  // Si es vista de jugador y no puede editar este token, no mostrar nada
+  if (isPlayerView && !canEditToken) {
+    return null;
+  }
 
   const content = (
     <div className="fixed select-none" style={{ top: pos.y, left: pos.x, zIndex: 1000 }}>
@@ -241,28 +251,39 @@ const TokenSettings = ({
         <div className="p-3 space-y-3 text-sm">
           {tab === 'details' && (
             <>
-              <div>
-                <label className="block mb-1">Representa a un personaje</label>
-                <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
-                  <option value="">Ninguno / Ficha genérica</option>
-                  {enemies.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Solo mostrar selector de enemigos para masters */}
+              {!isPlayerView && (
+                <div>
+                  <label className="block mb-1">Representa a un personaje</label>
+                  <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
+                    <option value="">Ninguno / Ficha genérica</option>
+                    {enemies.map((e) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input id="showName" type="checkbox" checked={showName} onChange={e => setShowName(e.target.checked)} />
                 <label htmlFor="showName">Nombre</label>
                 <Input className="flex-1" value={name} onChange={e => setName(e.target.value)} />
               </div>
               <div>
-                <label className="block mb-1">Controlado por</label>
-                <select value={controlledBy} onChange={e => setControlledBy(e.target.value)} className="w-full bg-gray-700 text-white">
-                  <option value="master">Máster</option>
-                  {players.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
+                <label className="block mb-1">
+                  {isPlayerView ? "Ficha de Personaje" : "Controlado por"}
+                </label>
+                {isPlayerView ? (
+                  <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
+                    {controlledBy === 'master' ? 'Enemigo (Master)' : controlledBy}
+                  </div>
+                ) : (
+                  <select value={controlledBy} onChange={e => setControlledBy(e.target.value)} className="w-full bg-gray-700 text-white">
+                    <option value="master">Máster</option>
+                    {players.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
@@ -517,6 +538,8 @@ TokenSettings.propTypes = {
   onOpenSheet: PropTypes.func.isRequired,
   onMoveFront: PropTypes.func,
   onMoveBack: PropTypes.func,
+  isPlayerView: PropTypes.bool,
+  currentPlayerName: PropTypes.string,
 };
 
 export default TokenSettings;
