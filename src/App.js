@@ -528,21 +528,20 @@ function App() {
     loadPages();
   }, []);
 
-  // Cargar configuración de visibilidad para jugadores
+  // Listener en tiempo real para configuración de visibilidad para jugadores
   useEffect(() => {
-    const loadPlayerVisibility = async () => {
-      try {
-        const docRef = doc(db, 'gameSettings', 'playerVisibility');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setPlayerVisiblePageId(data.playerVisiblePageId || null);
-        }
-      } catch (error) {
-        console.log('Error cargando configuración de visibilidad:', error);
+    const unsubscribe = onSnapshot(doc(db, 'gameSettings', 'playerVisibility'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const newVisiblePageId = data.playerVisiblePageId || null;
+        console.log('Cambio de visibilidad detectado:', newVisiblePageId);
+        setPlayerVisiblePageId(newVisiblePageId);
       }
-    };
-    loadPlayerVisibility();
+    }, (error) => {
+      console.error('Error en listener de visibilidad:', error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Cargar datos completos de la página visible para jugadores con listener en tiempo real
