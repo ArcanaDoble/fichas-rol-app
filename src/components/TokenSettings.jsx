@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
 
@@ -14,6 +16,8 @@ const TokenSettings = ({
   onOpenSheet,
   onMoveFront,
   onMoveBack,
+  isPlayerView = false,
+  currentPlayerName = '',
 }) => {
   const [tab, setTab] = useState('details');
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 140 });
@@ -110,7 +114,7 @@ const TokenSettings = ({
           range: visionRange,
         },
       });
-    }, 300); // Esperar 300ms antes de aplicar cambios
+    }, 800); // Esperar 800ms antes de aplicar cambios (optimizado para evitar spam a Firebase)
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
@@ -153,12 +157,11 @@ const TokenSettings = ({
     onUpdate(updatedToken);
   };
 
-  // useEffect para cambios inmediatos (no relacionados con luz)
+  // useEffect para cambios inmediatos (no relacionados con texto/luz)
   useEffect(() => {
     applyChanges();
   }, [
     enemyId,
-    name,
     showName,
     controlledBy,
     barsVisibility,
@@ -175,12 +178,60 @@ const TokenSettings = ({
     visionEnabled, // Cambio inmediato para visión
   ]);
 
-  // useEffect con debouncing para cambios de luz (color e intensidad)
+  // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
     debouncedApplyChanges();
-  }, [lightColor, lightOpacity, debouncedApplyChanges]);
+  }, [name, lightColor, lightOpacity, debouncedApplyChanges]);
+
+  // Función para agregar el token al sistema de velocidad
+  const addToInitiativeSystem = async () => {
+    try {
+      const initiativeRef = doc(db, 'initiative', 'current');
+      const initiativeDoc = await getDoc(initiativeRef);
+
+      let participants = [];
+      if (initiativeDoc.exists()) {
+        participants = initiativeDoc.data().participants || [];
+      }
+
+      // Verificar si ya existe un participante con el mismo nombre
+      const tokenDisplayName = showName && name ? name : (token.name || 'Token sin nombre');
+      const existingParticipant = participants.find(p => p.name === tokenDisplayName);
+
+      if (existingParticipant) {
+        alert(`Ya existe un participante llamado "${tokenDisplayName}" en el sistema de velocidad.`);
+        return;
+      }
+
+      // Crear nuevo participante
+      const newParticipant = {
+        id: Date.now().toString(),
+        name: tokenDisplayName,
+        speed: 0,
+        type: controlledBy === 'master' ? 'enemy' : 'player',
+        addedBy: controlledBy === 'master' ? 'master' : controlledBy
+      };
+
+      // Agregar al sistema
+      const updatedParticipants = [...participants, newParticipant];
+      await updateDoc(initiativeRef, { participants: updatedParticipants });
+
+      alert(`"${tokenDisplayName}" ha sido agregado al sistema de velocidad.`);
+    } catch (error) {
+      console.error('Error al agregar al sistema de velocidad:', error);
+      alert('Error al agregar al sistema de velocidad. Inténtalo de nuevo.');
+    }
+  };
+
+  // Verificar permisos para jugadores
+  const canEditToken = !isPlayerView || token.controlledBy === currentPlayerName;
 
   if (!token) return null;
+
+  // Si es vista de jugador y no puede editar este token, no mostrar nada
+  if (isPlayerView && !canEditToken) {
+    return null;
+  }
 
   const content = (
     <div className="fixed select-none" style={{ top: pos.y, left: pos.x, zIndex: 1000 }}>
@@ -200,28 +251,39 @@ const TokenSettings = ({
         <div className="p-3 space-y-3 text-sm">
           {tab === 'details' && (
             <>
-              <div>
-                <label className="block mb-1">Representa a un personaje</label>
-                <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
-                  <option value="">Ninguno / Ficha genérica</option>
-                  {enemies.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Solo mostrar selector de enemigos para masters */}
+              {!isPlayerView && (
+                <div>
+                  <label className="block mb-1">Representa a un personaje</label>
+                  <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
+                    <option value="">Ninguno / Ficha genérica</option>
+                    {enemies.map((e) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input id="showName" type="checkbox" checked={showName} onChange={e => setShowName(e.target.checked)} />
                 <label htmlFor="showName">Nombre</label>
                 <Input className="flex-1" value={name} onChange={e => setName(e.target.value)} />
               </div>
               <div>
-                <label className="block mb-1">Controlado por</label>
-                <select value={controlledBy} onChange={e => setControlledBy(e.target.value)} className="w-full bg-gray-700 text-white">
-                  <option value="master">Máster</option>
-                  {players.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
+                <label className="block mb-1">
+                  {isPlayerView ? "Ficha de Personaje" : "Controlado por"}
+                </label>
+                {isPlayerView ? (
+                  <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
+                    {controlledBy === 'master' ? 'Enemigo (Master)' : controlledBy}
+                  </div>
+                ) : (
+                  <select value={controlledBy} onChange={e => setControlledBy(e.target.value)} className="w-full bg-gray-700 text-white">
+                    <option value="master">Máster</option>
+                    {players.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
@@ -287,6 +349,12 @@ const TokenSettings = ({
                 }}
               >
                 Abrir ficha de personaje
+              </Boton>
+              <Boton
+                onClick={addToInitiativeSystem}
+                className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white mt-2"
+              >
+                ⚡ Añadir al Sistema de Velocidad
               </Boton>
               <div className="flex justify-center gap-2 mt-2">
                 <Boton size="sm" onClick={() => onMoveBack?.()}>Bajar capa</Boton>
@@ -470,6 +538,8 @@ TokenSettings.propTypes = {
   onOpenSheet: PropTypes.func.isRequired,
   onMoveFront: PropTypes.func,
   onMoveBack: PropTypes.func,
+  isPlayerView: PropTypes.bool,
+  currentPlayerName: PropTypes.string,
 };
 
 export default TokenSettings;

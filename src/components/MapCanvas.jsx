@@ -3,6 +3,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   forwardRef,
   useImperativeHandle,
   useLayoutEffect,
@@ -37,6 +38,63 @@ import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { deepEqual } from '../utils/deepEqual';
+
+// Funciones de sincronización para jugadores
+const createPlayerSyncManager = (pageId, playerName, isPlayerView) => {
+  const saveTimeouts = useRef({
+    tokens: null,
+    lines: null,
+    walls: null,
+    texts: null,
+  });
+
+  const prevData = useRef({
+    tokens: [],
+    lines: [],
+    walls: [],
+    texts: [],
+  });
+
+  const saveToFirebase = useCallback(async (type, data) => {
+    if (!pageId || !isPlayerView) return;
+
+    // Verificar si hay cambios reales
+    if (deepEqual(data, prevData.current[type])) return;
+
+    // Limpiar timeout anterior
+    if (saveTimeouts.current[type]) {
+      clearTimeout(saveTimeouts.current[type]);
+    }
+
+    // Debouncing: esperar 300ms antes de guardar
+    saveTimeouts.current[type] = setTimeout(async () => {
+      try {
+        // Validaciones de seguridad para jugadores
+        let filteredData = data;
+
+        if (type === 'tokens') {
+          // Jugadores solo pueden modificar tokens que controlan
+          filteredData = data.filter(token =>
+            token.controlledBy === playerName || token.controlledBy === 'master'
+          );
+        }
+
+        // Actualizar referencia previa
+        prevData.current[type] = filteredData;
+
+        // Guardar en Firebase
+        await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
+      } catch (error) {
+        console.error(`Error guardando ${type} para jugador:`, error);
+      }
+    }, 300);
+  }, [pageId, playerName, isPlayerView]);
+
+  return { saveToFirebase };
+};
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -843,6 +901,9 @@ const MapCanvas = ({
   onLayerChange = () => {},
   enableDarkness = true,
   darknessOpacity = 0.7,
+  // Nuevas props para sincronización bidireccional
+  pageId = null,
+  isPlayerView = false,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -919,6 +980,107 @@ const MapCanvas = ({
 
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
+
+  // Manager de sincronización para jugadores
+  const syncManager = useMemo(() => {
+    if (!isPlayerView || !pageId) return null;
+
+    const saveTimeouts = {
+      tokens: null,
+      lines: null,
+      walls: null,
+      texts: null,
+    };
+
+    const prevData = {
+      tokens: [],
+      lines: [],
+      walls: [],
+      texts: [],
+    };
+
+    const saveToFirebase = async (type, data) => {
+      // Verificar si hay cambios reales
+      if (deepEqual(data, prevData[type])) return;
+
+      // Limpiar timeout anterior
+      if (saveTimeouts[type]) {
+        clearTimeout(saveTimeouts[type]);
+      }
+
+      // Debouncing: esperar 300ms antes de guardar
+      saveTimeouts[type] = setTimeout(async () => {
+        try {
+          // Validaciones de seguridad para jugadores
+          let filteredData = data;
+
+          if (type === 'tokens') {
+            // Jugadores solo pueden modificar tokens que controlan
+            filteredData = data.filter(token =>
+              token.controlledBy === playerName || token.controlledBy === 'master'
+            );
+          }
+
+          // Actualizar referencia previa
+          prevData[type] = filteredData;
+
+          // Guardar en Firebase
+          await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
+        } catch (error) {
+          console.error(`Error guardando ${type} para jugador:`, error);
+        }
+      }, 300);
+    };
+
+    return { saveToFirebase, prevData };
+  }, [isPlayerView, pageId, playerName]);
+
+  // Función wrapper para manejar cambios de tokens con sincronización
+  const handleTokensChange = useCallback((newTokens) => {
+    // Validaciones de seguridad para jugadores
+    if (isPlayerView) {
+      // Verificar que el jugador solo modifique tokens que controla
+      const validTokens = newTokens.filter(token => {
+        const originalToken = tokens.find(t => t.id === token.id);
+        // Si es un token nuevo o el jugador lo controla, permitir
+        return !originalToken || originalToken.controlledBy === playerName || token.controlledBy === playerName;
+      });
+
+      // Usar syncManager para guardar en Firebase
+      if (syncManager) {
+        syncManager.saveToFirebase('tokens', validTokens);
+      }
+
+      // Actualizar estado local
+      onTokensChange(validTokens);
+    } else {
+      // Para Master, usar el flujo normal
+      onTokensChange(newTokens);
+    }
+  }, [isPlayerView, playerName, tokens, syncManager, onTokensChange]);
+
+  // Funciones wrapper para otros elementos
+  const handleLinesChange = useCallback((newLines) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('lines', newLines);
+    }
+    onLinesChange(newLines);
+  }, [isPlayerView, syncManager, onLinesChange]);
+
+  const handleWallsChange = useCallback((newWalls) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('walls', newWalls);
+    }
+    onWallsChange(newWalls);
+  }, [isPlayerView, syncManager, onWallsChange]);
+
+  const handleTextsChange = useCallback((newTexts) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('texts', newTexts);
+    }
+    onTextsChange(newTexts);
+  }, [isPlayerView, syncManager, onTextsChange]);
+
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
 
   // Sincronizar con la prop externa
@@ -1766,15 +1928,15 @@ const MapCanvas = ({
     return lines;
   };
 
-  const saveLines = (updater) => {
+  const saveLines = useCallback((updater) => {
     setLines((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       undoStack.current.push(prev);
       redoStack.current = [];
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
   const updateWalls = (updater) => {
     setWalls((prev) =>
@@ -1782,41 +1944,41 @@ const MapCanvas = ({
     );
   };
 
-  const saveWalls = (updater) => {
+  const saveWalls = useCallback((updater) => {
     setWalls((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      onWallsChange(next);
+      handleWallsChange(next);
       return next;
     });
-  };
+  }, [handleWallsChange]);
 
-  const updateTexts = (updater) => {
+  const updateTexts = useCallback((updater) => {
     setTexts((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      onTextsChange(next);
+      handleTextsChange(next);
       return next;
     });
-  };
+  }, [handleTextsChange]);
 
-  const undoLines = () => {
+  const undoLines = useCallback(() => {
     setLines((prev) => {
       if (undoStack.current.length === 0) return prev;
       redoStack.current.push(prev);
       const next = undoStack.current.pop();
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
-  const redoLines = () => {
+  const redoLines = useCallback(() => {
     setLines((prev) => {
       if (redoStack.current.length === 0) return prev;
       undoStack.current.push(prev);
       const next = redoStack.current.pop();
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
   const handleLineDragEnd = (id, e) => {
     const node = e.target;
@@ -1976,7 +2138,7 @@ const MapCanvas = ({
     const newTokens = tokens.map((t) =>
       t.id === id ? { ...t, x: col, y: row } : t
     );
-    onTokensChange(newTokens);
+    handleTokensChange(newTokens);
     setDragShadow(null);
   };
 
@@ -1989,12 +2151,12 @@ const MapCanvas = ({
     const x = pxToCell(px, gridOffsetX);
     const y = pxToCell(py, gridOffsetY);
     const updated = tokens.map((t) => (t.id === id ? { ...t, w, h, x, y } : t));
-    onTokensChange(updated);
+    handleTokensChange(updated);
   };
 
   const handleRotateChange = (id, angle) => {
     const updated = tokens.map((t) => (t.id === id ? { ...t, angle } : t));
-    onTokensChange(updated);
+    handleTokensChange(updated);
   };
 
   const handleOpenSettings = (id) => {
@@ -2033,7 +2195,7 @@ const MapCanvas = ({
     const reordered = [...tokens];
     const [token] = reordered.splice(index, 1);
     reordered.push(token);
-    onTokensChange(reordered);
+    handleTokensChange(reordered);
   };
 
   const moveTokenToBack = (id) => {
@@ -2042,7 +2204,7 @@ const MapCanvas = ({
     const reordered = [...tokens];
     const [token] = reordered.splice(index, 1);
     reordered.unshift(token);
-    onTokensChange(reordered);
+    handleTokensChange(reordered);
   };
 
   // Zoom interactivo con la rueda del ratón
@@ -2478,7 +2640,7 @@ const MapCanvas = ({
               layer: activeLayer
             };
           });
-          onTokensChange([...tokens, ...newTokens]);
+          handleTokensChange([...tokens, ...newTokens]);
         }
 
         // Pegar líneas
@@ -2582,7 +2744,7 @@ const MapCanvas = ({
 
         // Eliminar selección múltiple
         if (selectedTokens.length > 0) {
-          onTokensChange(tokens.filter(t => !selectedTokens.includes(t.id)));
+          handleTokensChange(tokens.filter(t => !selectedTokens.includes(t.id)));
           setSelectedTokens([]);
         }
         if (selectedLines.length > 0) {
@@ -2612,7 +2774,7 @@ const MapCanvas = ({
           setSelectedTextId(null);
         }
         if (selectedId != null && selectedTokens.length === 0) {
-          onTokensChange(tokens.filter((t) => t.id !== selectedId));
+          handleTokensChange(tokens.filter((t) => t.id !== selectedId));
           setSelectedId(null);
         }
         return;
@@ -2675,7 +2837,7 @@ const MapCanvas = ({
               }
               return t;
             });
-            onTokensChange(rotated);
+            handleTokensChange(rotated);
             return;
           }
           default:
@@ -2695,7 +2857,7 @@ const MapCanvas = ({
             }
             return t;
           });
-          onTokensChange(updated);
+          handleTokensChange(updated);
         }
         return;
       }
@@ -2727,7 +2889,7 @@ const MapCanvas = ({
           const rotated = tokens.map((t) =>
             t.id === selectedId ? { ...t, angle: updatedAngle } : t
           );
-          onTokensChange(rotated);
+          handleTokensChange(rotated);
           return;
         }
         default:
@@ -2747,12 +2909,12 @@ const MapCanvas = ({
       const updated = tokens.map((t) =>
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
-      onTokensChange(updated);
+      handleTokensChange(updated);
     },
     [
       selectedId,
       tokens,
-      onTokensChange,
+      handleTokensChange,
       mapWidth,
       mapHeight,
       selectedLineId,
@@ -2872,7 +3034,7 @@ const MapCanvas = ({
           estados: [],
           layer: activeLayer,
         };
-        onTokensChange([...tokens, newToken]);
+        handleTokensChange([...tokens, newToken]);
       },
     }),
     [
@@ -3603,6 +3765,7 @@ const MapCanvas = ({
         onTextOptionsChange={setTextOptions}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
+        isPlayerView={isPlayerView}
       />
       {settingsTokenIds.map((id) => (
         <TokenSettings
@@ -3613,11 +3776,13 @@ const MapCanvas = ({
           onClose={() => handleCloseSettings(id)}
           onUpdate={(tk) => {
             const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
-            onTokensChange(updated);
+            handleTokensChange(updated);
           }}
           onOpenSheet={handleOpenSheet}
           onMoveFront={() => moveTokenToFront(id)}
           onMoveBack={() => moveTokenToBack(id)}
+          isPlayerView={isPlayerView}
+          currentPlayerName={playerName}
         />
       ))}
       {estadoTokenIds.map((id) => (
@@ -3627,7 +3792,7 @@ const MapCanvas = ({
           onClose={() => handleCloseEstados(id)}
           onUpdate={(tk) => {
             const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
-            onTokensChange(updated);
+            handleTokensChange(updated);
           }}
         />
       ))}

@@ -450,6 +450,8 @@ function App() {
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  // Mapa de Batalla para jugadores
+  const [showPlayerBattleMap, setShowPlayerBattleMap] = useState(false);
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -478,6 +480,9 @@ function App() {
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [enableDarkness, setEnableDarkness] = useState(true);
+
+  // Control de visibilidad de páginas para jugadores
+  const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
 
   // Cargar páginas desde Firebase al iniciar
   useEffect(() => {
@@ -510,6 +515,11 @@ function App() {
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         const { tokens, lines, walls, texts, ...meta } = defaultPage;
         setPages([meta]);
+        // Establecer la primera página como visible para jugadores por defecto
+        setPlayerVisiblePageId(defaultPage.id);
+        await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
+          playerVisiblePageId: defaultPage.id
+        });
       } else {
         setPages(loaded);
       }
@@ -517,6 +527,75 @@ function App() {
     };
     loadPages();
   }, []);
+
+  // Cargar configuración de visibilidad para jugadores
+  useEffect(() => {
+    const loadPlayerVisibility = async () => {
+      try {
+        const docRef = doc(db, 'gameSettings', 'playerVisibility');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setPlayerVisiblePageId(data.playerVisiblePageId || null);
+        }
+      } catch (error) {
+        console.log('Error cargando configuración de visibilidad:', error);
+      }
+    };
+    loadPlayerVisibility();
+  }, []);
+
+  // Cargar datos completos de la página visible para jugadores con listener en tiempo real
+  useEffect(() => {
+    if (!playerVisiblePageId || userType !== 'player') return;
+
+    // Listener en tiempo real para la página visible
+    const unsubscribe = onSnapshot(doc(db, 'pages', playerVisiblePageId), (docSnap) => {
+      if (docSnap.exists()) {
+        const pageData = docSnap.data();
+        // Actualizar la página en el array de páginas con los datos completos
+        setPages(prevPages => {
+          const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
+          if (pageIndex !== -1) {
+            const updatedPages = [...prevPages];
+            updatedPages[pageIndex] = {
+              ...updatedPages[pageIndex],
+              tokens: pageData.tokens || [],
+              lines: pageData.lines || [],
+              walls: pageData.walls || [],
+              texts: pageData.texts || [],
+              background: pageData.background,
+              backgroundHash: pageData.backgroundHash
+            };
+            return updatedPages;
+          }
+          return prevPages;
+        });
+
+        // Actualizar también los estados del canvas
+        setCanvasTokens(pageData.tokens || []);
+        setCanvasLines(pageData.lines || []);
+        setCanvasWalls(pageData.walls || []);
+        setCanvasTexts(pageData.texts || []);
+      }
+    }, (error) => {
+      console.error('Error en listener de página para jugador:', error);
+    });
+
+    return () => unsubscribe();
+  }, [playerVisiblePageId, userType]);
+
+  // Función para actualizar la página visible para jugadores
+  const updatePlayerVisiblePage = async (pageId) => {
+    try {
+      setPlayerVisiblePageId(pageId);
+      await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
+        playerVisiblePageId: pageId
+      });
+    } catch (error) {
+      console.error('Error actualizando página visible para jugadores:', error);
+    }
+  };
 
   const handleBackgroundUpload = async (e) => {
     const file = e.target.files[0];
@@ -914,6 +993,7 @@ function App() {
     setShowDiceCalculator(false);
     setShowBarraReflejos(false);
     setShowInitiativeTracker(false);
+    setShowPlayerBattleMap(false);
   };
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
@@ -2338,6 +2418,164 @@ function App() {
       />
     );
   }
+  // MAPA DE BATALLA PARA JUGADORES
+  if (userType === 'player' && nameEntered && showPlayerBattleMap) {
+    // Usar la página configurada como visible para jugadores por el Master
+    let effectivePage = null;
+    let effectivePageIndex = 0;
+    let playerHasToken = false;
+
+    if (playerVisiblePageId) {
+      // Buscar la página por ID
+      const pageIndex = pages.findIndex(page => page.id === playerVisiblePageId);
+      if (pageIndex !== -1) {
+        effectivePage = pages[pageIndex];
+        effectivePageIndex = pageIndex;
+
+        // Verificar si el jugador tiene un token asignado en esta página
+        const pageTokens = effectivePage?.tokens || [];
+        playerHasToken = pageTokens.some(token => token.controlledBy === playerName);
+      }
+    }
+
+    // Si no hay página visible configurada o no se encuentra, mostrar mensaje
+    if (!effectivePage) {
+      return (
+        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🗺️</div>
+              <h2 className="text-xl font-bold mb-2">Mapa no disponible</h2>
+              <p className="text-gray-400 mb-4">
+                El Master aún no ha configurado ningún mapa como visible para jugadores.
+              </p>
+              <p className="text-yellow-400 text-sm">
+                Espera a que el Master seleccione un mapa para mostrar.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Si el jugador no tiene tokens asignados, no puede ver el mapa
+    if (!playerHasToken) {
+      return (
+        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-xl font-bold mb-2">Acceso Denegado</h2>
+              <p className="text-gray-400 mb-4">
+                No tienes ningún token asignado en este mapa.
+              </p>
+              <p className="text-yellow-400 text-sm">
+                Contacta al Master para que te asigne un token antes de acceder al mapa de batalla.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+          <div className="flex flex-wrap gap-2">
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+            <Boton
+              size="sm"
+              color="green"
+              onClick={() => setShowInitiativeTracker(true)}
+            >
+              ⚡ Sistema de Velocidad
+            </Boton>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <MapCanvas
+            userType="player"
+            playerName={playerName}
+            playerViewMode={true}
+            simulatedPlayer={playerName}
+            tokens={effectivePage?.tokens || []}
+            onTokensChange={(newTokens) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].tokens = newTokens;
+                setPages(updatedPages);
+              }
+            }}
+            lines={effectivePage?.lines || []}
+            onLinesChange={(newLines) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].lines = newLines;
+                setPages(updatedPages);
+              }
+            }}
+            walls={effectivePage?.walls || []}
+            onWallsChange={(newWalls) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].walls = newWalls;
+                setPages(updatedPages);
+              }
+            }}
+            texts={effectivePage?.texts || []}
+            onTextsChange={(newTexts) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].texts = newTexts;
+                setPages(updatedPages);
+              }
+            }}
+            backgroundImage={effectivePage?.background}
+            imageSize={effectivePage?.imageSize}
+            gridCells={effectivePage?.gridCells}
+            gridSize={effectivePage?.gridSize || 50}
+            gridOffsetX={effectivePage?.gridOffsetX || 0}
+            gridOffsetY={effectivePage?.gridOffsetY || 0}
+            enableDarkness={effectivePage?.enableDarkness || false}
+            darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+            activeLayer="fichas"
+            enemies={[]}
+            players={[playerName]}
+            highlightText={highlightText}
+            isPlayerView={true}
+            pageId={playerVisiblePageId}
+          />
+        </div>
+      </div>
+    );
+  }
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return (
@@ -2368,6 +2606,14 @@ function App() {
               className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
             >
               ⚡
+            </Boton>
+            {/* Botón de Mapa de Batalla */}
+            <Boton
+              onClick={() => setShowPlayerBattleMap(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              title="Mapa de Batalla"
+            >
+              🗺️
             </Boton>
           </div>
           <div className="mb-4 text-center text-sm text-gray-300 flex flex-col gap-1">
@@ -3985,6 +4231,8 @@ function App() {
             onAdd={addPage}
             onUpdate={updatePage}
             onDelete={deletePage}
+            playerVisiblePageId={playerVisiblePageId}
+            onPlayerVisiblePageChange={updatePlayerVisiblePage}
           />
         </div>
         <div className="relative pt-14 flex-1 overflow-hidden">

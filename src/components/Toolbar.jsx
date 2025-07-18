@@ -62,10 +62,17 @@ const Toolbar = ({
   onTextOptionsChange,
   activeLayer = 'fichas',
   onLayerChange,
-}) => (
+  isPlayerView = false,
+}) => {
+  // Filtrar herramientas para jugadores
+  const availableTools = isPlayerView
+    ? tools.filter(tool => ['select', 'draw', 'measure', 'text'].includes(tool.id))
+    : tools;
+
+  return (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
     <div className="flex flex-col items-center space-y-2 flex-1">
-      {tools.map(({ id, icon: Icon }) => (
+      {availableTools.map(({ id, icon: Icon }) => (
         <button
           key={id}
           onClick={() => onSelect(id)}
@@ -78,44 +85,46 @@ const Toolbar = ({
       ))}
     </div>
     
-    {/* Sección de Capas */}
-    <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
-      <div className="text-xs text-gray-300 font-medium">Capas</div>
-      <div className="flex flex-col items-center space-y-1">
-        <button
-          onClick={() => onLayerChange && onLayerChange('fichas')}
-          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
-            activeLayer === 'fichas' ? 'bg-green-600' : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-          title="Capa de Fichas"
-        >
-          <FiUsers className="text-sm" />
-        </button>
-        <div className="text-xs text-gray-300">Fichas</div>
-        
-        <button
-          onClick={() => onLayerChange && onLayerChange('master')}
-          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
-            activeLayer === 'master' ? 'bg-fuchsia-600' : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-          title="Capa de Master"
-        >
-          <FiShield className="text-sm" />
-        </button>
-        <div className="text-xs text-gray-300">Master</div>
-        
-        <button
-          onClick={() => onLayerChange && onLayerChange('luz')}
-          className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
-            activeLayer === 'luz' ? 'bg-yellow-600' : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-          title="Capa de Luz"
-        >
-          <FaSun className="text-sm" />
-        </button>
-        <div className="text-xs text-gray-300">Luz</div>
+    {/* Sección de Capas - ocultar para jugadores */}
+    {!isPlayerView && (
+      <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
+        <div className="text-xs text-gray-300 font-medium">Capas</div>
+        <div className="flex flex-col items-center space-y-1">
+          <button
+            onClick={() => onLayerChange && onLayerChange('fichas')}
+            className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+              activeLayer === 'fichas' ? 'bg-green-600' : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+            title="Capa de Fichas"
+          >
+            <FiUsers className="text-sm" />
+          </button>
+          <div className="text-xs text-gray-300">Fichas</div>
+
+          <button
+            onClick={() => onLayerChange && onLayerChange('master')}
+            className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+              activeLayer === 'master' ? 'bg-fuchsia-600' : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+            title="Capa de Master"
+          >
+            <FiShield className="text-sm" />
+          </button>
+          <div className="text-xs text-gray-300">Master</div>
+
+          <button
+            onClick={() => onLayerChange && onLayerChange('luz')}
+            className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+              activeLayer === 'luz' ? 'bg-yellow-600' : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+            title="Capa de Luz"
+          >
+            <FaSun className="text-sm" />
+          </button>
+          <div className="text-xs text-gray-300">Luz</div>
+        </div>
       </div>
-    </div>
+    )}
     <AnimatePresence>
       {activeTool === 'draw' && (
         <motion.div
@@ -308,7 +317,8 @@ const Toolbar = ({
       )}
     </AnimatePresence>
   </div>
-);
+  );
+};
 
 Toolbar.propTypes = {
   activeTool: PropTypes.string.isRequired,
@@ -335,6 +345,7 @@ Toolbar.propTypes = {
   onTextOptionsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
+  isPlayerView: PropTypes.bool,
 };
 
 export default Toolbar;

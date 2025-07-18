@@ -727,6 +727,27 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Los muros ahora se pegan correctamente manteniendo su posición relativa y estructura de coordenadas.
 - Transiciones suaves cuando los botones de puertas entran/salen del rango de visión.
 
+**Resumen de cambios v2.4.10:**
+
+- Optimización de escritura en Firebase para nombres de tokens con debouncing mejorado (800ms).
+- El campo de nombre del token ahora usa debouncing para evitar escrituras excesivas en Firebase.
+- Nuevo botón "⚡ Añadir al Sistema de Velocidad" en ajustes de tokens.
+- Integración automática con el sistema de velocidad usando el controlador del token como propietario.
+- Verificación de nombres duplicados antes de agregar al sistema de velocidad.
+- Detección automática del tipo de participante (jugador/enemigo) basado en el controlador.
+
+**Resumen de cambios v2.4.11:**
+
+- Vista de Mapa de Batalla simplificada para jugadores accesible desde fichas de personaje.
+- Botón 🗺️ "Mapa de Batalla" en fichas de jugadores para acceso directo al mapa.
+- Interfaz restringida para jugadores: oculta selector de páginas, botón subir mapa, menús de master.
+- Toolbar simplificada para jugadores: solo herramientas de selección, dibujar, regla y texto.
+- Detección automática del token del jugador y activación del modo de visión.
+- Restricciones de gestión de tokens: jugadores solo pueden editar SU token controlado.
+- Sistema de assets personalizado por jugador con estructura Firebase separada.
+- Chat con colores únicos automáticos para cada jugador basados en hash del nombre.
+- Navegación automática a la página donde está ubicado el token del jugador.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
