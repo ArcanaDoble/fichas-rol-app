@@ -757,6 +757,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
 - *Nuevo:* pruebas que simulan el cambio entre páginas y verifican que los tokens
   se mantienen independientes para jugadores y máster (`PageSwitchTokens.test.js`).
+- *Nuevo:* prueba rápida de cambio de página para asegurar que no se mezclan los tokens
+  al navegar velozmente (`QuickPageSwitch.test.js`).
+- *Nuevo:* prueba de sincronización de movimiento de tokens entre jugador y máster
+  usando un listener activo (`TokenListenerSync.test.js`).
 
 ## 🚀 Instalación y uso
 
