@@ -987,6 +987,10 @@ src/
 
 - 📝 Se elimina la indicación redundante de espera dejando solo el mensaje principal
 
+### 🌑 **Sincronización de oscuridad con jugadores (Julio 2026) - v2.4.19**
+
+- ✅ Los valores `enableDarkness` y `darknessOpacity` de la página visible se actualizan al instante para los jugadores
+
 ## 🔄 Historial de cambios previos
 
 <details>
