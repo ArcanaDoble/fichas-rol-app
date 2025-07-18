@@ -567,6 +567,11 @@ function App() {
       (docSnap) => {
         if (docSnap.exists()) {
           const pageData = docSnap.data();
+          setEnableDarkness(
+            pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
+          );
+          const opacity =
+            pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
           // Actualizar la página en el array de páginas con los datos completos
           setPages((prevPages) => {
             const pageIndex = prevPages.findIndex(
@@ -582,6 +587,11 @@ function App() {
                 texts: pageData.texts || [],
                 background: pageData.background,
                 backgroundHash: pageData.backgroundHash,
+                enableDarkness:
+                  pageData.enableDarkness !== undefined
+                    ? pageData.enableDarkness
+                    : updatedPages[pageIndex].enableDarkness,
+                darknessOpacity: opacity,
               };
               return updatedPages;
             }
