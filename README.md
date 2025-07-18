@@ -959,6 +959,10 @@ src/
 - ✅ **Logs de debug** - Tracking completo de operaciones de carga y guardado por página
 - ✅ **Manejo de errores robusto** - Try-catch y promesas con feedback detallado
 
+### 🛠️ **Unificación de deepEqual (Julio 2025) - v2.4.14**
+
+- ✅ Comparaciones profundas centralizadas en `src/utils/deepEqual.js`
+
 ## 🔄 Historial de cambios previos
 
 <details>

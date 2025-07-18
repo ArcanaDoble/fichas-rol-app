@@ -40,11 +40,11 @@ import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
+import { deepEqual } from './utils/deepEqual';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
   ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // Compara dos páginas ignorando el campo updatedAt
 function pageDataEqual(a, b) {
   if (!a || !b) return false;
@@ -53,7 +53,7 @@ function pageDataEqual(a, b) {
     const { updatedAt, ...rest } = obj;
     return rest;
   };
-  return JSON.stringify(omit(a)) === JSON.stringify(omit(b));
+  return deepEqual(omit(a), omit(b));
 }
 const MASTER_PASSWORD = '0904';
 
