@@ -70,7 +70,6 @@ const Toolbar = ({
     : tools;
 
   return (
-  <>
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
     <div className="flex flex-col items-center space-y-2 flex-1">
       {availableTools.map(({ id, icon: Icon }) => (
@@ -318,7 +317,6 @@ const Toolbar = ({
       )}
     </AnimatePresence>
   </div>
-  </>
 );
 
 Toolbar.propTypes = {
