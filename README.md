@@ -983,6 +983,10 @@ src/
 
 - ✅ Se evita que una carga previa de página sobrescriba el estado actual comprobando la versión del efecto
 
+### 🗺️ **Mensaje simplificado en mapa no disponible (Julio 2026) - v2.4.18**
+
+- 📝 Se elimina la indicación redundante de espera dejando solo el mensaje principal
+
 ## 🔄 Historial de cambios previos
 
 <details>

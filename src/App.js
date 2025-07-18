@@ -2704,9 +2704,6 @@ function App() {
                 El Master aún no ha configurado ningún mapa como visible para
                 jugadores.
               </p>
-              <p className="text-yellow-400 text-sm">
-                Espera a que el Master seleccione un mapa para mostrar.
-              </p>
             </div>
           </div>
         </div>
