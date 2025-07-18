@@ -833,6 +833,7 @@ src/
   cargarse por completo
 - **IDs de fichas** - Cada token creado ahora recibe un `tokenSheetId` único para evitar conflictos
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
+- **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 
 #### v2.1.1 (junio 2024)
 
