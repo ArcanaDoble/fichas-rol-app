@@ -832,6 +832,7 @@ src/
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo
 - **IDs de fichas** - Cada token creado ahora recibe un `tokenSheetId` único para evitar conflictos
+- **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 
 #### v2.1.1 (junio 2024)
 
