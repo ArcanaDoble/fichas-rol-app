@@ -548,10 +548,14 @@ function App() {
   useEffect(() => {
     if (!playerVisiblePageId || userType !== 'player') return;
 
+    console.log('Configurando listener para jugador en página:', playerVisiblePageId);
+
     // Listener en tiempo real para la página visible
     const unsubscribe = onSnapshot(doc(db, 'pages', playerVisiblePageId), (docSnap) => {
       if (docSnap.exists()) {
         const pageData = docSnap.data();
+        console.log('Datos recibidos para jugador desde página:', playerVisiblePageId);
+
         // Actualizar la página en el array de páginas con los datos completos
         setPages(prevPages => {
           const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
@@ -571,7 +575,8 @@ function App() {
           return prevPages;
         });
 
-        // Actualizar también los estados del canvas
+        // SOLO actualizar estados del canvas si es jugador
+        // Esto previene conflictos con el Master
         setCanvasTokens(pageData.tokens || []);
         setCanvasLines(pageData.lines || []);
         setCanvasWalls(pageData.walls || []);
@@ -630,14 +635,21 @@ function App() {
     }
   };
 
-  // Suscribirse a la página actual
+  // Suscribirse a la página actual (SOLO para Master)
   useEffect(() => {
     if (!pagesLoadedRef.current) return undefined;
+    if (userType !== 'master') return undefined; // SOLO Master usa este listener
+
     const page = pages[currentPage];
     if (!page) return undefined;
+
+    console.log('Configurando listener para Master en página:', page.id, 'currentPage:', currentPage);
+
     const unsub = onSnapshot(doc(db, 'pages', page.id), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
+      console.log('Datos recibidos para Master desde página:', page.id);
+
       setCanvasTokens(data.tokens || []);
       setCanvasLines(data.lines || []);
       setCanvasWalls(data.walls || []);
@@ -677,14 +689,19 @@ function App() {
       });
     });
     return unsub;
-  }, [currentPage, pages[currentPage]?.id]);
+  }, [currentPage, pages[currentPage]?.id, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
+
+    console.log('Master guardando tokens en página:', pageId);
     prevTokensRef.current = canvasTokens;
+
     const saveTokens = async () => {
       const tokens = await Promise.all(
         canvasTokens.map(async (t) => {
@@ -698,32 +715,45 @@ function App() {
       await updateDoc(doc(db, 'pages', pageId), { tokens });
     };
     saveTokens();
-  }, [canvasTokens, currentPage]);
+  }, [canvasTokens, currentPage, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTexts, prevTextsRef.current)) return;
+
+    console.log('Master guardando textos en página:', pageId);
     prevTextsRef.current = canvasTexts;
     updateDoc(doc(db, 'pages', pageId), { texts: canvasTexts });
-  }, [canvasTexts, currentPage]);
+  }, [canvasTexts, currentPage, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasLines, prevLinesRef.current)) return;
+
+    console.log('Master guardando líneas en página:', pageId);
     prevLinesRef.current = canvasLines;
     updateDoc(doc(db, 'pages', pageId), { lines: canvasLines });
-  }, [canvasLines, currentPage]);
+  }, [canvasLines, currentPage, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasWalls, prevWallsRef.current)) return;
+
+    console.log('Master guardando muros en página:', pageId);
     prevWallsRef.current = canvasWalls;
+
     if (wallSaveTimeout.current) clearTimeout(wallSaveTimeout.current);
     wallSaveTimeout.current = setTimeout(() => {
       updateDoc(doc(db, 'pages', pageId), { walls: canvasWalls });
@@ -734,14 +764,19 @@ function App() {
         wallSaveTimeout.current = null;
       }
     };
-  }, [canvasWalls, currentPage]);
+  }, [canvasWalls, currentPage, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (canvasBackground === prevBgRef.current) return;
+
+    console.log('Master guardando background en página:', pageId);
     let bg = canvasBackground;
+
     const saveBg = async () => {
       if (bg && bg.startsWith('blob:')) return;
       if (bg && bg.startsWith('data:')) {
@@ -754,20 +789,24 @@ function App() {
       prevBgRef.current = bg;
     };
     saveBg();
-  }, [canvasBackground, currentPage]);
+  }, [canvasBackground, currentPage, userType]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return; // SOLO Master puede guardar cambios
+
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
     if (deepEqual(newGrid, prevGridRef.current)) return;
+
+    console.log('Master guardando grid en página:', pageId);
     prevGridRef.current = newGrid;
     updateDoc(doc(db, 'pages', pageId), newGrid);
     setPages((ps) =>
       ps.map((p, i) => (i === currentPage ? { ...p, ...newGrid } : p))
     );
-  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage, userType]);
 
   // Función para crear un canvas con fondo blanco y grid negro
   const createDefaultGridCanvas = (width = 1500, height = 1000, cellSize = 50) => {
