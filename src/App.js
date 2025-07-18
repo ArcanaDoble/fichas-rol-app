@@ -775,6 +775,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
@@ -821,6 +822,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTexts, prevTextsRef.current)) return;
@@ -850,6 +852,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasLines, prevLinesRef.current)) return;
@@ -879,6 +882,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasWalls, prevWallsRef.current)) return;
@@ -921,6 +925,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (canvasBackground === prevBgRef.current) return;
@@ -966,6 +971,7 @@ function App() {
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
