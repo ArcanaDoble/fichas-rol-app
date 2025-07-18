@@ -2361,6 +2361,38 @@ function App() {
     const effectivePageIndex = playerToken ? playerPageIndex : currentPage;
     const effectivePage = pages[effectivePageIndex] || pages[0];
 
+    // Si no hay páginas o la página efectiva no existe
+    if (!effectivePage || pages.length === 0) {
+      return (
+        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🗺️</div>
+              <h2 className="text-xl font-bold mb-2">No hay mapas disponibles</h2>
+              <p className="text-gray-400 mb-4">
+                El Master aún no ha creado ningún mapa de batalla.
+              </p>
+              {!playerToken && (
+                <p className="text-yellow-400 text-sm">
+                  Además, no tienes ningún token asignado en el mapa.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
