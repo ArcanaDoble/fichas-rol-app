@@ -5,22 +5,10 @@ import { FaRuler, FaSun } from 'react-icons/fa';
 import { GiBrickWall } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Icono SVG personalizado para portales
-const PortalIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-    <path d="M2 17l10 5 10-5"/>
-    <path d="M2 12l10 5 10-5"/>
-    <path d="M8 12l4-2 4 2"/>
-    <path d="M16 10l-4 2-4-2"/>
-  </svg>
-);
-
 const tools = [
   { id: 'select', icon: FiMousePointer },
   { id: 'draw', icon: FiEdit2 },
   { id: 'wall', icon: GiBrickWall },
-  { id: 'portal', icon: PortalIcon },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
 ];
@@ -74,14 +62,17 @@ const Toolbar = ({
   onTextOptionsChange,
   activeLayer = 'fichas',
   onLayerChange,
-  // Props para portales
-  pages = [],
-  currentPage = 0,
-  onPageChange,
-}) => (
+  isPlayerView = false,
+}) => {
+  // Filtrar herramientas para jugadores
+  const availableTools = isPlayerView
+    ? tools.filter(tool => ['select', 'draw', 'measure', 'text'].includes(tool.id))
+    : tools;
+
+  return (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
     <div className="flex flex-col items-center space-y-2 flex-1">
-      {tools.map(({ id, icon: Icon }) => (
+      {availableTools.map(({ id, icon: Icon }) => (
         <button
           key={id}
           onClick={() => onSelect(id)}
@@ -322,55 +313,10 @@ const Toolbar = ({
           </div>
         </motion.div>
       )}
-      {activeTool === 'portal' && (
-        <motion.div
-          key="portal-menu"
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -10 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute left-12 top-2 bg-gray-800 p-3 rounded shadow-lg space-y-3 text-white w-64"
-        >
-          <div className="text-sm font-medium text-center border-b border-gray-600 pb-2">
-            🌀 Configuración de Portales
-          </div>
-
-          <div className="text-xs text-gray-300">
-            <div className="mb-2">
-              <strong>Capa Fichas:</strong> Portales interactivos para jugadores
-            </div>
-            <div className="mb-2">
-              <strong>Capas Master/Luz:</strong> Colocar y configurar portales
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-medium">Páginas disponibles:</div>
-            <div className="max-h-32 overflow-y-auto space-y-1">
-              {pages.map((page, index) => (
-                <div
-                  key={page.id}
-                  className={`text-xs p-2 rounded cursor-pointer transition-colors ${
-                    index === currentPage
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
-                  onClick={() => onPageChange && onPageChange(index)}
-                >
-                  {page.name} {index === currentPage && '(actual)'}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-400 border-t border-gray-600 pt-2">
-            💡 Haz clic en el mapa para colocar un portal
-          </div>
-        </motion.div>
-      )}
     </AnimatePresence>
   </div>
-);
+  );
+};
 
 Toolbar.propTypes = {
   activeTool: PropTypes.string.isRequired,
@@ -397,14 +343,7 @@ Toolbar.propTypes = {
   onTextOptionsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
-  pages: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
-      name: PropTypes.string.isRequired,
-    })
-  ),
-  currentPage: PropTypes.number,
-  onPageChange: PropTypes.func,
+  isPlayerView: PropTypes.bool,
 };
 
 export default Toolbar;

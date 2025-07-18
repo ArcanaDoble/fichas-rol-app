@@ -5,7 +5,16 @@ import Modal from './Modal';
 import Input from './Input';
 import Boton from './Boton';
 
-const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) => {
+const PageSelector = ({
+  pages,
+  current,
+  onSelect,
+  onAdd,
+  onUpdate,
+  onDelete,
+  playerVisiblePageId,
+  onPlayerVisiblePageChange
+}) => {
   const [editIndex, setEditIndex] = useState(null);
   const [pageData, setPageData] = useState({});
 
@@ -44,7 +53,39 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
   };
 
   return (
-    <div className="flex items-center gap-2 mb-4 overflow-x-auto overflow-y-visible py-1">
+    <div className="mb-4">
+      {/* Selector global de página visible para jugadores */}
+      <div className="mb-3 p-3 bg-gray-800 rounded-lg border border-gray-600">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-gray-200 mb-1">
+              Página visible para jugadores
+            </h3>
+            <p className="text-xs text-gray-400">
+              Selecciona qué página verán todos los jugadores
+            </p>
+          </div>
+          <select
+            value={playerVisiblePageId || ''}
+            onChange={(e) => {
+              const pageId = e.target.value;
+              if (onPlayerVisiblePageChange) {
+                onPlayerVisiblePageChange(pageId || null);
+              }
+            }}
+            className="bg-gray-700 text-gray-200 text-sm p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+          >
+            <option value="">Ninguna página visible</option>
+            {pages.map((page) => (
+              <option key={page.id} value={page.id}>
+                {page.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible py-1">
       {pages.map((p, i) => (
         <div key={p.id} className="relative group flex-shrink-0">
           <button
@@ -63,6 +104,11 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
             <span className="absolute bottom-0 left-0 right-0 bg-gray-800/60 text-sm text-center">
               {p.name}
             </span>
+            {playerVisiblePageId === p.id && (
+              <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow-lg">
+                👁️ Visible
+              </div>
+            )}
           </button>
           <button
             onClick={() => openEdit(i)}
@@ -152,8 +198,32 @@ const PageSelector = ({ pages, current, onSelect, onAdd, onUpdate, onDelete }) =
               />
             </div>
           )}
+
+          {/* Control de visibilidad para jugadores */}
+          <div className="border-t border-gray-600 pt-4">
+            <div className="flex items-center space-x-3">
+              <input
+                type="radio"
+                name="playerVisible"
+                checked={playerVisiblePageId === pages[editIndex]?.id}
+                onChange={() => {
+                  if (onPlayerVisiblePageChange && editIndex !== null) {
+                    onPlayerVisiblePageChange(pages[editIndex].id);
+                  }
+                }}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
+              />
+              <label className="text-sm font-medium text-blue-400">
+                Mostrar esta página a todos los jugadores
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Solo una página puede estar visible para jugadores a la vez
+            </p>
+          </div>
         </div>
       </Modal>
+      </div>
     </div>
   );
 };
@@ -174,6 +244,8 @@ PageSelector.propTypes = {
   onAdd: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
+  playerVisiblePageId: PropTypes.string,
+  onPlayerVisiblePageChange: PropTypes.func,
 };
 
 export default PageSelector;

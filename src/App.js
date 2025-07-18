@@ -481,6 +481,9 @@ function App() {
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [enableDarkness, setEnableDarkness] = useState(true);
 
+  // Control de visibilidad de páginas para jugadores
+  const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
+
   // Cargar páginas desde Firebase al iniciar
   useEffect(() => {
     const loadPages = async () => {
@@ -512,6 +515,11 @@ function App() {
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         const { tokens, lines, walls, texts, ...meta } = defaultPage;
         setPages([meta]);
+        // Establecer la primera página como visible para jugadores por defecto
+        setPlayerVisiblePageId(defaultPage.id);
+        await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
+          playerVisiblePageId: defaultPage.id
+        });
       } else {
         setPages(loaded);
       }
@@ -519,6 +527,35 @@ function App() {
     };
     loadPages();
   }, []);
+
+  // Cargar configuración de visibilidad para jugadores
+  useEffect(() => {
+    const loadPlayerVisibility = async () => {
+      try {
+        const docRef = doc(db, 'gameSettings', 'playerVisibility');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setPlayerVisiblePageId(data.playerVisiblePageId || null);
+        }
+      } catch (error) {
+        console.log('Error cargando configuración de visibilidad:', error);
+      }
+    };
+    loadPlayerVisibility();
+  }, []);
+
+  // Función para actualizar la página visible para jugadores
+  const updatePlayerVisiblePage = async (pageId) => {
+    try {
+      setPlayerVisiblePageId(pageId);
+      await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
+        playerVisiblePageId: pageId
+      });
+    } catch (error) {
+      console.error('Error actualizando página visible para jugadores:', error);
+    }
+  };
 
   const handleBackgroundUpload = async (e) => {
     const file = e.target.files[0];
@@ -2343,26 +2380,21 @@ function App() {
   }
   // MAPA DE BATALLA PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerBattleMap) {
-    // Buscar el token del jugador en todas las páginas
-    let playerToken = null;
-    let playerPageIndex = 0;
+    // Usar la página configurada como visible para jugadores por el Master
+    let effectivePage = null;
+    let effectivePageIndex = 0;
 
-    for (let i = 0; i < pages.length; i++) {
-      const pageTokens = pages[i]?.tokens || [];
-      const foundToken = pageTokens.find(token => token.controlledBy === playerName);
-      if (foundToken) {
-        playerToken = foundToken;
-        playerPageIndex = i;
-        break;
+    if (playerVisiblePageId) {
+      // Buscar la página por ID
+      const pageIndex = pages.findIndex(page => page.id === playerVisiblePageId);
+      if (pageIndex !== -1) {
+        effectivePage = pages[pageIndex];
+        effectivePageIndex = pageIndex;
       }
     }
 
-    // Si no se encuentra el token, usar la página actual
-    const effectivePageIndex = playerToken ? playerPageIndex : currentPage;
-    const effectivePage = pages[effectivePageIndex] || pages[0];
-
-    // Si no hay páginas o la página efectiva no existe
-    if (!effectivePage || pages.length === 0) {
+    // Si no hay página visible configurada o no se encuentra, mostrar mensaje
+    if (!effectivePage) {
       return (
         <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
           <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
@@ -2378,15 +2410,13 @@ function App() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <div className="text-6xl mb-4">🗺️</div>
-              <h2 className="text-xl font-bold mb-2">No hay mapas disponibles</h2>
+              <h2 className="text-xl font-bold mb-2">Mapa no disponible</h2>
               <p className="text-gray-400 mb-4">
-                El Master aún no ha creado ningún mapa de batalla.
+                El Master aún no ha configurado ningún mapa como visible para jugadores.
               </p>
-              {!playerToken && (
-                <p className="text-yellow-400 text-sm">
-                  Además, no tienes ningún token asignado en el mapa.
-                </p>
-              )}
+              <p className="text-yellow-400 text-sm">
+                Espera a que el Master seleccione un mapa para mostrar.
+              </p>
             </div>
           </div>
         </div>
@@ -4125,6 +4155,8 @@ function App() {
             onAdd={addPage}
             onUpdate={updatePage}
             onDelete={deletePage}
+            playerVisiblePageId={playerVisiblePageId}
+            onPlayerVisiblePageChange={updatePlayerVisiblePage}
           />
         </div>
         <div className="relative pt-14 flex-1 overflow-hidden">
