@@ -970,6 +970,10 @@ src/
 
 - ✅ Guardados pendientes de tokens, líneas, muros, textos y fondo se cancelan al cambiar de página
 
+### ♻️ **Sincronización en tiempo real para el máster (Abril 2026) - v2.4.16**
+
+- ✅ Listener `onSnapshot` mantiene tokens, líneas y demás elementos actualizados al instante para el máster
+
 ## 🔄 Historial de cambios previos
 
 <details>

@@ -602,6 +602,39 @@ function App() {
     return () => unsubscribe();
   }, [playerVisiblePageId, userType]);
 
+  // Listener en tiempo real para la página actual en modo máster
+  useEffect(() => {
+    if (userType !== 'master') return;
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'pages', pageId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const pageData = docSnap.data();
+          setCanvasTokens(pageData.tokens || []);
+          setCanvasLines(pageData.lines || []);
+          setCanvasWalls(pageData.walls || []);
+          setCanvasTexts(pageData.texts || []);
+          setCanvasBackground(pageData.background || null);
+          setGridSize(pageData.gridSize || 1);
+          setGridCells(pageData.gridCells || 1);
+          setGridOffsetX(pageData.gridOffsetX || 0);
+          setGridOffsetY(pageData.gridOffsetY || 0);
+          setEnableDarkness(
+            pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
+          );
+        }
+      },
+      (error) => {
+        console.error('Error en listener de página para máster:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userType, currentPage, pages[currentPage]?.id]);
+
   // Función para actualizar la página visible para jugadores
   const updatePlayerVisiblePage = async (pageId) => {
     try {
