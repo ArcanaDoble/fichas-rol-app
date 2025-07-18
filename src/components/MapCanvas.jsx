@@ -3882,35 +3882,49 @@ const MapCanvas = ({
         onLayerChange={handleLayerChange}
         isPlayerView={isPlayerView}
       />
-      {settingsTokenIds.map((id) => (
-        <TokenSettings
-          key={id}
-          token={tokens.find((t) => t.id === id)}
-          enemies={enemies}
-          players={players}
-          onClose={() => handleCloseSettings(id)}
-          onUpdate={(tk) => {
-            const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
-            handleTokensChange(updated);
-          }}
-          onOpenSheet={handleOpenSheet}
-          onMoveFront={() => moveTokenToFront(id)}
-          onMoveBack={() => moveTokenToBack(id)}
-          isPlayerView={isPlayerView}
-          currentPlayerName={playerName}
-        />
-      ))}
-      {estadoTokenIds.map((id) => (
-        <TokenEstadoMenu
-          key={id}
-          token={tokens.find((t) => t.id === id)}
-          onClose={() => handleCloseEstados(id)}
-          onUpdate={(tk) => {
-            const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
-            handleTokensChange(updated);
-          }}
-        />
-      ))}
+      {settingsTokenIds.map((id) => {
+        const token = tokens.find((t) => t.id === id);
+        if (!token) {
+          setSettingsTokenIds((prev) => prev.filter((sid) => sid !== id));
+          return null;
+        }
+        return (
+          <TokenSettings
+            key={id}
+            token={token}
+            enemies={enemies}
+            players={players}
+            onClose={() => handleCloseSettings(id)}
+            onUpdate={(tk) => {
+              const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
+              handleTokensChange(updated);
+            }}
+            onOpenSheet={handleOpenSheet}
+            onMoveFront={() => moveTokenToFront(id)}
+            onMoveBack={() => moveTokenToBack(id)}
+            isPlayerView={isPlayerView}
+            currentPlayerName={playerName}
+          />
+        );
+      })}
+      {estadoTokenIds.map((id) => {
+        const token = tokens.find((t) => t.id === id);
+        if (!token) {
+          setEstadoTokenIds((prev) => prev.filter((sid) => sid !== id));
+          return null;
+        }
+        return (
+          <TokenEstadoMenu
+            key={id}
+            token={token}
+            onClose={() => handleCloseEstados(id)}
+            onUpdate={(tk) => {
+              const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
+              handleTokensChange(updated);
+            }}
+          />
+        );
+      })}
       {openSheetTokens.map((tk) => (
         <TokenSheetModal
           key={tk.tokenSheetId}
