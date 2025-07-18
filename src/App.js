@@ -463,6 +463,14 @@ function App() {
   const prevTextsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
+  const saveVersionRef = useRef({
+    tokens: 0,
+    lines: 0,
+    walls: 0,
+    texts: 0,
+    background: 0,
+    grid: 0,
+  });
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -518,7 +526,7 @@ function App() {
         // Establecer la primera página como visible para jugadores por defecto
         setPlayerVisiblePageId(defaultPage.id);
         await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
-          playerVisiblePageId: defaultPage.id
+          playerVisiblePageId: defaultPage.id,
         });
       } else {
         setPages(loaded);
@@ -530,16 +538,20 @@ function App() {
 
   // Listener en tiempo real para configuración de visibilidad para jugadores
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, 'gameSettings', 'playerVisibility'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const newVisiblePageId = data.playerVisiblePageId || null;
-        console.log('Cambio de visibilidad detectado:', newVisiblePageId);
-        setPlayerVisiblePageId(newVisiblePageId);
+    const unsubscribe = onSnapshot(
+      doc(db, 'gameSettings', 'playerVisibility'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const newVisiblePageId = data.playerVisiblePageId || null;
+          console.log('Cambio de visibilidad detectado:', newVisiblePageId);
+          setPlayerVisiblePageId(newVisiblePageId);
+        }
+      },
+      (error) => {
+        console.error('Error en listener de visibilidad:', error);
       }
-    }, (error) => {
-      console.error('Error en listener de visibilidad:', error);
-    });
+    );
 
     return () => unsubscribe();
   }, []);
@@ -549,37 +561,43 @@ function App() {
     if (!playerVisiblePageId || userType !== 'player') return;
 
     // Listener en tiempo real para la página visible
-    const unsubscribe = onSnapshot(doc(db, 'pages', playerVisiblePageId), (docSnap) => {
-      if (docSnap.exists()) {
-        const pageData = docSnap.data();
-        // Actualizar la página en el array de páginas con los datos completos
-        setPages(prevPages => {
-          const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
-          if (pageIndex !== -1) {
-            const updatedPages = [...prevPages];
-            updatedPages[pageIndex] = {
-              ...updatedPages[pageIndex],
-              tokens: pageData.tokens || [],
-              lines: pageData.lines || [],
-              walls: pageData.walls || [],
-              texts: pageData.texts || [],
-              background: pageData.background,
-              backgroundHash: pageData.backgroundHash
-            };
-            return updatedPages;
-          }
-          return prevPages;
-        });
+    const unsubscribe = onSnapshot(
+      doc(db, 'pages', playerVisiblePageId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const pageData = docSnap.data();
+          // Actualizar la página en el array de páginas con los datos completos
+          setPages((prevPages) => {
+            const pageIndex = prevPages.findIndex(
+              (p) => p.id === playerVisiblePageId
+            );
+            if (pageIndex !== -1) {
+              const updatedPages = [...prevPages];
+              updatedPages[pageIndex] = {
+                ...updatedPages[pageIndex],
+                tokens: pageData.tokens || [],
+                lines: pageData.lines || [],
+                walls: pageData.walls || [],
+                texts: pageData.texts || [],
+                background: pageData.background,
+                backgroundHash: pageData.backgroundHash,
+              };
+              return updatedPages;
+            }
+            return prevPages;
+          });
 
-        // Actualizar también los estados del canvas
-        setCanvasTokens(pageData.tokens || []);
-        setCanvasLines(pageData.lines || []);
-        setCanvasWalls(pageData.walls || []);
-        setCanvasTexts(pageData.texts || []);
+          // Actualizar también los estados del canvas
+          setCanvasTokens(pageData.tokens || []);
+          setCanvasLines(pageData.lines || []);
+          setCanvasWalls(pageData.walls || []);
+          setCanvasTexts(pageData.texts || []);
+        }
+      },
+      (error) => {
+        console.error('Error en listener de página para jugador:', error);
       }
-    }, (error) => {
-      console.error('Error en listener de página para jugador:', error);
-    });
+    );
 
     return () => unsubscribe();
   }, [playerVisiblePageId, userType]);
@@ -589,7 +607,7 @@ function App() {
     try {
       setPlayerVisiblePageId(pageId);
       await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
-        playerVisiblePageId: pageId
+        playerVisiblePageId: pageId,
       });
     } catch (error) {
       console.error('Error actualizando página visible para jugadores:', error);
@@ -630,13 +648,31 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    saveVersionRef.current.tokens++;
+    saveVersionRef.current.lines++;
+    saveVersionRef.current.walls++;
+    saveVersionRef.current.texts++;
+    saveVersionRef.current.background++;
+    saveVersionRef.current.grid++;
+    if (wallSaveTimeout.current) {
+      clearTimeout(wallSaveTimeout.current);
+      wallSaveTimeout.current = null;
+    }
+  }, [currentPage]);
+
   // Suscribirse a la página actual - SOLO cargar datos cuando cambia de página
   useEffect(() => {
     if (!pagesLoadedRef.current) return undefined;
     const page = pages[currentPage];
     if (!page) return undefined;
 
-    console.log('Cargando datos de página:', page.id, 'currentPage:', currentPage);
+    console.log(
+      'Cargando datos de página:',
+      page.id,
+      'currentPage:',
+      currentPage
+    );
 
     // Cargar datos una sola vez al cambiar de página
     const loadPageData = async () => {
@@ -657,7 +693,9 @@ function App() {
         setGridCells(data.gridCells || 1);
         setGridOffsetX(data.gridOffsetX || 0);
         setGridOffsetY(data.gridOffsetY || 0);
-        setEnableDarkness(data.enableDarkness !== undefined ? data.enableDarkness : true);
+        setEnableDarkness(
+          data.enableDarkness !== undefined ? data.enableDarkness : true
+        );
 
         // Actualizar referencias previas para evitar guardado inmediato
         prevTokensRef.current = data.tokens || [];
@@ -703,8 +741,15 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
 
-    console.log('Guardando tokens en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando tokens en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     prevTokensRef.current = canvasTokens;
+
+    const saveId = ++saveVersionRef.current.tokens;
 
     const saveTokens = async () => {
       try {
@@ -717,7 +762,17 @@ function App() {
             return t;
           })
         );
+        if (saveId !== saveVersionRef.current.tokens) {
+          console.log('Guardado de tokens cancelado por cambio de página');
+          return;
+        }
         await updateDoc(doc(db, 'pages', pageId), { tokens });
+        if (saveId !== saveVersionRef.current.tokens) {
+          console.log(
+            'Resultado de guardado de tokens ignorado por cambio de página'
+          );
+          return;
+        }
         console.log('Tokens guardados exitosamente en página:', pageId);
       } catch (error) {
         console.error('Error guardando tokens:', error);
@@ -732,12 +787,27 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasTexts, prevTextsRef.current)) return;
 
-    console.log('Guardando textos en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando textos en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     prevTextsRef.current = canvasTexts;
 
+    const saveId = ++saveVersionRef.current.texts;
+
     updateDoc(doc(db, 'pages', pageId), { texts: canvasTexts })
-      .then(() => console.log('Textos guardados exitosamente en página:', pageId))
-      .catch(error => console.error('Error guardando textos:', error));
+      .then(() => {
+        if (saveId !== saveVersionRef.current.texts) {
+          console.log(
+            'Resultado de guardado de textos ignorado por cambio de página'
+          );
+          return;
+        }
+        console.log('Textos guardados exitosamente en página:', pageId);
+      })
+      .catch((error) => console.error('Error guardando textos:', error));
   }, [canvasTexts, currentPage]);
 
   useEffect(() => {
@@ -746,12 +816,27 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasLines, prevLinesRef.current)) return;
 
-    console.log('Guardando líneas en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando líneas en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     prevLinesRef.current = canvasLines;
 
+    const saveId = ++saveVersionRef.current.lines;
+
     updateDoc(doc(db, 'pages', pageId), { lines: canvasLines })
-      .then(() => console.log('Líneas guardadas exitosamente en página:', pageId))
-      .catch(error => console.error('Error guardando líneas:', error));
+      .then(() => {
+        if (saveId !== saveVersionRef.current.lines) {
+          console.log(
+            'Resultado de guardado de líneas ignorado por cambio de página'
+          );
+          return;
+        }
+        console.log('Líneas guardadas exitosamente en página:', pageId);
+      })
+      .catch((error) => console.error('Error guardando líneas:', error));
   }, [canvasLines, currentPage]);
 
   useEffect(() => {
@@ -760,14 +845,33 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasWalls, prevWallsRef.current)) return;
 
-    console.log('Guardando muros en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando muros en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     prevWallsRef.current = canvasWalls;
+
+    const saveId = ++saveVersionRef.current.walls;
 
     if (wallSaveTimeout.current) clearTimeout(wallSaveTimeout.current);
     wallSaveTimeout.current = setTimeout(() => {
+      if (saveId !== saveVersionRef.current.walls) {
+        console.log('Guardado de muros cancelado por cambio de página');
+        return;
+      }
       updateDoc(doc(db, 'pages', pageId), { walls: canvasWalls })
-        .then(() => console.log('Muros guardados exitosamente en página:', pageId))
-        .catch(error => console.error('Error guardando muros:', error));
+        .then(() => {
+          if (saveId !== saveVersionRef.current.walls) {
+            console.log(
+              'Resultado de guardado de muros ignorado por cambio de página'
+            );
+            return;
+          }
+          console.log('Muros guardados exitosamente en página:', pageId);
+        })
+        .catch((error) => console.error('Error guardando muros:', error));
     }, 200);
     return () => {
       if (wallSaveTimeout.current) {
@@ -783,8 +887,15 @@ function App() {
     if (!pageId) return;
     if (canvasBackground === prevBgRef.current) return;
 
-    console.log('Guardando background en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando background en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     let bg = canvasBackground;
+
+    const saveId = ++saveVersionRef.current.background;
 
     const saveBg = async () => {
       try {
@@ -792,7 +903,17 @@ function App() {
         if (bg && bg.startsWith('data:')) {
           bg = await uploadDataUrl(bg, `Mapas/${pageId}`);
         }
+        if (saveId !== saveVersionRef.current.background) {
+          console.log('Guardado de background cancelado por cambio de página');
+          return;
+        }
         await updateDoc(doc(db, 'pages', pageId), { background: bg });
+        if (saveId !== saveVersionRef.current.background) {
+          console.log(
+            'Resultado de guardado de background ignorado por cambio de página'
+          );
+          return;
+        }
         setPages((ps) =>
           ps.map((p, i) => (i === currentPage ? { ...p, background: bg } : p))
         );
@@ -812,21 +933,37 @@ function App() {
     const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
     if (deepEqual(newGrid, prevGridRef.current)) return;
 
-    console.log('Guardando grid en página:', pageId, 'currentPage:', currentPage);
+    console.log(
+      'Guardando grid en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
     prevGridRef.current = newGrid;
+    const saveId = ++saveVersionRef.current.grid;
 
     updateDoc(doc(db, 'pages', pageId), newGrid)
       .then(() => {
+        if (saveId !== saveVersionRef.current.grid) {
+          console.log(
+            'Resultado de guardado de grid ignorado por cambio de página'
+          );
+          return;
+        }
         console.log('Grid guardado exitosamente en página:', pageId);
         setPages((ps) =>
           ps.map((p, i) => (i === currentPage ? { ...p, ...newGrid } : p))
         );
       })
-      .catch(error => console.error('Error guardando grid:', error));
+      .catch((error) => console.error('Error guardando grid:', error));
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
 
   // Función para crear un canvas con fondo blanco y grid negro
-  const createDefaultGridCanvas = (width = 1500, height = 1000, cellSize = 50) => {
+  const createDefaultGridCanvas = (
+    width = 1500,
+    height = 1000,
+    cellSize = 50
+  ) => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -866,7 +1003,9 @@ function App() {
     } catch (error) {
       console.error('Error creando canvas por defecto:', error);
       // Fallback: usar una imagen simple
-      return 'data:image/svg+xml;base64,' + btoa(`
+      return (
+        'data:image/svg+xml;base64,' +
+        btoa(`
         <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
           <rect width="100%" height="100%" fill="white" stroke="black" stroke-width="2"/>
           <defs>
@@ -876,7 +1015,8 @@ function App() {
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
-      `);
+      `)
+      );
     }
   };
 
@@ -917,7 +1057,8 @@ function App() {
       if (data.gridCells !== undefined) setGridCells(data.gridCells);
       if (data.gridOffsetX !== undefined) setGridOffsetX(data.gridOffsetX);
       if (data.gridOffsetY !== undefined) setGridOffsetY(data.gridOffsetY);
-      if (data.enableDarkness !== undefined) setEnableDarkness(data.enableDarkness);
+      if (data.enableDarkness !== undefined)
+        setEnableDarkness(data.enableDarkness);
       if (data.background !== undefined) setCanvasBackground(data.background);
       if (data.tokens !== undefined) setCanvasTokens(data.tokens);
       if (data.lines !== undefined) setCanvasLines(data.lines);
@@ -2482,14 +2623,18 @@ function App() {
 
     if (playerVisiblePageId) {
       // Buscar la página por ID
-      const pageIndex = pages.findIndex(page => page.id === playerVisiblePageId);
+      const pageIndex = pages.findIndex(
+        (page) => page.id === playerVisiblePageId
+      );
       if (pageIndex !== -1) {
         effectivePage = pages[pageIndex];
         effectivePageIndex = pageIndex;
 
         // Verificar si el jugador tiene un token asignado en esta página
         const pageTokens = effectivePage?.tokens || [];
-        playerHasToken = pageTokens.some(token => token.controlledBy === playerName);
+        playerHasToken = pageTokens.some(
+          (token) => token.controlledBy === playerName
+        );
       }
     }
 
@@ -2512,7 +2657,8 @@ function App() {
               <div className="text-6xl mb-4">🗺️</div>
               <h2 className="text-xl font-bold mb-2">Mapa no disponible</h2>
               <p className="text-gray-400 mb-4">
-                El Master aún no ha configurado ningún mapa como visible para jugadores.
+                El Master aún no ha configurado ningún mapa como visible para
+                jugadores.
               </p>
               <p className="text-yellow-400 text-sm">
                 Espera a que el Master seleccione un mapa para mostrar.
@@ -4253,17 +4399,17 @@ function App() {
         </div>
         <div className="mb-4 mr-80">
           <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-semibold tracking-wide rounded-lg bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 focus:ring-gray-500 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-95 transform shadow-md hover:shadow-lg cursor-pointer text-white">
-            <svg 
-              className="w-4 h-4" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
             Subir Mapa
