@@ -974,6 +974,10 @@ src/
 
 - ✅ Listener `onSnapshot` mantiene tokens, líneas y demás elementos actualizados al instante para el máster
 
+### 🔄 **Protección contra cargas desfasadas (Abril 2026) - v2.4.17**
+
+- ✅ Se evita que una carga previa de página sobrescriba el estado actual comprobando la versión del efecto
+
 ## 🔄 Historial de cambios previos
 
 <details>
