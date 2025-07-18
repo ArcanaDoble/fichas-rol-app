@@ -1928,15 +1928,15 @@ const MapCanvas = ({
     return lines;
   };
 
-  const saveLines = (updater) => {
+  const saveLines = useCallback((updater) => {
     setLines((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       undoStack.current.push(prev);
       redoStack.current = [];
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
   const updateWalls = (updater) => {
     setWalls((prev) =>
@@ -1944,41 +1944,41 @@ const MapCanvas = ({
     );
   };
 
-  const saveWalls = (updater) => {
+  const saveWalls = useCallback((updater) => {
     setWalls((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      onWallsChange(next);
+      handleWallsChange(next);
       return next;
     });
-  };
+  }, [handleWallsChange]);
 
-  const updateTexts = (updater) => {
+  const updateTexts = useCallback((updater) => {
     setTexts((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      onTextsChange(next);
+      handleTextsChange(next);
       return next;
     });
-  };
+  }, [handleTextsChange]);
 
-  const undoLines = () => {
+  const undoLines = useCallback(() => {
     setLines((prev) => {
       if (undoStack.current.length === 0) return prev;
       redoStack.current.push(prev);
       const next = undoStack.current.pop();
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
-  const redoLines = () => {
+  const redoLines = useCallback(() => {
     setLines((prev) => {
       if (redoStack.current.length === 0) return prev;
       undoStack.current.push(prev);
       const next = redoStack.current.pop();
-      onLinesChange(next);
+      handleLinesChange(next);
       return next;
     });
-  };
+  }, [handleLinesChange]);
 
   const handleLineDragEnd = (id, e) => {
     const node = e.target;
