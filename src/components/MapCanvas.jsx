@@ -1450,6 +1450,27 @@ const MapCanvas = ({
     setTexts(propTexts);
   }, [propTexts]);
 
+  const prevBarsRef = useRef({});
+  useEffect(() => {
+    let changed = false;
+    tokens.forEach(t => {
+      if (prevBarsRef.current[t.id] !== undefined && prevBarsRef.current[t.id] !== t.barsVisibility) {
+        changed = true;
+      }
+      prevBarsRef.current[t.id] = t.barsVisibility;
+    });
+    Object.keys(prevBarsRef.current).forEach(id => {
+      if (!tokens.find(t => t.id === id)) {
+        delete prevBarsRef.current[id];
+      }
+    });
+    if (changed) {
+      window.dispatchEvent(
+        new CustomEvent('barsVisibilityChanged', { detail: tokens })
+      );
+    }
+  }, [tokens]);
+
   const canSeeBars = useCallback(
     (tk) => {
       // El Master SIEMPRE puede ver las barras, independientemente de la configuración
