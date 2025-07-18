@@ -545,40 +545,44 @@ function App() {
     loadPlayerVisibility();
   }, []);
 
-  // Cargar datos completos de la página visible para jugadores
+  // Cargar datos completos de la página visible para jugadores con listener en tiempo real
   useEffect(() => {
     if (!playerVisiblePageId || userType !== 'player') return;
 
-    const loadPlayerPageData = async () => {
-      try {
-        const pageDoc = await getDoc(doc(db, 'pages', playerVisiblePageId));
-        if (pageDoc.exists()) {
-          const pageData = pageDoc.data();
-          // Actualizar la página en el array de páginas con los datos completos
-          setPages(prevPages => {
-            const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
-            if (pageIndex !== -1) {
-              const updatedPages = [...prevPages];
-              updatedPages[pageIndex] = {
-                ...updatedPages[pageIndex],
-                tokens: pageData.tokens || [],
-                lines: pageData.lines || [],
-                walls: pageData.walls || [],
-                texts: pageData.texts || [],
-                background: pageData.background,
-                backgroundHash: pageData.backgroundHash
-              };
-              return updatedPages;
-            }
-            return prevPages;
-          });
-        }
-      } catch (error) {
-        console.error('Error cargando datos de página para jugador:', error);
-      }
-    };
+    // Listener en tiempo real para la página visible
+    const unsubscribe = onSnapshot(doc(db, 'pages', playerVisiblePageId), (docSnap) => {
+      if (docSnap.exists()) {
+        const pageData = docSnap.data();
+        // Actualizar la página en el array de páginas con los datos completos
+        setPages(prevPages => {
+          const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
+          if (pageIndex !== -1) {
+            const updatedPages = [...prevPages];
+            updatedPages[pageIndex] = {
+              ...updatedPages[pageIndex],
+              tokens: pageData.tokens || [],
+              lines: pageData.lines || [],
+              walls: pageData.walls || [],
+              texts: pageData.texts || [],
+              background: pageData.background,
+              backgroundHash: pageData.backgroundHash
+            };
+            return updatedPages;
+          }
+          return prevPages;
+        });
 
-    loadPlayerPageData();
+        // Actualizar también los estados del canvas
+        setCanvasTokens(pageData.tokens || []);
+        setCanvasLines(pageData.lines || []);
+        setCanvasWalls(pageData.walls || []);
+        setCanvasTexts(pageData.texts || []);
+      }
+    }, (error) => {
+      console.error('Error en listener de página para jugador:', error);
+    });
+
+    return () => unsubscribe();
   }, [playerVisiblePageId, userType]);
 
   // Función para actualizar la página visible para jugadores
@@ -2419,6 +2423,7 @@ function App() {
     // Usar la página configurada como visible para jugadores por el Master
     let effectivePage = null;
     let effectivePageIndex = 0;
+    let playerHasToken = false;
 
     if (playerVisiblePageId) {
       // Buscar la página por ID
@@ -2426,6 +2431,10 @@ function App() {
       if (pageIndex !== -1) {
         effectivePage = pages[pageIndex];
         effectivePageIndex = pageIndex;
+
+        // Verificar si el jugador tiene un token asignado en esta página
+        const pageTokens = effectivePage?.tokens || [];
+        playerHasToken = pageTokens.some(token => token.controlledBy === playerName);
       }
     }
 
@@ -2452,6 +2461,36 @@ function App() {
               </p>
               <p className="text-yellow-400 text-sm">
                 Espera a que el Master seleccione un mapa para mostrar.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Si el jugador no tiene tokens asignados, no puede ver el mapa
+    if (!playerHasToken) {
+      return (
+        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
+          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+            <Boton
+              size="sm"
+              onClick={() => setShowPlayerBattleMap(false)}
+              className="bg-gray-700 hover:bg-gray-600"
+            >
+              ← Volver a Ficha
+            </Boton>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-xl font-bold mb-2">Acceso Denegado</h2>
+              <p className="text-gray-400 mb-4">
+                No tienes ningún token asignado en este mapa.
+              </p>
+              <p className="text-yellow-400 text-sm">
+                Contacta al Master para que te asigne un token antes de acceder al mapa de batalla.
               </p>
             </div>
           </div>
