@@ -2570,6 +2570,7 @@ function App() {
             players={[playerName]}
             highlightText={highlightText}
             isPlayerView={true}
+            pageId={playerVisiblePageId}
           />
         </div>
       </div>
