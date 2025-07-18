@@ -3297,7 +3297,9 @@ const MapCanvas = ({
                   onRotate={handleRotateChange}
                   onHoverChange={(h) => setHoveredId(h ? token.id : null)}
                   estados={token.estados || []}
-                  draggable={activeTool === 'select'}
+                  draggable={
+                    activeTool === 'select' && canSelectElement(token, 'token')
+                  }
                   listening={activeTool === 'select'}
                 />
               ))}
@@ -3315,7 +3317,11 @@ const MapCanvas = ({
                   lineCap="round"
                   lineJoin="round"
                   opacity={ln.crossLayerOpacity || 1}
-                  draggable={activeTool === 'select' && !ln.isBackground}
+                  draggable={
+                    activeTool === 'select' &&
+                    !ln.isBackground &&
+                    canSelectElement(ln, 'line')
+                  }
                   listening={!ln.isBackground}
                   onClick={(e) => {
                     if (!ln.isBackground) {
@@ -3356,7 +3362,9 @@ const MapCanvas = ({
                   }}
                   x={t.x}
                   y={t.y}
-                  draggable={activeTool === 'select'}
+                  draggable={
+                    activeTool === 'select' && canSelectElement(t, 'text')
+                  }
                   onDragEnd={(e) => handleTextDragEnd(t.id, e)}
                   onTransformEnd={(e) => handleTextTransformEnd(t.id, e)}
                   onClick={(e) => {
@@ -3445,7 +3453,11 @@ const MapCanvas = ({
                     lineCap="round"
                     lineJoin="round"
                     opacity={wl.crossLayerOpacity || 1}
-                    draggable={activeTool === 'select' && !wl.isBackground}
+                    draggable={
+                      activeTool === 'select' &&
+                      !wl.isBackground &&
+                      canSelectElement(wl, 'wall')
+                    }
                     listening={!wl.isBackground}
                     onClick={(e) => {
                       if (!wl.isBackground) {
@@ -3480,7 +3492,11 @@ const MapCanvas = ({
                     radius={6}
                     fill="#ff6600"
                     opacity={wl.crossLayerOpacity || 1}
-                    draggable={activeTool === 'select' && !wl.isBackground}
+                  draggable={
+                    activeTool === 'select' &&
+                    !wl.isBackground &&
+                    canSelectElement(wl, 'wall')
+                  }
                     listening={!wl.isBackground}
                     onMouseDown={() => {
                       if (!wl.isBackground) {
@@ -3530,7 +3546,9 @@ const MapCanvas = ({
                     y={wl.y + wl.points[3]}
                     radius={6}
                     fill="#ff6600"
-                    draggable={activeTool === 'select'}
+                  draggable={
+                    activeTool === 'select' && canSelectElement(wl, 'wall')
+                  }
                     onMouseDown={() => {
                       setSelectedWallId(wl.id);
                       setSelectedId(null);
