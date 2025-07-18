@@ -493,6 +493,32 @@ function App() {
   // Control de visibilidad de páginas para jugadores
   const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
 
+  useEffect(() => {
+    const handler = (e) => {
+      const updated = e.detail;
+      if (userType === 'master') {
+        setCanvasTokens(updated);
+        setPages((prev) => {
+          const pagesCopy = [...prev];
+          if (pagesCopy[currentPage]) pagesCopy[currentPage].tokens = updated;
+          return pagesCopy;
+        });
+      } else if (userType === 'player') {
+        setPages((prev) => {
+          const idx = prev.findIndex((p) => p.id === playerVisiblePageId);
+          if (idx !== -1) {
+            const copy = [...prev];
+            copy[idx].tokens = updated;
+            return copy;
+          }
+          return prev;
+        });
+      }
+    };
+    window.addEventListener('barsVisibilityChanged', handler);
+    return () => window.removeEventListener('barsVisibilityChanged', handler);
+  }, [userType, currentPage, playerVisiblePageId]);
+
   // Cargar páginas desde Firebase al iniciar
   useEffect(() => {
     const loadPages = async () => {

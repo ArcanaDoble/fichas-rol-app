@@ -992,6 +992,7 @@ src/
 ### 🌑 **Sincronización de oscuridad con jugadores (Julio 2026) - v2.4.19**
 
 - ✅ Los valores `enableDarkness` y `darknessOpacity` de la página visible se actualizan al instante para los jugadores
+- ✅ La visibilidad de las barras de los tokens se propaga en tiempo real entre máster y jugadores
 
 ## 🔄 Historial de cambios previos
 
