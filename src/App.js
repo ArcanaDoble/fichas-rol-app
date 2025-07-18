@@ -2486,11 +2486,8 @@ function App() {
             <div className="text-center">
               <div className="text-6xl mb-4">🚫</div>
               <h2 className="text-xl font-bold mb-2">Acceso Denegado</h2>
-              <p className="text-gray-400 mb-4">
-                No tienes ningún token asignado en este mapa.
-              </p>
-              <p className="text-yellow-400 text-sm">
-                Contacta al Master para que te asigne un token antes de acceder al mapa de batalla.
+              <p className="text-gray-400">
+                Acceso Denegado - No tienes ningún token asignado
               </p>
             </div>
           </div>
