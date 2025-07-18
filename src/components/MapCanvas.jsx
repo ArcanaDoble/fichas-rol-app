@@ -1739,8 +1739,8 @@ const MapCanvas = ({
       }
       return wall;
     });
-    onWallsChange(updatedWalls);
-  }, [walls, onWallsChange]);
+    handleWallsChange(updatedWalls);
+  }, [walls, handleWallsChange]);
 
   // Función para encontrar el punto de conexión más cercano
   const findNearestWallEndpoint = useCallback((x, y, threshold = 25) => {
