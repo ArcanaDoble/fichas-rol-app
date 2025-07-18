@@ -31,6 +31,7 @@ import TokenEstadoMenu from './TokenEstadoMenu';
 import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
+import { createToken } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
@@ -2693,14 +2694,13 @@ const MapCanvas = ({
               pasteGridPos.y + relativeY
             );
 
-            return {
+            return createToken({
               ...token,
               id: Date.now() + Math.random(),
-              tokenSheetId: nanoid(),
               x: finalPos.x,
               y: finalPos.y,
               layer: activeLayer
-            };
+            });
           });
           handleTokensChange([...tokens, ...newTokens]);
         }
@@ -3086,7 +3086,7 @@ const MapCanvas = ({
           return;
         }
         
-        const newToken = {
+        const newToken = createToken({
           id: Date.now(),
           x,
           y,
@@ -3096,7 +3096,6 @@ const MapCanvas = ({
           url: item.url,
           name: item.name || '',
           enemyId: item.enemyId || null,
-          tokenSheetId: nanoid(),
           customName: '',
           showName: false,
           controlledBy: 'master',
@@ -3111,7 +3110,7 @@ const MapCanvas = ({
           tintOpacity: 0,
           estados: [],
           layer: activeLayer,
-        };
+        });
         handleTokensChange([...tokens, newToken]);
       },
     }),

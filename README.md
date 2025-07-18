@@ -825,6 +825,7 @@ src/
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo
+- **IDs de fichas** - Cada token creado ahora recibe un `tokenSheetId` único para evitar conflictos
 
 #### v2.1.1 (junio 2024)
 
