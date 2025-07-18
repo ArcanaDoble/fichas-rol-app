@@ -940,6 +940,25 @@ src/
 - ✅ Se muestra un mensaje de error si la imagen del mapa falla y se oculta el spinner
 - 🔧 Dependencias de ESLint eliminadas para evitar peticiones innecesarias
 
+### 🔒 **Restricciones de selección y sincronización mejorada (Enero 2025) - v2.4.12**
+
+- ✅ **Restricciones de selección para jugadores** - Los jugadores solo pueden seleccionar tokens que controlan y elementos que crearon
+- ✅ **Validación exhaustiva** - Aplicada en selección individual, Ctrl+click, selección múltiple y Ctrl+A
+- ✅ **Tracking de creadores** - Campo `createdBy` agregado a líneas, muros y textos para validación de permisos
+- ✅ **Visibilidad de barras mejorada** - Master SIEMPRE puede ver barras independientemente de configuración
+- ✅ **Sincronización en tiempo real** - Listener `onSnapshot` para cambios instantáneos de visibilidad de mapas
+- ✅ **Seguridad reforzada** - Sistema completo de permisos que respeta roles de usuario
+
+### 🚨 **CRÍTICO: Sincronización cruzada entre mapas solucionada (Enero 2025) - v2.4.13**
+
+- ✅ **Independencia completa de mapas** - Cada mapa mantiene contenido completamente independiente
+- ✅ **Carga única por página** - Reemplazado `onSnapshot` por `getDoc` para evitar sincronización cruzada
+- ✅ **Estados separados** - Sin propagación de cambios entre mapas diferentes
+- ✅ **Cambio de página seguro** - Cambiar página NO elimina contenido de otras páginas
+- ✅ **Modificaciones localizadas** - Mover tokens solo afecta página actual
+- ✅ **Logs de debug** - Tracking completo de operaciones de carga y guardado por página
+- ✅ **Manejo de errores robusto** - Try-catch y promesas con feedback detallado
+
 ## 🔄 Historial de cambios previos
 
 <details>
