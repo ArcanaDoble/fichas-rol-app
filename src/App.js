@@ -545,6 +545,42 @@ function App() {
     loadPlayerVisibility();
   }, []);
 
+  // Cargar datos completos de la página visible para jugadores
+  useEffect(() => {
+    if (!playerVisiblePageId || userType !== 'player') return;
+
+    const loadPlayerPageData = async () => {
+      try {
+        const pageDoc = await getDoc(doc(db, 'pages', playerVisiblePageId));
+        if (pageDoc.exists()) {
+          const pageData = pageDoc.data();
+          // Actualizar la página en el array de páginas con los datos completos
+          setPages(prevPages => {
+            const pageIndex = prevPages.findIndex(p => p.id === playerVisiblePageId);
+            if (pageIndex !== -1) {
+              const updatedPages = [...prevPages];
+              updatedPages[pageIndex] = {
+                ...updatedPages[pageIndex],
+                tokens: pageData.tokens || [],
+                lines: pageData.lines || [],
+                walls: pageData.walls || [],
+                texts: pageData.texts || [],
+                background: pageData.background,
+                backgroundHash: pageData.backgroundHash
+              };
+              return updatedPages;
+            }
+            return prevPages;
+          });
+        }
+      } catch (error) {
+        console.error('Error cargando datos de página para jugador:', error);
+      }
+    };
+
+    loadPlayerPageData();
+  }, [playerVisiblePageId, userType]);
+
   // Función para actualizar la página visible para jugadores
   const updatePlayerVisiblePage = async (pageId) => {
     try {
@@ -2482,7 +2518,7 @@ function App() {
                 setPages(updatedPages);
               }
             }}
-            backgroundImage={effectivePage?.backgroundImage}
+            backgroundImage={effectivePage?.background}
             imageSize={effectivePage?.imageSize}
             gridCells={effectivePage?.gridCells}
             gridSize={effectivePage?.gridSize || 50}
