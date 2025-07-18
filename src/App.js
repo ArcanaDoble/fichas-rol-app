@@ -471,6 +471,7 @@ function App() {
     background: 0,
     grid: 0,
   });
+  const loadVersionRef = useRef(0);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -700,6 +701,9 @@ function App() {
     const page = pages[currentPage];
     if (!page) return undefined;
 
+    loadVersionRef.current++;
+    const version = loadVersionRef.current;
+
     console.log(
       'Cargando datos de página:',
       page.id,
@@ -715,6 +719,7 @@ function App() {
 
         const data = snap.data();
         console.log('Datos cargados para página:', page.id);
+        if (version !== loadVersionRef.current) return;
 
         // Actualizar estados del canvas con los datos de esta página específica
         setCanvasTokens(data.tokens || []);
