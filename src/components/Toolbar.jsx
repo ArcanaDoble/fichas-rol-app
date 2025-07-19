@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { FiMousePointer, FiEdit2, FiType, FiUsers, FiShield } from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
-import { GiBrickWall } from 'react-icons/gi';
+import { GiBrickWall, GiCrosshair } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const tools = [
@@ -11,6 +11,7 @@ const tools = [
   { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
+  { id: 'target', icon: GiCrosshair },
 ];
 
 const brushOptions = [
@@ -66,7 +67,7 @@ const Toolbar = ({
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
-    ? tools.filter(tool => ['select', 'draw', 'measure', 'text'].includes(tool.id))
+    ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'target'].includes(tool.id))
     : tools;
 
   return (
