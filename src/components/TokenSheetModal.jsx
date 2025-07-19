@@ -59,7 +59,7 @@ const TokenSheetModal = ({
     sheet.armaduras = mapItems(sheet.armaduras, armaduras);
     sheet.poderes = mapItems(sheet.poderes, habilidades);
 
-    const ensureStatDefaults = (st, index, id, name, color) => {
+    const ensureStatDefaults = (st, index, id, name, color, row, anchor) => {
       const stat = { ...st };
       if (stat.base === undefined) stat.base = stat.total ?? 0;
       if (stat.total === undefined) stat.total = stat.base;
@@ -67,8 +67,8 @@ const TokenSheetModal = ({
       if (stat.showOnToken === undefined)
         stat.showOnToken = index < 5 ? true : !!(stat.base || stat.total || stat.actual || stat.buff);
       if (stat.label === undefined) stat.label = name || id;
-      if (stat.tokenRow === undefined) stat.tokenRow = index;
-      if (stat.tokenAnchor === undefined) stat.tokenAnchor = 'top';
+      if (stat.tokenRow === undefined) stat.tokenRow = row ?? index;
+      if (stat.tokenAnchor === undefined) stat.tokenAnchor = anchor ?? 'top';
       return stat;
     };
 
@@ -80,7 +80,9 @@ const TokenSheetModal = ({
           index,
           res.id,
           res.name,
-          res.color || recursoColor[res.id]
+          res.color || recursoColor[res.id],
+          res.tokenRow,
+          res.tokenAnchor
         );
       });
     } else if (!sheet.stats || Object.keys(sheet.stats).length === 0) {

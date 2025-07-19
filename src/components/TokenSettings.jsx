@@ -88,8 +88,10 @@ const TokenSettings = ({
         if (snap.exists() && token.tokenSheetId) {
           const stored = localStorage.getItem('tokenSheets');
           const sheets = stored ? JSON.parse(stored) : {};
-          sheets[token.tokenSheetId] = { id: token.tokenSheetId, ...snap.data() };
+          const sheet = { id: token.tokenSheetId, ...snap.data() };
+          sheets[token.tokenSheetId] = sheet;
           localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
         }
       } catch (err) {
         console.error('Error loading player sheet', err);
@@ -178,8 +180,10 @@ const TokenSettings = ({
         if (snap.exists()) {
           const stored = localStorage.getItem('tokenSheets');
           const sheets = stored ? JSON.parse(stored) : {};
-          sheets[token.tokenSheetId] = { id: token.tokenSheetId, ...snap.data() };
+          const sheet = { id: token.tokenSheetId, ...snap.data() };
+          sheets[token.tokenSheetId] = sheet;
           localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
         }
       } catch (err) {
         console.error('Error loading player sheet', err);

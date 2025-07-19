@@ -34,6 +34,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
   }, [enemy]);
 
   const handleMouseDown = (e) => {
+    e.stopPropagation();
     setDragging(true);
     offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
   };
@@ -72,6 +73,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
       className="fixed bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none pointer-events-auto"
       style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
       onClick={(e) => e.stopPropagation()}
+      onPointerDownCapture={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
         <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
