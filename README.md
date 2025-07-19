@@ -1016,6 +1016,17 @@ src/
 - ✅ Ventanas de ficha movibles para los jugadores
 - ✅ Armas, armaduras y poderes se muestran correctamente en su ficha del mapa
 
+### 🎯 **Modo Mirilla (Septiembre 2026) - v2.4.21**
+
+- ✅ Nueva herramienta de ataque con línea de distancia
+- ✅ Ventanas de ataque y defensa con tiradas automáticas
+- ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
+  automáticamente
+
+### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
+
+- ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
+
 ## 🔄 Historial de cambios previos
 
 <details>
