@@ -24,52 +24,101 @@ const TokenSheetModal = ({
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(false);
 
-  useEffect(() => {
-    if (!sheetId) return;
-    const stored = localStorage.getItem('tokenSheets');
-    const sheets = stored ? JSON.parse(stored) : {};
-    let sheet = sheets[sheetId];
-    if (!sheet) {
-      if (token.enemyId) {
-        const enemy = enemies.find((e) => e.id === token.enemyId);
-        if (enemy) {
-          sheet = JSON.parse(JSON.stringify(enemy));
-          sheet.id = sheetId;
+  const buildSheet = (base) => {
+    if (!base) return null;
+    const mapItems = (items, catalog) =>
+      (items || []).map((it) => {
+        if (typeof it === 'string') {
+          return catalog.find((c) => c.nombre === it) || { nombre: it };
         }
-      }
-      if (!sheet) sheet = { id: sheetId, name: '', stats: {}, atributos: {} };
-    }
-    // Use token info if sheet lacks it
-    sheet = {
-      ...sheet,
-      name: token.customName || sheet.name || token.name || '',
-      portrait: sheet.portrait || token.url,
+        return it;
+      });
+
+    const ensureStatDefaults = (st, index, id, name, color, row, anchor) => {
+      const stat = { ...st };
+      if (stat.base === undefined) stat.base = stat.total ?? 0;
+      if (stat.total === undefined) stat.total = stat.base;
+      if (stat.color === undefined) stat.color = color || '#ffffff';
+      if (stat.showOnToken === undefined)
+        stat.showOnToken = index < 5 ? true : !!(stat.base || stat.total || stat.actual || stat.buff);
+      if (stat.label === undefined) stat.label = name || id;
+      if (stat.tokenRow === undefined) stat.tokenRow = row ?? index;
+      if (stat.tokenAnchor === undefined) stat.tokenAnchor = anchor ?? 'top';
+      return stat;
     };
-    if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
+
+    let sheet = {
+      ...base,
+      name: token.customName || base.name || token.name || '',
+      portrait: base.portrait || token.url,
+    };
+
+    sheet.weapons = mapItems(sheet.weapons, armas);
+    sheet.armaduras = mapItems(sheet.armaduras, armaduras);
+    sheet.poderes = mapItems(sheet.poderes, habilidades);
+
+    if (sheet.resourcesList && sheet.resourcesList.length > 0) {
+      sheet.resourcesList.forEach((res, index) => {
+        const existing = sheet.stats[res.id] || {};
+        sheet.stats[res.id] = ensureStatDefaults(
+          existing,
+          index,
+          res.id,
+          res.name,
+          res.color || recursoColor[res.id],
+          res.tokenRow,
+          res.tokenAnchor
+        );
+      });
+    } else if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
       sheet.stats = {
-        postura: { label: 'postura', base: 0, actual: 0, total: 0, color: recursoColor.postura, showOnToken: true, tokenRow: 0, tokenAnchor: 'top' },
-        vida: { label: 'vida', base: 0, actual: 0, total: 0, color: recursoColor.vida, showOnToken: true, tokenRow: 1, tokenAnchor: 'top' },
-        ingenio: { label: 'ingenio', base: 0, actual: 0, total: 0, color: recursoColor.ingenio, showOnToken: true, tokenRow: 2, tokenAnchor: 'top' },
-        cordura: { label: 'cordura', base: 0, actual: 0, total: 0, color: recursoColor.cordura, showOnToken: true, tokenRow: 3, tokenAnchor: 'top' },
-        armadura: { label: 'armadura', base: 0, actual: 0, total: 0, color: recursoColor.armadura, showOnToken: true, tokenRow: 4, tokenAnchor: 'top' },
+        postura: ensureStatDefaults({}, 0, 'postura', 'postura', recursoColor.postura),
+        vida: ensureStatDefaults({}, 1, 'vida', 'vida', recursoColor.vida),
+        ingenio: ensureStatDefaults({}, 2, 'ingenio', 'ingenio', recursoColor.ingenio),
+        cordura: ensureStatDefaults({}, 3, 'cordura', 'cordura', recursoColor.cordura),
+        armadura: ensureStatDefaults({}, 4, 'armadura', 'armadura', recursoColor.armadura),
       };
     } else {
       Object.keys(sheet.stats).forEach((k, index) => {
-        const st = sheet.stats[k] || {};
-        if (st.base === undefined) st.base = st.total ?? 0;
-        if (st.total === undefined) st.total = st.base;
-        if (st.color === undefined) st.color = recursoColor[k] || '#ffffff';
-        if (st.showOnToken === undefined) {
-          st.showOnToken = index < 5 ? true : !!(st.base || st.total || st.actual || st.buff);
-        }
-        if (st.label === undefined) st.label = k;
-        if (st.tokenRow === undefined) st.tokenRow = index;
-        if (st.tokenAnchor === undefined) st.tokenAnchor = 'top';
-        sheet.stats[k] = st;
+        sheet.stats[k] = ensureStatDefaults(sheet.stats[k], index, k, k, recursoColor[k]);
       });
     }
-    setData(sheet);
-  }, [sheetId, token, enemies]);
+
+    return sheet;
+  };
+
+  const loadSheet = () => {
+    if (!sheetId) return;
+    const stored = localStorage.getItem('tokenSheets');
+    const sheets = stored ? JSON.parse(stored) : {};
+    let base = sheets[sheetId];
+
+    if (!base) {
+      if (token.enemyId) {
+        const enemy = enemies.find((e) => e.id === token.enemyId);
+        if (enemy) {
+          base = JSON.parse(JSON.stringify(enemy));
+          base.id = sheetId;
+        }
+      }
+      if (!base) base = { id: sheetId, name: '', stats: {}, atributos: {} };
+    }
+    const sheet = buildSheet(base);
+    if (sheet) setData(sheet);
+  };
+
+  useEffect(loadSheet, [sheetId, token, enemies, armas, armaduras, habilidades]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail && e.detail.id === sheetId) {
+        const sheet = buildSheet(e.detail);
+        if (sheet) setData(sheet);
+      }
+    };
+    window.addEventListener('tokenSheetSaved', handler);
+    return () => window.removeEventListener('tokenSheetSaved', handler);
+  }, [sheetId, armas, armaduras, habilidades]);
 
   const handleSave = (updated) => {
     const stored = localStorage.getItem('tokenSheets');

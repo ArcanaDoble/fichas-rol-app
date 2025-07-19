@@ -835,6 +835,10 @@ src/
 #### v2.1.2 (diciembre 2024)
 
 - **Sistema de Píldoras de Equipamiento** - Nuevas píldoras interactivas en el Sistema de Velocidad que permiten usar armas y poderes equipados directamente
+- **Vincular ficha de jugador** - Al asignar un controlador se descarga su ficha desde Firestore y se almacena localmente
+- **Fichas de jugador completas** - Las estadísticas personalizadas y el equipamiento se muestran correctamente al enlazar
+- **Carga de imágenes optimizada** - Las tarjetas ya no hacen peticiones en bucle al equipar objetos
+- **Sincronización total de fichas de jugador** - Se respetan las posiciones personalizadas de estadísticas y se cargan armas, armaduras y poderes equipados
 - **Mejoras en Sistema de Velocidad** - Los jugadores ahora pueden eliminar sus propios participantes, no solo el master
 - **Botón de papelera mejorado** - Color rojo consistente con el sistema de velocidad en inventario y línea de sucesos
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
@@ -846,6 +850,7 @@ src/
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
+- **Fichas flotantes corregidas** - Las fichas de token se pueden mover libremente sin bloquear el mapa y muestran el equipamiento completo
 
 #### v2.1.1 (junio 2024)
 
