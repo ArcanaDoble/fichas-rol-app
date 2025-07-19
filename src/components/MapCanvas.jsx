@@ -2715,13 +2715,28 @@ const MapCanvas = ({
               pasteGridPos.y + relativeY
             );
 
-            return createToken({
+            const newToken = createToken({
               ...token,
               id: Date.now() + Math.random(),
               x: finalPos.x,
               y: finalPos.y,
               layer: activeLayer
             });
+            const stored = localStorage.getItem('tokenSheets');
+            if (stored) {
+              const sheets = JSON.parse(stored);
+              const sheet = sheets[token.tokenSheetId];
+              if (sheet) {
+                const copy = JSON.parse(JSON.stringify(sheet));
+                copy.id = newToken.tokenSheetId;
+                sheets[newToken.tokenSheetId] = copy;
+                localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+                window.dispatchEvent(
+                  new CustomEvent('tokenSheetSaved', { detail: copy })
+                );
+              }
+            }
+            return newToken;
           });
           handleTokensChange([...tokens, ...newTokens]);
         }
@@ -3132,6 +3147,22 @@ const MapCanvas = ({
           estados: [],
           layer: activeLayer,
         });
+        if (item.tokenSheetId) {
+          const stored = localStorage.getItem('tokenSheets');
+          if (stored) {
+            const sheets = JSON.parse(stored);
+            const sheet = sheets[item.tokenSheetId];
+            if (sheet) {
+              const copy = JSON.parse(JSON.stringify(sheet));
+              copy.id = newToken.tokenSheetId;
+              sheets[newToken.tokenSheetId] = copy;
+              localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+              window.dispatchEvent(
+                new CustomEvent('tokenSheetSaved', { detail: copy })
+              );
+            }
+          }
+        }
         handleTokensChange([...tokens, newToken]);
       },
     }),
