@@ -38,6 +38,8 @@ import KonvaSpinner from './KonvaSpinner';
 import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
+import DoorCheckModal from './DoorCheckModal';
+import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -931,6 +933,7 @@ const MapCanvas = ({
   const [walls, setWalls] = useState(propWalls);
   const [selectedWallId, setSelectedWallId] = useState(null);
   const [doorMenuWallId, setDoorMenuWallId] = useState(null);
+  const [doorCheckWallId, setDoorCheckWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
@@ -1443,7 +1446,13 @@ const MapCanvas = ({
   }, [propLines]);
 
   useEffect(() => {
-    setWalls(propWalls);
+    setWalls(
+      propWalls.map(w => ({
+        difficulty: 1,
+        baseDifficulty: 1,
+        ...w,
+      }))
+    );
   }, [propWalls]);
 
   useEffect(() => {
@@ -1749,19 +1758,34 @@ const MapCanvas = ({
 
   // Función para alternar el estado de una puerta
   const toggleDoor = useCallback((wallId) => {
-    const updatedWalls = walls.map(wall => {
-      if (wall.id === wallId) {
-        // Solo permitir alternar entre cerrada y abierta (no secreta)
-        if (wall.door === 'closed') {
-          return { ...wall, door: 'open' };
-        } else if (wall.door === 'open') {
-          return { ...wall, door: 'closed' };
-        }
-      }
-      return wall;
+    const wall = walls.find(w => w.id === wallId);
+    if (!wall) return;
+    if (userType === 'player' && wall.door === 'closed' && (wall.difficulty || 1) > 1) {
+      setDoorCheckWallId(wallId);
+      return;
+    }
+    const updatedWalls = walls.map(w => {
+      if (w.id !== wallId) return w;
+      if (w.door === 'closed') return { ...w, door: 'open' };
+      if (w.door === 'open') return { ...w, door: 'closed' };
+      return w;
     });
     handleWallsChange(updatedWalls);
-  }, [walls, handleWallsChange]);
+  }, [walls, handleWallsChange, userType]);
+
+  const handleDoorCheckResult = useCallback((result) => {
+    const wall = walls.find(w => w.id === doorCheckWallId);
+    if (!wall) {
+      setDoorCheckWallId(null);
+      return;
+    }
+    if (result != null) {
+      const updated = applyDoorCheck(wall, result);
+      const updatedWalls = walls.map(w => (w.id === wall.id ? updated : w));
+      handleWallsChange(updatedWalls);
+    }
+    setDoorCheckWallId(null);
+  }, [doorCheckWallId, walls, handleWallsChange]);
 
   // Función para encontrar el punto de conexión más cercano
   const findNearestWallEndpoint = useCallback((x, y, threshold = 25) => {
@@ -2353,6 +2377,8 @@ const MapCanvas = ({
         color: '#ff6600',
         width: 4,
         door: 'closed',
+        difficulty: 1,
+        baseDifficulty: 1,
         layer: activeLayer,
         createdBy: playerName, // Agregar información del creador
       });
@@ -3992,10 +4018,18 @@ const MapCanvas = ({
       {doorMenuWallId != null && (
         <WallDoorMenu
           wall={walls.find((w) => w.id === doorMenuWallId)}
+          isMaster={userType === 'master'}
           onClose={() => setDoorMenuWallId(null)}
           onUpdate={(w) => {
             saveWalls((ws) => ws.map((wl) => (wl.id === w.id ? w : wl)));
           }}
+        />
+      )}
+      {doorCheckWallId != null && (
+        <DoorCheckModal
+          isOpen={true}
+          onClose={handleDoorCheckResult}
+          playerName={playerName}
         />
       )}
 
@@ -4109,6 +4143,8 @@ MapCanvas.propTypes = {
       color: PropTypes.string,
       width: PropTypes.number,
       door: PropTypes.oneOf(['secret', 'closed', 'open']),
+      difficulty: PropTypes.number,
+      baseDifficulty: PropTypes.number,
     })
   ),
   onWallsChange: PropTypes.func,
