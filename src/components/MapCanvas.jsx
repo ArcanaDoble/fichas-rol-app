@@ -43,7 +43,7 @@ import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 
@@ -957,6 +957,7 @@ const MapCanvas = ({
       setAttackResult(null);
     }
   }, [activeTool]);
+
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
   const [selectedLines, setSelectedLines] = useState([]);
@@ -1524,6 +1525,48 @@ const MapCanvas = ({
     },
     [playerName, userType]
   );
+
+  useEffect(() => {
+    const loadSheets = async () => {
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      const promises = [];
+      tokens.forEach(tk => {
+        if (!tk.tokenSheetId || sheets[tk.tokenSheetId] || !canSeeBars(tk)) return;
+        if (tk.controlledBy && tk.controlledBy !== 'master') {
+          promises.push(
+            getDoc(doc(db, 'players', tk.controlledBy))
+              .then(snap => {
+                if (snap.exists()) {
+                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
+                  sheets[tk.tokenSheetId] = sheet;
+                }
+              })
+              .catch(err => console.error('load player sheet', err))
+          );
+        } else if (tk.enemyId) {
+          promises.push(
+            getDoc(doc(db, 'enemies', tk.enemyId))
+              .then(snap => {
+                if (snap.exists()) {
+                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
+                  sheets[tk.tokenSheetId] = sheet;
+                }
+              })
+              .catch(err => console.error('load enemy sheet', err))
+          );
+        }
+      });
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        Object.values(sheets).forEach(sh =>
+          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sh }))
+        );
+      }
+    };
+    loadSheets();
+  }, [tokens, playerName, userType]);
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize =
