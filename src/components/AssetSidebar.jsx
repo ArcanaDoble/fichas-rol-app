@@ -19,6 +19,8 @@ import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
+const MASTER_COLOR = "#FFD700";
+
 const EMPTY_IMAGE = new Image();
 EMPTY_IMAGE.src =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -411,7 +413,7 @@ const AssetSidebar = ({
 
   // Función para generar color único basado en el nombre del jugador
   const getPlayerColor = (playerName) => {
-    if (!playerName || playerName === 'Master') return '#10b981'; // Verde para master
+    if (!playerName || playerName === 'Master') return MASTER_COLOR; // Dorado para master
 
     // Generar hash simple del nombre
     let hash = 0;
@@ -668,7 +670,7 @@ const AssetSidebar = ({
                   <div>
                     <span
                       className="font-semibold mr-1"
-                      style={{ color: getPlayerColor(m.author) }}
+                      style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}
                     >
                       {m.author}:
                     </span>
