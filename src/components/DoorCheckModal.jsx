@@ -8,7 +8,7 @@ import Input from './Input';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
 
-const DoorCheckModal = ({ isOpen, onClose, playerName = '' }) => {
+const DoorCheckModal = ({ isOpen, onClose, playerName = '', difficulty = 1 }) => {
   const [formula, setFormula] = useState('1d20');
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +16,7 @@ const DoorCheckModal = ({ isOpen, onClose, playerName = '' }) => {
     setLoading(true);
     try {
       const result = rollExpression(formula);
+      const success = result.total >= difficulty;
       let messages = [];
       try {
         const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
@@ -24,7 +25,8 @@ const DoorCheckModal = ({ isOpen, onClose, playerName = '' }) => {
         console.error(err);
       }
       const author = playerName || 'Jugador';
-      messages.push({ id: nanoid(), author, text: formula, result });
+      const text = `${author} intenta abrir una puerta. ${success ? 'Superado' : 'No superado'}`;
+      messages.push({ id: nanoid(), author, text, result, doorCheck: true, success });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
       setLoading(false);
       onClose(result.total);
@@ -50,6 +52,7 @@ DoorCheckModal.propTypes = {
   isOpen: PropTypes.bool,
   onClose: PropTypes.func,
   playerName: PropTypes.string,
+  difficulty: PropTypes.number,
 };
 
 export default DoorCheckModal;

@@ -4030,6 +4030,7 @@ const MapCanvas = ({
           isOpen={true}
           onClose={handleDoorCheckResult}
           playerName={playerName}
+          difficulty={(walls.find((w) => w.id === doorCheckWallId)?.difficulty) || 1}
         />
       )}
 

@@ -11,7 +11,14 @@ jest.mock('firebase/firestore', () => ({
 jest.mock('../../firebase', () => ({ db: {} }));
 
 function TestDoor({ wall, onResult }) {
-  return <DoorCheckModal isOpen={true} onClose={onResult} playerName="P1" />;
+  return (
+    <DoorCheckModal
+      isOpen={true}
+      onClose={onResult}
+      playerName="P1"
+      difficulty={wall.difficulty}
+    />
+  );
 }
 
 test('door unlocks after successful roll', async () => {
