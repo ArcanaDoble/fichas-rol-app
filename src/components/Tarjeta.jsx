@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 
 const variantStyles = {
@@ -51,12 +51,16 @@ const Tarjeta = ({
   const style = variantStyles[variant] || variantStyles.default;
 
   // Crear URL con cache busting para forzar recarga en móviles
-  const getImageUrl = (url) => {
-    if (!url) return url;
-    // Agregar timestamp para evitar problemas de cache
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}v=${Date.now()}`;
-  };
+  const cacheBust = useMemo(() => Date.now(), []);
+  const getImageUrl = useCallback(
+    (url) => {
+      if (!url) return url;
+      // Agregar timestamp una sola vez para evitar múltiples solicitudes
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}v=${cacheBust}`;
+    },
+    [cacheBust]
+  );
 
   const baseClasses = `
     relative overflow-hidden
