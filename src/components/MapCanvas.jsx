@@ -957,7 +957,6 @@ const MapCanvas = ({
       setAttackResult(null);
     }
   }, [activeTool]);
-
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
   const [selectedLines, setSelectedLines] = useState([]);
