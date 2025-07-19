@@ -2845,6 +2845,9 @@ function App() {
             activeLayer="fichas"
             enemies={[]}
             players={[playerName]}
+            armas={armas}
+            armaduras={armaduras}
+            habilidades={habilidades}
             highlightText={highlightText}
             isPlayerView={true}
             pageId={playerVisiblePageId}

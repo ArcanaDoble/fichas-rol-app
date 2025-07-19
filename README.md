@@ -1009,6 +1009,11 @@ src/
 - ✅ Los valores `enableDarkness` y `darknessOpacity` de la página visible se actualizan al instante para los jugadores
 - ✅ La visibilidad de las barras de los tokens se propaga en tiempo real entre máster y jugadores
 
+### 🛠️ **Corrección de fichas de jugadores en mapa (Agosto 2026) - v2.4.20**
+
+- ✅ Ventanas de ficha movibles para los jugadores
+- ✅ Armas, armaduras y poderes se muestran correctamente en su ficha del mapa
+
 ## 🔄 Historial de cambios previos
 
 <details>
