@@ -74,9 +74,28 @@ const TokenSettings = ({
   // Estados para configuración de visión
   const [visionEnabled, setVisionEnabled] = useState(token.vision?.enabled !== false); // Por defecto true
   const [visionRange, setVisionRange] = useState(token.vision?.range || 10); // Rango por defecto de 10 casillas
-  
+
   // Ref para debouncing
   const debounceRef = useRef(null);
+
+  const handleControlledByChange = async (e) => {
+    const value = e.target.value;
+    setControlledBy(value);
+    if (value !== 'master') {
+      setEnemyId('');
+      try {
+        const snap = await getDoc(doc(db, 'players', value));
+        if (snap.exists() && token.tokenSheetId) {
+          const stored = localStorage.getItem('tokenSheets');
+          const sheets = stored ? JSON.parse(stored) : {};
+          sheets[token.tokenSheetId] = { id: token.tokenSheetId, ...snap.data() };
+          localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        }
+      } catch (err) {
+        console.error('Error loading player sheet', err);
+      }
+    }
+  };
   
   // Función con debouncing para evitar múltiples actualizaciones a Firebase
   const debouncedApplyChanges = useCallback(() => {
@@ -123,11 +142,11 @@ const TokenSettings = ({
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
-  const applyChanges = () => {
+  const applyChanges = async () => {
     const enemy = enemies.find((e) => e.id === enemyId);
     const updatedToken = {
       ...token,
-      enemyId: enemyId || null,
+      enemyId: controlledBy === 'master' ? enemyId || null : null,
       url: enemyId ? enemy?.portrait || token.url : token.url,
       name: enemyId ? enemy?.name || token.name : token.name,
       customName: showName ? name : '',
@@ -153,6 +172,19 @@ const TokenSettings = ({
         range: visionRange,
       },
     };
+    if (controlledBy !== 'master' && token.tokenSheetId) {
+      try {
+        const snap = await getDoc(doc(db, 'players', controlledBy));
+        if (snap.exists()) {
+          const stored = localStorage.getItem('tokenSheets');
+          const sheets = stored ? JSON.parse(stored) : {};
+          sheets[token.tokenSheetId] = { id: token.tokenSheetId, ...snap.data() };
+          localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        }
+      } catch (err) {
+        console.error('Error loading player sheet', err);
+      }
+    }
     console.log('Updating token with vision:', visionEnabled, updatedToken);
     onUpdate(updatedToken);
   };
@@ -255,12 +287,18 @@ const TokenSettings = ({
               {!isPlayerView && (
                 <div>
                   <label className="block mb-1">Representa a un personaje</label>
-                  <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
-                    <option value="">Ninguno / Ficha genérica</option>
-                    {enemies.map((e) => (
-                      <option key={e.id} value={e.id}>{e.name}</option>
-                    ))}
-                  </select>
+                  {controlledBy !== 'master' ? (
+                    <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
+                      {controlledBy}
+                    </div>
+                  ) : (
+                    <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
+                      <option value="">Ninguno / Ficha genérica</option>
+                      {enemies.map((e) => (
+                        <option key={e.id} value={e.id}>{e.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -277,7 +315,7 @@ const TokenSettings = ({
                     {controlledBy === 'master' ? 'Enemigo (Master)' : controlledBy}
                   </div>
                 ) : (
-                  <select value={controlledBy} onChange={e => setControlledBy(e.target.value)} className="w-full bg-gray-700 text-white">
+                  <select value={controlledBy} onChange={handleControlledByChange} className="w-full bg-gray-700 text-white">
                     <option value="master">Máster</option>
                     {players.map((p) => (
                       <option key={p} value={p}>{p}</option>
