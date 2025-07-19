@@ -835,6 +835,7 @@ src/
 #### v2.1.2 (diciembre 2024)
 
 - **Sistema de Píldoras de Equipamiento** - Nuevas píldoras interactivas en el Sistema de Velocidad que permiten usar armas y poderes equipados directamente
+- **Vincular ficha de jugador** - Al asignar un controlador se descarga su ficha desde Firestore y se almacena localmente
 - **Mejoras en Sistema de Velocidad** - Los jugadores ahora pueden eliminar sus propios participantes, no solo el master
 - **Botón de papelera mejorado** - Color rojo consistente con el sistema de velocidad en inventario y línea de sucesos
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
