@@ -667,15 +667,30 @@ const AssetSidebar = ({
                 className="bg-gray-700/50 p-2 rounded flex items-start gap-2"
               >
                 <div className="flex-1 mr-2 min-w-0 space-y-1">
-                  <div>
-                    <span
-                      className="font-semibold mr-1"
-                      style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}
-                    >
-                      {m.author}:
-                    </span>
-                    <span className="text-gray-200 break-words">{m.text}</span>
-                  </div>
+                  {m.doorCheck ? (
+                    <div className="text-gray-200">
+                      <span
+                        className="font-semibold mr-1"
+                        style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}
+                      >
+                        {m.author}
+                      </span>
+                      <span className="mr-1">intenta abrir una puerta.</span>
+                      <span className={m.success ? 'text-green-400' : 'text-red-400'}>
+                        {m.success ? 'Superado' : 'No superado'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span
+                        className="font-semibold mr-1"
+                        style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}
+                      >
+                        {m.author}:
+                      </span>
+                      <span className="text-gray-200 break-words">{m.text}</span>
+                    </div>
+                  )}
                   {m.result && (
                     <div className="bg-green-900/20 border border-green-600/50 rounded p-2 ml-4 text-xs text-gray-100 space-y-1">
                       <p className="text-center text-green-400 font-semibold">

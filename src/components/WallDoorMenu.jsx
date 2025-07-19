@@ -5,9 +5,10 @@ import { FiX } from 'react-icons/fi';
 import { RiDoorOpenLine, RiDoorClosedLine, RiEyeOffLine } from 'react-icons/ri';
 import Boton from './Boton';
 
-const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
+const WallDoorMenu = ({ wall, onClose, onUpdate, isMaster = false }) => {
   const [door, setDoor] = useState(wall.door || 'closed');
   const [color, setColor] = useState(wall.color || '#ff6600');
+  const [difficulty, setDifficulty] = useState(wall.difficulty || 1);
 
   const handleDoor = (newDoor) => {
     setDoor(newDoor);
@@ -17,6 +18,18 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
   const handleColor = (newColor) => {
     setColor(newColor);
     onUpdate({ ...wall, door, color: newColor });
+  };
+
+  const handleDifficulty = (value) => {
+    const num = parseInt(value, 10) || 1;
+    setDifficulty(num);
+    onUpdate({ ...wall, door, color, difficulty: num });
+  };
+
+  const handleReset = () => {
+    const resetVal = wall.baseDifficulty || 1;
+    setDifficulty(resetVal);
+    onUpdate({ ...wall, door, color, difficulty: resetVal });
   };
 
   const content = (
@@ -69,6 +82,23 @@ const WallDoorMenu = ({ wall, onClose, onUpdate }) => {
             className="w-full h-8 p-0 border-0"
           />
         </div>
+        {isMaster && (
+          <div className="space-y-2">
+            <div>
+              <label className="block mb-1">Control de dificultad</label>
+              <input
+                type="number"
+                min="1"
+                value={difficulty}
+                onChange={(e) => handleDifficulty(e.target.value)}
+                className="w-full bg-gray-700 text-white"
+              />
+            </div>
+            <Boton className="w-full" size="sm" color="gray" onClick={handleReset}>
+              Resetear prueba
+            </Boton>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -81,9 +111,12 @@ WallDoorMenu.propTypes = {
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     color: PropTypes.string,
     door: PropTypes.string,
+    difficulty: PropTypes.number,
+    baseDifficulty: PropTypes.number,
   }).isRequired,
   onClose: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
+  isMaster: PropTypes.bool,
 };
 
 export default WallDoorMenu;
