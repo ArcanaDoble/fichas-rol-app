@@ -1022,7 +1022,7 @@ src/
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
-
+  
 ## 🔄 Historial de cambios previos
 
 <details>
