@@ -31,7 +31,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
         y: window.innerHeight / 2 - rect.height / 2,
       });
     }
-  }, [enemy]);
+  }, [enemy?.id]);
 
   const handleMouseDown = (e) => {
     e.stopPropagation();
