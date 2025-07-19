@@ -3457,7 +3457,7 @@ const MapCanvas = ({
                   draggable={
                     activeTool === 'select' && canSelectElement(token, 'token')
                   }
-                  listening={activeTool === 'select'}
+                  listening={activeTool === 'select' || activeTool === 'target'}
                 />
               ))}
               {filteredLines.map((ln) => (
