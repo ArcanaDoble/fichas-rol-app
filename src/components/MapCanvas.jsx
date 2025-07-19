@@ -949,6 +949,14 @@ const MapCanvas = ({
   const [attackLine, setAttackLine] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
 
+  useEffect(() => {
+    if (activeTool !== 'target') {
+      setAttackSourceId(null);
+      setAttackTargetId(null);
+      setAttackLine(null);
+      setAttackResult(null);
+    }
+  }, [activeTool]);
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
   const [selectedLines, setSelectedLines] = useState([]);
@@ -2354,14 +2362,10 @@ const MapCanvas = ({
           setAttackTargetId(clicked.id);
           const source = tokens.find(t => t.id === attackSourceId);
           if (source) {
-            const [sx, sy] = snapPoint(
-              cellToPx(source.x + (source.w || 1) / 2, gridOffsetX),
-              cellToPx(source.y + (source.h || 1) / 2, gridOffsetY)
-            );
-            const [tx, ty] = snapPoint(
-              cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX),
-              cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY)
-            );
+            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
             setAttackLine([sx, sy, tx, ty]);
           }
         }
@@ -2486,10 +2490,8 @@ const MapCanvas = ({
       [relX, relY] = snapPoint(relX, relY);
       const source = tokens.find(t => t.id === attackSourceId);
       if (source) {
-        const [sx, sy] = snapPoint(
-          cellToPx(source.x + (source.w || 1) / 2, gridOffsetX),
-          cellToPx(source.y + (source.h || 1) / 2, gridOffsetY)
-        );
+        const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+        const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
         setAttackLine([sx, sy, relX, relY]);
       }
       return;
@@ -2914,10 +2916,17 @@ const MapCanvas = ({
         return;
       }
 
-      // Deseleccionar todo con Escape
+      // Cancelar mirilla o deseleccionar con Escape
       if (e.key === 'Escape') {
         e.preventDefault();
-        clearAllSelections();
+        if (attackSourceId || attackTargetId) {
+          setAttackSourceId(null);
+          setAttackTargetId(null);
+          setAttackLine(null);
+          setAttackResult(null);
+        } else {
+          clearAllSelections();
+        }
         return;
       }
 
@@ -3729,7 +3738,7 @@ const MapCanvas = ({
                 }
                 transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
                 visible={
-                  activeTool === 'select' &&
+                  (activeTool === 'select' || activeTool === 'target') &&
                   hoveredId === token.id &&
                   canSeeBars(token)
                 }
