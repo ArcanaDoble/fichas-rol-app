@@ -8,7 +8,6 @@ import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
 const MASTER_COLOR = "#FFD700";
-
 const ChatPanel = ({ playerName = '', isMaster = false }) => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
