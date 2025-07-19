@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
+const MASTER_COLOR = "#FFD700";
 const ChatPanel = ({ playerName = '', isMaster = false }) => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
@@ -65,7 +66,7 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
   }, [messages, chatLoaded]);
 
   const getPlayerColor = (name) => {
-    if (!name || name === 'Master') return '#10b981';
+    if (!name || name === 'Master') return MASTER_COLOR;
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -104,7 +105,7 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
           <div key={m.id} className="bg-gray-700/50 p-2 rounded flex items-start gap-2">
             <div className="flex-1 mr-2 min-w-0 space-y-1">
               <div>
-                <span className="font-semibold mr-1" style={{ color: getPlayerColor(m.author) }}>
+                <span className="font-semibold mr-1" style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}>
                   {m.author}:
                 </span>
                 <span className="text-gray-200 break-words">{m.text}</span>
