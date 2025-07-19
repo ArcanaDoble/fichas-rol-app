@@ -4,4 +4,3 @@ export const createToken = (data = {}) => ({
   ...data,
   tokenSheetId: nanoid(),
 });
-

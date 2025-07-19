@@ -31,7 +31,7 @@ import TokenEstadoMenu from './TokenEstadoMenu';
 import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
-import { createToken } from '../utils/token';
+import { createToken, cloneTokenSheet } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
