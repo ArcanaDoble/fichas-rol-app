@@ -39,6 +39,8 @@ import Konva from 'konva';
 import Toolbar from './Toolbar';
 import WallDoorMenu from './WallDoorMenu';
 import DoorCheckModal from './DoorCheckModal';
+import AttackModal from './AttackModal';
+import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -940,6 +942,21 @@ const MapCanvas = ({
   const [measureVisible, setMeasureVisible] = useState(true);
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
+
+  // Estados para sistema de ataque
+  const [attackSourceId, setAttackSourceId] = useState(null);
+  const [attackTargetId, setAttackTargetId] = useState(null);
+  const [attackLine, setAttackLine] = useState(null);
+  const [attackResult, setAttackResult] = useState(null);
+
+  useEffect(() => {
+    if (activeTool !== 'target') {
+      setAttackSourceId(null);
+      setAttackTargetId(null);
+      setAttackLine(null);
+      setAttackResult(null);
+    }
+  }, [activeTool]);
 
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
@@ -2329,6 +2346,33 @@ const MapCanvas = ({
 
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
+    if (activeTool === 'target' && e.evt.button === 0) {
+      const pointer = stageRef.current.getPointerPosition();
+      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const cellX = pxToCell(relX, gridOffsetX);
+      const cellY = pxToCell(relY, gridOffsetY);
+      const clicked = tokens.find(t =>
+        cellX >= t.x && cellX < t.x + (t.w || 1) &&
+        cellY >= t.y && cellY < t.y + (t.h || 1)
+      );
+      if (clicked && canSelectElement(clicked, 'token')) {
+        if (!attackSourceId) {
+          setAttackSourceId(clicked.id);
+        } else if (clicked.id !== attackSourceId) {
+          setAttackTargetId(clicked.id);
+          const source = tokens.find(t => t.id === attackSourceId);
+          if (source) {
+            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+            setAttackLine([sx, sy, tx, ty]);
+          }
+        }
+      }
+      return;
+    }
     if (activeTool === 'select' && e.evt.button === 1) {
       e.evt.preventDefault();
       setIsPanning(true);
@@ -2441,6 +2485,16 @@ const MapCanvas = ({
         ...wl,
         points: [wl.points[0], wl.points[1], relX, relY],
       }));
+      return;
+    }
+    if (activeTool === 'target' && attackSourceId && !attackTargetId) {
+      [relX, relY] = snapPoint(relX, relY);
+      const source = tokens.find(t => t.id === attackSourceId);
+      if (source) {
+        const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+        const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+        setAttackLine([sx, sy, relX, relY]);
+      }
       return;
     }
     if (measureLine) {
@@ -2652,6 +2706,25 @@ const MapCanvas = ({
       );
     })();
 
+  const attackElement =
+    attackLine &&
+    (() => {
+      const [x1, y1, x2, y2] = attackLine;
+      const cellDx = Math.abs(
+        pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX)
+      );
+      const cellDy = Math.abs(
+        pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY)
+      );
+      const distance = Math.round(Math.hypot(cellDx, cellDy));
+      return (
+        <>
+          <Line points={attackLine} stroke="red" strokeWidth={2} />
+          <Text x={x2} y={y2} text={`${distance} casillas`} fontSize={16} fill="red" />
+        </>
+      );
+    })();
+
   const handleKeyDown = useCallback(
     (e) => {
       // Avoid moving the token when typing inside inputs or editable fields
@@ -2844,10 +2917,17 @@ const MapCanvas = ({
         return;
       }
 
-      // Deseleccionar todo con Escape
+      // Cancelar mirilla o deseleccionar con Escape
       if (e.key === 'Escape') {
         e.preventDefault();
-        clearAllSelections();
+        if (attackSourceId || attackTargetId) {
+          setAttackSourceId(null);
+          setAttackTargetId(null);
+          setAttackLine(null);
+          setAttackResult(null);
+        } else {
+          clearAllSelections();
+        }
         return;
       }
 
@@ -3378,7 +3458,7 @@ const MapCanvas = ({
                   draggable={
                     activeTool === 'select' && canSelectElement(token, 'token')
                   }
-                  listening={activeTool === 'select'}
+                  listening={activeTool === 'select' || activeTool === 'target'}
                 />
               ))}
               {filteredLines.map((ln) => (
@@ -3508,6 +3588,7 @@ const MapCanvas = ({
                 />
               )}
               {measureElement}
+              {attackElement}
             </Group>
           </Layer>
           <Layer>
@@ -3658,7 +3739,7 @@ const MapCanvas = ({
                 }
                 transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
                 visible={
-                  activeTool === 'select' &&
+                  (activeTool === 'select' || activeTool === 'target') &&
                   hoveredId === token.id &&
                   canSeeBars(token)
                 }
@@ -4031,6 +4112,43 @@ const MapCanvas = ({
           onClose={handleDoorCheckResult}
           playerName={playerName}
           difficulty={(walls.find((w) => w.id === doorCheckWallId)?.difficulty) || 1}
+        />
+      )}
+      {attackTargetId && (
+        <AttackModal
+          isOpen
+          attacker={tokens.find(t => t.id === attackSourceId)}
+          target={tokens.find(t => t.id === attackTargetId)}
+          distance={attackLine ? Math.round(Math.hypot(
+            pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
+            pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
+          )) : 0}
+          onClose={(res) => {
+            if (res) setAttackResult(res);
+            else {
+              setAttackSourceId(null);
+              setAttackTargetId(null);
+              setAttackLine(null);
+            }
+          }}
+        />
+      )}
+      {attackResult && (
+        <DefenseModal
+          isOpen
+          attacker={tokens.find(t => t.id === attackSourceId)}
+          target={tokens.find(t => t.id === attackTargetId)}
+          distance={attackLine ? Math.round(Math.hypot(
+            pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
+            pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
+          )) : 0}
+          attackResult={attackResult}
+          onClose={() => {
+            setAttackSourceId(null);
+            setAttackTargetId(null);
+            setAttackLine(null);
+            setAttackResult(null);
+          }}
         />
       )}
 
