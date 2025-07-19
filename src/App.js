@@ -33,6 +33,7 @@ import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
+import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 import { nanoid } from 'nanoid';
@@ -2794,8 +2795,9 @@ function App() {
             </Boton>
           </div>
         </div>
-        <div className="flex-1 overflow-hidden">
-          <MapCanvas
+        <div className="flex-1 overflow-hidden flex">
+          <div className="flex-1 overflow-hidden">
+            <MapCanvas
             userType="player"
             playerName={playerName}
             playerViewMode={true}
@@ -2847,6 +2849,8 @@ function App() {
             isPlayerView={true}
             pageId={playerVisiblePageId}
           />
+          </div>
+          <ChatPanel playerName={playerName} isMaster={false} />
         </div>
       </div>
     );

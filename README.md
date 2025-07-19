@@ -749,6 +749,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Chat con colores únicos automáticos para cada jugador basados en hash del nombre.
 - Navegación automática a la página donde está ubicado el token del jugador.
 
+**Resumen de cambios v2.4.12:**
+
+- El Mapa de Batalla para jugadores ahora incluye un chat integrado que admite
+  los mismos comandos de la calculadora de dados.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
