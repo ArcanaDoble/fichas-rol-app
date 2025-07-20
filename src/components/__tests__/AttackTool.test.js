@@ -28,7 +28,6 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
     } else if (!isOwn && id !== attacker) {
@@ -37,7 +36,6 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     }
   };
 
@@ -125,6 +123,13 @@ test('allows targeting tokens controlled by another player', async () => {
   render(<AttackToolDemo playerName="alice" />);
   await userEvent.click(screen.getByTestId('target-tool'));
   await userEvent.click(screen.getByTestId('a'));
+  await userEvent.click(screen.getByTestId('b'));
+  expect(screen.getByTestId('line')).toBeInTheDocument();
+});
+
+test('allows targeting tokens controlled by another player', async () => {
+  render(<AttackToolDemo selectedId="a" playerName="alice" />);
+  await userEvent.click(screen.getByTestId('target-tool'));
   await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByTestId('line')).toBeInTheDocument();
 });
