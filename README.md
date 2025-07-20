@@ -1039,6 +1039,7 @@ src/
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
 
 
+
 ## 🔄 Historial de cambios previos
 
 <details>
