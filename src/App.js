@@ -1593,32 +1593,21 @@ function App() {
       updatedAt: new Date(),
     };
     setPlayerData(fullData);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        `player_${playerName}`,
+        JSON.stringify(fullData)
+      );
+      window.dispatchEvent(
+        new CustomEvent('playerSheetSaved', {
+          detail: { name: playerName, sheet: fullData },
+        })
+      );
+    }
     try {
       await setDoc(doc(db, 'players', playerName), fullData);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(
-          `player_${playerName}`,
-          JSON.stringify(fullData)
-        );
-        window.dispatchEvent(
-          new CustomEvent('playerSheetSaved', {
-            detail: { name: playerName, sheet: fullData },
-          })
-        );
-      }
     } catch (e) {
-      // Error guardando en Firestore
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(
-          `player_${playerName}`,
-          JSON.stringify(fullData)
-        );
-        window.dispatchEvent(
-          new CustomEvent('playerSheetSaved', {
-            detail: { name: playerName, sheet: fullData },
-          })
-        );
-      }
+      console.error(e);
     }
   };
   // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso
