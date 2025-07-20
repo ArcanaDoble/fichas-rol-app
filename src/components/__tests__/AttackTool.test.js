@@ -38,7 +38,6 @@ function AttackToolDemo({
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
     } else if (canTarget) {
@@ -47,7 +46,6 @@ function AttackToolDemo({
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     }
   };
 
@@ -177,7 +175,6 @@ test('master selects attacker then target without auto-targeting first click', a
   await userEvent.click(screen.getByTestId('b')); // choose target
   expect(screen.getByTestId('line')).toBeInTheDocument();
 });
-
 test('shows message when no equipment', () => {
   localStorage.setItem('tokenSheets', JSON.stringify({ '1': { id: '1', weapons: [], poderes: [] } }));
   render(
