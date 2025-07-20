@@ -338,6 +338,7 @@ const Token = forwardRef(
       onTransformEnd,
       onRotate,
       onSettings,
+      activeTool = 'select',
       onStates,
       onHoverChange,
       tokenSheetId,
@@ -670,7 +671,9 @@ const Token = forwardRef(
         ref={groupRef}
         onMouseEnter={() => onHoverChange?.(true)}
         onMouseLeave={() => onHoverChange?.(false)}
-        onDblClick={() => onSettings?.(id)}
+        onDblClick={() => {
+          if (activeTool !== 'target') onSettings?.(id);
+        }}
       >
         {auraRadius > 0 &&
           showAura &&
@@ -868,6 +871,7 @@ Token.propTypes = {
   onHoverChange: PropTypes.func,
   estados: PropTypes.array,
   tokenSheetId: PropTypes.string,
+  activeTool: PropTypes.string,
 };
 
 /**
@@ -945,10 +949,20 @@ const MapCanvas = ({
 
   // Estados para sistema de ataque
   const [attackSourceId, setAttackSourceId] = useState(null);
+  const attackSourceIdRef = useRef(null);
   const [attackTargetId, setAttackTargetId] = useState(null);
+  const attackTargetIdRef = useRef(null);
   const [attackLine, setAttackLine] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
   const [attackReady, setAttackReady] = useState(false);
+
+  useEffect(() => {
+    attackSourceIdRef.current = attackSourceId;
+  }, [attackSourceId]);
+
+  useEffect(() => {
+    attackTargetIdRef.current = attackTargetId;
+  }, [attackTargetId]);
 
   useEffect(() => {
     if (activeTool !== 'target') {
@@ -2553,38 +2567,28 @@ const MapCanvas = ({
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
     if (activeTool === 'target' && e.evt.button === 0) {
-      // Autoseleccionar atacante si solo hay un token en la selección
-      if (!attackSourceId) {
-        const candidates = selectedTokens.length === 1
-          ? selectedTokens
-          : selectedTokens.length === 0 && selectedId != null
-            ? [selectedId]
-            : [];
-        if (candidates.length === 1) {
-          setAttackSourceId(candidates[0]);
-        }
-      }
 
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      const cellX = pxToCell(relX, gridOffsetX);
-      const cellY = pxToCell(relY, gridOffsetY);
+      const cellX = Math.floor((relX - gridOffsetX) / effectiveGridSize);
+      const cellY = Math.floor((relY - gridOffsetY) / effectiveGridSize);
       const clicked = tokens.find(t =>
         cellX >= t.x && cellX < t.x + (t.w || 1) &&
         cellY >= t.y && cellY < t.y + (t.h || 1)
       );
-      if (clicked && canSelectElement(clicked, 'token')) {
-        const sourceId = attackSourceId || (selectedTokens.length === 1
-          ? selectedTokens[0]
-          : selectedTokens.length === 0 && selectedId != null
-            ? selectedId
-            : null);
+      if (clicked) {
+        const sourceId = attackSourceIdRef.current;
+        const isOwnToken = clicked.controlledBy === playerName;
+
         if (!sourceId) {
-          setAttackSourceId(clicked.id);
-        } else if (attackTargetId == null && clicked.id !== sourceId) {
-          setAttackSourceId(sourceId);
+          if (isOwnToken && canSelectElement(clicked, 'token')) {
+            setAttackSourceId(clicked.id);
+            attackSourceIdRef.current = clicked.id;
+          }
+        } else if (attackTargetIdRef.current == null && !isOwnToken && clicked.id !== sourceId) {
           setAttackTargetId(clicked.id);
+          attackTargetIdRef.current = clicked.id;
           const source = tokens.find(t => t.id === sourceId);
           if (source) {
             const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
@@ -2594,10 +2598,11 @@ const MapCanvas = ({
             setAttackLine([sx, sy, tx, ty]);
           }
           setAttackReady(false);
-        } else if (attackTargetId === clicked.id) {
+        } else if (attackTargetIdRef.current === clicked.id) {
           if (!attackReady) setAttackReady(true);
-        } else if (clicked.id !== sourceId) {
+        } else if (!isOwnToken && clicked.id !== sourceId) {
           setAttackTargetId(clicked.id);
+          attackTargetIdRef.current = clicked.id;
           const source = tokens.find(t => t.id === sourceId);
           if (source) {
             const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
@@ -3159,7 +3164,12 @@ const MapCanvas = ({
       // Cancelar mirilla o deseleccionar con Escape
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (attackSourceId || attackTargetId) {
+        if (activeTool === 'target' && (attackSourceId || attackTargetId)) {
+          setAttackTargetId(null);
+          setAttackLine(null);
+          setAttackResult(null);
+          setAttackReady(false);
+        } else if (attackSourceId || attackTargetId) {
           setAttackSourceId(null);
           setAttackTargetId(null);
           setAttackLine(null);
@@ -3698,6 +3708,7 @@ const MapCanvas = ({
                     activeTool === 'select' && canSelectElement(token, 'token')
                   }
                   listening={activeTool === 'select' || activeTool === 'target'}
+                  activeTool={activeTool}
                 />
               ))}
               {filteredLines.map((ln) => (
@@ -4378,7 +4389,6 @@ const MapCanvas = ({
             if (res) setAttackResult(res);
             setAttackReady(false);
             if (!res) {
-              setAttackSourceId(null);
               setAttackTargetId(null);
               setAttackLine(null);
             }
@@ -4396,7 +4406,6 @@ const MapCanvas = ({
           )) : 0}
           attackResult={attackResult}
           onClose={() => {
-            setAttackSourceId(null);
             setAttackTargetId(null);
             setAttackLine(null);
             setAttackResult(null);
