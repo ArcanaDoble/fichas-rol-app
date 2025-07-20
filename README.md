@@ -1041,6 +1041,7 @@ src/
 
 - ✅ La ficha de jugador se actualiza automáticamente al recibir el evento `playerSheetSaved` desde otras pestañas o tokens
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
+- ✅ Los estados de los tokens controlados se sincronizan al instante al modificarse `localStorage`
 
 
 

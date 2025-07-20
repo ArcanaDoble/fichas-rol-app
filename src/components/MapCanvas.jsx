@@ -1224,6 +1224,37 @@ const MapCanvas = ({
     return () => window.removeEventListener('playerSheetSaved', handler);
   }, [tokens, handleTokensChange]);
 
+  // Escuchar cambios en localStorage de otras pestañas
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (!e.key || !e.key.startsWith('player_') || !e.newValue) return;
+      const name = e.key.replace('player_', '');
+      const affected = tokens.filter(
+        (t) => t.controlledBy === name && t.tokenSheetId
+      );
+      if (!affected.length) return;
+
+      const sheet = JSON.parse(e.newValue);
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      affected.forEach((t) => {
+        const copy = { ...sheet, id: t.tokenSheetId };
+        sheets[t.tokenSheetId] = copy;
+        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: copy }));
+      });
+      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+
+      const updated = tokens.map((t) =>
+        t.controlledBy === name ? { ...t, estados: sheet.estados || [] } : t
+      );
+      if (!deepEqual(updated, tokens)) {
+        handleTokensChange(updated);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [tokens, handleTokensChange]);
+
   // Funciones wrapper para otros elementos
   const handleLinesChange = useCallback((newLines) => {
     if (isPlayerView && syncManager) {
