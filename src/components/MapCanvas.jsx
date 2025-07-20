@@ -2574,14 +2574,16 @@ const MapCanvas = ({
         cellX >= t.x && cellX < t.x + (t.w || 1) &&
         cellY >= t.y && cellY < t.y + (t.h || 1)
       );
-      if (clicked && canSelectElement(clicked, 'token')) {
+      if (clicked) {
         const sourceId = attackSourceId || (selectedTokens.length === 1
           ? selectedTokens[0]
           : selectedTokens.length === 0 && selectedId != null
             ? selectedId
             : null);
         if (!sourceId) {
-          setAttackSourceId(clicked.id);
+          if (canSelectElement(clicked, 'token')) {
+            setAttackSourceId(clicked.id);
+          }
         } else if (attackTargetId == null && clicked.id !== sourceId) {
           setAttackSourceId(sourceId);
           setAttackTargetId(clicked.id);

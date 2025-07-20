@@ -864,6 +864,7 @@ src/
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
+- **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
 
 #### v2.1.1 (junio 2024)
 
