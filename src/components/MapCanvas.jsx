@@ -3792,7 +3792,6 @@ const MapCanvas = ({
                 />
               )}
               {measureElement}
-              {attackElement}
             </Group>
           </Layer>
           <Layer>
@@ -3950,7 +3949,20 @@ const MapCanvas = ({
               />
             ))}
           </Layer>
-          
+
+          {attackElement && (
+            <Layer listening>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                {attackElement}
+              </Group>
+            </Layer>
+          )}
+
           {/* Capa de iluminación */}
           <Layer listening={false}>
             <Group

@@ -78,7 +78,11 @@ const Toolbar = ({
           key={id}
           onClick={() => onSelect(id)}
           className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-            activeTool === id ? 'bg-gray-700' : 'bg-gray-800 hover:bg-gray-700'
+            activeTool === id
+              ? id === 'target'
+                ? 'bg-red-700'
+                : 'bg-gray-700'
+              : 'bg-gray-800 hover:bg-gray-700'
           }`}
         >
           <Icon />
