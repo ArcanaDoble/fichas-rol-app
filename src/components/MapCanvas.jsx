@@ -948,6 +948,7 @@ const MapCanvas = ({
   const [attackTargetId, setAttackTargetId] = useState(null);
   const [attackLine, setAttackLine] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
+  const [attackReady, setAttackReady] = useState(false);
 
   useEffect(() => {
     if (activeTool !== 'target') {
@@ -955,6 +956,7 @@ const MapCanvas = ({
       setAttackTargetId(null);
       setAttackLine(null);
       setAttackResult(null);
+      setAttackReady(false);
     }
   }, [activeTool]);
 
@@ -2579,9 +2581,8 @@ const MapCanvas = ({
             ? selectedId
             : null);
         if (!sourceId) {
-          // No atacante disponible, usar ficha clicada
           setAttackSourceId(clicked.id);
-        } else if (clicked.id !== sourceId) {
+        } else if (attackTargetId == null && clicked.id !== sourceId) {
           setAttackSourceId(sourceId);
           setAttackTargetId(clicked.id);
           const source = tokens.find(t => t.id === sourceId);
@@ -2592,6 +2593,20 @@ const MapCanvas = ({
             const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
             setAttackLine([sx, sy, tx, ty]);
           }
+          setAttackReady(false);
+        } else if (attackTargetId === clicked.id) {
+          if (!attackReady) setAttackReady(true);
+        } else if (clicked.id !== sourceId) {
+          setAttackTargetId(clicked.id);
+          const source = tokens.find(t => t.id === sourceId);
+          if (source) {
+            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+            setAttackLine([sx, sy, tx, ty]);
+          }
+          setAttackReady(false);
         }
       }
       return;
@@ -2713,12 +2728,6 @@ const MapCanvas = ({
       return;
     }
     if (activeTool === 'target' && attackSourceId && !attackTargetId) {
-      const source = tokens.find(t => t.id === attackSourceId);
-      if (source) {
-        const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
-        const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
-        setAttackLine([sx, sy, relX, relY]);
-      }
       return;
     }
     if (measureLine) {
@@ -4356,7 +4365,7 @@ const MapCanvas = ({
           difficulty={(walls.find((w) => w.id === doorCheckWallId)?.difficulty) || 1}
         />
       )}
-      {attackTargetId && (
+      {attackReady && attackTargetId && (
         <AttackModal
           isOpen
           attacker={tokens.find(t => t.id === attackSourceId)}
@@ -4367,7 +4376,8 @@ const MapCanvas = ({
           )) : 0}
           onClose={(res) => {
             if (res) setAttackResult(res);
-            else {
+            setAttackReady(false);
+            if (!res) {
               setAttackSourceId(null);
               setAttackTargetId(null);
               setAttackLine(null);
@@ -4390,6 +4400,7 @@ const MapCanvas = ({
             setAttackTargetId(null);
             setAttackLine(null);
             setAttackResult(null);
+            setAttackReady(false);
           }}
         />
       )}
