@@ -959,6 +959,8 @@ const MapCanvas = ({
   }, [activeTool]);
 
   // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
+  const prevTokensRef = useRef(tokens);
+
   useEffect(() => {
     const syncHandler = async (e) => {
       const sheet = e.detail;
@@ -977,6 +979,11 @@ const MapCanvas = ({
             `player_${token.controlledBy}`,
             JSON.stringify(sheet)
           );
+          window.dispatchEvent(
+            new CustomEvent('playerSheetSaved', {
+              detail: { name: token.controlledBy, sheet, origin: 'mapSync' },
+            })
+          );
         }
       } catch (err) {
         console.error('sync player sheet', err);
@@ -987,8 +994,57 @@ const MapCanvas = ({
   }, [tokens]);
 
   useEffect(() => {
+    const prev = prevTokensRef.current || [];
+    const checkStates = async () => {
+      for (const token of tokens) {
+        const prevToken = prev.find((t) => t.id === token.id);
+        if (
+          prevToken &&
+          token.controlledBy &&
+          token.controlledBy !== 'master' &&
+          !deepEqual(prevToken.estados, token.estados)
+        ) {
+          const stored =
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(
+                  `player_${token.controlledBy}`
+                )
+              : null;
+          const sheet = stored ? JSON.parse(stored) : null;
+          if (!sheet) continue;
+          if (deepEqual(sheet.estados || [], token.estados || [])) continue;
+          const updated = { ...sheet, estados: token.estados || [] };
+          try {
+            await setDoc(doc(db, 'players', token.controlledBy), updated);
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem(
+                `player_${token.controlledBy}`,
+                JSON.stringify(updated)
+              );
+              window.dispatchEvent(
+                new CustomEvent('playerSheetSaved', {
+                  detail: {
+                    name: token.controlledBy,
+                    sheet: updated,
+                    origin: 'mapSync',
+                  },
+                })
+              );
+            }
+          } catch (err) {
+            console.error('sync player estados', err);
+          }
+        }
+      }
+      prevTokensRef.current = tokens;
+    };
+    checkStates();
+  }, [tokens]);
+
+  useEffect(() => {
     const handler = (e) => {
-      const { name, sheet } = e.detail || {};
+      const { name, sheet, origin } = e.detail || {};
+      if (origin === 'mapSync') return;
       const affected = tokens.filter(
         (t) => t.controlledBy === name && t.tokenSheetId
       );
@@ -1004,10 +1060,19 @@ const MapCanvas = ({
         );
       });
       localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+
+      const updatedTokens = tokens.map((t) =>
+        t.controlledBy === name
+          ? { ...t, estados: sheet.estados || [] }
+          : t
+      );
+      if (!deepEqual(updatedTokens, tokens)) {
+        handleTokensChange(updatedTokens);
+      }
     };
     window.addEventListener('playerSheetSaved', handler);
     return () => window.removeEventListener('playerSheetSaved', handler);
-  }, [tokens]);
+  }, [tokens, handleTokensChange]);
 
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
