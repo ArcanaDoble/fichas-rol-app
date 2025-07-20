@@ -986,6 +986,29 @@ const MapCanvas = ({
     return () => window.removeEventListener('tokenSheetSaved', syncHandler);
   }, [tokens]);
 
+  useEffect(() => {
+    const handler = (e) => {
+      const { name, sheet } = e.detail || {};
+      const affected = tokens.filter(
+        (t) => t.controlledBy === name && t.tokenSheetId
+      );
+      if (!affected.length) return;
+
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      affected.forEach((t) => {
+        const copy = { ...sheet, id: t.tokenSheetId };
+        sheets[t.tokenSheetId] = copy;
+        window.dispatchEvent(
+          new CustomEvent('tokenSheetSaved', { detail: copy })
+        );
+      });
+      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+    };
+    window.addEventListener('playerSheetSaved', handler);
+    return () => window.removeEventListener('playerSheetSaved', handler);
+  }, [tokens]);
+
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
   const [selectedLines, setSelectedLines] = useState([]);
