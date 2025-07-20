@@ -1026,6 +1026,7 @@ src/
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
 - ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
+- ✅ Las fichas de jugador se sincronizan automáticamente con los tokens controlados tras editar la ficha
 
 ## 🔄 Historial de cambios previos
 

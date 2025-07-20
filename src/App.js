@@ -1600,6 +1600,11 @@ function App() {
           `player_${playerName}`,
           JSON.stringify(fullData)
         );
+        window.dispatchEvent(
+          new CustomEvent('playerSheetSaved', {
+            detail: { name: playerName, sheet: fullData },
+          })
+        );
       }
     } catch (e) {
       // Error guardando en Firestore
@@ -1607,6 +1612,11 @@ function App() {
         window.localStorage.setItem(
           `player_${playerName}`,
           JSON.stringify(fullData)
+        );
+        window.dispatchEvent(
+          new CustomEvent('playerSheetSaved', {
+            detail: { name: playerName, sheet: fullData },
+          })
         );
       }
     }
