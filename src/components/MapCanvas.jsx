@@ -2652,8 +2652,11 @@ const MapCanvas = ({
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      if (measureSnap !== 'free') {
+        [relX, relY] = snapPoint(relX, relY);
+      }
       setMeasureLine([relX, relY, relX, relY]);
     }
     if (activeTool === 'text' && e.evt.button === 0) {
@@ -2719,7 +2722,12 @@ const MapCanvas = ({
       return;
     }
     if (measureLine) {
-      setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
+      let nx = relX;
+      let ny = relY;
+      if (measureSnap !== 'free') {
+        [nx, ny] = snapPoint(relX, relY);
+      }
+      setMeasureLine(([x1, y1]) => [x1, y1, nx, ny]);
       return;
     }
     if (!isPanning) return;
