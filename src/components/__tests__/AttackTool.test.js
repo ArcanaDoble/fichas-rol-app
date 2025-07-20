@@ -3,7 +3,7 @@ import React from 'react';
 import userEvent from '@testing-library/user-event';
 import AttackModal from '../AttackModal';
 
-function AttackToolDemo({ selectedId } = {}) {
+function AttackToolDemo({ selectedId, playerName = 'player' } = {}) {
   const [activeTool, setActiveTool] = React.useState('select');
   const [attackSourceId, setAttackSourceId] = React.useState(null);
   const [attackTargetId, setAttackTargetId] = React.useState(null);
@@ -11,34 +11,48 @@ function AttackToolDemo({ selectedId } = {}) {
   const [attackReady, setAttackReady] = React.useState(false);
 
   const tokens = [
-    { id: 'a', x: 10, y: 10 },
-    { id: 'b', x: 80, y: 10 },
+    { id: 'a', x: 10, y: 10, controlledBy: playerName },
+    { id: 'b', x: 80, y: 10, controlledBy: 'other' },
   ];
 
   const handleClick = (id) => {
     if (activeTool !== 'target') return;
     const attacker = attackSourceId || selectedId;
+    const clicked = tokens.find((t) => t.id === id);
+    const isOwn = clicked.controlledBy === playerName;
     if (!attacker) {
-      setAttackSourceId(id);
+      if (isOwn) setAttackSourceId(id);
     } else if (attackTargetId == null && id !== attacker) {
-      setAttackSourceId(attacker);
-      setAttackTargetId(id);
-      const source = tokens.find((t) => t.id === attacker);
-      const target = tokens.find((t) => t.id === id);
-      if (source && target) {
-        setAttackLine([source.x, source.y, target.x, target.y]);
+      if (!isOwn) {
+        setAttackSourceId(attacker);
+        setAttackTargetId(id);
+        const source = tokens.find((t) => t.id === attacker);
+        if (source && clicked) {
+          setAttackLine([source.x, source.y, clicked.x, clicked.y]);
+        }
+        setAttackReady(false);
+      } else {
+        setAttackSourceId(id);
+        setAttackTargetId(null);
+        setAttackLine(null);
+        setAttackReady(false);
       }
-      setAttackReady(false);
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
     } else if (id !== attacker) {
-      setAttackTargetId(id);
-      const source = tokens.find((t) => t.id === attacker);
-      const target = tokens.find((t) => t.id === id);
-      if (source && target) {
-        setAttackLine([source.x, source.y, target.x, target.y]);
+      if (!isOwn) {
+        setAttackTargetId(id);
+        const source = tokens.find((t) => t.id === attacker);
+        if (source && clicked) {
+          setAttackLine([source.x, source.y, clicked.x, clicked.y]);
+        }
+        setAttackReady(false);
+      } else {
+        setAttackSourceId(id);
+        setAttackTargetId(null);
+        setAttackLine(null);
+        setAttackReady(false);
       }
-      setAttackReady(false);
     }
   };
 
@@ -115,6 +129,13 @@ test('auto selects attacker if a token was preselected', async () => {
   await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByTestId('line')).toBeInTheDocument();
   expect(screen.queryByText('Ataque')).toBeNull();
+});
+
+test('allows targeting tokens controlled by another player', async () => {
+  render(<AttackToolDemo selectedId="a" playerName="alice" />);
+  await userEvent.click(screen.getByTestId('target-tool'));
+  await userEvent.click(screen.getByTestId('b'));
+  expect(screen.getByTestId('line')).toBeInTheDocument();
 });
 
 test('attack modal appears on second click over same target', async () => {
