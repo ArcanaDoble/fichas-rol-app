@@ -843,6 +843,7 @@ src/
 - **Fichas de jugador completas** - Las estadísticas personalizadas y el equipamiento se muestran correctamente al enlazar
 - **Carga de imágenes optimizada** - Las tarjetas ya no hacen peticiones en bucle al equipar objetos
 - **Sincronización total de fichas de jugador** - Se respetan las posiciones personalizadas de estadísticas y se cargan armas, armaduras y poderes equipados
+- **Datos de jugador normalizados** - Armas, armaduras y poderes se guardan como nombres simples al sincronizar desde el mapa
 - **Mejoras en Sistema de Velocidad** - Los jugadores ahora pueden eliminar sus propios participantes, no solo el master
 - **Botón de papelera mejorado** - Color rojo consistente con el sistema de velocidad en inventario y línea de sucesos
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
