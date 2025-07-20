@@ -2652,9 +2652,8 @@ const MapCanvas = ({
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
       const pointer = stageRef.current.getPointerPosition();
-      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      [relX, relY] = snapPoint(relX, relY);
+      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
+      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
       setMeasureLine([relX, relY, relX, relY]);
     }
     if (activeTool === 'text' && e.evt.button === 0) {
@@ -2720,7 +2719,6 @@ const MapCanvas = ({
       return;
     }
     if (measureLine) {
-      [relX, relY] = snapPoint(relX, relY);
       setMeasureLine(([x1, y1]) => [x1, y1, relX, relY]);
       return;
     }
@@ -2830,11 +2828,13 @@ const MapCanvas = ({
     measureVisible &&
     (() => {
       const [x1, y1, x2, y2] = measureLine;
+      const [sx1, sy1] = snapPoint(x1, y1);
+      const [sx2, sy2] = snapPoint(x2, y2);
       const cellDx = Math.abs(
-        pxToCell(x2, gridOffsetX) - pxToCell(x1, gridOffsetX)
+        pxToCell(sx2, gridOffsetX) - pxToCell(sx1, gridOffsetX)
       );
       const cellDy = Math.abs(
-        pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY)
+        pxToCell(sy2, gridOffsetY) - pxToCell(sy1, gridOffsetY)
       );
       let distance = Math.hypot(cellDx, cellDy);
       const dx = x2 - x1;
