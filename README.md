@@ -1038,6 +1038,8 @@ src/
   automáticamente
 - ✅ Selección automática del atacante y línea que sigue al cursor
 - ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
+- ✅ Selección y ataque responden a cada clic sin retrasos
+
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 

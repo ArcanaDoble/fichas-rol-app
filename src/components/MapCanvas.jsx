@@ -945,10 +945,20 @@ const MapCanvas = ({
 
   // Estados para sistema de ataque
   const [attackSourceId, setAttackSourceId] = useState(null);
+  const attackSourceIdRef = useRef(null);
   const [attackTargetId, setAttackTargetId] = useState(null);
+  const attackTargetIdRef = useRef(null);
   const [attackLine, setAttackLine] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
   const [attackReady, setAttackReady] = useState(false);
+
+  useEffect(() => {
+    attackSourceIdRef.current = attackSourceId;
+  }, [attackSourceId]);
+
+  useEffect(() => {
+    attackTargetIdRef.current = attackTargetId;
+  }, [attackTargetId]);
 
   useEffect(() => {
     if (activeTool !== 'target') {
@@ -2562,6 +2572,7 @@ const MapCanvas = ({
             : [];
         if (candidates.length === 1) {
           setAttackSourceId(candidates[0]);
+          attackSourceIdRef.current = candidates[0];
         }
       }
 
@@ -2575,7 +2586,7 @@ const MapCanvas = ({
         cellY >= t.y && cellY < t.y + (t.h || 1)
       );
       if (clicked) {
-        const sourceId = attackSourceId || (selectedTokens.length === 1
+        const sourceId = attackSourceIdRef.current || (selectedTokens.length === 1
           ? selectedTokens[0]
           : selectedTokens.length === 0 && selectedId != null
             ? selectedId
@@ -2584,11 +2595,14 @@ const MapCanvas = ({
         if (!sourceId) {
           if (isOwnToken && canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
+            attackSourceIdRef.current = clicked.id;
           }
-        } else if (attackTargetId == null && clicked.id !== sourceId) {
+        } else if (attackTargetIdRef.current == null && clicked.id !== sourceId) {
           if (!isOwnToken) {
             setAttackSourceId(sourceId);
+            attackSourceIdRef.current = sourceId;
             setAttackTargetId(clicked.id);
+            attackTargetIdRef.current = clicked.id;
             const source = tokens.find(t => t.id === sourceId);
             if (source) {
               const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
@@ -2600,15 +2614,18 @@ const MapCanvas = ({
             setAttackReady(false);
           } else if (canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
+            attackSourceIdRef.current = clicked.id;
             setAttackTargetId(null);
+            attackTargetIdRef.current = null;
             setAttackLine(null);
             setAttackReady(false);
           }
-        } else if (attackTargetId === clicked.id) {
+        } else if (attackTargetIdRef.current === clicked.id) {
           if (!attackReady) setAttackReady(true);
         } else if (clicked.id !== sourceId) {
           if (!isOwnToken) {
             setAttackTargetId(clicked.id);
+            attackTargetIdRef.current = clicked.id;
             const source = tokens.find(t => t.id === sourceId);
             if (source) {
               const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
@@ -2620,7 +2637,9 @@ const MapCanvas = ({
             setAttackReady(false);
           } else if (canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
+            attackSourceIdRef.current = clicked.id;
             setAttackTargetId(null);
+            attackTargetIdRef.current = null;
             setAttackLine(null);
             setAttackReady(false);
           }
