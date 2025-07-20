@@ -332,6 +332,8 @@ const Token = forwardRef(
       draggable = true,
       listening = true,
       opacity = 1,
+      isAttacker = false,
+      isTarget = false,
       onDragEnd,
       onDragStart,
       onClick,
@@ -666,6 +668,12 @@ const Token = forwardRef(
       listening: false,
     };
 
+    const roleOutline = isAttacker
+      ? { stroke: '#f6e05e', strokeWidth: 3, dash: [4, 4] }
+      : isTarget
+        ? { stroke: '#f87171', strokeWidth: 3, dash: [4, 4] }
+        : null;
+
     return (
       <Group
         ref={groupRef}
@@ -718,6 +726,7 @@ const Token = forwardRef(
             )}
           </>
         )}
+        {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
           <Group listening={false}>
@@ -872,6 +881,8 @@ Token.propTypes = {
   estados: PropTypes.array,
   tokenSheetId: PropTypes.string,
   activeTool: PropTypes.string,
+  isAttacker: PropTypes.bool,
+  isTarget: PropTypes.bool,
 };
 
 /**
@@ -3672,6 +3683,8 @@ const MapCanvas = ({
                   auraShape={token.auraShape}
                   auraColor={token.auraColor}
                   auraOpacity={token.auraOpacity}
+                  isAttacker={activeTool === 'target' && token.id === attackSourceId}
+                  isTarget={activeTool === 'target' && token.id === attackTargetId}
                   selected={token.id === selectedId || selectedTokens.includes(token.id)}
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}

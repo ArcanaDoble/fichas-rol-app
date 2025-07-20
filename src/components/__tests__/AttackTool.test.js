@@ -55,23 +55,32 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
         onMouseMove={handleMove}
         style={{ position: 'relative', width: 100, height: 40 }}
       >
-        {tokens.map((t) => (
-          <div
-            key={t.id}
-            data-testid={t.id}
-            onClick={() => handleClick(t.id)}
-            onDoubleClick={() => {
-              if (activeTool !== 'target') onSettings?.(t.id);
-            }}
-            style={{
-              position: 'absolute',
-              left: t.x,
-              top: t.y,
-              width: 10,
-              height: 10,
-            }}
-          />
-        ))}
+        {tokens.map((t) => {
+          const border =
+            attackSourceId === t.id
+              ? '2px solid yellow'
+              : attackTargetId === t.id
+              ? '2px solid red'
+              : 'none';
+          return (
+            <div
+              key={t.id}
+              data-testid={t.id}
+              onClick={() => handleClick(t.id)}
+              onDoubleClick={() => {
+                if (activeTool !== 'target') onSettings?.(t.id);
+              }}
+              style={{
+                position: 'absolute',
+                left: t.x,
+                top: t.y,
+                width: 10,
+                height: 10,
+                border,
+              }}
+            />
+          );
+        })}
         <svg>{attackLine && <line data-testid="line" />}</svg>
       </div>
       {attackReady && attackTargetId && (
@@ -107,6 +116,8 @@ test('crosshair tool selects source and target', async () => {
   await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByTestId('line')).toBeInTheDocument();
   expect(screen.queryByText('Ataque')).toBeNull();
+  expect(screen.getByTestId('a')).toHaveStyle('border: 2px solid yellow');
+  expect(screen.getByTestId('b')).toHaveStyle('border: 2px solid red');
 });
 
 test('does not auto select attacker from previous selection', async () => {
