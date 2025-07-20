@@ -43,7 +43,7 @@ import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 
@@ -957,6 +957,34 @@ const MapCanvas = ({
       setAttackResult(null);
     }
   }, [activeTool]);
+
+  // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
+  useEffect(() => {
+    const syncHandler = async (e) => {
+      const sheet = e.detail;
+      if (!sheet || !sheet.id) return;
+      const token = tokens.find(
+        (t) =>
+          t.tokenSheetId === sheet.id &&
+          t.controlledBy &&
+          t.controlledBy !== 'master'
+      );
+      if (!token) return;
+      try {
+        await setDoc(doc(db, 'players', token.controlledBy), sheet);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            `player_${token.controlledBy}`,
+            JSON.stringify(sheet)
+          );
+        }
+      } catch (err) {
+        console.error('sync player sheet', err);
+      }
+    };
+    window.addEventListener('tokenSheetSaved', syncHandler);
+    return () => window.removeEventListener('tokenSheetSaved', syncHandler);
+  }, [tokens]);
 
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
