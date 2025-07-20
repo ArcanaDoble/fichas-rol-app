@@ -1012,6 +1012,7 @@ const MapCanvas = ({
               : null;
           const sheet = stored ? JSON.parse(stored) : null;
           if (!sheet) continue;
+          if (deepEqual(sheet.estados || [], token.estados || [])) continue;
           const updated = { ...sheet, estados: token.estados || [] };
           try {
             await setDoc(doc(db, 'players', token.controlledBy), updated);
@@ -1059,10 +1060,19 @@ const MapCanvas = ({
         );
       });
       localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+
+      const updatedTokens = tokens.map((t) =>
+        t.controlledBy === name
+          ? { ...t, estados: sheet.estados || [] }
+          : t
+      );
+      if (!deepEqual(updatedTokens, tokens)) {
+        handleTokensChange(updatedTokens);
+      }
     };
     window.addEventListener('playerSheetSaved', handler);
     return () => window.removeEventListener('playerSheetSaved', handler);
-  }, [tokens]);
+  }, [tokens, handleTokensChange]);
 
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
