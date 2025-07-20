@@ -1558,6 +1558,38 @@ function App() {
     loadPlayer();
   }, [loadPlayer]);
 
+  useEffect(() => {
+    const updateFromSheet = (sheet) => {
+      setPlayerData(sheet);
+      setResourcesList(sheet.resourcesList || []);
+      setClaves(sheet.claves || []);
+      setEstados(sheet.estados || []);
+    };
+
+    const handler = (e) => {
+      const { name, sheet } = e.detail || {};
+      if (name !== playerName) return;
+      updateFromSheet(sheet);
+    };
+
+    const storageHandler = (e) => {
+      if (e.key !== `player_${playerName}` || !e.newValue) return;
+      try {
+        const sheet = JSON.parse(e.newValue);
+        updateFromSheet(sheet);
+      } catch (err) {
+        console.error('invalid sheet from storage', err);
+      }
+    };
+
+    window.addEventListener('playerSheetSaved', handler);
+    window.addEventListener('storage', storageHandler);
+    return () => {
+      window.removeEventListener('playerSheetSaved', handler);
+      window.removeEventListener('storage', storageHandler);
+    };
+  }, [playerName]);
+
   // Debug: Monitorear cambios en playerData
   useEffect(() => {
     // playerData actualizado

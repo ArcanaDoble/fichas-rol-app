@@ -1033,6 +1033,11 @@ src/
 - ✅ Activar condiciones desde la ficha ahora refleja el estado al instante en el token correspondiente
 - ✅ Guardar la ficha envía el evento de actualización sin esperar a Firebase para evitar retrasos
 
+### 🔄 **Sincronización entre pestañas (Noviembre 2026) - v2.4.23**
+
+- ✅ La ficha de jugador se actualiza automáticamente al recibir el evento `playerSheetSaved` desde otras pestañas o tokens
+- ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
+
 
 ## 🔄 Historial de cambios previos
 
