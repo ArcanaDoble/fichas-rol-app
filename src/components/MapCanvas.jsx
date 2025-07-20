@@ -2551,6 +2551,18 @@ const MapCanvas = ({
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
     if (activeTool === 'target' && e.evt.button === 0) {
+      // Autoseleccionar atacante si solo hay un token en la selección
+      if (!attackSourceId) {
+        const candidates = selectedTokens.length === 1
+          ? selectedTokens
+          : selectedTokens.length === 0 && selectedId != null
+            ? [selectedId]
+            : [];
+        if (candidates.length === 1) {
+          setAttackSourceId(candidates[0]);
+        }
+      }
+
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
@@ -2561,11 +2573,18 @@ const MapCanvas = ({
         cellY >= t.y && cellY < t.y + (t.h || 1)
       );
       if (clicked && canSelectElement(clicked, 'token')) {
-        if (!attackSourceId) {
+        const sourceId = attackSourceId || (selectedTokens.length === 1
+          ? selectedTokens[0]
+          : selectedTokens.length === 0 && selectedId != null
+            ? selectedId
+            : null);
+        if (!sourceId) {
+          // No atacante disponible, usar ficha clicada
           setAttackSourceId(clicked.id);
-        } else if (clicked.id !== attackSourceId) {
+        } else if (clicked.id !== sourceId) {
+          setAttackSourceId(sourceId);
           setAttackTargetId(clicked.id);
-          const source = tokens.find(t => t.id === attackSourceId);
+          const source = tokens.find(t => t.id === sourceId);
           if (source) {
             const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
             const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
@@ -2692,7 +2711,6 @@ const MapCanvas = ({
       return;
     }
     if (activeTool === 'target' && attackSourceId && !attackTargetId) {
-      [relX, relY] = snapPoint(relX, relY);
       const source = tokens.find(t => t.id === attackSourceId);
       if (source) {
         const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
