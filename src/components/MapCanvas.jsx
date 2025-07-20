@@ -2591,13 +2591,16 @@ const MapCanvas = ({
       if (clicked) {
         const sourceId = attackSourceIdRef.current;
         const isOwnToken = clicked.controlledBy === playerName;
+        const canSelectAsSource = userType === 'master' || isOwnToken;
+        const canSelectAsTarget = userType === 'master' ? clicked.id !== sourceId : (!isOwnToken && clicked.id !== sourceId);
 
         if (!sourceId) {
-          if (isOwnToken && canSelectElement(clicked, 'token')) {
+          if (canSelectAsSource && canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
             attackSourceIdRef.current = clicked.id;
+            return;
           }
-        } else if (attackTargetIdRef.current == null && !isOwnToken && clicked.id !== sourceId) {
+        } else if (attackTargetIdRef.current == null && canSelectAsTarget) {
           setAttackTargetId(clicked.id);
           attackTargetIdRef.current = clicked.id;
           const source = tokens.find(t => t.id === sourceId);
@@ -2611,7 +2614,7 @@ const MapCanvas = ({
           setAttackReady(false);
         } else if (attackTargetIdRef.current === clicked.id) {
           if (!attackReady) setAttackReady(true);
-        } else if (!isOwnToken && clicked.id !== sourceId) {
+        } else if (canSelectAsTarget) {
           setAttackTargetId(clicked.id);
           attackTargetIdRef.current = clicked.id;
           const source = tokens.find(t => t.id === sourceId);

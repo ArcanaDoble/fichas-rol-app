@@ -1059,6 +1059,12 @@ src/
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
 - ✅ Los estados de los tokens controlados se sincronizan al instante al modificarse `localStorage`
 
+### 🐞 **Corrección de la mirilla para el máster (Diciembre 2026) - v2.4.24**
+
+- ✅ El máster puede seleccionar cualquier token como atacante sin fijar objetivo automáticamente
+- ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
+- ✅ Prueba unitaria garantiza el funcionamiento correcto
+
 
 
 ## 🔄 Historial de cambios previos

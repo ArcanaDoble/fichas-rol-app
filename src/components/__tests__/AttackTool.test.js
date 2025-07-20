@@ -3,7 +3,12 @@ import React from 'react';
 import userEvent from '@testing-library/user-event';
 import AttackModal from '../AttackModal';
 
-function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) {
+function AttackToolDemo({
+  selectedId,
+  playerName = 'player',
+  userType = 'player',
+  onSettings,
+} = {}) {
   const [activeTool, setActiveTool] = React.useState('select');
   const [attackSourceId, setAttackSourceId] = React.useState(null);
   const [attackTargetId, setAttackTargetId] = React.useState(null);
@@ -20,9 +25,14 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
     const attacker = attackSourceId;
     const clicked = tokens.find((t) => t.id === id);
     const isOwn = clicked.controlledBy === playerName;
+    const canSource = userType === 'master' || isOwn;
+    const canTarget = userType === 'master' ? id !== attacker : (!isOwn && id !== attacker);
     if (!attacker) {
-      if (isOwn) setAttackSourceId(id);
-    } else if (attackTargetId == null && !isOwn && id !== attacker) {
+      if (canSource) {
+        setAttackSourceId(id);
+        return;
+      }
+    } else if (attackTargetId == null && canTarget) {
       setAttackTargetId(id);
       const source = tokens.find((t) => t.id === attacker);
       if (source && clicked) {
@@ -30,7 +40,7 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
       }
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
-    } else if (!isOwn && id !== attacker) {
+    } else if (canTarget) {
       setAttackTargetId(id);
       const source = tokens.find((t) => t.id === attacker);
       if (source && clicked) {
@@ -155,4 +165,13 @@ test('double click does not open settings while targeting', async () => {
   await userEvent.click(screen.getByTestId('a'));
   await userEvent.dblClick(screen.getByTestId('b'));
   expect(onSettings).not.toHaveBeenCalled();
+});
+
+test('master selects attacker then target without auto-targeting first click', async () => {
+  render(<AttackToolDemo userType="master" playerName="master" />);
+  await userEvent.click(screen.getByTestId('target-tool'));
+  await userEvent.click(screen.getByTestId('a')); // choose attacker
+  expect(screen.queryByTestId('line')).toBeNull();
+  await userEvent.click(screen.getByTestId('b')); // choose target
+  expect(screen.getByTestId('line')).toBeInTheDocument();
 });
