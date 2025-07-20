@@ -2622,7 +2622,6 @@ const MapCanvas = ({
             const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
             setAttackLine([sx, sy, tx, ty]);
           }
-          setAttackReady(false);
         }
       }
       return;

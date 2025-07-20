@@ -28,7 +28,6 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
     } else if (!isOwn && id !== attacker) {
@@ -37,7 +36,6 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     }
   };
 
