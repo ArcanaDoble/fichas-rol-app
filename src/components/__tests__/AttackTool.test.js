@@ -3,7 +3,7 @@ import React from 'react';
 import userEvent from '@testing-library/user-event';
 import AttackModal from '../AttackModal';
 
-function AttackToolDemo({ selectedId, playerName = 'player' } = {}) {
+function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) {
   const [activeTool, setActiveTool] = React.useState('select');
   const [attackSourceId, setAttackSourceId] = React.useState(null);
   const [attackTargetId, setAttackTargetId] = React.useState(null);
@@ -77,6 +77,9 @@ function AttackToolDemo({ selectedId, playerName = 'player' } = {}) {
             key={t.id}
             data-testid={t.id}
             onClick={() => handleClick(t.id)}
+            onDoubleClick={() => {
+              if (activeTool !== 'target') onSettings?.(t.id);
+            }}
             style={{
               position: 'absolute',
               left: t.x,
@@ -146,4 +149,12 @@ test('attack modal appears on second click over same target', async () => {
   expect(screen.queryByText('Ataque')).toBeNull();
   await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByText('Ataque')).toBeInTheDocument();
+});
+
+test('double click does not open settings while targeting', async () => {
+  const onSettings = jest.fn();
+  render(<AttackToolDemo onSettings={onSettings} />);
+  await userEvent.click(screen.getByTestId('target-tool'));
+  await userEvent.dblClick(screen.getByTestId('b'));
+  expect(onSettings).not.toHaveBeenCalled();
 });

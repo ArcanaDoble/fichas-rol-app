@@ -338,6 +338,7 @@ const Token = forwardRef(
       onTransformEnd,
       onRotate,
       onSettings,
+      activeTool = 'select',
       onStates,
       onHoverChange,
       tokenSheetId,
@@ -670,7 +671,9 @@ const Token = forwardRef(
         ref={groupRef}
         onMouseEnter={() => onHoverChange?.(true)}
         onMouseLeave={() => onHoverChange?.(false)}
-        onDblClick={() => onSettings?.(id)}
+        onDblClick={() => {
+          if (activeTool !== 'target') onSettings?.(id);
+        }}
       >
         {auraRadius > 0 &&
           showAura &&
@@ -868,6 +871,7 @@ Token.propTypes = {
   onHoverChange: PropTypes.func,
   estados: PropTypes.array,
   tokenSheetId: PropTypes.string,
+  activeTool: PropTypes.string,
 };
 
 /**
@@ -3734,6 +3738,7 @@ const MapCanvas = ({
                     activeTool === 'select' && canSelectElement(token, 'token')
                   }
                   listening={activeTool === 'select' || activeTool === 'target'}
+                  activeTool={activeTool}
                 />
               ))}
               {filteredLines.map((ln) => (

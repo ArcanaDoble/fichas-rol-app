@@ -866,6 +866,7 @@ src/
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
 - **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
 - **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
+- **Doble clic seguro en mirilla** - Al usar la mirilla, el doble clic ya no abre el menú de ajustes del token
 
 #### v2.1.1 (junio 2024)
 
@@ -1039,6 +1040,7 @@ src/
 - ✅ Selección automática del atacante y línea que sigue al cursor
 - ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
 - ✅ Selección y ataque responden a cada clic sin retrasos
+- ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
 
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
