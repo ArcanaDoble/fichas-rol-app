@@ -973,15 +973,31 @@ const MapCanvas = ({
       );
       if (!token) return;
       try {
-        await setDoc(doc(db, 'players', token.controlledBy), sheet);
+        const mapNames = (arr) =>
+          (arr || [])
+            .map((it) => (typeof it === 'string' ? it : it.nombre))
+            .filter(Boolean);
+
+        const playerSheet = {
+          ...sheet,
+          weapons: mapNames(sheet.weapons),
+          armaduras: mapNames(sheet.armaduras),
+          poderes: mapNames(sheet.poderes),
+        };
+
+        await setDoc(doc(db, 'players', token.controlledBy), playerSheet);
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(
             `player_${token.controlledBy}`,
-            JSON.stringify(sheet)
+            JSON.stringify(playerSheet)
           );
           window.dispatchEvent(
             new CustomEvent('playerSheetSaved', {
-              detail: { name: token.controlledBy, sheet, origin: 'mapSync' },
+              detail: {
+                name: token.controlledBy,
+                sheet: playerSheet,
+                origin: 'mapSync',
+              },
             })
           );
         }
