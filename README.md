@@ -1042,6 +1042,7 @@ src/
 - ✅ Selección y ataque responden a cada clic sin retrasos
 - ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
 
+
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
 - ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
