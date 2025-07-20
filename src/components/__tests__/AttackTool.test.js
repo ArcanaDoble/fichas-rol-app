@@ -127,13 +127,6 @@ test('allows targeting tokens controlled by another player', async () => {
   expect(screen.getByTestId('line')).toBeInTheDocument();
 });
 
-test('allows targeting tokens controlled by another player', async () => {
-  render(<AttackToolDemo selectedId="a" playerName="alice" />);
-  await userEvent.click(screen.getByTestId('target-tool'));
-  await userEvent.click(screen.getByTestId('b'));
-  expect(screen.getByTestId('line')).toBeInTheDocument();
-});
-
 test('attack modal appears on second click over same target', async () => {
   render(<AttackToolDemo />);
   await userEvent.click(screen.getByTestId('target-tool'));

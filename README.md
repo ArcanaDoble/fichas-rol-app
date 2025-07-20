@@ -1041,6 +1041,7 @@ src/
 - ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
 - ✅ Un clic fija el objetivo y el siguiente inicia el ataque
 - ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
+- ✅ El objetivo se reconoce al pulsar en cualquier punto de su casilla
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 

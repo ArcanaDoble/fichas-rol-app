@@ -2571,8 +2571,8 @@ const MapCanvas = ({
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
       let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
-      const cellX = pxToCell(relX, gridOffsetX);
-      const cellY = pxToCell(relY, gridOffsetY);
+      const cellX = Math.floor((relX - gridOffsetX) / effectiveGridSize);
+      const cellY = Math.floor((relY - gridOffsetY) / effectiveGridSize);
       const clicked = tokens.find(t =>
         cellX >= t.x && cellX < t.x + (t.w || 1) &&
         cellY >= t.y && cellY < t.y + (t.h || 1)
