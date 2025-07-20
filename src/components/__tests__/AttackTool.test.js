@@ -17,41 +17,24 @@ function AttackToolDemo({ selectedId, playerName = 'player', onSettings } = {}) 
 
   const handleClick = (id) => {
     if (activeTool !== 'target') return;
-    const attacker = attackSourceId || selectedId;
+    const attacker = attackSourceId;
     const clicked = tokens.find((t) => t.id === id);
     const isOwn = clicked.controlledBy === playerName;
     if (!attacker) {
       if (isOwn) setAttackSourceId(id);
-    } else if (attackTargetId == null && id !== attacker) {
-      if (!isOwn) {
-        setAttackSourceId(attacker);
-        setAttackTargetId(id);
-        const source = tokens.find((t) => t.id === attacker);
-        if (source && clicked) {
-          setAttackLine([source.x, source.y, clicked.x, clicked.y]);
-        }
-        setAttackReady(false);
-      } else {
-        setAttackSourceId(id);
-        setAttackTargetId(null);
-        setAttackLine(null);
-        setAttackReady(false);
+    } else if (attackTargetId == null && !isOwn && id !== attacker) {
+      setAttackTargetId(id);
+      const source = tokens.find((t) => t.id === attacker);
+      if (source && clicked) {
+        setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
-    } else if (id !== attacker) {
-      if (!isOwn) {
-        setAttackTargetId(id);
-        const source = tokens.find((t) => t.id === attacker);
-        if (source && clicked) {
-          setAttackLine([source.x, source.y, clicked.x, clicked.y]);
-        }
-        setAttackReady(false);
-      } else {
-        setAttackSourceId(id);
-        setAttackTargetId(null);
-        setAttackLine(null);
-        setAttackReady(false);
+    } else if (!isOwn && id !== attacker) {
+      setAttackTargetId(id);
+      const source = tokens.find((t) => t.id === attacker);
+      if (source && clicked) {
+        setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
     }
   };
@@ -126,12 +109,22 @@ test('crosshair tool selects source and target', async () => {
   expect(screen.queryByText('Ataque')).toBeNull();
 });
 
-test('auto selects attacker if a token was preselected', async () => {
+test('does not auto select attacker from previous selection', async () => {
   render(<AttackToolDemo selectedId="a" />);
   await userEvent.click(screen.getByTestId('target-tool'));
   await userEvent.click(screen.getByTestId('b'));
+  expect(screen.queryByTestId('line')).toBeNull();
+  await userEvent.click(screen.getByTestId('a'));
+  await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByTestId('line')).toBeInTheDocument();
-  expect(screen.queryByText('Ataque')).toBeNull();
+});
+
+test('allows targeting tokens controlled by another player', async () => {
+  render(<AttackToolDemo playerName="alice" />);
+  await userEvent.click(screen.getByTestId('target-tool'));
+  await userEvent.click(screen.getByTestId('a'));
+  await userEvent.click(screen.getByTestId('b'));
+  expect(screen.getByTestId('line')).toBeInTheDocument();
 });
 
 test('allows targeting tokens controlled by another player', async () => {
@@ -155,6 +148,7 @@ test('double click does not open settings while targeting', async () => {
   const onSettings = jest.fn();
   render(<AttackToolDemo onSettings={onSettings} />);
   await userEvent.click(screen.getByTestId('target-tool'));
+  await userEvent.click(screen.getByTestId('a'));
   await userEvent.dblClick(screen.getByTestId('b'));
   expect(onSettings).not.toHaveBeenCalled();
 });

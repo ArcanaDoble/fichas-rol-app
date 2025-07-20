@@ -1037,11 +1037,10 @@ src/
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
-- ✅ Selección automática del atacante y línea que sigue al cursor
+- ✅ Debes elegir tu propio token como atacante y la selección se mantiene hasta cambiar de herramienta
 - ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
-- ✅ Selección y ataque responden a cada clic sin retrasos
+- ✅ Un clic fija el objetivo y el siguiente inicia el ataque
 - ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
-
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 

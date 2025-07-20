@@ -2567,18 +2567,6 @@ const MapCanvas = ({
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
     if (activeTool === 'target' && e.evt.button === 0) {
-      // Autoseleccionar atacante si solo hay un token en la selección
-      if (!attackSourceId) {
-        const candidates = selectedTokens.length === 1
-          ? selectedTokens
-          : selectedTokens.length === 0 && selectedId != null
-            ? [selectedId]
-            : [];
-        if (candidates.length === 1) {
-          setAttackSourceId(candidates[0]);
-          attackSourceIdRef.current = candidates[0];
-        }
-      }
 
       const pointer = stageRef.current.getPointerPosition();
       let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
@@ -2590,62 +2578,38 @@ const MapCanvas = ({
         cellY >= t.y && cellY < t.y + (t.h || 1)
       );
       if (clicked) {
-        const sourceId = attackSourceIdRef.current || (selectedTokens.length === 1
-          ? selectedTokens[0]
-          : selectedTokens.length === 0 && selectedId != null
-            ? selectedId
-            : null);
+        const sourceId = attackSourceIdRef.current;
         const isOwnToken = clicked.controlledBy === playerName;
+
         if (!sourceId) {
           if (isOwnToken && canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
             attackSourceIdRef.current = clicked.id;
           }
-        } else if (attackTargetIdRef.current == null && clicked.id !== sourceId) {
-          if (!isOwnToken) {
-            setAttackSourceId(sourceId);
-            attackSourceIdRef.current = sourceId;
-            setAttackTargetId(clicked.id);
-            attackTargetIdRef.current = clicked.id;
-            const source = tokens.find(t => t.id === sourceId);
-            if (source) {
-              const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
-              const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
-              const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
-              const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
-              setAttackLine([sx, sy, tx, ty]);
-            }
-            setAttackReady(false);
-          } else if (canSelectElement(clicked, 'token')) {
-            setAttackSourceId(clicked.id);
-            attackSourceIdRef.current = clicked.id;
-            setAttackTargetId(null);
-            attackTargetIdRef.current = null;
-            setAttackLine(null);
-            setAttackReady(false);
+        } else if (attackTargetIdRef.current == null && !isOwnToken && clicked.id !== sourceId) {
+          setAttackTargetId(clicked.id);
+          attackTargetIdRef.current = clicked.id;
+          const source = tokens.find(t => t.id === sourceId);
+          if (source) {
+            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+            setAttackLine([sx, sy, tx, ty]);
           }
+          setAttackReady(false);
         } else if (attackTargetIdRef.current === clicked.id) {
           if (!attackReady) setAttackReady(true);
-        } else if (clicked.id !== sourceId) {
-          if (!isOwnToken) {
-            setAttackTargetId(clicked.id);
-            attackTargetIdRef.current = clicked.id;
-            const source = tokens.find(t => t.id === sourceId);
-            if (source) {
-              const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
-              const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
-              const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
-              const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
-              setAttackLine([sx, sy, tx, ty]);
-            }
-            setAttackReady(false);
-          } else if (canSelectElement(clicked, 'token')) {
-            setAttackSourceId(clicked.id);
-            attackSourceIdRef.current = clicked.id;
-            setAttackTargetId(null);
-            attackTargetIdRef.current = null;
-            setAttackLine(null);
-            setAttackReady(false);
+        } else if (!isOwnToken && clicked.id !== sourceId) {
+          setAttackTargetId(clicked.id);
+          attackTargetIdRef.current = clicked.id;
+          const source = tokens.find(t => t.id === sourceId);
+          if (source) {
+            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+            setAttackLine([sx, sy, tx, ty]);
           }
         }
       }
@@ -3199,7 +3163,12 @@ const MapCanvas = ({
       // Cancelar mirilla o deseleccionar con Escape
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (attackSourceId || attackTargetId) {
+        if (activeTool === 'target' && (attackSourceId || attackTargetId)) {
+          setAttackTargetId(null);
+          setAttackLine(null);
+          setAttackResult(null);
+          setAttackReady(false);
+        } else if (attackSourceId || attackTargetId) {
           setAttackSourceId(null);
           setAttackTargetId(null);
           setAttackLine(null);
@@ -4419,7 +4388,6 @@ const MapCanvas = ({
             if (res) setAttackResult(res);
             setAttackReady(false);
             if (!res) {
-              setAttackSourceId(null);
               setAttackTargetId(null);
               setAttackLine(null);
             }
@@ -4437,7 +4405,6 @@ const MapCanvas = ({
           )) : 0}
           attackResult={attackResult}
           onClose={() => {
-            setAttackSourceId(null);
             setAttackTargetId(null);
             setAttackLine(null);
             setAttackResult(null);
