@@ -175,3 +175,30 @@ test('master selects attacker then target without auto-targeting first click', a
   await userEvent.click(screen.getByTestId('b')); // choose target
   expect(screen.getByTestId('line')).toBeInTheDocument();
 });
+test('shows message when no equipment', () => {
+  localStorage.setItem('tokenSheets', JSON.stringify({ '1': { id: '1', weapons: [], poderes: [] } }));
+  render(
+    <AttackModal
+      isOpen
+      attacker={{ name: 'A', tokenSheetId: '1' }}
+      target={{ name: 'B', tokenSheetId: '2' }}
+      distance={2}
+      onClose={() => {}}
+    />
+  );
+  expect(screen.getByText(/no hay armas o poderes equipados/i)).toBeInTheDocument();
+});
+
+test('shows message when equipment out of range', () => {
+  localStorage.setItem('tokenSheets', JSON.stringify({ '1': { id: '1', weapons: [{ nombre: 'Espada', alcance: 'Toque' }], poderes: [] } }));
+  render(
+    <AttackModal
+      isOpen
+      attacker={{ name: 'A', tokenSheetId: '1' }}
+      target={{ name: 'B', tokenSheetId: '2' }}
+      distance={3}
+      onClose={() => {}}
+    />
+  );
+  expect(screen.getByText(/no hay ningún arma disponible al alcance/i)).toBeInTheDocument();
+});

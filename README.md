@@ -1065,6 +1065,11 @@ src/
 - ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
 - ✅ Prueba unitaria garantiza el funcionamiento correcto
 
+### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
+
+- ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
+- ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
+
 
 
 ## 🔄 Historial de cambios previos
