@@ -7,7 +7,16 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 
-const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClose }) => {
+const DefenseModal = ({
+  isOpen,
+  attacker,
+  target,
+  distance,
+  attackResult,
+  armas = [],
+  poderesCatalog = [],
+  onClose,
+}) => {
   const sheet = useMemo(() => {
     if (!target?.tokenSheetId) return null;
     const stored = localStorage.getItem('tokenSheets');
@@ -20,9 +29,13 @@ const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClos
     if (!val && val !== 0) return Infinity;
     const map = {
       toque: 1,
+      'cuerpo a cuerpo': 1,
       cercano: 2,
+      corto: 2,
       intermedio: 3,
+      media: 3,
       lejano: 4,
+      largo: 4,
       extremo: 5,
     };
     if (typeof val === 'string') {
@@ -35,21 +48,41 @@ const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClos
     return isNaN(n) ? Infinity : n;
   };
 
-  const weapons = useMemo(() => {
-    if (!sheet) return [];
-    return (sheet.weapons || []).filter(w => {
-      const alc = parseRange(w.alcance);
-      return distance <= alc;
-    });
-  }, [sheet, distance]);
+  const mapItem = (it, catalog) => {
+    if (!it) return null;
+    if (typeof it === 'string') {
+      return catalog.find((c) => c.nombre === it) || { nombre: it };
+    }
+    return it;
+  };
 
-  const powers = useMemo(() => {
+  const weaponObjs = useMemo(() => {
     if (!sheet) return [];
-    return (sheet.poderes || []).filter(p => {
-      const alc = parseRange(p.alcance);
-      return distance <= alc;
-    });
-  }, [sheet, distance]);
+    return (sheet.weapons || []).map((w) => mapItem(w, armas));
+  }, [sheet, armas]);
+
+  const weapons = useMemo(
+    () =>
+      weaponObjs.filter((w) => {
+        const alc = parseRange(w.alcance);
+        return distance <= alc;
+      }),
+    [weaponObjs, distance]
+  );
+
+  const powerObjs = useMemo(() => {
+    if (!sheet) return [];
+    return (sheet.poderes || []).map((p) => mapItem(p, poderesCatalog));
+  }, [sheet, poderesCatalog]);
+
+  const powers = useMemo(
+    () =>
+      powerObjs.filter((p) => {
+        const alc = parseRange(p.alcance);
+        return distance <= alc;
+      }),
+    [powerObjs, distance]
+  );
 
   const [choice, setChoice] = useState('');
   const [loading, setLoading] = useState(false);
@@ -156,6 +189,8 @@ DefenseModal.propTypes = {
   target: PropTypes.object,
   distance: PropTypes.number,
   attackResult: PropTypes.object,
+  armas: PropTypes.array,
+  poderesCatalog: PropTypes.array,
   onClose: PropTypes.func,
 };
 

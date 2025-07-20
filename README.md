@@ -1070,6 +1070,12 @@ src/
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
 - ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
 
+### 🛠️ **Corrección de nombres y daño de armas (Enero 2027) - v2.4.26**
+
+- ✅ Los menús de ataque y defensa listan correctamente las armas y poderes equipados
+- ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
+- ✅ Las tiradas utilizan el daño definido para cada arma o poder
+
 
 
 ## 🔄 Historial de cambios previos

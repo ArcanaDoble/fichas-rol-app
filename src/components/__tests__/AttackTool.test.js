@@ -99,6 +99,8 @@ function AttackToolDemo({
           attacker={{ name: 'A', tokenSheetId: '1' }}
           target={{ name: 'B', tokenSheetId: '2' }}
           distance={5}
+          armas={[]}
+          poderesCatalog={[]}
           onClose={() => {}}
         />
       )}
@@ -113,6 +115,8 @@ test('attack modal renders distance', () => {
       attacker={{ name: 'A', tokenSheetId: '1' }}
       target={{ name: 'B', tokenSheetId: '2' }}
       distance={5}
+      armas={[]}
+      poderesCatalog={[]}
       onClose={() => {}}
     />
   );
@@ -175,6 +179,7 @@ test('master selects attacker then target without auto-targeting first click', a
   await userEvent.click(screen.getByTestId('b')); // choose target
   expect(screen.getByTestId('line')).toBeInTheDocument();
 });
+
 test('shows message when no equipment', () => {
   localStorage.setItem('tokenSheets', JSON.stringify({ '1': { id: '1', weapons: [], poderes: [] } }));
   render(
@@ -183,6 +188,8 @@ test('shows message when no equipment', () => {
       attacker={{ name: 'A', tokenSheetId: '1' }}
       target={{ name: 'B', tokenSheetId: '2' }}
       distance={2}
+      armas={[]}
+      poderesCatalog={[]}
       onClose={() => {}}
     />
   );
@@ -197,6 +204,8 @@ test('shows message when equipment out of range', () => {
       attacker={{ name: 'A', tokenSheetId: '1' }}
       target={{ name: 'B', tokenSheetId: '2' }}
       distance={3}
+      armas={[]}
+      poderesCatalog={[]}
       onClose={() => {}}
     />
   );

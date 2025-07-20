@@ -4400,6 +4400,8 @@ const MapCanvas = ({
             pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
             pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
           )) : 0}
+          armas={armas}
+          poderesCatalog={habilidades}
           onClose={(res) => {
             if (res) setAttackResult(res);
             setAttackReady(false);
@@ -4420,6 +4422,8 @@ const MapCanvas = ({
             pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
           )) : 0}
           attackResult={attackResult}
+          armas={armas}
+          poderesCatalog={habilidades}
           onClose={() => {
             setAttackTargetId(null);
             setAttackLine(null);
