@@ -981,7 +981,7 @@ const MapCanvas = ({
           );
           window.dispatchEvent(
             new CustomEvent('playerSheetSaved', {
-              detail: { name: token.controlledBy, sheet },
+              detail: { name: token.controlledBy, sheet, origin: 'mapSync' },
             })
           );
         }
@@ -1022,7 +1022,11 @@ const MapCanvas = ({
               );
               window.dispatchEvent(
                 new CustomEvent('playerSheetSaved', {
-                  detail: { name: token.controlledBy, sheet: updated },
+                  detail: {
+                    name: token.controlledBy,
+                    sheet: updated,
+                    origin: 'mapSync',
+                  },
                 })
               );
             }
@@ -1038,7 +1042,8 @@ const MapCanvas = ({
 
   useEffect(() => {
     const handler = (e) => {
-      const { name, sheet } = e.detail || {};
+      const { name, sheet, origin } = e.detail || {};
+      if (origin === 'mapSync') return;
       const affected = tokens.filter(
         (t) => t.controlledBy === name && t.tokenSheetId
       );
