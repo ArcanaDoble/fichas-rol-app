@@ -1040,6 +1040,7 @@ src/
 - ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
 - ✅ Selección y ataque responden a cada clic sin retrasos
 
+
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
 - ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
