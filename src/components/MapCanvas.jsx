@@ -2580,35 +2580,50 @@ const MapCanvas = ({
           : selectedTokens.length === 0 && selectedId != null
             ? selectedId
             : null);
+        const isOwnToken = clicked.controlledBy === playerName;
         if (!sourceId) {
-          if (canSelectElement(clicked, 'token')) {
+          if (isOwnToken && canSelectElement(clicked, 'token')) {
             setAttackSourceId(clicked.id);
           }
         } else if (attackTargetId == null && clicked.id !== sourceId) {
-          setAttackSourceId(sourceId);
-          setAttackTargetId(clicked.id);
-          const source = tokens.find(t => t.id === sourceId);
-          if (source) {
-            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
-            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
-            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
-            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
-            setAttackLine([sx, sy, tx, ty]);
+          if (!isOwnToken) {
+            setAttackSourceId(sourceId);
+            setAttackTargetId(clicked.id);
+            const source = tokens.find(t => t.id === sourceId);
+            if (source) {
+              const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+              const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+              const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+              const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+              setAttackLine([sx, sy, tx, ty]);
+            }
+            setAttackReady(false);
+          } else if (canSelectElement(clicked, 'token')) {
+            setAttackSourceId(clicked.id);
+            setAttackTargetId(null);
+            setAttackLine(null);
+            setAttackReady(false);
           }
-          setAttackReady(false);
         } else if (attackTargetId === clicked.id) {
           if (!attackReady) setAttackReady(true);
         } else if (clicked.id !== sourceId) {
-          setAttackTargetId(clicked.id);
-          const source = tokens.find(t => t.id === sourceId);
-          if (source) {
-            const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
-            const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
-            const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
-            const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
-            setAttackLine([sx, sy, tx, ty]);
+          if (!isOwnToken) {
+            setAttackTargetId(clicked.id);
+            const source = tokens.find(t => t.id === sourceId);
+            if (source) {
+              const sx = cellToPx(source.x + (source.w || 1) / 2, gridOffsetX);
+              const sy = cellToPx(source.y + (source.h || 1) / 2, gridOffsetY);
+              const tx = cellToPx(clicked.x + (clicked.w || 1) / 2, gridOffsetX);
+              const ty = cellToPx(clicked.y + (clicked.h || 1) / 2, gridOffsetY);
+              setAttackLine([sx, sy, tx, ty]);
+            }
+            setAttackReady(false);
+          } else if (canSelectElement(clicked, 'token')) {
+            setAttackSourceId(clicked.id);
+            setAttackTargetId(null);
+            setAttackLine(null);
+            setAttackReady(false);
           }
-          setAttackReady(false);
         }
       }
       return;
