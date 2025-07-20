@@ -864,6 +864,8 @@ src/
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
+- **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
+- **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
 
 #### v2.1.1 (junio 2024)
 
@@ -1035,6 +1037,7 @@ src/
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
 - ✅ Selección automática del atacante y línea que sigue al cursor
+- ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
