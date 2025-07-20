@@ -1028,6 +1028,7 @@ src/
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
+- ✅ Selección automática del atacante y línea que sigue al cursor
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 

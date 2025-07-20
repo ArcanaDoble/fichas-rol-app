@@ -3,7 +3,7 @@ import React from 'react';
 import userEvent from '@testing-library/user-event';
 import AttackModal from '../AttackModal';
 
-function AttackToolDemo() {
+function AttackToolDemo({ selectedId } = {}) {
   const [activeTool, setActiveTool] = React.useState('select');
   const [attackSourceId, setAttackSourceId] = React.useState(null);
   const [attackTargetId, setAttackTargetId] = React.useState(null);
@@ -16,8 +16,18 @@ function AttackToolDemo() {
 
   const handleClick = (id) => {
     if (activeTool !== 'target') return;
-    if (!attackSourceId) setAttackSourceId(id);
-    else if (id !== attackSourceId) setAttackTargetId(id);
+    const attacker = attackSourceId || selectedId;
+    if (!attacker) {
+      setAttackSourceId(id);
+    } else if (id !== attacker) {
+      setAttackSourceId(attacker);
+      setAttackTargetId(id);
+      const source = tokens.find(t => t.id === attacker);
+      const target = tokens.find(t => t.id === id);
+      if (source && target) {
+        setAttackLine([source.x, source.y, target.x, target.y]);
+      }
+    }
   };
 
   const handleMove = (e) => {
@@ -76,6 +86,14 @@ test('crosshair tool selects source and target', async () => {
   await userEvent.click(screen.getByTestId('a'));
   // simulate mouse move to draw line
   fireEvent.mouseMove(canvas, { clientX: 90, clientY: 20 });
+  await userEvent.click(screen.getByTestId('b'));
+  expect(screen.getByTestId('line')).toBeInTheDocument();
+  expect(screen.getByText('Ataque')).toBeInTheDocument();
+});
+
+test('auto selects attacker if a token was preselected', async () => {
+  render(<AttackToolDemo selectedId="a" />);
+  await userEvent.click(screen.getByTestId('target-tool'));
   await userEvent.click(screen.getByTestId('b'));
   expect(screen.getByTestId('line')).toBeInTheDocument();
   expect(screen.getByText('Ataque')).toBeInTheDocument();
