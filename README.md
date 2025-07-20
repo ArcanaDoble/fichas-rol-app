@@ -864,6 +864,9 @@ src/
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
+- **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
+- **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
+- **Doble clic seguro en mirilla** - Al usar la mirilla, el doble clic ya no abre el menú de ajustes del token
 
 #### v2.1.1 (junio 2024)
 
@@ -1034,7 +1037,12 @@ src/
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
-- ✅ Selección automática del atacante y línea que sigue al cursor
+- ✅ Debes elegir tu propio token como atacante y la selección se mantiene hasta cambiar de herramienta
+- ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
+- ✅ Un clic fija el objetivo y el siguiente inicia el ataque
+- ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
+- ✅ El objetivo se reconoce al pulsar en cualquier punto de su casilla
+- ✅ El atacante y el objetivo se destacan con un marco de color
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
@@ -1050,6 +1058,12 @@ src/
 - ✅ La ficha de jugador se actualiza automáticamente al recibir el evento `playerSheetSaved` desde otras pestañas o tokens
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
 - ✅ Los estados de los tokens controlados se sincronizan al instante al modificarse `localStorage`
+
+### 🐞 **Corrección de la mirilla para el máster (Diciembre 2026) - v2.4.24**
+
+- ✅ El máster puede seleccionar cualquier token como atacante sin fijar objetivo automáticamente
+- ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
+- ✅ Prueba unitaria garantiza el funcionamiento correcto
 
 
 
