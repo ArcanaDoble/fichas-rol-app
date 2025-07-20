@@ -959,6 +959,8 @@ const MapCanvas = ({
   }, [activeTool]);
 
   // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
+  const prevTokensRef = useRef(tokens);
+
   useEffect(() => {
     const syncHandler = async (e) => {
       const sheet = e.detail;
@@ -977,6 +979,11 @@ const MapCanvas = ({
             `player_${token.controlledBy}`,
             JSON.stringify(sheet)
           );
+          window.dispatchEvent(
+            new CustomEvent('playerSheetSaved', {
+              detail: { name: token.controlledBy, sheet },
+            })
+          );
         }
       } catch (err) {
         console.error('sync player sheet', err);
@@ -984,6 +991,49 @@ const MapCanvas = ({
     };
     window.addEventListener('tokenSheetSaved', syncHandler);
     return () => window.removeEventListener('tokenSheetSaved', syncHandler);
+  }, [tokens]);
+
+  useEffect(() => {
+    const prev = prevTokensRef.current || [];
+    const checkStates = async () => {
+      for (const token of tokens) {
+        const prevToken = prev.find((t) => t.id === token.id);
+        if (
+          prevToken &&
+          token.controlledBy &&
+          token.controlledBy !== 'master' &&
+          !deepEqual(prevToken.estados, token.estados)
+        ) {
+          const stored =
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(
+                  `player_${token.controlledBy}`
+                )
+              : null;
+          const sheet = stored ? JSON.parse(stored) : null;
+          if (!sheet) continue;
+          const updated = { ...sheet, estados: token.estados || [] };
+          try {
+            await setDoc(doc(db, 'players', token.controlledBy), updated);
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem(
+                `player_${token.controlledBy}`,
+                JSON.stringify(updated)
+              );
+              window.dispatchEvent(
+                new CustomEvent('playerSheetSaved', {
+                  detail: { name: token.controlledBy, sheet: updated },
+                })
+              );
+            }
+          } catch (err) {
+            console.error('sync player estados', err);
+          }
+        }
+      }
+      prevTokensRef.current = tokens;
+    };
+    checkStates();
   }, [tokens]);
 
   useEffect(() => {
