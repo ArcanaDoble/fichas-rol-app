@@ -1031,6 +1031,8 @@ src/
 - ✅ Las fichas de jugador se sincronizan automáticamente con los tokens controlados tras editar la ficha
 - ✅ Se corrige un error que impedía aplicar estos cambios cuando se abrían los ajustes del token
 - ✅ Activar condiciones desde la ficha ahora refleja el estado al instante en el token correspondiente
+- ✅ Guardar la ficha envía el evento de actualización sin esperar a Firebase para evitar retrasos
+
 
 ## 🔄 Historial de cambios previos
 
