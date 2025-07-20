@@ -776,6 +776,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   al navegar velozmente (`QuickPageSwitch.test.js`).
 - *Nuevo:* prueba de sincronización de movimiento de tokens entre jugador y máster
   usando un listener activo (`TokenListenerSync.test.js`).
+- *Nuevo:* prueba de mapeo de nombres de equipo al guardar fichas de tokens
+  (`EquipmentSync.test.js`).
 
 ## 🚀 Instalación y uso
 
