@@ -1558,6 +1558,19 @@ function App() {
     loadPlayer();
   }, [loadPlayer]);
 
+  useEffect(() => {
+    const handler = (e) => {
+      const { name, sheet } = e.detail || {};
+      if (name !== playerName) return;
+      setPlayerData(sheet);
+      setResourcesList(sheet.resourcesList || []);
+      setClaves(sheet.claves || []);
+      setEstados(sheet.estados || []);
+    };
+    window.addEventListener('playerSheetSaved', handler);
+    return () => window.removeEventListener('playerSheetSaved', handler);
+  }, [playerName]);
+
   // Debug: Monitorear cambios en playerData
   useEffect(() => {
     // playerData actualizado
