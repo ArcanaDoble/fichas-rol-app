@@ -2,6 +2,8 @@ import { render, act } from '@testing-library/react';
 import React from 'react';
 
 function SyncListener({ tokens, onTokensChange }) {
+  const prevTokensRef = React.useRef(tokens);
+
   React.useEffect(() => {
     const handler = (e) => {
       const { name, sheet, origin } = e.detail || {};
@@ -30,6 +32,32 @@ function SyncListener({ tokens, onTokensChange }) {
     window.addEventListener('playerSheetSaved', handler);
     return () => window.removeEventListener('playerSheetSaved', handler);
   }, [tokens, onTokensChange]);
+
+  React.useEffect(() => {
+    const prev = prevTokensRef.current || [];
+    tokens.forEach((token) => {
+      const prevToken = prev.find((t) => t.id === token.id);
+      if (
+        prevToken &&
+        token.controlledBy &&
+        token.controlledBy !== 'master' &&
+        JSON.stringify(prevToken.estados) !== JSON.stringify(token.estados)
+      ) {
+        const stored = localStorage.getItem(`player_${token.controlledBy}`);
+        const sheet = stored ? JSON.parse(stored) : null;
+        if (!sheet) return;
+        if (JSON.stringify(sheet.estados || []) === JSON.stringify(token.estados || [])) return;
+        const updated = { ...sheet, estados: token.estados || [] };
+        localStorage.setItem(`player_${token.controlledBy}`, JSON.stringify(updated));
+        window.dispatchEvent(
+          new CustomEvent('playerSheetSaved', {
+            detail: { name: token.controlledBy, sheet: updated, origin: 'mapSync' },
+          })
+        );
+      }
+    });
+    prevTokensRef.current = tokens;
+  }, [tokens]);
   return null;
 }
 
@@ -88,4 +116,29 @@ test('mapSync events are ignored to avoid loops', () => {
   expect(localStorage.getItem('tokenSheets')).toBeNull();
   expect(saved).not.toHaveBeenCalled();
   window.removeEventListener('tokenSheetSaved', saved);
+});
+
+test('token estado changes update player sheet', () => {
+  const initial = [{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: [] }];
+  let setTokens;
+  const Wrapper = () => {
+    const [tokens, update] = React.useState(initial);
+    setTokens = update;
+    return <SyncListener tokens={tokens} onTokensChange={update} />;
+  };
+  const saved = jest.fn();
+  localStorage.clear();
+  localStorage.setItem('player_Carl', JSON.stringify({ stats: {} }));
+  window.addEventListener('playerSheetSaved', saved);
+  render(<Wrapper />);
+
+  act(() => {
+    setTokens([{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: ['mareado'] }]);
+  });
+
+  const updated = JSON.parse(localStorage.getItem('player_Carl'));
+  expect(updated.estados).toEqual(['mareado']);
+  expect(saved).toHaveBeenCalledTimes(1);
+  expect(saved.mock.calls[0][0].detail.origin).toBe('mapSync');
+  window.removeEventListener('playerSheetSaved', saved);
 });
