@@ -1041,39 +1041,6 @@ const MapCanvas = ({
     checkStates();
   }, [tokens]);
 
-  useEffect(() => {
-    const handler = (e) => {
-      const { name, sheet, origin } = e.detail || {};
-      if (origin === 'mapSync') return;
-      const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId
-      );
-      if (!affected.length) return;
-
-      const stored = localStorage.getItem('tokenSheets');
-      const sheets = stored ? JSON.parse(stored) : {};
-      affected.forEach((t) => {
-        const copy = { ...sheet, id: t.tokenSheetId };
-        sheets[t.tokenSheetId] = copy;
-        window.dispatchEvent(
-          new CustomEvent('tokenSheetSaved', { detail: copy })
-        );
-      });
-      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-
-      const updatedTokens = tokens.map((t) =>
-        t.controlledBy === name
-          ? { ...t, estados: sheet.estados || [] }
-          : t
-      );
-      if (!deepEqual(updatedTokens, tokens)) {
-        handleTokensChange(updatedTokens);
-      }
-    };
-    window.addEventListener('playerSheetSaved', handler);
-    return () => window.removeEventListener('playerSheetSaved', handler);
-  }, [tokens, handleTokensChange]);
-
   // Estados para selección múltiple
   const [selectedTokens, setSelectedTokens] = useState([]);
   const [selectedLines, setSelectedLines] = useState([]);
@@ -1208,6 +1175,37 @@ const MapCanvas = ({
       onTokensChange(newTokens);
     }
   }, [isPlayerView, playerName, tokens, syncManager, onTokensChange]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { name, sheet, origin } = e.detail || {};
+      if (origin === 'mapSync') return;
+      const affected = tokens.filter(
+        (t) => t.controlledBy === name && t.tokenSheetId
+      );
+      if (!affected.length) return;
+
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      affected.forEach((t) => {
+        const copy = { ...sheet, id: t.tokenSheetId };
+        sheets[t.tokenSheetId] = copy;
+        window.dispatchEvent(
+          new CustomEvent('tokenSheetSaved', { detail: copy })
+        );
+      });
+      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+
+      const updatedTokens = tokens.map((t) =>
+        t.controlledBy === name ? { ...t, estados: sheet.estados || [] } : t
+      );
+      if (!deepEqual(updatedTokens, tokens)) {
+        handleTokensChange(updatedTokens);
+      }
+    };
+    window.addEventListener('playerSheetSaved', handler);
+    return () => window.removeEventListener('playerSheetSaved', handler);
+  }, [tokens, handleTokensChange]);
 
   // Funciones wrapper para otros elementos
   const handleLinesChange = useCallback((newLines) => {

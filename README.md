@@ -1029,6 +1029,7 @@ src/
 
 - ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
 - ✅ Las fichas de jugador se sincronizan automáticamente con los tokens controlados tras editar la ficha
+- ✅ Se corrige un error que impedía aplicar estos cambios cuando se abrían los ajustes del token
 
 ## 🔄 Historial de cambios previos
 
