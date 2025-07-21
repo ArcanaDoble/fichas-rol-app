@@ -496,20 +496,22 @@ function App() {
 
   useEffect(() => {
     const handler = (e) => {
-      const updated = e.detail;
+      const { tokens, pageId } = e.detail || {};
       if (userType === 'master') {
-        setCanvasTokens(updated);
+        if (pageId !== pages[currentPage]?.id) return;
+        setCanvasTokens(tokens);
         setPages((prev) => {
           const pagesCopy = [...prev];
-          if (pagesCopy[currentPage]) pagesCopy[currentPage].tokens = updated;
+          if (pagesCopy[currentPage]) pagesCopy[currentPage].tokens = tokens;
           return pagesCopy;
         });
       } else if (userType === 'player') {
+        if (pageId !== playerVisiblePageId) return;
         setPages((prev) => {
           const idx = prev.findIndex((p) => p.id === playerVisiblePageId);
           if (idx !== -1) {
             const copy = [...prev];
-            copy[idx].tokens = updated;
+            copy[idx].tokens = tokens;
             return copy;
           }
           return prev;
