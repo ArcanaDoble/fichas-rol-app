@@ -7,7 +7,16 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 
-const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClose }) => {
+const DefenseModal = ({
+  isOpen,
+  attacker,
+  target,
+  distance,
+  attackResult,
+  armas = [],
+  poderesCatalog = [],
+  onClose,
+}) => {
   const sheet = useMemo(() => {
     if (!target?.tokenSheetId) return null;
     const stored = localStorage.getItem('tokenSheets');
@@ -16,31 +25,83 @@ const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClos
     return sheets[target.tokenSheetId] || null;
   }, [target]);
 
-  const weapons = useMemo(() => {
-    if (!sheet) return [];
-    return (sheet.weapons || []).filter(w => {
-      const alc = parseInt(w.alcance, 10);
-      return isNaN(alc) || distance <= alc;
-    });
-  }, [sheet, distance]);
+  const parseRange = (val) => {
+    if (!val && val !== 0) return Infinity;
+    const map = {
+      toque: 1,
+      cercano: 2,
+      intermedio: 3,
+      lejano: 4,
+      extremo: 5,
+    };
+    if (typeof val === 'string') {
+      const key = val.trim().toLowerCase();
+      if (map[key]) return map[key];
+      const n = parseInt(key, 10);
+      if (!isNaN(n)) return n;
+    }
+    const n = parseInt(val, 10);
+    return isNaN(n) ? Infinity : n;
+  };
+  const parseDamage = (val) => {
+    if (!val) return "";
+    return String(val).split(/[ (]/)[0];
+  };
 
-  const powers = useMemo(() => {
+  const mapItem = (it, catalog) => {
+    if (!it) return null;
+    if (typeof it === 'string') {
+      return catalog.find((c) => c.nombre === it) || { nombre: it };
+    }
+    return it;
+  };
+
+  const weaponObjs = useMemo(() => {
     if (!sheet) return [];
-    return (sheet.poderes || []).filter(p => {
-      const alc = parseInt(p.alcance, 10);
-      return isNaN(alc) || distance <= alc;
-    });
-  }, [sheet, distance]);
+    return (sheet.weapons || []).map((w) => mapItem(w, armas));
+  }, [sheet, armas]);
+
+  const weapons = useMemo(
+    () =>
+      weaponObjs.filter((w) => {
+        const alc = parseRange(w.alcance);
+        return distance <= alc;
+      }),
+    [weaponObjs, distance]
+  );
+
+  const powerObjs = useMemo(() => {
+    if (!sheet) return [];
+    return (sheet.poderes || []).map((p) => mapItem(p, poderesCatalog));
+  }, [sheet, poderesCatalog]);
+
+  const powers = useMemo(
+    () =>
+      powerObjs.filter((p) => {
+        const alc = parseRange(p.alcance);
+        return distance <= alc;
+      }),
+    [powerObjs, distance]
+  );
 
   const [choice, setChoice] = useState('');
+  const [damage, setDamage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const hasEquip = useMemo(() => {
+    if (!sheet) return false;
+    const w = sheet.weapons || [];
+    const p = sheet.poderes || [];
+    return w.length > 0 || p.length > 0;
+  }, [sheet]);
+
+  const hasAvailable = weapons.length > 0 || powers.length > 0;
 
   if (!attacker || !target) return null;
 
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const formula = item?.dano || '1d20';
-    setLoading(true);
+    const formula = damage || parseDamage(item?.dano || "") || "1d20";
     try {
       const result = rollExpression(formula);
       let messages = [];
@@ -86,21 +147,51 @@ const DefenseModal = ({ isOpen, attacker, target, distance, attackResult, onClos
       <div className="space-y-4">
         <div>
           <p className="text-sm text-gray-300 mb-1">Distancia: {distance} casillas</p>
-          <select
-            value={choice}
-            onChange={e => setChoice(e.target.value)}
-            className="w-full bg-gray-700 text-white"
-          >
-            <option value="">Selecciona arma o poder</option>
-            {weapons.map(w => (
-              <option key={`w-${w.nombre}`} value={w.nombre}>{w.nombre}</option>
-            ))}
-            {powers.map(p => (
-              <option key={`p-${p.nombre}`} value={p.nombre}>{p.nombre}</option>
-            ))}
-          </select>
+          {hasEquip ? (
+            hasAvailable ? (
+              <>
+              <select
+                value={choice}
+                onChange={e => {
+                  const val = e.target.value;
+                  setChoice(val);
+                  const item = [...weapons, ...powers].find(i => i.nombre === val);
+                  setDamage(parseDamage(item?.dano || ""));
+                }}
+                className="w-full bg-gray-700 text-white"
+              >
+                <option value="">Selecciona arma o poder</option>
+                {weapons.map(w => (
+                  <option key={`w-${w.nombre}`} value={w.nombre}>{w.nombre}</option>
+                ))}
+                {powers.map(p => (
+                  <option key={`p-${p.nombre}`} value={p.nombre}>{p.nombre}</option>
+                ))}
+              </select>
+              {choice && (
+                <input
+                  type="text"
+                  value={damage}
+                  onChange={e => setDamage(e.target.value)}
+                  className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                  placeholder="Daño"
+                />
+              )}
+              </>
+            ) : (
+              <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
+            )
+          ) : (
+            <p className="text-red-400 text-sm">No hay armas o poderes equipados</p>
+          )}
         </div>
-        <Boton color="green" onClick={handleRoll} loading={loading} className="w-full">
+        <Boton
+          color="green"
+          onClick={handleRoll}
+          loading={loading}
+          className="w-full"
+          disabled={!hasAvailable}
+        >
           Lanzar
         </Boton>
       </div>
@@ -114,6 +205,8 @@ DefenseModal.propTypes = {
   target: PropTypes.object,
   distance: PropTypes.number,
   attackResult: PropTypes.object,
+  armas: PropTypes.array,
+  poderesCatalog: PropTypes.array,
   onClose: PropTypes.func,
 };
 
