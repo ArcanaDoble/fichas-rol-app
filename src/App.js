@@ -3739,6 +3739,9 @@ function App() {
                     >
                       <p className="font-bold text-lg">{p.nombre}</p>
                       <p>
+                        <strong>Daño:</strong> {p.poder}
+                      </p>
+                      <p>
                         <strong>Alcance:</strong> {p.alcance}
                       </p>
                       <p>
@@ -3749,9 +3752,6 @@ function App() {
                       </p>
                       <p>
                         <strong>Mente:</strong> {p.mente}
-                      </p>
-                      <p>
-                        <strong>Poder:</strong> {p.poder}
                       </p>
                       {p.descripcion && (
                         <p className="italic">{highlightText(p.descripcion)}</p>
@@ -4372,16 +4372,16 @@ function App() {
                               <p className="font-bold">{power.nombre}</p>
                             </div>
                             <p className="text-xs mb-1">
+                              <span className="font-medium">Daño:</span>{' '}
+                              {power.poder}
+                            </p>
+                            <p className="text-xs mb-1">
                               <span className="font-medium">Alcance:</span>{' '}
                               {power.alcance}
                             </p>
                             <p className="text-xs mb-1">
                               <span className="font-medium">Consumo:</span>{' '}
                               {power.consumo}
-                            </p>
-                            <p className="text-xs mb-1">
-                              <span className="font-medium">Poder:</span>{' '}
-                              {power.poder}
                             </p>
                             {power.descripcion && (
                               <p className="text-xs text-gray-300">
@@ -4741,7 +4741,7 @@ function App() {
               }
             />
             <Input
-              placeholder="Poder"
+              placeholder="Daño"
               value={newAbility.poder}
               onChange={(e) =>
                 setNewAbility((a) => ({ ...a, poder: e.target.value }))
@@ -4963,7 +4963,7 @@ function App() {
                               <strong>Mente:</strong> {h.mente}
                             </p>
                             <p>
-                              <strong>Poder:</strong> {h.poder}
+                              <strong>Daño:</strong> {h.poder}
                             </p>
                             {h.descripcion && (
                               <p className="italic">

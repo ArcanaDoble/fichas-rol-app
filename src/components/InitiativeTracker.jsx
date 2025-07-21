@@ -1179,11 +1179,11 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
                         <div key={index} className="bg-gray-700 p-3 rounded-lg">
                           <div className="font-semibold text-white mb-2">{power.nombre}</div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-300">
+                            <div><span className="font-medium">Daño:</span> {power.poder}</div>
                             <div><span className="font-medium">Alcance:</span> {power.alcance}</div>
                             <div><span className="font-medium">Consumo:</span> {power.consumo}</div>
                             <div><span className="font-medium">Cuerpo:</span> {power.cuerpo}</div>
                             <div><span className="font-medium">Mente:</span> {power.mente}</div>
-                            <div><span className="font-medium">Poder:</span> {power.poder}</div>
                           </div>
                           {power.descripcion && (
                             <div className="mt-2 text-gray-300 italic text-sm">

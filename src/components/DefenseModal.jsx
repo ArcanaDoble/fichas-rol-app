@@ -47,7 +47,6 @@ const DefenseModal = ({
     if (!val) return "";
     return String(val).split(/[ (]/)[0];
   };
-
   const mapItem = (it, catalog) => {
     if (!it) return null;
     if (typeof it === 'string') {
