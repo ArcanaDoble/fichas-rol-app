@@ -43,7 +43,10 @@ const DefenseModal = ({
     const n = parseInt(val, 10);
     return isNaN(n) ? Infinity : n;
   };
-
+  const parseDamage = (val) => {
+    if (!val) return "";
+    return String(val).split(/[ (]/)[0];
+  };
   const mapItem = (it, catalog) => {
     if (!it) return null;
     if (typeof it === 'string') {
@@ -97,8 +100,7 @@ const DefenseModal = ({
 
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const formula = damage || item?.dano || '1d20';
-    setLoading(true);
+    const formula = damage || parseDamage(item?.dano || "") || "1d20";
     try {
       const result = rollExpression(formula);
       let messages = [];
@@ -153,7 +155,7 @@ const DefenseModal = ({
                   const val = e.target.value;
                   setChoice(val);
                   const item = [...weapons, ...powers].find(i => i.nombre === val);
-                  setDamage(item?.dano || '');
+                  setDamage(parseDamage(item?.dano || ""));
                 }}
                 className="w-full bg-gray-700 text-white"
               >

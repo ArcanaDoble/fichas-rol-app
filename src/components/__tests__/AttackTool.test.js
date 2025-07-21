@@ -215,7 +215,7 @@ test('shows message when equipment out of range', () => {
 test('damage field prefilled when selecting weapon', async () => {
   localStorage.setItem(
     'tokenSheets',
-    JSON.stringify({ '1': { id: '1', weapons: [{ nombre: 'Espada', alcance: 'Toque', dano: '1d4' }], poderes: [] } })
+    JSON.stringify({ '1': { id: '1', weapons: [{ nombre: 'Espada', alcance: 'Toque', dano: '1d4 fisico' }], poderes: [] } })
   );
   render(
     <AttackModal
@@ -232,4 +232,26 @@ test('damage field prefilled when selecting weapon', async () => {
   const input = screen.getByPlaceholderText(/daño/i);
   expect(input).toBeInTheDocument();
   expect(input.value).toBe('1d4');
+});
+
+test('damage field prefilled when selecting power', async () => {
+  localStorage.setItem(
+    'tokenSheets',
+    JSON.stringify({ '1': { id: '1', weapons: [], poderes: [{ nombre: 'Fuego', alcance: 'Cercano', dano: '2d6 fuego' }] } })
+  );
+  render(
+    <AttackModal
+      isOpen
+      attacker={{ name: 'A', tokenSheetId: '1' }}
+      target={{ name: 'B', tokenSheetId: '2' }}
+      distance={2}
+      armas={[]}
+      poderesCatalog={[]}
+      onClose={() => {}}
+    />
+  );
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'Fuego');
+  const input = screen.getByPlaceholderText(/daño/i);
+  expect(input).toBeInTheDocument();
+  expect(input.value).toBe('2d6');
 });

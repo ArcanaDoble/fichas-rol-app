@@ -42,6 +42,10 @@ const AttackModal = ({
     const n = parseInt(val, 10);
     return isNaN(n) ? Infinity : n;
   };
+  const parseDamage = (val) => {
+    if (!val) return "";
+    return String(val).split(/[ (]/)[0];
+  };
 
   const mapItem = (it, catalog) => {
     if (!it) return null;
@@ -96,7 +100,7 @@ const AttackModal = ({
 
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const formula = damage || item?.dano || '1d20';
+    const formula = damage || parseDamage(item?.dano || "") || "1d20";
     setLoading(true);
     try {
       const result = rollExpression(formula);
@@ -132,9 +136,8 @@ const AttackModal = ({
                   const val = e.target.value;
                   setChoice(val);
                   const item = [...weapons, ...powers].find(i => i.nombre === val);
-                  setDamage(item?.dano || '');
+                  setDamage(parseDamage(item?.dano || ""));
                 }}
-
                 className="w-full bg-gray-700 text-white"
               >
                 <option value="">Selecciona arma o poder</option>
@@ -155,7 +158,6 @@ const AttackModal = ({
                 />
               )}
               </>
-
             ) : (
               <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
             )

@@ -1087,7 +1087,10 @@ src/
 - ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
 - ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
 
+### ⚔️ **Daño sin tipo en menús (Enero 2027) - v2.4.29**
 
+- ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
+- ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
 ## 🔄 Historial de cambios previos
 
