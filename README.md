@@ -1119,9 +1119,9 @@ src/
 - ✅ Suscripción estable para prevenir reconexiones al renderizar el mapa
 - ✅ La defensa se resuelve automáticamente si nadie responde
 
-### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.34**
+### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.35**
 
-- ✅ El daño se calcula como `floor(daño / atributo)` para cada recurso
+- ✅ El daño se calcula como `floor(daño / atributo)` y se aplica primero a la armadura, pasando a postura y vida solo si queda daño
 - ✅ Si la defensa supera al ataque se produce un contraataque automático
 - ✅ Los mensajes de chat muestran tiradas, diferencia y bloques perdidos
 

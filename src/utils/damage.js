@@ -8,7 +8,7 @@ export const parseDieValue = (diceStr) => {
 
 export const applyDamage = (sheet, damage, stat) => {
   if (!sheet || !sheet.stats || !sheet.stats[stat]) {
-    return { sheet, blocks: 0 };
+    return { sheet, blocks: 0, remaining: damage };
   }
   const attrMap = {
     postura: 'destreza',
@@ -18,14 +18,13 @@ export const applyDamage = (sheet, damage, stat) => {
   const attrName = attrMap[stat];
   const dieStr = sheet.atributos?.[attrName];
   const dieValue = parseDieValue(dieStr) || 1;
-  const blocks = Math.floor(damage / dieValue);
+  const available = sheet.stats[stat].actual || 0;
+  const blocks = Math.min(Math.floor(damage / dieValue), available);
+  const usedDamage = blocks * dieValue;
   const updated = {
     ...sheet,
     stats: { ...sheet.stats, [stat]: { ...sheet.stats[stat] } },
   };
-  updated.stats[stat].actual = Math.max(
-    0,
-    (updated.stats[stat].actual || 0) - blocks
-  );
-  return { sheet: updated, blocks };
+  updated.stats[stat].actual = available - blocks;
+  return { sheet: updated, blocks, remaining: Math.max(0, damage - usedDamage) };
 };

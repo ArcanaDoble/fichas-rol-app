@@ -147,8 +147,10 @@ const AttackModal = ({
               const sheet = sheets[target.tokenSheetId];
               if (sheet) {
                 let updated = sheet;
+                let remaining = result.total;
                 ['armadura', 'postura', 'vida'].forEach((stat) => {
-                  const res = applyDamage(updated, result.total, stat);
+                  const res = applyDamage(updated, remaining, stat);
+                  remaining = res.remaining;
                   updated = res.sheet;
                   lost[stat] = res.blocks;
                 });

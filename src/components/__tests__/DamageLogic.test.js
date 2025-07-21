@@ -40,3 +40,21 @@ test('counter-attacks trigger when defense exceeds attack', () => {
   const { sheet: updated } = applyDamage(attacker, diff, 'vida');
   expect(updated.stats.vida.actual).toBe(9);
 });
+
+test('damage is applied sequentially across stats', () => {
+  const sheet = {
+    id: 's2',
+    atributos: { destreza: 'D4', vigor: 'D4' },
+    stats: { armadura: { actual: 1 }, postura: { actual: 2 }, vida: { actual: 2 } },
+  };
+  let remaining = 4;
+  let updated = sheet;
+  ['armadura', 'postura', 'vida'].forEach((stat) => {
+    const res = applyDamage(updated, remaining, stat);
+    remaining = res.remaining;
+    updated = res.sheet;
+  });
+  expect(updated.stats.armadura.actual).toBe(0);
+  expect(updated.stats.postura.actual).toBe(2);
+  expect(updated.stats.vida.actual).toBe(2);
+});
