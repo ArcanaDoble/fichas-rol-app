@@ -112,8 +112,10 @@ const AttackModal = ({
       } catch (err) {
         console.error(err);
       }
-      const text = `${attacker.name || 'Atacante'} ataca a ${target.name || ''}`;
-      messages.push({ id: nanoid(), author: attacker.name || 'Atacante', text, result });
+      const attackerName = attacker.customName || attacker.name || 'Atacante';
+      const targetName = target.customName || target.name || '';
+      const text = `${attackerName} ataca a ${targetName}`;
+      messages.push({ id: nanoid(), author: attackerName, text, result });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
       setLoading(false);
       onClose(result);

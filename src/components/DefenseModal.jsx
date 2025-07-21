@@ -112,8 +112,9 @@ const DefenseModal = ({
         console.error(err);
       }
       const success = result.total >= (attackResult?.total || 0);
-      const text = `${target.name || 'Defensor'} se defiende ${success ? 'con exito' : 'sin exito'}`;
-      messages.push({ id: nanoid(), author: target.name || 'Defensor', text, result });
+      const targetName = target.customName || target.name || 'Defensor';
+      const text = `${targetName} se defiende ${success ? 'con exito' : 'sin exito'}`;
+      messages.push({ id: nanoid(), author: targetName, text, result });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
 
       if (sheet && attackResult) {
