@@ -3971,7 +3971,22 @@ const MapCanvas = ({
                       180
                     }
                     onClick={() => setDoorMenuWallId(wl.id)}
+                    onTap={() => setDoorMenuWallId(wl.id)}
+                    onMouseEnter={() =>
+                      (stageRef.current.container().style.cursor = 'pointer')
+                    }
+                    onMouseLeave={() =>
+                      (stageRef.current.container().style.cursor =
+                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    }
                   >
+                    <Rect
+                      width={32}
+                      height={32}
+                      offsetX={16}
+                      offsetY={16}
+                      fill="transparent"
+                    />
                     {DOOR_PATHS[wl.door || 'closed'].map((d, i) => (
                       <Path
                         key={i}
@@ -3980,6 +3995,7 @@ const MapCanvas = ({
                         strokeWidth={1}
                         lineCap="round"
                         lineJoin="round"
+                        hitStrokeWidth={10}
                       />
                     ))}
                   </Group>
