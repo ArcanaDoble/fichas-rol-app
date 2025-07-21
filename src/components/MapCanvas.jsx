@@ -987,11 +987,8 @@ const MapCanvas = ({
     }
   }, [activeTool]);
 
-  useAttackRequests({
-    tokens,
-    playerName,
-    userType,
-    onAttack: ({ id, attackerId, targetId, result }) => {
+  const handleIncomingAttack = useCallback(
+    ({ id, attackerId, targetId, result }) => {
       setAttackRequestId(id);
       setAttackSourceId(attackerId);
       setAttackTargetId(targetId);
@@ -1002,6 +999,14 @@ const MapCanvas = ({
         setAttackLine([source.x, source.y, target.x, target.y]);
       }
     },
+    [tokens]
+  );
+
+  useAttackRequests({
+    tokens,
+    playerName,
+    userType,
+    onAttack: handleIncomingAttack,
   });
 
   // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
