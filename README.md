@@ -864,6 +864,9 @@ src/
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
+- **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
+- **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
+- **Doble clic seguro en mirilla** - Al usar la mirilla, el doble clic ya no abre el menú de ajustes del token
 
 #### v2.1.1 (junio 2024)
 
@@ -1034,7 +1037,12 @@ src/
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
 - ✅ Las barras de vida de fichas de otros jugadores ahora se cargan
   automáticamente
-- ✅ Selección automática del atacante y línea que sigue al cursor
+- ✅ Debes elegir tu propio token como atacante y la selección se mantiene hasta cambiar de herramienta
+- ✅ Puede apuntar a tokens controlados por otros jugadores o el máster
+- ✅ Un clic fija el objetivo y el siguiente inicia el ataque
+- ✅ El doble clic no abre ajustes de token cuando se usa la mirilla
+- ✅ El objetivo se reconoce al pulsar en cualquier punto de su casilla
+- ✅ El atacante y el objetivo se destacan con un marco de color
 
 ### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
 
@@ -1050,6 +1058,33 @@ src/
 - ✅ La ficha de jugador se actualiza automáticamente al recibir el evento `playerSheetSaved` desde otras pestañas o tokens
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
 - ✅ Los estados de los tokens controlados se sincronizan al instante al modificarse `localStorage`
+
+### 🐞 **Corrección de la mirilla para el máster (Diciembre 2026) - v2.4.24**
+
+- ✅ El máster puede seleccionar cualquier token como atacante sin fijar objetivo automáticamente
+- ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
+- ✅ Prueba unitaria garantiza el funcionamiento correcto
+
+### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
+
+- ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
+- ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
+
+### 🛠️ **Corrección de nombres y daño de armas (Enero 2027) - v2.4.26**
+
+- ✅ Los menús de ataque y defensa listan correctamente las armas y poderes equipados
+- ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
+- ✅ Las tiradas utilizan el daño definido para cada arma o poder
+
+### 🎯 **Ajuste de valores de alcance (Enero 2027) - v2.4.27**
+
+- ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
+- ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
+
+### ⚔️ **Daño editable en ataques (Enero 2027) - v2.4.28**
+
+- ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
+- ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
 
 
 
