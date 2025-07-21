@@ -769,6 +769,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - El ataque con la herramienta de mirilla ahora requiere pulsar dos veces sobre
   el objetivo para mostrar el modal de ataque.
+- Las tarjetas de poderes equipados muestran ahora **Daño** debajo del nombre,
+  usando el valor definido en el campo Poder al crear la habilidad.
 
 ### 🛠️ **Características Técnicas**
 
