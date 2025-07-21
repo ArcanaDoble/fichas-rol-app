@@ -769,6 +769,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - El ataque con la herramienta de mirilla ahora requiere pulsar dos veces sobre
   el objetivo para mostrar el modal de ataque.
+- Las tarjetas de poderes equipados muestran ahora **Daño** justo debajo del nombre, antes de **Alcance**, usando el valor definido en el campo Poder al crear la habilidad.
 
 ### 🛠️ **Características Técnicas**
 
@@ -1090,8 +1091,6 @@ src/
 
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
-
-
 
 ## 🔄 Historial de cambios previos
 
