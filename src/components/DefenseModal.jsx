@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
+import { applyDamage, parseDieValue } from '../utils/damage';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
@@ -44,7 +45,7 @@ const DefenseModal = ({
     return isNaN(n) ? Infinity : n;
   };
   const parseDamage = (val) => {
-    if (!val) return "";
+    if (!val) return '';
     return String(val).split(/[ (]/)[0];
   };
   const mapItem = (it, catalog) => {
@@ -99,9 +100,9 @@ const DefenseModal = ({
   if (!attacker || !target) return null;
 
   const handleRoll = async () => {
-    const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const itemDamage = item?.dano ?? item?.poder ?? "";
-    const formula = damage || parseDamage(itemDamage) || "1d20";
+    const item = [...weapons, ...powers].find((i) => i.nombre === choice);
+    const itemDamage = item?.dano ?? item?.poder ?? '';
+    const formula = damage || parseDamage(itemDamage) || '1d20';
     try {
       const result = rollExpression(formula);
       let messages = [];
@@ -111,29 +112,58 @@ const DefenseModal = ({
       } catch (err) {
         console.error(err);
       }
-      const success = result.total >= (attackResult?.total || 0);
       const targetName = target.customName || target.name || 'Defensor';
-      const text = `${targetName} se defiende ${success ? 'con exito' : 'sin exito'}`;
-      messages.push({ id: nanoid(), author: targetName, text, result });
-      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
-
-      if (sheet && attackResult) {
-        let dmg = Math.max(0, attackResult.total - result.total);
-        const order = ['armadura', 'postura', 'vida'];
-        const updated = { ...sheet, stats: { ...sheet.stats } };
-        order.forEach(stat => {
-          if (!updated.stats[stat]) return;
-          const current = updated.stats[stat].actual ?? 0;
-          const newVal = Math.max(0, current - dmg);
-          dmg -= current - newVal;
-          updated.stats[stat].actual = newVal;
+      const diff = result.total - (attackResult?.total || 0);
+      let lost = { armadura: 0, postura: 0, vida: 0 };
+      let affectedSheet = null;
+      if (diff < 0 && sheet) {
+        let updated = sheet;
+        ['armadura', 'postura', 'vida'].forEach((stat) => {
+          const res = applyDamage(updated, Math.abs(diff), stat);
+          updated = res.sheet;
+          lost[stat] = res.blocks;
         });
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
         sheets[updated.id] = updated;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
+        window.dispatchEvent(
+          new CustomEvent('tokenSheetSaved', { detail: updated })
+        );
+        affectedSheet = updated;
+      } else if (diff > 0 && attacker?.tokenSheetId) {
+        const stored = localStorage.getItem('tokenSheets');
+        if (stored) {
+          const sheets = JSON.parse(stored);
+          let atkSheet = sheets[attacker.tokenSheetId];
+          if (atkSheet) {
+            ['armadura', 'postura', 'vida'].forEach((stat) => {
+              const res = applyDamage(atkSheet, diff, stat);
+              atkSheet = res.sheet;
+              lost[stat] = res.blocks;
+            });
+            sheets[atkSheet.id] = atkSheet;
+            localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+            window.dispatchEvent(
+              new CustomEvent('tokenSheetSaved', { detail: atkSheet })
+            );
+            affectedSheet = atkSheet;
+          }
+        }
       }
+
+      const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
+      const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
+      let text;
+      if (diff > 0) {
+        text = `${targetName} contraataca. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+      } else if (diff < 0) {
+        text = `${targetName} recibe daño. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${Math.abs(diff)} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+      } else {
+        text = `${targetName} bloquea el ataque. Ataque ${attackResult?.total || 0} Defensa ${result.total}`;
+      }
+      messages.push({ id: nanoid(), author: targetName, text, result });
+      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
 
       setLoading(false);
       onClose(result);
@@ -144,47 +174,64 @@ const DefenseModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={() => onClose(null)} title="Defensa" size="sm">
+    <Modal
+      isOpen={isOpen}
+      onClose={() => onClose(null)}
+      title="Defensa"
+      size="sm"
+    >
       <div className="space-y-4">
         <div>
-          <p className="text-sm text-gray-300 mb-1">Distancia: {distance} casillas</p>
+          <p className="text-sm text-gray-300 mb-1">
+            Distancia: {distance} casillas
+          </p>
           {hasEquip ? (
             hasAvailable ? (
               <>
-              <select
-                value={choice}
-                onChange={e => {
-                  const val = e.target.value;
-                  setChoice(val);
-                  const item = [...weapons, ...powers].find(i => i.nombre === val);
-                  const dmg = item?.dano ?? item?.poder ?? "";
-                  setDamage(parseDamage(dmg));
-                }}
-                className="w-full bg-gray-700 text-white"
-              >
-                <option value="">Selecciona arma o poder</option>
-                {weapons.map(w => (
-                  <option key={`w-${w.nombre}`} value={w.nombre}>{w.nombre}</option>
-                ))}
-                {powers.map(p => (
-                  <option key={`p-${p.nombre}`} value={p.nombre}>{p.nombre}</option>
-                ))}
-              </select>
-              {choice && (
-                <input
-                  type="text"
-                  value={damage}
-                  onChange={e => setDamage(e.target.value)}
-                  className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
-                  placeholder="Daño"
-                />
-              )}
+                <select
+                  value={choice}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setChoice(val);
+                    const item = [...weapons, ...powers].find(
+                      (i) => i.nombre === val
+                    );
+                    const dmg = item?.dano ?? item?.poder ?? '';
+                    setDamage(parseDamage(dmg));
+                  }}
+                  className="w-full bg-gray-700 text-white"
+                >
+                  <option value="">Selecciona arma o poder</option>
+                  {weapons.map((w) => (
+                    <option key={`w-${w.nombre}`} value={w.nombre}>
+                      {w.nombre}
+                    </option>
+                  ))}
+                  {powers.map((p) => (
+                    <option key={`p-${p.nombre}`} value={p.nombre}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+                {choice && (
+                  <input
+                    type="text"
+                    value={damage}
+                    onChange={(e) => setDamage(e.target.value)}
+                    className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                    placeholder="Daño"
+                  />
+                )}
               </>
             ) : (
-              <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
+              <p className="text-red-400 text-sm">
+                No hay ningún arma disponible al alcance
+              </p>
             )
           ) : (
-            <p className="text-red-400 text-sm">No hay armas o poderes equipados</p>
+            <p className="text-red-400 text-sm">
+              No hay armas o poderes equipados
+            </p>
           )}
         </div>
         <Boton

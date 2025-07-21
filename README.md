@@ -754,11 +754,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Sistema de assets personalizado por jugador con estructura Firebase separada.
 - Chat con colores únicos automáticos para cada jugador basados en hash del nombre.
 - Navegación automática a la página donde está ubicado el token del jugador.
-**Resumen de cambios v2.4.12:**
+  **Resumen de cambios v2.4.12:**
 
 - El Mapa de Batalla para jugadores ahora incluye un chat integrado que admite los mismos comandos de la calculadora de dados.
 - El nombre del Máster en el chat se muestra en color dorado con un ligero brillo para destacarlo.
-
 
 **Resumen de cambios v2.4.12:**
 
@@ -783,13 +782,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tooltips informativos** - Información detallada editables en tiempo real
 - **Glosario configurable** - Términos destacados con descripciones personalizadas
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
-- *Nuevo:* pruebas que simulan el cambio entre páginas y verifican que los tokens
+- _Nuevo:_ pruebas que simulan el cambio entre páginas y verifican que los tokens
   se mantienen independientes para jugadores y máster (`PageSwitchTokens.test.js`).
-- *Nuevo:* prueba rápida de cambio de página para asegurar que no se mezclan los tokens
+- _Nuevo:_ prueba rápida de cambio de página para asegurar que no se mezclan los tokens
   al navegar velozmente (`QuickPageSwitch.test.js`).
-- *Nuevo:* prueba de sincronización de movimiento de tokens entre jugador y máster
+- _Nuevo:_ prueba de sincronización de movimiento de tokens entre jugador y máster
   usando un listener activo (`TokenListenerSync.test.js`).
-- *Nuevo:* prueba de mapeo de nombres de equipo al guardar fichas de tokens
+- _Nuevo:_ prueba de mapeo de nombres de equipo al guardar fichas de tokens
   (`EquipmentSync.test.js`).
 
 ## 🚀 Instalación y uso
@@ -1119,6 +1118,12 @@ src/
 - ✅ Optimizado el listener para evitar conexiones repetidas a Firestore
 - ✅ Suscripción estable para prevenir reconexiones al renderizar el mapa
 - ✅ La defensa se resuelve automáticamente si nadie responde
+
+### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.34**
+
+- ✅ El daño se calcula como `floor(daño / atributo)` para cada recurso
+- ✅ Si la defensa supera al ataque se produce un contraataque automático
+- ✅ Los mensajes de chat muestran tiradas, diferencia y bloques perdidos
 
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
