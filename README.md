@@ -1135,6 +1135,11 @@ src/
 - ✅ Si la defensa supera al ataque se produce un contraataque automático
 - ✅ Los mensajes de chat muestran tiradas, diferencia y bloques perdidos
 
+### 🏰 **Mejoras en botones de puertas y muros (Enero 2027) - v2.4.36**
+
+- ✅ El icono de puerta tiene un área de clic más grande y visible
+- ✅ Se cambia el cursor a puntero al pasar sobre el icono
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
