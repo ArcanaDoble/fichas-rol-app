@@ -3,7 +3,16 @@ import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
-import { doc, getDoc, setDoc, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { applyDamage, parseDieValue } from '../utils/damage';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 
@@ -45,7 +54,7 @@ const AttackModal = ({
     return isNaN(n) ? Infinity : n;
   };
   const parseDamage = (val) => {
-    if (!val) return "";
+    if (!val) return '';
     return String(val).split(/[ (]/)[0];
   };
 
@@ -101,9 +110,9 @@ const AttackModal = ({
   if (!attacker || !target) return null;
 
   const handleRoll = async () => {
-    const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const itemDamage = item?.dano ?? item?.poder ?? "";
-    const formula = damage || parseDamage(itemDamage) || "1d20";
+    const item = [...weapons, ...powers].find((i) => i.nombre === choice);
+    const itemDamage = item?.dano ?? item?.poder ?? '';
+    const formula = damage || parseDamage(itemDamage) || '1d20';
     setLoading(true);
     try {
       const result = rollExpression(formula);
@@ -130,25 +139,26 @@ const AttackModal = ({
         try {
           const snap = await getDoc(docRef);
           if (!snap.exists() || snap.data().completed) return;
+          let lost = { armadura: 0, postura: 0, vida: 0 };
           if (target.tokenSheetId) {
             const stored = localStorage.getItem('tokenSheets');
             if (stored) {
               const sheets = JSON.parse(stored);
               const sheet = sheets[target.tokenSheetId];
               if (sheet) {
-                let dmg = result.total;
-                const order = ['armadura', 'postura', 'vida'];
-                const updated = { ...sheet, stats: { ...sheet.stats } };
-                order.forEach(stat => {
-                  if (!updated.stats[stat]) return;
-                  const current = updated.stats[stat].actual ?? 0;
-                  const newVal = Math.max(0, current - dmg);
-                  dmg -= current - newVal;
-                  updated.stats[stat].actual = newVal;
+                let updated = sheet;
+                let remaining = result.total;
+                ['armadura', 'postura', 'vida'].forEach((stat) => {
+                  const res = applyDamage(updated, remaining, stat);
+                  remaining = res.remaining;
+                  updated = res.sheet;
+                  lost[stat] = res.blocks;
                 });
                 sheets[updated.id] = updated;
                 localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-                window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
+                window.dispatchEvent(
+                  new CustomEvent('tokenSheetSaved', { detail: updated })
+                );
               }
             }
           }
@@ -158,7 +168,14 @@ const AttackModal = ({
             if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
           } catch (err) {}
           const targetName = target.customName || target.name || 'Defensor';
-          msgs.push({ id: nanoid(), author: targetName, text: `${targetName} no se defendió a tiempo` });
+          const vigor = parseDieValue(sheet?.atributos?.vigor);
+          const destreza = parseDieValue(sheet?.atributos?.destreza);
+          const diff = result.total;
+          msgs.push({
+            id: nanoid(),
+            author: targetName,
+            text: `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`,
+          });
           await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
           await updateDoc(docRef, { completed: true, auto: true });
         } catch (err) {
@@ -174,47 +191,64 @@ const AttackModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={() => onClose(null)} title="Ataque" size="sm">
+    <Modal
+      isOpen={isOpen}
+      onClose={() => onClose(null)}
+      title="Ataque"
+      size="sm"
+    >
       <div className="space-y-4">
         <div>
-          <p className="text-sm text-gray-300 mb-1">Distancia: {distance} casillas</p>
+          <p className="text-sm text-gray-300 mb-1">
+            Distancia: {distance} casillas
+          </p>
           {hasEquip ? (
             hasAvailable ? (
               <>
-              <select
-                value={choice}
-                onChange={e => {
-                  const val = e.target.value;
-                  setChoice(val);
-                  const item = [...weapons, ...powers].find(i => i.nombre === val);
-                  const dmg = item?.dano ?? item?.poder ?? "";
-                  setDamage(parseDamage(dmg));
-                }}
-                className="w-full bg-gray-700 text-white"
-              >
-                <option value="">Selecciona arma o poder</option>
-                {weapons.map(w => (
-                  <option key={`w-${w.nombre}`} value={w.nombre}>{w.nombre}</option>
-                ))}
-                {powers.map(p => (
-                  <option key={`p-${p.nombre}`} value={p.nombre}>{p.nombre}</option>
-                ))}
-              </select>
-              {choice && (
-                <input
-                  type="text"
-                  value={damage}
-                  onChange={e => setDamage(e.target.value)}
-                  className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
-                  placeholder="Daño"
-                />
-              )}
+                <select
+                  value={choice}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setChoice(val);
+                    const item = [...weapons, ...powers].find(
+                      (i) => i.nombre === val
+                    );
+                    const dmg = item?.dano ?? item?.poder ?? '';
+                    setDamage(parseDamage(dmg));
+                  }}
+                  className="w-full bg-gray-700 text-white"
+                >
+                  <option value="">Selecciona arma o poder</option>
+                  {weapons.map((w) => (
+                    <option key={`w-${w.nombre}`} value={w.nombre}>
+                      {w.nombre}
+                    </option>
+                  ))}
+                  {powers.map((p) => (
+                    <option key={`p-${p.nombre}`} value={p.nombre}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+                {choice && (
+                  <input
+                    type="text"
+                    value={damage}
+                    onChange={(e) => setDamage(e.target.value)}
+                    className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                    placeholder="Daño"
+                  />
+                )}
               </>
             ) : (
-              <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
+              <p className="text-red-400 text-sm">
+                No hay ningún arma disponible al alcance
+              </p>
             )
           ) : (
-            <p className="text-red-400 text-sm">No hay armas o poderes equipados</p>
+            <p className="text-red-400 text-sm">
+              No hay armas o poderes equipados
+            </p>
           )}
         </div>
         <Boton
