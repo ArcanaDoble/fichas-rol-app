@@ -1681,7 +1681,7 @@ const MapCanvas = ({
     });
     if (changed) {
       window.dispatchEvent(
-        new CustomEvent('barsVisibilityChanged', { detail: tokens })
+        new CustomEvent('barsVisibilityChanged', { detail: { tokens, pageId } })
       );
     }
   }, [tokens]);

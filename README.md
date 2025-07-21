@@ -1092,6 +1092,41 @@ src/
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
+### 🔄 **Barras por página (Enero 2027) - v2.4.30**
+
+- ✅ Los eventos de visibilidad de barras incluyen la página de origen
+- ✅ Los cambios solo se aplican si corresponden a la página abierta, evitando sobrescritura entre escenas
+
+- ✅ El máster puede seleccionar cualquier token como atacante sin fijar objetivo automáticamente
+- ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
+- ✅ Prueba unitaria garantiza el funcionamiento correcto
+
+### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
+
+- ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
+- ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
+
+### 🛠️ **Corrección de nombres y daño de armas (Enero 2027) - v2.4.26**
+
+- ✅ Los menús de ataque y defensa listan correctamente las armas y poderes equipados
+- ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
+- ✅ Las tiradas utilizan el daño definido para cada arma o poder
+
+### 🎯 **Ajuste de valores de alcance (Enero 2027) - v2.4.27**
+
+- ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
+- ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
+
+### ⚔️ **Daño editable en ataques (Enero 2027) - v2.4.28**
+
+- ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
+- ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
+
+### ⚔️ **Daño sin tipo en menús (Enero 2027) - v2.4.29**
+
+- ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
+- ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
+
 ## 🔄 Historial de cambios previos
 
 <details>

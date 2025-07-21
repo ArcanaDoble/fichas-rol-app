@@ -16,7 +16,9 @@ function Sender({ tokens, setTokens }) {
       if (!tokens.find(t => t.id === id)) delete prev.current[id];
     });
     if (changed) {
-      window.dispatchEvent(new CustomEvent('barsVisibilityChanged', { detail: tokens }));
+      window.dispatchEvent(
+        new CustomEvent('barsVisibilityChanged', { detail: { tokens, pageId: 'p1' } })
+      );
     }
   }, [tokens]);
 
@@ -34,8 +36,10 @@ function TestApp() {
 
   React.useEffect(() => {
     const handler = e => {
-      setMasterTokens(e.detail);
-      setPlayerTokens(e.detail);
+      const { tokens: tks, pageId } = e.detail;
+      if (pageId !== 'p1') return;
+      setMasterTokens(tks);
+      setPlayerTokens(tks);
     };
     window.addEventListener('barsVisibilityChanged', handler);
     return () => window.removeEventListener('barsVisibilityChanged', handler);
