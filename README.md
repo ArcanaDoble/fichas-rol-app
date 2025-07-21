@@ -1081,6 +1081,11 @@ src/
 - ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
 - ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
 
+### ⚔️ **Daño editable en ataques (Enero 2027) - v2.4.28**
+
+- ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
+- ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
+
 
 
 ## 🔄 Historial de cambios previos

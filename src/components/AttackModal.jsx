@@ -80,6 +80,7 @@ const AttackModal = ({
   );
 
   const [choice, setChoice] = useState('');
+  const [damage, setDamage] = useState('');
   const [loading, setLoading] = useState(false);
 
   const hasEquip = useMemo(() => {
@@ -95,7 +96,7 @@ const AttackModal = ({
 
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const formula = item?.dano || '1d20';
+    const formula = damage || item?.dano || '1d20';
     setLoading(true);
     try {
       const result = rollExpression(formula);
@@ -124,9 +125,16 @@ const AttackModal = ({
           <p className="text-sm text-gray-300 mb-1">Distancia: {distance} casillas</p>
           {hasEquip ? (
             hasAvailable ? (
+              <>
               <select
                 value={choice}
-                onChange={e => setChoice(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setChoice(val);
+                  const item = [...weapons, ...powers].find(i => i.nombre === val);
+                  setDamage(item?.dano || '');
+                }}
+
                 className="w-full bg-gray-700 text-white"
               >
                 <option value="">Selecciona arma o poder</option>
@@ -137,6 +145,17 @@ const AttackModal = ({
                   <option key={`p-${p.nombre}`} value={p.nombre}>{p.nombre}</option>
                 ))}
               </select>
+              {choice && (
+                <input
+                  type="text"
+                  value={damage}
+                  onChange={e => setDamage(e.target.value)}
+                  className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                  placeholder="Daño"
+                />
+              )}
+              </>
+
             ) : (
               <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
             )
