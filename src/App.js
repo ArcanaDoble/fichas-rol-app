@@ -3737,6 +3737,9 @@ function App() {
                     >
                       <p className="font-bold text-lg">{p.nombre}</p>
                       <p>
+                        <strong>Daño:</strong> {p.poder}
+                      </p>
+                      <p>
                         <strong>Alcance:</strong> {p.alcance}
                       </p>
                       <p>
@@ -3747,9 +3750,6 @@ function App() {
                       </p>
                       <p>
                         <strong>Mente:</strong> {p.mente}
-                      </p>
-                      <p>
-                        <strong>Daño:</strong> {p.poder}
                       </p>
                       {p.descripcion && (
                         <p className="italic">{highlightText(p.descripcion)}</p>
