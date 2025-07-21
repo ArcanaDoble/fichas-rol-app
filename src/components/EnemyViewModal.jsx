@@ -235,13 +235,13 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                         <p className="font-bold text-sm">{power.nombre}</p>
                       </div>
                       <p className="mb-1">
+                        <span className="font-medium">Daño:</span> {power.poder}
+                      </p>
+                      <p className="mb-1">
                         <span className="font-medium">Alcance:</span> {power.alcance}
                       </p>
                       <p className="mb-1">
                         <span className="font-medium">Consumo:</span> {power.consumo}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Poder:</span> {power.poder}
                       </p>
                       {power.descripcion && (
                         <p className="text-gray-300 italic">
