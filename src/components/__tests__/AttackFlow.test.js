@@ -102,4 +102,19 @@ describe('Attack flow', () => {
     });
     expect(DefenseModal).not.toHaveBeenCalled();
   });
+
+  test('listener is not reconnected when callback changes', () => {
+    const unsub = jest.fn();
+    onSnapshot.mockReturnValue(unsub);
+    function Wrapper() {
+      const [cb, setCb] = React.useState(() => {});
+      useAttackRequests({ tokens: [], playerName: 'p2', userType: 'player', onAttack: cb });
+      return <button onClick={() => setCb(() => {})}>change</button>;
+    }
+    render(<Wrapper />);
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    userEvent.click(screen.getByRole('button', { name: 'change' }));
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(unsub).not.toHaveBeenCalled();
+  });
 });
