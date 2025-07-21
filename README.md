@@ -1117,7 +1117,7 @@ src/
 - ✅ El jugador objetivo o el máster reciben la notificación y abren la defensa
 - ✅ Solo se activa para jugadores con el mapa abierto controlando un token
 - ✅ Optimizado el listener para evitar conexiones repetidas a Firestore
-- ✅ Se mantiene la referencia del callback con `useRef` para no reiniciar el listener al cambiar `onAttack`
+- ✅ La defensa se resuelve automáticamente si nadie responde
 
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 

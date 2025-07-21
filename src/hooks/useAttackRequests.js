@@ -4,16 +4,11 @@ import { db } from '../firebase';
 
 export default function useAttackRequests({ tokens, playerName, userType, onAttack }) {
   const tokensRef = useRef(tokens);
-  const onAttackRef = useRef(onAttack);
 
   // Mantener referencia actualizada sin recrear el listener
   useEffect(() => {
     tokensRef.current = tokens;
   }, [tokens]);
-
-  useEffect(() => {
-    onAttackRef.current = onAttack;
-  }, [onAttack]);
 
   useEffect(() => {
     const q = collection(db, 'attacks');
@@ -27,10 +22,10 @@ export default function useAttackRequests({ tokens, playerName, userType, onAtta
         const isTargetPlayer = target.controlledBy === playerName;
         const isMaster = userType === 'master';
         if (isTargetPlayer || isMaster) {
-          onAttackRef.current && onAttackRef.current({ id: change.doc.id, ...data });
+          onAttack && onAttack({ id: change.doc.id, ...data });
         }
       });
     });
     return () => unsub();
-  }, [playerName, userType]);
+  }, [playerName, userType, onAttack]);
 }

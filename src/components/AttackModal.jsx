@@ -3,9 +3,11 @@ import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
-import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
+
+const AUTO_RESOLVE_MS = 10000;
 
 const AttackModal = ({
   isOpen,
@@ -117,13 +119,52 @@ const AttackModal = ({
       const text = `${attackerName} ataca a ${targetName}`;
       messages.push({ id: nanoid(), author: attackerName, text, result });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
-      await addDoc(collection(db, 'attacks'), {
+      const docRef = await addDoc(collection(db, 'attacks'), {
         attackerId: attacker.id,
         targetId: target.id,
         result,
         timestamp: serverTimestamp(),
         completed: false,
       });
+      setTimeout(async () => {
+        try {
+          const snap = await getDoc(docRef);
+          if (!snap.exists() || snap.data().completed) return;
+          if (target.tokenSheetId) {
+            const stored = localStorage.getItem('tokenSheets');
+            if (stored) {
+              const sheets = JSON.parse(stored);
+              const sheet = sheets[target.tokenSheetId];
+              if (sheet) {
+                let dmg = result.total;
+                const order = ['armadura', 'postura', 'vida'];
+                const updated = { ...sheet, stats: { ...sheet.stats } };
+                order.forEach(stat => {
+                  if (!updated.stats[stat]) return;
+                  const current = updated.stats[stat].actual ?? 0;
+                  const newVal = Math.max(0, current - dmg);
+                  dmg -= current - newVal;
+                  updated.stats[stat].actual = newVal;
+                });
+                sheets[updated.id] = updated;
+                localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+                window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
+              }
+            }
+          }
+          let msgs = [];
+          try {
+            const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+            if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
+          } catch (err) {}
+          const targetName = target.customName || target.name || 'Defensor';
+          msgs.push({ id: nanoid(), author: targetName, text: `${targetName} no se defendió a tiempo` });
+          await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
+          await updateDoc(docRef, { completed: true, auto: true });
+        } catch (err) {
+          console.error(err);
+        }
+      }, AUTO_RESOLVE_MS);
       setLoading(false);
       onClose(result);
     } catch (e) {

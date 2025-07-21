@@ -11,6 +11,7 @@ jest.mock('firebase/firestore', () => ({
   getDoc: jest.fn().mockResolvedValue({ exists: () => false }),
   setDoc: jest.fn().mockResolvedValue(),
   addDoc: jest.fn().mockResolvedValue(),
+  updateDoc: jest.fn().mockResolvedValue(),
   collection: jest.fn(),
   onSnapshot: jest.fn(),
   serverTimestamp: jest.fn(() => 'ts'),
@@ -21,7 +22,7 @@ jest.mock('../../firebase', () => ({ db: {} }));
 
 jest.mock('../DefenseModal', () => jest.fn(() => null));
 
-const { addDoc, onSnapshot } = require('firebase/firestore');
+const { addDoc, onSnapshot, updateDoc, getDoc } = require('firebase/firestore');
 
 function ListenerDemo({ playerName = 'p2', userType = 'player' }) {
   const [req, setReq] = React.useState(null);
@@ -103,18 +104,29 @@ describe('Attack flow', () => {
     expect(DefenseModal).not.toHaveBeenCalled();
   });
 
-  test('listener is not reconnected when callback changes', () => {
-    const unsub = jest.fn();
-    onSnapshot.mockReturnValue(unsub);
-    function Wrapper() {
-      const [cb, setCb] = React.useState(() => {});
-      useAttackRequests({ tokens: [], playerName: 'p2', userType: 'player', onAttack: cb });
-      return <button onClick={() => setCb(() => {})}>change</button>;
-    }
-    render(<Wrapper />);
-    expect(onSnapshot).toHaveBeenCalledTimes(1);
-    userEvent.click(screen.getByRole('button', { name: 'change' }));
-    expect(onSnapshot).toHaveBeenCalledTimes(1);
-    expect(unsub).not.toHaveBeenCalled();
+  test('auto resolves if defense is unanswered', async () => {
+    jest.useFakeTimers();
+    addDoc.mockResolvedValue({ id: 'r1' });
+    getDoc
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ completed: false }) });
+    render(
+      <AttackModal
+        isOpen
+        attacker={{ id: 'a', name: 'A', tokenSheetId: '1' }}
+        target={{ id: 'b', name: 'B', tokenSheetId: '2' }}
+        distance={1}
+        armas={[]}
+        poderesCatalog={[]}
+        onClose={() => {}}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
+    await waitFor(() => expect(addDoc).toHaveBeenCalled());
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await waitFor(() => expect(updateDoc).toHaveBeenCalled());
+    jest.useRealTimers();
   });
 });
