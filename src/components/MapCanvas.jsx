@@ -43,9 +43,10 @@ import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
+import useAttackRequests from '../hooks/useAttackRequests';
 
 // Funciones de sincronización para jugadores
 const createPlayerSyncManager = (pageId, playerName, isPlayerView) => {
@@ -966,6 +967,7 @@ const MapCanvas = ({
   const [attackLine, setAttackLine] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
   const [attackReady, setAttackReady] = useState(false);
+  const [attackRequestId, setAttackRequestId] = useState(null);
 
   useEffect(() => {
     attackSourceIdRef.current = attackSourceId;
@@ -984,6 +986,23 @@ const MapCanvas = ({
       setAttackReady(false);
     }
   }, [activeTool]);
+
+  useAttackRequests({
+    tokens,
+    playerName,
+    userType,
+    onAttack: ({ id, attackerId, targetId, result }) => {
+      setAttackRequestId(id);
+      setAttackSourceId(attackerId);
+      setAttackTargetId(targetId);
+      setAttackResult(result);
+      const source = tokens.find(t => t.id === attackerId);
+      const target = tokens.find(t => t.id === targetId);
+      if (source && target) {
+        setAttackLine([source.x, source.y, target.x, target.y]);
+      }
+    },
+  });
 
   // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
   const prevTokensRef = useRef(tokens);
@@ -4403,7 +4422,6 @@ const MapCanvas = ({
           armas={armas}
           poderesCatalog={habilidades}
           onClose={(res) => {
-            if (res) setAttackResult(res);
             setAttackReady(false);
             if (!res) {
               setAttackTargetId(null);
@@ -4424,7 +4442,15 @@ const MapCanvas = ({
           attackResult={attackResult}
           armas={armas}
           poderesCatalog={habilidades}
-          onClose={() => {
+          onClose={async () => {
+            if (attackRequestId) {
+              try {
+                await deleteDoc(doc(db, 'attacks', attackRequestId));
+              } catch (err) {
+                console.error(err);
+              }
+              setAttackRequestId(null);
+            }
             setAttackTargetId(null);
             setAttackLine(null);
             setAttackResult(null);
