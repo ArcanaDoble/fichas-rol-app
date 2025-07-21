@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 
@@ -117,6 +117,13 @@ const AttackModal = ({
       const text = `${attackerName} ataca a ${targetName}`;
       messages.push({ id: nanoid(), author: attackerName, text, result });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
+      await addDoc(collection(db, 'attacks'), {
+        attackerId: attacker.id,
+        targetId: target.id,
+        result,
+        timestamp: serverTimestamp(),
+        completed: false,
+      });
       setLoading(false);
       onClose(result);
     } catch (e) {
