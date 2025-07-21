@@ -85,4 +85,21 @@ describe('Attack flow', () => {
     });
     expect(DefenseModal).toHaveBeenCalled();
   });
+
+  test('ignores attacks for other players', () => {
+    let snapCb;
+    onSnapshot.mockImplementation((col, cb) => {
+      snapCb = cb;
+      return () => {};
+    });
+    render(<ListenerDemo playerName="p1" />);
+    const doc = {
+      id: 'req1',
+      data: () => ({ attackerId: 'a', targetId: 'b', result: { total: 5 } }),
+    };
+    act(() => {
+      snapCb({ docChanges: () => [{ type: 'added', doc }] });
+    });
+    expect(DefenseModal).not.toHaveBeenCalled();
+  });
 });

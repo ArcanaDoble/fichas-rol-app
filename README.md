@@ -1115,6 +1115,7 @@ src/
 
 - ✅ Tras lanzar el ataque se crea una solicitud en la colección `attacks`
 - ✅ El jugador objetivo o el máster reciben la notificación y abren la defensa
+- ✅ Solo se activa para jugadores con el mapa abierto controlando un token
 
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
