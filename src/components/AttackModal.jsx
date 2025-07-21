@@ -134,6 +134,7 @@ const AttackModal = ({
                   const item = [...weapons, ...powers].find(i => i.nombre === val);
                   setDamage(item?.dano || '');
                 }}
+
                 className="w-full bg-gray-700 text-white"
               >
                 <option value="">Selecciona arma o poder</option>
@@ -154,6 +155,7 @@ const AttackModal = ({
                 />
               )}
               </>
+
             ) : (
               <p className="text-red-400 text-sm">No hay ningún arma disponible al alcance</p>
             )
