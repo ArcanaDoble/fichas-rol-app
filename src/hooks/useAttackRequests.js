@@ -1,16 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function useAttackRequests({ tokens, playerName, userType, onAttack }) {
+  const tokensRef = useRef(tokens);
+
+  // Mantener referencia actualizada sin recrear el listener
   useEffect(() => {
-    if (!tokens || tokens.length === 0) return () => {};
+    tokensRef.current = tokens;
+  }, [tokens]);
+
+  useEffect(() => {
     const q = collection(db, 'attacks');
     const unsub = onSnapshot(q, snapshot => {
       snapshot.docChanges().forEach(change => {
         if (change.type !== 'added') return;
         const data = change.doc.data();
-        const target = tokens.find(t => t.id === data.targetId);
+        const currentTokens = tokensRef.current || [];
+        const target = currentTokens.find(t => t.id === data.targetId);
         if (!target) return;
         const isTargetPlayer = target.controlledBy === playerName;
         const isMaster = userType === 'master';
@@ -20,5 +27,5 @@ export default function useAttackRequests({ tokens, playerName, userType, onAtta
       });
     });
     return () => unsub();
-  }, [tokens, playerName, userType, onAttack]);
+  }, [playerName, userType, onAttack]);
 }
