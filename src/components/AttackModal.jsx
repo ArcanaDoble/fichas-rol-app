@@ -100,7 +100,8 @@ const AttackModal = ({
 
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find(i => i.nombre === choice);
-    const formula = damage || parseDamage(item?.dano || "") || "1d20";
+    const itemDamage = item?.dano ?? item?.poder ?? "";
+    const formula = damage || parseDamage(itemDamage) || "1d20";
     setLoading(true);
     try {
       const result = rollExpression(formula);
@@ -136,7 +137,8 @@ const AttackModal = ({
                   const val = e.target.value;
                   setChoice(val);
                   const item = [...weapons, ...powers].find(i => i.nombre === val);
-                  setDamage(parseDamage(item?.dano || ""));
+                  const dmg = item?.dano ?? item?.poder ?? "";
+                  setDamage(parseDamage(dmg));
                 }}
                 className="w-full bg-gray-700 text-white"
               >

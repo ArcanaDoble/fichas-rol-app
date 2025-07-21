@@ -771,6 +771,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   el objetivo para mostrar el modal de ataque.
 - Las tarjetas de poderes equipados muestran ahora **Daño** justo debajo del nombre, antes de **Alcance**, usando el valor definido en el campo Poder al crear la habilidad.
 
+**Resumen de cambios v2.4.14:**
+
+- Corrección: al seleccionar un poder en el modal de ataque o defensa se precarga
+  ahora el daño definido en la habilidad.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
