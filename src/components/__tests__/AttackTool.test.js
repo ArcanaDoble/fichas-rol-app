@@ -38,7 +38,6 @@ function AttackToolDemo({
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     } else if (attackTargetId === id) {
       if (!attackReady) setAttackReady(true);
     } else if (canTarget) {
@@ -47,7 +46,6 @@ function AttackToolDemo({
       if (source && clicked) {
         setAttackLine([source.x, source.y, clicked.x, clicked.y]);
       }
-      setAttackReady(false);
     }
   };
 
