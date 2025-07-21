@@ -28,13 +28,9 @@ const AttackModal = ({
     if (!val && val !== 0) return Infinity;
     const map = {
       toque: 1,
-      'cuerpo a cuerpo': 1,
       cercano: 2,
-      corto: 2,
       intermedio: 3,
-      media: 3,
       lejano: 4,
-      largo: 4,
       extremo: 5,
     };
     if (typeof val === 'string') {

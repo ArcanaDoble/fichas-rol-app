@@ -1076,6 +1076,11 @@ src/
 - ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
 - ✅ Las tiradas utilizan el daño definido para cada arma o poder
 
+### 🎯 **Ajuste de valores de alcance (Enero 2027) - v2.4.27**
+
+- ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
+- ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
+
 
 
 ## 🔄 Historial de cambios previos
