@@ -1106,6 +1106,11 @@ src/
 - ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
 - ✅ Prueba unitaria garantiza el funcionamiento correcto
 
+### 🏷️ **Nombre de token en chat (Enero 2027) - v2.4.31**
+
+- ✅ Los mensajes de ataque y defensa muestran el nombre del token si está definido
+- ✅ Si el token no tiene nombre, se usa el del asset correspondiente
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
