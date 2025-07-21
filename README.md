@@ -1111,6 +1111,14 @@ src/
 - ✅ Los mensajes de ataque y defensa muestran el nombre del token si está definido
 - ✅ Si el token no tiene nombre, se usa el del asset correspondiente
 
+### 🛡️ **Defensa remota mediante Firestore (Enero 2027) - v2.4.32**
+
+- ✅ Tras lanzar el ataque se crea una solicitud en la colección `attacks`
+- ✅ El jugador objetivo o el máster reciben la notificación y abren la defensa
+- ✅ Solo se activa para jugadores con el mapa abierto controlando un token
+- ✅ Optimizado el listener para evitar conexiones repetidas a Firestore
+- ✅ La defensa se resuelve automáticamente si nadie responde
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
