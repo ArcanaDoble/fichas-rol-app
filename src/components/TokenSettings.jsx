@@ -397,7 +397,9 @@ const TokenSettings = ({
               </Boton>
               <Boton
                 onClick={addToInitiativeSystem}
-                className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white mt-2"
+                size="sm"
+                color="green"
+                className="mt-2"
               >
                 ⚡ Añadir al Sistema de Velocidad
               </Boton>
