@@ -1555,10 +1555,12 @@ function App() {
     }
   }, [playerName, armas, armaduras, setResourcesList]);
 
-  // useEffect que llama a loadPlayer
+  // useEffect que llama a loadPlayer una vez que se ingresó el nombre
   useEffect(() => {
-    loadPlayer();
-  }, [loadPlayer]);
+    if (nameEntered) {
+      loadPlayer();
+    }
+  }, [loadPlayer, nameEntered]);
 
   useEffect(() => {
     const updateFromSheet = (sheet) => {

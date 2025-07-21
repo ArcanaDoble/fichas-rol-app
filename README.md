@@ -132,6 +132,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - El token ya no se mueve al editar su nombre en los ajustes.
 
+**Resumen de cambios v2.1.14:**
+
+- Crear personaje ya no envía peticiones repetidas a Firebase al escribir el nombre.
+
 **Resumen de cambios v2.2.0:**
 
 - Botón **Guardar datos** para respaldar la ficha completa.
