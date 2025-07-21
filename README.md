@@ -775,6 +775,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Corrección: al seleccionar un poder en el modal de ataque o defensa se precarga
   ahora el daño definido en la habilidad.
 
+**Resumen de cambios v2.4.15:**
+
+- El botón "⚡ Añadir al Sistema de Velocidad" en ajustes de tokens ahora es
+  más pequeño y usa el mismo color verde que el botón de los jugadores en el
+  mapa de batalla.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
