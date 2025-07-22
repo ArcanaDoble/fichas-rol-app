@@ -793,8 +793,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.4.17:**
 
 - En el chat, las frases **recibe daño**, **bloquea el ataque** y **contraataca** ahora se resaltan con colores.
-- Al recibir daño se muestra una animación "-X" sobre el token, de color según la barra afectada. Los contraataques y defensas perfectas también tienen su propia animación.
-- Las animaciones de daño ahora se sincronizan entre pestañas para que todos los jugadores las vean en tiempo real.
+- Al recibir daño se muestra una animación "-X" sobre el token indicando los bloques perdidos, con el color de la barra afectada. Los contraataques y defensas perfectas también tienen su propia animación.
+- Las animaciones de daño se sincronizan entre pestañas y ahora se ven durante más tiempo para apreciarlas mejor.
 
 ### 🛠️ **Características Técnicas**
 

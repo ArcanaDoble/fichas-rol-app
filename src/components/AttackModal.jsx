@@ -170,7 +170,7 @@ const AttackModal = ({
               : 'vida';
           const anim = {
             tokenId: target.id,
-            value: result.total,
+            value: lost[stat],
             stat,
             ts: Date.now(),
           };

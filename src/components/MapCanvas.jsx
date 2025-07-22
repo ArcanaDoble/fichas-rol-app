@@ -1078,7 +1078,7 @@ const MapCanvas = ({
       setDamagePopups((prev) => [...prev, { id, x, y, value, stat, type }]);
       setTimeout(() => {
         setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-      }, 1000);
+      }, 2000);
     };
     window.addEventListener('damageAnimation', handler);
     return () => window.removeEventListener('damageAnimation', handler);
@@ -4391,7 +4391,7 @@ const MapCanvas = ({
               key={p.id}
               initial={{ opacity: 1, y: 0 }}
               animate={{ opacity: 0, y: -20 }}
-              transition={{ duration: 1 }}
+              transition={{ duration: 2 }}
               style={{
                 position: 'absolute',
                 left: p.x,

@@ -160,11 +160,11 @@ const DefenseModal = ({
         lost.postura > 0 ? 'postura' : lost.armadura > 0 ? 'armadura' : 'vida';
       let anim;
       if (diff < 0) {
-        anim = { tokenId: target.id, value: Math.abs(diff), stat, ts: Date.now() };
+        anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
       } else if (diff > 0) {
         anim = {
           tokenId: attacker.id,
-          value: diff,
+          value: lost[stat],
           stat,
           type: 'counter',
           ts: Date.now(),
