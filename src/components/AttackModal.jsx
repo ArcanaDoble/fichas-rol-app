@@ -162,6 +162,22 @@ const AttackModal = ({
               }
             }
           }
+          ['postura', 'armadura', 'vida'].forEach((stat) => {
+            if (lost[stat] > 0) {
+              const anim = {
+                tokenId: target.id,
+                value: lost[stat],
+                stat,
+                ts: Date.now(),
+              };
+              window.dispatchEvent(
+                new CustomEvent('damageAnimation', { detail: anim })
+              );
+              try {
+                localStorage.setItem('damageAnimation', JSON.stringify(anim));
+              } catch {}
+            }
+          });
           let msgs = [];
           try {
             const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
