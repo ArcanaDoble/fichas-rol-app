@@ -156,26 +156,35 @@ const DefenseModal = ({
         }
       }
 
-      const stat =
-        lost.postura > 0 ? 'postura' : lost.armadura > 0 ? 'armadura' : 'vida';
-      let anim;
-      if (diff < 0) {
-        anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
-      } else if (diff > 0) {
-        anim = {
-          tokenId: attacker.id,
-          value: lost[stat],
-          stat,
-          type: 'counter',
-          ts: Date.now(),
-        };
+      if (diff === 0) {
+        const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
+        window.dispatchEvent(
+          new CustomEvent('damageAnimation', { detail: anim })
+        );
+        try {
+          localStorage.setItem('damageAnimation', JSON.stringify(anim));
+        } catch {}
       } else {
-        anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
+        const id = diff < 0 ? target.id : attacker.id;
+        const type = diff > 0 ? 'counter' : undefined;
+        ['postura', 'armadura', 'vida'].forEach((stat) => {
+          if (lost[stat] > 0) {
+            const anim = {
+              tokenId: id,
+              value: lost[stat],
+              stat,
+              ts: Date.now(),
+              ...(type ? { type } : {}),
+            };
+            window.dispatchEvent(
+              new CustomEvent('damageAnimation', { detail: anim })
+            );
+            try {
+              localStorage.setItem('damageAnimation', JSON.stringify(anim));
+            } catch {}
+          }
+        });
       }
-      window.dispatchEvent(new CustomEvent('damageAnimation', { detail: anim }));
-      try {
-        localStorage.setItem('damageAnimation', JSON.stringify(anim));
-      } catch {}
 
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
       const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
