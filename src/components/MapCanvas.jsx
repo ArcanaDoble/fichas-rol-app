@@ -929,6 +929,7 @@ const MapCanvas = ({
   onLayerChange = () => {},
   enableDarkness = true,
   darknessOpacity = 0.7,
+  showVisionPolygons = true,
   // Nuevas props para sincronización bidireccional
   pageId = null,
   isPlayerView = false,
@@ -4181,7 +4182,7 @@ const MapCanvas = ({
           )}
 
           {/* Capa de visión - mostrar polígonos de visión de tokens (solo en modo master) */}
-          {!playerViewMode && userType === 'master' && (
+          {showVisionPolygons && !playerViewMode && userType === 'master' && (
             <Layer listening={false}>
               <Group
                 x={groupPos.x}
@@ -4601,6 +4602,7 @@ MapCanvas.propTypes = {
   onLayerChange: PropTypes.func,
   enableDarkness: PropTypes.bool,
   darknessOpacity: PropTypes.number,
+  showVisionPolygons: PropTypes.bool,
 };
 
 export default MapCanvas;
