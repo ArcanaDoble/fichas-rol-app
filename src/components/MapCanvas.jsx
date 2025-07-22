@@ -31,6 +31,7 @@ import TokenEstadoMenu from './TokenEstadoMenu';
 import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
+import { motion } from 'framer-motion';
 import { createToken, cloneTokenSheet } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
@@ -947,6 +948,7 @@ const MapCanvas = ({
   const [isPanning, setIsPanning] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
+  const [damagePopups, setDamagePopups] = useState([]);
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
@@ -1062,6 +1064,39 @@ const MapCanvas = ({
     window.addEventListener('tokenSheetSaved', syncHandler);
     return () => window.removeEventListener('tokenSheetSaved', syncHandler);
   }, [tokens]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { tokenId, value, stat, type } = e.detail || {};
+      if (!tokenId || !tokenRefs.current[tokenId] || !stageRef.current || !containerRef.current) return;
+      const rect = tokenRefs.current[tokenId].node.getClientRect({ relativeTo: stageRef.current });
+      const stageRect = stageRef.current.container().getBoundingClientRect();
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const x = rect.x + rect.width / 2 + stageRect.left - containerRect.left;
+      const y = rect.y + stageRect.top - containerRect.top;
+      const id = nanoid();
+      setDamagePopups((prev) => [...prev, { id, x, y, value, stat, type }]);
+      setTimeout(() => {
+        setDamagePopups((prev) => prev.filter((p) => p.id !== id));
+      }, 1000);
+    };
+    window.addEventListener('damageAnimation', handler);
+    return () => window.removeEventListener('damageAnimation', handler);
+  }, [tokens]);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== 'damageAnimation' || !e.newValue) return;
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data && data.ts) {
+          window.dispatchEvent(new CustomEvent('damageAnimation', { detail: data }));
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   useEffect(() => {
     const prev = prevTokensRef.current || [];
@@ -4339,6 +4374,39 @@ const MapCanvas = ({
             </Layer>
           )}
         </Stage>
+      </div>
+      <div className="absolute inset-0 pointer-events-none z-40">
+        {damagePopups.map((p) => {
+          const colors = {
+            postura: '#34d399',
+            vida: '#f87171',
+            armadura: '#9ca3af',
+            counter: '#facc15',
+            perfect: '#60a5fa',
+          };
+          const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
+          const text = p.type === 'counter' ? '¡Contraataque!' : p.type === 'perfect' ? '¡Defensa perfecta!' : `-${p.value}`;
+          return (
+            <motion.div
+              key={p.id}
+              initial={{ opacity: 1, y: 0 }}
+              animate={{ opacity: 0, y: -20 }}
+              transition={{ duration: 1 }}
+              style={{
+                position: 'absolute',
+                left: p.x,
+                top: p.y,
+                transform: 'translate(-50%, -100%)',
+                color,
+                fontSize: 20,
+                fontWeight: 'bold',
+                textShadow: '0 0 2px #000',
+              }}
+            >
+              {text}
+            </motion.div>
+          );
+        })}
       </div>
       <Toolbar
         activeTool={activeTool}
