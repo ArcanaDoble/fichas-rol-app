@@ -48,6 +48,14 @@ const DefenseModal = ({
     if (!val) return '';
     return String(val).split(/[ (]/)[0];
   };
+  const getSpeedConsumption = (equipment) => {
+    if (!equipment) return 0;
+    const consumo = equipment.consumo || '';
+    const yellowDotCount = (consumo.match(/🟡/g) || []).length;
+    if (yellowDotCount) return yellowDotCount;
+    const parsed = parseInt(consumo, 10);
+    return isNaN(parsed) ? 0 : parsed;
+  };
   const mapItem = (it, catalog) => {
     if (!it) return null;
     if (typeof it === 'string') {
@@ -86,6 +94,7 @@ const DefenseModal = ({
 
   const [choice, setChoice] = useState('');
   const [damage, setDamage] = useState('');
+  const [speedCost, setSpeedCost] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const hasEquip = useMemo(() => {
@@ -232,6 +241,7 @@ const DefenseModal = ({
                     );
                     const dmg = item?.dano ?? item?.poder ?? '';
                     setDamage(parseDamage(dmg));
+                    setSpeedCost(getSpeedConsumption(item));
                   }}
                   className="w-full bg-gray-700 text-white"
                 >
@@ -248,13 +258,16 @@ const DefenseModal = ({
                   ))}
                 </select>
                 {choice && (
-                  <input
-                    type="text"
-                    value={damage}
-                    onChange={(e) => setDamage(e.target.value)}
-                    className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
-                    placeholder="Daño"
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={damage}
+                      onChange={(e) => setDamage(e.target.value)}
+                      className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                      placeholder="Daño"
+                    />
+                    <p className="text-sm text-gray-300 mt-1">Consumo: 🟡{speedCost}</p>
+                  </>
                 )}
               </>
             ) : (
