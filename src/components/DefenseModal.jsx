@@ -197,11 +197,16 @@ const DefenseModal = ({
 
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
       const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
+      const totalLost = lost.armadura + lost.postura + lost.vida;
       let text;
       if (diff > 0) {
         text = `${targetName} contraataca. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
       } else if (diff < 0) {
-        text = `${targetName} recibe daño. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${Math.abs(diff)} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        if (totalLost === 0) {
+          text = `${targetName} resiste el ataque. Ataque ${attackResult?.total || 0} Defensa ${result.total}`;
+        } else {
+          text = `${targetName} recibe daño. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${Math.abs(diff)} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        }
       } else {
         text = `${targetName} bloquea el ataque. Ataque ${attackResult?.total || 0} Defensa ${result.total}`;
       }
