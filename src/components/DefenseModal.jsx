@@ -156,6 +156,28 @@ const DefenseModal = ({
         }
       }
 
+      const stat =
+        lost.postura > 0 ? 'postura' : lost.armadura > 0 ? 'armadura' : 'vida';
+      if (diff < 0) {
+        window.dispatchEvent(
+          new CustomEvent('damageAnimation', {
+            detail: { tokenId: target.id, value: Math.abs(diff), stat },
+          })
+        );
+      } else if (diff > 0) {
+        window.dispatchEvent(
+          new CustomEvent('damageAnimation', {
+            detail: { tokenId: attacker.id, value: diff, stat, type: 'counter' },
+          })
+        );
+      } else {
+        window.dispatchEvent(
+          new CustomEvent('damageAnimation', {
+            detail: { tokenId: target.id, type: 'perfect' },
+          })
+        );
+      }
+
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
       const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
       let text;
