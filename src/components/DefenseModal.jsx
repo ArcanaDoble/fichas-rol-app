@@ -119,7 +119,7 @@ const DefenseModal = ({
       if (diff < 0 && sheet) {
         let updated = sheet;
         let remaining = Math.abs(diff);
-        ['armadura', 'postura', 'vida'].forEach((stat) => {
+        ['postura', 'armadura', 'vida'].forEach((stat) => {
           const res = applyDamage(updated, remaining, stat);
           remaining = res.remaining;
           updated = res.sheet;
@@ -140,7 +140,7 @@ const DefenseModal = ({
           let atkSheet = sheets[attacker.tokenSheetId];
           if (atkSheet) {
             let remaining = diff;
-            ['armadura', 'postura', 'vida'].forEach((stat) => {
+            ['postura', 'armadura', 'vida'].forEach((stat) => {
               const res = applyDamage(atkSheet, remaining, stat);
               remaining = res.remaining;
               atkSheet = res.sheet;

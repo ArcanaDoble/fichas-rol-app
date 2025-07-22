@@ -26,5 +26,9 @@ export const applyDamage = (sheet, damage, stat) => {
     stats: { ...sheet.stats, [stat]: { ...sheet.stats[stat] } },
   };
   updated.stats[stat].actual = available - blocks;
-  return { sheet: updated, blocks, remaining: Math.max(0, damage - usedDamage) };
+  let remaining = Math.max(0, damage - usedDamage);
+  if (remaining > 0 && available - blocks > 0) {
+    remaining = 0;
+  }
+  return { sheet: updated, blocks, remaining };
 };

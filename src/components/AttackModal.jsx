@@ -148,7 +148,7 @@ const AttackModal = ({
               if (sheet) {
                 let updated = sheet;
                 let remaining = result.total;
-                ['armadura', 'postura', 'vida'].forEach((stat) => {
+                ['postura', 'armadura', 'vida'].forEach((stat) => {
                   const res = applyDamage(updated, remaining, stat);
                   remaining = res.remaining;
                   updated = res.sheet;

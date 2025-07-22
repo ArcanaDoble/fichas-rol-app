@@ -47,14 +47,14 @@ test('damage is applied sequentially across stats', () => {
     atributos: { destreza: 'D4', vigor: 'D4' },
     stats: { armadura: { actual: 1 }, postura: { actual: 2 }, vida: { actual: 2 } },
   };
-  let remaining = 4;
+  let remaining = 5;
   let updated = sheet;
-  ['armadura', 'postura', 'vida'].forEach((stat) => {
+  ['postura', 'armadura', 'vida'].forEach((stat) => {
     const res = applyDamage(updated, remaining, stat);
     remaining = res.remaining;
     updated = res.sheet;
   });
-  expect(updated.stats.armadura.actual).toBe(0);
-  expect(updated.stats.postura.actual).toBe(2);
+  expect(updated.stats.armadura.actual).toBe(1);
+  expect(updated.stats.postura.actual).toBe(1);
   expect(updated.stats.vida.actual).toBe(2);
 });
