@@ -156,6 +156,13 @@ const DOOR_PATHS = {
   ],
 };
 
+const normalizeWallRotation = (x1, y1, x2, y2) => {
+  let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+  deg = (deg + 360) % 180;
+  if (deg > 90) deg -= 180;
+  return Math.abs(deg);
+};
+
 // Componente para mostrar puertas interactivas en la capa fichas
 const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
   const [x1, y1, x2, y2] = wall.points;
@@ -3962,14 +3969,12 @@ const MapCanvas = ({
                   <Group
                     x={wl.x + (wl.points[0] + wl.points[2]) / 2}
                     y={wl.y + (wl.points[1] + wl.points[3]) / 2}
-                    rotation={
-                      (Math.atan2(
-                        wl.points[3] - wl.points[1],
-                        wl.points[2] - wl.points[0]
-                      ) /
-                        Math.PI) *
-                      180
-                    }
+                    rotation={normalizeWallRotation(
+                      wl.points[0],
+                      wl.points[1],
+                      wl.points[2],
+                      wl.points[3]
+                    )}
                     onClick={() => setDoorMenuWallId(wl.id)}
                     onTap={() => setDoorMenuWallId(wl.id)}
                     onMouseEnter={() =>

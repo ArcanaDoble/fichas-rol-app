@@ -882,6 +882,7 @@ src/
 - **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
 - **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
 - **Doble clic seguro en mirilla** - Al usar la mirilla, el doble clic ya no abre el menú de ajustes del token
+- **Iconos de puerta siempre orientados** - Los SVG de las puertas se muestran correctamente aunque el muro se dibuje al revés
 
 #### v2.1.1 (junio 2024)
 
