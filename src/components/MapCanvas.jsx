@@ -1071,8 +1071,9 @@ const MapCanvas = ({
       if (!tokenId || !tokenRefs.current[tokenId] || !stageRef.current || !containerRef.current) return;
       const rect = tokenRefs.current[tokenId].node.getClientRect({ relativeTo: stageRef.current });
       const stageRect = stageRef.current.container().getBoundingClientRect();
-      const x = rect.x + rect.width / 2 + stageRect.left;
-      const y = rect.y + stageRect.top;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const x = rect.x + rect.width / 2 + stageRect.left - containerRect.left;
+      const y = rect.y + stageRect.top - containerRect.top;
       const id = nanoid();
       setDamagePopups((prev) => [...prev, { id, x, y, value, stat, type }]);
       setTimeout(() => {
@@ -1082,6 +1083,20 @@ const MapCanvas = ({
     window.addEventListener('damageAnimation', handler);
     return () => window.removeEventListener('damageAnimation', handler);
   }, [tokens]);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== 'damageAnimation' || !e.newValue) return;
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data && data.ts) {
+          window.dispatchEvent(new CustomEvent('damageAnimation', { detail: data }));
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   useEffect(() => {
     const prev = prevTokensRef.current || [];
@@ -4383,6 +4398,7 @@ const MapCanvas = ({
                 top: p.y,
                 transform: 'translate(-50%, -100%)',
                 color,
+                fontSize: 20,
                 fontWeight: 'bold',
                 textShadow: '0 0 2px #000',
               }}

@@ -168,11 +168,18 @@ const AttackModal = ({
               : lost.armadura > 0
               ? 'armadura'
               : 'vida';
+          const anim = {
+            tokenId: target.id,
+            value: result.total,
+            stat,
+            ts: Date.now(),
+          };
           window.dispatchEvent(
-            new CustomEvent('damageAnimation', {
-              detail: { tokenId: target.id, value: result.total, stat },
-            })
+            new CustomEvent('damageAnimation', { detail: anim })
           );
+          try {
+            localStorage.setItem('damageAnimation', JSON.stringify(anim));
+          } catch {}
           let msgs = [];
           try {
             const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
