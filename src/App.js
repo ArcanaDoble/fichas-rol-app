@@ -490,6 +490,7 @@ function App() {
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [enableDarkness, setEnableDarkness] = useState(true);
+  const [showVisionRanges, setShowVisionRanges] = useState(true);
 
   // Control de visibilidad de páginas para jugadores
   const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
@@ -4514,6 +4515,14 @@ function App() {
             >
               Herramientas
             </Boton>
+            <label className="flex items-center gap-1 text-sm ml-2">
+              <input
+                type="checkbox"
+                checked={showVisionRanges}
+                onChange={(e) => setShowVisionRanges(e.target.checked)}
+              />
+              Rangos de visión
+            </label>
           </div>
         </div>
         <div className="mb-4 mr-80">
@@ -4583,6 +4592,7 @@ function App() {
               onLayerChange={setActiveLayer}
               enableDarkness={enableDarkness}
               darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
+              showVisionPolygons={showVisionRanges}
             />
           </div>
           <AssetSidebar isMaster={authenticated} playerName={playerName} />
