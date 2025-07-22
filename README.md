@@ -788,6 +788,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.4.16:**
 
 - Ajuste de daño: ahora se aplica primero a la Postura, luego a la Armadura y por último a la Vida. El daño sobrante no se transfiere a la siguiente estadística.
+- Mayor tolerancia antes de sincronizar los datos al editar fichas y tiempo de ventana de defensa ampliado a 20s.
 
 ### 🛠️ **Características Técnicas**
 

@@ -16,7 +16,7 @@ import {
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 
-const AUTO_RESOLVE_MS = 10000;
+const AUTO_RESOLVE_MS = 20000;
 
 const AttackModal = ({
   isOpen,
