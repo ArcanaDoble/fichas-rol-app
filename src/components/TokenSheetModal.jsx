@@ -25,7 +25,7 @@ const TokenSheetModal = ({
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    if (!sheetId) return;
+    if (!sheetId || editing) return;
     const stored = localStorage.getItem('tokenSheets');
     const sheets = stored ? JSON.parse(stored) : {};
     let sheet = sheets[sheetId];
@@ -100,7 +100,7 @@ const TokenSheetModal = ({
     }
 
     setData(sheet);
-  }, [sheetId, token, enemies, armas, armaduras, habilidades]);
+  }, [sheetId, token, enemies, armas, armaduras, habilidades, editing]);
 
   const handleSave = (updated) => {
     const stored = localStorage.getItem('tokenSheets');
