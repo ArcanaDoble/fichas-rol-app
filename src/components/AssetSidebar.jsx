@@ -19,6 +19,21 @@ import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
+const highlightBattleText = (text) =>
+  text
+    .replace(
+      /(recibe daño)/gi,
+      '<span class="text-red-400 font-semibold">$1</span>'
+    )
+    .replace(
+      /(bloquea el ataque)/gi,
+      '<span class="text-green-400 font-semibold">$1</span>'
+    )
+    .replace(
+      /(contraataca)/gi,
+      '<span class="text-yellow-400 font-semibold">$1</span>'
+    );
+
 const MASTER_COLOR = "#FFD700";
 
 const EMPTY_IMAGE = new Image();
@@ -688,7 +703,10 @@ const AssetSidebar = ({
                       >
                         {m.author}:
                       </span>
-                      <span className="text-gray-200 break-words">{m.text}</span>
+                      <span
+                        className="text-gray-200 break-words"
+                        dangerouslySetInnerHTML={{ __html: highlightBattleText(m.text) }}
+                      />
                     </div>
                   )}
                   {m.result && (
