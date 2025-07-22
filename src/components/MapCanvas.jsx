@@ -1075,10 +1075,13 @@ const MapCanvas = ({
       const x = rect.x + rect.width / 2 + stageRect.left - containerRect.left;
       const y = rect.y + stageRect.top - containerRect.top;
       const id = nanoid();
-      setDamagePopups((prev) => [...prev, { id, x, y, value, stat, type }]);
+      setDamagePopups((prev) => [
+        ...prev,
+        { id, tokenId, x, y, value, stat, type },
+      ]);
       setTimeout(() => {
         setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-      }, 2000);
+      }, 4000);
     };
     window.addEventListener('damageAnimation', handler);
     return () => window.removeEventListener('damageAnimation', handler);
@@ -4376,37 +4379,52 @@ const MapCanvas = ({
         </Stage>
       </div>
       <div className="absolute inset-0 pointer-events-none z-40">
-        {damagePopups.map((p) => {
-          const colors = {
+        {(() => {
+          const groups = damagePopups.reduce((acc, p) => {
+            acc[p.tokenId] = acc[p.tokenId] || [];
+            acc[p.tokenId].push(p);
+            return acc;
+          }, {});
+          return damagePopups.map((p) => {
+            const colors = {
             postura: '#34d399',
             vida: '#f87171',
             armadura: '#9ca3af',
             counter: '#facc15',
             perfect: '#60a5fa',
           };
-          const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
-          const text = p.type === 'counter' ? '¡Contraataque!' : p.type === 'perfect' ? '¡Defensa perfecta!' : `-${p.value}`;
-          return (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 1, y: 0 }}
-              animate={{ opacity: 0, y: -20 }}
-              transition={{ duration: 2 }}
-              style={{
-                position: 'absolute',
-                left: p.x,
-                top: p.y,
-                transform: 'translate(-50%, -100%)',
-                color,
-                fontSize: 20,
-                fontWeight: 'bold',
-                textShadow: '0 0 2px #000',
-              }}
-            >
-              {text}
-            </motion.div>
-          );
-        })}
+            const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
+            const text =
+              p.type === 'counter'
+                ? '¡Contraataque!'
+                : p.type === 'perfect'
+                ? '¡Defensa perfecta!'
+                : `-${p.value}`;
+            const group = groups[p.tokenId] || [];
+            const index = group.findIndex((g) => g.id === p.id);
+            const offset = (index - (group.length - 1) / 2) * 30;
+            return (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 1, y: 0 }}
+                animate={{ opacity: 0, y: -20 }}
+                transition={{ duration: 4 }}
+                style={{
+                  position: 'absolute',
+                  left: p.x + offset,
+                  top: p.y,
+                  transform: 'translate(-50%, -100%)',
+                  color,
+                  fontSize: 20,
+                  fontWeight: 'bold',
+                  textShadow: '0 0 2px #000',
+                }}
+              >
+                {text}
+              </motion.div>
+            );
+          });
+        })()}
       </div>
       <Toolbar
         activeTool={activeTool}
