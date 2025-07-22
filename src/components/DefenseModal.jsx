@@ -258,14 +258,32 @@ const DefenseModal = ({
                 )}
               </>
             ) : (
-              <p className="text-red-400 text-sm">
-                No hay ningún arma disponible al alcance
-              </p>
+              <>
+                <p className="text-red-400 text-sm">
+                  No hay ningún arma disponible al alcance
+                </p>
+                <input
+                  type="text"
+                  value={damage}
+                  onChange={(e) => setDamage(e.target.value)}
+                  className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                  placeholder="Defensa opcional"
+                />
+              </>
             )
           ) : (
-            <p className="text-red-400 text-sm">
-              No hay armas o poderes equipados
-            </p>
+            <>
+              <p className="text-red-400 text-sm">
+                No hay armas o poderes equipados
+              </p>
+              <input
+                type="text"
+                value={damage}
+                onChange={(e) => setDamage(e.target.value)}
+                className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
+                placeholder="Defensa opcional"
+              />
+            </>
           )}
         </div>
         <Boton
@@ -273,7 +291,6 @@ const DefenseModal = ({
           onClick={handleRoll}
           loading={loading}
           className="w-full"
-          disabled={!hasAvailable}
         >
           Lanzar
         </Boton>

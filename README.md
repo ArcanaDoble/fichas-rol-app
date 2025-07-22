@@ -1147,6 +1147,7 @@ src/
 - ✅ Optimizado el listener para evitar conexiones repetidas a Firestore
 - ✅ Suscripción estable para prevenir reconexiones al renderizar el mapa
 - ✅ La defensa se resuelve automáticamente si nadie responde
+- ✅ Si no hay armas o poderes disponibles, el defensor puede introducir un valor manual de defensa
 
 ### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.35**
 
