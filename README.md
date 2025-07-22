@@ -785,6 +785,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   más pequeño y usa el mismo color verde que el botón de los jugadores en el
   mapa de batalla.
 
+**Resumen de cambios v2.4.16:**
+
+- Ajuste de daño: ahora se aplica primero a la Postura, luego a la Armadura y por último a la Vida. El daño sobrante no se transfiere a la siguiente estadística.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
@@ -1132,7 +1136,8 @@ src/
 
 ### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.35**
 
-- ✅ El daño se calcula como `floor(daño / atributo)` y se aplica primero a la armadura, pasando a postura y vida solo si queda daño
+- ✅ El daño se calcula como `floor(daño / atributo)` y se aplica primero a la postura, luego a la armadura y finalmente a la vida
+- ✅ El daño restante no pasa a la siguiente estadística si quedan bloques disponibles en la actual
 - ✅ Si la defensa supera al ataque se produce un contraataque automático
 - ✅ Los mensajes de chat muestran tiradas, diferencia y bloques perdidos
 
