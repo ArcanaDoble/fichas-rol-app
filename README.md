@@ -1161,6 +1161,10 @@ src/
 - ✅ El icono de puerta tiene un área de clic más grande y visible
 - ✅ Se cambia el cursor a puntero al pasar sobre el icono
 
+### ⚡ **Consumo de velocidad en ataque y defensa (Enero 2027) - v2.4.37**
+
+- ✅ Los modales de Ataque y Defensa muestran el consumo de velocidad del arma o poder seleccionado
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
