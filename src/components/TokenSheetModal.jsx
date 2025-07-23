@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
 import TokenSheetEditor from './TokenSheetEditor';
+import { saveTokenSheet } from '../utils/token';
 
 const recursoColor = {
   postura: '#34d399',
@@ -103,13 +104,9 @@ const TokenSheetModal = ({
   }, [sheetId, token, enemies, armas, armaduras, habilidades, editing]);
 
   const handleSave = (updated) => {
-    const stored = localStorage.getItem('tokenSheets');
-    const sheets = stored ? JSON.parse(stored) : {};
-    sheets[sheetId] = updated;
-    localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+    saveTokenSheet(updated);
     setData(updated);
     setEditing(false);
-    window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
   };
 
   if (!token || !data) return null;
