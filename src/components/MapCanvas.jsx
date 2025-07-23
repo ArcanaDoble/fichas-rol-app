@@ -44,6 +44,7 @@ import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
+import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
@@ -1370,6 +1371,17 @@ const MapCanvas = ({
   }, [isPlayerView, syncManager, onTextsChange]);
 
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
+  const [activeTokenId, setActiveTokenId] = useState(null);
+
+  useEffect(() => {
+    const currentPlayer = userType === 'player' ? playerName : simulatedPlayer;
+    const playerTokens = tokens.filter(t => t.controlledBy === currentPlayer);
+    if (playerTokens.length === 0) {
+      setActiveTokenId(null);
+      return;
+    }
+    setActiveTokenId(id => playerTokens.find(t => t.id === id)?.id || playerTokens[0].id);
+  }, [tokens, playerName, userType, simulatedPlayer]);
 
   // Sincronizar con la prop externa
   useEffect(() => {
@@ -1383,7 +1395,6 @@ const MapCanvas = ({
         e.preventDefault();
 
         if (!playerViewMode) {
-          // Activar modo simulación - mostrar lista de jugadores disponibles
           const availablePlayers = [...new Set(tokens.map(t => t.controlledBy).filter(Boolean))];
 
           if (availablePlayers.length === 0) {
@@ -1406,16 +1417,28 @@ const MapCanvas = ({
             }
           }
         } else {
-          // Desactivar modo simulación
           setPlayerViewMode(false);
           setSimulatedPlayer('');
         }
+        return;
+      }
+
+      if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) {
+        const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
+        if (!isPlayerMode) return;
+        const currentPlayer = userType === 'player' ? playerName : simulatedPlayer;
+        const playerTokens = tokens.filter(t => t.controlledBy === currentPlayer);
+        if (playerTokens.length < 2) return;
+        e.preventDefault();
+        const idx = playerTokens.findIndex(t => t.id === activeTokenId);
+        const next = playerTokens[(idx + 1) % playerTokens.length];
+        setActiveTokenId(next.id);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [userType, playerViewMode, tokens]);
+  }, [userType, playerViewMode, tokens, activeTokenId, playerName, simulatedPlayer]);
 
   // Sistema de visibilidad cruzada entre capas
   const getVisibleElements = (elements, currentLayer) => {
@@ -1828,49 +1851,10 @@ const MapCanvas = ({
 
   // Función para verificar si un token es visible para el jugador actual
   const isTokenVisibleToPlayer = useCallback((token) => {
-    // Si no estamos en modo jugador, mostrar todos los tokens (modo master)
     const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-    if (!isPlayerMode) {
-      return true;
-    }
-
-    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-    if (!effectivePlayerName) {
-      return true;
-    }
-
-    // Encontrar el token del jugador actual
-    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
-    if (!playerToken) {
-      return true;
-    }
-
-    // Si el token es del propio jugador, siempre es visible
-    if (token.controlledBy === effectivePlayerName) {
-      return true;
-    }
-
-    // Verificar si el jugador tiene visión habilitada
-    const visionEnabled = playerToken.vision?.enabled !== false;
-    if (!visionEnabled) {
-      return false;
-    }
-
-    // Obtener el polígono de visión del jugador
-    const playerVisionData = playerVisionPolygons[playerToken.id];
-    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
-      return true; // Si no hay polígono de visión, mostrar por defecto
-    }
-
-    // Calcular el centro del token a verificar
-    const tokenCenter = {
-      x: (token.x + token.w / 2) * effectiveGridSize,
-      y: (token.y + token.h / 2) * effectiveGridSize
-    };
-
-    // Verificar si el centro del token está dentro del polígono de visión del jugador
-    return isPointVisible(tokenCenter, playerVisionData.polygon);
-  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons, effectiveGridSize]);
+    if (!isPlayerMode) return true;
+    return isTokenVisible(token, activeTokenId, tokens, playerVisionPolygons, effectiveGridSize);
+  }, [userType, playerViewMode, activeTokenId, tokens, playerVisionPolygons, effectiveGridSize]);
 
   // Los tokens siempre mantienen opacidad completa - la visibilidad se controla solo por sombras
   const getTokenOpacity = useCallback((token) => {
@@ -2175,45 +2159,10 @@ const MapCanvas = ({
 
   // Función para verificar si una puerta es visible para el jugador actual
   const isDoorVisibleToPlayer = useCallback((wall) => {
-    // Si no estamos en modo jugador, mostrar todas las puertas (modo master)
     const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-    if (!isPlayerMode) {
-      return true;
-    }
-
-    const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-    if (!effectivePlayerName) {
-      return true;
-    }
-
-    // Encontrar el token del jugador actual
-    const playerToken = tokens.find(t => t.controlledBy === effectivePlayerName);
-    if (!playerToken) {
-      return true;
-    }
-
-    // Verificar si el jugador tiene visión habilitada
-    const visionEnabled = playerToken.vision?.enabled !== false;
-    if (!visionEnabled) {
-      return false;
-    }
-
-    // Obtener el polígono de visión del jugador
-    const playerVisionData = playerVisionPolygons[playerToken.id];
-    if (!playerVisionData || !playerVisionData.polygon || playerVisionData.polygon.length < 3) {
-      return true; // Si no hay polígono de visión, mostrar por defecto
-    }
-
-    // Calcular el centro de la puerta
-    const [x1, y1, x2, y2] = wall.points;
-    const doorCenter = {
-      x: wall.x + (x1 + x2) / 2,
-      y: wall.y + (y1 + y2) / 2
-    };
-
-    // Verificar si el centro de la puerta está dentro del polígono de visión del jugador
-    return isPointVisible(doorCenter, playerVisionData.polygon);
-  }, [userType, playerViewMode, playerName, simulatedPlayer, tokens, playerVisionPolygons]);
+    if (!isPlayerMode) return true;
+    return isDoorVisible(wall, activeTokenId, tokens, playerVisionPolygons);
+  }, [userType, playerViewMode, activeTokenId, tokens, playerVisionPolygons]);
 
   // Filtrar muros que deben mostrar iconos interactivos
   // Ahora siempre devuelve las puertas - la visibilidad se controla por la capa de sombras
@@ -4275,18 +4224,15 @@ const MapCanvas = ({
           {(() => {
             // Determinar si estamos en modo jugador real o simulado
             const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
-            const effectivePlayerName = userType === 'player' ? playerName : simulatedPlayer;
-
-            if (!isPlayerMode || !effectivePlayerName) {
+            if (!isPlayerMode || !activeTokenId) {
               return null;
             }
 
-            const playerToken = tokens.find(token => token.controlledBy === effectivePlayerName);
+            const playerToken = tokens.find(token => token.id === activeTokenId);
             if (!playerToken) {
               return null;
             }
 
-            // Verificar si el jugador tiene visión habilitada
             const visionEnabled = playerToken.vision?.enabled !== false;
             if (!visionEnabled) {
               return (
@@ -4574,6 +4520,24 @@ const MapCanvas = ({
             <span className="text-sm font-medium">👁️ Simulando vista de:</span>
             <span className="font-bold">{simulatedPlayer}</span>
             <span className="text-xs opacity-75">(Ctrl+L para salir)</span>
+          </div>
+        </div>
+      )}
+
+      {(userType === 'player' || playerViewMode) && tokens.some(t => t.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)) && (
+        <div className="absolute top-16 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">🎯 Ficha activa:</span>
+            <select
+              className="text-black text-sm"
+              value={activeTokenId || ''}
+              onChange={e => setActiveTokenId(e.target.value)}
+            >
+              {tokens.filter(t => t.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)).map(t => (
+                <option key={t.id} value={t.id}>{t.name || t.id}</option>
+              ))}
+            </select>
+            <span className="text-xs opacity-75">(Tab para alternar)</span>
           </div>
         </div>
       )}
