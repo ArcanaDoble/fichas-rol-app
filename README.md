@@ -693,6 +693,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Añadido buscador de tokens en la sección de assets para localizar imágenes por nombre.
 
+**Resumen de cambios v2.3.29:**
+
+- Asignar un jugador a un token ya no descarga automáticamente su ficha; usa **Restaurar ficha** para importarla manualmente.
+
 **Resumen de cambios v2.4.0:**
 
 - Sistema de Capas implementado con organización del contenido del mapa en 3 capas independientes.
