@@ -70,7 +70,11 @@ const TokenSheetEditor = ({
     setData(prev => {
       const copy = { ...prev.stats };
       delete copy[stat];
-      return { ...prev, stats: copy };
+      let list = prev.resourcesList;
+      if (Array.isArray(list)) {
+        list = list.filter(r => r.id !== stat);
+      }
+      return { ...prev, stats: copy, resourcesList: list };
     });
   };
 
