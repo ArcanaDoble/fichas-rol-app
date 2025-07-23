@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
@@ -94,6 +94,62 @@ const TokenSettings = ({
       }
     } catch (err) {
       console.error('Error loading player sheet', err);
+    }
+  };
+
+  const restoreFromPlayerSheet = async () => {
+    if (controlledBy === 'master' || !token.tokenSheetId) return;
+    try {
+      const snap = await getDoc(doc(db, 'players', controlledBy));
+      if (snap.exists()) {
+        const stored = localStorage.getItem('tokenSheets');
+        const sheets = stored ? JSON.parse(stored) : {};
+        const sheet = {
+          id: token.tokenSheetId,
+          portrait: token.url,
+          ...snap.data(),
+        };
+        sheets[token.tokenSheetId] = sheet;
+        localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        window.dispatchEvent(
+          new CustomEvent('tokenSheetSaved', { detail: sheet })
+        );
+      }
+    } catch (err) {
+      console.error('restore player sheet', err);
+    }
+  };
+
+  const updatePlayerSheet = async () => {
+    if (controlledBy === 'master' || !token.tokenSheetId) return;
+    const stored = localStorage.getItem('tokenSheets');
+    if (!stored) return;
+    const sheets = JSON.parse(stored);
+    const sheet = sheets[token.tokenSheetId];
+    if (!sheet) return;
+    const mapNames = (arr) =>
+      (arr || [])
+        .map((it) => (typeof it === 'string' ? it : it.nombre))
+        .filter(Boolean);
+    const playerSheet = {
+      ...sheet,
+      weapons: mapNames(sheet.weapons),
+      armaduras: mapNames(sheet.armaduras),
+      poderes: mapNames(sheet.poderes),
+    };
+    try {
+      await setDoc(doc(db, 'players', controlledBy), playerSheet);
+      localStorage.setItem(
+        `player_${controlledBy}`,
+        JSON.stringify(playerSheet)
+      );
+      window.dispatchEvent(
+        new CustomEvent('playerSheetSaved', {
+          detail: { name: controlledBy, sheet: playerSheet },
+        })
+      );
+    } catch (err) {
+      console.error('update player sheet', err);
     }
   };
 
@@ -414,6 +470,16 @@ const TokenSettings = ({
               >
                 Abrir ficha de personaje
               </Boton>
+              {controlledBy !== 'master' && token.tokenSheetId && (
+                <div className="flex justify-center gap-2 mt-2">
+                  <Boton size="sm" onClick={restoreFromPlayerSheet}>
+                    Restaurar ficha
+                  </Boton>
+                  <Boton size="sm" onClick={updatePlayerSheet}>
+                    Subir cambios
+                  </Boton>
+                </div>
+              )}
               <Boton
                 onClick={addToInitiativeSystem}
                 size="sm"
