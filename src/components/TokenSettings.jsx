@@ -64,9 +64,6 @@ const TokenSettings = ({
   const [tintOpacity, setTintOpacity] = useState(
     typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
   );
-  const [syncWithPlayer, setSyncWithPlayer] = useState(
-    token.syncWithPlayer !== false
-  );
   
   // Estados para configuración de luz
   const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
@@ -194,14 +191,13 @@ const TokenSettings = ({
           enabled: visionEnabled,
           range: visionRange,
         },
-        syncWithPlayer,
       });
     }, 800); // Esperar 800ms antes de aplicar cambios (optimizado para evitar spam a Firebase)
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
     tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
-    lightColor, lightOpacity, visionEnabled, visionRange, syncWithPlayer,
+    lightColor, lightOpacity, visionEnabled, visionRange,
     onUpdate
   ]);
 
@@ -235,7 +231,6 @@ const TokenSettings = ({
         enabled: visionEnabled,
         range: visionRange,
       },
-      syncWithPlayer,
     };
     console.log('Updating token with vision:', visionEnabled, updatedToken);
     onUpdate(updatedToken);
@@ -262,14 +257,6 @@ const TokenSettings = ({
     visionEnabled // Cambio inmediato para visión
   ]);
 
-  const firstSyncRef = useRef(true);
-  useEffect(() => {
-    if (firstSyncRef.current) {
-      firstSyncRef.current = false;
-      return;
-    }
-    applyChanges();
-  }, [syncWithPlayer]);
 
   // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
@@ -384,16 +371,9 @@ const TokenSettings = ({
                   </select>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="syncWithPlayer"
-                  type="checkbox"
-                  checked={syncWithPlayer}
-                  onChange={e => setSyncWithPlayer(e.target.checked)}
-                />
-                <label htmlFor="syncWithPlayer">Sincronizar con ficha de jugador</label>
+              <div className="flex justify-end mb-2">
                 {controlledBy !== 'master' && (
-                  <Boton size="sm" className="ml-auto" onClick={() => loadPlayerSheet(controlledBy)}>
+                  <Boton size="sm" onClick={() => loadPlayerSheet(controlledBy)}>
                     Actualizar ficha
                   </Boton>
                 )}
@@ -460,7 +440,6 @@ const TokenSettings = ({
                       opacity: tokenOpacity,
                       tintColor,
                       tintOpacity,
-                      syncWithPlayer,
                   };
                   onOpenSheet(updated);
                 }}
