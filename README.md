@@ -1180,6 +1180,10 @@ src/
 
 - ✅ Se elimina el botón "Actualizar ficha" manteniendo "Restaurar ficha" y "Subir cambios"
 
+### 🕹️ **Ventana de cambio de ficha móvil (Enero 2027) - v2.4.40**
+
+- ✅ El selector de ficha activa puede arrastrarse a cualquier posición de la pantalla
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
