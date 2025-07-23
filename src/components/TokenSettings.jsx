@@ -371,13 +371,6 @@ const TokenSettings = ({
                   </select>
                 )}
               </div>
-              <div className="flex justify-end mb-2">
-                {controlledBy !== 'master' && (
-                  <Boton size="sm" onClick={() => loadPlayerSheet(controlledBy)}>
-                    Actualizar ficha
-                  </Boton>
-                )}
-              </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
                 <select value={barsVisibility} onChange={e => setBarsVisibility(e.target.value)} className="w-full bg-gray-700 text-white">
