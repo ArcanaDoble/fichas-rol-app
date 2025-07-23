@@ -23,6 +23,7 @@ const AttackModal = ({
   attacker,
   target,
   distance,
+  pageId,
   armas = [],
   poderesCatalog = [],
   onClose,
@@ -187,6 +188,11 @@ const AttackModal = ({
               );
               try {
                 localStorage.setItem('damageAnimation', JSON.stringify(anim));
+                addDoc(collection(db, 'damageEvents'), {
+                  ...anim,
+                  pageId,
+                  timestamp: serverTimestamp(),
+                });
               } catch {}
             }
           });
@@ -305,6 +311,7 @@ AttackModal.propTypes = {
   attacker: PropTypes.object,
   target: PropTypes.object,
   distance: PropTypes.number,
+  pageId: PropTypes.string,
   armas: PropTypes.array,
   poderesCatalog: PropTypes.array,
   onClose: PropTypes.func,

@@ -45,7 +45,17 @@ import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
-import { doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import {
+  doc,
+  updateDoc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import useAttackRequests from '../hooks/useAttackRequests';
@@ -1015,11 +1025,8 @@ const MapCanvas = ({
     },
   });
 
-  // Sincronización manual de fichas con las hojas de personaje
-
-  useEffect(() => {
-    const handler = (e) => {
-      const { tokenId, value, stat, type } = e.detail || {};
+  const triggerDamagePopup = useCallback(
+    ({ tokenId, value, stat, type }) => {
       if (!tokenId || !tokenRefs.current[tokenId] || !stageRef.current || !containerRef.current) return;
       const rect = tokenRefs.current[tokenId].node.getClientRect({ relativeTo: stageRef.current });
       const stageRect = stageRef.current.container().getBoundingClientRect();
@@ -1027,17 +1034,23 @@ const MapCanvas = ({
       const x = rect.x + rect.width / 2 + stageRect.left - containerRect.left;
       const y = rect.y + stageRect.top - containerRect.top;
       const id = nanoid();
-      setDamagePopups((prev) => [
-        ...prev,
-        { id, tokenId, x, y, value, stat, type },
-      ]);
+      setDamagePopups((prev) => [...prev, { id, tokenId, x, y, value, stat, type }]);
       setTimeout(() => {
         setDamagePopups((prev) => prev.filter((p) => p.id !== id));
       }, 5000);
+    },
+    [tokens]
+  );
+
+  // Sincronización manual de fichas con las hojas de personaje
+
+  useEffect(() => {
+    const handler = (e) => {
+      triggerDamagePopup(e.detail || {});
     };
     window.addEventListener('damageAnimation', handler);
     return () => window.removeEventListener('damageAnimation', handler);
-  }, [tokens]);
+  }, [triggerDamagePopup]);
 
   useEffect(() => {
     const onStorage = (e) => {
@@ -1052,6 +1065,24 @@ const MapCanvas = ({
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!pageId) return undefined;
+    const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        triggerDamagePopup(data);
+        try {
+          await deleteDoc(doc(db, 'damageEvents', change.doc.id));
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    });
+    return () => unsub();
+  }, [pageId, triggerDamagePopup]);
 
 
 
@@ -4340,6 +4371,7 @@ const MapCanvas = ({
             pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
             pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
           )) : 0}
+          pageId={pageId}
           armas={armas}
           poderesCatalog={habilidades}
           onClose={(res) => {
@@ -4361,6 +4393,7 @@ const MapCanvas = ({
             pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
           )) : 0}
           attackResult={attackResult}
+          pageId={pageId}
           armas={armas}
           poderesCatalog={habilidades}
           onClose={async () => {

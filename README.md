@@ -804,6 +804,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Las animaciones de daño se sincronizan entre pestañas y ahora se ven durante más tiempo para apreciarlas mejor.
 - Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 5 segundos.
 El Máster ahora también ve estas animaciones cuando los jugadores reciben daño.
+- Ahora las animaciones se comparten entre jugadores y el máster mediante Firestore.
 
 **Resumen de cambios v2.4.18:**
 
