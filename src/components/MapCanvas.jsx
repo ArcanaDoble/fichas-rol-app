@@ -1686,16 +1686,8 @@ const MapCanvas = ({
       tokens.forEach(tk => {
         if (!tk.tokenSheetId || sheets[tk.tokenSheetId] || !canSeeBars(tk)) return;
         if (tk.controlledBy && tk.controlledBy !== 'master') {
-          promises.push(
-            getDoc(doc(db, 'players', tk.controlledBy))
-              .then(snap => {
-                if (snap.exists()) {
-                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
-                  sheets[tk.tokenSheetId] = sheet;
-                }
-              })
-              .catch(err => console.error('load player sheet', err))
-          );
+          // No cargar automáticamente la ficha del jugador al asignar el token.
+          return;
         } else if (tk.enemyId) {
           promises.push(
             getDoc(doc(db, 'enemies', tk.enemyId))
