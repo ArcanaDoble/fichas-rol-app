@@ -800,7 +800,7 @@ El Máster ahora también ve estas animaciones cuando los jugadores reciben dañ
 
 **Resumen de cambios v2.4.18:**
 
-- Si un ataque no rompe ni reduce bloques ahora se muestra "**resiste el ataque**" en azul en el chat.
+ - Si un ataque no rompe ni reduce bloques ahora se muestra "**resiste el daño**" en azul en el chat.
 
 ### 🛠️ **Características Técnicas**
 
