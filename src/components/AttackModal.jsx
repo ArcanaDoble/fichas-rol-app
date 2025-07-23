@@ -145,6 +145,7 @@ const AttackModal = ({
         timestamp: serverTimestamp(),
         completed: false,
       });
+      let updatedSheet = null;
       setTimeout(async () => {
         try {
           const snap = await getDoc(docRef);
@@ -169,6 +170,7 @@ const AttackModal = ({
                 window.dispatchEvent(
                   new CustomEvent('tokenSheetSaved', { detail: updated })
                 );
+                updatedSheet = updated;
               }
             }
           }
@@ -194,8 +196,8 @@ const AttackModal = ({
             if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
           } catch (err) {}
           const targetName = target.customName || target.name || 'Defensor';
-          const vigor = parseDieValue(sheet?.atributos?.vigor);
-          const destreza = parseDieValue(sheet?.atributos?.destreza);
+          const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
+          const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
           const diff = result.total;
           const totalLost = lost.armadura + lost.postura + lost.vida;
           const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
