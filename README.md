@@ -17,6 +17,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Eventos de guardado de ficha de jugador** - Al modificar estados en el mapa se actualiza automáticamente la ficha del jugador sin provocar bucles
 - **Estados sincronizados de la ficha al token** - Al activar condiciones desde la ficha se aplican inmediatamente al token controlado
 - **Modo Master y Jugador** - Controles especializados según el rol del usuario
+- **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Mapa de Batalla integrado** - VTT sencillo con grid y tokens arrastrables
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con los mismos ajustes
