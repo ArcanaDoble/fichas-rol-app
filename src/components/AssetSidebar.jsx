@@ -30,7 +30,7 @@ const highlightBattleText = (text) =>
       '<span class="text-green-400 font-semibold">$1</span>'
     )
     .replace(
-      /(resiste el ataque)/gi,
+      /(resiste el ataque|resiste el daño)/gi,
       '<span class="text-blue-400 font-semibold">$1</span>'
     )
     .replace(

@@ -197,10 +197,13 @@ const AttackModal = ({
           const vigor = parseDieValue(sheet?.atributos?.vigor);
           const destreza = parseDieValue(sheet?.atributos?.destreza);
           const diff = result.total;
+          const totalLost = lost.armadura + lost.postura + lost.vida;
+          const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+          const damageText = `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
           msgs.push({
             id: nanoid(),
             author: targetName,
-            text: `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`,
+            text: totalLost === 0 ? noDamageText : damageText,
           });
           await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
           await updateDoc(docRef, { completed: true, auto: true });
