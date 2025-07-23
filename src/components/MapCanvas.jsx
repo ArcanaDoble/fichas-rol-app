@@ -1015,57 +1015,7 @@ const MapCanvas = ({
     },
   });
 
-  // Sincronizar cambios de fichas de tokens controlados con la ficha del jugador
-  const prevTokensRef = useRef(tokens);
-
-  useEffect(() => {
-    const syncHandler = async (e) => {
-      const sheet = e.detail;
-      if (!sheet || !sheet.id) return;
-      const token = tokens.find(
-        (t) =>
-          t.tokenSheetId === sheet.id &&
-          t.controlledBy &&
-          t.controlledBy !== 'master' &&
-          t.syncWithPlayer
-      );
-      if (!token) return;
-      try {
-        const mapNames = (arr) =>
-          (arr || [])
-            .map((it) => (typeof it === 'string' ? it : it.nombre))
-            .filter(Boolean);
-
-        const playerSheet = {
-          ...sheet,
-          weapons: mapNames(sheet.weapons),
-          armaduras: mapNames(sheet.armaduras),
-          poderes: mapNames(sheet.poderes),
-        };
-
-        await setDoc(doc(db, 'players', token.controlledBy), playerSheet);
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(
-            `player_${token.controlledBy}`,
-            JSON.stringify(playerSheet)
-          );
-          window.dispatchEvent(
-            new CustomEvent('playerSheetSaved', {
-              detail: {
-                name: token.controlledBy,
-                sheet: playerSheet,
-                origin: 'mapSync',
-              },
-            })
-          );
-        }
-      } catch (err) {
-        console.error('sync player sheet', err);
-      }
-    };
-    window.addEventListener('tokenSheetSaved', syncHandler);
-    return () => window.removeEventListener('tokenSheetSaved', syncHandler);
-  }, [tokens]);
+  // Sincronización manual de fichas con las hojas de personaje
 
   useEffect(() => {
     const handler = (e) => {
@@ -1103,54 +1053,6 @@ const MapCanvas = ({
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  useEffect(() => {
-    const prev = prevTokensRef.current || [];
-    const checkStates = async () => {
-      for (const token of tokens) {
-        const prevToken = prev.find((t) => t.id === token.id);
-        if (
-          prevToken &&
-          token.controlledBy &&
-          token.controlledBy !== 'master' &&
-          token.syncWithPlayer &&
-          !deepEqual(prevToken.estados, token.estados)
-        ) {
-          const stored =
-            typeof window !== 'undefined'
-              ? window.localStorage.getItem(
-                  `player_${token.controlledBy}`
-                )
-              : null;
-          const sheet = stored ? JSON.parse(stored) : null;
-          if (!sheet) continue;
-          if (deepEqual(sheet.estados || [], token.estados || [])) continue;
-          const updated = { ...sheet, estados: token.estados || [] };
-          try {
-            await setDoc(doc(db, 'players', token.controlledBy), updated);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(
-                `player_${token.controlledBy}`,
-                JSON.stringify(updated)
-              );
-              window.dispatchEvent(
-                new CustomEvent('playerSheetSaved', {
-                  detail: {
-                    name: token.controlledBy,
-                    sheet: updated,
-                    origin: 'mapSync',
-                  },
-                })
-              );
-            }
-          } catch (err) {
-            console.error('sync player estados', err);
-          }
-        }
-      }
-      prevTokensRef.current = tokens;
-    };
-    checkStates();
-  }, [tokens]);
 
 
   // Estados para selección múltiple
