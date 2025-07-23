@@ -1216,6 +1216,16 @@ const MapCanvas = ({
 
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
+  const [tokenSwitcherPos, setTokenSwitcherPos] = useState(() => {
+    try {
+      const stored = localStorage.getItem('tokenSwitcherPos');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return { x: window.innerWidth / 2 - 140, y: 70 };
+  });
+  const [draggingSwitcher, setDraggingSwitcher] = useState(false);
+  const switcherOffset = useRef({ x: 0, y: 0 });
+  const switcherRef = useRef(null);
 
   useEffect(() => {
     const currentPlayer = userType === 'player' ? playerName : simulatedPlayer;
@@ -1283,6 +1293,27 @@ const MapCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [userType, playerViewMode, tokens, activeTokenId, playerName, simulatedPlayer]);
+
+  useEffect(() => {
+    if (!draggingSwitcher) return;
+    const move = (e) => {
+      setTokenSwitcherPos({
+        x: e.clientX - switcherOffset.current.x,
+        y: e.clientY - switcherOffset.current.y,
+      });
+    };
+    const up = () => setDraggingSwitcher(false);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+  }, [draggingSwitcher]);
+
+  useEffect(() => {
+    localStorage.setItem('tokenSwitcherPos', JSON.stringify(tokenSwitcherPos));
+  }, [tokenSwitcherPos]);
 
   // Sistema de visibilidad cruzada entre capas
   const getVisibleElements = (elements, currentLayer) => {
@@ -4369,7 +4400,15 @@ const MapCanvas = ({
       )}
 
       {(userType === 'player' || playerViewMode) && tokens.some(t => t.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)) && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+        <div
+          ref={switcherRef}
+          className="fixed bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50 cursor-move"
+          style={{ top: tokenSwitcherPos.y, left: tokenSwitcherPos.x }}
+          onMouseDown={(e) => {
+            setDraggingSwitcher(true);
+            switcherOffset.current = { x: e.clientX - tokenSwitcherPos.x, y: e.clientY - tokenSwitcherPos.y };
+          }}
+        >
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Ficha activa:</span>
             <select
