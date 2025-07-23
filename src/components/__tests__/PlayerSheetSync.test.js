@@ -1,144 +1,66 @@
-import { render, act } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import React from 'react';
 
-function SyncListener({ tokens, onTokensChange }) {
-  const prevTokensRef = React.useRef(tokens);
+function ManualSync({ token }) {
+  const restore = () => {
+    const stored = localStorage.getItem(`player_${token.controlledBy}`);
+    if (!stored) return;
+    const sheets = JSON.parse(localStorage.getItem('tokenSheets') || '{}');
+    const sheet = { id: token.tokenSheetId, ...JSON.parse(stored), portrait: token.url };
+    sheets[token.tokenSheetId] = sheet;
+    localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+    window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
+  };
 
-  React.useEffect(() => {
-    const handler = (e) => {
-      const { name, sheet, origin } = e.detail || {};
-      if (origin === 'mapSync') return;
-      const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId
-      );
-      if (!affected.length) return;
-
-      const stored = localStorage.getItem('tokenSheets');
-      const sheets = stored ? JSON.parse(stored) : {};
-      affected.forEach((t) => {
-        const copy = { ...sheet, id: t.tokenSheetId };
-        sheets[t.tokenSheetId] = copy;
-        window.dispatchEvent(
-          new CustomEvent('tokenSheetSaved', { detail: copy })
-        );
-      });
-      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-
-      const updated = tokens.map((t) =>
-        t.controlledBy === name ? { ...t, estados: sheet.estados || [] } : t
-      );
-      onTokensChange(updated);
+  const update = () => {
+    const sheets = JSON.parse(localStorage.getItem('tokenSheets') || '{}');
+    const sheet = sheets[token.tokenSheetId];
+    if (!sheet) return;
+    const mapNames = (arr) => (arr || []).map(it => typeof it === 'string' ? it : it.nombre).filter(Boolean);
+    const playerSheet = {
+      ...sheet,
+      weapons: mapNames(sheet.weapons),
+      armaduras: mapNames(sheet.armaduras),
+      poderes: mapNames(sheet.poderes),
     };
-    window.addEventListener('playerSheetSaved', handler);
-    return () => window.removeEventListener('playerSheetSaved', handler);
-  }, [tokens, onTokensChange]);
+    localStorage.setItem(`player_${token.controlledBy}`, JSON.stringify(playerSheet));
+    window.dispatchEvent(new CustomEvent('playerSheetSaved', { detail: { name: token.controlledBy, sheet: playerSheet } }));
+  };
 
-  React.useEffect(() => {
-    const prev = prevTokensRef.current || [];
-    tokens.forEach((token) => {
-      const prevToken = prev.find((t) => t.id === token.id);
-      if (
-        prevToken &&
-        token.controlledBy &&
-        token.controlledBy !== 'master' &&
-        JSON.stringify(prevToken.estados) !== JSON.stringify(token.estados)
-      ) {
-        const stored = localStorage.getItem(`player_${token.controlledBy}`);
-        const sheet = stored ? JSON.parse(stored) : null;
-        if (!sheet) return;
-        if (JSON.stringify(sheet.estados || []) === JSON.stringify(token.estados || [])) return;
-        const updated = { ...sheet, estados: token.estados || [] };
-        localStorage.setItem(`player_${token.controlledBy}`, JSON.stringify(updated));
-        window.dispatchEvent(
-          new CustomEvent('playerSheetSaved', {
-            detail: { name: token.controlledBy, sheet: updated, origin: 'mapSync' },
-          })
-        );
-      }
-    });
-    prevTokensRef.current = tokens;
-  }, [tokens]);
-  return null;
-}
-
-function savePlayer(name, data) {
-  localStorage.setItem(`player_${name}`, JSON.stringify(data));
-  window.dispatchEvent(
-    new CustomEvent('playerSheetSaved', { detail: { name, sheet: data } })
+  return (
+    <div>
+      <button onClick={restore}>restore</button>
+      <button onClick={update}>update</button>
+    </div>
   );
 }
 
-test('controlled token updates on player sheet save', () => {
-  const initial = [{ id: 't1', controlledBy: 'Alice', tokenSheetId: 's1', syncWithPlayer: true }];
-  let renderedTokens = initial;
-  const Wrapper = () => {
-    const [tokens, setTokens] = React.useState(initial);
-    renderedTokens = tokens;
-    return <SyncListener tokens={tokens} onTokensChange={setTokens} />;
-  };
-
+test('restore button loads player sheet into tokenSheets', () => {
+  const token = { id: 't1', tokenSheetId: 's1', controlledBy: 'Alice', url: 'img' };
+  localStorage.setItem('player_Alice', JSON.stringify({ stats: { vida: { base: 5 } } }));
   const saved = jest.fn();
-  localStorage.clear();
   window.addEventListener('tokenSheetSaved', saved);
-  render(<Wrapper />);
+  const { getByText } = render(<ManualSync token={token} />);
 
-  const sheet = { stats: { vida: { base: 5 } }, estados: ['cansado'] };
-  act(() => {
-    savePlayer('Alice', sheet);
-  });
+  fireEvent.click(getByText('restore'));
 
   const stored = JSON.parse(localStorage.getItem('tokenSheets'));
   expect(stored.s1.stats.vida.base).toBe(5);
-  expect(renderedTokens[0].estados).toEqual(['cansado']);
   expect(saved).toHaveBeenCalledTimes(1);
   window.removeEventListener('tokenSheetSaved', saved);
 });
 
-test('mapSync events are ignored to avoid loops', () => {
-  const initial = [{ id: 't1', controlledBy: 'Bob', tokenSheetId: 's2', syncWithPlayer: true }];
-  const Wrapper = () => {
-    const [tokens, setTokens] = React.useState(initial);
-    return <SyncListener tokens={tokens} onTokensChange={setTokens} />;
-  };
+test('update button saves token sheet to player', () => {
+  const token = { id: 't1', tokenSheetId: 's1', controlledBy: 'Bob', url: 'img' };
+  localStorage.setItem('tokenSheets', JSON.stringify({ s1: { id: 's1', weapons: [{ nombre: 'Espada' }] } }));
   const saved = jest.fn();
-  localStorage.clear();
-  window.addEventListener('tokenSheetSaved', saved);
-  render(<Wrapper />);
-
-  act(() => {
-    window.dispatchEvent(
-      new CustomEvent('playerSheetSaved', {
-        detail: { name: 'Bob', sheet: { stats: {} }, origin: 'mapSync' },
-      })
-    );
-  });
-
-  expect(localStorage.getItem('tokenSheets')).toBeNull();
-  expect(saved).not.toHaveBeenCalled();
-  window.removeEventListener('tokenSheetSaved', saved);
-});
-
-test('token estado changes update player sheet', () => {
-  const initial = [{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: [], syncWithPlayer: true }];
-  let setTokens;
-  const Wrapper = () => {
-    const [tokens, update] = React.useState(initial);
-    setTokens = update;
-    return <SyncListener tokens={tokens} onTokensChange={update} />;
-  };
-  const saved = jest.fn();
-  localStorage.clear();
-  localStorage.setItem('player_Carl', JSON.stringify({ stats: {} }));
   window.addEventListener('playerSheetSaved', saved);
-  render(<Wrapper />);
+  const { getByText } = render(<ManualSync token={token} />);
 
-  act(() => {
-    setTokens([{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: ['mareado'], syncWithPlayer: true }]);
-  });
+  fireEvent.click(getByText('update'));
 
-  const updated = JSON.parse(localStorage.getItem('player_Carl'));
-  expect(updated.estados).toEqual(['mareado']);
+  const player = JSON.parse(localStorage.getItem('player_Bob'));
+  expect(player.weapons).toEqual(['Espada']);
   expect(saved).toHaveBeenCalledTimes(1);
-  expect(saved.mock.calls[0][0].detail.origin).toBe('mapSync');
   window.removeEventListener('playerSheetSaved', saved);
 });

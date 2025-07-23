@@ -2,7 +2,6 @@ import { nanoid } from 'nanoid';
 
 export const createToken = (data = {}) => ({
   ...data,
-  syncWithPlayer: true,
   tokenSheetId: nanoid(),
 });
 

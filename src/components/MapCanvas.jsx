@@ -1190,67 +1190,7 @@ const MapCanvas = ({
     }
   }, [isPlayerView, playerName, tokens, syncManager, onTokensChange]);
 
-  useEffect(() => {
-    const handler = (e) => {
-      const { name, sheet, origin } = e.detail || {};
-      if (origin === 'mapSync') return;
-      const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId && t.syncWithPlayer
-      );
-      if (!affected.length) return;
-
-      const stored = localStorage.getItem('tokenSheets');
-      const sheets = stored ? JSON.parse(stored) : {};
-      affected.forEach((t) => {
-        const copy = { ...sheet, id: t.tokenSheetId };
-        sheets[t.tokenSheetId] = copy;
-        window.dispatchEvent(
-          new CustomEvent('tokenSheetSaved', { detail: copy })
-        );
-      });
-      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-
-      const updatedTokens = tokens.map((t) =>
-        t.controlledBy === name ? { ...t, estados: sheet.estados || [] } : t
-      );
-      if (!deepEqual(updatedTokens, tokens)) {
-        handleTokensChange(updatedTokens);
-      }
-    };
-    window.addEventListener('playerSheetSaved', handler);
-    return () => window.removeEventListener('playerSheetSaved', handler);
-  }, [tokens, handleTokensChange]);
-
-  // Escuchar cambios en localStorage de otras pestañas
-  useEffect(() => {
-    const handleStorage = (e) => {
-      if (!e.key || !e.key.startsWith('player_') || !e.newValue) return;
-      const name = e.key.replace('player_', '');
-      const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId && t.syncWithPlayer
-      );
-      if (!affected.length) return;
-
-      const sheet = JSON.parse(e.newValue);
-      const stored = localStorage.getItem('tokenSheets');
-      const sheets = stored ? JSON.parse(stored) : {};
-      affected.forEach((t) => {
-        const copy = { ...sheet, id: t.tokenSheetId };
-        sheets[t.tokenSheetId] = copy;
-        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: copy }));
-      });
-      localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-
-      const updated = tokens.map((t) =>
-        t.controlledBy === name ? { ...t, estados: sheet.estados || [] } : t
-      );
-      if (!deepEqual(updated, tokens)) {
-        handleTokensChange(updated);
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [tokens, handleTokensChange]);
+  // Sincronización manual: sin listeners automáticos de fichas
 
   // Funciones wrapper para otros elementos
   const handleLinesChange = useCallback((newLines) => {
@@ -2995,7 +2935,6 @@ const MapCanvas = ({
               x: finalPos.x,
               y: finalPos.y,
               layer: activeLayer,
-              syncWithPlayer: true,
             });
             const stored = localStorage.getItem('tokenSheets');
             if (stored) {
@@ -3433,7 +3372,6 @@ const MapCanvas = ({
           tintOpacity: 0,
           estados: [],
           layer: activeLayer,
-          syncWithPlayer: true,
         });
         if (item.tokenSheetId) {
           const stored = localStorage.getItem('tokenSheets');
