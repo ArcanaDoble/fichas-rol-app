@@ -798,6 +798,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 5 segundos.
 El Máster ahora también ve estas animaciones cuando los jugadores reciben daño.
 
+**Resumen de cambios v2.4.18:**
+
+- Si un ataque no rompe ni reduce bloques ahora se muestra "**resiste el ataque**" en azul en el chat.
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
