@@ -385,6 +385,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.56:**
 
 - Las fichas de token ahora pueden editarse de forma independiente, guardando sus cambios en localStorage.
+- Las fichas de token se guardan también en Firestore y se sincronizan en tiempo real.
 
 **Resumen de cambios v2.2.57:**
 

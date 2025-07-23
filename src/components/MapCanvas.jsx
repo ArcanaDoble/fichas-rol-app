@@ -32,7 +32,7 @@ import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
 import { motion } from 'framer-motion';
-import { createToken, cloneTokenSheet } from '../utils/token';
+import { createToken, cloneTokenSheet, saveTokenSheet } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
@@ -633,13 +633,7 @@ const Token = forwardRef(
             const sheet = sheets[tokenSheetId];
             if (sheet && sheet.stats) {
               sheet.stats = updated;
-              sheets[tokenSheetId] = sheet;
-              localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-              window.dispatchEvent(
-                new CustomEvent('tokenSheetSaved', {
-                  detail: { id: tokenSheetId, stats: updated },
-                })
-              );
+              saveTokenSheet(sheet);
             }
           }
         }
@@ -1714,33 +1708,69 @@ const MapCanvas = ({
       const stored = localStorage.getItem('tokenSheets');
       const sheets = stored ? JSON.parse(stored) : {};
       const promises = [];
-      tokens.forEach(tk => {
+      tokens.forEach((tk) => {
         if (!tk.tokenSheetId || sheets[tk.tokenSheetId] || !canSeeBars(tk)) return;
         if (tk.controlledBy && tk.controlledBy !== 'master') {
-          // No cargar automáticamente la ficha del jugador al asignar el token.
           return;
         } else if (tk.enemyId) {
           promises.push(
             getDoc(doc(db, 'enemies', tk.enemyId))
-              .then(snap => {
+              .then((snap) => {
                 if (snap.exists()) {
                   const sheet = { id: tk.tokenSheetId, ...snap.data() };
                   sheets[tk.tokenSheetId] = sheet;
                 }
               })
-              .catch(err => console.error('load enemy sheet', err))
+              .catch((err) => console.error('load enemy sheet', err))
+          );
+        } else {
+          promises.push(
+            getDoc(doc(db, 'tokenSheets', tk.tokenSheetId))
+              .then((snap) => {
+                if (snap.exists()) {
+                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
+                  sheets[tk.tokenSheetId] = sheet;
+                }
+              })
+              .catch((err) => console.error('load token sheet', err))
           );
         }
       });
       if (promises.length > 0) {
         await Promise.all(promises);
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-        Object.values(sheets).forEach(sh =>
+        Object.values(sheets).forEach((sh) =>
           window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sh }))
         );
       }
     };
     loadSheets();
+  }, [tokens, playerName, userType]);
+
+  const sheetListeners = useRef({});
+  useEffect(() => {
+    tokens.forEach((tk) => {
+      if (!tk.tokenSheetId || !canSeeBars(tk)) return;
+      if (!sheetListeners.current[tk.tokenSheetId]) {
+        const ref = doc(db, 'tokenSheets', tk.tokenSheetId);
+        sheetListeners.current[tk.tokenSheetId] = onSnapshot(ref, (snap) => {
+          if (snap.exists()) {
+            const data = { id: tk.tokenSheetId, ...snap.data() };
+            saveTokenSheet(data);
+          }
+        });
+      }
+    });
+    Object.keys(sheetListeners.current).forEach((id) => {
+      if (!tokens.find((t) => t.tokenSheetId === id)) {
+        sheetListeners.current[id]();
+        delete sheetListeners.current[id];
+      }
+    });
+    return () => {
+      Object.values(sheetListeners.current).forEach((unsub) => unsub());
+      sheetListeners.current = {};
+    };
   }, [tokens, playerName, userType]);
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda

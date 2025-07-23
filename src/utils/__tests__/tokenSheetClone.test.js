@@ -1,5 +1,11 @@
 import { createToken } from '../token';
 
+jest.mock('firebase/firestore', () => ({
+  doc: jest.fn(),
+  setDoc: jest.fn().mockResolvedValue(),
+}));
+jest.mock('../../firebase', () => ({ db: {} }));
+
 describe('token sheet cloning', () => {
   beforeEach(() => {
     localStorage.clear();
