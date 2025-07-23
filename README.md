@@ -883,7 +883,7 @@ src/
 #### v2.1.2 (diciembre 2024)
 
 - **Sistema de Píldoras de Equipamiento** - Nuevas píldoras interactivas en el Sistema de Velocidad que permiten usar armas y poderes equipados directamente
-- **Vincular ficha de jugador** - Al asignar un controlador se descarga su ficha desde Firestore y se almacena localmente
+- **Vincular ficha de jugador** - Al asignar un controlador ya no se descarga automáticamente su ficha; usa **Restaurar ficha** para importarla desde Firestore
 - **Fichas de jugador completas** - Las estadísticas personalizadas y el equipamiento se muestran correctamente al enlazar
 - **Carga de imágenes optimizada** - Las tarjetas ya no hacen peticiones en bucle al equipar objetos
 - **Sincronización total de fichas de jugador** - Se respetan las posiciones personalizadas de estadísticas y se cargan armas, armaduras y poderes equipados
