@@ -4525,16 +4525,16 @@ const MapCanvas = ({
       )}
 
       {(userType === 'player' || playerViewMode) && tokens.some(t => t.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)) && (
-        <div className="absolute top-16 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">🎯 Ficha activa:</span>
+            <span className="text-sm font-medium">Ficha activa:</span>
             <select
               className="text-black text-sm"
               value={activeTokenId || ''}
               onChange={e => setActiveTokenId(e.target.value)}
             >
               {tokens.filter(t => t.controlledBy === (userType === 'player' ? playerName : simulatedPlayer)).map(t => (
-                <option key={t.id} value={t.id}>{t.name || t.id}</option>
+                <option key={t.id} value={t.id}>{t.customName || t.name || t.id}</option>
               ))}
             </select>
             <span className="text-xs opacity-75">(Tab para alternar)</span>
