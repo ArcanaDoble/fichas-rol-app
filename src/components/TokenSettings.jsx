@@ -64,6 +64,9 @@ const TokenSettings = ({
   const [tintOpacity, setTintOpacity] = useState(
     typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
   );
+  const [syncWithPlayer, setSyncWithPlayer] = useState(
+    token.syncWithPlayer !== false
+  );
   
   // Estados para configuración de luz
   const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
@@ -134,13 +137,15 @@ const TokenSettings = ({
           enabled: visionEnabled,
           range: visionRange,
         },
+        syncWithPlayer,
       });
     }, 800); // Esperar 800ms antes de aplicar cambios (optimizado para evitar spam a Firebase)
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
     tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
-    lightColor, lightOpacity, visionEnabled, visionRange, onUpdate
+    lightColor, lightOpacity, visionEnabled, visionRange, syncWithPlayer,
+    onUpdate
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
@@ -173,6 +178,7 @@ const TokenSettings = ({
         enabled: visionEnabled,
         range: visionRange,
       },
+      syncWithPlayer,
     };
     if (controlledBy !== 'master' && token.tokenSheetId) {
       try {
@@ -212,6 +218,7 @@ const TokenSettings = ({
     lightEnabled,
     lightRadius,
     visionEnabled, // Cambio inmediato para visión
+    syncWithPlayer,
   ]);
 
   // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
@@ -327,6 +334,15 @@ const TokenSettings = ({
                   </select>
                 )}
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="syncWithPlayer"
+                  type="checkbox"
+                  checked={syncWithPlayer}
+                  onChange={e => setSyncWithPlayer(e.target.checked)}
+                />
+                <label htmlFor="syncWithPlayer">Sincronizar con ficha de jugador</label>
+              </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
                 <select value={barsVisibility} onChange={e => setBarsVisibility(e.target.value)} className="w-full bg-gray-700 text-white">
@@ -388,7 +404,8 @@ const TokenSettings = ({
                       auraVisibility,
                       opacity: tokenOpacity,
                       tintColor,
-                    tintOpacity,
+                      tintOpacity,
+                      syncWithPlayer,
                   };
                   onOpenSheet(updated);
                 }}

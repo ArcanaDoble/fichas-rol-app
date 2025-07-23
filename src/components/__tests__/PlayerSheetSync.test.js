@@ -69,7 +69,7 @@ function savePlayer(name, data) {
 }
 
 test('controlled token updates on player sheet save', () => {
-  const initial = [{ id: 't1', controlledBy: 'Alice', tokenSheetId: 's1' }];
+  const initial = [{ id: 't1', controlledBy: 'Alice', tokenSheetId: 's1', syncWithPlayer: true }];
   let renderedTokens = initial;
   const Wrapper = () => {
     const [tokens, setTokens] = React.useState(initial);
@@ -95,7 +95,7 @@ test('controlled token updates on player sheet save', () => {
 });
 
 test('mapSync events are ignored to avoid loops', () => {
-  const initial = [{ id: 't1', controlledBy: 'Bob', tokenSheetId: 's2' }];
+  const initial = [{ id: 't1', controlledBy: 'Bob', tokenSheetId: 's2', syncWithPlayer: true }];
   const Wrapper = () => {
     const [tokens, setTokens] = React.useState(initial);
     return <SyncListener tokens={tokens} onTokensChange={setTokens} />;
@@ -119,7 +119,7 @@ test('mapSync events are ignored to avoid loops', () => {
 });
 
 test('token estado changes update player sheet', () => {
-  const initial = [{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: [] }];
+  const initial = [{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: [], syncWithPlayer: true }];
   let setTokens;
   const Wrapper = () => {
     const [tokens, update] = React.useState(initial);
@@ -133,7 +133,7 @@ test('token estado changes update player sheet', () => {
   render(<Wrapper />);
 
   act(() => {
-    setTokens([{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: ['mareado'] }]);
+    setTokens([{ id: 't1', controlledBy: 'Carl', tokenSheetId: 's3', estados: ['mareado'], syncWithPlayer: true }]);
   });
 
   const updated = JSON.parse(localStorage.getItem('player_Carl'));
