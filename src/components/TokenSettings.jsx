@@ -147,12 +147,14 @@ const TokenSettings = ({
     }
   };
 
-  const handleControlledByChange = async (e) => {
+  const handleControlledByChange = (e) => {
     const value = e.target.value;
     setControlledBy(value);
     if (value !== 'master') {
       setEnemyId('');
-      await loadPlayerSheet(value);
+      // La ficha del jugador ya no se carga de forma automática al
+      // asignar el token. Se mantiene la ficha actual hasta que el
+      // usuario pulse "Restaurar ficha" manualmente.
     }
   };
   
