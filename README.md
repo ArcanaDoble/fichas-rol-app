@@ -1173,6 +1173,10 @@ src/
 
 - ✅ Los modales de Ataque y Defensa muestran el consumo de velocidad del arma o poder seleccionado
 
+### 🗄️ **Sincronización manual de fichas (Enero 2027) - v2.4.38**
+
+- ✅ Nuevos botones para restaurar o subir la ficha del jugador desde los ajustes del token
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
