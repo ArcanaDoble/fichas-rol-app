@@ -14,6 +14,7 @@ const DefenseModal = ({
   target,
   distance,
   attackResult,
+  pageId,
   armas = [],
   poderesCatalog = [],
   onClose,
@@ -172,6 +173,11 @@ const DefenseModal = ({
         );
         try {
           localStorage.setItem('damageAnimation', JSON.stringify(anim));
+          addDoc(collection(db, 'damageEvents'), {
+            ...anim,
+            pageId,
+            timestamp: serverTimestamp(),
+          });
         } catch {}
       } else {
         const id = diff < 0 ? target.id : attacker.id;
@@ -190,6 +196,11 @@ const DefenseModal = ({
             );
             try {
               localStorage.setItem('damageAnimation', JSON.stringify(anim));
+              addDoc(collection(db, 'damageEvents'), {
+                ...anim,
+                pageId,
+                timestamp: serverTimestamp(),
+              });
             } catch {}
           }
         });
@@ -323,6 +334,7 @@ DefenseModal.propTypes = {
   target: PropTypes.object,
   distance: PropTypes.number,
   attackResult: PropTypes.object,
+  pageId: PropTypes.string,
   armas: PropTypes.array,
   poderesCatalog: PropTypes.array,
   onClose: PropTypes.func,
