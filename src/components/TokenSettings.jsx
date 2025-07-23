@@ -104,11 +104,8 @@ const TokenSettings = ({
       if (snap.exists()) {
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
-        const sheet = {
-          id: token.tokenSheetId,
-          portrait: token.url,
-          ...snap.data(),
-        };
+        const sheet = { id: token.tokenSheetId, ...snap.data() };
+        sheet.portrait = token.url;
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
         window.dispatchEvent(
