@@ -958,6 +958,8 @@ const MapCanvas = ({
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  // Track tokenSheet IDs that have already been fetched to avoid redundant requests
+  const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
@@ -1707,9 +1709,16 @@ const MapCanvas = ({
     const loadSheets = async () => {
       const stored = localStorage.getItem('tokenSheets');
       const sheets = stored ? JSON.parse(stored) : {};
+      Object.keys(sheets).forEach((id) => loadedSheetIds.current.add(id));
       const promises = [];
       tokens.forEach((tk) => {
-        if (!tk.tokenSheetId || sheets[tk.tokenSheetId] || !canSeeBars(tk)) return;
+        if (
+          !tk.tokenSheetId ||
+          sheets[tk.tokenSheetId] ||
+          loadedSheetIds.current.has(tk.tokenSheetId) ||
+          !canSeeBars(tk)
+        )
+          return;
         if (tk.controlledBy && tk.controlledBy !== 'master') {
           return;
         } else if (tk.enemyId) {
@@ -1719,6 +1728,7 @@ const MapCanvas = ({
                 if (snap.exists()) {
                   const sheet = { id: tk.tokenSheetId, ...snap.data() };
                   sheets[tk.tokenSheetId] = sheet;
+                  loadedSheetIds.current.add(tk.tokenSheetId);
                 }
               })
               .catch((err) => console.error('load enemy sheet', err))
@@ -1730,6 +1740,7 @@ const MapCanvas = ({
                 if (snap.exists()) {
                   const sheet = { id: tk.tokenSheetId, ...snap.data() };
                   sheets[tk.tokenSheetId] = sheet;
+                  loadedSheetIds.current.add(tk.tokenSheetId);
                 }
               })
               .catch((err) => console.error('load token sheet', err))
@@ -1745,7 +1756,7 @@ const MapCanvas = ({
       }
     };
     loadSheets();
-  }, [tokens, playerName, userType]);
+  }, [playerName, userType, tokens.map((t) => t.tokenSheetId).filter(Boolean).sort().join(',')]);
 
   const sheetListeners = useRef({});
   useEffect(() => {

@@ -1245,6 +1245,10 @@ src/
 
 Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang/es/). Las actualizaciones de **parche** (2.1.x) corrigen errores y ajustes menores. Las de **minor** (2.x.0) agregan funcionalidades notables sin romper compatibilidad. Un cambio mayor se reserva para modificaciones que alteran significativamente el comportamiento existente.
 
+## 📗 Project Notes
+
+- Token sheets are cached client-side. Moving a token no longer triggers repeated Firestore requests for the same sheet.
+
 ## 🤝 Contribución
 
 Las contribuciones son bienvenidas. Por favor:
