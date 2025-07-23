@@ -81,24 +81,28 @@ const TokenSettings = ({
   // Ref para debouncing
   const debounceRef = useRef(null);
 
+  const loadPlayerSheet = async (playerId) => {
+    try {
+      const snap = await getDoc(doc(db, 'players', playerId));
+      if (snap.exists() && token.tokenSheetId) {
+        const stored = localStorage.getItem('tokenSheets');
+        const sheets = stored ? JSON.parse(stored) : {};
+        const sheet = { id: token.tokenSheetId, ...snap.data() };
+        sheets[token.tokenSheetId] = sheet;
+        localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
+      }
+    } catch (err) {
+      console.error('Error loading player sheet', err);
+    }
+  };
+
   const handleControlledByChange = async (e) => {
     const value = e.target.value;
     setControlledBy(value);
     if (value !== 'master') {
       setEnemyId('');
-      try {
-        const snap = await getDoc(doc(db, 'players', value));
-        if (snap.exists() && token.tokenSheetId) {
-          const stored = localStorage.getItem('tokenSheets');
-          const sheets = stored ? JSON.parse(stored) : {};
-          const sheet = { id: token.tokenSheetId, ...snap.data() };
-          sheets[token.tokenSheetId] = sheet;
-          localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
-        }
-      } catch (err) {
-        console.error('Error loading player sheet', err);
-      }
+      await loadPlayerSheet(value);
     }
   };
   
@@ -180,21 +184,6 @@ const TokenSettings = ({
       },
       syncWithPlayer,
     };
-    if (controlledBy !== 'master' && token.tokenSheetId) {
-      try {
-        const snap = await getDoc(doc(db, 'players', controlledBy));
-        if (snap.exists()) {
-          const stored = localStorage.getItem('tokenSheets');
-          const sheets = stored ? JSON.parse(stored) : {};
-          const sheet = { id: token.tokenSheetId, ...snap.data() };
-          sheets[token.tokenSheetId] = sheet;
-          localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
-        }
-      } catch (err) {
-        console.error('Error loading player sheet', err);
-      }
-    }
     console.log('Updating token with vision:', visionEnabled, updatedToken);
     onUpdate(updatedToken);
   };
@@ -217,9 +206,17 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
-    visionEnabled, // Cambio inmediato para visión
-    syncWithPlayer,
+    visionEnabled // Cambio inmediato para visión
   ]);
+
+  const firstSyncRef = useRef(true);
+  useEffect(() => {
+    if (firstSyncRef.current) {
+      firstSyncRef.current = false;
+      return;
+    }
+    applyChanges();
+  }, [syncWithPlayer]);
 
   // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
@@ -342,6 +339,11 @@ const TokenSettings = ({
                   onChange={e => setSyncWithPlayer(e.target.checked)}
                 />
                 <label htmlFor="syncWithPlayer">Sincronizar con ficha de jugador</label>
+                {controlledBy !== 'master' && (
+                  <Boton size="sm" className="ml-auto" onClick={() => loadPlayerSheet(controlledBy)}>
+                    Actualizar ficha
+                  </Boton>
+                )}
               </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
