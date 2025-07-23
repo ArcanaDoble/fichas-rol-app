@@ -1026,7 +1026,8 @@ const MapCanvas = ({
         (t) =>
           t.tokenSheetId === sheet.id &&
           t.controlledBy &&
-          t.controlledBy !== 'master'
+          t.controlledBy !== 'master' &&
+          t.syncWithPlayer
       );
       if (!token) return;
       try {
@@ -1111,6 +1112,7 @@ const MapCanvas = ({
           prevToken &&
           token.controlledBy &&
           token.controlledBy !== 'master' &&
+          token.syncWithPlayer &&
           !deepEqual(prevToken.estados, token.estados)
         ) {
           const stored =
@@ -1291,7 +1293,7 @@ const MapCanvas = ({
       const { name, sheet, origin } = e.detail || {};
       if (origin === 'mapSync') return;
       const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId
+        (t) => t.controlledBy === name && t.tokenSheetId && t.syncWithPlayer
       );
       if (!affected.length) return;
 
@@ -1323,7 +1325,7 @@ const MapCanvas = ({
       if (!e.key || !e.key.startsWith('player_') || !e.newValue) return;
       const name = e.key.replace('player_', '');
       const affected = tokens.filter(
-        (t) => t.controlledBy === name && t.tokenSheetId
+        (t) => t.controlledBy === name && t.tokenSheetId && t.syncWithPlayer
       );
       if (!affected.length) return;
 
@@ -3090,7 +3092,8 @@ const MapCanvas = ({
               id: Date.now() + Math.random(),
               x: finalPos.x,
               y: finalPos.y,
-              layer: activeLayer
+              layer: activeLayer,
+              syncWithPlayer: true,
             });
             const stored = localStorage.getItem('tokenSheets');
             if (stored) {
@@ -3528,6 +3531,7 @@ const MapCanvas = ({
           tintOpacity: 0,
           estados: [],
           layer: activeLayer,
+          syncWithPlayer: true,
         });
         if (item.tokenSheetId) {
           const stored = localStorage.getItem('tokenSheets');

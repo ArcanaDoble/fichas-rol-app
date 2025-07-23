@@ -35,7 +35,7 @@ function StorageListener({ tokens, onTokensChange }) {
 }
 
 test('tokens update on storage event', () => {
-  const initial = [{ id: 't1', controlledBy: 'Alice', tokenSheetId: 's1' }];
+  const initial = [{ id: 't1', controlledBy: 'Alice', tokenSheetId: 's1', syncWithPlayer: true }];
   let renderedTokens = initial;
   const Wrapper = () => {
     const [tokens, setTokens] = React.useState(initial);
