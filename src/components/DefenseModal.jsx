@@ -7,6 +7,7 @@ import { applyDamage, parseDieValue } from '../utils/damage';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
+import { saveTokenSheet } from '../utils/token';
 
 const DefenseModal = ({
   isOpen,
@@ -142,6 +143,7 @@ const DefenseModal = ({
         window.dispatchEvent(
           new CustomEvent('tokenSheetSaved', { detail: updated })
         );
+        saveTokenSheet(updated);
         affectedSheet = updated;
       } else if (diff > 0 && attacker?.tokenSheetId) {
         const stored = localStorage.getItem('tokenSheets');
@@ -161,6 +163,7 @@ const DefenseModal = ({
             window.dispatchEvent(
               new CustomEvent('tokenSheetSaved', { detail: atkSheet })
             );
+            saveTokenSheet(atkSheet);
             affectedSheet = atkSheet;
           }
         }

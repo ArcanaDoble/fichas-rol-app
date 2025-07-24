@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
+import { saveTokenSheet } from '../utils/token';
 
 const AUTO_RESOLVE_MS = 20000;
 
@@ -171,6 +172,7 @@ const AttackModal = ({
                 window.dispatchEvent(
                   new CustomEvent('tokenSheetSaved', { detail: updated })
                 );
+                saveTokenSheet(updated);
                 updatedSheet = updated;
               }
             }
