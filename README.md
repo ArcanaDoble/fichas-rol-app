@@ -1197,6 +1197,11 @@ src/
 - ✅ Los modales de Ataque y Defensa guardan las estadísticas modificadas con `saveTokenSheet`
 - ✅ Al mover un token se mantienen correctos la vida y demás recursos
 
+### 🛠️ **Edición tras restaurar ficha (Abril 2027) - v2.4.42**
+
+- ✅ Restaurar la ficha de un jugador aplica valores predeterminados para que las barras sean visibles
+- ✅ Las estadísticas pueden modificarse y guardarse sin problemas
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
