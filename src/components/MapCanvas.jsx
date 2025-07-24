@@ -1676,6 +1676,11 @@ const MapCanvas = ({
     }
   }, [tokens]);
 
+  const tokenSheetIdsKey = useMemo(
+    () => tokens.map((t) => t.tokenSheetId).filter(Boolean).sort().join(','),
+    [tokens]
+  );
+
   const canSeeBars = useCallback(
     (tk) => {
       // El Master SIEMPRE puede ver las barras, independientemente de la configuración
@@ -1756,7 +1761,7 @@ const MapCanvas = ({
       }
     };
     loadSheets();
-  }, [playerName, userType, tokens.map((t) => t.tokenSheetId).filter(Boolean).sort().join(',')]);
+  }, [playerName, userType, tokenSheetIdsKey]);
 
   const sheetListeners = useRef({});
   useEffect(() => {
@@ -1782,7 +1787,7 @@ const MapCanvas = ({
       Object.values(sheetListeners.current).forEach((unsub) => unsub());
       sheetListeners.current = {};
     };
-  }, [tokens, playerName, userType]);
+  }, [tokenSheetIdsKey, playerName, userType]);
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize =
