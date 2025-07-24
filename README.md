@@ -1247,7 +1247,7 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 
 ## 📗 Project Notes
 
-- Token sheets are cached client-side. Moving a token no longer triggers repeated Firestore requests for the same sheet.
+- Token sheets are cached client-side. Listener subscriptions depend only on the set of sheet IDs so moving a token no longer recreates them or triggers repeated Firestore requests.
 
 ## 🤝 Contribución
 
