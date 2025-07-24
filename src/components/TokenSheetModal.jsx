@@ -2,15 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import EnemyViewModal from './EnemyViewModal';
 import TokenSheetEditor from './TokenSheetEditor';
-import { saveTokenSheet } from '../utils/token';
-
-const recursoColor = {
-  postura: '#34d399',
-  vida: '#f87171',
-  ingenio: '#60a5fa',
-  cordura: '#a78bfa',
-  armadura: '#9ca3af',
-};
+import { saveTokenSheet, ensureSheetDefaults } from '../utils/token';
 
 const TokenSheetModal = ({
   token,
@@ -60,45 +52,7 @@ const TokenSheetModal = ({
     sheet.armaduras = mapItems(sheet.armaduras, armaduras);
     sheet.poderes = mapItems(sheet.poderes, habilidades);
 
-    const ensureStatDefaults = (st, index, id, name, color, row, anchor) => {
-      const stat = { ...st };
-      if (stat.base === undefined) stat.base = stat.total ?? 0;
-      if (stat.total === undefined) stat.total = stat.base;
-      if (stat.color === undefined) stat.color = color || '#ffffff';
-      if (stat.showOnToken === undefined)
-        stat.showOnToken = index < 5 ? true : !!(stat.base || stat.total || stat.actual || stat.buff);
-      if (stat.label === undefined) stat.label = name || id;
-      if (stat.tokenRow === undefined) stat.tokenRow = row ?? index;
-      if (stat.tokenAnchor === undefined) stat.tokenAnchor = anchor ?? 'top';
-      return stat;
-    };
-
-    if (sheet.resourcesList && sheet.resourcesList.length > 0) {
-      sheet.resourcesList.forEach((res, index) => {
-        const existing = sheet.stats[res.id] || {};
-        sheet.stats[res.id] = ensureStatDefaults(
-          existing,
-          index,
-          res.id,
-          res.name,
-          res.color || recursoColor[res.id],
-          res.tokenRow,
-          res.tokenAnchor
-        );
-      });
-    } else if (!sheet.stats || Object.keys(sheet.stats).length === 0) {
-      sheet.stats = {
-        postura: ensureStatDefaults({}, 0, 'postura', 'postura', recursoColor.postura),
-        vida: ensureStatDefaults({}, 1, 'vida', 'vida', recursoColor.vida),
-        ingenio: ensureStatDefaults({}, 2, 'ingenio', 'ingenio', recursoColor.ingenio),
-        cordura: ensureStatDefaults({}, 3, 'cordura', 'cordura', recursoColor.cordura),
-        armadura: ensureStatDefaults({}, 4, 'armadura', 'armadura', recursoColor.armadura),
-      };
-    } else {
-      Object.keys(sheet.stats).forEach((k, index) => {
-        sheet.stats[k] = ensureStatDefaults(sheet.stats[k], index, k, k, recursoColor[k]);
-      });
-    }
+    sheet = ensureSheetDefaults(sheet);
 
     setData(sheet);
   }, [sheetId, token, enemies, armas, armaduras, habilidades, editing]);

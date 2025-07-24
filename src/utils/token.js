@@ -39,3 +39,43 @@ export const cloneTokenSheet = (sourceId, targetId) => {
   localStorage.setItem('tokenSheets', JSON.stringify(sheets));
   window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: copy }));
 };
+export const ensureSheetDefaults = (sheet) => {
+  if (!sheet || typeof sheet !== 'object') return sheet;
+  const recursoColor = {
+    postura: '#34d399',
+    vida: '#f87171',
+    ingenio: '#60a5fa',
+    cordura: '#a78bfa',
+    armadura: '#9ca3af',
+  };
+  const ensure = (st, index, id) => {
+    const stat = { ...st };
+    if (stat.base === undefined) stat.base = stat.total ?? 0;
+    if (stat.total === undefined) stat.total = stat.base;
+    if (stat.color === undefined) stat.color = recursoColor[id] || '#ffffff';
+    if (stat.showOnToken === undefined)
+      stat.showOnToken = index < 5 ? true : !!(stat.base || stat.total || stat.actual || stat.buff);
+    if (stat.label === undefined) stat.label = id;
+    if (stat.tokenRow === undefined) stat.tokenRow = index;
+    if (stat.tokenAnchor === undefined) stat.tokenAnchor = 'top';
+    return stat;
+  };
+  if (!sheet.stats) sheet.stats = {};
+  if (sheet.resourcesList && sheet.resourcesList.length > 0) {
+    sheet.resourcesList.forEach((res, idx) => {
+      sheet.stats[res.id] = ensure(sheet.stats[res.id] || {}, idx, res.id);
+      if (res.color && !sheet.stats[res.id].color) sheet.stats[res.id].color = res.color;
+      if (res.tokenRow !== undefined) sheet.stats[res.id].tokenRow = res.tokenRow;
+      if (res.tokenAnchor) sheet.stats[res.id].tokenAnchor = res.tokenAnchor;
+    });
+  } else if (Object.keys(sheet.stats).length === 0) {
+    ['postura','vida','ingenio','cordura','armadura'].forEach((id, idx) => {
+      sheet.stats[id] = ensure({}, idx, id);
+    });
+  } else {
+    Object.keys(sheet.stats).forEach((id, idx) => {
+      sheet.stats[id] = ensure(sheet.stats[id], idx, id);
+    });
+  }
+  return sheet;
+};
