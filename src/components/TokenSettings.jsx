@@ -85,7 +85,7 @@ const TokenSettings = ({
       if (snap.exists() && token.tokenSheetId) {
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
-        const sheet = ensureSheetDefaults({ id: token.tokenSheetId, ...snap.data() });
+        const sheet = ensureSheetDefaults({ ...snap.data(), id: token.tokenSheetId });
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
         window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
@@ -102,7 +102,7 @@ const TokenSettings = ({
       if (snap.exists()) {
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
-        const sheet = ensureSheetDefaults({ id: token.tokenSheetId, ...snap.data() });
+        const sheet = ensureSheetDefaults({ ...snap.data(), id: token.tokenSheetId });
         sheet.portrait = token.url;
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
