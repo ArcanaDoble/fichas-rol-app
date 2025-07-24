@@ -1202,6 +1202,10 @@ src/
 - ✅ Restaurar la ficha de un jugador aplica valores predeterminados para que las barras sean visibles
 - ✅ Las estadísticas pueden modificarse y guardarse sin problemas
 
+### 🛠️ **Corrección de barras tras restaurar ficha (Julio 2027) - v2.4.43**
+
+- ✅ Las fichas restauradas se normalizan en el tablero para mostrar todas las barras
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance

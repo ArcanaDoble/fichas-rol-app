@@ -32,7 +32,12 @@ import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
 import { motion } from 'framer-motion';
-import { createToken, cloneTokenSheet, saveTokenSheet } from '../utils/token';
+import {
+  createToken,
+  cloneTokenSheet,
+  saveTokenSheet,
+  ensureSheetDefaults,
+} from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
 import KonvaSpinner from './KonvaSpinner';
@@ -444,12 +449,16 @@ const Token = forwardRef(
         if (!stored) return;
         const sheets = JSON.parse(stored);
         const sheet = sheets[tokenSheetId];
-        if (sheet && sheet.stats) setStats(sheet.stats);
+        if (sheet) {
+          const normalized = ensureSheetDefaults(sheet);
+          setStats(normalized.stats || {});
+        }
       };
       load();
       const handler = (e) => {
         if (e.detail && e.detail.id === tokenSheetId) {
-          setStats(e.detail.stats || {});
+          const normalized = ensureSheetDefaults(e.detail);
+          setStats(normalized.stats || {});
         }
       };
       window.addEventListener('tokenSheetSaved', handler);
