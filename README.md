@@ -1192,6 +1192,11 @@ src/
 
 - ✅ El selector de ficha activa puede arrastrarse a cualquier posición de la pantalla
 
+### 💾 **Persistencia de cambios en combate (Enero 2027) - v2.4.41**
+
+- ✅ Los modales de Ataque y Defensa guardan las estadísticas modificadas con `saveTokenSheet`
+- ✅ Al mover un token se mantienen correctos la vida y demás recursos
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
