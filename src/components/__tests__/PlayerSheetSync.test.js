@@ -6,7 +6,7 @@ function ManualSync({ token }) {
     const stored = localStorage.getItem(`player_${token.controlledBy}`);
     if (!stored) return;
     const sheets = JSON.parse(localStorage.getItem('tokenSheets') || '{}');
-    const sheet = { id: token.tokenSheetId, ...JSON.parse(stored), portrait: token.url };
+    const sheet = { ...JSON.parse(stored), id: token.tokenSheetId, portrait: token.url };
     sheets[token.tokenSheetId] = sheet;
     localStorage.setItem('tokenSheets', JSON.stringify(sheets));
     window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
@@ -48,6 +48,18 @@ test('restore button loads player sheet into tokenSheets', () => {
   expect(stored.s1.stats.vida.base).toBe(5);
   expect(saved).toHaveBeenCalledTimes(1);
   window.removeEventListener('tokenSheetSaved', saved);
+});
+
+test('restore ignores id field from player sheet', () => {
+  const token = { id: 't1', tokenSheetId: 's2', controlledBy: 'Carol', url: 'img' };
+  localStorage.setItem('player_Carol', JSON.stringify({ id: 'Carol', stats: { vida: { base: 7 } } }));
+  const { getByText } = render(<ManualSync token={token} />);
+
+  fireEvent.click(getByText('restore'));
+
+  const stored = JSON.parse(localStorage.getItem('tokenSheets'));
+  expect(stored.s2.stats.vida.base).toBe(7);
+  expect(stored.Carol).toBeUndefined();
 });
 
 test('update button saves token sheet to player', () => {
