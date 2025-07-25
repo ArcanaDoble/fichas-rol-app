@@ -1207,6 +1207,11 @@ src/
 
 - ✅ Las fichas restauradas se normalizan en el tablero para mostrar todas las barras
 
+### 🔗 **Indicador de ficha enlazada (Enero 2027) - v2.4.44**
+
+- ✅ Distintivo visible cuando un token pertenece al jugador actual
+- ✅ Mensaje junto a "Restaurar ficha" y "Subir cambios" recordando la vinculación
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
