@@ -1275,6 +1275,7 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 - Saving a token sheet now replaces the Firestore document, removing deleted statistics or equipment.
 - Realtime listeners only update the local cache instead of rewriting Firestore, ensuring edits persist across browsers.
 
+
 ## 🤝 Contribución
 
 Las contribuciones son bienvenidas. Por favor:
