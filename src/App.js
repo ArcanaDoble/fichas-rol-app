@@ -37,6 +37,7 @@ import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 import { nanoid } from 'nanoid';
+import { saveTokenSheet } from './utils/token';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -457,6 +458,7 @@ function App() {
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const pagesLoadedRef = useRef(false);
+  const checkedPagesRef = useRef({});
   const prevTokensRef = useRef([]);
   const prevLinesRef = useRef([]);
   const prevWallsRef = useRef([]);
@@ -491,6 +493,54 @@ function App() {
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
+
+  const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {
+    if (!pageId || checkedPagesRef.current[pageId]) return tokens || [];
+    const updated = tokens ? [...tokens] : [];
+    let modified = false;
+    const tasks = [];
+
+    updated.forEach((tk) => {
+      if (!tk.tokenSheetId) {
+        const newId = nanoid();
+        tk.tokenSheetId = newId;
+        modified = true;
+        if (tk.enemyId) {
+          tasks.push(
+            getDoc(doc(db, 'enemies', tk.enemyId))
+              .then((snap) => {
+                if (snap.exists()) {
+                  return saveTokenSheet({ id: newId, ...snap.data() });
+                }
+                return setDoc(doc(db, 'tokenSheets', newId), { stats: {} });
+              })
+              .catch((err) => console.error('clone enemy sheet', err))
+          );
+        } else {
+          tasks.push(
+            setDoc(doc(db, 'tokenSheets', newId), { stats: {} }).catch((err) =>
+              console.error('create token sheet', err)
+            )
+          );
+        }
+      }
+    });
+
+    if (modified) {
+      try {
+        await Promise.all(tasks);
+        await updateDoc(doc(db, 'pages', pageId), { tokens: updated });
+      } catch (err) {
+        console.error('update tokens', err);
+        // Revert to original tokens on failure to avoid losing data
+        checkedPagesRef.current[pageId] = true;
+        return tokens || [];
+      }
+    }
+
+    checkedPagesRef.current[pageId] = true;
+    return updated;
+  }, []);
 
   // Control de visibilidad de páginas para jugadores
   const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
@@ -594,7 +644,7 @@ function App() {
     // Listener en tiempo real para la página visible
     const unsubscribe = onSnapshot(
       doc(db, 'pages', playerVisiblePageId),
-      (docSnap) => {
+      async (docSnap) => {
         if (docSnap.exists()) {
           const pageData = docSnap.data();
           setEnableDarkness(
@@ -602,6 +652,10 @@ function App() {
           );
           const opacity =
             pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
+          const tokensWithIds = await ensureTokenSheetIds(
+            playerVisiblePageId,
+            pageData.tokens || []
+          );
           // Actualizar la página en el array de páginas con los datos completos
           setPages((prevPages) => {
             const pageIndex = prevPages.findIndex(
@@ -611,7 +665,7 @@ function App() {
               const updatedPages = [...prevPages];
               updatedPages[pageIndex] = {
                 ...updatedPages[pageIndex],
-                tokens: pageData.tokens || [],
+                tokens: tokensWithIds,
                 lines: pageData.lines || [],
                 walls: pageData.walls || [],
                 texts: pageData.texts || [],
@@ -629,7 +683,7 @@ function App() {
           });
 
           // Actualizar también los estados del canvas
-          setCanvasTokens(pageData.tokens || []);
+          setCanvasTokens(tokensWithIds);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -651,10 +705,14 @@ function App() {
 
     const unsubscribe = onSnapshot(
       doc(db, 'pages', pageId),
-      (docSnap) => {
+      async (docSnap) => {
         if (docSnap.exists()) {
           const pageData = docSnap.data();
-          setCanvasTokens(pageData.tokens || []);
+          const tokensWithIds = await ensureTokenSheetIds(
+            pageId,
+            pageData.tokens || []
+          );
+          setCanvasTokens(tokensWithIds);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);

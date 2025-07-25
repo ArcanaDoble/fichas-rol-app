@@ -1270,6 +1270,7 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 - Token sheets are cached client-side. Listener subscriptions depend only on the set of sheet IDs so moving a token no longer recreates them or triggers repeated Firestore requests.
 - Restoring a player sheet no longer overwrites the token sheet ID, ensuring edits persist.
 - Enemy tokens automatically clone their template the first time they appear if the token sheet doesn't exist, preserving life and resources across browsers.
+- Tokens loaded without a `tokenSheetId` now generate one automatically and persist to Firestore. If the update fails, the original token data is kept to avoid losing sheet changes.
 
 ## 🤝 Contribución
 
