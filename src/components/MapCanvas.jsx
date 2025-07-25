@@ -1724,8 +1724,7 @@ const MapCanvas = ({
       const stored = localStorage.getItem('tokenSheets');
       const sheets = stored ? JSON.parse(stored) : {};
       Object.keys(sheets).forEach((id) => loadedSheetIds.current.add(id));
-      const promises = [];
-      tokens.forEach((tk) => {
+      const promises = tokens.map(async (tk) => {
         if (
           !tk.tokenSheetId ||
           sheets[tk.tokenSheetId] ||
@@ -1733,32 +1732,39 @@ const MapCanvas = ({
           !canSeeBars(tk)
         )
           return;
-        if (tk.enemyId) {
-          promises.push(
-            getDoc(doc(db, 'enemies', tk.enemyId))
-              .then((snap) => {
-                if (snap.exists()) {
-                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
-                  sheets[tk.tokenSheetId] = sheet;
-                  loadedSheetIds.current.add(tk.tokenSheetId);
-                }
-              })
-              .catch((err) => console.error('load enemy sheet', err))
-          );
-        } else {
-          promises.push(
-            getDoc(doc(db, 'tokenSheets', tk.tokenSheetId))
-              .then((snap) => {
-                if (snap.exists()) {
-                  const sheet = { id: tk.tokenSheetId, ...snap.data() };
-                  sheets[tk.tokenSheetId] = sheet;
-                  loadedSheetIds.current.add(tk.tokenSheetId);
-                }
-              })
-              .catch((err) => console.error('load token sheet', err))
-          );
+
+        try {
+          const snap = await getDoc(doc(db, 'tokenSheets', tk.tokenSheetId));
+          if (snap.exists()) {
+            const sheet = ensureSheetDefaults({
+              id: tk.tokenSheetId,
+              ...snap.data(),
+            });
+            sheets[tk.tokenSheetId] = sheet;
+            loadedSheetIds.current.add(tk.tokenSheetId);
+            return;
+          }
+        } catch (err) {
+          console.error('load token sheet', err);
+        }
+
+        if (!tk.enemyId) return;
+        try {
+          const snap = await getDoc(doc(db, 'enemies', tk.enemyId));
+          if (snap.exists()) {
+            const sheet = ensureSheetDefaults({
+              id: tk.tokenSheetId,
+              ...snap.data(),
+            });
+            await saveTokenSheet(sheet);
+            sheets[tk.tokenSheetId] = sheet;
+            loadedSheetIds.current.add(tk.tokenSheetId);
+          }
+        } catch (err) {
+          console.error('load enemy sheet', err);
         }
       });
+
       if (promises.length > 0) {
         await Promise.all(promises);
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
