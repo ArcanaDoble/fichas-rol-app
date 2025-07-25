@@ -499,7 +499,6 @@ function App() {
     const updated = tokens ? [...tokens] : [];
     let modified = false;
     const tasks = [];
-
     updated.forEach((tk) => {
       if (!tk.tokenSheetId) {
         const newId = nanoid();
