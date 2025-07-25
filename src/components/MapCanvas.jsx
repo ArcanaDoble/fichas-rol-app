@@ -1733,9 +1733,7 @@ const MapCanvas = ({
           !canSeeBars(tk)
         )
           return;
-        if (tk.controlledBy && tk.controlledBy !== 'master') {
-          return;
-        } else if (tk.enemyId) {
+        if (tk.enemyId) {
           promises.push(
             getDoc(doc(db, 'enemies', tk.enemyId))
               .then((snap) => {
