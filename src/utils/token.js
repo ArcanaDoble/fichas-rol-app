@@ -13,13 +13,18 @@ export const createToken = (data = {}) => {
   return token;
 };
 
-export const saveTokenSheet = async (sheet) => {
+export const updateLocalTokenSheet = (sheet) => {
   if (!sheet?.id) return;
   const stored = localStorage.getItem('tokenSheets');
   const sheets = stored ? JSON.parse(stored) : {};
   sheets[sheet.id] = { ...(sheets[sheet.id] || {}), ...sheet };
   localStorage.setItem('tokenSheets', JSON.stringify(sheets));
   window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
+};
+
+export const saveTokenSheet = async (sheet) => {
+  if (!sheet?.id) return;
+  updateLocalTokenSheet(sheet);
   try {
     const data = sanitize(sheet);
     await setDoc(doc(db, 'tokenSheets', sheet.id), data);
@@ -37,9 +42,7 @@ export const cloneTokenSheet = (sourceId, targetId) => {
   if (!sheet) return;
   const copy = JSON.parse(JSON.stringify(sheet));
   copy.id = targetId;
-  sheets[targetId] = copy;
-  localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-  window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: copy }));
+  updateLocalTokenSheet(copy);
 };
 export const ensureSheetDefaults = (sheet) => {
   if (!sheet || typeof sheet !== 'object') return sheet;
