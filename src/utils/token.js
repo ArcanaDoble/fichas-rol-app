@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import sanitize from './sanitize';
 
 export const createToken = (data = {}) => {
   const token = { ...data, tokenSheetId: nanoid() };
@@ -20,7 +21,8 @@ export const saveTokenSheet = async (sheet) => {
   localStorage.setItem('tokenSheets', JSON.stringify(sheets));
   window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
   try {
-    await setDoc(doc(db, 'tokenSheets', sheet.id), sheet, { merge: true });
+    const data = sanitize(sheet);
+    await setDoc(doc(db, 'tokenSheets', sheet.id), data);
   } catch (err) {
     console.error('save token sheet', err);
   }
