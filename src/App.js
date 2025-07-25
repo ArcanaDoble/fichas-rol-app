@@ -531,6 +531,9 @@ function App() {
         await updateDoc(doc(db, 'pages', pageId), { tokens: updated });
       } catch (err) {
         console.error('update tokens', err);
+        // Revert to original tokens on failure to avoid losing data
+        checkedPagesRef.current[pageId] = true;
+        return tokens || [];
       }
     }
 
