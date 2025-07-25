@@ -41,6 +41,10 @@ export const cloneTokenSheet = (sourceId, targetId) => {
 };
 export const ensureSheetDefaults = (sheet) => {
   if (!sheet || typeof sheet !== 'object') return sheet;
+  if (!sheet.atributos) sheet.atributos = {};
+  ['destreza', 'vigor', 'intelecto', 'voluntad'].forEach((attr) => {
+    if (!sheet.atributos[attr]) sheet.atributos[attr] = 'D4';
+  });
   const recursoColor = {
     postura: '#34d399',
     vida: '#f87171',
