@@ -1272,6 +1272,8 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 - Enemy tokens automatically clone their template the first time they appear if the token sheet doesn't exist, preserving life and resources across browsers.
 - Tokens loaded without a `tokenSheetId` now generate one automatically and persist to Firestore. If the update fails, the original token data is kept to avoid losing sheet changes.
 - Token sheets always include basic attributes so they can be edited even if missing in stored data.
+- Saving a token sheet now replaces the Firestore document, removing deleted statistics or equipment.
+- Realtime listeners only update the local cache instead of rewriting Firestore, ensuring edits persist across browsers.
 
 ## 🤝 Contribución
 

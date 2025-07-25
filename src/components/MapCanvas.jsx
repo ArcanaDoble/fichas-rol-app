@@ -37,6 +37,7 @@ import {
   cloneTokenSheet,
   saveTokenSheet,
   ensureSheetDefaults,
+  updateLocalTokenSheet,
 } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
@@ -1785,7 +1786,7 @@ const MapCanvas = ({
         sheetListeners.current[tk.tokenSheetId] = onSnapshot(ref, (snap) => {
           if (snap.exists()) {
             const data = { id: tk.tokenSheetId, ...snap.data() };
-            saveTokenSheet(data);
+            updateLocalTokenSheet(data);
           }
         });
       }
