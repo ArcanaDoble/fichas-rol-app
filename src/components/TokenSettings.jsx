@@ -6,6 +6,7 @@ import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
+import { Tooltip } from 'react-tooltip';
 import { ensureSheetDefaults } from '../utils/token';
 
 const TokenSettings = ({
@@ -360,6 +361,23 @@ const TokenSettings = ({
               <div>
                 <label className="block mb-1">
                   {isPlayerView ? "Ficha de Personaje" : "Controlado por"}
+                  {controlledBy !== 'master' &&
+                    controlledBy === currentPlayerName && (
+                      <>
+                        <span
+                          className="ml-2 inline-flex items-center bg-blue-600 text-white text-xs px-2 rounded-full"
+                          data-tooltip-id={`link-${token.id}`}
+                          data-tooltip-content="Ficha enlazada"
+                        >
+                          🔗
+                        </span>
+                        <Tooltip
+                          id={`link-${token.id}`}
+                          place="top"
+                          className="max-w-[90vw] sm:max-w-xs"
+                        />
+                      </>
+                    )}
                 </label>
                 {isPlayerView ? (
                   <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
@@ -443,13 +461,18 @@ const TokenSettings = ({
                 Abrir ficha de personaje
               </Boton>
               {controlledBy !== 'master' && token.tokenSheetId && (
-                <div className="flex justify-center gap-2 mt-2">
-                  <Boton size="sm" onClick={restoreFromPlayerSheet}>
-                    Restaurar ficha
-                  </Boton>
-                  <Boton size="sm" onClick={updatePlayerSheet}>
-                    Subir cambios
-                  </Boton>
+                <div className="flex flex-col items-center gap-1 mt-2">
+                  <div className="flex justify-center gap-2">
+                    <Boton size="sm" onClick={restoreFromPlayerSheet}>
+                      Restaurar ficha
+                    </Boton>
+                    <Boton size="sm" onClick={updatePlayerSheet}>
+                      Subir cambios
+                    </Boton>
+                  </div>
+                  {controlledBy === currentPlayerName && (
+                    <span className="text-xs text-blue-400">🔗 Vinculado a tu ficha</span>
+                  )}
                 </div>
               )}
               <Boton
