@@ -1018,7 +1018,18 @@ const MapCanvas = ({
     tokens,
     playerName,
     userType,
-    onAttack: ({ id, attackerId, targetId, result }) => {
+    onAttack: ({ id, attackerId, targetId, result, deleted }) => {
+      if (deleted) {
+        if (attackRequestId === id) {
+          setAttackRequestId(null);
+          setAttackSourceId(null);
+          setAttackTargetId(null);
+          setAttackLine(null);
+          setAttackResult(null);
+          setAttackReady(false);
+        }
+        return;
+      }
       setAttackRequestId(id);
       setAttackSourceId(attackerId);
       setAttackTargetId(targetId);
@@ -1076,15 +1087,17 @@ const MapCanvas = ({
     if (!pageId) return undefined;
     const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
     const unsub = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
+      snapshot.docChanges().forEach((change) => {
         if (change.type !== 'added') return;
         const data = change.doc.data();
         triggerDamagePopup(data);
-        try {
-          await deleteDoc(doc(db, 'damageEvents', change.doc.id));
-        } catch (err) {
-          console.error(err);
-        }
+        setTimeout(async () => {
+          try {
+            await deleteDoc(doc(db, 'damageEvents', change.doc.id));
+          } catch (err) {
+            console.error(err);
+          }
+        }, 2000);
       });
     });
     return () => unsub();

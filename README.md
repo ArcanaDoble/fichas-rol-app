@@ -1214,6 +1214,12 @@ src/
 - ✅ Distintivo visible cuando un token pertenece al jugador actual
 - ✅ Mensaje junto a "Restaurar ficha" y "Subir cambios" recordando la vinculación
 
+### 🛠️ **Corrección de animaciones de daño (Julio 2027) - v2.4.45**
+
+- ✅ Las animaciones de daño se muestran tanto al atacante como al defensor
+- ✅ La ventana de defensa se cierra automáticamente en todas las vistas al resolverse
+- ✅ Se sincronizan las animaciones en navegadores distintos mediante Firestore
+
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance

@@ -176,7 +176,7 @@ const DefenseModal = ({
         );
         try {
           localStorage.setItem('damageAnimation', JSON.stringify(anim));
-          addDoc(collection(db, 'damageEvents'), {
+          await addDoc(collection(db, 'damageEvents'), {
             ...anim,
             pageId,
             timestamp: serverTimestamp(),
@@ -185,7 +185,7 @@ const DefenseModal = ({
       } else {
         const id = diff < 0 ? target.id : attacker.id;
         const type = diff > 0 ? 'counter' : undefined;
-        ['postura', 'armadura', 'vida'].forEach((stat) => {
+        for (const stat of ['postura', 'armadura', 'vida']) {
           if (lost[stat] > 0) {
             const anim = {
               tokenId: id,
@@ -199,14 +199,14 @@ const DefenseModal = ({
             );
             try {
               localStorage.setItem('damageAnimation', JSON.stringify(anim));
-              addDoc(collection(db, 'damageEvents'), {
+              await addDoc(collection(db, 'damageEvents'), {
                 ...anim,
                 pageId,
                 timestamp: serverTimestamp(),
               });
             } catch {}
           }
-        });
+        }
       }
 
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
