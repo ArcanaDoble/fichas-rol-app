@@ -4621,6 +4621,8 @@ MapCanvas.propTypes = {
   enableDarkness: PropTypes.bool,
   darknessOpacity: PropTypes.number,
   showVisionPolygons: PropTypes.bool,
+  pageId: PropTypes.string,
+  isPlayerView: PropTypes.bool,
 };
 
 export default MapCanvas;
