@@ -4650,6 +4650,7 @@ function App() {
               enableDarkness={enableDarkness}
               darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
               showVisionPolygons={showVisionRanges}
+              pageId={pages[currentPage]?.id}
             />
           </div>
           <AssetSidebar isMaster={authenticated} playerName={playerName} />
