@@ -19,15 +19,18 @@ export default function useAttackRequests({ tokens, playerName, userType, onAtta
     const q = query(collection(db, 'attacks'), where('completed', '==', false));
     const unsub = onSnapshot(q, snapshot => {
       snapshot.docChanges().forEach(change => {
-        if (change.type !== 'added') return;
         const data = change.doc.data();
-        const currentTokens = tokensRef.current || [];
-        const target = currentTokens.find(t => t.id === data.targetId);
-        if (!target) return;
-        const isTargetPlayer = target.controlledBy === playerName;
-        const isMaster = userType === 'master';
-        if (isTargetPlayer || isMaster) {
-          callbackRef.current && callbackRef.current({ id: change.doc.id, ...data });
+        if (change.type === 'added') {
+          const currentTokens = tokensRef.current || [];
+          const target = currentTokens.find(t => t.id === data.targetId);
+          if (!target) return;
+          const isTargetPlayer = target.controlledBy === playerName;
+          const isMaster = userType === 'master';
+          if (isTargetPlayer || isMaster) {
+            callbackRef.current && callbackRef.current({ id: change.doc.id, ...data });
+          }
+        } else if (change.type === 'removed') {
+          callbackRef.current && callbackRef.current({ id: change.doc.id, deleted: true });
         }
       });
     });
