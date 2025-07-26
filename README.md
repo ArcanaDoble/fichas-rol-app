@@ -809,6 +809,7 @@ El Máster ahora también ve estas animaciones cuando los jugadores reciben dañ
 - Ahora las animaciones se comparten entre jugadores y el máster mediante Firestore.
 - MapCanvas pasa ahora el `pageId` a los modales de ataque y defensa para sincronizar animaciones.
 - Las fichas controladas por el Máster ahora muestran la pérdida de bloques en la vista de todos los jugadores.
+- Los eventos de daño se conservan 5 segundos en Firestore para garantizar la sincronización entre navegadores.
 
 **Resumen de cambios v2.4.18:**
 

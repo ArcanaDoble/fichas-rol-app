@@ -1097,7 +1097,7 @@ const MapCanvas = ({
           } catch (err) {
             console.error(err);
           }
-        }, 2000);
+        }, 5000);
       });
     });
     return () => unsub();
