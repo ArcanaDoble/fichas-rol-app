@@ -177,7 +177,7 @@ const AttackModal = ({
               }
             }
           }
-          ['postura', 'armadura', 'vida'].forEach((stat) => {
+          for (const stat of ['postura', 'armadura', 'vida']) {
             if (lost[stat] > 0) {
               const anim = {
                 tokenId: target.id,
@@ -190,14 +190,14 @@ const AttackModal = ({
               );
               try {
                 localStorage.setItem('damageAnimation', JSON.stringify(anim));
-                addDoc(collection(db, 'damageEvents'), {
+                await addDoc(collection(db, 'damageEvents'), {
                   ...anim,
                   pageId,
                   timestamp: serverTimestamp(),
                 });
               } catch {}
             }
-          });
+          }
           let msgs = [];
           try {
             const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
