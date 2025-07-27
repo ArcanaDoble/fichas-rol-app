@@ -1228,6 +1228,10 @@ src/
 
 - 🛠️ Se corrigen las animaciones de daño para que todos los jugadores las vean en tiempo real
 
+**Resumen de cambios v2.4.48:**
+
+- Las modificaciones de tokens de los jugadores se fusionan con los datos actuales de Firebase para mantener los tokens de otros jugadores.
+
 
 **Resumen de cambios v2.4.25:**
 

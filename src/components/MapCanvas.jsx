@@ -61,6 +61,7 @@ import {
   query,
   where,
   onSnapshot,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
@@ -1096,9 +1097,28 @@ const MapCanvas = ({
 
           if (type === 'tokens') {
             // Jugadores solo pueden modificar tokens que controlan
-            filteredData = data.filter(token =>
-              token.controlledBy === playerName || token.controlledBy === 'master'
+            filteredData = data.filter(
+              (token) => token.controlledBy === playerName
             );
+
+            const pageRef = doc(db, 'pages', pageId);
+            let mergedTokens = [];
+
+            await runTransaction(db, async (transaction) => {
+              const snap = await transaction.get(pageRef);
+              const current = snap.data()?.tokens || [];
+              const others = current.filter(
+                (t) => t.controlledBy !== playerName
+              );
+              mergedTokens = [...filteredData, ...others];
+              transaction.update(pageRef, { tokens: mergedTokens });
+            });
+
+            prevData[type] = mergedTokens;
+            console.log(
+              `✅ Jugador ${playerName} guardó ${type} exitosamente (${mergedTokens.length} elementos)`
+            );
+            return;
           }
 
           // Actualizar referencia previa
@@ -1106,7 +1126,9 @@ const MapCanvas = ({
 
           // Guardar en Firebase
           await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
-          console.log(`✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`);
+          console.log(
+            `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`
+          );
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
         }
