@@ -1137,6 +1137,10 @@ src/
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
+**Resumen de cambios v2.4.48:**
+
+- 🔧 `handleDragEnd` solo sincroniza los tokens si realmente cambian de posición
+
 **Resumen de cambios v2.4.30:**
 
 - ✅ Nueva casilla "Rangos de visión" en el mapa de batalla del máster

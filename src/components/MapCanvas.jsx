@@ -2434,9 +2434,10 @@ const MapCanvas = ({
     const node = evt?.target;
     if (!node) return;
 
+    const token = tokens.find((t) => t.id === id);
+
     // Validación de permisos para jugadores
     if (isPlayerView) {
-      const token = tokens.find(t => t.id === id);
       if (!token || token.controlledBy !== playerName) {
         // Si el jugador no puede mover este token, devolverlo a su posición original
         if (token) {
@@ -2461,11 +2462,10 @@ const MapCanvas = ({
     // Verificar colisiones con muros antes de colocar el token
     if (isPositionBlocked(col, row)) {
       // Si la posición está bloqueada, devolver el token a su posición original
-      const originalToken = tokens.find(t => t.id === id);
-      if (originalToken) {
+      if (token) {
         node.position({
-          x: originalToken.x * effectiveGridSize + offX + gridOffsetX,
-          y: originalToken.y * effectiveGridSize + offY + gridOffsetY,
+          x: token.x * effectiveGridSize + offX + gridOffsetX,
+          y: token.y * effectiveGridSize + offY + gridOffsetY,
         });
         node.getLayer().batchDraw();
       }
@@ -2479,10 +2479,13 @@ const MapCanvas = ({
     });
     node.getLayer().batchDraw();
 
-    const newTokens = tokens.map((t) =>
-      t.id === id ? { ...t, x: col, y: row } : t
-    );
-    handleTokensChange(newTokens);
+
+    if (token && (token.x !== col || token.y !== row)) {
+      const newTokens = tokens.map((t) =>
+        t.id === id ? { ...t, x: col, y: row } : t
+      );
+      handleTokensChange(newTokens);
+    }
     setDragShadow(null);
   };
 
