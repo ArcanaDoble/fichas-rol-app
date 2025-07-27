@@ -802,12 +802,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - En el chat, las frases **recibe daño**, **bloquea el ataque** y **contraataca** ahora se resaltan con colores.
 - Al recibir daño se muestran animaciones "-X" para **cada** tipo de bloque perdido, con el color de la barra afectada. Los contraataques y defensas perfectas también tienen su propia animación.
 - Las animaciones de daño se sincronizan entre pestañas y ahora se ven durante más tiempo para apreciarlas mejor.
-- Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 5 segundos.
+ - Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 7 segundos.
 El Máster ahora también ve estas animaciones cuando los jugadores reciben daño.
 - Ahora las animaciones se comparten entre jugadores y el máster mediante Firestore.
 - MapCanvas pasa ahora el `pageId` a los modales de ataque y defensa para sincronizar animaciones.
 - Las fichas controladas por el Máster ahora muestran la pérdida de bloques en la vista de todos los jugadores.
-- Los eventos de daño se conservan 5 segundos en Firestore para garantizar la sincronización entre navegadores.
+ - Los eventos de daño se conservan 7 segundos en Firestore para garantizar la sincronización entre navegadores.
 
 **Resumen de cambios v2.4.18:**
 
