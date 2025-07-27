@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
@@ -29,12 +29,37 @@ const AttackModal = ({
   poderesCatalog = [],
   onClose,
 }) => {
-  const sheet = useMemo(() => {
-    if (!attacker?.tokenSheetId) return null;
-    const stored = localStorage.getItem('tokenSheets');
-    if (!stored) return null;
-    const sheets = JSON.parse(stored);
-    return sheets[attacker.tokenSheetId] || null;
+  const [sheet, setSheet] = useState(null);
+
+  useEffect(() => {
+    if (!attacker?.tokenSheetId) {
+      setSheet(null);
+      return;
+    }
+    const id = attacker.tokenSheetId;
+    const load = async () => {
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      if (sheets[id]) {
+        setSheet(sheets[id]);
+      } else {
+        try {
+          const snap = await getDoc(doc(db, 'tokenSheets', id));
+          if (snap.exists()) {
+            const data = snap.data();
+            setSheet(data);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    };
+    load();
+    const handler = (e) => {
+      if (e.detail && e.detail.id === id) setSheet(e.detail);
+    };
+    window.addEventListener('tokenSheetSaved', handler);
+    return () => window.removeEventListener('tokenSheetSaved', handler);
   }, [attacker]);
 
   const parseRange = (val) => {
