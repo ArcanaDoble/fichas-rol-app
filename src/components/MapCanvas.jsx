@@ -66,59 +66,7 @@ import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import useAttackRequests from '../hooks/useAttackRequests';
 
-// Funciones de sincronización para jugadores
-const createPlayerSyncManager = (pageId, playerName, isPlayerView) => {
-  const saveTimeouts = useRef({
-    tokens: null,
-    lines: null,
-    walls: null,
-    texts: null,
-  });
 
-  const prevData = useRef({
-    tokens: [],
-    lines: [],
-    walls: [],
-    texts: [],
-  });
-
-  const saveToFirebase = useCallback(async (type, data) => {
-    if (!pageId || !isPlayerView) return;
-
-    // Verificar si hay cambios reales
-    if (deepEqual(data, prevData.current[type])) return;
-
-    // Limpiar timeout anterior
-    if (saveTimeouts.current[type]) {
-      clearTimeout(saveTimeouts.current[type]);
-    }
-
-    // Debouncing: esperar 300ms antes de guardar
-    saveTimeouts.current[type] = setTimeout(async () => {
-      try {
-        // Validaciones de seguridad para jugadores
-        let filteredData = data;
-
-        if (type === 'tokens') {
-          // Jugadores solo pueden modificar tokens que controlan
-          filteredData = data.filter(token =>
-            token.controlledBy === playerName || token.controlledBy === 'master'
-          );
-        }
-
-        // Actualizar referencia previa
-        prevData.current[type] = filteredData;
-
-        // Guardar en Firebase
-        await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
-      } catch (error) {
-        console.error(`Error guardando ${type} para jugador:`, error);
-      }
-    }, 300);
-  }, [pageId, playerName, isPlayerView]);
-
-  return { saveToFirebase };
-};
 
 const hexToRgba = (hex, alpha = 1) => {
   let h = hex.replace('#', '');
@@ -961,6 +909,16 @@ const MapCanvas = ({
   const [zoom, setZoom] = useState(initialZoom);
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+
+  // Refs para acceder a valores actuales sin dependencias
+  const zoomRef = useRef(zoom);
+  const groupPosRef = useRef(groupPos);
+  const baseScaleRef = useRef(baseScale);
+
+  // Actualizar refs cuando cambien los valores
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { groupPosRef.current = groupPos; }, [groupPos]);
+  useEffect(() => { baseScaleRef.current = baseScale; }, [baseScale]);
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
@@ -1042,66 +1000,17 @@ const MapCanvas = ({
     },
   });
 
-  const triggerDamagePopup = useCallback(
-    ({ tokenId, value, stat, type }) => {
-      if (!tokenId || !tokenRefs.current[tokenId] || !stageRef.current || !containerRef.current) return;
-      const rect = tokenRefs.current[tokenId].node.getClientRect({ relativeTo: stageRef.current });
-      const stageRect = stageRef.current.container().getBoundingClientRect();
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const x = rect.x + rect.width / 2 + stageRect.left - containerRect.left;
-      const y = rect.y + stageRect.top - containerRect.top;
-      const id = nanoid();
-      setDamagePopups((prev) => [...prev, { id, tokenId, x, y, value, stat, type }]);
-      setTimeout(() => {
-        setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-      }, 5000);
-    },
-    []
-  );
+  // Eliminado triggerDamagePopup de aquí - se moverá después de effectiveGridSize
 
   // Sincronización manual de fichas con las hojas de personaje
 
-  useEffect(() => {
-    const handler = (e) => {
-      triggerDamagePopup(e.detail || {});
-    };
-    window.addEventListener('damageAnimation', handler);
-    return () => window.removeEventListener('damageAnimation', handler);
-  }, [triggerDamagePopup]);
+  // Eliminado el listener de eventos window para evitar duplicación
+  // Las animaciones ahora solo se manejan a través de Firebase
 
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key !== 'damageAnimation' || !e.newValue) return;
-      try {
-        const data = JSON.parse(e.newValue);
-        if (data && data.ts) {
-          window.dispatchEvent(new CustomEvent('damageAnimation', { detail: data }));
-        }
-      } catch {}
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  // Eliminado el listener de localStorage para evitar duplicación de animaciones
+  // Las animaciones ahora solo se sincronizan a través de Firebase
 
-  useEffect(() => {
-    if (!pageId) return undefined;
-    const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
-    const unsub = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type !== 'added') return;
-        const data = change.doc.data();
-        triggerDamagePopup(data);
-        setTimeout(async () => {
-          try {
-            await deleteDoc(doc(db, 'damageEvents', change.doc.id));
-          } catch (err) {
-            console.error(err);
-          }
-        }, 5000);
-      });
-    });
-    return () => unsub();
-  }, [pageId, triggerDamagePopup]);
+  // Listener de Firebase movido después de la definición de triggerDamagePopup
 
 
 
@@ -1149,10 +1058,11 @@ const MapCanvas = ({
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
 
-  // Manager de sincronización para jugadores
+  // Crear syncManager para jugadores usando la función global
   const syncManager = useMemo(() => {
-    if (!isPlayerView || !pageId) return null;
+    if (!isPlayerView || !pageId || !playerName) return null;
 
+    // Crear el manager con refs y callbacks dentro del componente
     const saveTimeouts = {
       tokens: null,
       lines: null,
@@ -1168,6 +1078,8 @@ const MapCanvas = ({
     };
 
     const saveToFirebase = async (type, data) => {
+      if (!pageId || !isPlayerView) return;
+
       // Verificar si hay cambios reales
       if (deepEqual(data, prevData[type])) return;
 
@@ -1176,30 +1088,36 @@ const MapCanvas = ({
         clearTimeout(saveTimeouts[type]);
       }
 
-      // Debouncing: esperar 100ms antes de guardar (optimizado)
+      // Debouncing: esperar 300ms antes de guardar
       saveTimeouts[type] = setTimeout(async () => {
         try {
-          // Para tokens, la validación ya se hizo en handleTokensChange
-          // Solo guardamos los datos que ya están validados
-          let dataToSave = data;
+          // Validaciones de seguridad para jugadores
+          let filteredData = data;
+
+          if (type === 'tokens') {
+            // Jugadores solo pueden modificar tokens que controlan
+            filteredData = data.filter(token =>
+              token.controlledBy === playerName || token.controlledBy === 'master'
+            );
+          }
 
           // Actualizar referencia previa
-          prevData[type] = dataToSave;
+          prevData[type] = filteredData;
 
           // Guardar en Firebase
-          await updateDoc(doc(db, 'pages', pageId), { [type]: dataToSave });
+          await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
+          console.log(`✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`);
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
         }
-      }, 100);
+      }, 300);
     };
 
-    return { saveToFirebase, prevData };
+    return { saveToFirebase };
   }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
   const handleTokensChange = useCallback((newTokens) => {
-    // Validaciones de seguridad para jugadores
     if (isPlayerView) {
       // Para jugadores: solo permitir cambios en tokens que controlan
       // Mantener todos los tokens existentes y solo actualizar los que el jugador puede modificar
@@ -1227,12 +1145,10 @@ const MapCanvas = ({
 
       const finalTokens = [...updatedTokens, ...newTokensToAdd];
 
-      // Usar syncManager para guardar en Firebase
+      // Usar syncManager para guardar en Firebase Y actualizar estado local
       if (syncManager) {
         syncManager.saveToFirebase('tokens', finalTokens);
       }
-
-      // Actualizar estado local
       onTokensChange(finalTokens);
     } else {
       // Para Master, usar el flujo normal
@@ -1820,6 +1736,105 @@ const MapCanvas = ({
   const effectiveGridSize =
     imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
 
+  // Funciones de conversión de coordenadas
+  const pxToCell = (px, offset) =>
+    Math.round((px - offset) / effectiveGridSize);
+  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+
+  // Función para mostrar animaciones de daño
+  const triggerDamagePopup = useCallback(
+    ({ tokenId, value, stat, type }) => {
+      // Validaciones más robustas
+      if (!tokenId) {
+        console.warn('triggerDamagePopup: tokenId no proporcionado');
+        return;
+      }
+
+      // Buscar el token en la lista de tokens para obtener sus coordenadas de celda
+      const token = tokens.find(t => t.id === tokenId);
+      if (!token) {
+        console.warn(`triggerDamagePopup: No se encontró token con id ${tokenId}`);
+        return;
+      }
+
+      if (!stageRef.current || !containerRef.current) {
+        console.warn('triggerDamagePopup: Referencias de stage o container no disponibles');
+        return;
+      }
+
+      try {
+        // Usar refs para obtener valores actuales sin dependencias (evita recreación del callback)
+        const currentBaseScale = baseScaleRef.current;
+        const currentZoom = zoomRef.current;
+        const currentGroupPos = groupPosRef.current;
+
+        // Usar las mismas funciones que se usan para renderizar los tokens
+        const tokenPixelX = cellToPx(token.x, gridOffsetX);
+        const tokenPixelY = cellToPx(token.y, gridOffsetY);
+        const tokenWidth = (token.w || 1) * effectiveGridSize;
+        const tokenHeight = (token.h || 1) * effectiveGridSize;
+
+        // Calcular el centro del token en coordenadas del mundo
+        const centerX = tokenPixelX + tokenWidth / 2;
+        const centerY = tokenPixelY + tokenHeight / 2;
+
+        // Transformar a coordenadas de pantalla usando las transformaciones actuales
+        const groupScale = currentBaseScale * currentZoom;
+        const screenX = centerX * groupScale + currentGroupPos.x;
+        const screenY = centerY * groupScale + currentGroupPos.y;
+
+        // Obtener la posición relativa al contenedor
+        const stageRect = stageRef.current.container().getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+
+        const x = screenX + stageRect.left - containerRect.left;
+        const y = screenY + stageRect.top - containerRect.top;
+
+        // Validar que las coordenadas sean números válidos
+        if (isNaN(x) || isNaN(y)) {
+          console.warn(`triggerDamagePopup: Coordenadas inválidas x=${x}, y=${y}`);
+          return;
+        }
+
+        console.log(`Animación de daño para token ${tokenId} en celda (${token.x}, ${token.y}) -> píxeles (${tokenPixelX}, ${tokenPixelY}) -> pantalla (${x}, ${y}) [zoom: ${currentZoom}, pos: ${currentGroupPos.x},${currentGroupPos.y}]`);
+
+        const id = nanoid();
+        // No guardar coordenadas fijas, solo el tokenId para calcular posición en tiempo real
+        setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type }]);
+
+        setTimeout(() => {
+          setDamagePopups((prev) => prev.filter((p) => p.id !== id));
+        }, 5000);
+      } catch (error) {
+        console.error('Error en triggerDamagePopup:', error);
+      }
+    },
+    [tokens, gridOffsetX, gridOffsetY, effectiveGridSize]
+  );
+
+  // Listener de Firebase para eventos de daño
+  useEffect(() => {
+    if (!pageId) return undefined;
+    console.log(`Configurando listener de damageEvents para pageId: ${pageId}`);
+    const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        console.log('Evento de daño recibido desde Firebase:', data);
+        triggerDamagePopup(data);
+        setTimeout(async () => {
+          try {
+            await deleteDoc(doc(db, 'damageEvents', change.doc.id));
+          } catch (err) {
+            console.error('Error eliminando evento de daño:', err);
+          }
+        }, 5000);
+      });
+    });
+    return () => unsub();
+  }, [pageId, triggerDamagePopup]);
+
   // Función para verificar si un token es visible para el jugador actual
   const isTokenVisibleToPlayer = useCallback((token) => {
     const isPlayerMode = userType === 'player' || (userType === 'master' && playerViewMode);
@@ -2149,9 +2164,7 @@ const MapCanvas = ({
     return [];
   }, [walls, activeLayer]);
 
-  const pxToCell = (px, offset) =>
-    Math.round((px - offset) / effectiveGridSize);
-  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  // Funciones movidas arriba después de effectiveGridSize
   const snapPoint = useCallback(
     (x, y) => {
       if (measureSnap === 'free') return [x, y];
@@ -4303,44 +4316,83 @@ const MapCanvas = ({
             return acc;
           }, {});
           return damagePopups.map((p) => {
-            const colors = {
-            postura: '#34d399',
-            vida: '#f87171',
-            armadura: '#9ca3af',
-            counter: '#facc15',
-            perfect: '#60a5fa',
-          };
-            const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
-            const text =
-              p.type === 'counter'
-                ? '¡Contraataque!'
-                : p.type === 'perfect'
-                ? '¡Defensa perfecta!'
-                : `-${p.value}`;
-            const group = groups[p.tokenId] || [];
-            const index = group.findIndex((g) => g.id === p.id);
-            const offset = (index - (group.length - 1) / 2) * 30;
-            return (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 1, y: 0 }}
-                animate={{ opacity: 0, y: -20 }}
-                transition={{ duration: 5 }}
-                style={{
-                  position: 'absolute',
-                  left: p.x + offset,
-                  top: p.y,
-                  transform: 'translate(-50%, -100%)',
-                  color,
-                  fontSize: 20,
-                  fontWeight: 'bold',
-                  textShadow: '0 0 2px #000',
-                }}
-              >
-                {text}
-              </motion.div>
-            );
-          });
+            // Calcular posición en tiempo real basándose en la posición actual del token
+            const token = tokens.find(t => t.id === p.tokenId);
+            if (!token || !stageRef.current || !containerRef.current) {
+              return null; // No renderizar si no se encuentra el token
+            }
+
+            try {
+              // Usar valores actuales de transformación
+              const currentBaseScale = baseScaleRef.current;
+              const currentZoom = zoomRef.current;
+              const currentGroupPos = groupPosRef.current;
+
+              // Calcular posición actual del token
+              const tokenPixelX = cellToPx(token.x, gridOffsetX);
+              const tokenPixelY = cellToPx(token.y, gridOffsetY);
+              const tokenWidth = (token.w || 1) * effectiveGridSize;
+              const tokenHeight = (token.h || 1) * effectiveGridSize;
+
+              // Centro del token en coordenadas del mundo
+              const centerX = tokenPixelX + tokenWidth / 2;
+              const centerY = tokenPixelY + tokenHeight / 2;
+
+              // Transformar a coordenadas de pantalla
+              const groupScale = currentBaseScale * currentZoom;
+              const screenX = centerX * groupScale + currentGroupPos.x;
+              const screenY = centerY * groupScale + currentGroupPos.y;
+
+              // Posición relativa al contenedor
+              const stageRect = stageRef.current.container().getBoundingClientRect();
+              const containerRect = containerRef.current.getBoundingClientRect();
+
+              const x = screenX + stageRect.left - containerRect.left;
+              const y = screenY + stageRect.top - containerRect.top;
+
+              const colors = {
+                postura: '#34d399',
+                vida: '#f87171',
+                armadura: '#9ca3af',
+                counter: '#facc15',
+                perfect: '#60a5fa',
+              };
+              const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
+              const text =
+                p.type === 'counter'
+                  ? '¡Contraataque!'
+                  : p.type === 'perfect'
+                  ? '¡Defensa perfecta!'
+                  : `-${p.value}`;
+              const group = groups[p.tokenId] || [];
+              const index = group.findIndex((g) => g.id === p.id);
+              const offset = (index - (group.length - 1) / 2) * 30;
+
+              return (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 1, y: 0 }}
+                  animate={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 5 }}
+                  style={{
+                    position: 'absolute',
+                    left: x + offset,
+                    top: y,
+                    transform: 'translate(-50%, -100%)',
+                    color,
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    textShadow: '0 0 2px #000',
+                  }}
+                >
+                  {text}
+                </motion.div>
+              );
+            } catch (error) {
+              console.error('Error renderizando animación de daño:', error);
+              return null;
+            }
+          }).filter(Boolean); // Filtrar elementos null
         })()}
       </div>
       <Toolbar

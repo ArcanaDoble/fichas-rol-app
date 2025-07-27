@@ -4,7 +4,7 @@ import Modal from './Modal';
 import Boton from './Boton';
 import { rollExpression } from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
@@ -196,14 +196,22 @@ const DefenseModal = ({
 
       if (diff === 0) {
         const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
-        window.dispatchEvent(
-          new CustomEvent('damageAnimation', { detail: anim })
-        );
+        // Solo guardar en Firebase para sincronización entre navegadores
+        // No disparar eventos locales para evitar duplicación
         try {
-          localStorage.setItem('damageAnimation', JSON.stringify(anim));
+          // Obtener el pageId visible para jugadores para asegurar sincronización
+          let effectivePageId = pageId;
+          try {
+            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+            if (visibilityDoc.exists()) {
+              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+            }
+          } catch (err) {
+            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+          }
           await addDoc(collection(db, 'damageEvents'), {
             ...anim,
-            pageId,
+            pageId: effectivePageId,
             timestamp: serverTimestamp(),
           });
         } catch {}
@@ -219,14 +227,22 @@ const DefenseModal = ({
               ts: Date.now(),
               ...(type ? { type } : {}),
             };
-            window.dispatchEvent(
-              new CustomEvent('damageAnimation', { detail: anim })
-            );
+            // Solo guardar en Firebase para sincronización entre navegadores
+            // No disparar eventos locales para evitar duplicación
             try {
-              localStorage.setItem('damageAnimation', JSON.stringify(anim));
+              // Obtener el pageId visible para jugadores para asegurar sincronización
+              let effectivePageId = pageId;
+              try {
+                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                if (visibilityDoc.exists()) {
+                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+                }
+              } catch (err) {
+                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+              }
               await addDoc(collection(db, 'damageEvents'), {
                 ...anim,
-                pageId,
+                pageId: effectivePageId,
                 timestamp: serverTimestamp(),
               });
             } catch {}

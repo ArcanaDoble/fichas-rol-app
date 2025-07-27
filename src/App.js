@@ -870,51 +870,64 @@ function App() {
     loadPageData();
   }, [currentPage, pages[currentPage]?.id]);
 
+  // Timeout para debouncing de guardado de tokens del master
+  const tokenSaveTimeout = useRef(null);
+
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
     if (userType !== 'master') return;
+    // No guardar automáticamente si estamos en vista de jugador simulada
+    if (showPlayerBattleMap) return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
 
     console.log(
-      'Guardando tokens en página:',
+      'Programando guardado de tokens en página:',
       pageId,
       'currentPage:',
       currentPage
     );
     prevTokensRef.current = canvasTokens;
 
-    const saveId = ++saveVersionRef.current.tokens;
+    // Limpiar timeout anterior
+    if (tokenSaveTimeout.current) {
+      clearTimeout(tokenSaveTimeout.current);
+    }
 
-    const saveTokens = async () => {
-      try {
-        const tokens = await Promise.all(
-          canvasTokens.map(async (t) => {
-            if (t.url && t.url.startsWith('data:')) {
-              const url = await uploadDataUrl(t.url, `canvas-tokens/${t.id}`);
-              return { ...t, url };
-            }
-            return t;
-          })
-        );
-        if (saveId !== saveVersionRef.current.tokens) {
-          console.log('Guardado de tokens cancelado por cambio de página');
-          return;
-        }
-        await updateDoc(doc(db, 'pages', pageId), { tokens });
-        if (saveId !== saveVersionRef.current.tokens) {
-          console.log(
-            'Resultado de guardado de tokens ignorado por cambio de página'
+    // Debouncing: esperar 100ms antes de guardar
+    tokenSaveTimeout.current = setTimeout(async () => {
+      const saveId = ++saveVersionRef.current.tokens;
+
+      const saveTokens = async () => {
+        try {
+          const tokens = await Promise.all(
+            canvasTokens.map(async (t) => {
+              if (t.url && t.url.startsWith('data:')) {
+                const url = await uploadDataUrl(t.url, `canvas-tokens/${t.id}`);
+                return { ...t, url };
+              }
+              return t;
+            })
           );
-          return;
+          if (saveId !== saveVersionRef.current.tokens) {
+            console.log('Guardado de tokens cancelado por cambio de página');
+            return;
+          }
+          await updateDoc(doc(db, 'pages', pageId), { tokens });
+          if (saveId !== saveVersionRef.current.tokens) {
+            console.log(
+              'Resultado de guardado de tokens ignorado por cambio de página'
+            );
+            return;
+          }
+          console.log('Tokens guardados exitosamente en página:', pageId);
+        } catch (error) {
+          console.error('Error guardando tokens:', error);
         }
-        console.log('Tokens guardados exitosamente en página:', pageId);
-      } catch (error) {
-        console.error('Error guardando tokens:', error);
-      }
-    };
-    saveTokens();
+      };
+      saveTokens();
+    }, 100);
   }, [canvasTokens, currentPage]);
 
   useEffect(() => {
