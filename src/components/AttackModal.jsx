@@ -210,14 +210,22 @@ const AttackModal = ({
                 stat,
                 ts: Date.now(),
               };
-              window.dispatchEvent(
-                new CustomEvent('damageAnimation', { detail: anim })
-              );
+              // Solo guardar en Firebase para sincronización entre navegadores
+              // No disparar eventos locales para evitar duplicación
               try {
-                localStorage.setItem('damageAnimation', JSON.stringify(anim));
+                // Obtener el pageId visible para jugadores para asegurar sincronización
+                let effectivePageId = pageId;
+                try {
+                  const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                  if (visibilityDoc.exists()) {
+                    effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+                  }
+                } catch (err) {
+                  console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                }
                 await addDoc(collection(db, 'damageEvents'), {
                   ...anim,
-                  pageId,
+                  pageId: effectivePageId,
                   timestamp: serverTimestamp(),
                 });
               } catch {}
