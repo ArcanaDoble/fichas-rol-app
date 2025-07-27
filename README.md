@@ -1224,6 +1224,10 @@ src/
 - ✅ Los modales de Ataque y Defensa cargan la ficha desde Firestore si no está en caché
 - ✅ Se actualizan automáticamente al guardarse cualquier ficha
 
+**Resumen de cambios v2.4.47:**
+
+- 🛠️ Se corrigen las animaciones de daño para que todos los jugadores las vean en tiempo real
+
 
 **Resumen de cambios v2.4.25:**
 
