@@ -118,8 +118,6 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Los cuadros de texto creados en el mapa ahora muestran un marco inicial para
   facilitar su edición.
 
-**Resumen de cambios v2.1.10:**
-
 - Nuevo botón dorado para aplicar buffs a las estadísticas.
 - El botón verde "+" ahora incrementa el recurso hasta su valor base.
 - Otros ajustes menores.
@@ -891,7 +889,7 @@ src/
 
 ## 🎯 Últimas mejoras implementadas
 
-#### v2.1.2 (diciembre 2024)
+**Resumen de cambios v2.1.2:**
 
 - **Sistema de Píldoras de Equipamiento** - Nuevas píldoras interactivas en el Sistema de Velocidad que permiten usar armas y poderes equipados directamente
 - **Vincular ficha de jugador** - Al asignar un controlador ya no se descarga automáticamente su ficha; usa **Restaurar ficha** para importarla desde Firestore
@@ -916,7 +914,7 @@ src/
 - **Iconos de puerta siempre orientados** - Los SVG de las puertas se muestran correctamente aunque el muro se dibuje al revés
 - **Edición de estadísticas fiable** - Al borrar una estadística de la ficha se elimina también de `resourcesList`, evitando que reaparezca
 
-#### v2.1.1 (junio 2024)
+**Resumen de cambios v2.1.1:**
 
 - Vista de enemigos rediseñada como cartas coleccionables (Magic-like), con responsive y efectos visuales exclusivos.
 - Equipamiento equipado (armas/armaduras) restaurado a su diseño clásico, sin efectos de carta.
@@ -961,7 +959,7 @@ src/
 
 ## 🔄 Historial de cambios recientes
 
-### 🧹 **Limpieza y Corrección de Errores (Diciembre 2024) - v2.1.3**
+**Resumen de cambios v2.1.3:**
 
 - ✅ **Errores críticos solucionados** - Imports de iconos faltantes corregidos para evitar errores de compilación
 - ✅ **Código completamente limpio** - Eliminación de todos los console.log y console.error innecesarios
@@ -970,14 +968,14 @@ src/
 - ✅ **Compilación perfecta** - Proyecto ahora compila sin errores ni warnings de ESLint
 - ✅ **Mantenibilidad mejorada** - Código más limpio y fácil de mantener
 
-### 🎮 **Mejoras en Minijuego de Cerrajería (Diciembre 2024)**
+### 🎮 **Mejoras en Minijuego de Cerrajería **
 
 - ✅ **Velocidad aleatorizada mejorada** - Variación sutil de ±10% para evitar patrones predecibles
 - ✅ **Balance de dificultad mantenido** - Misma variación en todos los niveles sin afectar jugabilidad
 - ✅ **Información de velocidad** - Mostrar variación porcentual en tiempo real y resultados
 - ✅ **Historial mejorado** - Incluye datos de velocidad para análisis de intentos anteriores
 
-### 🔧 **Corrección de Permisos Firebase (Diciembre 2024)**
+### 🔧 **Corrección de Permisos Firebase **
 
 - ✅ **Reglas de Firestore configuradas** - Solucionado error "Missing or insufficient permissions"
 - ✅ **Configuración de seguridad** - Añadidas reglas permisivas para acceso completo a datos
@@ -1001,36 +999,36 @@ src/
 - 🔧 **Guardado inmediato de mapas** - Tras la subida, la página se actualiza en Firestore con la URL definitiva
 - 🔧 **Rutas seguras en Storage** - Los archivos se guardan usando `encodeURIComponent` para evitar errores por espacios o acentos
 
-### 🗺️ **Corrección de Alineado de Tokens (Enero 2025) - v2.1.4**
+**Resumen de cambios v2.1.4:**
 
 - ✅ **Snap perfecto tras drag** - Los tokens quedan totalmente centrados en la casilla al soltarlos
 
-### 🔧 **Mejora de selección de controlador (Enero 2025) - v2.1.5**
+**Resumen de cambios v2.1.5:**
 
 - ✅ **Listado completo de jugadores** - Ahora se muestran todos los nombres en "Controlado por" al editar un token
 - ✅ **Ajustes de token en tiempo real** - Los cambios se aplican sin cerrar la ventana de configuración
 
-### 🖌️ **Mejora de tinte de tokens (Febrero 2025) - v2.1.6**
+**Resumen de cambios v2.1.6:**
 
 - ✅ **Tinte nítido** - El token usa filtro RGBA en lugar de un overlay
 - 🔧 **Cacheado con pixelRatio** - La imagen se cachea a la resolución de pantalla para no perder nitidez
 - 🛠️ **pixelRatio ajustado** - El zoom del mapa se tiene en cuenta para evitar desenfoque
 - 🚫 **Selección intacta** - El contorno de selección ya no se tiñe
 
-### 🌀 **Indicador de carga del mapa (Marzo 2025) - v2.1.7**
+**Resumen de cambios v2.1.7:**
 
 - ✅ Spinner visible mientras se carga la imagen del mapa para evitar pantalla negra
 
-### 🛑 **Bloqueo de movimiento al editar token (Abril 2025) - v2.1.8**
+**Resumen de cambios v2.1.8:**
 
 - ✅ Al escribir el nombre del token en los ajustes ya no se mueve accidentalmente
 
-### 🗺️ **Corrección de carga de mapas (Julio 2025) - v2.1.9**
+**Resumen de cambios v2.1.9:**
 
 - ✅ Se muestra un mensaje de error si la imagen del mapa falla y se oculta el spinner
 - 🔧 Dependencias de ESLint eliminadas para evitar peticiones innecesarias
 
-### 🔒 **Restricciones de selección y sincronización mejorada (Enero 2025) - v2.4.12**
+**Resumen de cambios v2.4.12:**
 
 - ✅ **Restricciones de selección para jugadores** - Los jugadores solo pueden seleccionar tokens que controlan y elementos que crearon
 - ✅ **Validación exhaustiva** - Aplicada en selección individual, Ctrl+click, selección múltiple y Ctrl+A
@@ -1039,7 +1037,7 @@ src/
 - ✅ **Sincronización en tiempo real** - Listener `onSnapshot` para cambios instantáneos de visibilidad de mapas
 - ✅ **Seguridad reforzada** - Sistema completo de permisos que respeta roles de usuario
 
-### 🚨 **CRÍTICO: Sincronización cruzada entre mapas solucionada (Enero 2025) - v2.4.13**
+**Resumen de cambios v2.4.13:**
 
 - ✅ **Independencia completa de mapas** - Cada mapa mantiene contenido completamente independiente
 - ✅ **Carga única por página** - Reemplazado `onSnapshot` por `getDoc` para evitar sincronización cruzada
@@ -1049,37 +1047,37 @@ src/
 - ✅ **Logs de debug** - Tracking completo de operaciones de carga y guardado por página
 - ✅ **Manejo de errores robusto** - Try-catch y promesas con feedback detallado
 
-### 🛠️ **Unificación de deepEqual (Julio 2025) - v2.4.14**
+**Resumen de cambios v2.4.14:**
 
 - ✅ Comparaciones profundas centralizadas en `src/utils/deepEqual.js`
 
-### 🛡️ **Cancelación de guardados al cambiar de página (Abril 2026) - v2.4.15**
+**Resumen de cambios v2.4.15:**
 
 - ✅ Guardados pendientes de tokens, líneas, muros, textos y fondo se cancelan al cambiar de página
 
-### ♻️ **Sincronización en tiempo real para el máster (Abril 2026) - v2.4.16**
+**Resumen de cambios v2.4.16:**
 
 - ✅ Listener `onSnapshot` mantiene tokens, líneas y demás elementos actualizados al instante para el máster
 
-### 🔄 **Protección contra cargas desfasadas (Abril 2026) - v2.4.17**
+**Resumen de cambios v2.4.17:**
 
 - ✅ Se evita que una carga previa de página sobrescriba el estado actual comprobando la versión del efecto
 
-### 🗺️ **Mensaje simplificado en mapa no disponible (Julio 2026) - v2.4.18**
+**Resumen de cambios v2.4.18:**
 
 - 📝 Se elimina la indicación redundante de espera dejando solo el mensaje principal
 
-### 🌑 **Sincronización de oscuridad con jugadores (Julio 2026) - v2.4.19**
+**Resumen de cambios v2.4.19:**
 
 - ✅ Los valores `enableDarkness` y `darknessOpacity` de la página visible se actualizan al instante para los jugadores
 - ✅ La visibilidad de las barras de los tokens se propaga en tiempo real entre máster y jugadores
 
-### 🛠️ **Corrección de fichas de jugadores en mapa (Agosto 2026) - v2.4.20**
+**Resumen de cambios v2.4.20:**
 
 - ✅ Ventanas de ficha movibles para los jugadores
 - ✅ Armas, armaduras y poderes se muestran correctamente en su ficha del mapa
 
-### 🎯 **Modo Mirilla (Septiembre 2026) - v2.4.21**
+**Resumen de cambios v2.4.21:**
 
 - ✅ Nueva herramienta de ataque con línea de distancia
 - ✅ Ventanas de ataque y defensa con tiradas automáticas
@@ -1092,7 +1090,7 @@ src/
 - ✅ El objetivo se reconoce al pulsar en cualquier punto de su casilla
 - ✅ El atacante y el objetivo se destacan con un marco de color
 
-### 🔄 **Sincronización automática de fichas (Octubre 2026) - v2.4.22**
+**Resumen de cambios v2.4.22:**
 
 - ✅ Los cambios en la ficha de un token controlado actualizan al instante la ficha de su jugador
 - ✅ Al modificar el equipamiento desde el token, la ficha del jugador se actualiza automáticamente
@@ -1101,50 +1099,50 @@ src/
 - ✅ Activar condiciones desde la ficha ahora refleja el estado al instante en el token correspondiente
 - ✅ Guardar la ficha envía el evento de actualización sin esperar a Firebase para evitar retrasos
 
-### 🔄 **Sincronización entre pestañas (Noviembre 2026) - v2.4.23**
+**Resumen de cambios v2.4.23:**
 
 - ✅ La ficha de jugador se actualiza automáticamente al recibir el evento `playerSheetSaved` desde otras pestañas o tokens
 - ✅ Al detectar cambios en `localStorage`, la ficha se actualiza sin recargar la página
 - ✅ Los estados de los tokens controlados se sincronizan al instante al modificarse `localStorage`
 
-### 🐞 **Corrección de la mirilla para el máster (Diciembre 2026) - v2.4.24**
+**Resumen de cambios v2.4.24:**
 
 - ✅ El máster puede seleccionar cualquier token como atacante sin fijar objetivo automáticamente
 - ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
 - ✅ Prueba unitaria garantiza el funcionamiento correcto
 
-### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
+**Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
 - ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
 
-### 🛠️ **Corrección de nombres y daño de armas (Enero 2027) - v2.4.26**
+**Resumen de cambios v2.4.26:**
 
 - ✅ Los menús de ataque y defensa listan correctamente las armas y poderes equipados
 - ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
 - ✅ Las tiradas utilizan el daño definido para cada arma o poder
 
-### 🎯 **Ajuste de valores de alcance (Enero 2027) - v2.4.27**
+**Resumen de cambios v2.4.27:**
 
 - ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
 - ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
 
-### ⚔️ **Daño editable en ataques (Enero 2027) - v2.4.28**
+**Resumen de cambios v2.4.28:**
 
 - ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
 - ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
 
-### ⚔️ **Daño sin tipo en menús (Enero 2027) - v2.4.29**
+**Resumen de cambios v2.4.29:**
 
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
-### 👁️ **Rangos de visión opcionales (Enero 2027) - v2.4.30**
+**Resumen de cambios v2.4.30:**
 
 - ✅ Nueva casilla "Rangos de visión" en el mapa de batalla del máster
 - ✅ Permite ocultar el contorno amarillo de visión de los tokens
 
-### 🔄 **Barras por página (Enero 2027) - v2.4.30**
+**Resumen de cambios v2.4.30:**
 
 - ✅ Los eventos de visibilidad de barras incluyen la página de origen
 - ✅ Los cambios solo se aplican si corresponden a la página abierta, evitando sobrescritura entre escenas
@@ -1153,12 +1151,12 @@ src/
 - ✅ El objetivo solo se fija al hacer clic sobre otro token, permitiendo cambiarlo fácilmente
 - ✅ Prueba unitaria garantiza el funcionamiento correcto
 
-### 🏷️ **Nombre de token en chat (Enero 2027) - v2.4.31**
+**Resumen de cambios v2.4.31:**
 
 - ✅ Los mensajes de ataque y defensa muestran el nombre del token si está definido
 - ✅ Si el token no tiene nombre, se usa el del asset correspondiente
 
-### 🛡️ **Defensa remota mediante Firestore (Enero 2027) - v2.4.33**
+**Resumen de cambios v2.4.33:**
 
 - ✅ Tras lanzar el ataque se crea una solicitud en la colección `attacks`
 - ✅ El jugador objetivo o el máster reciben la notificación y abren la defensa
@@ -1168,87 +1166,87 @@ src/
 - ✅ La defensa se resuelve automáticamente si nadie responde
 - ✅ Si no hay armas o poderes disponibles, el defensor puede introducir un valor manual de defensa
 
-### ⚔️ **Daño escalado y contraataque (Enero 2027) - v2.4.35**
+**Resumen de cambios v2.4.35:**
 
 - ✅ El daño se calcula como `floor(daño / atributo)` y se aplica primero a la postura, luego a la armadura y finalmente a la vida
 - ✅ El daño restante no pasa a la siguiente estadística si quedan bloques disponibles en la actual
 - ✅ Si la defensa supera al ataque se produce un contraataque automático
 - ✅ Los mensajes de chat muestran tiradas, diferencia y bloques perdidos
 
-### 🏰 **Mejoras en botones de puertas y muros (Enero 2027) - v2.4.36**
+**Resumen de cambios v2.4.36:**
 
 - ✅ El icono de puerta tiene un área de clic más grande y visible
 - ✅ Se cambia el cursor a puntero al pasar sobre el icono
 
-### ⚡ **Consumo de velocidad en ataque y defensa (Enero 2027) - v2.4.37**
+**Resumen de cambios v2.4.37:**
 
 - ✅ Los modales de Ataque y Defensa muestran el consumo de velocidad del arma o poder seleccionado
 
-### 🗄️ **Sincronización manual de fichas (Enero 2027) - v2.4.38**
+**Resumen de cambios v2.4.38:**
 
 - ✅ Nuevos botones para restaurar o subir la ficha del jugador desde los ajustes del token
 
-### 🗑️ **Simplificación de botones de ficha (Enero 2027) - v2.4.39**
+**Resumen de cambios v2.4.39:**
 
 - ✅ Se elimina el botón "Actualizar ficha" manteniendo "Restaurar ficha" y "Subir cambios"
 
-### 🕹️ **Ventana de cambio de ficha móvil (Enero 2027) - v2.4.40**
+**Resumen de cambios v2.4.40:**
 
 - ✅ El selector de ficha activa puede arrastrarse a cualquier posición de la pantalla
 
-### 💾 **Persistencia de cambios en combate (Enero 2027) - v2.4.41**
+**Resumen de cambios v2.4.41:**
 
 - ✅ Los modales de Ataque y Defensa guardan las estadísticas modificadas con `saveTokenSheet`
 - ✅ Al mover un token se mantienen correctos la vida y demás recursos
 
-### 🛠️ **Edición tras restaurar ficha (Abril 2027) - v2.4.42**
+**Resumen de cambios v2.4.42:**
 
 - ✅ Restaurar la ficha de un jugador aplica valores predeterminados para que las barras sean visibles
 - ✅ Las estadísticas pueden modificarse y guardarse sin problemas
 
-### 🛠️ **Corrección de barras tras restaurar ficha (Julio 2027) - v2.4.43**
+**Resumen de cambios v2.4.43:**
 
 - ✅ Las fichas restauradas se normalizan en el tablero para mostrar todas las barras
 
-### 🔗 **Indicador de ficha enlazada (Enero 2027) - v2.4.44**
+**Resumen de cambios v2.4.44:**
 
 - ✅ Distintivo visible cuando un token pertenece al jugador actual
 - ✅ Mensaje junto a "Restaurar ficha" y "Subir cambios" recordando la vinculación
 
-### 🛠️ **Corrección de animaciones de daño (Julio 2027) - v2.4.45**
+**Resumen de cambios v2.4.45:**
 
 - ✅ Las animaciones de daño se muestran tanto al atacante como al defensor
 - ✅ La ventana de defensa se cierra automáticamente en todas las vistas al resolverse
 - ✅ Se sincronizan las animaciones en navegadores distintos mediante Firestore
 
-### 🔄 **Hojas de combate reactivas (Octubre 2027) - v2.4.46**
+**Resumen de cambios v2.4.46:**
 
 - ✅ Los modales de Ataque y Defensa cargan la ficha desde Firestore si no está en caché
 - ✅ Se actualizan automáticamente al guardarse cualquier ficha
 
 
-### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
+**Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
 - ✅ Mensajes claros cuando no hay equipamiento o ningún arma puede utilizarse
 
-### 🛠️ **Corrección de nombres y daño de armas (Enero 2027) - v2.4.26**
+**Resumen de cambios v2.4.26:**
 
 - ✅ Los menús de ataque y defensa listan correctamente las armas y poderes equipados
 - ✅ Se tiene en cuenta el alcance aún cuando proviene de valores como "Cuerpo a cuerpo" o "Media"
 - ✅ Las tiradas utilizan el daño definido para cada arma o poder
 
-### 🎯 **Ajuste de valores de alcance (Enero 2027) - v2.4.27**
+**Resumen de cambios v2.4.27:**
 
 - ✅ Los alcances se limitan a cinco categorías: Toque, Cercano, Intermedio, Lejano y Extremo
 - ✅ Se eliminan sinónimos como "corto" o "media" para evitar confusiones
 
-### ⚔️ **Daño editable en ataques (Enero 2027) - v2.4.28**
+**Resumen de cambios v2.4.28:**
 
 - ✅ Al escoger un arma o poder aparece un campo con su daño por defecto
 - ✅ Dicho campo es editable para modificar la tirada de ataque o defensa
 
-### ⚔️ **Daño sin tipo en menús (Enero 2027) - v2.4.29**
+**Resumen de cambios v2.4.29:**
 
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
