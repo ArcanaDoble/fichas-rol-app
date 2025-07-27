@@ -1837,7 +1837,7 @@ const MapCanvas = ({
 
         setTimeout(() => {
           setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-        }, 5000);
+        }, 7000);
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
       }
@@ -1862,7 +1862,7 @@ const MapCanvas = ({
           } catch (err) {
             console.error('Error eliminando evento de daño:', err);
           }
-        }, 5000);
+        }, 7000);
       });
     });
     return () => unsub();
@@ -4409,7 +4409,7 @@ const MapCanvas = ({
                   key={p.id}
                   initial={{ opacity: 1, y: 0 }}
                   animate={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 5 }}
+                  transition={{ duration: 7 }}
                   style={{
                     position: 'absolute',
                     left: x + offset,
