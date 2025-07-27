@@ -969,6 +969,7 @@ src/
 - ✅ **Imports optimizados** - Eliminación de useState no usado en Input.jsx
 - ✅ **Compilación perfecta** - Proyecto ahora compila sin errores ni warnings de ESLint
 - ✅ **Mantenibilidad mejorada** - Código más limpio y fácil de mantener
+- ✅ **MapCanvas optimizado** - Nuevos refs para tokens y cuadrícula evitan llamadas repetidas a `/Listen`
 
 ### 🎮 **Mejoras en Minijuego de Cerrajería **
 
