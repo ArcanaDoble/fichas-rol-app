@@ -1239,6 +1239,10 @@ src/
 
 - Las modificaciones de tokens de los jugadores se fusionan con los datos actuales de Firebase para mantener los tokens de otros jugadores.
 
+**Resumen de cambios v2.4.49:**
+
+- Se cambia la frase de la animación: "¡Defensa perfecta!" por "¡Bloqueo perfecto!".
+
 
 **Resumen de cambios v2.4.25:**
 

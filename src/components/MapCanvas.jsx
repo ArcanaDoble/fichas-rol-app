@@ -4398,7 +4398,7 @@ const MapCanvas = ({
                 p.type === 'counter'
                   ? '¡Contraataque!'
                   : p.type === 'perfect'
-                  ? '¡Defensa perfecta!'
+                  ? '¡Bloqueo perfecto!'
                   : `-${p.value}`;
               const group = groups[p.tokenId] || [];
               const index = group.findIndex((g) => g.id === p.id);
