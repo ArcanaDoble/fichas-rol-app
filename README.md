@@ -829,6 +829,8 @@ El Máster ahora también ve estas animaciones cuando los jugadores reciben dañ
   usando un listener activo (`TokenListenerSync.test.js`).
 - _Nuevo:_ prueba de mapeo de nombres de equipo al guardar fichas de tokens
   (`EquipmentSync.test.js`).
+- _Nuevo:_ prueba de animaciones de daño actualizada con `act()` y mocks de eventos
+  (`MasterDefenseAnimation.test.js`).
 
 ## 🚀 Instalación y uso
 
