@@ -1221,6 +1221,11 @@ src/
 - ✅ La ventana de defensa se cierra automáticamente en todas las vistas al resolverse
 - ✅ Se sincronizan las animaciones en navegadores distintos mediante Firestore
 
+### 🔄 **Hojas de combate reactivas (Octubre 2027) - v2.4.46**
+
+- ✅ Los modales de Ataque y Defensa cargan la ficha desde Firestore si no está en caché
+- ✅ Se actualizan automáticamente al guardarse cualquier ficha
+
 
 ### 🎯 **Alcance de armas y poderes (Enero 2027) - v2.4.25**
 
