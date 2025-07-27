@@ -915,11 +915,18 @@ const MapCanvas = ({
   const zoomRef = useRef(zoom);
   const groupPosRef = useRef(groupPos);
   const baseScaleRef = useRef(baseScale);
+  const tokensRef = useRef(tokens);
+  const gridOffsetXRef = useRef(gridOffsetX);
+  const gridOffsetYRef = useRef(gridOffsetY);
+  const gridSizeRef = useRef(gridSize);
 
   // Actualizar refs cuando cambien los valores
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { groupPosRef.current = groupPos; }, [groupPos]);
   useEffect(() => { baseScaleRef.current = baseScale; }, [baseScale]);
+  useEffect(() => { tokensRef.current = tokens; }, [tokens]);
+  useEffect(() => { gridOffsetXRef.current = gridOffsetX; }, [gridOffsetX]);
+  useEffect(() => { gridOffsetYRef.current = gridOffsetY; }, [gridOffsetY]);
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
@@ -1763,6 +1770,10 @@ const MapCanvas = ({
     Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
 
+  useEffect(() => {
+    gridSizeRef.current = effectiveGridSize;
+  }, [effectiveGridSize]);
+
   // Función para mostrar animaciones de daño
   const triggerDamagePopup = useCallback(
     ({ tokenId, value, stat, type }) => {
@@ -1773,7 +1784,7 @@ const MapCanvas = ({
       }
 
       // Buscar el token en la lista de tokens para obtener sus coordenadas de celda
-      const token = tokens.find(t => t.id === tokenId);
+      const token = tokensRef.current.find(t => t.id === tokenId);
       if (!token) {
         console.warn(`triggerDamagePopup: No se encontró token con id ${tokenId}`);
         return;
@@ -1791,10 +1802,10 @@ const MapCanvas = ({
         const currentGroupPos = groupPosRef.current;
 
         // Usar las mismas funciones que se usan para renderizar los tokens
-        const tokenPixelX = cellToPx(token.x, gridOffsetX);
-        const tokenPixelY = cellToPx(token.y, gridOffsetY);
-        const tokenWidth = (token.w || 1) * effectiveGridSize;
-        const tokenHeight = (token.h || 1) * effectiveGridSize;
+        const tokenPixelX = token.x * gridSizeRef.current + gridOffsetXRef.current;
+        const tokenPixelY = token.y * gridSizeRef.current + gridOffsetYRef.current;
+        const tokenWidth = (token.w || 1) * gridSizeRef.current;
+        const tokenHeight = (token.h || 1) * gridSizeRef.current;
 
         // Calcular el centro del token en coordenadas del mundo
         const centerX = tokenPixelX + tokenWidth / 2;
@@ -1831,7 +1842,7 @@ const MapCanvas = ({
         console.error('Error en triggerDamagePopup:', error);
       }
     },
-    [tokens, gridOffsetX, gridOffsetY, effectiveGridSize]
+    []
   );
 
   // Listener de Firebase para eventos de daño
@@ -1855,7 +1866,7 @@ const MapCanvas = ({
       });
     });
     return () => unsub();
-  }, [pageId, triggerDamagePopup]);
+  }, [pageId]);
 
   // Función para verificar si un token es visible para el jugador actual
   const isTokenVisibleToPlayer = useCallback((token) => {
