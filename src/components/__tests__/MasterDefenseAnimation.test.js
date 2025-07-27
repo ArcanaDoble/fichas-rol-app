@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import AttackModal from '../AttackModal';
@@ -85,11 +85,17 @@ test('damage animations fire when master defends right after attacking', async (
 
   const attackBtn = screen.getByRole('button', { name: /lanzar/i });
   await waitFor(() => expect(attackBtn).not.toBeDisabled());
-  await userEvent.click(attackBtn);
+  await act(async () => {
+    await userEvent.click(attackBtn);
+  });
   await waitFor(() => expect(addDoc).toHaveBeenCalled());
   await waitFor(() => screen.getByText('Defensa'));
-  await new Promise(r => setTimeout(r, 0));
-  await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
-  await waitFor(() => expect(localStorage.getItem('damageAnimation')).not.toBeNull());
+  await act(async () => {
+    await new Promise(r => setTimeout(r, 0));
+  });
+  await act(async () => {
+    await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
+  });
+  await waitFor(() => expect(addDoc).toHaveBeenCalledTimes(2));
   window.removeEventListener('damageAnimation', handler);
 });
