@@ -1056,7 +1056,7 @@ const MapCanvas = ({
         setDamagePopups((prev) => prev.filter((p) => p.id !== id));
       }, 5000);
     },
-    [tokens]
+    []
   );
 
   // Sincronización manual de fichas con las hojas de personaje
