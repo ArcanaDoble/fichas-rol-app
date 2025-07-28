@@ -1850,16 +1850,26 @@ const MapCanvas = ({
       if (!tokenId) return;
       const current = tokensRef.current;
       if (!current.find((t) => t.id === tokenId)) return;
+      const startOpacity = 0.5;
+      const duration = 7000;
+      const steps = 20;
+
+      // Apply initial highlight
       const highlight = current.map((t) =>
-        t.id === tokenId ? { ...t, tintOpacity: 0.5 } : t
+        t.id === tokenId ? { ...t, tintOpacity: startOpacity } : t
       );
       handleTokensChange(highlight);
-      setTimeout(() => {
-        const revert = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: 0 } : t
-        );
-        handleTokensChange(revert);
-      }, 7000);
+
+      // Gradually reduce tint
+      for (let i = 1; i <= steps; i += 1) {
+        setTimeout(() => {
+          const opacity = startOpacity * (1 - i / steps);
+          const updated = tokensRef.current.map((t) =>
+            t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
+          );
+          handleTokensChange(updated);
+        }, (duration / steps) * i);
+      }
     },
     [handleTokensChange]
   );
