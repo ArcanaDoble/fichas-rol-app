@@ -139,6 +139,7 @@ const DefenseModal = ({
     const item = [...weapons, ...powers].find((i) => i.nombre === choice);
     const itemDamage = item?.dano ?? item?.poder ?? '';
     const formula = damage || parseDamage(itemDamage) || '1d20';
+    setLoading(true);
     try {
       const result = rollExpression(formula);
       let messages = [];
@@ -152,6 +153,20 @@ const DefenseModal = ({
       const diff = result.total - (attackResult?.total || 0);
       let lost = { armadura: 0, postura: 0, vida: 0 };
       let affectedSheet = null;
+      let effectivePageId = pageId;
+      try {
+        const visibilityDoc = await getDoc(
+          doc(db, 'gameSettings', 'playerVisibility')
+        );
+        if (visibilityDoc.exists()) {
+          effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+        }
+      } catch (err) {
+        console.warn(
+          'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+          err
+        );
+      }
       if (diff < 0 && sheet) {
         let updated = sheet;
         let remaining = Math.abs(diff);
@@ -199,16 +214,6 @@ const DefenseModal = ({
         // Solo guardar en Firebase para sincronización entre navegadores
         // No disparar eventos locales para evitar duplicación
         try {
-          // Obtener el pageId visible para jugadores para asegurar sincronización
-          let effectivePageId = pageId;
-          try {
-            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-            if (visibilityDoc.exists()) {
-              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-            }
-          } catch (err) {
-            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-          }
           addDoc(collection(db, 'damageEvents'), {
             ...anim,
             pageId: effectivePageId,
@@ -230,16 +235,6 @@ const DefenseModal = ({
             // Solo guardar en Firebase para sincronización entre navegadores
             // No disparar eventos locales para evitar duplicación
             try {
-              // Obtener el pageId visible para jugadores para asegurar sincronización
-              let effectivePageId = pageId;
-              try {
-                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                if (visibilityDoc.exists()) {
-                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                }
-              } catch (err) {
-                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-              }
               addDoc(collection(db, 'damageEvents'), {
                 ...anim,
                 pageId: effectivePageId,

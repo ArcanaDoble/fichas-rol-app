@@ -1261,6 +1261,10 @@ src/
 
 - La animación del tinte rojo ahora es consistente.
 
+**Resumen de cambios v2.4.55:**
+
+- La defensa se resuelve más rápido reutilizando la página visible para guardar eventos de daño.
+
 
 **Resumen de cambios v2.4.25:**
 
