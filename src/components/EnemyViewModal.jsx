@@ -16,6 +16,12 @@ const recursoColor = {
   cordura: '#a78bfa',
   armadura: '#9ca3af',
 };
+const atributoColor = {
+  destreza: '#34d399',
+  vigor: '#f87171',
+  intelecto: '#60a5fa',
+  voluntad: '#a78bfa',
+};
 
 const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floating = false }) => {
   const modalRef = useRef(null);
@@ -127,8 +133,18 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {atributos.map((attr) => (
                   <div key={attr} className="flex justify-between">
-                    <span className="font-medium">{attr}:</span>
-                    <span className="text-blue-400">{enemy.atributos?.[attr] || 'D4'}</span>
+                    <span
+                      className="font-medium capitalize"
+                      style={{ color: atributoColor[attr] }}
+                    >
+                      {attr}:
+                    </span>
+                    <span
+                      className="font-extrabold"
+                      style={{ color: '#333' }}
+                    >
+                      {enemy.atributos?.[attr] || 'D4'}
+                    </span>
                   </div>
                 ))}
               </div>
