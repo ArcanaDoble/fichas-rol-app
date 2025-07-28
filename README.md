@@ -1255,6 +1255,10 @@ src/
 
 - El tinte rojo se desvanece siempre tras 7 segundos sin quedarse pillado.
 
+**Resumen de cambios v2.4.54:**
+
+- El resaltado de daño ahora es local y no escribe en Firebase, evitando parpadeos.
+
 
 **Resumen de cambios v2.4.25:**
 
