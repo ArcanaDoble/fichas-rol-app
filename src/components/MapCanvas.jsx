@@ -1854,11 +1854,10 @@ const MapCanvas = ({
       if (!current.find((t) => t.id === tokenId)) return;
       const startOpacity = 0.5;
       const duration = 7000;
-      const steps = 20;
 
       const existing = damageTimersRef.current[tokenId];
-      if (existing) {
-        existing.forEach((t) => clearTimeout(t));
+      if (existing && existing.raf) {
+        cancelAnimationFrame(existing.raf);
       }
 
       const highlight = current.map((t) =>
@@ -1866,30 +1865,32 @@ const MapCanvas = ({
       );
       handleTokensChange(highlight);
 
-      const timeouts = [];
-      for (let i = 1; i <= steps; i += 1) {
-        const timeout = setTimeout(() => {
-          const opacity = startOpacity * (1 - i / steps);
-          const updated = tokensRef.current.map((t) =>
-            t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
-          );
-          handleTokensChange(updated);
-          if (i === steps) {
-            delete damageTimersRef.current[tokenId];
-          }
-        }, (duration / steps) * i);
-        timeouts.push(timeout);
-      }
+      const startTime = performance.now();
+      const animate = (time) => {
+        const progress = Math.min((time - startTime) / duration, 1);
+        const opacity = startOpacity * (1 - progress);
+        const updated = tokensRef.current.map((t) =>
+          t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
+        );
+        handleTokensChange(updated);
+        if (progress < 1) {
+          damageTimersRef.current[tokenId].raf = requestAnimationFrame(animate);
+        } else {
+          delete damageTimersRef.current[tokenId];
+        }
+      };
 
-      damageTimersRef.current[tokenId] = timeouts;
+      damageTimersRef.current[tokenId] = {
+        raf: requestAnimationFrame(animate),
+      };
     },
     [handleTokensChange]
   );
 
   useEffect(
     () => () => {
-      Object.values(damageTimersRef.current).forEach((timers) => {
-        timers.forEach((t) => clearTimeout(t));
+      Object.values(damageTimersRef.current).forEach((anim) => {
+        if (anim.raf) cancelAnimationFrame(anim.raf);
       });
       damageTimersRef.current = {};
     },
