@@ -1885,7 +1885,12 @@ const MapCanvas = ({
         const data = change.doc.data();
         console.log('Evento de daño recibido desde Firebase:', data);
         triggerDamagePopup(data);
-        highlightTokenDamage(data.tokenId);
+        if (
+          data.value > 0 &&
+          ['vida', 'armadura', 'postura'].includes(data.stat)
+        ) {
+          highlightTokenDamage(data.tokenId);
+        }
         setTimeout(async () => {
           try {
             await deleteDoc(doc(db, 'damageEvents', change.doc.id));
