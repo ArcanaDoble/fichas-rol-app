@@ -1251,6 +1251,10 @@ src/
 
 - El tinte rojo solo se aplica cuando el token pierde vida, armadura o postura.
 
+**Resumen de cambios v2.4.53:**
+
+- El tinte rojo se desvanece siempre tras 7 segundos sin quedarse pillado.
+
 
 **Resumen de cambios v2.4.25:**
 

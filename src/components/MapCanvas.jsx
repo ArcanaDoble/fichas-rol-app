@@ -1845,6 +1845,8 @@ const MapCanvas = ({
     []
   );
 
+  const damageTimersRef = useRef({});
+
   const highlightTokenDamage = useCallback(
     (tokenId) => {
       if (!tokenId) return;
@@ -1854,24 +1856,54 @@ const MapCanvas = ({
       const duration = 7000;
       const steps = 20;
 
-      // Apply initial highlight
+      const existing = damageTimersRef.current[tokenId];
+      if (existing) {
+        clearInterval(existing.interval);
+        clearTimeout(existing.timeout);
+      }
+
       const highlight = current.map((t) =>
         t.id === tokenId ? { ...t, tintOpacity: startOpacity } : t
       );
       handleTokensChange(highlight);
 
-      // Gradually reduce tint
-      for (let i = 1; i <= steps; i += 1) {
-        setTimeout(() => {
-          const opacity = startOpacity * (1 - i / steps);
-          const updated = tokensRef.current.map((t) =>
-            t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
-          );
-          handleTokensChange(updated);
-        }, (duration / steps) * i);
-      }
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const opacity = startOpacity * (1 - progress);
+        const updated = tokensRef.current.map((t) =>
+          t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
+        );
+        handleTokensChange(updated);
+        if (progress >= 1) {
+          clearInterval(interval);
+        }
+      }, duration / steps);
+
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        const updated = tokensRef.current.map((t) =>
+          t.id === tokenId ? { ...t, tintOpacity: 0 } : t
+        );
+        handleTokensChange(updated);
+        delete damageTimersRef.current[tokenId];
+      }, duration + 50);
+
+      damageTimersRef.current[tokenId] = { interval, timeout };
     },
     [handleTokensChange]
+  );
+
+  useEffect(
+    () => () => {
+      Object.values(damageTimersRef.current).forEach(({ interval, timeout }) => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      });
+      damageTimersRef.current = {};
+    },
+    []
   );
 
   // Listener de Firebase para eventos de daño
