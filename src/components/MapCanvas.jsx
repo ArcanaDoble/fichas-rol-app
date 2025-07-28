@@ -1146,7 +1146,11 @@ const MapCanvas = ({
   }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-  const handleTokensChange = useCallback((newTokens) => {
+  const handleTokensChange = useCallback((newTokens, options = {}) => {
+    if (options.localOnly) {
+      onTokensChange(newTokens);
+      return;
+    }
     if (isPlayerView) {
       // Para jugadores: solo permitir cambios en tokens que controlan
       // Mantener todos los tokens existentes y solo actualizar los que el jugador puede modificar
@@ -1863,7 +1867,7 @@ const MapCanvas = ({
       const highlight = current.map((t) =>
         t.id === tokenId ? { ...t, tintOpacity: startOpacity } : t
       );
-      handleTokensChange(highlight);
+      handleTokensChange(highlight, { localOnly: true });
 
       const startTime = performance.now();
       const animate = (time) => {
@@ -1872,7 +1876,7 @@ const MapCanvas = ({
         const updated = tokensRef.current.map((t) =>
           t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
         );
-        handleTokensChange(updated);
+        handleTokensChange(updated, { localOnly: true });
         if (progress < 1) {
           damageTimersRef.current[tokenId].raf = requestAnimationFrame(animate);
         } else {
