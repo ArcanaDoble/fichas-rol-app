@@ -1886,8 +1886,8 @@ const MapCanvas = ({
         console.log('Evento de daño recibido desde Firebase:', data);
         triggerDamagePopup(data);
         if (
-          data.value > 0 &&
-          ['vida', 'armadura', 'postura'].includes(data.stat)
+          ['vida', 'armadura', 'postura'].includes(data.stat) &&
+          data.value > 0
         ) {
           highlightTokenDamage(data.tokenId);
         }
