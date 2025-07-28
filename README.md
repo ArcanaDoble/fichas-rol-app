@@ -912,6 +912,7 @@ src/
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
 - **Mirilla funcional para ataques** - Los jugadores pueden seleccionar objetivos enemigos con un clic y atacar con un segundo clic
 - **La mirilla apunta a tokens ajenos** - Ahora también puedes fijar como objetivo fichas controladas por otros jugadores o por el máster
+- **Atributos con color en fichas** - Destreza, Vigor, Intelecto y Voluntad muestran sus colores y los valores de dados se ven en **negrita gris armadura (#9ca3af)**
 - **Doble clic seguro en mirilla** - Al usar la mirilla, el doble clic ya no abre el menú de ajustes del token
 - **Iconos de puerta siempre orientados** - Los SVG de las puertas se muestran correctamente aunque el muro se dibuje al revés
 - **Edición de estadísticas fiable** - Al borrar una estadística de la ficha se elimina también de `resourcesList`, evitando que reaparezca
