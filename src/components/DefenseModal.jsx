@@ -209,11 +209,11 @@ const DefenseModal = ({
           } catch (err) {
             console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
           }
-          await addDoc(collection(db, 'damageEvents'), {
+          addDoc(collection(db, 'damageEvents'), {
             ...anim,
             pageId: effectivePageId,
             timestamp: serverTimestamp(),
-          });
+          }).catch(() => {});
         } catch {}
       } else {
         const id = diff < 0 ? target.id : attacker.id;
@@ -240,11 +240,11 @@ const DefenseModal = ({
               } catch (err) {
                 console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
               }
-              await addDoc(collection(db, 'damageEvents'), {
+              addDoc(collection(db, 'damageEvents'), {
                 ...anim,
                 pageId: effectivePageId,
                 timestamp: serverTimestamp(),
-              });
+              }).catch(() => {});
             } catch {}
           }
         }
@@ -266,7 +266,7 @@ const DefenseModal = ({
         text = `${targetName} bloquea el ataque. Ataque ${attackResult?.total || 0} Defensa ${result.total}`;
       }
       messages.push({ id: nanoid(), author: targetName, text, result });
-      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
+      setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(() => {});
 
       setLoading(false);
       onClose(result);
