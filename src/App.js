@@ -895,7 +895,7 @@ function App() {
       clearTimeout(tokenSaveTimeout.current);
     }
 
-    // Debouncing: esperar 100ms antes de guardar
+    // Debouncing: esperar 50ms antes de guardar
     tokenSaveTimeout.current = setTimeout(async () => {
       const saveId = ++saveVersionRef.current.tokens;
 
@@ -927,7 +927,7 @@ function App() {
         }
       };
       saveTokens();
-    }, 100);
+    }, 50);
   }, [canvasTokens, currentPage]);
 
   useEffect(() => {
@@ -1024,7 +1024,7 @@ function App() {
           console.log('Muros guardados exitosamente en página:', pageId);
         })
         .catch((error) => console.error('Error guardando muros:', error));
-    }, 200);
+    }, 100);
     return () => {
       if (wallSaveTimeout.current) {
         clearTimeout(wallSaveTimeout.current);

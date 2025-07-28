@@ -1096,7 +1096,7 @@ const MapCanvas = ({
         clearTimeout(saveTimeouts[type]);
       }
 
-      // Debouncing: esperar 300ms antes de guardar
+      // Debouncing: esperar 100ms antes de guardar
       saveTimeouts[type] = setTimeout(async () => {
         try {
           // Validaciones de seguridad para jugadores
@@ -1139,7 +1139,7 @@ const MapCanvas = ({
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
         }
-      }, 300);
+      }, 100);
     };
 
     return { saveToFirebase };
