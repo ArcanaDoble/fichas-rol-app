@@ -1858,8 +1858,7 @@ const MapCanvas = ({
 
       const existing = damageTimersRef.current[tokenId];
       if (existing) {
-        clearInterval(existing.interval);
-        clearTimeout(existing.timeout);
+        existing.forEach((t) => clearTimeout(t));
       }
 
       const highlight = current.map((t) =>
@@ -1867,39 +1866,30 @@ const MapCanvas = ({
       );
       handleTokensChange(highlight);
 
-      const startTime = Date.now();
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const opacity = startOpacity * (1 - progress);
-        const updated = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
-        );
-        handleTokensChange(updated);
-        if (progress >= 1) {
-          clearInterval(interval);
-        }
-      }, duration / steps);
+      const timeouts = [];
+      for (let i = 1; i <= steps; i += 1) {
+        const timeout = setTimeout(() => {
+          const opacity = startOpacity * (1 - i / steps);
+          const updated = tokensRef.current.map((t) =>
+            t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
+          );
+          handleTokensChange(updated);
+          if (i === steps) {
+            delete damageTimersRef.current[tokenId];
+          }
+        }, (duration / steps) * i);
+        timeouts.push(timeout);
+      }
 
-      const timeout = setTimeout(() => {
-        clearInterval(interval);
-        const updated = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: 0 } : t
-        );
-        handleTokensChange(updated);
-        delete damageTimersRef.current[tokenId];
-      }, duration + 50);
-
-      damageTimersRef.current[tokenId] = { interval, timeout };
+      damageTimersRef.current[tokenId] = timeouts;
     },
     [handleTokensChange]
   );
 
   useEffect(
     () => () => {
-      Object.values(damageTimersRef.current).forEach(({ interval, timeout }) => {
-        clearInterval(interval);
-        clearTimeout(timeout);
+      Object.values(damageTimersRef.current).forEach((timers) => {
+        timers.forEach((t) => clearTimeout(t));
       });
       damageTimersRef.current = {};
     },
