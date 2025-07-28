@@ -326,6 +326,7 @@ const Token = forwardRef(
       showAura = true,
       tintColor = '#ff0000',
       tintOpacity = 0,
+      damageOpacity = 0,
       showSpinner = true,
       estados = [],
     },
@@ -699,7 +700,17 @@ const Token = forwardRef(
             )}
           </>
         )}
-        {roleOutline && <Rect {...outline} {...roleOutline} />}
+      )}
+      {damageOpacity > 0 && (
+        <Rect
+          {...geometry}
+          fill="red"
+          opacity={damageOpacity}
+          listening={false}
+          globalCompositeOperation="source-atop"
+        />
+      )}
+      {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
           <Group listening={false}>
@@ -843,6 +854,7 @@ Token.propTypes = {
   showAura: PropTypes.bool,
   tintColor: PropTypes.string,
   tintOpacity: PropTypes.number,
+  damageOpacity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -934,6 +946,7 @@ const MapCanvas = ({
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  const [damageTints, setDamageTints] = useState({});
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
@@ -1847,53 +1860,45 @@ const MapCanvas = ({
 
   const damageTimersRef = useRef({});
 
-  const highlightTokenDamage = useCallback(
-    (tokenId) => {
-      if (!tokenId) return;
-      const current = tokensRef.current;
-      if (!current.find((t) => t.id === tokenId)) return;
-      const startOpacity = 0.5;
-      const duration = 7000;
-      const steps = 20;
+  const highlightTokenDamage = useCallback((tokenId) => {
+    if (!tokenId) return;
+    const current = tokensRef.current;
+    if (!current.find((t) => t.id === tokenId)) return;
+    const startOpacity = 0.5;
+    const duration = 7000;
+    const steps = 20;
 
-      const existing = damageTimersRef.current[tokenId];
-      if (existing) {
-        clearInterval(existing.interval);
-        clearTimeout(existing.timeout);
-      }
+    const existing = damageTimersRef.current[tokenId];
+    if (existing) {
+      clearInterval(existing.interval);
+      clearTimeout(existing.timeout);
+    }
 
-      const highlight = current.map((t) =>
-        t.id === tokenId ? { ...t, tintOpacity: startOpacity } : t
-      );
-      handleTokensChange(highlight);
+    setDamageTints((t) => ({ ...t, [tokenId]: startOpacity }));
 
-      const startTime = Date.now();
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const opacity = startOpacity * (1 - progress);
-        const updated = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
-        );
-        handleTokensChange(updated);
-        if (progress >= 1) {
-          clearInterval(interval);
-        }
-      }, duration / steps);
-
-      const timeout = setTimeout(() => {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const opacity = startOpacity * (1 - progress);
+      setDamageTints((t) => ({ ...t, [tokenId]: Math.max(0, opacity) }));
+      if (progress >= 1) {
         clearInterval(interval);
-        const updated = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: 0 } : t
-        );
-        handleTokensChange(updated);
-        delete damageTimersRef.current[tokenId];
-      }, duration + 50);
+      }
+    }, duration / steps);
 
-      damageTimersRef.current[tokenId] = { interval, timeout };
-    },
-    [handleTokensChange]
-  );
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      setDamageTints((t) => {
+        const updated = { ...t };
+        delete updated[tokenId];
+        return updated;
+      });
+      delete damageTimersRef.current[tokenId];
+    }, duration + 50);
+
+    damageTimersRef.current[tokenId] = { interval, timeout };
+  }, []);
 
   useEffect(
     () => () => {
@@ -1902,6 +1907,7 @@ const MapCanvas = ({
         clearTimeout(timeout);
       });
       damageTimersRef.current = {};
+      setDamageTints({});
     },
     []
   );
@@ -3781,6 +3787,7 @@ const MapCanvas = ({
                   opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                   tintColor={token.tintColor}
                   tintOpacity={token.tintOpacity}
+                  damageOpacity={damageTints[token.id] || 0}
                   showAura={false}
                   tokenSheetId={token.tokenSheetId}
                   auraRadius={token.auraRadius}
