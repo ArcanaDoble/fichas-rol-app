@@ -139,10 +139,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                     >
                       {attr}:
                     </span>
-                    <span
-                      className="font-extrabold"
-                      style={{ color: recursoColor.armadura }}
-                    >
+                    <span style={{ color: recursoColor.armadura }}>
                       {enemy.atributos?.[attr] || 'D4'}
                     </span>
                   </div>
