@@ -1243,6 +1243,10 @@ src/
 
 - Se cambia la frase de la animación: "¡Defensa perfecta!" por "¡Bloqueo perfecto!".
 
+**Resumen de cambios v2.4.50:**
+
+- Los tokens se tintan de rojo durante 7 segundos cada vez que reciben daño para destacar el impacto.
+
 
 **Resumen de cambios v2.4.25:**
 
