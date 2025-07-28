@@ -1845,6 +1845,25 @@ const MapCanvas = ({
     []
   );
 
+  const highlightTokenDamage = useCallback(
+    (tokenId) => {
+      if (!tokenId) return;
+      const current = tokensRef.current;
+      if (!current.find((t) => t.id === tokenId)) return;
+      const highlight = current.map((t) =>
+        t.id === tokenId ? { ...t, tintOpacity: 0.5 } : t
+      );
+      handleTokensChange(highlight);
+      setTimeout(() => {
+        const revert = tokensRef.current.map((t) =>
+          t.id === tokenId ? { ...t, tintOpacity: 0 } : t
+        );
+        handleTokensChange(revert);
+      }, 7000);
+    },
+    [handleTokensChange]
+  );
+
   // Listener de Firebase para eventos de daño
   useEffect(() => {
     if (!pageId) return undefined;
@@ -1856,6 +1875,7 @@ const MapCanvas = ({
         const data = change.doc.data();
         console.log('Evento de daño recibido desde Firebase:', data);
         triggerDamagePopup(data);
+        highlightTokenDamage(data.tokenId);
         setTimeout(async () => {
           try {
             await deleteDoc(doc(db, 'damageEvents', change.doc.id));
