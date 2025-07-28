@@ -326,6 +326,7 @@ const Token = forwardRef(
       showAura = true,
       tintColor = '#ff0000',
       tintOpacity = 0,
+      damageOpacity = 0,
       showSpinner = true,
       estados = [],
     },
@@ -699,7 +700,17 @@ const Token = forwardRef(
             )}
           </>
         )}
-        {roleOutline && <Rect {...outline} {...roleOutline} />}
+      )}
+      {damageOpacity > 0 && (
+        <Rect
+          {...geometry}
+          fill="red"
+          opacity={damageOpacity}
+          listening={false}
+          globalCompositeOperation="source-atop"
+        />
+      )}
+      {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
           <Group listening={false}>
@@ -843,6 +854,7 @@ Token.propTypes = {
   showAura: PropTypes.bool,
   tintColor: PropTypes.string,
   tintOpacity: PropTypes.number,
+  damageOpacity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -934,6 +946,7 @@ const MapCanvas = ({
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  const [damageTints, setDamageTints] = useState({});
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
@@ -1892,6 +1905,7 @@ const MapCanvas = ({
         timers.forEach((t) => clearTimeout(t));
       });
       damageTimersRef.current = {};
+      setDamageTints({});
     },
     []
   );
@@ -3771,6 +3785,7 @@ const MapCanvas = ({
                   opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                   tintColor={token.tintColor}
                   tintOpacity={token.tintOpacity}
+                  damageOpacity={damageTints[token.id] || 0}
                   showAura={false}
                   tokenSheetId={token.tokenSheetId}
                   auraRadius={token.auraRadius}
