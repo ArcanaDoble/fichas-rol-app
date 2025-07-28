@@ -971,6 +971,7 @@ src/
 - ✅ **Mantenibilidad mejorada** - Código más limpio y fácil de mantener
 - ✅ **MapCanvas optimizado** - Nuevos refs para tokens y cuadrícula evitan llamadas repetidas a `/Listen`
 - ✅ **Animación de daño refinada** - El tinte rojo se desvanece suavemente usando `requestAnimationFrame`
+- ✅ **Defensa instantánea** - La ventana se cierra en cuanto se resuelve la tirada
 
 ### 🎮 **Mejoras en Minijuego de Cerrajería **
 
