@@ -970,6 +970,7 @@ src/
 - ✅ **Compilación perfecta** - Proyecto ahora compila sin errores ni warnings de ESLint
 - ✅ **Mantenibilidad mejorada** - Código más limpio y fácil de mantener
 - ✅ **MapCanvas optimizado** - Nuevos refs para tokens y cuadrícula evitan llamadas repetidas a `/Listen`
+- ✅ **Animación de daño refinada** - El tinte rojo se desvanece suavemente usando `requestAnimationFrame`
 
 ### 🎮 **Mejoras en Minijuego de Cerrajería **
 
