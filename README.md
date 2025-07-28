@@ -1261,6 +1261,11 @@ src/
 
 - La animación del tinte rojo ahora es consistente.
 
+**Resumen de cambios v2.4.55:**
+
+- Debouncing reducido en el Mapa de Batalla para mover tokens y abrir puertas,
+  mejorando la sincronización para máster y jugadores.
+
 
 **Resumen de cambios v2.4.25:**
 
