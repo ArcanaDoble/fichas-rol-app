@@ -1247,6 +1247,10 @@ src/
 
 - Los tokens se tintan de rojo al recibir daño y el tinte se desvanece progresivamente.
 
+**Resumen de cambios v2.4.52:**
+
+- El tinte rojo solo se aplica cuando el token pierde vida, armadura o postura.
+
 
 **Resumen de cambios v2.4.25:**
 
