@@ -803,17 +803,17 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - En el chat, las frases **recibe daño**, **bloquea el ataque** y **contraataca** ahora se resaltan con colores.
 - Al recibir daño se muestran animaciones "-X" para **cada** tipo de bloque perdido, con el color de la barra afectada. Los contraataques y defensas perfectas también tienen su propia animación.
 - Las animaciones de daño se sincronizan entre pestañas y ahora se ven durante más tiempo para apreciarlas mejor.
- - Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 7 segundos.
-El Máster ahora también ve estas animaciones cuando los jugadores reciben daño.
+- Las animaciones de pérdida de varios bloques se muestran ahora una al lado de otra para mayor claridad y la vida se reduce de forma más lenta, desapareciendo tras 7 segundos.
+  El Máster ahora también ve estas animaciones cuando los jugadores reciben daño.
 - Ahora las animaciones se comparten entre jugadores y el máster mediante Firestore.
 - MapCanvas pasa ahora el `pageId` a los modales de ataque y defensa para sincronizar animaciones.
 - Las fichas controladas por el Máster ahora muestran la pérdida de bloques en la vista de todos los jugadores.
- - Los eventos de daño se conservan 7 segundos en Firestore para garantizar la sincronización entre navegadores.
+- Los eventos de daño se conservan 7 segundos en Firestore para garantizar la sincronización entre navegadores.
 
 **Resumen de cambios v2.4.18:**
 
- - Si un ataque no rompe ni reduce bloques ahora se muestra "**resiste el daño**" en azul en el chat.
- - El mensaje automático del ataque ahora muestra los valores actualizados de Vigor y Destreza del defensor.
+- Si un ataque no rompe ni reduce bloques ahora se muestra "**resiste el daño**" en azul en el chat.
+- El mensaje automático del ataque ahora muestra los valores actualizados de Vigor y Destreza del defensor.
 
 ### 🛠️ **Características Técnicas**
 
@@ -821,7 +821,7 @@ El Máster ahora también ve estas animaciones cuando los jugadores reciben dañ
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
 - **Tooltips informativos** - Información detallada editables en tiempo real
 - **Glosario configurable** - Términos destacados con descripciones personalizadas
-- **Editor de notas con Tiptap** - Edición de texto enriquecido para los tokens
+- **Editor de notas con Tiptap** - Edición de texto con negrita, cursiva, subrayado, listas y colores
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
 - _Nuevo:_ pruebas que simulan el cambio entre páginas y verifican que los tokens
   se mantienen independientes para jugadores y máster (`PageSwitchTokens.test.js`).
@@ -1339,7 +1339,6 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 - Token sheets always include basic attributes so they can be edited even if missing in stored data.
 - Saving a token sheet now replaces the Firestore document, removing deleted statistics or equipment.
 - Realtime listeners only update the local cache instead of rewriting Firestore, ensuring edits persist across browsers.
-
 
 ## 🤝 Contribución
 
