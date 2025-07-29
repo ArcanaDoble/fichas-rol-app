@@ -821,6 +821,7 @@ El Máster ahora también ve estas animaciones cuando los jugadores reciben dañ
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
 - **Tooltips informativos** - Información detallada editables en tiempo real
 - **Glosario configurable** - Términos destacados con descripciones personalizadas
+- **Editor de notas con Tiptap** - Edición de texto enriquecido para los tokens
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
 - _Nuevo:_ pruebas que simulan el cambio entre páginas y verifican que los tokens
   se mantienen independientes para jugadores y máster (`PageSwitchTokens.test.js`).
