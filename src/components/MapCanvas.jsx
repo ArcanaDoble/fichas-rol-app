@@ -2726,6 +2726,13 @@ const MapCanvas = ({
       }
       return;
     }
+    if (activeTool === 'target' && e.evt.button === 1) {
+      e.evt.preventDefault();
+      setIsPanning(true);
+      panStart.current = stageRef.current.getPointerPosition();
+      panOrigin.current = { ...groupPos };
+      return;
+    }
     if (activeTool === 'select' && e.evt.button === 1) {
       e.evt.preventDefault();
       setIsPanning(true);
