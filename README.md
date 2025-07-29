@@ -1299,6 +1299,11 @@ src/
 
 - La regla se alinea correctamente con el cursor al usar el ajuste a la cuadrícula.
 
+**Resumen de cambios v2.4.63:**
+
+- Se restaura el ajuste de la regla al centro o a la esquina sin desfasar el cursor.
+- El conteo de casillas es correcto en todas las direcciones y el texto se muestra desplazado para que no lo tape el ratón.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
