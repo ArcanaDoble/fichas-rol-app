@@ -1774,6 +1774,8 @@ const MapCanvas = ({
   const pxToCell = (px, offset) =>
     Math.round((px - offset) / effectiveGridSize);
   const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  const snapCell = (px, offset) =>
+    Math.floor((px - offset) / effectiveGridSize);
 
   useEffect(() => {
     gridSizeRef.current = effectiveGridSize;
@@ -2264,8 +2266,8 @@ const MapCanvas = ({
   const snapPoint = useCallback(
     (x, y) => {
       if (measureSnap === 'free') return [x, y];
-      const cellX = pxToCell(x, gridOffsetX);
-      const cellY = pxToCell(y, gridOffsetY);
+      const cellX = snapCell(x, gridOffsetX);
+      const cellY = snapCell(y, gridOffsetY);
       if (measureSnap === 'center') {
         return [
           cellToPx(cellX + 0.5, gridOffsetX),
@@ -2970,10 +2972,10 @@ const MapCanvas = ({
       const [sx1, sy1] = snapPoint(x1, y1);
       const [sx2, sy2] = snapPoint(x2, y2);
       const cellDx = Math.abs(
-        pxToCell(sx2, gridOffsetX) - pxToCell(sx1, gridOffsetX)
+        snapCell(sx2, gridOffsetX) - snapCell(sx1, gridOffsetX)
       );
       const cellDy = Math.abs(
-        pxToCell(sy2, gridOffsetY) - pxToCell(sy1, gridOffsetY)
+        snapCell(sy2, gridOffsetY) - snapCell(sy1, gridOffsetY)
       );
       let distance = Math.hypot(cellDx, cellDy);
       const dx = x2 - x1;
@@ -3057,8 +3059,8 @@ const MapCanvas = ({
         <>
           {shape}
           <Text
-            x={x2}
-            y={y2}
+            x={x2 + 10}
+            y={y2 + 10}
             text={`${Math.round(distance)} casillas`}
             fontSize={16}
             fill="#fff"
