@@ -8,6 +8,7 @@ import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'fireba
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
+import { addSpeedForToken } from '../utils/initiative';
 
 const DefenseModal = ({
   isOpen,
@@ -268,6 +269,7 @@ const DefenseModal = ({
       messages.push({ id: nanoid(), author: targetName, text, result });
       setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(() => {});
 
+      await addSpeedForToken(target, speedCost);
       setLoading(false);
       onClose(result);
     } catch (e) {

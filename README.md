@@ -11,6 +11,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Línea de sucesos en tiempo real** - Seguimiento visual del orden de actuación
 - **Píldoras de Equipamiento interactivas** - Uso directo de armas y poderes desde la ficha
 - **Consumo de velocidad inteligente** - Cálculo automático basado en emojis 🟡 del equipamiento
+- **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
 - **Permisos granulares** - Jugadores pueden eliminar sus propios participantes
 - **Interfaz color-coded** - Identificación visual por jugador y tipo de equipamiento
 - **Sincronización en tiempo real** - Cambios instantáneos para todos los participantes
@@ -906,6 +907,7 @@ src/
 - **Botón de papelera mejorado** - Color rojo consistente con el sistema de velocidad en inventario y línea de sucesos
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
 - **Consumo de velocidad inteligente** - Las píldoras muestran el consumo real basado en emojis 🟡 del equipamiento
+- **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo

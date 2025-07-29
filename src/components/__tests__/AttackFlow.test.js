@@ -23,8 +23,10 @@ jest.mock('firebase/firestore', () => ({
 jest.mock('../../firebase', () => ({ db: {} }));
 
 jest.mock('../DefenseModal', () => jest.fn(() => null));
+jest.mock('../../utils/initiative', () => ({ addSpeedForToken: jest.fn() }));
 
 const { addDoc, onSnapshot, updateDoc, getDoc } = require('firebase/firestore');
+const { addSpeedForToken } = require('../../utils/initiative');
 
 function ListenerDemo({ playerName = 'p2', userType = 'player' }) {
   const [req, setReq] = React.useState(null);
@@ -70,6 +72,7 @@ describe('Attack flow', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
     await waitFor(() => expect(addDoc).toHaveBeenCalled());
+    expect(addSpeedForToken).toHaveBeenCalled();
   });
 
   test('opens defense modal for targeted player', () => {
