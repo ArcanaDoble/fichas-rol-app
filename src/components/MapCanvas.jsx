@@ -769,7 +769,8 @@ const Token = forwardRef(
                 'bottom-right',
               ]}
               rotateEnabled={false}
-              boundBoxFunc={(oldBox, newBox) => snapBox(newBox)}
+              // No snap mientras se redimensiona para evitar saltos abruptos
+              boundBoxFunc={(oldBox, newBox) => newBox}
               onTransformStart={handleTransformStart}
               onTransform={updateHandle}
               onTransformEnd={handleTransformEnd}
