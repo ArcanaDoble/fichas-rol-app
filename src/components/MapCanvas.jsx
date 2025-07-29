@@ -2963,6 +2963,8 @@ const MapCanvas = ({
       const [x1, y1, x2, y2] = measureLine;
       const [sx1, sy1] = snapPoint(x1, y1);
       const [sx2, sy2] = snapPoint(x2, y2);
+      const sdx = sx2 - sx1;
+      const sdy = sy2 - sy1;
       const cellDx = Math.abs(
         snapCell(sx2, gridOffsetX) - snapCell(sx1, gridOffsetX)
       );
@@ -2970,19 +2972,17 @@ const MapCanvas = ({
         snapCell(sy2, gridOffsetY) - snapCell(sy1, gridOffsetY)
       );
       let distance = Math.max(cellDx, cellDy);
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const len = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
+      const len = Math.hypot(sdx, sdy);
+      const angle = Math.atan2(sdy, sdx);
       let shape;
       if (measureShape === 'square') {
         distance = Math.max(cellDx, cellDy);
         shape = (
           <Rect
-            x={Math.min(x1, x2)}
-            y={Math.min(y1, y2)}
-            width={Math.abs(dx)}
-            height={Math.abs(dy)}
+            x={Math.min(sx1, sx2)}
+            y={Math.min(sy1, sy2)}
+            width={Math.abs(sdx)}
+            height={Math.abs(sdy)}
             stroke="cyan"
             strokeWidth={2}
             dash={[4, 4]}
@@ -2992,8 +2992,8 @@ const MapCanvas = ({
         distance = Math.max(cellDx, cellDy);
         shape = (
           <Circle
-            x={x1}
-            y={y1}
+            x={sx1}
+            y={sy1}
             radius={len}
             stroke="cyan"
             strokeWidth={2}
@@ -3002,13 +3002,13 @@ const MapCanvas = ({
         );
       } else if (measureShape === 'cone') {
         const half = Math.PI / 6;
-        const p2x = x1 + len * Math.cos(angle + half);
-        const p2y = y1 + len * Math.sin(angle + half);
-        const p3x = x1 + len * Math.cos(angle - half);
-        const p3y = y1 + len * Math.sin(angle - half);
+        const p2x = sx1 + len * Math.cos(angle + half);
+        const p2y = sy1 + len * Math.sin(angle + half);
+        const p3x = sx1 + len * Math.cos(angle - half);
+        const p3y = sy1 + len * Math.sin(angle - half);
         shape = (
           <Line
-            points={[x1, y1, p2x, p2y, p3x, p3y]}
+            points={[sx1, sy1, p2x, p2y, p3x, p3y]}
             closed
             stroke="cyan"
             strokeWidth={2}
@@ -3022,14 +3022,14 @@ const MapCanvas = ({
         shape = (
           <Line
             points={[
-              x1 + dxp,
-              y1 + dyp,
-              x2 + dxp,
-              y2 + dyp,
-              x2 - dxp,
-              y2 - dyp,
-              x1 - dxp,
-              y1 - dyp,
+              sx1 + dxp,
+              sy1 + dyp,
+              sx2 + dxp,
+              sy2 + dyp,
+              sx2 - dxp,
+              sy2 - dyp,
+              sx1 - dxp,
+              sy1 - dyp,
             ]}
             closed
             stroke="cyan"
@@ -3040,7 +3040,7 @@ const MapCanvas = ({
       } else {
         shape = (
           <Line
-            points={measureLine}
+            points={[sx1, sy1, sx2, sy2]}
             stroke="cyan"
             strokeWidth={2}
             dash={[4, 4]}
@@ -3051,8 +3051,8 @@ const MapCanvas = ({
         <>
           {shape}
           <Text
-            x={x2 + 20}
-            y={y2 + 20}
+            x={sx2 + 20}
+            y={sy2 + 20}
             text={`${Math.round(distance)} casillas`}
             fontSize={16}
             fill="#fff"
