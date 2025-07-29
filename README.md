@@ -822,6 +822,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tooltips informativos** - Información detallada editables en tiempo real
 - **Glosario configurable** - Términos destacados con descripciones personalizadas
 - **Editor de notas con Tiptap** - Edición de texto con negrita, cursiva, subrayado, listas y colores
+  - Ahora las listas numeradas y con viñetas se muestran con sangría adecuada dentro del editor
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
 - _Nuevo:_ pruebas que simulan el cambio entre páginas y verifican que los tokens
   se mantienen independientes para jugadores y máster (`PageSwitchTokens.test.js`).

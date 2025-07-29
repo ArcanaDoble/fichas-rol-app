@@ -402,3 +402,16 @@ input[type="number"] {
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Estilos para listas dentro del editor de notas */
+.ProseMirror ul {
+  list-style-type: disc;
+  margin-left: 1.25rem;
+  padding-left: 1.25rem;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  padding-left: 1.25rem;
+}
