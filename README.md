@@ -1275,7 +1275,6 @@ src/
 
 - "Subir cambios" ahora confirma antes de actualizar y avisa si la ficha no está enlazada.
 
-
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
