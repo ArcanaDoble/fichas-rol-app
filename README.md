@@ -1295,6 +1295,10 @@ src/
 
 - Se corrige el desplazamiento del escenario con la mirilla activada usando la rueda del ratón.
 
+**Resumen de cambios v2.4.62:**
+
+- La regla se alinea correctamente con el cursor al usar el ajuste a la cuadrícula.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
