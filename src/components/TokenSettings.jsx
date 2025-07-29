@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -69,6 +69,11 @@ const TokenSettings = ({
     typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
   );
   const [notes, setNotes] = useState(token.notes || '');
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: notes,
+    onUpdate: ({ editor }) => setNotes(editor.getHTML()),
+  });
   
   // Estados para configuración de luz
   const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
@@ -667,14 +672,9 @@ const TokenSettings = ({
               )}
             </>
           )}
-          {tab === 'notes' && (
+          {tab === 'notes' && editor && (
             <div className="text-black">
-              <ReactQuill
-                theme="snow"
-                value={notes}
-                onChange={setNotes}
-                className="bg-white"
-              />
+              <EditorContent editor={editor} className="bg-white" />
             </div>
           )}
           {tab !== 'details' && tab !== 'aura' && tab !== 'light' && tab !== 'notes' && (
