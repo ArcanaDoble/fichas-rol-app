@@ -2969,7 +2969,7 @@ const MapCanvas = ({
       const cellDy = Math.abs(
         snapCell(sy2, gridOffsetY) - snapCell(sy1, gridOffsetY)
       );
-      let distance = Math.hypot(cellDx, cellDy);
+      let distance = Math.max(cellDx, cellDy);
       const dx = x2 - x1;
       const dy = y2 - y1;
       const len = Math.hypot(dx, dy);
@@ -3051,8 +3051,8 @@ const MapCanvas = ({
         <>
           {shape}
           <Text
-            x={x2 + 10}
-            y={y2 + 10}
+            x={x2 + 20}
+            y={y2 + 20}
             text={`${Math.round(distance)} casillas`}
             fontSize={16}
             fill="#fff"
@@ -3071,11 +3071,11 @@ const MapCanvas = ({
       const cellDy = Math.abs(
         pxToCell(y2, gridOffsetY) - pxToCell(y1, gridOffsetY)
       );
-      const distance = Math.round(Math.hypot(cellDx, cellDy));
+      const distance = Math.max(cellDx, cellDy);
       return (
         <>
           <Line points={attackLine} stroke="red" strokeWidth={2} />
-          <Text x={x2} y={y2} text={`${distance} casillas`} fontSize={16} fill="red" />
+          <Text x={x2 + 20} y={y2 + 20} text={`${distance} casillas`} fontSize={16} fill="red" />
         </>
       );
     })();

@@ -978,6 +978,7 @@ src/
 - ✅ **MapCanvas optimizado** - Nuevos refs para tokens y cuadrícula evitan llamadas repetidas a `/Listen`
 - ✅ **Animación de daño refinada** - El tinte rojo se desvanece suavemente usando `requestAnimationFrame`
 - ✅ **Defensa instantánea** - La ventana se cierra en cuanto se resuelve la tirada
+- ✅ **Medición precisa de distancias** - El conteo usa el mayor desplazamiento y el texto se desplaza 20px para evitar que lo tape el cursor
 
 ### 🎮 **Mejoras en Minijuego de Cerrajería **
 
