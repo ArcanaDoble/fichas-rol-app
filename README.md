@@ -1288,6 +1288,9 @@ src/
 - La herramienta de mirilla ya no selecciona el token ni muestra el transformador de tamaño al hacer clic.
 
 
+**Resumen de cambios v2.4.60:**
+
+- Con la mirilla seleccionada puedes moverte por el escenario manteniendo la rueda del ratón, sin usar la herramienta del cursor.
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
