@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -66,6 +68,7 @@ const TokenSettings = ({
   const [tintOpacity, setTintOpacity] = useState(
     typeof token.tintOpacity === 'number' ? token.tintOpacity : 0
   );
+  const [notes, setNotes] = useState(token.notes || '');
   
   // Estados para configuración de luz
   const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
@@ -200,6 +203,7 @@ const TokenSettings = ({
         opacity: tokenOpacity,
         tintColor,
         tintOpacity,
+        notes,
         light: {
           enabled: lightEnabled,
           radius: lightRadius,
@@ -215,7 +219,7 @@ const TokenSettings = ({
   }, [
     token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
     auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
-    tokenOpacity, tintColor, tintOpacity, lightEnabled, lightRadius,
+    tokenOpacity, tintColor, tintOpacity, notes, lightEnabled, lightRadius,
     lightColor, lightOpacity, visionEnabled, visionRange,
     onUpdate
   ]);
@@ -240,6 +244,7 @@ const TokenSettings = ({
       opacity: tokenOpacity,
       tintColor,
       tintOpacity,
+      notes,
       light: {
         enabled: lightEnabled,
         radius: lightRadius,
@@ -280,7 +285,7 @@ const TokenSettings = ({
   // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
     debouncedApplyChanges();
-  }, [name, lightColor, lightOpacity, debouncedApplyChanges]);
+  }, [name, notes, lightColor, lightOpacity, debouncedApplyChanges]);
 
   useEffect(() => {
     if (!token.tokenSheetId) return;
@@ -422,9 +427,6 @@ const TokenSettings = ({
                   <option value="controlled">Controlador</option>
                   <option value="none">Nadie</option>
                 </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  El Master siempre puede ver las barras independientemente de esta configuración
-                </p>
               </div>
               <div>
                 <label className="block mb-1">Opacidad del token</label>
@@ -666,7 +668,14 @@ const TokenSettings = ({
             </>
           )}
           {tab === 'notes' && (
-            <div className="text-gray-400">(Funcionalidad de notas pendiente)</div>
+            <div className="text-black">
+              <ReactQuill
+                theme="snow"
+                value={notes}
+                onChange={setNotes}
+                className="bg-white"
+              />
+            </div>
           )}
           {tab !== 'details' && tab !== 'aura' && tab !== 'light' && tab !== 'notes' && (
             <div className="text-gray-400">(Sin contenido)</div>

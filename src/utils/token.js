@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import sanitize from './sanitize';
 
 export const createToken = (data = {}) => {
-  const token = { ...data, tokenSheetId: nanoid() };
+  const token = { notes: '', ...data, tokenSheetId: nanoid() };
   try {
     setDoc(doc(db, 'tokenSheets', token.tokenSheetId), { stats: {} });
   } catch (err) {
