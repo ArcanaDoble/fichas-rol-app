@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import { Extension } from '@tiptap/core';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -10,6 +14,48 @@ import Boton from './Boton';
 import Input from './Input';
 import { Tooltip } from 'react-tooltip';
 import { ensureSheetDefaults } from '../utils/token';
+
+const FontFamily = Extension.create({
+  name: 'fontFamily',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['textStyle'],
+        attributes: {
+          fontFamily: {
+            default: null,
+            parseHTML: (element) =>
+              element.style.fontFamily?.replace(/['"]/g, ''),
+            renderHTML: (attributes) => {
+              if (!attributes.fontFamily) return {};
+              return { style: `font-family: ${attributes.fontFamily}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setFontFamily:
+        (font) =>
+        ({ chain }) =>
+          chain().setMark('textStyle', { fontFamily: font }).run(),
+    };
+  },
+});
+
+const fontOptions = [
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Georgia',
+  'Courier New',
+  'Comic Sans MS',
+  'Trebuchet MS',
+  'Impact',
+  'Verdana',
+];
 
 const TokenSettings = ({
   token,
@@ -24,7 +70,10 @@ const TokenSettings = ({
   currentPlayerName = '',
 }) => {
   const [tab, setTab] = useState('details');
-  const [pos, setPos] = useState({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 140 });
+  const [pos, setPos] = useState({
+    x: window.innerWidth / 2 - 160,
+    y: window.innerHeight / 2 - 140,
+  });
   const [dragging, setDragging] = useState(false);
   const offset = useRef({ x: 0, y: 0 });
 
@@ -34,7 +83,10 @@ const TokenSettings = ({
   };
   const handleMouseMove = (e) => {
     if (!dragging) return;
-    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+    setPos({
+      x: e.clientX - offset.current.x,
+      y: e.clientY - offset.current.y,
+    });
   };
   const handleMouseUp = () => setDragging(false);
   useEffect(() => {
@@ -50,8 +102,12 @@ const TokenSettings = ({
   const [enemyId, setEnemyId] = useState(token.enemyId || '');
   const [name, setName] = useState(token.customName || '');
   const [showName, setShowName] = useState(token.showName || false);
-  const [controlledBy, setControlledBy] = useState(token.controlledBy || 'master');
-  const [barsVisibility, setBarsVisibility] = useState(token.barsVisibility || 'all');
+  const [controlledBy, setControlledBy] = useState(
+    token.controlledBy || 'master'
+  );
+  const [barsVisibility, setBarsVisibility] = useState(
+    token.barsVisibility || 'all'
+  );
   const [auraRadius, setAuraRadius] = useState(token.auraRadius || 0);
   const [auraShape, setAuraShape] = useState(token.auraShape || 'circle');
   const [auraColor, setAuraColor] = useState(token.auraColor || '#ffff00');
@@ -70,19 +126,23 @@ const TokenSettings = ({
   );
   const [notes, setNotes] = useState(token.notes || '');
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, Underline, TextStyle, Color, FontFamily],
     content: notes,
     onUpdate: ({ editor }) => setNotes(editor.getHTML()),
   });
-  
+
   // Estados para configuración de luz
-  const [lightEnabled, setLightEnabled] = useState(token.light?.enabled || false);
+  const [lightEnabled, setLightEnabled] = useState(
+    token.light?.enabled || false
+  );
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
 
   // Estados para configuración de visión
-  const [visionEnabled, setVisionEnabled] = useState(token.vision?.enabled !== false); // Por defecto true
+  const [visionEnabled, setVisionEnabled] = useState(
+    token.vision?.enabled !== false
+  ); // Por defecto true
   const [visionRange, setVisionRange] = useState(token.vision?.range || 10); // Rango por defecto de 10 casillas
 
   // Ref para debouncing
@@ -99,10 +159,15 @@ const TokenSettings = ({
       if (snap.exists() && token.tokenSheetId) {
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
-        const sheet = ensureSheetDefaults({ ...snap.data(), id: token.tokenSheetId });
+        const sheet = ensureSheetDefaults({
+          ...snap.data(),
+          id: token.tokenSheetId,
+        });
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
+        window.dispatchEvent(
+          new CustomEvent('tokenSheetSaved', { detail: sheet })
+        );
       }
     } catch (err) {
       console.error('Error loading player sheet', err);
@@ -116,7 +181,10 @@ const TokenSettings = ({
       if (snap.exists()) {
         const stored = localStorage.getItem('tokenSheets');
         const sheets = stored ? JSON.parse(stored) : {};
-        const sheet = ensureSheetDefaults({ ...snap.data(), id: token.tokenSheetId });
+        const sheet = ensureSheetDefaults({
+          ...snap.data(),
+          id: token.tokenSheetId,
+        });
         sheet.portrait = token.url;
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
@@ -182,13 +250,13 @@ const TokenSettings = ({
       // usuario pulse "Restaurar ficha" manualmente.
     }
   };
-  
+
   // Función con debouncing para evitar múltiples actualizaciones a Firebase
   const debouncedApplyChanges = useCallback(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
-    
+
     debounceRef.current = setTimeout(() => {
       const enemy = enemies.find((e) => e.id === enemyId);
       onUpdate({
@@ -222,11 +290,29 @@ const TokenSettings = ({
       });
     }, 800); // Esperar 800ms antes de aplicar cambios (optimizado para evitar spam a Firebase)
   }, [
-    token, enemyId, enemies, name, showName, controlledBy, barsVisibility,
-    auraRadius, auraShape, auraColor, auraOpacity, auraVisibility,
-    tokenOpacity, tintColor, tintOpacity, notes, lightEnabled, lightRadius,
-    lightColor, lightOpacity, visionEnabled, visionRange,
-    onUpdate
+    token,
+    enemyId,
+    enemies,
+    name,
+    showName,
+    controlledBy,
+    barsVisibility,
+    auraRadius,
+    auraShape,
+    auraColor,
+    auraOpacity,
+    auraVisibility,
+    tokenOpacity,
+    tintColor,
+    tintOpacity,
+    notes,
+    lightEnabled,
+    lightRadius,
+    lightColor,
+    lightOpacity,
+    visionEnabled,
+    visionRange,
+    onUpdate,
   ]);
 
   // Función inmediata para cambios que no requieren debouncing
@@ -283,9 +369,8 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
-    visionEnabled // Cambio inmediato para visión
+    visionEnabled, // Cambio inmediato para visión
   ]);
-
 
   // useEffect con debouncing para cambios de texto y luz (para evitar spam a Firebase)
   useEffect(() => {
@@ -311,11 +396,16 @@ const TokenSettings = ({
       }
 
       // Verificar si ya existe un participante con el mismo nombre
-      const tokenDisplayName = showName && name ? name : (token.name || 'Token sin nombre');
-      const existingParticipant = participants.find(p => p.name === tokenDisplayName);
+      const tokenDisplayName =
+        showName && name ? name : token.name || 'Token sin nombre';
+      const existingParticipant = participants.find(
+        (p) => p.name === tokenDisplayName
+      );
 
       if (existingParticipant) {
-        alert(`Ya existe un participante llamado "${tokenDisplayName}" en el sistema de velocidad.`);
+        alert(
+          `Ya existe un participante llamado "${tokenDisplayName}" en el sistema de velocidad.`
+        );
         return;
       }
 
@@ -325,7 +415,7 @@ const TokenSettings = ({
         name: tokenDisplayName,
         speed: 0,
         type: controlledBy === 'master' ? 'enemy' : 'player',
-        addedBy: controlledBy === 'master' ? 'master' : controlledBy
+        addedBy: controlledBy === 'master' ? 'master' : controlledBy,
       };
 
       // Agregar al sistema
@@ -340,7 +430,8 @@ const TokenSettings = ({
   };
 
   // Verificar permisos para jugadores
-  const canEditToken = !isPlayerView || token.controlledBy === currentPlayerName;
+  const canEditToken =
+    !isPlayerView || token.controlledBy === currentPlayerName;
 
   if (!token) return null;
 
@@ -350,19 +441,51 @@ const TokenSettings = ({
   }
 
   const content = (
-    <div className="fixed select-none" style={{ top: pos.y, left: pos.x, zIndex: 1000 }}>
+    <div
+      className="fixed select-none"
+      style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
+    >
       <div className="bg-gray-800 border border-gray-700 rounded shadow-xl w-80">
-        <div className="flex justify-between items-center bg-gray-700 px-2 py-1 cursor-move" onMouseDown={handleMouseDown}>
+        <div
+          className="flex justify-between items-center bg-gray-700 px-2 py-1 cursor-move"
+          onMouseDown={handleMouseDown}
+        >
           <span className="font-bold">Ajustes de ficha</span>
-          <button onClick={() => { applyChanges(); onClose(); }} className="text-gray-400 hover:text-red-400">
+          <button
+            onClick={() => {
+              applyChanges();
+              onClose();
+            }}
+            className="text-gray-400 hover:text-red-400"
+          >
             <FiX />
           </button>
         </div>
         <div className="flex border-b border-gray-600 text-sm">
-          <button onClick={() => setTab('details')} className={`flex-1 p-2 ${tab==='details' ? 'bg-gray-800' : 'bg-gray-700'}`}>Detalles</button>
-          <button onClick={() => setTab('notes')} className={`flex-1 p-2 ${tab==='notes' ? 'bg-gray-800' : 'bg-gray-700'}`}>Notas</button>
-          <button onClick={() => setTab('light')} className={`flex-1 p-2 ${tab==='light' ? 'bg-gray-800' : 'bg-gray-700'}`}>Iluminación</button>
-          <button onClick={() => setTab('aura')} className={`flex-1 p-2 ${tab==='aura' ? 'bg-gray-800' : 'bg-gray-700'}`}>Aura</button>
+          <button
+            onClick={() => setTab('details')}
+            className={`flex-1 p-2 ${tab === 'details' ? 'bg-gray-800' : 'bg-gray-700'}`}
+          >
+            Detalles
+          </button>
+          <button
+            onClick={() => setTab('notes')}
+            className={`flex-1 p-2 ${tab === 'notes' ? 'bg-gray-800' : 'bg-gray-700'}`}
+          >
+            Notas
+          </button>
+          <button
+            onClick={() => setTab('light')}
+            className={`flex-1 p-2 ${tab === 'light' ? 'bg-gray-800' : 'bg-gray-700'}`}
+          >
+            Iluminación
+          </button>
+          <button
+            onClick={() => setTab('aura')}
+            className={`flex-1 p-2 ${tab === 'aura' ? 'bg-gray-800' : 'bg-gray-700'}`}
+          >
+            Aura
+          </button>
         </div>
         <div className="p-3 space-y-3 text-sm">
           {tab === 'details' && (
@@ -370,29 +493,46 @@ const TokenSettings = ({
               {/* Solo mostrar selector de enemigos para masters */}
               {!isPlayerView && (
                 <div>
-                  <label className="block mb-1">Representa a un personaje</label>
+                  <label className="block mb-1">
+                    Representa a un personaje
+                  </label>
                   {controlledBy !== 'master' ? (
                     <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
                       {controlledBy}
                     </div>
                   ) : (
-                    <select value={enemyId} onChange={(e) => setEnemyId(e.target.value)} className="w-full bg-gray-700 text-white">
+                    <select
+                      value={enemyId}
+                      onChange={(e) => setEnemyId(e.target.value)}
+                      className="w-full bg-gray-700 text-white"
+                    >
                       <option value="">Ninguno / Ficha genérica</option>
                       {enemies.map((e) => (
-                        <option key={e.id} value={e.id}>{e.name}</option>
+                        <option key={e.id} value={e.id}>
+                          {e.name}
+                        </option>
                       ))}
                     </select>
                   )}
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <input id="showName" type="checkbox" checked={showName} onChange={e => setShowName(e.target.checked)} />
+                <input
+                  id="showName"
+                  type="checkbox"
+                  checked={showName}
+                  onChange={(e) => setShowName(e.target.checked)}
+                />
                 <label htmlFor="showName">Nombre</label>
-                <Input className="flex-1" value={name} onChange={e => setName(e.target.value)} />
+                <Input
+                  className="flex-1"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
               <div>
                 <label className="block mb-1">
-                  {isPlayerView ? "Ficha de Personaje" : "Controlado por"}
+                  {isPlayerView ? 'Ficha de Personaje' : 'Controlado por'}
                   {controlledBy !== 'master' &&
                     controlledBy === currentPlayerName &&
                     linked && (
@@ -414,20 +554,32 @@ const TokenSettings = ({
                 </label>
                 {isPlayerView ? (
                   <div className="w-full bg-gray-600 text-gray-300 p-2 rounded border">
-                    {controlledBy === 'master' ? 'Enemigo (Master)' : controlledBy}
+                    {controlledBy === 'master'
+                      ? 'Enemigo (Master)'
+                      : controlledBy}
                   </div>
                 ) : (
-                  <select value={controlledBy} onChange={handleControlledByChange} className="w-full bg-gray-700 text-white">
+                  <select
+                    value={controlledBy}
+                    onChange={handleControlledByChange}
+                    className="w-full bg-gray-700 text-white"
+                  >
                     <option value="master">Máster</option>
                     {players.map((p) => (
-                      <option key={p} value={p}>{p}</option>
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
                     ))}
                   </select>
                 )}
               </div>
               <div>
                 <label className="block mb-1">Barras visibles para</label>
-                <select value={barsVisibility} onChange={e => setBarsVisibility(e.target.value)} className="w-full bg-gray-700 text-white">
+                <select
+                  value={barsVisibility}
+                  onChange={(e) => setBarsVisibility(e.target.value)}
+                  className="w-full bg-gray-700 text-white"
+                >
                   <option value="all">Todos</option>
                   <option value="controlled">Controlador</option>
                   <option value="none">Nadie</option>
@@ -441,14 +593,21 @@ const TokenSettings = ({
                   max="1"
                   step="0.05"
                   value={tokenOpacity}
-                  onChange={e => setTokenOpacity(parseFloat(e.target.value))}
+                  onChange={(e) => setTokenOpacity(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <div className="text-right">{Math.round(tokenOpacity * 100)}%</div>
+                <div className="text-right">
+                  {Math.round(tokenOpacity * 100)}%
+                </div>
               </div>
               <div>
                 <label className="block mb-1">Color de tinte</label>
-                <input type="color" value={tintColor} onChange={e => setTintColor(e.target.value)} className="w-full h-8 p-0 border-0" />
+                <input
+                  type="color"
+                  value={tintColor}
+                  onChange={(e) => setTintColor(e.target.value)}
+                  className="w-full h-8 p-0 border-0"
+                />
               </div>
               <div>
                 <label className="block mb-1">Opacidad del tinte</label>
@@ -458,10 +617,12 @@ const TokenSettings = ({
                   max="1"
                   step="0.05"
                   value={tintOpacity}
-                  onChange={e => setTintOpacity(parseFloat(e.target.value))}
+                  onChange={(e) => setTintOpacity(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <div className="text-right">{Math.round(tintOpacity * 100)}%</div>
+                <div className="text-right">
+                  {Math.round(tintOpacity * 100)}%
+                </div>
               </div>
               <div className="text-center">
                 <Boton
@@ -484,39 +645,45 @@ const TokenSettings = ({
                       opacity: tokenOpacity,
                       tintColor,
                       tintOpacity,
-                  };
-                  onOpenSheet(updated);
-                }}
-              >
-                Abrir ficha de personaje
-              </Boton>
-              {controlledBy !== 'master' && token.tokenSheetId && (
-                <div className="flex flex-col items-center gap-1 mt-2">
-                  <div className="flex justify-center gap-2">
-                    <Boton size="sm" onClick={restoreFromPlayerSheet}>
-                      Restaurar ficha
-                    </Boton>
-                    <Boton size="sm" onClick={updatePlayerSheet}>
-                      Subir cambios
-                    </Boton>
-                  </div>
-                  {controlledBy === currentPlayerName && linked && (
-                      <span className="text-xs text-blue-400">🔗 Vinculado a tu ficha</span>
+                    };
+                    onOpenSheet(updated);
+                  }}
+                >
+                  Abrir ficha de personaje
+                </Boton>
+                {controlledBy !== 'master' && token.tokenSheetId && (
+                  <div className="flex flex-col items-center gap-1 mt-2">
+                    <div className="flex justify-center gap-2">
+                      <Boton size="sm" onClick={restoreFromPlayerSheet}>
+                        Restaurar ficha
+                      </Boton>
+                      <Boton size="sm" onClick={updatePlayerSheet}>
+                        Subir cambios
+                      </Boton>
+                    </div>
+                    {controlledBy === currentPlayerName && linked && (
+                      <span className="text-xs text-blue-400">
+                        🔗 Vinculado a tu ficha
+                      </span>
                     )}
                   </div>
                 )}
-              <Boton
-                onClick={addToInitiativeSystem}
-                size="sm"
-                color="green"
-                className="mt-2"
-              >
-                ⚡ Añadir al Sistema de Velocidad
-              </Boton>
-              <div className="flex justify-center gap-2 mt-2">
-                <Boton size="sm" onClick={() => onMoveBack?.()}>Bajar capa</Boton>
-                <Boton size="sm" onClick={() => onMoveFront?.()}>Subir capa</Boton>
-              </div>
+                <Boton
+                  onClick={addToInitiativeSystem}
+                  size="sm"
+                  color="green"
+                  className="mt-2"
+                >
+                  ⚡ Añadir al Sistema de Velocidad
+                </Boton>
+                <div className="flex justify-center gap-2 mt-2">
+                  <Boton size="sm" onClick={() => onMoveBack?.()}>
+                    Bajar capa
+                  </Boton>
+                  <Boton size="sm" onClick={() => onMoveFront?.()}>
+                    Subir capa
+                  </Boton>
+                </div>
               </div>
             </>
           )}
@@ -524,18 +691,33 @@ const TokenSettings = ({
             <>
               <div>
                 <label className="block mb-1">Radio en casillas</label>
-                <Input type="number" value={auraRadius} onChange={e => setAuraRadius(parseInt(e.target.value,10) || 0)} />
+                <Input
+                  type="number"
+                  value={auraRadius}
+                  onChange={(e) =>
+                    setAuraRadius(parseInt(e.target.value, 10) || 0)
+                  }
+                />
               </div>
               <div>
                 <label className="block mb-1">Forma</label>
-                <select value={auraShape} onChange={e => setAuraShape(e.target.value)} className="w-full bg-gray-700 text-white">
+                <select
+                  value={auraShape}
+                  onChange={(e) => setAuraShape(e.target.value)}
+                  className="w-full bg-gray-700 text-white"
+                >
                   <option value="circle">Círculo</option>
                   <option value="square">Cuadrado</option>
                 </select>
               </div>
               <div>
                 <label className="block mb-1">Color</label>
-                <input type="color" value={auraColor} onChange={e => setAuraColor(e.target.value)} className="w-full h-8 p-0 border-0" />
+                <input
+                  type="color"
+                  value={auraColor}
+                  onChange={(e) => setAuraColor(e.target.value)}
+                  className="w-full h-8 p-0 border-0"
+                />
               </div>
               <div>
                 <label className="block mb-1">Opacidad</label>
@@ -545,16 +727,18 @@ const TokenSettings = ({
                   max="1"
                   step="0.05"
                   value={auraOpacity}
-                  onChange={e => setAuraOpacity(parseFloat(e.target.value))}
+                  onChange={(e) => setAuraOpacity(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <div className="text-right">{Math.round(auraOpacity * 100)}%</div>
+                <div className="text-right">
+                  {Math.round(auraOpacity * 100)}%
+                </div>
               </div>
               <div>
                 <label className="block mb-1">Visible para</label>
                 <select
                   value={auraVisibility}
-                  onChange={e => setAuraVisibility(e.target.value)}
+                  onChange={(e) => setAuraVisibility(e.target.value)}
                   className="w-full bg-gray-700 text-white"
                 >
                   <option value="all">Todos</option>
@@ -571,7 +755,7 @@ const TokenSettings = ({
                   id="lightEnabled"
                   type="checkbox"
                   checked={lightEnabled}
-                  onChange={e => setLightEnabled(e.target.checked)}
+                  onChange={(e) => setLightEnabled(e.target.checked)}
                 />
                 <label htmlFor="lightEnabled">Emite luz</label>
               </div>
@@ -581,7 +765,7 @@ const TokenSettings = ({
                   id="visionEnabled"
                   type="checkbox"
                   checked={visionEnabled}
-                  onChange={e => {
+                  onChange={(e) => {
                     console.log('Vision changed:', e.target.checked);
                     setVisionEnabled(e.target.checked);
                   }}
@@ -591,16 +775,21 @@ const TokenSettings = ({
 
               {visionEnabled && (
                 <div>
-                  <label className="block mb-1">Rango de visión (casillas)</label>
+                  <label className="block mb-1">
+                    Rango de visión (casillas)
+                  </label>
                   <Input
                     type="number"
                     min="1"
                     max="50"
                     value={visionRange}
-                    onChange={e => setVisionRange(parseInt(e.target.value, 10) || 1)}
+                    onChange={(e) =>
+                      setVisionRange(parseInt(e.target.value, 10) || 1)
+                    }
                   />
                   <div className="text-xs text-gray-400 mt-1">
-                    👁️ Distancia máxima que puede ver este token. Los muros bloquearán la visión.
+                    👁️ Distancia máxima que puede ver este token. Los muros
+                    bloquearán la visión.
                   </div>
                 </div>
               )}
@@ -608,48 +797,52 @@ const TokenSettings = ({
               {lightEnabled && (
                 <>
                   <div>
-                    <label className="block mb-1">Radio de luz (casillas)</label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="20" 
-                      value={lightRadius} 
-                      onChange={e => setLightRadius(parseInt(e.target.value, 10) || 1)} 
+                    <label className="block mb-1">
+                      Radio de luz (casillas)
+                    </label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={lightRadius}
+                      onChange={(e) =>
+                        setLightRadius(parseInt(e.target.value, 10) || 1)
+                      }
                     />
                   </div>
                   <div>
                     <label className="block mb-1">Color de la luz</label>
                     <div className="flex gap-2 mb-2">
-                      <button 
-                        onClick={() => setLightColor('#ffa500')} 
-                        className="w-8 h-8 rounded border-2 border-gray-400" 
-                        style={{backgroundColor: '#ffa500'}} 
+                      <button
+                        onClick={() => setLightColor('#ffa500')}
+                        className="w-8 h-8 rounded border-2 border-gray-400"
+                        style={{ backgroundColor: '#ffa500' }}
                         title="Antorcha (naranja cálido)"
                       />
-                      <button 
-                        onClick={() => setLightColor('#ffff88')} 
-                        className="w-8 h-8 rounded border-2 border-gray-400" 
-                        style={{backgroundColor: '#ffff88'}} 
+                      <button
+                        onClick={() => setLightColor('#ffff88')}
+                        className="w-8 h-8 rounded border-2 border-gray-400"
+                        style={{ backgroundColor: '#ffff88' }}
                         title="Vela (amarillo suave)"
                       />
-                      <button 
-                        onClick={() => setLightColor('#87ceeb')} 
-                        className="w-8 h-8 rounded border-2 border-gray-400" 
-                        style={{backgroundColor: '#87ceeb'}} 
+                      <button
+                        onClick={() => setLightColor('#87ceeb')}
+                        className="w-8 h-8 rounded border-2 border-gray-400"
+                        style={{ backgroundColor: '#87ceeb' }}
                         title="Luz mágica (azul)"
                       />
-                      <button 
-                        onClick={() => setLightColor('#ffffff')} 
-                        className="w-8 h-8 rounded border-2 border-gray-400" 
-                        style={{backgroundColor: '#ffffff'}} 
+                      <button
+                        onClick={() => setLightColor('#ffffff')}
+                        className="w-8 h-8 rounded border-2 border-gray-400"
+                        style={{ backgroundColor: '#ffffff' }}
                         title="Luz brillante (blanco)"
                       />
                     </div>
-                    <input 
-                      type="color" 
-                      value={lightColor} 
-                      onChange={e => setLightColor(e.target.value)} 
-                      className="w-full h-8 p-0 border-0" 
+                    <input
+                      type="color"
+                      value={lightColor}
+                      onChange={(e) => setLightColor(e.target.value)}
+                      className="w-full h-8 p-0 border-0"
                     />
                   </div>
                   <div>
@@ -660,26 +853,107 @@ const TokenSettings = ({
                       max="0.8"
                       step="0.05"
                       value={lightOpacity}
-                      onChange={e => setLightOpacity(parseFloat(e.target.value))}
+                      onChange={(e) =>
+                        setLightOpacity(parseFloat(e.target.value))
+                      }
                       className="w-full"
                     />
-                    <div className="text-right">{Math.round(lightOpacity * 100)}%</div>
+                    <div className="text-right">
+                      {Math.round(lightOpacity * 100)}%
+                    </div>
                   </div>
                   <div className="text-xs text-gray-400 mt-2">
-                    💡 La luz revelará áreas ocultas por muros y creará zonas iluminadas realistas
+                    💡 La luz revelará áreas ocultas por muros y creará zonas
+                    iluminadas realistas
                   </div>
                 </>
               )}
             </>
           )}
           {tab === 'notes' && editor && (
-            <div className="text-black">
-              <EditorContent editor={editor} className="bg-white" />
+            <div className="text-black space-y-2">
+              <div className="flex flex-wrap gap-1 bg-gray-200 p-1 rounded">
+                <button
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive('bold') ? 'bg-gray-400' : 'bg-gray-300'
+                  }`}
+                >
+                  N
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive('italic') ? 'bg-gray-400' : 'bg-gray-300'
+                  }`}
+                >
+                  I
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().toggleUnderline().run()}
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive('underline') ? 'bg-gray-400' : 'bg-gray-300'
+                  }`}
+                >
+                  S
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().toggleBulletList().run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive('bulletList')
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  •
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().toggleOrderedList().run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive('orderedList')
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  1.
+                </button>
+                <select
+                  onChange={(e) =>
+                    editor.chain().focus().setFontFamily(e.target.value).run()
+                  }
+                  className="bg-gray-300 text-sm rounded"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Fuente
+                  </option>
+                  {fontOptions.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="color"
+                  onChange={(e) =>
+                    editor.chain().focus().setColor(e.target.value).run()
+                  }
+                  className="w-8 h-8 p-0 border-0"
+                />
+              </div>
+              <EditorContent editor={editor} className="bg-white p-2" />
             </div>
           )}
-          {tab !== 'details' && tab !== 'aura' && tab !== 'light' && tab !== 'notes' && (
-            <div className="text-gray-400">(Sin contenido)</div>
-          )}
+          {tab !== 'details' &&
+            tab !== 'aura' &&
+            tab !== 'light' &&
+            tab !== 'notes' && (
+              <div className="text-gray-400">(Sin contenido)</div>
+            )}
         </div>
       </div>
     </div>
