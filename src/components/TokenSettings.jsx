@@ -79,6 +79,11 @@ const TokenSettings = ({
 
   // Ref para debouncing
   const debounceRef = useRef(null);
+  const [linked, setLinked] = useState(() =>
+    token.tokenSheetId
+      ? localStorage.getItem(`link_${token.tokenSheetId}`) === controlledBy
+      : false
+  );
 
   const loadPlayerSheet = async (playerId) => {
     try {
@@ -107,6 +112,8 @@ const TokenSettings = ({
         sheet.portrait = token.url;
         sheets[token.tokenSheetId] = sheet;
         localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        localStorage.setItem(`link_${token.tokenSheetId}`, controlledBy);
+        setLinked(true);
         window.dispatchEvent(
           new CustomEvent('tokenSheetSaved', { detail: sheet })
         );
@@ -267,6 +274,13 @@ const TokenSettings = ({
     debouncedApplyChanges();
   }, [name, lightColor, lightOpacity, debouncedApplyChanges]);
 
+  useEffect(() => {
+    if (!token.tokenSheetId) return;
+    setLinked(
+      localStorage.getItem(`link_${token.tokenSheetId}`) === controlledBy
+    );
+  }, [token.tokenSheetId, controlledBy]);
+
   // Función para agregar el token al sistema de velocidad
   const addToInitiativeSystem = async () => {
     try {
@@ -362,7 +376,8 @@ const TokenSettings = ({
                 <label className="block mb-1">
                   {isPlayerView ? "Ficha de Personaje" : "Controlado por"}
                   {controlledBy !== 'master' &&
-                    controlledBy === currentPlayerName && (
+                    controlledBy === currentPlayerName &&
+                    linked && (
                       <>
                         <span
                           className="ml-2 inline-flex items-center bg-blue-600 text-white text-xs px-2 rounded-full"
@@ -470,11 +485,11 @@ const TokenSettings = ({
                       Subir cambios
                     </Boton>
                   </div>
-                  {controlledBy === currentPlayerName && (
-                    <span className="text-xs text-blue-400">🔗 Vinculado a tu ficha</span>
-                  )}
-                </div>
-              )}
+                  {controlledBy === currentPlayerName && linked && (
+                      <span className="text-xs text-blue-400">🔗 Vinculado a tu ficha</span>
+                    )}
+                  </div>
+                )}
               <Boton
                 onClick={addToInitiativeSystem}
                 size="sm"
