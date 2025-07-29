@@ -3789,6 +3789,8 @@ const MapCanvas = ({
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
                   onClick={(e) => {
+                    if (activeTool === 'target') return; // Evitar selección durante la mirilla
+
                     // Validar permisos de selección
                     if (!canSelectElement(token, 'token')) {
                       return; // Bloquear selección si no tiene permisos

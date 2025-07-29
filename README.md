@@ -1283,6 +1283,10 @@ src/
 **Resumen de cambios v2.4.58:**
 
 - Redimensionado de tokens sin snapping hasta soltar, para un ajuste más cómodo.
+**Resumen de cambios v2.4.59:**
+
+- La herramienta de mirilla ya no selecciona el token ni muestra el transformador de tamaño al hacer clic.
+
 
 **Resumen de cambios v2.4.25:**
 
