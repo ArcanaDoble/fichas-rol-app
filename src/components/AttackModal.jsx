@@ -16,6 +16,7 @@ import {
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
+import { addSpeedForToken } from '../utils/initiative';
 
 const AUTO_RESOLVE_MS = 20000;
 
@@ -254,6 +255,7 @@ const AttackModal = ({
           console.error(err);
         }
       }, AUTO_RESOLVE_MS);
+      await addSpeedForToken(attacker, speedCost);
       setLoading(false);
       onClose(result);
     } catch (e) {
