@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
+import TextAlign from '@tiptap/extension-text-align';
 import { Extension } from '@tiptap/core';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
@@ -126,7 +127,14 @@ const TokenSettings = ({
   );
   const [notes, setNotes] = useState(token.notes || '');
   const editor = useEditor({
-    extensions: [StarterKit, Underline, TextStyle, Color, FontFamily],
+    extensions: [
+      StarterKit,
+      Underline,
+      TextStyle,
+      Color,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      FontFamily,
+    ],
     content: notes,
     onUpdate: ({ editor }) => setNotes(editor.getHTML()),
   });
@@ -920,6 +928,54 @@ const TokenSettings = ({
                   }`}
                 >
                   1.
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('left').run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive({ textAlign: 'left' })
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  L
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('center').run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive({ textAlign: 'center' })
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  C
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('right').run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive({ textAlign: 'right' })
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  R
+                </button>
+                <button
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('justify').run()
+                  }
+                  className={`px-2 py-1 rounded text-sm ${
+                    editor.isActive({ textAlign: 'justify' })
+                      ? 'bg-gray-400'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  J
                 </button>
                 <select
                   onChange={(e) =>
