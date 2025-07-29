@@ -1271,6 +1271,9 @@ src/
 
 - El aviso "Vinculado a tu ficha" solo aparece tras usar "Restaurar ficha" en el token.
 
+**Resumen de cambios v2.4.57:**
+
+- "Subir cambios" ahora confirma antes de actualizar y avisa si la ficha no está enlazada.
 
 **Resumen de cambios v2.4.25:**
 

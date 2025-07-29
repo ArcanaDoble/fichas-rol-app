@@ -125,6 +125,14 @@ const TokenSettings = ({
 
   const updatePlayerSheet = async () => {
     if (controlledBy === 'master' || !token.tokenSheetId) return;
+    if (!linked) {
+      alert(
+        'No se subieron los datos porque la ficha no está enlazada. Usa "Restaurar ficha" para enlazar.'
+      );
+      return;
+    }
+    if (!window.confirm('¿Seguro que quieres subir los cambios a tu ficha?'))
+      return;
     const stored = localStorage.getItem('tokenSheets');
     if (!stored) return;
     const sheets = JSON.parse(stored);
