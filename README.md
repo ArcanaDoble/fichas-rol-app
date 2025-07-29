@@ -1267,6 +1267,14 @@ src/
 - Debouncing reducido en el Mapa de Batalla para mover tokens y abrir puertas,
   mejorando la sincronización para máster y jugadores.
 
+**Resumen de cambios v2.4.56:**
+
+- El aviso "Vinculado a tu ficha" solo aparece tras usar "Restaurar ficha" en el token.
+
+**Resumen de cambios v2.4.57:**
+
+- "Subir cambios" ahora confirma antes de actualizar y avisa si la ficha no está enlazada.
+
 
 **Resumen de cambios v2.4.25:**
 
