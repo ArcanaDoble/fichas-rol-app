@@ -3,6 +3,8 @@ import Boton from './Boton';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
+const SPECIAL_TRAIT_COLOR = '#ef4444';
+
 const DiceCalculator = ({ playerName, onBack }) => {
 
   const [selectedDice, setSelectedDice] = useState([]);
@@ -217,7 +219,21 @@ const DiceCalculator = ({ playerName, onBack }) => {
                       <div key={index} className="text-sm text-center bg-gray-800/50 rounded p-2">
                         {detail.type === 'dice' ? (
                           <span>
-                            {detail.formula}: [{detail.rolls.join(', ')}] = {detail.subtotal}
+                            {detail.formula}: [
+                            {detail.rolls.map((r, ri) => {
+                              const val = typeof r === 'number' ? r : r.value;
+                              const crit = typeof r === 'object' && r.critical;
+                              return (
+                                <span
+                                  key={ri}
+                                  style={crit ? { color: SPECIAL_TRAIT_COLOR } : {}}
+                                >
+                                  {val}
+                                  {ri < detail.rolls.length - 1 ? ', ' : ''}
+                                </span>
+                              );
+                            })}
+                            ] = {detail.subtotal}
                           </span>
                         ) : detail.type === 'calc' ? (
                           <span>Resultado: {detail.value}</span>
