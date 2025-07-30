@@ -1341,6 +1341,12 @@ src/
 - Se implementa el rasgo **Crítico** que vuelve a tirar el dado de daño cuando
   muestra su valor máximo, acumulando cada nuevo resultado.
 
+**Resumen de cambios v2.4.70:**
+
+- Las armas y poderes ahora pueden consumir Ingenio (🔵).
+  Al usarlos se resta de la estadística del atacante y se muestra una animación
+  de daño en Ingenio con el color azul correspondiente.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
