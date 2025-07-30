@@ -49,11 +49,11 @@ export const parseAndRollFormulaCritical = (formula) => {
     const rolls = [];
     for (let i = 0; i < count; i++) {
       let roll = Math.floor(Math.random() * sides) + 1;
-      rolls.push(roll);
+      rolls.push({ value: roll, critical: false });
       total += roll;
       while (roll === sides) {
         roll = Math.floor(Math.random() * sides) + 1;
-        rolls.push(roll);
+        rolls.push({ value: roll, critical: true });
         total += roll;
       }
     }
@@ -61,7 +61,7 @@ export const parseAndRollFormulaCritical = (formula) => {
       type: 'dice',
       formula: `${count}d${sides}`,
       rolls,
-      subtotal: rolls.reduce((sum, r) => sum + r, 0),
+      subtotal: rolls.reduce((sum, r) => sum + r.value, 0),
     });
   }
 

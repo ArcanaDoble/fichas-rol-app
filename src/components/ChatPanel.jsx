@@ -8,6 +8,7 @@ import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
 const MASTER_COLOR = "#FFD700";
+const SPECIAL_TRAIT_COLOR = '#ef4444';
 const ChatPanel = ({ playerName = '', isMaster = false }) => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
@@ -133,7 +134,17 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
                           {d.type === 'dice' && (
                             <span className="flex items-center justify-center gap-1">
                               {img && <img src={img} alt={`d${sides}`} className="w-4 h-4" />}
-                              {d.formula}: [{d.rolls.join(', ')}] = {d.subtotal}
+                              {d.formula}: [
+                              {d.rolls.map((r, ri) => (
+                                <span
+                                  key={ri}
+                                  style={r.critical ? { color: SPECIAL_TRAIT_COLOR } : {}}
+                                >
+                                  {r.value}
+                                  {ri < d.rolls.length - 1 ? ', ' : ''}
+                                </span>
+                              ))}
+                              ] = {d.subtotal}
                             </span>
                           )}
                           {d.type === 'modifier' && <span>Modificador: {d.formula}</span>}

@@ -19,6 +19,8 @@ import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
+const SPECIAL_TRAIT_COLOR = '#ef4444';
+
 const highlightBattleText = (text) =>
   text
     .replace(
@@ -744,8 +746,17 @@ const AssetSidebar = ({
                                       className="w-4 h-4"
                                     />
                                   )}
-                                  {d.formula}: [{d.rolls.join(', ')}] ={' '}
-                                  {d.subtotal}
+                                  {d.formula}: [
+                                  {d.rolls.map((r, ri) => (
+                                    <span
+                                      key={ri}
+                                      style={r.critical ? { color: SPECIAL_TRAIT_COLOR } : {}}
+                                    >
+                                      {r.value}
+                                      {ri < d.rolls.length - 1 ? ', ' : ''}
+                                    </span>
+                                  ))}
+                                  ] = {d.subtotal}
                                 </span>
                               )}
                               {d.type === 'modifier' && (
