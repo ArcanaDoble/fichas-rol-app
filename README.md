@@ -1319,6 +1319,10 @@ src/
 
 - Las habilidades incluyen un campo de **rasgos** que se muestra en las tarjetas al equiparlas.
 
+**Resumen de cambios v2.4.67:**
+
+- Los poderes equipados de los tokens ahora incluyen correctamente sus **rasgos**.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
