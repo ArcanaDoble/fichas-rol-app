@@ -1323,6 +1323,10 @@ src/
 
 - Los poderes equipados de los tokens ahora incluyen correctamente sus **rasgos**.
 
+**Resumen de cambios v2.4.68:**
+
+- Durante la defensa también se aplican los **rasgos** del arma o poder elegido.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance

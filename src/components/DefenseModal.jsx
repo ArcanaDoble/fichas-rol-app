@@ -10,6 +10,26 @@ import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
 import { addSpeedForToken } from '../utils/initiative';
 
+const atributoColor = {
+  destreza: '#34d399',
+  vigor: '#f87171',
+  intelecto: '#60a5fa',
+  voluntad: '#a78bfa',
+};
+
+const parseAttrBonuses = (rasgos = []) => {
+  const result = [];
+  rasgos.forEach((r) => {
+    const match = r
+      .toLowerCase()
+      .match(/(vigor|destreza|intelecto|voluntad)\s*(?:\(x?(\d+)\))?/);
+    if (match) {
+      result.push({ attr: match[1], mult: parseInt(match[2], 10) || 1 });
+    }
+  });
+  return result;
+};
+
 const DefenseModal = ({
   isOpen,
   attacker,
@@ -124,6 +144,16 @@ const DefenseModal = ({
   const [speedCost, setSpeedCost] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  const selectedItem = useMemo(
+    () => [...weapons, ...powers].find((i) => i.nombre === choice),
+    [choice, weapons, powers]
+  );
+
+  const attrBonuses = useMemo(
+    () => parseAttrBonuses(selectedItem?.rasgos || []),
+    [selectedItem]
+  );
+
   const hasEquip = useMemo(() => {
     if (!sheet) return false;
     const w = sheet.weapons || [];
@@ -138,7 +168,15 @@ const DefenseModal = ({
   const handleRoll = async () => {
     const item = [...weapons, ...powers].find((i) => i.nombre === choice);
     const itemDamage = item?.dano ?? item?.poder ?? '';
-    const formula = damage || parseDamage(itemDamage) || '1d20';
+    const baseFormula = damage || parseDamage(itemDamage) || '1d20';
+    const attrDice = parseAttrBonuses(item?.rasgos || [])
+      .flatMap(({ attr, mult }) => {
+        const die = sheet?.atributos?.[attr];
+        if (!die) return [];
+        return Array(mult).fill(die);
+      })
+      .join(' + ');
+    const formula = attrDice ? `${baseFormula} + ${attrDice}` : baseFormula;
     try {
       const result = rollExpression(formula);
       let messages = [];
@@ -328,6 +366,20 @@ const DefenseModal = ({
                       placeholder="Daño"
                     />
                     <p className="text-sm text-gray-300 mt-1">Consumo: 🟡{speedCost}</p>
+                    {attrBonuses.length > 0 && (
+                      <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
+                        {attrBonuses.map(({ attr, mult }) => (
+                          <span
+                            key={attr}
+                            className="mr-2"
+                            style={{ color: atributoColor[attr] }}
+                          >
+                            {attr} {sheet?.atributos?.[attr]}
+                            {mult > 1 ? ` x${mult}` : ''}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </>
                 )}
               </>
