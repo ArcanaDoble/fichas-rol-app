@@ -165,6 +165,17 @@ const AttackModal = ({
     [selectedItem]
   );
 
+  const otherTraits = useMemo(
+    () =>
+      (selectedItem?.rasgos || []).filter(
+        (r) =>
+          !r
+            .toLowerCase()
+            .match(/(vigor|destreza|intelecto|voluntad)/)
+      ),
+    [selectedItem]
+  );
+
   const hasEquip = useMemo(() => {
     if (!sheet) return false;
     const w = sheet.weapons || [];
@@ -364,6 +375,11 @@ const AttackModal = ({
                             {mult > 1 ? ` x${mult}` : ''}
                           </span>
                         ))}
+                      </p>
+                    )}
+                    {otherTraits.length > 0 && (
+                      <p className="text-sm text-gray-300 mt-1">
+                        Rasgos: {otherTraits.join(', ')}
                       </p>
                     )}
                   </>
