@@ -43,11 +43,11 @@ const TokenSheetModal = ({
     // Map item names to full objects when coming from player data
     const mapItems = (items, catalog) =>
       (items || []).map((it) => {
-        if (typeof it === 'string') {
-          return catalog.find((c) => c.nombre === it) || { nombre: it };
-        }
-        return it;
-      });
+        if (!it) return null;
+        const base = typeof it === 'string' ? { nombre: it } : it;
+        const fromCatalog = catalog.find((c) => c.nombre === base.nombre);
+        return fromCatalog ? { ...fromCatalog, ...base } : base;
+      }).filter(Boolean);
     sheet.weapons = mapItems(sheet.weapons, armas);
     sheet.armaduras = mapItems(sheet.armaduras, armaduras);
     sheet.poderes = mapItems(sheet.poderes, habilidades);

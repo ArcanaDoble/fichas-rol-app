@@ -86,10 +86,9 @@ const DefenseModal = ({
   };
   const mapItem = (it, catalog) => {
     if (!it) return null;
-    if (typeof it === 'string') {
-      return catalog.find((c) => c.nombre === it) || { nombre: it };
-    }
-    return it;
+    const base = typeof it === 'string' ? { nombre: it } : it;
+    const fromCatalog = catalog.find((c) => c.nombre === base.nombre);
+    return fromCatalog ? { ...fromCatalog, ...base } : base;
   };
 
   const weaponObjs = useMemo(() => {
