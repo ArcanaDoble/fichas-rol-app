@@ -220,15 +220,19 @@ const DiceCalculator = ({ playerName, onBack }) => {
                         {detail.type === 'dice' ? (
                           <span>
                             {detail.formula}: [
-                            {detail.rolls.map((r, ri) => (
-                              <span
-                                key={ri}
-                                style={r.critical ? { color: SPECIAL_TRAIT_COLOR } : {}}
-                              >
-                                {r.value}
-                                {ri < detail.rolls.length - 1 ? ', ' : ''}
-                              </span>
-                            ))}
+                            {detail.rolls.map((r, ri) => {
+                              const val = typeof r === 'number' ? r : r.value;
+                              const crit = typeof r === 'object' && r.critical;
+                              return (
+                                <span
+                                  key={ri}
+                                  style={crit ? { color: SPECIAL_TRAIT_COLOR } : {}}
+                                >
+                                  {val}
+                                  {ri < detail.rolls.length - 1 ? ', ' : ''}
+                                </span>
+                              );
+                            })}
                             ] = {detail.subtotal}
                           </span>
                         ) : detail.type === 'calc' ? (

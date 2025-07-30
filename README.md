@@ -1153,6 +1153,7 @@ src/
 **Resumen de cambios v2.4.30:**
 
 - ✅ Los resultados extra por "crítico" se muestran en rojo dentro de la calculadora y el chat
+- ✅ Las tiradas normales vuelven a mostrar todos los resultados
 
 **Resumen de cambios v2.4.30:**
 

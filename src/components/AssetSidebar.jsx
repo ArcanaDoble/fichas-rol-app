@@ -747,15 +747,19 @@ const AssetSidebar = ({
                                     />
                                   )}
                                   {d.formula}: [
-                                  {d.rolls.map((r, ri) => (
-                                    <span
-                                      key={ri}
-                                      style={r.critical ? { color: SPECIAL_TRAIT_COLOR } : {}}
-                                    >
-                                      {r.value}
-                                      {ri < d.rolls.length - 1 ? ', ' : ''}
-                                    </span>
-                                  ))}
+                                  {d.rolls.map((r, ri) => {
+                                    const val = typeof r === 'number' ? r : r.value;
+                                    const crit = typeof r === 'object' && r.critical;
+                                    return (
+                                      <span
+                                        key={ri}
+                                        style={crit ? { color: SPECIAL_TRAIT_COLOR } : {}}
+                                      >
+                                        {val}
+                                        {ri < d.rolls.length - 1 ? ', ' : ''}
+                                      </span>
+                                    );
+                                  })}
                                   ] = {d.subtotal}
                                 </span>
                               )}
