@@ -255,3 +255,32 @@ test('damage field prefilled when selecting power', async () => {
   expect(input).toBeInTheDocument();
   expect(input.value).toBe('2d6');
 });
+
+test('shows attribute bonuses from weapon traits', async () => {
+  localStorage.setItem(
+    'tokenSheets',
+    JSON.stringify({
+      '1': {
+        id: '1',
+        atributos: { destreza: 'D6' },
+        weapons: [
+          { nombre: 'Espada', alcance: 'Toque', dano: '1d4', rasgos: ['Destreza'] },
+        ],
+        poderes: [],
+      },
+    })
+  );
+  render(
+    <AttackModal
+      isOpen
+      attacker={{ name: 'A', tokenSheetId: '1' }}
+      target={{ name: 'B', tokenSheetId: '2' }}
+      distance={1}
+      armas={[]}
+      poderesCatalog={[]}
+      onClose={() => {}}
+    />
+  );
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'Espada');
+  expect(screen.getByText(/destreza d6/i)).toBeInTheDocument();
+});
