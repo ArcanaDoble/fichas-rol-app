@@ -1309,6 +1309,11 @@ src/
 
 - El ajuste de la regla ahora desplaza la figura al centro o a la esquina de la cuadrcula en lugar de solo calcular la distancia.
 
+**Resumen de cambios v2.4.65:**
+
+- Los ataques ahora suman el dado del atributo si el arma tiene rasgos como `vigor`, `destreza`, `intelecto` o `voluntad`.
+- Se indica visualmente el atributo aplicado y si está duplicado con `x2`.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
