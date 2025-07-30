@@ -1331,6 +1331,11 @@ src/
 
 - Durante la defensa también se aplican los **rasgos** del arma o poder elegido.
 
+**Resumen de cambios v2.4.69:**
+
+- Se implementa el rasgo **Crítico** que vuelve a tirar el dado de daño cuando
+  muestra su valor máximo, acumulando cada nuevo resultado.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance

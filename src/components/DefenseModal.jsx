@@ -2,7 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Modal from './Modal';
 import Boton from './Boton';
-import { rollExpression } from '../utils/dice';
+import {
+  rollExpression,
+  parseAndRollFormula,
+  rollExpressionCritical,
+  parseAndRollFormulaCritical,
+} from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -16,6 +21,7 @@ const atributoColor = {
   intelecto: '#60a5fa',
   voluntad: '#a78bfa',
 };
+const specialTraitColor = '#ef4444';
 
 const parseAttrBonuses = (rasgos = []) => {
   const result = [];
@@ -154,6 +160,14 @@ const DefenseModal = ({
     [selectedItem]
   );
 
+  const specialTraits = useMemo(
+    () =>
+      (selectedItem?.rasgos || []).filter((r) =>
+        r.toLowerCase().includes('crítico')
+      ),
+    [selectedItem]
+  );
+
   const otherTraits = useMemo(
     () =>
       (selectedItem?.rasgos || []).filter(
@@ -161,6 +175,7 @@ const DefenseModal = ({
           !r
             .toLowerCase()
             .match(/(vigor|destreza|intelecto|voluntad)/)
+          && !r.toLowerCase().includes('crítico')
       ),
     [selectedItem]
   );
@@ -188,8 +203,22 @@ const DefenseModal = ({
       })
       .join(' + ');
     const formula = attrDice ? `${baseFormula} + ${attrDice}` : baseFormula;
+    const hasCritical = (item?.rasgos || []).some((r) =>
+      r.toLowerCase().includes('crítico')
+    );
     try {
-      const result = rollExpression(formula);
+      let result;
+      if (hasCritical) {
+        const baseRes = parseAndRollFormulaCritical(baseFormula);
+        const attrRes = attrDice ? parseAndRollFormula(attrDice) : { total: 0, details: [] };
+        result = {
+          formula,
+          total: baseRes.total + attrRes.total,
+          details: [...baseRes.details, ...attrRes.details],
+        };
+      } else {
+        result = rollExpression(formula);
+      }
       let messages = [];
       try {
         const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
@@ -387,6 +416,15 @@ const DefenseModal = ({
                           >
                             {attr} {sheet?.atributos?.[attr]}
                             {mult > 1 ? ` x${mult}` : ''}
+                          </span>
+                        ))}
+                      </p>
+                    )}
+                    {specialTraits.length > 0 && (
+                      <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
+                        {specialTraits.map((t, i) => (
+                          <span key={i} className="mr-2" style={{ color: specialTraitColor }}>
+                            {t}
                           </span>
                         ))}
                       </p>
