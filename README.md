@@ -1347,6 +1347,10 @@ src/
   Al usarlos se resta de la estadística del atacante y se muestra una animación
   de daño en Ingenio con el color azul correspondiente.
 
+**Resumen de cambios v2.4.71:**
+
+- Las acciones de combate en el chat se resaltan también para los jugadores.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
