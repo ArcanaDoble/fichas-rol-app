@@ -1150,6 +1150,10 @@ src/
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
+**Resumen de cambios v2.4.30:**
+
+- ✅ Los menús de ataque y defensa muestran ahora todos los rasgos de las armas y poderes seleccionados (informativo)
+
 **Resumen de cambios v2.4.48:**
 
 - 🔧 `handleDragEnd` solo sincroniza los tokens si realmente cambian de posición
