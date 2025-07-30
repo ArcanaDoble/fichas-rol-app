@@ -6,6 +6,7 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
+import highlightBattleText from '../utils/highlightBattleText';
 
 const MASTER_COLOR = "#FFD700";
 const SPECIAL_TRAIT_COLOR = '#ef4444';
@@ -118,7 +119,10 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
                   <span className="font-semibold mr-1" style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}>
                     {m.author}:
                   </span>
-                  <span className="text-gray-200 break-words">{m.text}</span>
+                  <span
+                    className="text-gray-200 break-words"
+                    dangerouslySetInnerHTML={{ __html: highlightBattleText(m.text) }}
+                  />
                 </div>
               )}
               {m.result && (
