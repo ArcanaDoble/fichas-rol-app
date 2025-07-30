@@ -386,6 +386,7 @@ function App() {
     cuerpo: '',
     mente: '',
     poder: '',
+    rasgos: '',
     descripcion: '',
   });
   const [editingAbility, setEditingAbility] = useState(null);
@@ -1821,7 +1822,14 @@ function App() {
       if (editingAbility && editingAbility !== nombre) {
         await deleteDoc(doc(db, 'abilities', editingAbility));
       }
-      await setDoc(doc(db, 'abilities', nombre), newAbility);
+      const dataToSave = {
+        ...newAbility,
+        rasgos: (newAbility.rasgos || '')
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean),
+      };
+      await setDoc(doc(db, 'abilities', nombre), dataToSave);
       setEditingAbility(null);
       setNewAbility({
         nombre: '',
@@ -1830,6 +1838,7 @@ function App() {
         cuerpo: '',
         mente: '',
         poder: '',
+        rasgos: '',
         descripcion: '',
       });
       setNewAbilityError('');
@@ -1839,7 +1848,12 @@ function App() {
     }
   };
   const startEditAbility = (ability) => {
-    setNewAbility(ability);
+    setNewAbility({
+      ...ability,
+      rasgos: Array.isArray(ability.rasgos)
+        ? ability.rasgos.join(', ')
+        : ability.rasgos || '',
+    });
     setEditingAbility(ability.nombre);
   };
   const deleteAbility = async (name) => {
@@ -3826,6 +3840,11 @@ function App() {
                       <p>
                         <strong>Mente:</strong> {p.mente}
                       </p>
+                      {p.rasgos && p.rasgos.length > 0 && (
+                        <p>
+                          <strong>Rasgos:</strong> {p.rasgos.join(', ')}
+                        </p>
+                      )}
                       {p.descripcion && (
                         <p className="italic">{highlightText(p.descripcion)}</p>
                       )}
@@ -4456,6 +4475,12 @@ function App() {
                               <span className="font-medium">Consumo:</span>{' '}
                               {power.consumo}
                             </p>
+                            {power.rasgos && power.rasgos.length > 0 && (
+                              <p className="text-xs mb-1">
+                                <span className="font-medium">Rasgos:</span>{' '}
+                                {highlightText(power.rasgos.join(', '))}
+                              </p>
+                            )}
                             {power.descripcion && (
                               <p className="text-xs text-gray-300">
                                 <span className="font-medium">
@@ -4824,6 +4849,13 @@ function App() {
               }
             />
             <Input
+              placeholder="Rasgos (separados por comas)"
+              value={newAbility.rasgos}
+              onChange={(e) =>
+                setNewAbility((a) => ({ ...a, rasgos: e.target.value }))
+              }
+            />
+            <Input
               placeholder="Daño"
               value={newAbility.poder}
               onChange={(e) =>
@@ -4851,6 +4883,7 @@ function App() {
                       cuerpo: '',
                       mente: '',
                       poder: '',
+                      rasgos: '',
                       descripcion: '',
                     });
                   }}
@@ -5045,6 +5078,11 @@ function App() {
                             <p>
                               <strong>Mente:</strong> {h.mente}
                             </p>
+                            {h.rasgos && h.rasgos.length > 0 && (
+                              <p>
+                                <strong>Rasgos:</strong> {h.rasgos.join(', ')}
+                              </p>
+                            )}
                             <p>
                               <strong>Daño:</strong> {h.poder}
                             </p>

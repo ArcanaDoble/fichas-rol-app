@@ -256,6 +256,11 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                       <p className="mb-1">
                         <span className="font-medium">Consumo:</span> {power.consumo}
                       </p>
+                      {power.rasgos && power.rasgos.length > 0 && (
+                        <p className="mb-1">
+                          <span className="font-medium">Rasgos:</span> {highlightText(power.rasgos.join(', '))}
+                        </p>
+                      )}
                       {power.descripcion && (
                         <p className="text-gray-300 italic">
                           <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}

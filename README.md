@@ -150,6 +150,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Gestión de atributos y recursos** - Dados para atributos y recursos personalizables
 - **Equipamiento desde Google Sheets** - Catálogo dinámico de armas y armaduras
 - **Habilidades personalizadas** - Creación y gestión de poderes únicos
+- **Rasgos en habilidades** - Define rasgos de cada poder y se muestran en sus tarjetas
 - **Claves consumibles** - Acciones especiales con contador de usos
 - **Carga física y mental** - Sistema automático de penalizaciones por peso
 - **Estados del personaje** - Seguimiento de efectos activos con iconos
@@ -1313,6 +1314,10 @@ src/
 
 - Los ataques ahora suman el dado del atributo si el arma tiene rasgos como `vigor`, `destreza`, `intelecto` o `voluntad`.
 - Se indica visualmente el atributo aplicado y si está duplicado con `x2`.
+
+**Resumen de cambios v2.4.66:**
+
+- Las habilidades incluyen un campo de **rasgos** que se muestra en las tarjetas al equiparlas.
 
 **Resumen de cambios v2.4.25:**
 
