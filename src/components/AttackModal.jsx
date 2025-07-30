@@ -21,7 +21,7 @@ import {
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
-import { addSpeedForToken } from '../utils/initiative';
+import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
 
 const AUTO_RESOLVE_MS = 20000;
 
@@ -121,6 +121,13 @@ const AttackModal = ({
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const getIngenioConsumption = (equipment) => {
+    if (!equipment) return 0;
+    const consumo = equipment.consumo || '';
+    const blueDotCount = (consumo.match(/🔵/g) || []).length;
+    return blueDotCount;
+  };
+
   const mapItem = (it, catalog) => {
     if (!it) return null;
     const base = typeof it === 'string' ? { nombre: it } : it;
@@ -159,6 +166,7 @@ const AttackModal = ({
   const [choice, setChoice] = useState('');
   const [damage, setDamage] = useState('');
   const [speedCost, setSpeedCost] = useState(0);
+  const [ingenioCost, setIngenioCost] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const selectedItem = useMemo(
@@ -333,6 +341,7 @@ const AttackModal = ({
         }
       }, AUTO_RESOLVE_MS);
       await addSpeedForToken(attacker, speedCost);
+      await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
       setLoading(false);
       onClose(result);
     } catch (e) {
@@ -367,6 +376,7 @@ const AttackModal = ({
                     const dmg = item?.dano ?? item?.poder ?? '';
                     setDamage(parseDamage(dmg));
                     setSpeedCost(getSpeedConsumption(item));
+                    setIngenioCost(getIngenioConsumption(item));
                   }}
                   className="w-full bg-gray-700 text-white"
                 >
@@ -391,7 +401,10 @@ const AttackModal = ({
                       className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
                       placeholder="Daño"
                     />
-                    <p className="text-sm text-gray-300 mt-1">Consumo: 🟡{speedCost}</p>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Consumo: 🟡{speedCost}
+                      {ingenioCost > 0 && <> {' '}🔵{ingenioCost}</>}
+                    </p>
                     {attrBonuses.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
                         {attrBonuses.map(({ attr, mult }) => (
