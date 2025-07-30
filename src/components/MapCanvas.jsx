@@ -4456,6 +4456,7 @@ const MapCanvas = ({
                 postura: '#34d399',
                 vida: '#f87171',
                 armadura: '#9ca3af',
+                ingenio: '#60a5fa',
                 counter: '#facc15',
                 perfect: '#60a5fa',
               };
