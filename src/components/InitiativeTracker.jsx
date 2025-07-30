@@ -1184,6 +1184,9 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
                             <div><span className="font-medium">Consumo:</span> {power.consumo}</div>
                             <div><span className="font-medium">Cuerpo:</span> {power.cuerpo}</div>
                             <div><span className="font-medium">Mente:</span> {power.mente}</div>
+                            {power.rasgos && power.rasgos.length > 0 && (
+                              <div><span className="font-medium">Rasgos:</span> {power.rasgos.join(', ')}</div>
+                            )}
                           </div>
                           {power.descripcion && (
                             <div className="mt-2 text-gray-300 italic text-sm">
