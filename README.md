@@ -1153,6 +1153,10 @@ src/
 **Resumen de cambios v2.4.30:**
 
 - ✅ Los resultados extra por "crítico" se muestran en rojo dentro de la calculadora y el chat
+
+**Resumen de cambios v2.4.31:**
+
+- ✅ Nuevo menú de barras para editar estadísticas del token y controlar su visibilidad
 - ✅ Las tiradas normales vuelven a mostrar todos los resultados
 
 **Resumen de cambios v2.4.30:**

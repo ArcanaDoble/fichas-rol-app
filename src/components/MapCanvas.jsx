@@ -28,6 +28,7 @@ import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
 import TokenSettings from './TokenSettings';
 import TokenEstadoMenu from './TokenEstadoMenu';
+import TokenBarMenu from './TokenBarMenu';
 import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
@@ -317,6 +318,7 @@ const Token = forwardRef(
       onSettings,
       activeTool = 'select',
       onStates,
+      onBars,
       onHoverChange,
       tokenSheetId,
       auraRadius = 0,
@@ -339,6 +341,7 @@ const Token = forwardRef(
     const trRef = useRef();
     const rotateRef = useRef();
     const gearRef = useRef();
+    const barsRef = useRef();
     const estadosRef = useRef();
     const textRef = useRef();
     const textGroupRef = useRef();
@@ -433,9 +436,15 @@ const Token = forwardRef(
           y: box.y + box.height + HANDLE_OFFSET,
         });
       }
+      if (barsRef.current) {
+        barsRef.current.position({
+          x: box.x - HANDLE_OFFSET + buttonSize + 4,
+          y: box.y + box.height + HANDLE_OFFSET,
+        });
+      }
       if (estadosRef.current) {
         estadosRef.current.position({
-          x: box.x - HANDLE_OFFSET + buttonSize + 4,
+          x: box.x - HANDLE_OFFSET + (buttonSize + 4) * 2,
           y: box.y + box.height + HANDLE_OFFSET,
         });
       }
@@ -462,6 +471,9 @@ const Token = forwardRef(
       }
       if (gearRef.current) {
         gearRef.current.fontSize(buttonSize);
+      }
+      if (barsRef.current) {
+        barsRef.current.fontSize(buttonSize);
       }
       if (estadosRef.current) {
         estadosRef.current.fontSize(buttonSize);
@@ -798,6 +810,16 @@ const Token = forwardRef(
               onClick={() => onSettings?.(id)}
             />
             <Text
+              ref={barsRef}
+              text="📊"
+              fontSize={buttonSize}
+              shadowColor="#000"
+              shadowBlur={4}
+              shadowOpacity={0.9}
+              listening
+              onClick={() => onBars?.(id)}
+            />
+            <Text
               ref={estadosRef}
               text="🩸"
               fontSize={buttonSize}
@@ -851,6 +873,7 @@ Token.propTypes = {
   onRotate: PropTypes.func.isRequired,
   onSettings: PropTypes.func,
   onStates: PropTypes.func,
+  onBars: PropTypes.func,
   onHoverChange: PropTypes.func,
   estados: PropTypes.array,
   tokenSheetId: PropTypes.string,
@@ -934,6 +957,7 @@ const MapCanvas = ({
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
+  const [barsToken, setBarsToken] = useState(null);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
@@ -2620,6 +2644,17 @@ const MapCanvas = ({
     setEstadoTokenIds((prev) => prev.filter((sid) => sid !== id));
   };
 
+  const handleOpenBars = (id) => {
+    const token = tokens.find((t) => t.id === id);
+    if (!token) return;
+    if (!canSelectElement(token, 'token')) return;
+    setBarsToken(id);
+  };
+
+  const handleCloseBars = () => {
+    setBarsToken(null);
+  };
+
   const handleOpenSheet = (token) => {
     setOpenSheetTokens((prev) =>
       prev.some((t) => t.tokenSheetId === token.tokenSheetId)
@@ -3815,6 +3850,7 @@ const MapCanvas = ({
                   }}
                   onSettings={handleOpenSettings}
                   onStates={handleOpenEstados}
+                  onBars={handleOpenBars}
                   onTransformEnd={handleSizeChange}
                   onRotate={handleRotateChange}
                   onHoverChange={(h) => setHoveredId(h ? token.id : null)}
@@ -4560,6 +4596,20 @@ const MapCanvas = ({
           />
         );
       })}
+      {barsToken != null && (() => {
+        const token = tokens.find((t) => t.id === barsToken);
+        if (!token) return null;
+        return (
+          <TokenBarMenu
+            token={token}
+            onClose={handleCloseBars}
+            onUpdate={(tk) => {
+              const updated = tokens.map((t) => (t.id === tk.id ? tk : t));
+              handleTokensChange(updated);
+            }}
+          />
+        );
+      })()}
       {openSheetTokens.map((tk) => (
         <TokenSheetModal
           key={tk.tokenSheetId}
