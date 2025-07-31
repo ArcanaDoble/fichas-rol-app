@@ -489,6 +489,7 @@ function App() {
   const checkedPagesRef = useRef({});
   const prevTokensRef = useRef([]);
   const isLocalTokenEdit = useRef(false);
+  const isRemoteTokenUpdate = useRef(false);
   const prevLinesRef = useRef([]);
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
@@ -578,6 +579,7 @@ function App() {
       const { tokens, pageId } = e.detail || {};
       if (userType === 'master') {
         if (pageId !== pages[currentPage]?.id) return;
+        if (!showPlayerBattleMap) isRemoteTokenUpdate.current = true;
         setCanvasTokens(tokens);
         setPages((prev) => {
           const pagesCopy = [...prev];
@@ -741,6 +743,7 @@ function App() {
             pageId,
             pageData.tokens || []
           );
+          isRemoteTokenUpdate.current = true;
           setCanvasTokens(tokensWithIds);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
@@ -849,6 +852,7 @@ function App() {
         if (version !== loadVersionRef.current) return;
 
         // Actualizar estados del canvas con los datos de esta página específica
+        isRemoteTokenUpdate.current = true;
         setCanvasTokens(data.tokens || []);
         setCanvasLines(data.lines || []);
         setCanvasWalls(data.walls || []);
@@ -913,6 +917,11 @@ function App() {
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
 
     prevTokensRef.current = canvasTokens;
+    if (isRemoteTokenUpdate.current) {
+      isRemoteTokenUpdate.current = false;
+      isLocalTokenEdit.current = false;
+      return;
+    }
     if (!isLocalTokenEdit.current) return;
 
     console.log(
@@ -958,6 +967,7 @@ function App() {
           console.error('Error guardando tokens:', error);
         } finally {
           isLocalTokenEdit.current = false;
+          isRemoteTokenUpdate.current = false;
         }
       };
       saveTokens();
@@ -1248,7 +1258,10 @@ function App() {
       if (data.enableDarkness !== undefined)
         setEnableDarkness(data.enableDarkness);
       if (data.background !== undefined) setCanvasBackground(data.background);
-      if (data.tokens !== undefined) setCanvasTokens(data.tokens);
+      if (data.tokens !== undefined) {
+        isRemoteTokenUpdate.current = true;
+        setCanvasTokens(data.tokens);
+      }
       if (data.lines !== undefined) setCanvasLines(data.lines);
       if (data.walls !== undefined) setCanvasWalls(data.walls);
       if (data.texts !== undefined) setCanvasTexts(data.texts);
@@ -2122,6 +2135,8 @@ function App() {
           : t
       )
     );
+    isRemoteTokenUpdate.current = false;
+    isLocalTokenEdit.current = true;
   };
   const handleSaveEnemy = async () => {
     if (!newEnemy.name.trim()) {
@@ -4850,6 +4865,7 @@ function App() {
               tokens={canvasTokens}
               onTokensChange={(newTokens) => {
                 setCanvasTokens(newTokens);
+                isRemoteTokenUpdate.current = false;
                 isLocalTokenEdit.current = true;
               }}
               texts={canvasTexts}
