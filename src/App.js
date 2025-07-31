@@ -488,6 +488,7 @@ function App() {
   const pagesLoadedRef = useRef(false);
   const checkedPagesRef = useRef({});
   const prevTokensRef = useRef([]);
+  const isLocalTokenEdit = useRef(false);
   const prevLinesRef = useRef([]);
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
@@ -910,13 +911,15 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
 
+    prevTokensRef.current = canvasTokens;
+    if (!isLocalTokenEdit.current) return;
+
     console.log(
       'Programando guardado de tokens en página:',
       pageId,
       'currentPage:',
       currentPage
     );
-    prevTokensRef.current = canvasTokens;
 
     // Limpiar timeout anterior
     if (tokenSaveTimeout.current) {
@@ -952,6 +955,8 @@ function App() {
           console.log('Tokens guardados exitosamente en página:', pageId);
         } catch (error) {
           console.error('Error guardando tokens:', error);
+        } finally {
+          isLocalTokenEdit.current = false;
         }
       };
       saveTokens();
@@ -4842,7 +4847,10 @@ function App() {
               gridOffsetX={gridOffsetX}
               gridOffsetY={gridOffsetY}
               tokens={canvasTokens}
-              onTokensChange={setCanvasTokens}
+              onTokensChange={(newTokens) => {
+                setCanvasTokens(newTokens);
+                isLocalTokenEdit.current = true;
+              }}
               texts={canvasTexts}
               onTextsChange={setCanvasTexts}
               lines={canvasLines}
