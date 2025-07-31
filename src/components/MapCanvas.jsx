@@ -1142,7 +1142,9 @@ const MapCanvas = ({
               const others = current.filter(
                 (t) => t.controlledBy !== playerName
               );
-              mergedTokens = [...filteredData, ...others];
+              mergedTokens = [...filteredData, ...others].sort((a, b) =>
+                String(a.id).localeCompare(String(b.id))
+              );
               transaction.update(pageRef, { tokens: mergedTokens });
             });
 

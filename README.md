@@ -1390,6 +1390,10 @@ src/
 
 - Se evita que las actualizaciones de otros clientes disparen escrituras del máster.
 
+**Resumen de cambios v2.4.31:**
+
+- Los tokens del mapa se ordenan antes de guardarse para detectar cambios reales y evitar escrituras innecesarias.
+
 ## 🔄 Historial de cambios previos
 
 <details>
