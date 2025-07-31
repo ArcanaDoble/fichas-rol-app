@@ -379,6 +379,33 @@ function App() {
     (data, list) => savePlayer(data, list),
     playerData
   );
+  const [newWeaponData, setNewWeaponData] = useState({
+    nombre: '',
+    dano: '',
+    alcance: '',
+    consumo: '',
+    cargaFisica: '',
+    cargaMental: '',
+    rasgos: '',
+    descripcion: '',
+    tipoDano: '',
+    valor: '',
+    tecnologia: '',
+  });
+  const [editingWeapon, setEditingWeapon] = useState(null);
+  const [newWeaponError, setNewWeaponError] = useState('');
+  const [newArmorData, setNewArmorData] = useState({
+    nombre: '',
+    defensa: '',
+    cargaFisica: '',
+    cargaMental: '',
+    rasgos: '',
+    descripcion: '',
+    valor: '',
+    tecnologia: '',
+  });
+  const [editingArmor, setEditingArmor] = useState(null);
+  const [newArmorError, setNewArmorError] = useState('');
   const [newAbility, setNewAbility] = useState({
     nombre: '',
     alcance: '',
@@ -1411,45 +1438,53 @@ function App() {
     if (fetchArmasError) return;
     setLoading(true);
     try {
-      const rows = await fetchSheetData(sheetId, 'Lista_Armas');
       let datos;
-      if (rows && rows.length > 0) {
-        datos = rows.map((obj) => {
-          const rasgos = obj.RASGOS
-            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
-                s.replace(/[[\]]/g, '').trim()
-              )
-            : [];
-          return {
-            nombre: obj.NOMBRE,
-            dano: obj.DAÑO,
-            alcance: obj.ALCANCE,
-            consumo: obj.CONSUMO,
-            carga: obj.CARGA,
-            cuerpo: obj.CUERPO,
-            mente: obj.MENTE,
-            cargaFisica:
-              obj.CARGA_FISICA ||
-              obj['CARGA FISICA'] ||
-              obj.CUERPO ||
-              obj.CARGA ||
-              '',
-            cargaMental:
-              obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
-            rasgos,
-            descripcion: obj.DESCRIPCIÓN || '',
-            tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
-            valor: obj.VALOR || '',
-            tecnologia: obj.TECNOLOGÍA || '',
-          };
-        });
-      } else {
-        datos = datosPruebaArmas;
+      try {
+        const rows = await fetchSheetData(sheetId, 'Lista_Armas');
+        if (rows && rows.length > 0) {
+          datos = rows.map((obj) => {
+            const rasgos = obj.RASGOS
+              ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
+                  s.replace(/[[\]]/g, '').trim()
+                )
+              : [];
+            return {
+              nombre: obj.NOMBRE,
+              dano: obj.DAÑO,
+              alcance: obj.ALCANCE,
+              consumo: obj.CONSUMO,
+              carga: obj.CARGA,
+              cuerpo: obj.CUERPO,
+              mente: obj.MENTE,
+              cargaFisica:
+                obj.CARGA_FISICA ||
+                obj['CARGA FISICA'] ||
+                obj.CUERPO ||
+                obj.CARGA ||
+                '',
+              cargaMental:
+                obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+              rasgos,
+              descripcion: obj.DESCRIPCIÓN || '',
+              tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
+              valor: obj.VALOR || '',
+              tecnologia: obj.TECNOLOGÍA || '',
+              fuente: 'sheet',
+            };
+          });
+        } else {
+          datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+        }
+      } catch (err) {
+        datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+        setFetchArmasError(true);
       }
+      try {
+        const snap = await getDocs(collection(db, 'weapons'));
+        const custom = snap.docs.map((d) => ({ ...d.data(), fuente: 'custom' }));
+        datos = [...datos, ...custom];
+      } catch (e) {}
       setArmas(datos);
-    } catch (e) {
-      setArmas(datosPruebaArmas);
-      setFetchArmasError(true);
     } finally {
       setLoading(false);
     }
@@ -1465,42 +1500,50 @@ function App() {
     if (fetchArmadurasError) return;
     setLoading(true);
     try {
-      const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
       let datos;
-      if (rows && rows.length > 0) {
-        datos = rows.map((obj) => {
-          const rasgos = obj.RASGOS
-            ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
-                s.replace(/[[\]]/g, '').trim()
-              )
-            : [];
-          return {
-            nombre: obj.NOMBRE,
-            defensa: obj.ARMADURA,
-            cuerpo: obj.CUERPO,
-            mente: obj.MENTE,
-            carga: obj.CARGA,
-            cargaFisica:
-              obj.CARGA_FISICA ||
-              obj['CARGA FISICA'] ||
-              obj.CUERPO ||
-              obj.CARGA ||
-              '',
-            cargaMental:
-              obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
-            rasgos,
-            descripcion: obj.DESCRIPCIÓN || '',
-            valor: obj.VALOR || '',
-            tecnologia: obj.TECNOLOGÍA || '',
-          };
-        });
-      } else {
-        datos = datosPruebaArmaduras;
+      try {
+        const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
+        if (rows && rows.length > 0) {
+          datos = rows.map((obj) => {
+            const rasgos = obj.RASGOS
+              ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
+                  s.replace(/[[\]]/g, '').trim()
+                )
+              : [];
+            return {
+              nombre: obj.NOMBRE,
+              defensa: obj.ARMADURA,
+              cuerpo: obj.CUERPO,
+              mente: obj.MENTE,
+              carga: obj.CARGA,
+              cargaFisica:
+                obj.CARGA_FISICA ||
+                obj['CARGA FISICA'] ||
+                obj.CUERPO ||
+                obj.CARGA ||
+                '',
+              cargaMental:
+                obj.CARGA_MENTAL || obj['CARGA MENTAL'] || obj.MENTE || '',
+              rasgos,
+              descripcion: obj.DESCRIPCIÓN || '',
+              valor: obj.VALOR || '',
+              tecnologia: obj.TECNOLOGÍA || '',
+              fuente: 'sheet',
+            };
+          });
+        } else {
+          datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+        }
+      } catch (err) {
+        datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+        setFetchArmadurasError(true);
       }
+      try {
+        const snap = await getDocs(collection(db, 'armors'));
+        const custom = snap.docs.map((d) => ({ ...d.data(), fuente: 'custom' }));
+        datos = [...datos, ...custom];
+      } catch (e) {}
       setArmaduras(datos);
-    } catch (e) {
-      setArmaduras(datosPruebaArmaduras);
-      setFetchArmadurasError(true);
     } finally {
       setLoading(false);
     }
@@ -1811,6 +1854,138 @@ function App() {
     newList[index + 1] = temp;
     setResourcesList(newList);
     savePlayer(playerData, newList);
+  };
+  const agregarArma = async () => {
+    const { nombre } = newWeaponData;
+    if (!nombre.trim()) {
+      setNewWeaponError('Nombre requerido');
+      return;
+    }
+    try {
+      if (editingWeapon && editingWeapon !== nombre) {
+        await deleteDoc(doc(db, 'weapons', editingWeapon));
+      }
+      const dataToSave = {
+        ...newWeaponData,
+        rasgos: (newWeaponData.rasgos || '')
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean),
+      };
+      await setDoc(doc(db, 'weapons', nombre), dataToSave);
+      setEditingWeapon(null);
+      setNewWeaponData({
+        nombre: '',
+        dano: '',
+        alcance: '',
+        consumo: '',
+        cargaFisica: '',
+        cargaMental: '',
+        rasgos: '',
+        descripcion: '',
+        tipoDano: '',
+        valor: '',
+        tecnologia: '',
+      });
+      setNewWeaponError('');
+      fetchArmas();
+    } catch (e) {
+      setNewWeaponError('Error al guardar');
+    }
+  };
+  const startEditWeapon = (weapon) => {
+    setNewWeaponData({
+      ...weapon,
+      rasgos: Array.isArray(weapon.rasgos)
+        ? weapon.rasgos.join(', ')
+        : weapon.rasgos || '',
+    });
+    setEditingWeapon(weapon.nombre);
+  };
+  const deleteWeapon = async (name) => {
+    try {
+      await deleteDoc(doc(db, 'weapons', name));
+      if (editingWeapon === name) {
+        setEditingWeapon(null);
+        setNewWeaponData({
+          nombre: '',
+          dano: '',
+          alcance: '',
+          consumo: '',
+          cargaFisica: '',
+          cargaMental: '',
+          rasgos: '',
+          descripcion: '',
+          tipoDano: '',
+          valor: '',
+          tecnologia: '',
+        });
+      }
+      fetchArmas();
+    } catch (e) {}
+  };
+  const agregarArmadura = async () => {
+    const { nombre } = newArmorData;
+    if (!nombre.trim()) {
+      setNewArmorError('Nombre requerido');
+      return;
+    }
+    try {
+      if (editingArmor && editingArmor !== nombre) {
+        await deleteDoc(doc(db, 'armors', editingArmor));
+      }
+      const dataToSave = {
+        ...newArmorData,
+        rasgos: (newArmorData.rasgos || '')
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean),
+      };
+      await setDoc(doc(db, 'armors', nombre), dataToSave);
+      setEditingArmor(null);
+      setNewArmorData({
+        nombre: '',
+        defensa: '',
+        cargaFisica: '',
+        cargaMental: '',
+        rasgos: '',
+        descripcion: '',
+        valor: '',
+        tecnologia: '',
+      });
+      setNewArmorError('');
+      fetchArmaduras();
+    } catch (e) {
+      setNewArmorError('Error al guardar');
+    }
+  };
+  const startEditArmor = (armor) => {
+    setNewArmorData({
+      ...armor,
+      rasgos: Array.isArray(armor.rasgos)
+        ? armor.rasgos.join(', ')
+        : armor.rasgos || '',
+    });
+    setEditingArmor(armor.nombre);
+  };
+  const deleteArmor = async (name) => {
+    try {
+      await deleteDoc(doc(db, 'armors', name));
+      if (editingArmor === name) {
+        setEditingArmor(null);
+        setNewArmorData({
+          nombre: '',
+          defensa: '',
+          cargaFisica: '',
+          cargaMental: '',
+          rasgos: '',
+          descripcion: '',
+          valor: '',
+          tecnologia: '',
+        });
+      }
+      fetchArmaduras();
+    } catch (e) {}
   };
   const agregarHabilidad = async () => {
     const { nombre } = newAbility;
@@ -4806,6 +4981,226 @@ function App() {
         </Collapsible>
         <Collapsible
           title={
+            editingWeapon
+              ? `Editar arma: ${editingWeapon}`
+              : 'Crear nueva arma'
+          }
+          defaultOpen={false}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="Nombre"
+              value={newWeaponData.nombre}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, nombre: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Daño"
+              value={newWeaponData.dano}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, dano: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Alcance"
+              value={newWeaponData.alcance}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, alcance: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Consumo"
+              value={newWeaponData.consumo}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, consumo: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Carga física"
+              value={newWeaponData.cargaFisica}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, cargaFisica: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Carga mental"
+              value={newWeaponData.cargaMental}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, cargaMental: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Rasgos (separados por comas)"
+              value={newWeaponData.rasgos}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, rasgos: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Tipo de daño"
+              value={newWeaponData.tipoDano}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, tipoDano: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Valor"
+              value={newWeaponData.valor}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, valor: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Tecnología"
+              value={newWeaponData.tecnologia}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, tecnologia: e.target.value }))
+              }
+            />
+            <textarea
+              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+              placeholder="Descripción"
+              value={newWeaponData.descripcion}
+              onChange={(e) =>
+                setNewWeaponData((w) => ({ ...w, descripcion: e.target.value }))
+              }
+            />
+            <div className="sm:col-span-2 flex justify-between items-center">
+              {editingWeapon && (
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setEditingWeapon(null);
+                    setNewWeaponData({
+                      nombre: '',
+                      dano: '',
+                      alcance: '',
+                      consumo: '',
+                      cargaFisica: '',
+                      cargaMental: '',
+                      rasgos: '',
+                      descripcion: '',
+                      tipoDano: '',
+                      valor: '',
+                      tecnologia: '',
+                    });
+                  }}
+                >
+                  Cancelar
+                </Boton>
+              )}
+              <Boton color="green" onClick={agregarArma}>
+                {editingWeapon ? 'Actualizar' : 'Guardar'} arma
+              </Boton>
+            </div>
+            {newWeaponError && (
+              <p className="text-red-400 text-center sm:col-span-2">
+                {newWeaponError}
+              </p>
+            )}
+          </div>
+        </Collapsible>
+        <Collapsible
+          title={
+            editingArmor
+              ? `Editar armadura: ${editingArmor}`
+              : 'Crear nueva armadura'
+          }
+          defaultOpen={false}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="Nombre"
+              value={newArmorData.nombre}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, nombre: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Defensa"
+              value={newArmorData.defensa}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, defensa: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Carga física"
+              value={newArmorData.cargaFisica}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, cargaFisica: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Carga mental"
+              value={newArmorData.cargaMental}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, cargaMental: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Rasgos (separados por comas)"
+              value={newArmorData.rasgos}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, rasgos: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Valor"
+              value={newArmorData.valor}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, valor: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Tecnología"
+              value={newArmorData.tecnologia}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, tecnologia: e.target.value }))
+              }
+            />
+            <textarea
+              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+              placeholder="Descripción"
+              value={newArmorData.descripcion}
+              onChange={(e) =>
+                setNewArmorData((a) => ({ ...a, descripcion: e.target.value }))
+              }
+            />
+            <div className="sm:col-span-2 flex justify-between items-center">
+              {editingArmor && (
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setEditingArmor(null);
+                    setNewArmorData({
+                      nombre: '',
+                      defensa: '',
+                      cargaFisica: '',
+                      cargaMental: '',
+                      rasgos: '',
+                      descripcion: '',
+                      valor: '',
+                      tecnologia: '',
+                    });
+                  }}
+                >
+                  Cancelar
+                </Boton>
+              )}
+              <Boton color="green" onClick={agregarArmadura}>
+                {editingArmor ? 'Actualizar' : 'Guardar'} armadura
+              </Boton>
+            </div>
+            {newArmorError && (
+              <p className="text-red-400 text-center sm:col-span-2">
+                {newArmorError}
+              </p>
+            )}
+          </div>
+        </Collapsible>
+        <Collapsible
+          title={
             editingAbility
               ? `Editar habilidad: ${editingAbility}`
               : 'Crear nueva habilidad'
@@ -4975,6 +5370,24 @@ function App() {
                                 {highlightText(a.descripcion)}
                               </p>
                             )}
+                            {a.fuente === 'custom' && (
+                              <div className="flex justify-end gap-2 mt-2">
+                                <Boton
+                                  color="blue"
+                                  onClick={() => startEditWeapon(a)}
+                                  className="px-2 py-1 text-sm"
+                                >
+                                  Editar
+                                </Boton>
+                                <Boton
+                                  color="red"
+                                  onClick={() => deleteWeapon(a.nombre)}
+                                  className="px-2 py-1 text-sm"
+                                >
+                                  Borrar
+                                </Boton>
+                              </div>
+                            )}
                           </Tarjeta>
                         ))}
                       </Collapsible>
@@ -5039,6 +5452,24 @@ function App() {
                               <p className="italic">
                                 {highlightText(a.descripcion)}
                               </p>
+                            )}
+                            {a.fuente === 'custom' && (
+                              <div className="flex justify-end gap-2 mt-2">
+                                <Boton
+                                  color="blue"
+                                  onClick={() => startEditArmor(a)}
+                                  className="px-2 py-1 text-sm"
+                                >
+                                  Editar
+                                </Boton>
+                                <Boton
+                                  color="red"
+                                  onClick={() => deleteArmor(a.nombre)}
+                                  className="px-2 py-1 text-sm"
+                                >
+                                  Borrar
+                                </Boton>
+                              </div>
                             )}
                           </Tarjeta>
                         ))}
