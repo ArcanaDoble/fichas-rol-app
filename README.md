@@ -1386,6 +1386,10 @@ src/
 - ✅ El campo de daño solo muestra valores como `1d8` o `2d6`, ocultando el tipo de daño
 - ✅ También se rellena correctamente el daño de los poderes al seleccionarlos
 
+**Resumen de cambios v2.4.30:**
+
+- Se evita que las actualizaciones de otros clientes disparen escrituras del máster.
+
 ## 🔄 Historial de cambios previos
 
 <details>
