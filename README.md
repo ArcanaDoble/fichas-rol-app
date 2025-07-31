@@ -1355,6 +1355,11 @@ src/
 
 - Las acciones de combate en el chat se resaltan también para los jugadores.
 
+**Resumen de cambios v2.4.72:**
+
+- Las armas y armaduras personalizadas pueden crearse, editarse y eliminarse directamente en la aplicación, guardándose en Firebase.
+- El catálogo base sigue cargándose desde Google Sheets.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
