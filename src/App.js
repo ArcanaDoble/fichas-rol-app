@@ -936,7 +936,7 @@ function App() {
       clearTimeout(tokenSaveTimeout.current);
     }
 
-    // Debouncing: esperar 50ms antes de guardar
+    // Debouncing: esperar 20ms antes de guardar
     tokenSaveTimeout.current = setTimeout(async () => {
       const saveId = ++saveVersionRef.current.tokens;
 
@@ -971,7 +971,7 @@ function App() {
         }
       };
       saveTokens();
-    }, 50);
+    }, 20);
   }, [canvasTokens, currentPage]);
 
   useEffect(() => {
