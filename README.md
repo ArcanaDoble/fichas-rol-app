@@ -1430,6 +1430,7 @@ Se sigue una numeración basada en [Semantic Versioning](https://semver.org/lang
 - Token sheets always include basic attributes so they can be edited even if missing in stored data.
 - Saving a token sheet now replaces the Firestore document, removing deleted statistics or equipment.
 - Realtime listeners only update the local cache instead of rewriting Firestore, ensuring edits persist across browsers.
+- Player page listener ignores pending writes to avoid oscillations while Firestore transactions complete.
 
 ## 🤝 Contribución
 

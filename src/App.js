@@ -673,6 +673,7 @@ function App() {
     const unsubscribe = onSnapshot(
       doc(db, 'pages', playerVisiblePageId),
       async (docSnap) => {
+        if (docSnap.metadata.hasPendingWrites) return;
         if (docSnap.exists()) {
           const pageData = docSnap.data();
           setEnableDarkness(
