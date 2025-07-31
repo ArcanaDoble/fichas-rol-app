@@ -1394,6 +1394,10 @@ src/
 
 - Los tokens del mapa se ordenan antes de guardarse para detectar cambios reales y evitar escrituras innecesarias.
 
+**Resumen de cambios v2.4.32:**
+
+- Debounce unificado a 20 ms para el guardado de tokens tanto de jugadores como del máster.
+
 ## 🔄 Historial de cambios previos
 
 <details>
