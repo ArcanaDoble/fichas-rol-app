@@ -63,7 +63,6 @@ import {
   query,
   where,
   onSnapshot,
-  runTransaction,
   addDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -1142,24 +1141,25 @@ const MapCanvas = ({
               (token) => token.controlledBy === playerName
             );
 
-            const pageRef = doc(db, 'pages', pageId);
-            let mergedTokens = [];
+            const tokensRef = collection(db, 'pages', pageId, 'tokens');
 
-            await runTransaction(db, async (transaction) => {
-              const snap = await transaction.get(pageRef);
-              const current = snap.data()?.tokens || [];
-              const others = current.filter(
-                (t) => t.controlledBy !== playerName
-              );
-              mergedTokens = [...filteredData, ...others].sort((a, b) =>
-                String(a.id).localeCompare(String(b.id))
-              );
-              transaction.update(pageRef, { tokens: mergedTokens });
-            });
+            const prevTokens = prevData[type] || [];
+            const tokensToDelete = prevTokens.filter(
+              (t) => !filteredData.some((f) => String(f.id) === String(t.id))
+            );
 
-            prevData[type] = mergedTokens;
+            await Promise.all([
+              ...filteredData.map((tk) =>
+                setDoc(doc(tokensRef, String(tk.id)), tk)
+              ),
+              ...tokensToDelete.map((tk) =>
+                deleteDoc(doc(tokensRef, String(tk.id)))
+              ),
+            ]);
+
+            prevData[type] = filteredData;
             console.log(
-              `✅ Jugador ${playerName} guardó ${type} exitosamente (${mergedTokens.length} elementos)`
+              `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`
             );
             return;
           }

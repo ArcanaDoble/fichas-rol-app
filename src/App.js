@@ -529,11 +529,13 @@ function App() {
     const updated = tokens ? [...tokens] : [];
     let modified = false;
     const tasks = [];
+    const updates = [];
     updated.forEach((tk) => {
       if (!tk.tokenSheetId) {
         const newId = nanoid();
         tk.tokenSheetId = newId;
         modified = true;
+        updates.push({ id: tk.id, tokenSheetId: newId });
         if (tk.enemyId) {
           tasks.push(
             getDoc(doc(db, 'enemies', tk.enemyId))
@@ -558,7 +560,13 @@ function App() {
     if (modified) {
       try {
         await Promise.all(tasks);
-        await updateDoc(doc(db, 'pages', pageId), { tokens: updated });
+        await Promise.all(
+          updates.map((u) =>
+            updateDoc(doc(db, 'pages', pageId, 'tokens', String(u.id)), {
+              tokenSheetId: u.tokenSheetId,
+            })
+          )
+        );
       } catch (err) {
         console.error('update tokens', err);
         // Revert to original tokens on failure to avoid losing data
@@ -608,7 +616,7 @@ function App() {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
       const loaded = snap.docs.map((d) => {
-        const { tokens, lines, texts, walls, ...meta } = d.data();
+        const { lines, texts, walls, ...meta } = d.data();
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
@@ -626,13 +634,12 @@ function App() {
           gridOffsetY: 0,
           enableDarkness: true,
           darknessOpacity: 0.7,
-          tokens: [],
           lines: [],
           walls: [],
           texts: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        const { tokens, lines, walls, texts, ...meta } = defaultPage;
+        const { lines, walls, texts, ...meta } = defaultPage;
         setPages([meta]);
         // Establecer la primera página como visible para jugadores por defecto
         setPlayerVisiblePageId(defaultPage.id);
@@ -671,10 +678,12 @@ function App() {
   useEffect(() => {
     if (!playerVisiblePageId || userType !== 'player') return;
 
-    // Listener en tiempo real para la página visible
-    const unsubscribe = onSnapshot(
-      doc(db, 'pages', playerVisiblePageId),
-      async (docSnap) => {
+    const pageRef = doc(db, 'pages', playerVisiblePageId);
+    const tokensRef = collection(pageRef, 'tokens');
+
+    const unsubscribePage = onSnapshot(
+      pageRef,
+      (docSnap) => {
         if (docSnap.metadata.hasPendingWrites) return;
         if (docSnap.exists()) {
           const pageData = docSnap.data();
@@ -683,11 +692,6 @@ function App() {
           );
           const opacity =
             pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
-          const tokensWithIds = await ensureTokenSheetIds(
-            playerVisiblePageId,
-            pageData.tokens || []
-          );
-          // Actualizar la página en el array de páginas con los datos completos
           setPages((prevPages) => {
             const pageIndex = prevPages.findIndex(
               (p) => p.id === playerVisiblePageId
@@ -696,7 +700,6 @@ function App() {
               const updatedPages = [...prevPages];
               updatedPages[pageIndex] = {
                 ...updatedPages[pageIndex],
-                tokens: tokensWithIds,
                 lines: pageData.lines || [],
                 walls: pageData.walls || [],
                 texts: pageData.texts || [],
@@ -713,8 +716,6 @@ function App() {
             return prevPages;
           });
 
-          // Actualizar también los estados del canvas
-          setCanvasTokens(tokensWithIds);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -725,7 +726,37 @@ function App() {
       }
     );
 
-    return () => unsubscribe();
+    const unsubscribeTokens = onSnapshot(
+      tokensRef,
+      async (snap) => {
+        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const tokensWithIds = await ensureTokenSheetIds(
+          playerVisiblePageId,
+          tokens
+        );
+        setPages((prevPages) => {
+          const pageIndex = prevPages.findIndex((p) => p.id === playerVisiblePageId);
+          if (pageIndex !== -1) {
+            const updatedPages = [...prevPages];
+            updatedPages[pageIndex] = {
+              ...updatedPages[pageIndex],
+              tokens: tokensWithIds,
+            };
+            return updatedPages;
+          }
+          return prevPages;
+        });
+        setCanvasTokens(tokensWithIds);
+      },
+      (error) => {
+        console.error('Error en listener de tokens para jugador:', error);
+      }
+    );
+
+    return () => {
+      unsubscribePage();
+      unsubscribeTokens();
+    };
   }, [playerVisiblePageId, userType]);
 
   // Listener en tiempo real para la página actual en modo máster
@@ -734,17 +765,14 @@ function App() {
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'pages', pageId),
-      async (docSnap) => {
+    const pageRef = doc(db, 'pages', pageId);
+    const tokensRef = collection(pageRef, 'tokens');
+
+    const unsubscribePage = onSnapshot(
+      pageRef,
+      (docSnap) => {
         if (docSnap.exists()) {
           const pageData = docSnap.data();
-          const tokensWithIds = await ensureTokenSheetIds(
-            pageId,
-            pageData.tokens || []
-          );
-          isRemoteTokenUpdate.current = true;
-          setCanvasTokens(tokensWithIds);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -763,7 +791,23 @@ function App() {
       }
     );
 
-    return () => unsubscribe();
+    const unsubscribeTokens = onSnapshot(
+      tokensRef,
+      async (snap) => {
+        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const tokensWithIds = await ensureTokenSheetIds(pageId, tokens);
+        isRemoteTokenUpdate.current = true;
+        setCanvasTokens(tokensWithIds);
+      },
+      (error) => {
+        console.error('Error en listener de tokens para máster:', error);
+      }
+    );
+
+    return () => {
+      unsubscribePage();
+      unsubscribeTokens();
+    };
   }, [userType, currentPage, pages[currentPage]?.id]);
 
   // Función para actualizar la página visible para jugadores
@@ -848,12 +892,15 @@ function App() {
         if (!snap.exists()) return;
 
         const data = snap.data();
+        const tokenSnap = await getDocs(collection(db, 'pages', page.id, 'tokens'));
+        const tokens = tokenSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const tokensWithIds = await ensureTokenSheetIds(page.id, tokens);
         console.log('Datos cargados para página:', page.id);
         if (version !== loadVersionRef.current) return;
 
         // Actualizar estados del canvas con los datos de esta página específica
         isRemoteTokenUpdate.current = true;
-        setCanvasTokens(data.tokens || []);
+        setCanvasTokens(tokensWithIds);
         setCanvasLines(data.lines || []);
         setCanvasWalls(data.walls || []);
         setCanvasTexts(data.texts || []);
@@ -867,7 +914,7 @@ function App() {
         );
 
         // Actualizar referencias previas para evitar guardado inmediato
-        prevTokensRef.current = data.tokens || [];
+        prevTokensRef.current = tokensWithIds;
         prevLinesRef.current = data.lines || [];
         prevWallsRef.current = data.walls || [];
         prevTextsRef.current = data.texts || [];
@@ -916,6 +963,7 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
 
+    const prevTokens = prevTokensRef.current;
     prevTokensRef.current = canvasTokens;
     if (isRemoteTokenUpdate.current) {
       isRemoteTokenUpdate.current = false;
@@ -955,7 +1003,14 @@ function App() {
             console.log('Guardado de tokens cancelado por cambio de página');
             return;
           }
-          await updateDoc(doc(db, 'pages', pageId), { tokens });
+          const tokensRef = collection(db, 'pages', pageId, 'tokens');
+          const toDelete = prevTokens.filter(
+            (pt) => !tokens.some((t) => t.id === pt.id)
+          );
+          await Promise.all([
+            ...tokens.map((t) => setDoc(doc(tokensRef, String(t.id)), t)),
+            ...toDelete.map((t) => deleteDoc(doc(tokensRef, String(t.id)))),
+          ]);
           if (saveId !== saveVersionRef.current.tokens) {
             console.log(
               'Resultado de guardado de tokens ignorado por cambio de página'
@@ -1233,13 +1288,12 @@ function App() {
       gridOffsetY: 0,
       enableDarkness: true,
       darknessOpacity: 0.7,
-      tokens: [],
       lines: [],
       walls: [],
       texts: [],
     };
     await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-    const { tokens, lines, walls, texts, ...meta } = newPage;
+    const { lines, walls, texts, ...meta } = newPage;
     setPages((ps) => [...ps, meta]);
     setCurrentPage(pages.length);
   };
@@ -1247,7 +1301,12 @@ function App() {
   const updatePage = (index, data) => {
     const pageId = pages[index]?.id;
     if (pageId) {
-      updateDoc(doc(db, 'pages', pageId), data);
+      const { tokens, ...rest } = data;
+      if (Object.keys(rest).length) updateDoc(doc(db, 'pages', pageId), rest);
+      if (tokens) {
+        const tokensRef = collection(db, 'pages', pageId, 'tokens');
+        tokens.forEach((t) => setDoc(doc(tokensRef, String(t.id)), t));
+      }
     }
     setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...data } : p)));
     if (index === currentPage) {
