@@ -1094,6 +1094,12 @@ const MapCanvas = ({
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
 
+  // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
+  const saveDelayRef = useRef(150);
+  const setSaveDelay = (ms) => {
+    saveDelayRef.current = Math.max(150, Math.min(300, ms));
+  };
+
   // Crear syncManager para jugadores usando la función global
   const syncManager = useMemo(() => {
     if (!isPlayerView || !pageId || !playerName) return null;
@@ -1124,7 +1130,7 @@ const MapCanvas = ({
         clearTimeout(saveTimeouts[type]);
       }
 
-      // Debouncing: esperar 20ms antes de guardar
+      // Debouncing: esperar el tiempo configurado antes de guardar
       saveTimeouts[type] = setTimeout(async () => {
         try {
           // Validaciones de seguridad para jugadores
@@ -1169,10 +1175,10 @@ const MapCanvas = ({
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
         }
-      }, 20);
+      }, saveDelayRef.current);
     };
-
-    return { saveToFirebase };
+    
+    return { saveToFirebase, setSaveDelay };
   }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
@@ -3568,10 +3574,25 @@ const MapCanvas = ({
     ]
   );
 
+  const handleKeyUp = useCallback(
+    (e) => {
+      if (!syncManager) return;
+      if (["w", "a", "s", "d"].includes(e.key.toLowerCase())) {
+        syncManager.saveToFirebase('tokens', tokens);
+      }
+    },
+    [syncManager, tokens]
+  );
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    window.addEventListener('keyup', handleKeyUp);
+    return () => window.removeEventListener('keyup', handleKeyUp);
+  }, [handleKeyUp]);
 
   // Listener global para tracking de posición del mouse
   useEffect(() => {
