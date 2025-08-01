@@ -1402,6 +1402,11 @@ src/
 
 - Debounce unificado a 20 ms para el guardado de tokens tanto de jugadores como del máster.
 
+**Resumen de cambios v2.4.33:**
+
+- El guardado de tokens utiliza un temporizador ajustable (150–300 ms).
+- Se envía la última posición de los tokens al soltar la tecla.
+
 ## 🔄 Historial de cambios previos
 
 <details>
