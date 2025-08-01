@@ -60,11 +60,13 @@ import {
   setDoc,
   deleteDoc,
   collection,
+  getDocs,
   query,
   where,
   onSnapshot,
   addDoc,
   serverTimestamp,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
@@ -953,6 +955,33 @@ const MapCanvas = ({
   useEffect(() => { tokensRef.current = tokens; }, [tokens]);
   useEffect(() => { gridOffsetXRef.current = gridOffsetX; }, [gridOffsetX]);
   useEffect(() => { gridOffsetYRef.current = gridOffsetY; }, [gridOffsetY]);
+  useEffect(() => {
+    const migrateTokens = async () => {
+      if (!pageId) return;
+      try {
+        const pageRef = doc(db, 'pages', pageId);
+        const pageSnap = await getDoc(pageRef);
+        if (!pageSnap.exists()) return;
+
+        const data = pageSnap.data();
+        if (!Array.isArray(data.tokens) || data.tokens.length === 0) return;
+
+        const tokensCol = collection(pageRef, 'tokens');
+        const tokensSnap = await getDocs(tokensCol);
+        if (!tokensSnap.empty) return;
+
+        await Promise.all(
+          data.tokens.map((tk) => setDoc(doc(tokensCol, String(tk.id)), tk))
+        );
+
+        await updateDoc(pageRef, { tokens: deleteField() });
+      } catch (err) {
+        console.error('Error migrating legacy tokens:', err);
+      }
+    };
+
+    migrateTokens();
+  }, [pageId]);
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
