@@ -52,6 +52,7 @@ import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
+import { applyDamage, parseDieValue } from '../utils/damage';
 import {
   doc,
   updateDoc,
@@ -63,6 +64,8 @@ import {
   where,
   onSnapshot,
   runTransaction,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
@@ -4664,33 +4667,119 @@ const MapCanvas = ({
         />
       )}
       {attackResult && (
-        <DefenseModal
-          isOpen
-          attacker={tokens.find(t => t.id === attackSourceId)}
-          target={tokens.find(t => t.id === attackTargetId)}
-          distance={attackLine ? Math.round(Math.hypot(
-            pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
-            pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
-          )) : 0}
-          attackResult={attackResult}
-          pageId={pageId}
-          armas={armas}
-          poderesCatalog={habilidades}
-          onClose={async () => {
-            if (attackRequestId) {
-              try {
-                await deleteDoc(doc(db, 'attacks', attackRequestId));
-              } catch (err) {
-                console.error(err);
+          <DefenseModal
+            isOpen
+            attacker={tokens.find(t => t.id === attackSourceId)}
+            target={tokens.find(t => t.id === attackTargetId)}
+            distance={attackLine ? Math.round(Math.hypot(
+              pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
+              pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
+            )) : 0}
+            attackResult={attackResult}
+            pageId={pageId}
+            armas={armas}
+            poderesCatalog={habilidades}
+            onClose={async (res) => {
+              if (!res && attackResult) {
+                try {
+                  let alreadyCompleted = false;
+                  if (attackRequestId) {
+                    try {
+                      const snap = await getDoc(doc(db, 'attacks', attackRequestId));
+                      if (snap.exists() && snap.data().completed) alreadyCompleted = true;
+                    } catch {}
+                  }
+                  if (!alreadyCompleted) {
+                    const target = tokens.find(t => t.id === attackTargetId);
+                    if (target) {
+                      let lost = { armadura: 0, postura: 0, vida: 0 };
+                      let updatedSheet = null;
+                      if (target.tokenSheetId) {
+                        const stored = localStorage.getItem('tokenSheets');
+                        if (stored) {
+                          const sheets = JSON.parse(stored);
+                          const sheet = sheets[target.tokenSheetId];
+                          if (sheet) {
+                            let updated = sheet;
+                            let remaining = attackResult.total;
+                            ['postura', 'armadura', 'vida'].forEach((stat) => {
+                              const resDam = applyDamage(updated, remaining, stat);
+                              remaining = resDam.remaining;
+                              updated = resDam.sheet;
+                              lost[stat] = resDam.blocks;
+                            });
+                            sheets[updated.id] = updated;
+                            localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+                            window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
+                            saveTokenSheet(updated);
+                            updatedSheet = updated;
+                          }
+                        }
+                      }
+                      for (const stat of ['postura', 'armadura', 'vida']) {
+                        if (lost[stat] > 0) {
+                          const anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
+                          try {
+                            let effectivePageId = pageId;
+                            try {
+                              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                              if (visibilityDoc.exists()) {
+                                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+                              }
+                            } catch (err) {
+                              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                            }
+                            await addDoc(collection(db, 'damageEvents'), {
+                              ...anim,
+                              pageId: effectivePageId,
+                              timestamp: serverTimestamp(),
+                            });
+                          } catch {}
+                        }
+                      }
+                      let msgs = [];
+                      try {
+                        const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+                        if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
+                      } catch {}
+                      const targetName = target.customName || target.name || 'Defensor';
+                      const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
+                      const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
+                      const diff = attackResult.total;
+                      const totalLost = lost.armadura + lost.postura + lost.vida;
+                      const noDamageText = `${targetName} resiste el daño. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                      const damageText = `${targetName} no se defendió. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                      msgs.push({
+                        id: nanoid(),
+                        author: targetName,
+                        text: totalLost === 0 ? noDamageText : damageText,
+                      });
+                      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
+                      if (attackRequestId) {
+                        try {
+                          await updateDoc(doc(db, 'attacks', attackRequestId), { completed: true, auto: true });
+                        } catch {}
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
               }
-              setAttackRequestId(null);
-            }
-            setAttackTargetId(null);
-            setAttackLine(null);
-            setAttackResult(null);
-            setAttackReady(false);
-          }}
-        />
+              if (attackRequestId) {
+                try {
+                  await deleteDoc(doc(db, 'attacks', attackRequestId));
+                } catch (err) {
+                  console.error(err);
+                }
+                setAttackRequestId(null);
+              }
+              setAttackTargetId(null);
+              setAttackLine(null);
+              setAttackResult(null);
+              setAttackReady(false);
+            }}
+          />
       )}
 
       {/* Indicador de modo simulación */}
