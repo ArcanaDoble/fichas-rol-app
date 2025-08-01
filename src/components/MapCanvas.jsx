@@ -2065,41 +2065,42 @@ const MapCanvas = ({
     calculatePlayerVisionPolygons();
   }, [calculatePlayerVisionPolygons]);
 
+  // Estructura memoizada con las celdas ocupadas por muros
+  const blockedCells = useMemo(() => {
+    const cells = new Set();
 
+    walls.forEach(wall => {
+      if (wall.door !== 'closed' && wall.door !== 'secret') return;
 
-  // Función para detectar colisiones con muros (independiente de la capa)
-  const isPositionBlocked = useCallback((x, y) => {
-    // Verificar todos los muros, independientemente de la capa
-    return walls.some(wall => {
-      // Solo bloquear si la puerta está cerrada o secreta
-      if (wall.door !== 'closed' && wall.door !== 'secret') return false;
-      
-      // Obtener las coordenadas del muro
       const [x1, y1, x2, y2] = wall.points;
       const wallX = wall.x;
       const wallY = wall.y;
-      
-      // Calcular el área ocupada por el muro
+
       const minX = wallX + Math.min(x1, x2);
       const maxX = wallX + Math.max(x1, x2);
       const minY = wallY + Math.min(y1, y2);
       const maxY = wallY + Math.max(y1, y2);
-      
-      // Convertir coordenadas del muro a celdas de la cuadrícula
+
       const wallCellMinX = Math.floor(minX / effectiveGridSize);
       const wallCellMaxX = Math.floor(maxX / effectiveGridSize);
       const wallCellMinY = Math.floor(minY / effectiveGridSize);
       const wallCellMaxY = Math.floor(maxY / effectiveGridSize);
-      
-      // Verificar si la posición del token intersecta con el muro
-      return (
-        x >= wallCellMinX && 
-        x <= wallCellMaxX &&
-        y >= wallCellMinY && 
-        y <= wallCellMaxY
-      );
+
+      for (let cx = wallCellMinX; cx <= wallCellMaxX; cx++) {
+        for (let cy = wallCellMinY; cy <= wallCellMaxY; cy++) {
+          cells.add(`${cx},${cy}`);
+        }
+      }
     });
+
+    return cells;
   }, [walls, effectiveGridSize]);
+
+  // Función para detectar colisiones con muros (independiente de la capa)
+  const isPositionBlocked = useCallback(
+    (x, y) => blockedCells.has(`${x},${y}`),
+    [blockedCells]
+  );
 
   // Función para conectar automáticamente extremos de muros cercanos
   const snapWallEndpoints = useCallback((walls) => {

@@ -1404,8 +1404,7 @@ src/
 
 **Resumen de cambios v2.4.33:**
 
-- El guardado de tokens utiliza un temporizador ajustable (150–300 ms).
-- Se envía la última posición de los tokens al soltar la tecla.
+- Optimización del bloqueo de posiciones en el mapa usando un `Set` memoizado de celdas ocupadas por muros.
 
 ## 🔄 Historial de cambios previos
 
