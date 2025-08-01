@@ -1200,6 +1200,10 @@ src/
 - ✅ La defensa se resuelve automáticamente si nadie responde
 - ✅ Si no hay armas o poderes disponibles, el defensor puede introducir un valor manual de defensa
 
+**Resumen de cambios v2.4.34:**
+
+- ✅ Los tokens se mueven de forma continua al mantener pulsadas las teclas WASD y los cambios se sincronizan con Firebase.
+
 **Resumen de cambios v2.4.35:**
 
 - ✅ El daño se calcula como `floor(daño / atributo)` y se aplica primero a la postura, luego a la armadura y finalmente a la vida

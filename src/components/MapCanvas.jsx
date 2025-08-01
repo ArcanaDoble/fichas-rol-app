@@ -946,6 +946,7 @@ const MapCanvas = ({
   const gridOffsetXRef = useRef(gridOffsetX);
   const gridOffsetYRef = useRef(gridOffsetY);
   const gridSizeRef = useRef(gridSize);
+  const pressedKeys = useRef(new Set());
 
   // Actualizar refs cuando cambien los valores
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -955,6 +956,8 @@ const MapCanvas = ({
   useEffect(() => { gridOffsetXRef.current = gridOffsetX; }, [gridOffsetX]);
   useEffect(() => { gridOffsetYRef.current = gridOffsetY; }, [gridOffsetY]);
   const [selectedId, setSelectedId] = useState(null);
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
   const [dragShadow, setDragShadow] = useState(null);
@@ -1182,8 +1185,8 @@ const MapCanvas = ({
   }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-  const handleTokensChange = useCallback((newTokens, options = {}) => {
-    if (options.localOnly) {
+  const handleTokensChange = useCallback((newTokens, { localOnly = false } = {}) => {
+    if (localOnly) {
       onTokensChange(newTokens);
       return;
     }
@@ -1224,6 +1227,9 @@ const MapCanvas = ({
       onTokensChange(newTokens);
     }
   }, [isPlayerView, playerName, tokens, syncManager, onTokensChange]);
+
+  const handleTokensChangeRef = useRef(handleTokensChange);
+  useEffect(() => { handleTokensChangeRef.current = handleTokensChange; }, [handleTokensChange]);
 
   // Sincronización manual: sin listeners automáticos de fichas
 
@@ -3484,59 +3490,27 @@ const MapCanvas = ({
 
       // Mover token individual seleccionado
       if (selectedId == null) return;
-      const index = tokens.findIndex((t) => t.id === selectedId);
-      if (index === -1) return;
+      const key = e.key.toLowerCase();
 
-      // Validación de permisos para jugadores
-      if (isPlayerView && tokens[index].controlledBy !== playerName) {
-        return; // No permitir movimiento si no controla el token
-      }
-
-      let { x, y } = tokens[index];
-      let newX = x;
-      let newY = y;
-
-      switch (e.key.toLowerCase()) {
-        case 'w':
-          newY = y - 1;
-          break;
-        case 's':
-          newY = y + 1;
-          break;
-        case 'a':
-          newX = x - 1;
-          break;
-        case 'd':
-          newX = x + 1;
-          break;
-        case 'r': {
-          // Validación de permisos para jugadores ya hecha arriba
-          const delta = e.shiftKey ? -90 : 90;
-          const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
-          const rotated = tokens.map((t) =>
-            t.id === selectedId ? { ...t, angle: updatedAngle } : t
-          );
-          handleTokensChange(rotated);
-          return;
-        }
-        default:
-          return;
-      }
-
-      // Aplicar límites del mapa
-      newX = Math.max(0, Math.min(mapWidth - 1, newX));
-      newY = Math.max(0, Math.min(mapHeight - 1, newY));
-
-      // Verificar colisiones con muros (independiente de la capa)
-      if (isPositionBlocked(newX, newY)) {
-        // Si la posición está bloqueada, no mover el token
+      if (["w", "a", "s", "d"].includes(key)) {
+        pressedKeys.current.add(key);
+        e.preventDefault();
         return;
       }
 
-      const updated = tokens.map((t) =>
-        t.id === selectedId ? { ...t, x: newX, y: newY } : t
-      );
-      handleTokensChange(updated);
+      if (key === "r") {
+        const index = tokens.findIndex((t) => t.id === selectedId);
+        if (index === -1) return;
+        if (isPlayerView && tokens[index].controlledBy !== playerName) {
+          return; // No permitir rotación si no controla el token
+        }
+        const delta = e.shiftKey ? -90 : 90;
+        const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
+        const rotated = tokens.map((t) =>
+          t.id === selectedId ? { ...t, angle: updatedAngle } : t
+        );
+        handleTokensChange(rotated);
+      }
     },
     [
       selectedId,
@@ -3572,18 +3546,14 @@ const MapCanvas = ({
       clampToMapBounds,
       containerSize,
       mousePosition,
+      isPlayerView,
+      playerName,
     ]
   );
 
-  const handleKeyUp = useCallback(
-    (e) => {
-      if (!syncManager) return;
-      if (["w", "a", "s", "d"].includes(e.key.toLowerCase())) {
-        syncManager.saveToFirebase('tokens', tokens);
-      }
-    },
-    [syncManager, tokens]
-  );
+  const handleKeyUp = useCallback((e) => {
+    pressedKeys.current.delete(e.key.toLowerCase());
+  }, []);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -3594,6 +3564,46 @@ const MapCanvas = ({
     window.addEventListener('keyup', handleKeyUp);
     return () => window.removeEventListener('keyup', handleKeyUp);
   }, [handleKeyUp]);
+
+  useEffect(() => {
+    let frameId;
+    const step = () => {
+      const keys = pressedKeys.current;
+      const selId = selectedIdRef.current;
+      const tokens = tokensRef.current;
+      if (keys.size > 0 && selId != null) {
+        const index = tokens.findIndex((t) => t.id === selId);
+        if (index !== -1) {
+          const token = tokens[index];
+          if (!isPlayerView || token.controlledBy === playerName) {
+            let { x, y } = token;
+            let newX = x;
+            let newY = y;
+            if (keys.has('w')) newY -= 1;
+            if (keys.has('s')) newY += 1;
+            if (keys.has('a')) newX -= 1;
+            if (keys.has('d')) newX += 1;
+            newX = Math.max(0, Math.min(mapWidth - 1, newX));
+            newY = Math.max(0, Math.min(mapHeight - 1, newY));
+            if (!isPositionBlocked(newX, newY) && (newX !== x || newY !== y)) {
+              const updated = tokens.map((t) =>
+                t.id === selId ? { ...t, x: newX, y: newY } : t
+              );
+              if (isPlayerView) {
+                handleTokensChangeRef.current(updated, { localOnly: true });
+                syncManager?.saveToFirebase('tokens', updated);
+              } else {
+                handleTokensChangeRef.current(updated);
+              }
+            }
+          }
+        }
+      }
+      frameId = requestAnimationFrame(step);
+    };
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
+  }, [mapWidth, mapHeight, isPositionBlocked, syncManager, isPlayerView, playerName]);
 
   // Listener global para tracking de posición del mouse
   useEffect(() => {
