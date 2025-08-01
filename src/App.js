@@ -488,6 +488,7 @@ function App() {
   const pagesLoadedRef = useRef(false);
   const checkedPagesRef = useRef({});
   const prevTokensRef = useRef([]);
+  const canvasTokensRef = useRef([]);
   const isLocalTokenEdit = useRef(false);
   const isRemoteTokenUpdate = useRef(false);
   const prevLinesRef = useRef([]);
@@ -687,6 +688,29 @@ function App() {
             playerVisiblePageId,
             pageData.tokens || []
           );
+
+          const localTokens = canvasTokensRef.current;
+          const remoteMap = new Map(tokensWithIds.map((t) => [t.id, t]));
+          const mergedTokens = [];
+
+          localTokens.forEach((lt) => {
+            const rt = remoteMap.get(lt.id);
+            if (rt) {
+              if (rt.controlledBy === playerName) {
+                mergedTokens.push({ ...rt, x: lt.x, y: lt.y });
+              } else {
+                mergedTokens.push(rt);
+              }
+              remoteMap.delete(lt.id);
+            } else {
+              mergedTokens.push(lt);
+            }
+          });
+
+          remoteMap.forEach((rt) => mergedTokens.push(rt));
+
+          isRemoteTokenUpdate.current = true;
+
           // Actualizar la página en el array de páginas con los datos completos
           setPages((prevPages) => {
             const pageIndex = prevPages.findIndex(
@@ -696,7 +720,7 @@ function App() {
               const updatedPages = [...prevPages];
               updatedPages[pageIndex] = {
                 ...updatedPages[pageIndex],
-                tokens: tokensWithIds,
+                tokens: mergedTokens,
                 lines: pageData.lines || [],
                 walls: pageData.walls || [],
                 texts: pageData.texts || [],
@@ -714,7 +738,7 @@ function App() {
           });
 
           // Actualizar también los estados del canvas
-          setCanvasTokens(tokensWithIds);
+          setCanvasTokens(mergedTokens);
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -726,7 +750,7 @@ function App() {
     );
 
     return () => unsubscribe();
-  }, [playerVisiblePageId, userType]);
+  }, [playerVisiblePageId, userType, playerName]);
 
   // Listener en tiempo real para la página actual en modo máster
   useEffect(() => {
@@ -973,6 +997,10 @@ function App() {
       saveTokens();
     }, 20);
   }, [canvasTokens, currentPage]);
+
+  useEffect(() => {
+    canvasTokensRef.current = canvasTokens;
+  }, [canvasTokens]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
