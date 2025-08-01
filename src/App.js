@@ -488,6 +488,7 @@ function App() {
   const pagesLoadedRef = useRef(false);
   const checkedPagesRef = useRef({});
   const prevTokensRef = useRef([]);
+  const canvasTokensRef = useRef([]);
   const isLocalTokenEdit = useRef(false);
   const isRemoteTokenUpdate = useRef(false);
   const prevLinesRef = useRef([]);
@@ -715,7 +716,6 @@ function App() {
             }
             return prevPages;
           });
-
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -1028,6 +1028,10 @@ function App() {
       saveTokens();
     }, 20);
   }, [canvasTokens, currentPage]);
+
+  useEffect(() => {
+    canvasTokensRef.current = canvasTokens;
+  }, [canvasTokens]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
