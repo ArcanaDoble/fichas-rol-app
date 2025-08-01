@@ -1416,6 +1416,11 @@ src/
 
 - Los tokens controlados por el jugador conservan su posición local al sincronizarse, evitando guardados innecesarios.
 
+**Resumen de cambios v2.4.36:**
+
+- Las animaciones de daño duran ahora 10 s.
+- Los números de daño duplican su tamaño para mayor legibilidad.
+
 ## 🔄 Historial de cambios previos
 
 <details>

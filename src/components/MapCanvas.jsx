@@ -1908,7 +1908,7 @@ const MapCanvas = ({
 
         setTimeout(() => {
           setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-        }, 7000);
+        }, 10000);
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
       }
@@ -1924,7 +1924,7 @@ const MapCanvas = ({
       const current = tokensRef.current;
       if (!current.find((t) => t.id === tokenId)) return;
       const startOpacity = 0.5;
-      const duration = 7000;
+      const duration = 10000;
 
       const existing = damageTimersRef.current[tokenId];
       if (existing && existing.raf) {
@@ -1991,7 +1991,7 @@ const MapCanvas = ({
           } catch (err) {
             console.error('Error eliminando evento de daño:', err);
           }
-        }, 7000);
+        }, 10000);
       });
     });
     return () => unsub();
@@ -4568,14 +4568,14 @@ const MapCanvas = ({
                   key={p.id}
                   initial={{ opacity: 1, y: 0 }}
                   animate={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 7 }}
+                  transition={{ duration: 10 }}
                   style={{
                     position: 'absolute',
                     left: x + offset,
                     top: y,
                     transform: 'translate(-50%, -100%)',
                     color,
-                    fontSize: 20,
+                    fontSize: 40,
                     fontWeight: 'bold',
                     textShadow: '0 0 2px #000',
                   }}
