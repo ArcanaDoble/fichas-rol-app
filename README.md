@@ -1406,6 +1406,10 @@ src/
 
 - Optimización del bloqueo de posiciones en el mapa usando un `Set` memoizado de celdas ocupadas por muros.
 
+**Resumen de cambios v2.4.34:**
+
+- Los tokens controlados por el jugador conservan su posición local al sincronizarse, evitando guardados innecesarios.
+
 ## 🔄 Historial de cambios previos
 
 <details>
