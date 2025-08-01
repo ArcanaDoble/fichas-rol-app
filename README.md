@@ -1407,6 +1407,11 @@ src/
 
 - Optimización del bloqueo de posiciones en el mapa usando un `Set` memoizado de celdas ocupadas por muros.
 
+**Resumen de cambios v2.4.35:**
+
+- Los tokens almacenados en el campo `tokens` se migran automáticamente a la subcolección `tokens` de cada página al iniciar la aplicación.
+- Se incluye el script `scripts/migrateTokens.mjs` para ejecutar la migración en colecciones existentes.
+
 **Resumen de cambios v2.4.34:**
 
 - Los tokens controlados por el jugador conservan su posición local al sincronizarse, evitando guardados innecesarios.
