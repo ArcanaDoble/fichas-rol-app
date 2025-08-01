@@ -1402,6 +1402,10 @@ src/
 
 - Debounce unificado a 20 ms para el guardado de tokens tanto de jugadores como del máster.
 
+**Resumen de cambios v2.4.33:**
+
+- Optimización del bloqueo de posiciones en el mapa usando un `Set` memoizado de celdas ocupadas por muros.
+
 ## 🔄 Historial de cambios previos
 
 <details>
