@@ -6,7 +6,6 @@ import {
   rollExpression,
   parseAndRollFormula,
   rollExpressionCritical,
-  parseAndRollFormulaCritical,
 } from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -216,7 +215,7 @@ const DefenseModal = ({
     try {
       let result;
       if (hasCritical) {
-        const baseRes = parseAndRollFormulaCritical(baseFormula);
+        const baseRes = rollExpressionCritical(baseFormula);
         const attrRes = attrDice ? parseAndRollFormula(attrDice) : { total: 0, details: [] };
         result = {
           formula,

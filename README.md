@@ -178,6 +178,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Corrección: los buffs de Postura solo cuentan para la resistencia en la ficha de Álvaro.
 
+**Resumen de cambios v2.2.80:**
+
+- La defensa personalizada se respeta aunque el arma o poder tenga rasgo crítico.
+- Se garantiza un único evento de contraataque y se añade la prueba correspondiente.
+
 **Resumen de cambios v2.2.7:**
 
 - Se corrige la penalización de Postura para que otras fichas ignoren el buff al calcular la resistencia.
