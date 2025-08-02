@@ -39,6 +39,7 @@ import {
   saveTokenSheet,
   ensureSheetDefaults,
   updateLocalTokenSheet,
+  mergeTokens,
 } from '../utils/token';
 import TokenBars from './TokenBars';
 import LoadingSpinner from './LoadingSpinner';
@@ -1139,9 +1140,8 @@ const MapCanvas = ({
       walls: null,
       texts: null,
     };
-
+    let pendingTokenChanges = [];
     const prevData = {
-      tokens: [],
       lines: [],
       walls: [],
       texts: [],
@@ -1150,56 +1150,57 @@ const MapCanvas = ({
     const saveToFirebase = async (type, data) => {
       if (!pageId || !isPlayerView) return;
 
-      // Verificar si hay cambios reales
+      if (type === 'tokens') {
+        if (!Array.isArray(data) || data.length === 0) return;
+
+        pendingTokenChanges = mergeTokens(pendingTokenChanges, data);
+
+        if (saveTimeouts.tokens) {
+          clearTimeout(saveTimeouts.tokens);
+        }
+
+        saveTimeouts.tokens = setTimeout(async () => {
+          try {
+            const tokensRef = collection(db, 'pages', pageId, 'tokens');
+            const filtered = pendingTokenChanges.filter(
+              (tk) => tk._deleted || tk.controlledBy === playerName
+            );
+
+            await Promise.all(
+              filtered.map((tk) =>
+                tk._deleted
+                  ? deleteDoc(doc(tokensRef, String(tk.id)))
+                  : setDoc(doc(tokensRef, String(tk.id)), tk)
+              )
+            );
+
+            console.log(
+              `✅ Jugador ${playerName} guardó tokens (${filtered.length} cambios)`,
+              new Date().toISOString()
+            );
+            pendingTokenChanges = [];
+          } catch (error) {
+            console.error('Error guardando tokens para jugador:', error);
+          }
+        }, saveDelayRef.current);
+        return;
+      }
+
+      // Verificar si hay cambios reales para otros tipos
       if (deepEqual(data, prevData[type])) return;
 
-      // Limpiar timeout anterior
       if (saveTimeouts[type]) {
         clearTimeout(saveTimeouts[type]);
       }
 
-      // Debouncing: esperar el tiempo configurado antes de guardar
       saveTimeouts[type] = setTimeout(async () => {
         try {
-          // Validaciones de seguridad para jugadores
-          let filteredData = data;
-
-          if (type === 'tokens') {
-            // Jugadores solo pueden modificar tokens que controlan
-            filteredData = data.filter(
-              (token) => token.controlledBy === playerName
-            );
-
-            const tokensRef = collection(db, 'pages', pageId, 'tokens');
-
-            const prevTokens = prevData[type] || [];
-            const tokensToDelete = prevTokens.filter(
-              (t) => !filteredData.some((f) => String(f.id) === String(t.id))
-            );
-
-            await Promise.all([
-              ...filteredData.map((tk) =>
-                setDoc(doc(tokensRef, String(tk.id)), tk)
-              ),
-              ...tokensToDelete.map((tk) =>
-                deleteDoc(doc(tokensRef, String(tk.id)))
-              ),
-            ]);
-
-            prevData[type] = filteredData;
-            console.log(
-              `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`
-            );
-            return;
-          }
-
-          // Actualizar referencia previa
+          const filteredData = data;
           prevData[type] = filteredData;
-
-          // Guardar en Firebase
           await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
           console.log(
-            `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`
+            `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`,
+            new Date().toISOString()
           );
         } catch (error) {
           console.error(`Error guardando ${type} para jugador:`, error);
@@ -1211,48 +1212,55 @@ const MapCanvas = ({
   }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-  const handleTokensChange = useCallback((newTokens, options = {}) => {
-    if (options.localOnly) {
-      onTokensChange(newTokens);
-      return;
-    }
-    if (isPlayerView) {
-      // Para jugadores: solo permitir cambios en tokens que controlan
-      // Mantener todos los tokens existentes y solo actualizar los que el jugador puede modificar
-      const updatedTokens = tokens.map(existingToken => {
-        // Buscar si este token tiene una actualización en newTokens
-        const updatedToken = newTokens.find(t => t.id === existingToken.id);
-
-        if (updatedToken) {
-          // Verificar si el jugador puede modificar este token
-          if (existingToken.controlledBy === playerName) {
-            return updatedToken; // Permitir la actualización
-          } else {
-            return existingToken; // Mantener el token original (no permitir cambios)
-          }
-        }
-
-        return existingToken; // Mantener tokens que no fueron modificados
-      });
-
-      // Agregar tokens nuevos solo si el jugador los controla
-      const newTokensToAdd = newTokens.filter(newToken => {
-        const isNewToken = !tokens.find(t => t.id === newToken.id);
-        return isNewToken && newToken.controlledBy === playerName;
-      });
-
-      const finalTokens = [...updatedTokens, ...newTokensToAdd];
-
-      // Usar syncManager para guardar en Firebase Y actualizar estado local
-      if (syncManager) {
-        syncManager.saveToFirebase('tokens', finalTokens);
+  const diffTokens = (prev, next) => {
+    const prevMap = new Map(prev.map((t) => [t.id, t]));
+    const changed = [];
+    next.forEach((tk) => {
+      const old = prevMap.get(tk.id);
+      if (!old) {
+        changed.push(tk);
+      } else if (!deepEqual(old, tk)) {
+        changed.push(tk);
       }
-      onTokensChange(finalTokens);
-    } else {
-      // Para Master, usar el flujo normal
-      onTokensChange(newTokens);
-    }
-  }, [isPlayerView, playerName, tokens, syncManager, onTokensChange]);
+      prevMap.delete(tk.id);
+    });
+    prevMap.forEach((tk) => {
+      changed.push({ id: tk.id, _deleted: true });
+    });
+    return changed;
+  };
+
+  const handleTokensChange = useCallback(
+    (newTokens, options = {}) => {
+      const prev = tokensRef.current;
+      const changedTokens = diffTokens(prev, newTokens);
+      if (changedTokens.length === 0) return;
+
+      if (options.localOnly) {
+        console.log('[tokens] cambios locales', new Date().toISOString(), changedTokens);
+        onTokensChange((prevTokens) => mergeTokens(prevTokens, changedTokens));
+        return;
+      }
+
+      if (isPlayerView) {
+        const allowed = changedTokens.filter((tk) => {
+          const original = prev.find((pt) => pt.id === tk.id);
+          const owner = tk.controlledBy || original?.controlledBy;
+          return tk._deleted ? original?.controlledBy === playerName : owner === playerName;
+        });
+        if (allowed.length === 0) return;
+        console.log('[tokens] cambios permitidos', new Date().toISOString(), allowed);
+        if (syncManager) {
+          syncManager.saveToFirebase('tokens', allowed);
+        }
+        onTokensChange((prevTokens) => mergeTokens(prevTokens, allowed));
+      } else {
+        console.log('[tokens] cambios', new Date().toISOString(), changedTokens);
+        onTokensChange((prevTokens) => mergeTokens(prevTokens, changedTokens));
+      }
+    },
+    [isPlayerView, playerName, onTokensChange, syncManager]
+  );
 
   // Sincronización manual: sin listeners automáticos de fichas
 
@@ -3604,25 +3612,10 @@ const MapCanvas = ({
     ]
   );
 
-  const handleKeyUp = useCallback(
-    (e) => {
-      if (!syncManager) return;
-      if (["w", "a", "s", "d"].includes(e.key.toLowerCase())) {
-        syncManager.saveToFirebase('tokens', tokens);
-      }
-    },
-    [syncManager, tokens]
-  );
-
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
-
-  useEffect(() => {
-    window.addEventListener('keyup', handleKeyUp);
-    return () => window.removeEventListener('keyup', handleKeyUp);
-  }, [handleKeyUp]);
 
   // Listener global para tracking de posición del mouse
   useEffect(() => {
