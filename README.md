@@ -1379,6 +1379,9 @@ src/
 
 - Las fichas del mapa se sincronizan parcialmente enviando solo los tokens modificados.
 - Las actualizaciones locales fusionan los cambios en lugar de reemplazar todo el arreglo.
+**Resumen de cambios v2.4.74:**
+
+- Se añade prueba de movimiento concurrente de tokens para asegurar que ambas posiciones finales persisten sin revertirse.
 
 **Resumen de cambios v2.4.25:**
 
