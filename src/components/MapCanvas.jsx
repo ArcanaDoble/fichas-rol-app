@@ -51,7 +51,7 @@ import DoorCheckModal from './DoorCheckModal';
 import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
-import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
+import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import {
@@ -1114,7 +1114,6 @@ const MapCanvas = ({
   
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
-  const [combinedLight, setCombinedLight] = useState([]);
 
   // Estados para el sistema de visión de jugadores
   const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
@@ -2027,7 +2026,7 @@ const MapCanvas = ({
       if (token.light && token.light.enabled) {
         const maxRadius = Math.max(
           token.light.radius || 0,
-          token.light.dimRadius || 0
+          token.light.dimRadius ?? 0
         );
         if (maxRadius > 0) {
           const origin = {
@@ -2052,11 +2051,6 @@ const MapCanvas = ({
     });
 
     setLightPolygons(newPolygons);
-
-    // Combinar todos los polígonos de luz en uno solo
-    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
-    const combined = combineVisibilityPolygons(allPolygons);
-    setCombinedLight(combined);
   }, [tokens, walls, effectiveGridSize]);
 
   // Recalcular polígonos cuando cambien tokens o muros
@@ -4241,15 +4235,15 @@ const MapCanvas = ({
               {tokens.filter(token =>
                 token.light &&
                 token.light.enabled &&
-                (token.light.radius > 0 || (token.light.dimRadius || 0) > 0)
+                (token.light.radius > 0 || (token.light.dimRadius ?? 0) > 0)
               ).map(token => {
                 const centerX = (token.x + token.w / 2) * effectiveGridSize;
                 const centerY = (token.y + token.h / 2) * effectiveGridSize;
                 const brightRadius = token.light.radius * effectiveGridSize;
-                const dimRadius = (token.light.dimRadius || token.light.radius) * effectiveGridSize;
+                const outerRadius = (token.light.dimRadius > 0 ? token.light.dimRadius : token.light.radius) * effectiveGridSize;
                 const color = token.light.color || '#ffa500';
                 const opacity = Math.max(0.2, token.light.opacity || 0.4);
-                const brightRatio = dimRadius > 0 ? brightRadius / dimRadius : 1;
+                const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
                 const gradientStops = [
                   0, hexToRgba(color, opacity * 0.8),
                   brightRatio * 0.3, hexToRgba(color, opacity * 0.6),
@@ -4278,7 +4272,7 @@ const MapCanvas = ({
                         fillRadialGradientStartPoint={{ x: centerX, y: centerY }}
                         fillRadialGradientEndPoint={{ x: centerX, y: centerY }}
                         fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={dimRadius}
+                        fillRadialGradientEndRadius={outerRadius}
                         fillRadialGradientColorStops={gradientStops}
                         listening={false}
                         perfectDrawEnabled={false}
@@ -4292,11 +4286,11 @@ const MapCanvas = ({
                       <Circle
                         x={centerX}
                         y={centerY}
-                        radius={dimRadius}
+                        radius={outerRadius}
                         fillRadialGradientStartPoint={{ x: 0, y: 0 }}
                         fillRadialGradientEndPoint={{ x: 0, y: 0 }}
                         fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={dimRadius}
+                        fillRadialGradientEndRadius={outerRadius}
                         fillRadialGradientColorStops={gradientStops}
                         listening={false}
                       />
@@ -4326,17 +4320,81 @@ const MapCanvas = ({
                   listening={false}
                 />
 
-                {/* Polígono combinado que revela las áreas iluminadas - solo si hay luz */}
-                {combinedLight.length >= 3 && (
-                  <Line
-                    points={combinedLight.flatMap(point => [point.x, point.y])}
-                    closed={true}
-                    fill="rgba(0, 0, 0, 1)"
-                    globalCompositeOperation="destination-out"
-                    listening={false}
-                    perfectDrawEnabled={false}
-                  />
-                )}
+                {/* Reducir la oscuridad alrededor de cada token con luz */}
+                {tokens
+                  .filter(
+                    (token) =>
+                      token.light &&
+                      token.light.enabled &&
+                      (token.light.radius > 0 || (token.light.dimRadius ?? 0) > 0)
+                  )
+                  .map((token) => {
+                    const centerX = (token.x + token.w / 2) * effectiveGridSize;
+                    const centerY = (token.y + token.h / 2) * effectiveGridSize;
+                    const brightRadius = token.light.radius * effectiveGridSize;
+                    const outerRadius =
+                      (token.light.dimRadius > 0
+                        ? token.light.dimRadius
+                        : token.light.radius) * effectiveGridSize;
+                    const brightRatio =
+                      outerRadius > 0 ? brightRadius / outerRadius : 1;
+                    const lightData = lightPolygons[token.id];
+                    const hasWallBlocking =
+                      lightData &&
+                      lightData.polygon &&
+                      lightData.polygon.length >= 3;
+                    const stops = [
+                      0,
+                      'rgba(0,0,0,1)',
+                      brightRatio,
+                      'rgba(0,0,0,1)',
+                      1,
+                      'rgba(0,0,0,0)'
+                    ];
+
+                    if (hasWallBlocking) {
+                      const points = [];
+                      lightData.polygon.forEach((point) => {
+                        points.push(point.x, point.y);
+                      });
+                      return (
+                        <Line
+                          key={`darkness-cut-${token.id}`}
+                          points={points}
+                          closed={true}
+                          fillRadialGradientStartPoint={{
+                            x: centerX,
+                            y: centerY,
+                          }}
+                          fillRadialGradientEndPoint={{
+                            x: centerX,
+                            y: centerY,
+                          }}
+                          fillRadialGradientStartRadius={0}
+                          fillRadialGradientEndRadius={outerRadius}
+                          fillRadialGradientColorStops={stops}
+                          globalCompositeOperation="destination-out"
+                          listening={false}
+                          perfectDrawEnabled={false}
+                        />
+                      );
+                    }
+                    return (
+                      <Circle
+                        key={`darkness-cut-${token.id}`}
+                        x={centerX}
+                        y={centerY}
+                        radius={outerRadius}
+                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientStartRadius={0}
+                        fillRadialGradientEndRadius={outerRadius}
+                        fillRadialGradientColorStops={stops}
+                        globalCompositeOperation="destination-out"
+                        listening={false}
+                      />
+                    );
+                  })}
               </Group>
             </Layer>
           )}

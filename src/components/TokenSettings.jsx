@@ -145,7 +145,7 @@ const TokenSettings = ({
   );
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
   const [dimLightRadius, setDimLightRadius] = useState(
-    token.light?.dimRadius || token.light?.radius || 5
+    token.light?.dimRadius ?? token.light?.radius ?? 5
   );
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
@@ -831,15 +831,12 @@ const TokenSettings = ({
                     </label>
                     <Input
                       type="number"
-                      min={lightRadius}
+                      min="0"
                       max="40"
                       value={dimLightRadius}
                       onChange={(e) =>
                         setDimLightRadius(
-                          Math.max(
-                            lightRadius,
-                            parseInt(e.target.value, 10) || lightRadius
-                          )
+                          Math.max(0, parseInt(e.target.value, 10) || 0)
                         )
                       }
                     />
