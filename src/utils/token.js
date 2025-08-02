@@ -3,6 +3,18 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import sanitize from './sanitize';
 
+export const mergeTokens = (prevTokens, changedTokens) => {
+  const map = new Map(prevTokens.map((t) => [t.id, t]));
+  changedTokens.forEach((tk) => {
+    if (tk._deleted) {
+      map.delete(tk.id);
+    } else {
+      map.set(tk.id, tk);
+    }
+  });
+  return Array.from(map.values());
+};
+
 export const createToken = (data = {}) => {
   const token = { notes: '', ...data, tokenSheetId: nanoid() };
   try {

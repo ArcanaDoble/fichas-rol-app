@@ -3182,10 +3182,13 @@ function App() {
             playerViewMode={true}
             simulatedPlayer={playerName}
             tokens={effectivePage?.tokens || []}
-            onTokensChange={(newTokens) => {
+            onTokensChange={(updater) => {
               const updatedPages = [...pages];
               if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].tokens = newTokens;
+                const prev = updatedPages[effectivePageIndex].tokens || [];
+                const next =
+                  typeof updater === 'function' ? updater(prev) : updater;
+                updatedPages[effectivePageIndex].tokens = next;
                 setPages(updatedPages);
               }
             }}
@@ -4926,8 +4929,10 @@ function App() {
               gridOffsetX={gridOffsetX}
               gridOffsetY={gridOffsetY}
               tokens={canvasTokens}
-              onTokensChange={(newTokens) => {
-                setCanvasTokens(newTokens);
+              onTokensChange={(updater) => {
+                setCanvasTokens((prev) =>
+                  typeof updater === 'function' ? updater(prev) : updater
+                );
                 isRemoteTokenUpdate.current = false;
                 isLocalTokenEdit.current = true;
               }}

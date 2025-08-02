@@ -1375,6 +1375,11 @@ src/
 - Las armas y armaduras personalizadas pueden crearse, editarse y eliminarse directamente en la aplicación, guardándose en Firebase.
 - El catálogo base sigue cargándose desde Google Sheets.
 
+**Resumen de cambios v2.4.73:**
+
+- Las fichas del mapa se sincronizan parcialmente enviando solo los tokens modificados.
+- Las actualizaciones locales fusionan los cambios en lugar de reemplazar todo el arreglo.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
