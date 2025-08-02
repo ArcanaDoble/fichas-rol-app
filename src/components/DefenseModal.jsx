@@ -155,35 +155,62 @@ const DefenseModal = ({
   const [speedCost, setSpeedCost] = useState(0);
   const [ingenioCost, setIngenioCost] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [disabledTraits, setDisabledTraits] = useState([]);
+
+  const toggleTrait = (trait) => {
+    setDisabledTraits((prev) =>
+      prev.includes(trait) ? prev.filter((t) => t !== trait) : [...prev, trait]
+    );
+  };
 
   const selectedItem = useMemo(
     () => [...weapons, ...powers].find((i) => i.nombre === choice),
     [choice, weapons, powers]
   );
 
-  const attrBonuses = useMemo(
-    () => parseAttrBonuses(selectedItem?.rasgos || []),
-    [selectedItem]
+  useEffect(() => {
+    setDisabledTraits([]);
+  }, [choice]);
+
+  const allTraits = selectedItem?.rasgos || [];
+  const activeTraits = useMemo(
+    () => allTraits.filter((t) => !disabledTraits.includes(t)),
+    [allTraits, disabledTraits]
   );
 
-  const specialTraits = useMemo(
+  const attrTraitStrings = useMemo(
     () =>
-      (selectedItem?.rasgos || []).filter((r) =>
-        r.toLowerCase().includes('crítico')
+      allTraits.filter((r) =>
+        r.toLowerCase().match(/(vigor|destreza|intelecto|voluntad)/)
       ),
-    [selectedItem]
+    [allTraits]
   );
 
-  const otherTraits = useMemo(
+  const attrTraitDetails = useMemo(
     () =>
-      (selectedItem?.rasgos || []).filter(
+      parseAttrBonuses(attrTraitStrings).map((b, i) => ({
+        ...b,
+        trait: attrTraitStrings[i],
+      })),
+    [attrTraitStrings]
+  );
+
+  const allSpecialTraits = useMemo(
+    () =>
+      allTraits.filter((r) => r.toLowerCase().includes('crítico')),
+    [allTraits]
+  );
+
+  const allOtherTraits = useMemo(
+    () =>
+      allTraits.filter(
         (r) =>
           !r
             .toLowerCase()
             .match(/(vigor|destreza|intelecto|voluntad)/)
           && !r.toLowerCase().includes('crítico')
       ),
-    [selectedItem]
+    [allTraits]
   );
 
   const hasEquip = useMemo(() => {
@@ -201,7 +228,10 @@ const DefenseModal = ({
     const item = [...weapons, ...powers].find((i) => i.nombre === choice);
     const itemDamage = item?.dano ?? item?.poder ?? '';
     const baseFormula = damage || parseDamage(itemDamage) || '1d20';
-    const attrDice = parseAttrBonuses(item?.rasgos || [])
+    const activeRasgos = (item?.rasgos || []).filter(
+      (t) => !disabledTraits.includes(t)
+    );
+    const attrDice = parseAttrBonuses(activeRasgos)
       .flatMap(({ attr, mult }) => {
         const die = sheet?.atributos?.[attr];
         if (!die) return [];
@@ -209,7 +239,7 @@ const DefenseModal = ({
       })
       .join(' + ');
     const formula = attrDice ? `${baseFormula} + ${attrDice}` : baseFormula;
-    const hasCritical = (item?.rasgos || []).some((r) =>
+    const hasCritical = activeRasgos.some((r) =>
       r.toLowerCase().includes('crítico')
     );
     try {
@@ -454,32 +484,55 @@ const DefenseModal = ({
                       Consumo: 🟡{speedCost}
                       {ingenioCost > 0 && <> {' '}🔵{ingenioCost}</>}
                     </p>
-                    {attrBonuses.length > 0 && (
+                    {attrTraitDetails.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
-                        {attrBonuses.map(({ attr, mult }) => (
-                          <span
-                            key={attr}
-                            className="mr-2"
-                            style={{ color: atributoColor[attr] }}
-                          >
-                            {attr} {sheet?.atributos?.[attr]}
-                            {mult > 1 ? ` x${mult}` : ''}
-                          </span>
-                        ))}
+                        {attrTraitDetails.map(({ attr, mult, trait }) => {
+                          const disabled = disabledTraits.includes(trait);
+                          return (
+                            <span
+                              key={trait}
+                              onClick={() => toggleTrait(trait)}
+                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
+                              style={{ color: disabled ? undefined : atributoColor[attr] }}
+                            >
+                              {attr} {sheet?.atributos?.[attr]}
+                              {mult > 1 ? ` x${mult}` : ''}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
-                    {specialTraits.length > 0 && (
+                    {allSpecialTraits.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
-                        {specialTraits.map((t, i) => (
-                          <span key={i} className="mr-2" style={{ color: specialTraitColor }}>
-                            {t}
-                          </span>
-                        ))}
+                        {allSpecialTraits.map((t, i) => {
+                          const disabled = disabledTraits.includes(t);
+                          return (
+                            <span
+                              key={i}
+                              onClick={() => toggleTrait(t)}
+                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
+                              style={{ color: specialTraitColor }}
+                            >
+                              {t}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
-                    {otherTraits.length > 0 && (
-                      <p className="text-sm text-gray-300 mt-1">
-                        Rasgos: {otherTraits.join(', ')}
+                    {allOtherTraits.length > 0 && (
+                      <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
+                        {allOtherTraits.map((t, i) => {
+                          const disabled = disabledTraits.includes(t);
+                          return (
+                            <span
+                              key={i}
+                              onClick={() => toggleTrait(t)}
+                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
+                            >
+                              {t}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
                   </>

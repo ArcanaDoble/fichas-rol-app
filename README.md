@@ -1383,6 +1383,10 @@ src/
 
 - Se añade prueba de movimiento concurrente de tokens para asegurar que ambas posiciones finales persisten sin revertirse.
 
+**Resumen de cambios v2.4.75:**
+
+- Ahora es posible desactivar los rasgos activos en los menús de ataque y defensa para que no afecten la tirada.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
