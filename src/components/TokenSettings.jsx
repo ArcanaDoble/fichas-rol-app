@@ -144,6 +144,9 @@ const TokenSettings = ({
     token.light?.enabled || false
   );
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
+  const [dimLightRadius, setDimLightRadius] = useState(
+    token.light?.dimRadius || token.light?.radius || 5
+  );
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
 
@@ -288,6 +291,7 @@ const TokenSettings = ({
         light: {
           enabled: lightEnabled,
           radius: lightRadius,
+          dimRadius: dimLightRadius,
           color: lightColor,
           opacity: lightOpacity,
         },
@@ -316,6 +320,7 @@ const TokenSettings = ({
     notes,
     lightEnabled,
     lightRadius,
+    dimLightRadius,
     lightColor,
     lightOpacity,
     visionEnabled,
@@ -347,6 +352,7 @@ const TokenSettings = ({
       light: {
         enabled: lightEnabled,
         radius: lightRadius,
+        dimRadius: dimLightRadius,
         color: lightColor,
         opacity: lightOpacity,
       },
@@ -377,6 +383,7 @@ const TokenSettings = ({
     tintOpacity,
     lightEnabled,
     lightRadius,
+    dimLightRadius,
     visionEnabled, // Cambio inmediato para visión
   ]);
 
@@ -815,6 +822,25 @@ const TokenSettings = ({
                       value={lightRadius}
                       onChange={(e) =>
                         setLightRadius(parseInt(e.target.value, 10) || 1)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">
+                      Radio de luz tenue (casillas)
+                    </label>
+                    <Input
+                      type="number"
+                      min={lightRadius}
+                      max="40"
+                      value={dimLightRadius}
+                      onChange={(e) =>
+                        setDimLightRadius(
+                          Math.max(
+                            lightRadius,
+                            parseInt(e.target.value, 10) || lightRadius
+                          )
+                        )
                       }
                     />
                   </div>
