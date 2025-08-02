@@ -303,7 +303,25 @@ const DefenseModal = ({
         } catch {}
       } else {
         const id = diff < 0 ? target.id : attacker.id;
-        const type = diff > 0 ? 'counter' : undefined;
+        if (diff > 0) {
+          const anim = { tokenId: attacker.id, type: 'counter', ts: Date.now() };
+          try {
+            let effectivePageId = pageId;
+            try {
+              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+              if (visibilityDoc.exists()) {
+                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+              }
+            } catch (err) {
+              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+            }
+            addDoc(collection(db, 'damageEvents'), {
+              ...anim,
+              pageId: effectivePageId,
+              timestamp: serverTimestamp(),
+            }).catch(() => {});
+          } catch {}
+        }
         for (const stat of ['postura', 'armadura', 'vida']) {
           if (lost[stat] > 0) {
             const anim = {
@@ -311,7 +329,6 @@ const DefenseModal = ({
               value: lost[stat],
               stat,
               ts: Date.now(),
-              ...(type ? { type } : {}),
             };
             // Solo guardar en Firebase para sincronización entre navegadores
             // No disparar eventos locales para evitar duplicación
