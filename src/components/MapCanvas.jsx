@@ -4551,10 +4551,13 @@ const MapCanvas = ({
                 ingenio: '#60a5fa',
                 counter: '#facc15',
                 perfect: '#60a5fa',
+                resist: '#60a5fa',
               };
               const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
               const text =
-                p.type === 'counter'
+                p.type === 'resist'
+                  ? 'Resiste el daño'
+                  : p.type === 'counter'
                   ? '¡Contraataque!'
                   : p.type === 'perfect'
                   ? '¡Bloqueo perfecto!'
@@ -4575,7 +4578,7 @@ const MapCanvas = ({
                     top: y,
                     transform: 'translate(-50%, -100%)',
                     color,
-                    fontSize: 40,
+                    fontSize: 30,
                     fontWeight: 'bold',
                     textShadow: '0 0 2px #000',
                   }}
@@ -4779,14 +4782,34 @@ const MapCanvas = ({
                               }
                             } catch (err) {
                               console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                          }
+                          await addDoc(collection(db, 'damageEvents'), {
+                            ...anim,
+                            pageId: effectivePageId,
+                            timestamp: serverTimestamp(),
+                          });
+                        } catch {}
+                      }
+                      }
+                      const totalLost = lost.armadura + lost.postura + lost.vida;
+                      if (totalLost === 0) {
+                        const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
+                        try {
+                          let effectivePageId = pageId;
+                          try {
+                            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                            if (visibilityDoc.exists()) {
+                              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
                             }
-                            await addDoc(collection(db, 'damageEvents'), {
-                              ...anim,
-                              pageId: effectivePageId,
-                              timestamp: serverTimestamp(),
-                            });
-                          } catch {}
-                        }
+                          } catch (err) {
+                            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                          }
+                          await addDoc(collection(db, 'damageEvents'), {
+                            ...anim,
+                            pageId: effectivePageId,
+                            timestamp: serverTimestamp(),
+                          });
+                        } catch {}
                       }
                       let msgs = [];
                       try {
@@ -4797,7 +4820,6 @@ const MapCanvas = ({
                       const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
                       const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
                       const diff = attackResult.total;
-                      const totalLost = lost.armadura + lost.postura + lost.vida;
                       const noDamageText = `${targetName} resiste el daño. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
                       const damageText = `${targetName} no se defendió. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
                       msgs.push({

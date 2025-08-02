@@ -298,40 +298,59 @@ const AttackModal = ({
               };
               // Solo guardar en Firebase para sincronización entre navegadores
               // No disparar eventos locales para evitar duplicación
+            try {
+              // Obtener el pageId visible para jugadores para asegurar sincronización
+              let effectivePageId = pageId;
               try {
-                // Obtener el pageId visible para jugadores para asegurar sincronización
-                let effectivePageId = pageId;
-                try {
-                  const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                  if (visibilityDoc.exists()) {
-                    effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                  }
-                } catch (err) {
-                  console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                if (visibilityDoc.exists()) {
+                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
                 }
-                await addDoc(collection(db, 'damageEvents'), {
-                  ...anim,
-                  pageId: effectivePageId,
-                  timestamp: serverTimestamp(),
-                });
-              } catch {}
-            }
+              } catch (err) {
+                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+              }
+              await addDoc(collection(db, 'damageEvents'), {
+                ...anim,
+                pageId: effectivePageId,
+                timestamp: serverTimestamp(),
+              });
+            } catch {}
           }
-          let msgs = [];
+        }
+        const totalLost = lost.armadura + lost.postura + lost.vida;
+        if (totalLost === 0) {
+          const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
           try {
-            const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
-            if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
-          } catch (err) {}
-          const targetName = target.customName || target.name || 'Defensor';
-          const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
-          const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
-          const diff = result.total;
-          const totalLost = lost.armadura + lost.postura + lost.vida;
-          const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-          const damageText = `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-          msgs.push({
-            id: nanoid(),
-            author: targetName,
+            let effectivePageId = pageId;
+            try {
+              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+              if (visibilityDoc.exists()) {
+                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+              }
+            } catch (err) {
+              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+            }
+            await addDoc(collection(db, 'damageEvents'), {
+              ...anim,
+              pageId: effectivePageId,
+              timestamp: serverTimestamp(),
+            });
+          } catch {}
+        }
+        let msgs = [];
+        try {
+          const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+          if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
+        } catch (err) {}
+        const targetName = target.customName || target.name || 'Defensor';
+        const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
+        const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
+        const diff = result.total;
+        const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        const damageText = `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        msgs.push({
+          id: nanoid(),
+          author: targetName,
             text: totalLost === 0 ? noDamageText : damageText,
           });
           await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });

@@ -279,6 +279,7 @@ const DefenseModal = ({
         }
       }
 
+      let totalLost = 0;
       if (diff === 0) {
         const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
         // Solo guardar en Firebase para sincronización entre navegadores
@@ -333,11 +334,30 @@ const DefenseModal = ({
             } catch {}
           }
         }
+        totalLost = lost.armadura + lost.postura + lost.vida;
+        if (diff < 0 && totalLost === 0) {
+          const anim = { tokenId: id, type: 'resist', ts: Date.now() };
+          try {
+            let effectivePageId = pageId;
+            try {
+              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+              if (visibilityDoc.exists()) {
+                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+              }
+            } catch (err) {
+              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+            }
+            addDoc(collection(db, 'damageEvents'), {
+              ...anim,
+              pageId: effectivePageId,
+              timestamp: serverTimestamp(),
+            }).catch(() => {});
+          } catch {}
+        }
       }
 
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
       const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
-      const totalLost = lost.armadura + lost.postura + lost.vida;
       let text;
       if (diff > 0) {
         text = `${targetName} contraataca. Ataque ${attackResult?.total || 0} Defensa ${result.total} Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
