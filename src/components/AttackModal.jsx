@@ -6,7 +6,6 @@ import {
   rollExpression,
   parseAndRollFormula,
   rollExpressionCritical,
-  parseAndRollFormulaCritical,
 } from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import {
@@ -229,7 +228,7 @@ const AttackModal = ({
     try {
       let result;
       if (hasCritical) {
-        const baseRes = parseAndRollFormulaCritical(baseFormula);
+        const baseRes = rollExpressionCritical(baseFormula);
         const attrRes = attrDice ? parseAndRollFormula(attrDice) : { total: 0, details: [] };
         result = {
           formula,
