@@ -4243,18 +4243,22 @@ const MapCanvas = ({
                 const color = token.light.color || '#ffa500';
                 const opacity = Math.max(0.2, token.light.opacity || 0.4);
                 const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
-                const dimIntensity = opacity * 0.5;
+                const dimIntensity = opacity * 0.25;
+                const dimStart = Math.min(brightRatio + 0.001, 0.999);
 
-                const gradientStops = [
-                  0,
-                  hexToRgba(color, opacity),
-                  brightRatio,
-                  hexToRgba(color, opacity),
-                  0.999,
-                  hexToRgba(color, dimIntensity),
-                  1,
-                  hexToRgba(color, 0),
-                ];
+                const gradientStops =
+                  dimRadius > 0
+                    ? [
+                        0,
+                        hexToRgba(color, opacity),
+                        brightRatio,
+                        hexToRgba(color, opacity),
+                        dimStart,
+                        hexToRgba(color, dimIntensity),
+                        1,
+                        hexToRgba(color, 0),
+                      ]
+                    : [0, hexToRgba(color, opacity), 1, hexToRgba(color, 0)];
                 
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];
@@ -4340,24 +4344,28 @@ const MapCanvas = ({
                       (token.light.dimRadius ?? 0) * effectiveGridSize;
                     const outerRadius = brightRadius + dimRadius;
                     const opacity = Math.max(0.2, token.light.opacity || 0.4);
-                    const dimIntensity = opacity * 0.5;
+                    const dimIntensity = opacity * 0.25;
                     const brightRatio =
                       outerRadius > 0 ? brightRadius / outerRadius : 1;
+                    const dimStart = Math.min(brightRatio + 0.001, 0.999);
                     const lightData = lightPolygons[token.id];
                     const hasWallBlocking =
                       lightData &&
                       lightData.polygon &&
                       lightData.polygon.length >= 3;
-                    const stops = [
-                      0,
-                      'rgba(0,0,0,1)',
-                      brightRatio,
-                      'rgba(0,0,0,1)',
-                      0.999,
-                      `rgba(0,0,0,${dimIntensity})`,
-                      1,
-                      'rgba(0,0,0,0)'
-                    ];
+                    const stops =
+                      dimRadius > 0
+                        ? [
+                            0,
+                            'rgba(0,0,0,1)',
+                            brightRatio,
+                            'rgba(0,0,0,1)',
+                            dimStart,
+                            `rgba(0,0,0,${dimIntensity})`,
+                            1,
+                            'rgba(0,0,0,0)'
+                          ]
+                        : [0, 'rgba(0,0,0,1)', 1, 'rgba(0,0,0,0)'];
 
                     if (hasWallBlocking) {
                       const points = [];
