@@ -4240,17 +4240,24 @@ const MapCanvas = ({
                 const centerX = (token.x + token.w / 2) * effectiveGridSize;
                 const centerY = (token.y + token.h / 2) * effectiveGridSize;
                 const brightRadius = token.light.radius * effectiveGridSize;
-                const outerRadius = (token.light.dimRadius > 0 ? token.light.dimRadius : token.light.radius) * effectiveGridSize;
+                const dimRadius = (token.light.dimRadius ?? 0) * effectiveGridSize;
+                const outerRadius = Math.max(brightRadius, dimRadius);
                 const color = token.light.color || '#ffa500';
                 const opacity = Math.max(0.2, token.light.opacity || 0.4);
                 const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
-                const gradientStops = [
-                  0, hexToRgba(color, opacity * 0.8),
-                  brightRatio * 0.3, hexToRgba(color, opacity * 0.6),
-                  brightRatio * 0.6, hexToRgba(color, opacity * 0.3),
-                  brightRatio * 0.85, hexToRgba(color, opacity * 0.1),
-                  1, hexToRgba(color, 0)
-                ];
+
+                const gradientStops = [0, hexToRgba(color, opacity * 0.8)];
+                if (brightRadius > 0) {
+                  gradientStops.push(
+                    brightRatio * 0.3,
+                    hexToRgba(color, opacity * 0.6),
+                    brightRatio * 0.6,
+                    hexToRgba(color, opacity * 0.3),
+                    brightRatio * 0.85,
+                    hexToRgba(color, opacity * 0.1)
+                  );
+                }
+                gradientStops.push(1, hexToRgba(color, 0));
                 
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];

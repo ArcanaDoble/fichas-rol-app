@@ -725,6 +725,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Sistema de iluminación y visibilidad con cálculo realista de áreas iluminadas usando ray casting.
 - Configuración de luz en tokens con radio brillante y tenue (permitiendo desactivar la tenue), color e intensidad personalizables. La luz tenue atenúa la oscuridad en vez de eliminarla.
+- El radio de luz tenue se ajusta automáticamente para no ser menor que el radio brillante, evitando errores de renderizado.
+
 
 **Resumen de cambios v2.4.6:**
 
