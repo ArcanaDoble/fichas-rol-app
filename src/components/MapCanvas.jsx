@@ -4244,7 +4244,6 @@ const MapCanvas = ({
                 const opacity = Math.max(0.2, token.light.opacity || 0.4);
                 const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
                 const dimIntensity = opacity * 0.3;
-
                 const dimStart = Math.min(brightRatio + 0.001, 0.999);
 
                 const gradientStops =
