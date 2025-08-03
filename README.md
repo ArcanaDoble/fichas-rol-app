@@ -1388,6 +1388,11 @@ src/
 
 - Ahora es posible desactivar los rasgos activos en los menús de ataque y defensa para que no afecten la tirada.
 
+**Resumen de cambios v2.4.76:**
+
+- Se reduce la intensidad mínima de la luz al 5% para transiciones más suaves entre zonas iluminadas.
+- La luz tenue aplica ahora el 100% de la intensidad configurada, evitando contrastes irreales.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance

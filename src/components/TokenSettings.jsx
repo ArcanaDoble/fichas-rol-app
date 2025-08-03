@@ -880,7 +880,7 @@ const TokenSettings = ({
                     <label className="block mb-1">Intensidad de la luz</label>
                     <input
                       type="range"
-                      min="0.1"
+                      min="0.05"
                       max="0.8"
                       step="0.05"
                       value={lightOpacity}
