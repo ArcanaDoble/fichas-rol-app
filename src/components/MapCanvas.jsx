@@ -4241,9 +4241,9 @@ const MapCanvas = ({
                 const dimRadius = (token.light.dimRadius ?? 0) * effectiveGridSize;
                 const outerRadius = brightRadius + dimRadius;
                 const color = token.light.color || '#ffa500';
-                const opacity = Math.max(0.2, token.light.opacity || 0.4);
+                const opacity = token.light.opacity ?? 0.4;
                 const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
-                const dimIntensity = opacity;
+                const dimIntensity = opacity * 0.5;
                 const dimStart = Math.min(brightRatio + 0.001, 0.999);
 
                 const gradientStops =
@@ -4343,8 +4343,8 @@ const MapCanvas = ({
                     const dimRadius =
                       (token.light.dimRadius ?? 0) * effectiveGridSize;
                     const outerRadius = brightRadius + dimRadius;
-                    const opacity = Math.max(0.2, token.light.opacity || 0.4);
-                    const dimIntensity = opacity;
+                    const opacity = token.light.opacity ?? 0.4;
+                    const dimIntensity = opacity * 0.5;
                     const brightRatio =
                       outerRadius > 0 ? brightRadius / outerRadius : 1;
                     const dimStart = Math.min(brightRatio + 0.001, 0.999);
