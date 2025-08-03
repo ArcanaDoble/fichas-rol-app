@@ -51,7 +51,7 @@ import DoorCheckModal from './DoorCheckModal';
 import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
-import { computeVisibility, combineVisibilityPolygons, isPointVisible } from '../utils/visibility';
+import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import {
@@ -1114,7 +1114,6 @@ const MapCanvas = ({
   
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
-  const [combinedLight, setCombinedLight] = useState([]);
 
   // Estados para el sistema de visión de jugadores
   const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
@@ -2024,33 +2023,32 @@ const MapCanvas = ({
     const newPolygons = {};
     
     tokens.forEach(token => {
-      if (token.light && token.light.enabled && token.light.radius > 0) {
-        const origin = {
-          x: (token.x + token.w / 2) * effectiveGridSize,
-          y: (token.y + token.h / 2) * effectiveGridSize
-        };
-        
-        // Aumentar significativamente el número de rayos para mayor precisión
-        // Especialmente importante para evitar "saltos" de luz
-        const polygon = computeVisibility(origin, walls, {
-          rays: 180, // Aumentado de 64 a 180 para mayor precisión
-          maxDistance: token.light.radius * effectiveGridSize
-        });
-        
-        newPolygons[token.id] = {
-          polygon,
-          color: token.light.color || '#ffff88',
-          opacity: token.light.opacity || 0.3
-        };
+      if (token.light && token.light.enabled) {
+        const maxRadius =
+          (token.light.radius || 0) + (token.light.dimRadius ?? 0);
+        if (maxRadius > 0) {
+          const origin = {
+            x: (token.x + token.w / 2) * effectiveGridSize,
+            y: (token.y + token.h / 2) * effectiveGridSize
+          };
+
+          // Aumentar significativamente el número de rayos para mayor precisión
+          // Especialmente importante para evitar "saltos" de luz
+          const polygon = computeVisibility(origin, walls, {
+            rays: 180, // Aumentado de 64 a 180 para mayor precisión
+            maxDistance: maxRadius * effectiveGridSize
+          });
+
+          newPolygons[token.id] = {
+            polygon,
+            color: token.light.color || '#ffff88',
+            opacity: token.light.opacity || 0.3
+          };
+        }
       }
     });
 
     setLightPolygons(newPolygons);
-
-    // Combinar todos los polígonos de luz en uno solo
-    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
-    const combined = combineVisibilityPolygons(allPolygons);
-    setCombinedLight(combined);
   }, [tokens, walls, effectiveGridSize]);
 
   // Recalcular polígonos cuando cambien tokens o muros
@@ -4232,17 +4230,36 @@ const MapCanvas = ({
               scaleY={groupScale}
             >
               {/* Renderizar luz básica para todos los tokens con luz */}
-              {tokens.filter(token => 
-                token.light && 
-                token.light.enabled && 
-                token.light.radius && 
-                token.light.radius > 0
+              {tokens.filter(token =>
+                token.light &&
+                token.light.enabled &&
+                (token.light.radius > 0 || (token.light.dimRadius ?? 0) > 0)
               ).map(token => {
                 const centerX = (token.x + token.w / 2) * effectiveGridSize;
                 const centerY = (token.y + token.h / 2) * effectiveGridSize;
-                const radius = token.light.radius * effectiveGridSize;
+                const brightRadius = token.light.radius * effectiveGridSize;
+                const dimRadius = (token.light.dimRadius ?? 0) * effectiveGridSize;
+                const outerRadius = brightRadius + dimRadius;
                 const color = token.light.color || '#ffa500';
                 const opacity = Math.max(0.2, token.light.opacity || 0.4);
+                const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
+                const dimIntensity = opacity * 0.3;
+
+                const dimStart = Math.min(brightRatio + 0.001, 0.999);
+
+                const gradientStops =
+                  dimRadius > 0
+                    ? [
+                        0,
+                        hexToRgba(color, opacity),
+                        brightRatio,
+                        hexToRgba(color, opacity),
+                        dimStart,
+                        hexToRgba(color, dimIntensity),
+                        1,
+                        hexToRgba(color, 0),
+                      ]
+                    : [0, hexToRgba(color, opacity), 1, hexToRgba(color, 0)];
                 
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];
@@ -4254,7 +4271,7 @@ const MapCanvas = ({
                   lightData.polygon.forEach(point => {
                     points.push(point.x, point.y);
                   });
-                  
+
                   return (
                     <Group key={`wall-blocked-light-${token.id}`}>
                       {/* Luz limitada por muros usando polígono de visibilidad */}
@@ -4264,14 +4281,8 @@ const MapCanvas = ({
                         fillRadialGradientStartPoint={{ x: centerX, y: centerY }}
                         fillRadialGradientEndPoint={{ x: centerX, y: centerY }}
                         fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={radius}
-                        fillRadialGradientColorStops={[
-                          0, hexToRgba(color, opacity * 0.8),
-                          0.3, hexToRgba(color, opacity * 0.6),
-                          0.6, hexToRgba(color, opacity * 0.3),
-                          0.85, hexToRgba(color, opacity * 0.1),
-                          1, hexToRgba(color, 0)
-                        ]}
+                        fillRadialGradientEndRadius={outerRadius}
+                        fillRadialGradientColorStops={gradientStops}
                         listening={false}
                         perfectDrawEnabled={false}
                       />
@@ -4284,18 +4295,12 @@ const MapCanvas = ({
                       <Circle
                         x={centerX}
                         y={centerY}
-                        radius={radius}
+                        radius={outerRadius}
                         fillRadialGradientStartPoint={{ x: 0, y: 0 }}
                         fillRadialGradientEndPoint={{ x: 0, y: 0 }}
                         fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={radius}
-                        fillRadialGradientColorStops={[
-                          0, hexToRgba(color, opacity * 0.8),
-                          0.3, hexToRgba(color, opacity * 0.6),
-                          0.6, hexToRgba(color, opacity * 0.3),
-                          0.85, hexToRgba(color, opacity * 0.1),
-                          1, hexToRgba(color, 0)
-                        ]}
+                        fillRadialGradientEndRadius={outerRadius}
+                        fillRadialGradientColorStops={gradientStops}
                         listening={false}
                       />
                     </Group>
@@ -4324,17 +4329,88 @@ const MapCanvas = ({
                   listening={false}
                 />
 
-                {/* Polígono combinado que revela las áreas iluminadas - solo si hay luz */}
-                {combinedLight.length >= 3 && (
-                  <Line
-                    points={combinedLight.flatMap(point => [point.x, point.y])}
-                    closed={true}
-                    fill="rgba(0, 0, 0, 1)"
-                    globalCompositeOperation="destination-out"
-                    listening={false}
-                    perfectDrawEnabled={false}
-                  />
-                )}
+                {/* Reducir la oscuridad alrededor de cada token con luz */}
+                {tokens
+                  .filter(
+                    (token) =>
+                      token.light &&
+                      token.light.enabled &&
+                      (token.light.radius > 0 || (token.light.dimRadius ?? 0) > 0)
+                  )
+                  .map((token) => {
+                    const centerX = (token.x + token.w / 2) * effectiveGridSize;
+                    const centerY = (token.y + token.h / 2) * effectiveGridSize;
+                    const brightRadius = token.light.radius * effectiveGridSize;
+                    const dimRadius =
+                      (token.light.dimRadius ?? 0) * effectiveGridSize;
+                    const outerRadius = brightRadius + dimRadius;
+                    const opacity = Math.max(0.2, token.light.opacity || 0.4);
+                    const dimIntensity = opacity * 0.3;
+                    const brightRatio =
+                      outerRadius > 0 ? brightRadius / outerRadius : 1;
+                    const dimStart = Math.min(brightRatio + 0.001, 0.999);
+                    const lightData = lightPolygons[token.id];
+                    const hasWallBlocking =
+                      lightData &&
+                      lightData.polygon &&
+                      lightData.polygon.length >= 3;
+                    const stops =
+                      dimRadius > 0
+                        ? [
+                            0,
+                            'rgba(0,0,0,1)',
+                            brightRatio,
+                            'rgba(0,0,0,1)',
+                            dimStart,
+                            `rgba(0,0,0,${dimIntensity})`,
+                            1,
+                            'rgba(0,0,0,0)'
+                          ]
+                        : [0, 'rgba(0,0,0,1)', 1, 'rgba(0,0,0,0)'];
+
+                    if (hasWallBlocking) {
+                      const points = [];
+                      lightData.polygon.forEach((point) => {
+                        points.push(point.x, point.y);
+                      });
+                      return (
+                        <Line
+                          key={`darkness-cut-${token.id}`}
+                          points={points}
+                          closed={true}
+                          fillRadialGradientStartPoint={{
+                            x: centerX,
+                            y: centerY,
+                          }}
+                          fillRadialGradientEndPoint={{
+                            x: centerX,
+                            y: centerY,
+                          }}
+                          fillRadialGradientStartRadius={0}
+                          fillRadialGradientEndRadius={outerRadius}
+                          fillRadialGradientColorStops={stops}
+                          globalCompositeOperation="destination-out"
+                          listening={false}
+                          perfectDrawEnabled={false}
+                        />
+                      );
+                    }
+                    return (
+                      <Circle
+                        key={`darkness-cut-${token.id}`}
+                        x={centerX}
+                        y={centerY}
+                        radius={outerRadius}
+                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientStartRadius={0}
+                        fillRadialGradientEndRadius={outerRadius}
+                        fillRadialGradientColorStops={stops}
+                        globalCompositeOperation="destination-out"
+                        listening={false}
+                      />
+                    );
+                  })}
               </Group>
             </Layer>
           )}
