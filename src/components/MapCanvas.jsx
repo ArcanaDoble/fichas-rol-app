@@ -4242,23 +4242,24 @@ const MapCanvas = ({
                 const outerRadius = brightRadius + dimRadius;
                 const color = token.light.color || '#ffa500';
                 const opacity = token.light.opacity ?? 0.4;
+                const brightIntensity = opacity;
                 const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
-                const dimIntensity = opacity * 0.5;
+                const dimIntensity = opacity * 0.8;
                 const dimStart = Math.min(brightRatio + 0.001, 0.999);
 
                 const gradientStops =
                   dimRadius > 0
                     ? [
                         0,
-                        hexToRgba(color, opacity),
+                        hexToRgba(color, brightIntensity),
                         brightRatio,
-                        hexToRgba(color, opacity),
+                        hexToRgba(color, brightIntensity),
                         dimStart,
                         hexToRgba(color, dimIntensity),
                         1,
                         hexToRgba(color, 0),
                       ]
-                    : [0, hexToRgba(color, opacity), 1, hexToRgba(color, 0)];
+                    : [0, hexToRgba(color, brightIntensity), 1, hexToRgba(color, 0)];
                 
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];
@@ -4344,7 +4345,8 @@ const MapCanvas = ({
                       (token.light.dimRadius ?? 0) * effectiveGridSize;
                     const outerRadius = brightRadius + dimRadius;
                     const opacity = token.light.opacity ?? 0.4;
-                    const dimIntensity = opacity * 0.5;
+                    const brightIntensity = opacity;
+                    const dimIntensity = opacity * 0.8;
                     const brightRatio =
                       outerRadius > 0 ? brightRadius / outerRadius : 1;
                     const dimStart = Math.min(brightRatio + 0.001, 0.999);
@@ -4357,15 +4359,15 @@ const MapCanvas = ({
                       dimRadius > 0
                         ? [
                             0,
-                            'rgba(0,0,0,1)',
+                            `rgba(0,0,0,${brightIntensity})`,
                             brightRatio,
-                            'rgba(0,0,0,1)',
+                            `rgba(0,0,0,${brightIntensity})`,
                             dimStart,
                             `rgba(0,0,0,${dimIntensity})`,
                             1,
                             'rgba(0,0,0,0)'
                           ]
-                        : [0, 'rgba(0,0,0,1)', 1, 'rgba(0,0,0,0)'];
+                        : [0, `rgba(0,0,0,${brightIntensity})`, 1, 'rgba(0,0,0,0)'];
 
                     if (hasWallBlocking) {
                       const points = [];
