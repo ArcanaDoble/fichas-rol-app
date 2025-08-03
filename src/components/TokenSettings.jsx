@@ -144,10 +144,9 @@ const TokenSettings = ({
     token.light?.enabled || false
   );
   const [lightRadius, setLightRadius] = useState(token.light?.radius || 5);
-  const [dimLightRadius, setDimLightRadius] = useState(() => {
-    const base = token.light?.dimRadius ?? token.light?.radius ?? 5;
-    return base > 0 ? Math.max(base, token.light?.radius || 5) : 0;
-  });
+  const [dimLightRadius, setDimLightRadius] = useState(
+    token.light?.dimRadius || 0
+  );
   const [lightColor, setLightColor] = useState(token.light?.color || '#ffa500');
   const [lightOpacity, setLightOpacity] = useState(token.light?.opacity || 0.4);
 
@@ -292,7 +291,7 @@ const TokenSettings = ({
         light: {
           enabled: lightEnabled,
           radius: lightRadius,
-          dimRadius: dimLightRadius > 0 ? Math.max(dimLightRadius, lightRadius) : 0,
+          dimRadius: Math.max(dimLightRadius, 0),
           color: lightColor,
           opacity: lightOpacity,
         },
@@ -353,7 +352,7 @@ const TokenSettings = ({
       light: {
         enabled: lightEnabled,
         radius: lightRadius,
-        dimRadius: dimLightRadius > 0 ? Math.max(dimLightRadius, lightRadius) : 0,
+        dimRadius: Math.max(dimLightRadius, 0),
         color: lightColor,
         opacity: lightOpacity,
       },
@@ -824,13 +823,12 @@ const TokenSettings = ({
                       onChange={(e) => {
                         const value = parseInt(e.target.value, 10) || 1;
                         setLightRadius(value);
-                        setDimLightRadius((d) => (d === 0 ? 0 : Math.max(d, value)));
                       }}
                     />
                   </div>
                   <div>
                     <label className="block mb-1">
-                      Radio de luz tenue (casillas)
+                      Radio de luz tenue adicional (casillas)
                     </label>
                     <Input
                       type="number"
@@ -839,24 +837,8 @@ const TokenSettings = ({
                       value={dimLightRadius}
                       onChange={(e) => {
                         const value = parseInt(e.target.value, 10) || 0;
-                        setDimLightRadius(value <= 0 ? 0 : Math.max(value, lightRadius));
+                        setDimLightRadius(value < 0 ? 0 : value);
                       }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-1">
-                      Radio de luz tenue (casillas)
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="40"
-                      value={dimLightRadius}
-                      onChange={(e) =>
-                        setDimLightRadius(
-                          Math.max(0, parseInt(e.target.value, 10) || 0)
-                        )
-                      }
                     />
                   </div>
                   <div>
