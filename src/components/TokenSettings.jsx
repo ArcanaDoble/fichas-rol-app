@@ -844,6 +844,22 @@ const TokenSettings = ({
                     />
                   </div>
                   <div>
+                    <label className="block mb-1">
+                      Radio de luz tenue (casillas)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="40"
+                      value={dimLightRadius}
+                      onChange={(e) =>
+                        setDimLightRadius(
+                          Math.max(0, parseInt(e.target.value, 10) || 0)
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
                     <label className="block mb-1">Color de la luz</label>
                     <div className="flex gap-2 mb-2">
                       <button
