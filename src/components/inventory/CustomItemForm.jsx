@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import Input from '../Input';
+import Boton from '../Boton';
 
 const toSlug = (str) =>
   str
@@ -36,27 +38,36 @@ const CustomItemForm = ({ onSave, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2 p-2 border rounded bg-gray-800">
-      <input
-        className="w-full px-2 py-1 text-black"
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 p-4 border border-gray-600 rounded-lg bg-gray-800"
+    >
+      <Input
         placeholder="Nombre"
         value={name}
         onChange={(e) => setName(e.target.value)}
+        size="sm"
       />
-      <input
-        className="w-full px-2 py-1 text-black"
+      <Input
         placeholder="Descripción"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
+        size="sm"
       />
       <div className="flex gap-2 items-center">
-        <input
-          className="flex-1 px-2 py-1 text-black"
+        <Input
+          className="flex-1"
           placeholder="Icono (emoji)"
           value={icon.startsWith('data:') ? '' : icon}
           onChange={(e) => setIcon(e.target.value)}
+          size="sm"
         />
-        <input type="file" accept="image/*" onChange={handleFile} />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          className="text-sm text-gray-300"
+        />
       </div>
       <div className="flex items-center gap-2">
         <label className="text-sm">Color:</label>
@@ -64,16 +75,16 @@ const CustomItemForm = ({ onSave, onCancel }) => {
           type="color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
-          className="w-10 h-6"
+          className="w-10 h-6 rounded border-0 p-0"
         />
       </div>
       <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onCancel} className="px-2 py-1 bg-gray-600 text-white rounded">
+        <Boton type="button" onClick={onCancel} color="gray" size="sm">
           Cancelar
-        </button>
-        <button type="submit" className="px-2 py-1 bg-green-600 text-white rounded">
+        </Boton>
+        <Boton type="submit" color="green" size="sm">
           Guardar
-        </button>
+        </Boton>
       </div>
     </form>
   );

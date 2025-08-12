@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import CustomItemForm from './CustomItemForm';
+import Boton from '../Boton';
 
 const CustomItemManager = () => {
   const [showForm, setShowForm] = useState(false);
@@ -12,12 +13,9 @@ const CustomItemManager = () => {
 
   return (
     <div className="space-y-2">
-      <button
-        onClick={() => setShowForm(true)}
-        className="bg-green-600 text-white px-3 py-1 rounded"
-      >
+      <Boton color="green" size="sm" onClick={() => setShowForm(true)}>
         Nuevo
-      </button>
+      </Boton>
       {showForm && (
         <CustomItemForm onSave={handleSave} onCancel={() => setShowForm(false)} />
       )}

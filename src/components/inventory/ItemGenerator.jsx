@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import Input from '../Input';
+import Boton from '../Boton';
 import CustomItemForm from './CustomItemForm';
 
 const DEFAULT_ITEMS = ['remedio', 'chatarra', 'comida', 'polvora'];
-const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
 
+const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
   const [items, setItems] = useState(DEFAULT_ITEMS);
   const [query, setQuery] = useState('');
   const [suggest, setSuggest] = useState('');
@@ -64,7 +65,7 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="relative flex-1">
           <Input
-            className="w-full text-black bg-transparent relative z-10"
+            className="w-full relative z-10"
             placeholder="Buscar objeto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -79,7 +80,7 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
                 {query}
               </span>
               <span
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-20"
                 style={{ marginLeft: offset }}
               >
                 {suggest}
@@ -87,20 +88,14 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
             </>
           )}
         </div>
-        <button
-          onClick={handleGenerate}
-          className="bg-blue-600 text-white px-3 py-1 rounded"
-        >
+        <Boton color="blue" size="sm" onClick={handleGenerate}>
           Generar
-        </button>
+        </Boton>
         {allowCustom && (
           <>
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-green-600 text-white px-3 py-1 rounded"
-            >
+            <Boton color="green" size="sm" onClick={() => setShowForm(true)}>
               Nuevo
-            </button>
+            </Boton>
             {showForm && (
               <CustomItemForm
                 onSave={(item) => {
