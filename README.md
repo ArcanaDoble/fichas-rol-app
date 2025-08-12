@@ -1452,7 +1452,7 @@ src/
 
 **Resumen de cambios v2.4.37:**
 
-- El máster puede crear objetos de inventario personalizados con nombre, descripción, icono y color.
+- El máster puede crear objetos de inventario personalizados con nombre, descripción, icono y color desde sus herramientas.
 
 ## 🔄 Historial de cambios previos
 

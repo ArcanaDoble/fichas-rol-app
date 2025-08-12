@@ -4,8 +4,8 @@ import Input from '../Input';
 import CustomItemForm from './CustomItemForm';
 
 const DEFAULT_ITEMS = ['remedio', 'chatarra', 'comida', 'polvora'];
+const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
 
-const ItemGenerator = ({ onGenerate }) => {
   const [items, setItems] = useState(DEFAULT_ITEMS);
   const [query, setQuery] = useState('');
   const [suggest, setSuggest] = useState('');
@@ -93,22 +93,26 @@ const ItemGenerator = ({ onGenerate }) => {
         >
           Generar
         </button>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-green-600 text-white px-3 py-1 rounded"
-        >
-          Nuevo
-        </button>
-        {showForm && (
-          <CustomItemForm
-            onSave={(item) => {
-              const stored = JSON.parse(localStorage.getItem('customItems') || '[]');
-              localStorage.setItem('customItems', JSON.stringify([...stored, item]));
-              setItems((prev) => [...prev, item.type]);
-              setShowForm(false);
-            }}
-            onCancel={() => setShowForm(false)}
-          />
+        {allowCustom && (
+          <>
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-green-600 text-white px-3 py-1 rounded"
+            >
+              Nuevo
+            </button>
+            {showForm && (
+              <CustomItemForm
+                onSave={(item) => {
+                  const stored = JSON.parse(localStorage.getItem('customItems') || '[]');
+                  localStorage.setItem('customItems', JSON.stringify([...stored, item]));
+                  setItems((prev) => [...prev, item.type]);
+                  setShowForm(false);
+                }}
+                onCancel={() => setShowForm(false)}
+              />
+            )}
+          </>
         )}
       </div>
     );
@@ -116,6 +120,7 @@ const ItemGenerator = ({ onGenerate }) => {
 
 ItemGenerator.propTypes = {
   onGenerate: PropTypes.func.isRequired,
+  allowCustom: PropTypes.bool,
 };
 
 export default ItemGenerator;
