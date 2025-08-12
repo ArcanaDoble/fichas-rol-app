@@ -26,6 +26,7 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
+import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
@@ -4983,6 +4984,9 @@ function App() {
             />
           </div>
         </div>
+        <Collapsible title="Objetos de inventario personalizados" defaultOpen={false}>
+          <CustomItemManager />
+        </Collapsible>
         <Collapsible
           title={
             editingTerm
