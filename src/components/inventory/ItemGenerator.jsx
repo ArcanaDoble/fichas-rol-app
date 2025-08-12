@@ -4,8 +4,8 @@ import Input from '../Input';
 import CustomItemForm from './CustomItemForm';
 
 const DEFAULT_ITEMS = ['remedio', 'chatarra', 'comida', 'polvora'];
-
 const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
+
   const [items, setItems] = useState(DEFAULT_ITEMS);
   const [query, setQuery] = useState('');
   const [suggest, setSuggest] = useState('');
