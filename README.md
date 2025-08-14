@@ -155,7 +155,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Claves consumibles** - Acciones especiales con contador de usos
 - **Carga física y mental** - Sistema automático de penalizaciones por peso
 - **Estados del personaje** - Seguimiento de efectos activos con iconos
-- **Inventario tradicional** - Sistema de slots drag & drop para objetos básicos
+- **Inventario tradicional** - Sistema de slots drag & drop para objetos básicos y personalizables
 
 **Resumen de cambios v2.2.1:**
 
@@ -1449,6 +1449,12 @@ src/
 
 - Las animaciones de daño duran ahora 10 s.
 - Los números de daño duplican su tamaño para mayor legibilidad.
+
+**Resumen de cambios v2.4.37:**
+
+- El máster puede crear objetos de inventario personalizados con nombre, descripción, icono y color desde sus herramientas.
+- Los formularios de creación de objetos personalizados usan la misma estética que los de poder, armadura o arma.
+- Los objetos personalizados pueden buscarse, editarse y eliminarse desde las herramientas del máster.
 
 ## 🔄 Historial de cambios previos
 

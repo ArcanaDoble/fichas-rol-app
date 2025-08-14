@@ -9,7 +9,7 @@ import ItemGenerator from './ItemGenerator';
 
 const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, item: null }));
 
-const Inventory = ({ playerName }) => {
+const Inventory = ({ playerName, isMaster = false }) => {
   const [slots, setSlots] = useState(initialSlots);
   const [nextId, setNextId] = useState(initialSlots.length);
   const [tokens, setTokens] = useState([]);
@@ -97,7 +97,7 @@ const Inventory = ({ playerName }) => {
             🗑
           </div>
         </div>
-        <ItemGenerator onGenerate={generateItem} />
+        <ItemGenerator onGenerate={generateItem} allowCustom={isMaster} />
         <div className="flex flex-wrap justify-center gap-2">
           {tokens.map(token => (
             <ItemToken key={token.id} id={token.id} type={token.type} />
@@ -109,6 +109,7 @@ const Inventory = ({ playerName }) => {
 
 Inventory.propTypes = {
   playerName: PropTypes.string,
+  isMaster: PropTypes.bool,
 };
 
 export default Inventory;
