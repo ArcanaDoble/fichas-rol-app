@@ -3,6 +3,30 @@ import CustomItemForm from './CustomItemForm';
 import Boton from '../Boton';
 import Input from '../Input';
 
+const DEFAULT_CUSTOM_ITEMS = [
+  {
+    type: 'chatarra',
+    name: 'Chatarra',
+    icon: '⚙️',
+    description: 'Partes de recambio variadas',
+    color: '#facc15',
+  },
+  {
+    type: 'remedio',
+    name: 'Remedio',
+    icon: '💊',
+    description: 'Un remedio curativo',
+    color: '#60a5fa',
+  },
+  {
+    type: 'polvora',
+    name: 'Pólvora',
+    icon: '💥',
+    description: 'Material explosivo en polvo',
+    color: '#6b7280',
+  },
+];
+
 const CustomItemManager = () => {
   const [items, setItems] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -14,9 +38,19 @@ const CustomItemManager = () => {
 
   useEffect(() => {
     try {
-      setItems(JSON.parse(localStorage.getItem('customItems')) || []);
+      const stored = JSON.parse(localStorage.getItem('customItems')) || [];
+      const merged = [...DEFAULT_CUSTOM_ITEMS];
+      stored.forEach((it) => {
+        const idx = merged.findIndex((d) => d.type === it.type);
+        if (idx >= 0) {
+          merged[idx] = it;
+        } else {
+          merged.push(it);
+        }
+      });
+      setItems(merged);
     } catch {
-      setItems([]);
+      setItems(DEFAULT_CUSTOM_ITEMS);
     }
   }, []);
 

@@ -1459,6 +1459,11 @@ src/
 - Los formularios de creación de objetos personalizados usan la misma estética que los de poder, armadura o arma.
 - Los objetos personalizados pueden buscarse, editarse y eliminarse desde las herramientas del máster.
 
+**Resumen de cambios v2.4.38:**
+
+- "Chatarra", "Remedio" y "Pólvora" se incluyen en el buscador de objetos personalizados.
+- El formulario de objetos personalizados incorpora un selector de emojis optimizado para móvil.
+
 ## 🔄 Historial de cambios previos
 
 <details>

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Input from '../Input';
 import Boton from '../Boton';
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
 
 const toSlug = (str) =>
   str
@@ -15,6 +17,7 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
   const [description, setDescription] = useState(initial?.description || '');
   const [icon, setIcon] = useState(initial?.icon || '');
   const [color, setColor] = useState(initial?.color || '#a3a3a3');
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     if (initial) {
@@ -70,14 +73,35 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
         onChange={(e) => setDescription(e.target.value)}
         size="sm"
       />
-      <div className="flex flex-col sm:flex-row gap-2 items-center">
-        <Input
-          className="flex-1 w-full"
-          placeholder="Icono (emoji)"
-          value={icon.startsWith('data:') ? '' : icon}
-          onChange={(e) => setIcon(e.target.value)}
-          size="sm"
-        />
+      <div className="flex flex-col sm:flex-row gap-2 items-center relative">
+        <div className="relative flex-1 w-full">
+          <Input
+            className="w-full"
+            placeholder="Icono (emoji)"
+            value={icon.startsWith('data:') ? '' : icon}
+            onChange={(e) => setIcon(e.target.value)}
+            size="sm"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPicker((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-xl"
+          >
+            😀
+          </button>
+          {showPicker && (
+            <div className="absolute z-20 mt-2 w-full sm:w-64">
+              <Picker
+                data={data}
+                onEmojiSelect={(e) => {
+                  setIcon(e.native);
+                  setShowPicker(false);
+                }}
+                theme="dark"
+              />
+            </div>
+          )}
+        </div>
         <input
           type="file"
           accept="image/*"
