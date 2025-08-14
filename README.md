@@ -1472,6 +1472,10 @@ src/
 
 - El formulario de objetos personalizados permite seleccionar iconos SVG de la librería Lucide.
 
+**Resumen de cambios v2.4.41:**
+
+- Corrección del selector de iconos Lucide evitando el error `iconNode is undefined` al abrirlo.
+
 ## 🔄 Historial de cambios previos
 
 <details>
