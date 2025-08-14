@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { useDrag } from 'react-dnd';
 import { Tooltip } from 'react-tooltip';
+import * as LucideIcons from 'lucide-react';
 
 export const ItemTypes = {
   TOKEN: 'token'
@@ -95,6 +96,11 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
       >
         {custom.icon?.startsWith('data:') ? (
           <img src={custom.icon} alt={type} className="w-8 h-8 mx-auto" />
+        ) : custom.icon?.startsWith('lucide:') ? (
+          (() => {
+            const Icon = LucideIcons[custom.icon.slice(7)];
+            return Icon ? <Icon className="w-8 h-8 mx-auto" /> : <div className="text-black text-2xl">❔</div>;
+          })()
         ) : (
           <div className="text-black text-2xl">{custom.icon || '❔'}</div>
         )}
