@@ -22,7 +22,15 @@ test('supports new polvora type', () => {
 test('renders custom item from localStorage', () => {
   localStorage.setItem(
     'customItems',
-    JSON.stringify([{ type: 'gema', icon: '💎', description: 'Una gema', color: '#00ff00' }])
+    JSON.stringify([
+      {
+        name: 'Gema',
+        type: 'gema',
+        icon: '💎',
+        description: 'Una gema',
+        color: '#00ff00',
+      },
+    ])
   );
   const { getByText } = render(<ItemToken id="3" type="gema" count={1} />);
   getByText('💎');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Input from '../Input';
 import Boton from '../Boton';
@@ -10,11 +10,25 @@ const toSlug = (str) =>
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '');
 
-const CustomItemForm = ({ onSave, onCancel }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [icon, setIcon] = useState('');
-  const [color, setColor] = useState('#a3a3a3');
+const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
+  const [name, setName] = useState(initial?.name || '');
+  const [description, setDescription] = useState(initial?.description || '');
+  const [icon, setIcon] = useState(initial?.icon || '');
+  const [color, setColor] = useState(initial?.color || '#a3a3a3');
+
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setDescription(initial.description || '');
+      setIcon(initial.icon || '');
+      setColor(initial.color || '#a3a3a3');
+    } else {
+      setName('');
+      setDescription('');
+      setIcon('');
+      setColor('#a3a3a3');
+    }
+  }, [initial]);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -30,11 +44,13 @@ const CustomItemForm = ({ onSave, onCancel }) => {
     e.preventDefault();
     if (!name) return;
     const type = toSlug(name);
-    onSave({ type, icon, description, color });
-    setName('');
-    setDescription('');
-    setIcon('');
-    setColor('#a3a3a3');
+    onSave({ name, type, icon, description, color });
+    if (!initial) {
+      setName('');
+      setDescription('');
+      setIcon('');
+      setColor('#a3a3a3');
+    }
   };
 
   return (
@@ -93,6 +109,17 @@ const CustomItemForm = ({ onSave, onCancel }) => {
 CustomItemForm.propTypes = {
   onSave: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
+  initial: PropTypes.shape({
+    name: PropTypes.string,
+    type: PropTypes.string,
+    description: PropTypes.string,
+    icon: PropTypes.string,
+    color: PropTypes.string,
+  }),
+};
+
+CustomItemForm.defaultProps = {
+  initial: null,
 };
 
 export default CustomItemForm;
