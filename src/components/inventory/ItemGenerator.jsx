@@ -17,7 +17,10 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('customItems')) || [];
-      setItems([...DEFAULT_ITEMS, ...stored.map((i) => i.type)]);
+      const types = Array.from(
+        new Set([...DEFAULT_ITEMS, ...stored.map((i) => i.type)])
+      );
+      setItems(types);
     } catch {
       setItems(DEFAULT_ITEMS);
     }

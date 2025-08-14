@@ -198,12 +198,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.12:**
 
 - Imagen del mapa se escala automáticamente al contenedor sin perder la relación de aspecto.
-- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 
 **Resumen de cambios v2.2.13:**
 
+- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 - Mapa sin bordes negros utilizando escalado tipo cover o contain.
 - Zoom interactivo con la rueda del ratón en el Mapa de Batalla.
+- Búsqueda con autocompletado para objetos de inventario personalizados.
+- El formulario de nuevos objetos es ahora más usable en móviles.
+- El panel de objetos personalizados se mantiene abierto al crear un ítem.
 
 **Resumen de cambios v2.2.14:**
 
@@ -1455,6 +1458,15 @@ src/
 - El máster puede crear objetos de inventario personalizados con nombre, descripción, icono y color desde sus herramientas.
 - Los formularios de creación de objetos personalizados usan la misma estética que los de poder, armadura o arma.
 - Los objetos personalizados pueden buscarse, editarse y eliminarse desde las herramientas del máster.
+
+**Resumen de cambios v2.4.38:**
+
+- "Chatarra", "Remedio" y "Pólvora" se incluyen en el buscador de objetos personalizados.
+- El formulario de objetos personalizados incorpora un selector de emojis optimizado para móvil.
+
+**Resumen de cambios v2.4.39:**
+
+- Se reemplazó la dependencia del selector de emojis por una compatible con React 19 para evitar errores de instalación.
 
 ## 🔄 Historial de cambios previos
 
