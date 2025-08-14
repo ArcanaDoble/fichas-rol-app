@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Input from '../Input';
 import Boton from '../Boton';
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import EmojiPicker from 'emoji-picker-react';
 
 const toSlug = (str) =>
   str
@@ -91,13 +90,13 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
           </button>
           {showPicker && (
             <div className="absolute z-20 mt-2 w-full sm:w-64">
-              <Picker
-                data={data}
-                onEmojiSelect={(e) => {
-                  setIcon(e.native);
+              <EmojiPicker
+                onEmojiClick={(e) => {
+                  setIcon(e.emoji);
                   setShowPicker(false);
                 }}
                 theme="dark"
+                lazyLoadEmojis
               />
             </div>
           )}

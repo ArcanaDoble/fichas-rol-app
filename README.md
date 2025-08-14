@@ -1464,6 +1464,10 @@ src/
 - "Chatarra", "Remedio" y "Pólvora" se incluyen en el buscador de objetos personalizados.
 - El formulario de objetos personalizados incorpora un selector de emojis optimizado para móvil.
 
+**Resumen de cambios v2.4.39:**
+
+- Se reemplazó la dependencia del selector de emojis por una compatible con React 19 para evitar errores de instalación.
+
 ## 🔄 Historial de cambios previos
 
 <details>
