@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import CustomItemForm from './CustomItemForm';
 import Boton from '../Boton';
 import Input from '../Input';
@@ -8,6 +8,9 @@ const CustomItemManager = () => {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
+  const [suggest, setSuggest] = useState('');
+  const mirrorRef = useRef(null);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     try {
@@ -38,22 +41,74 @@ const CustomItemManager = () => {
     saveItems(updated);
   };
 
+  useEffect(() => {
+    if (!query) {
+      setSuggest('');
+      return;
+    }
+    const q = query.toLowerCase();
+    const names = items.map(i => i.name || i.type);
+    const match = names.find(n => n && n.toLowerCase().startsWith(q));
+    if (match && match.toLowerCase() !== q) {
+      setSuggest(match.slice(query.length));
+    } else {
+      setSuggest('');
+    }
+  }, [query, items]);
+
+  useEffect(() => {
+    if (mirrorRef.current) {
+      setOffset(mirrorRef.current.offsetWidth);
+    }
+  }, [query, suggest]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Tab' && suggest) {
+      e.preventDefault();
+      setQuery(query + suggest);
+      setSuggest('');
+    }
+  };
+
   const filtered = items
     .map((it, idx) => ({ item: it, index: idx }))
-    .filter(({ item }) =>
-      item.name?.toLowerCase().includes(query.toLowerCase())
-    );
+    .filter(({ item }) => {
+      const q = query.toLowerCase();
+      return (
+        item.name?.toLowerCase().includes(q) ||
+        item.type?.toLowerCase().includes(q)
+      );
+    });
 
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <Input
-          className="flex-1"
-          placeholder="Buscar objeto"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          size="sm"
-        />
+        <div className="relative flex-1">
+          <Input
+            className="w-full relative z-10"
+            placeholder="Buscar objeto"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            size="sm"
+          />
+          {suggest && (
+            <>
+              <span
+                ref={mirrorRef}
+                className="absolute left-4 top-1/2 -translate-y-1/2 invisible whitespace-pre"
+              >
+                {query}
+              </span>
+              <span
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-20"
+                style={{ marginLeft: offset }}
+              >
+                {suggest}
+              </span>
+            </>
+          )}
+        </div>
         <Boton
           color="green"
           size="sm"

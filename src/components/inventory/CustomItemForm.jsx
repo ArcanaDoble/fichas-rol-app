@@ -70,9 +70,9 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
         onChange={(e) => setDescription(e.target.value)}
         size="sm"
       />
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-col sm:flex-row gap-2 items-center">
         <Input
-          className="flex-1"
+          className="flex-1 w-full"
           placeholder="Icono (emoji)"
           value={icon.startsWith('data:') ? '' : icon}
           onChange={(e) => setIcon(e.target.value)}
@@ -85,7 +85,7 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
           className="text-sm text-gray-300"
         />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-center gap-2">
         <label className="text-sm">Color:</label>
         <input
           type="color"
@@ -94,11 +94,11 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
           className="w-10 h-6 rounded border-0 p-0"
         />
       </div>
-      <div className="flex gap-2 justify-end">
-        <Boton type="button" onClick={onCancel} color="gray" size="sm">
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+        <Boton type="button" onClick={onCancel} color="gray" size="sm" className="w-full sm:w-auto">
           Cancelar
         </Boton>
-        <Boton type="submit" color="green" size="sm">
+        <Boton type="submit" color="green" size="sm" className="w-full sm:w-auto">
           Guardar
         </Boton>
       </div>

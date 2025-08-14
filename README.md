@@ -198,12 +198,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.12:**
 
 - Imagen del mapa se escala automáticamente al contenedor sin perder la relación de aspecto.
-- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 
 **Resumen de cambios v2.2.13:**
 
+- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 - Mapa sin bordes negros utilizando escalado tipo cover o contain.
 - Zoom interactivo con la rueda del ratón en el Mapa de Batalla.
+- Búsqueda con autocompletado para objetos de inventario personalizados.
+- El formulario de nuevos objetos es ahora más usable en móviles.
+- El panel de objetos personalizados se mantiene abierto al crear un ítem.
 
 **Resumen de cambios v2.2.14:**
 
