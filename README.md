@@ -1468,6 +1468,10 @@ src/
 
 - Se reemplazó la dependencia del selector de emojis por una compatible con React 19 para evitar errores de instalación.
 
+**Resumen de cambios v2.4.40:**
+
+- El formulario de objetos personalizados permite seleccionar iconos SVG de la librería Lucide.
+
 ## 🔄 Historial de cambios previos
 
 <details>

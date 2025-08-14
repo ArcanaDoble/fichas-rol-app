@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import Input from '../Input';
 import Boton from '../Boton';
 import EmojiPicker from 'emoji-picker-react';
+import LucideIconPicker from '../LucideIconPicker';
+import { Search } from 'lucide-react';
 
 const toSlug = (str) =>
   str
@@ -17,6 +19,7 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
   const [icon, setIcon] = useState(initial?.icon || '');
   const [color, setColor] = useState(initial?.color || '#a3a3a3');
   const [showPicker, setShowPicker] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   useEffect(() => {
     if (initial) {
@@ -76,18 +79,45 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
         <div className="relative flex-1 w-full">
           <Input
             className="w-full"
-            placeholder="Icono (emoji)"
-            value={icon.startsWith('data:') ? '' : icon}
-            onChange={(e) => setIcon(e.target.value)}
+            placeholder="Icono (emoji o Lucide)"
+            value={
+              icon.startsWith('data:')
+                ? ''
+                : icon.startsWith('lucide:')
+                ? icon.slice(7)
+                : icon
+            }
+            onChange={(e) => {
+              if (icon.startsWith('lucide:')) {
+                setIcon(`lucide:${e.target.value}`);
+              } else {
+                setIcon(e.target.value);
+              }
+            }}
             size="sm"
           />
-          <button
-            type="button"
-            onClick={() => setShowPicker((s) => !s)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-xl"
-          >
-            😀
-          </button>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPicker((s) => !s);
+                setShowIconPicker(false);
+              }}
+              className="text-xl"
+            >
+              😀
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIconPicker((s) => !s);
+                setShowPicker(false);
+              }}
+              className="text-xl"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+          </div>
           {showPicker && (
             <div className="absolute z-20 mt-2 w-full sm:w-64">
               <EmojiPicker
@@ -97,6 +127,16 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
                 }}
                 theme="dark"
                 lazyLoadEmojis
+              />
+            </div>
+          )}
+          {showIconPicker && (
+            <div className="absolute z-20 mt-2 w-full sm:w-64">
+              <LucideIconPicker
+                onSelect={(name) => {
+                  setIcon(`lucide:${name}`);
+                  setShowIconPicker(false);
+                }}
               />
             </div>
           )}

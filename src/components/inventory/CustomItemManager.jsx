@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import CustomItemForm from './CustomItemForm';
 import Boton from '../Boton';
 import Input from '../Input';
+import * as LucideIcons from 'lucide-react';
 
 const DEFAULT_CUSTOM_ITEMS = [
   {
@@ -172,6 +173,11 @@ const CustomItemManager = () => {
           >
             {item.icon?.startsWith('data:') ? (
               <img src={item.icon} alt={item.name} className="w-6 h-6" />
+            ) : item.icon?.startsWith('lucide:') ? (
+              (() => {
+                const Icon = LucideIcons[item.icon.slice(7)];
+                return Icon ? <Icon className="w-6 h-6" /> : <span className="text-xl">❔</span>;
+              })()
             ) : (
               <span className="text-xl">{item.icon || '❔'}</span>
             )}
