@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import * as icons from 'lucide-react';
 
-const iconList = Object.keys(icons).filter((name) => /^[A-Z]/.test(name));
+// The lucide-react package also exports a base `Icon` component which expects an
+// `iconNode` prop. Rendering this component without the prop (as we do when
+// listing all icons) causes a runtime error. Filter it out from the list of
+// icon names so only valid icon components are shown in the picker.
+const iconList = Object.keys(icons).filter(
+  (name) => /^[A-Z]/.test(name) && name !== 'Icon'
+);
 
 const LucideIconPicker = ({ onSelect }) => {
   const [query, setQuery] = useState('');
