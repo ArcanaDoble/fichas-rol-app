@@ -1488,6 +1488,10 @@ src/
 
 - El editor de color para objetos de inventario personalizados permite ingresar códigos hexadecimales.
 
+**Resumen de cambios v2.4.45:**
+
+- Las imágenes personalizadas de los objetos de inventario ya no pueden arrastrarse accidentalmente al moverlos.
+
 ## 🔄 Historial de cambios previos
 
 <details>

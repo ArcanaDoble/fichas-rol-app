@@ -102,7 +102,12 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
         data-tooltip-content={custom.description}
       >
         {custom.icon?.startsWith('data:') ? (
-          <img src={custom.icon} alt={type} className="w-8 h-8 mx-auto" />
+          <img
+            src={custom.icon}
+            alt={type}
+            className="w-8 h-8 mx-auto"
+            draggable={false}
+          />
         ) : custom.icon?.startsWith('lucide:') ? (
           (() => {
             const Icon = LucideIcons[custom.icon.slice(7)];
