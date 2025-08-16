@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { collection, getDocs, setDoc, doc } from 'firebase/firestore';
 import Input from '../Input';
 import Boton from '../Boton';
 import CustomItemForm from './CustomItemForm';
+import { db } from '../../firebase';
 
 const DEFAULT_ITEMS = ['remedio', 'chatarra', 'comida', 'polvora'];
 
@@ -15,15 +17,18 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('customItems')) || [];
-      const types = Array.from(
-        new Set([...DEFAULT_ITEMS, ...stored.map((i) => i.type)])
-      );
-      setItems(types);
-    } catch {
-      setItems(DEFAULT_ITEMS);
-    }
+    const fetchItems = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'customItems'));
+        const types = Array.from(
+          new Set([...DEFAULT_ITEMS, ...snap.docs.map(d => d.data().type)])
+        );
+        setItems(types);
+      } catch {
+        setItems(DEFAULT_ITEMS);
+      }
+    };
+    fetchItems();
   }, []);
 
   useEffect(() => {
@@ -101,9 +106,8 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
             </Boton>
             {showForm && (
               <CustomItemForm
-                onSave={(item) => {
-                  const stored = JSON.parse(localStorage.getItem('customItems') || '[]');
-                  localStorage.setItem('customItems', JSON.stringify([...stored, item]));
+                onSave={async (item) => {
+                  await setDoc(doc(db, 'customItems', item.type), item);
                   setItems((prev) => [...prev, item.type]);
                   setShowForm(false);
                 }}
