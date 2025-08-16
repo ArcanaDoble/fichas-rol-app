@@ -184,7 +184,12 @@ const CustomItemManager = () => {
             className="flex items-center gap-2 p-2 border border-gray-600 rounded"
           >
             {item.icon?.startsWith('data:') ? (
-              <img src={item.icon} alt={item.name} className="w-6 h-6" />
+              <img
+                src={item.icon}
+                alt={item.name}
+                className="w-6 h-6"
+                draggable={false}
+              />
             ) : item.icon?.startsWith('lucide:') ? (
               (() => {
                 const Icon = LucideIcons[item.icon.slice(7)];
