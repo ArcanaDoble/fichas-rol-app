@@ -1492,6 +1492,10 @@ src/
 
 - Las imágenes personalizadas de los objetos de inventario ya no pueden arrastrarse accidentalmente al moverlos.
 
+**Resumen de cambios v2.4.46:**
+
+- Los cuadros del inventario ahora tiñen su borde con el color de los objetos personalizados.
+
 ## 🔄 Historial de cambios previos
 
 <details>
