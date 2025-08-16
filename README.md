@@ -1476,6 +1476,10 @@ src/
 
 - Corrección del selector de iconos Lucide evitando el error `iconNode is undefined` al abrirlo.
 
+**Resumen de cambios v2.4.42:**
+
+- Los objetos de inventario personalizados se guardan en Firebase y se comparten entre dispositivos.
+
 ## 🔄 Historial de cambios previos
 
 <details>
