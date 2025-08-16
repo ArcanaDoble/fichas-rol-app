@@ -1484,6 +1484,10 @@ src/
 
 - "Comida" aparece entre los objetos predeterminados del gestor de objetos personalizados.
 
+**Resumen de cambios v2.4.44:**
+
+- El editor de color para objetos de inventario personalizados permite ingresar códigos hexadecimales.
+
 ## 🔄 Historial de cambios previos
 
 <details>

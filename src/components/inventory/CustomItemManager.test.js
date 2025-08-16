@@ -53,10 +53,15 @@ test('edits an item', async () => {
   const nameInput = await screen.findByPlaceholderText('Nombre');
   await userEvent.clear(nameInput);
   await userEvent.type(nameInput, 'Perla');
+  const colorInput = screen.getByPlaceholderText('#ffffff');
+  await userEvent.clear(colorInput);
+  await userEvent.type(colorInput, '#123abc');
   await userEvent.click(screen.getByText('Guardar'));
   await screen.findByText('Perla');
   const call = setDoc.mock.calls[0];
-  expect(call[1]).toEqual(expect.objectContaining({ name: 'Perla' }));
+  expect(call[1]).toEqual(
+    expect.objectContaining({ name: 'Perla', color: '#123abc' })
+  );
 });
 
 test('deletes an item', async () => {
