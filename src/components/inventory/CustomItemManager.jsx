@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { collection, getDocs, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import CustomItemForm from './CustomItemForm';
 import Boton from '../Boton';
 import Input from '../Input';
 import * as LucideIcons from 'lucide-react';
+import { db } from '../../firebase';
 
 const DEFAULT_CUSTOM_ITEMS = [
   {
@@ -18,6 +20,13 @@ const DEFAULT_CUSTOM_ITEMS = [
     icon: '💊',
     description: 'Un remedio curativo',
     color: '#60a5fa',
+  },
+  {
+    type: 'comida',
+    name: 'Comida',
+    icon: '🍖',
+    description: 'Provisiones comestibles',
+    color: '#86efac',
   },
   {
     type: 'polvora',
@@ -38,42 +47,45 @@ const CustomItemManager = () => {
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('customItems')) || [];
-      const merged = [...DEFAULT_CUSTOM_ITEMS];
-      stored.forEach((it) => {
-        const idx = merged.findIndex((d) => d.type === it.type);
-        if (idx >= 0) {
-          merged[idx] = it;
-        } else {
-          merged.push(it);
-        }
-      });
-      setItems(merged);
-    } catch {
-      setItems(DEFAULT_CUSTOM_ITEMS);
-    }
+    const fetchItems = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'customItems'));
+        const fetched = snap.docs.map(d => d.data());
+        const merged = [...DEFAULT_CUSTOM_ITEMS];
+        fetched.forEach(it => {
+          const idx = merged.findIndex(d => d.type === it.type);
+          if (idx >= 0) {
+            merged[idx] = it;
+          } else {
+            merged.push(it);
+          }
+        });
+        setItems(merged);
+      } catch {
+        setItems(DEFAULT_CUSTOM_ITEMS);
+      }
+    };
+    fetchItems();
   }, []);
 
-  const saveItems = (updated) => {
-    setItems(updated);
-    localStorage.setItem('customItems', JSON.stringify(updated));
-  };
-
-  const handleSave = (item) => {
+  const handleSave = async (item) => {
+    let updated;
     if (editing !== null) {
-      const updated = items.map((it, idx) => (idx === editing ? item : it));
-      saveItems(updated);
+      updated = items.map((it, idx) => (idx === editing ? item : it));
     } else {
-      saveItems([...items, item]);
+      updated = [...items, item];
     }
+    setItems(updated);
+    await setDoc(doc(db, 'customItems', item.type), item);
     setShowForm(false);
     setEditing(null);
   };
 
-  const handleDelete = (index) => {
+  const handleDelete = async (index) => {
+    const item = items[index];
     const updated = items.filter((_, idx) => idx !== index);
-    saveItems(updated);
+    setItems(updated);
+    await deleteDoc(doc(db, 'customItems', item.type));
   };
 
   useEffect(() => {

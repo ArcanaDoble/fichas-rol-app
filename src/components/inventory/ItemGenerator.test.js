@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event';
 import ItemGenerator from './ItemGenerator';
 
 jest.mock('react-dnd', () => ({ useDrag: () => [{}, () => {}], useDrop: () => [{}, () => {}] }));
+jest.mock('firebase/firestore', () => ({
+  collection: jest.fn(),
+  getDocs: jest.fn(() => Promise.resolve({ docs: [] })),
+  setDoc: jest.fn(),
+  doc: jest.fn(),
+  getFirestore: jest.fn(() => ({})),
+  enableIndexedDbPersistence: jest.fn(() => Promise.resolve()),
+}));
 
 afterEach(() => {
   jest.clearAllMocks();

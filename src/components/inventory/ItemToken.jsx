@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useDrag } from 'react-dnd';
 import { Tooltip } from 'react-tooltip';
 import * as LucideIcons from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 export const ItemTypes = {
   TOKEN: 'token'
@@ -54,18 +56,6 @@ const lighten = (hex, amt) => {
   return `#${(b | (g << 8) | (r << 16)).toString(16).padStart(6, '0')}`;
 };
 
-const getCustomMap = () => {
-  try {
-    const arr = JSON.parse(localStorage.getItem('customItems')) || [];
-    return arr.reduce((acc, it) => {
-      acc[it.type] = it;
-      return acc;
-    }, {});
-  } catch {
-    return {};
-  }
-};
-
 const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
       type: ItemTypes.TOKEN,
@@ -74,8 +64,25 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
         isDragging: monitor.isDragging(),
       }),
     }), [id, type, count, fromSlot]);
+  const [customMap, setCustomMap] = useState({});
 
-  const customMap = getCustomMap();
+  useEffect(() => {
+    const fetchCustom = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'customItems'));
+        const map = snap.docs.reduce((acc, d) => {
+          const data = d.data();
+          acc[data.type || d.id] = data;
+          return acc;
+        }, {});
+        setCustomMap(map);
+      } catch {
+        setCustomMap({});
+      }
+    };
+    fetchCustom();
+  }, []);
+
   const custom = customMap[type];
   const opacity = isDragging ? 0.5 : 1;
   const dragStyle = isDragging ? 'scale-110 rotate-6' : 'hover:scale-105';
