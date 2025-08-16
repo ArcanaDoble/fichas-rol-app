@@ -132,7 +132,7 @@ const CustomItemManager = () => {
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
-            className="w-full relative z-10"
+            className="w-full relative"
             placeholder="Buscar objeto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -184,7 +184,12 @@ const CustomItemManager = () => {
             className="flex items-center gap-2 p-2 border border-gray-600 rounded"
           >
             {item.icon?.startsWith('data:') ? (
-              <img src={item.icon} alt={item.name} className="w-6 h-6" />
+              <img
+                src={item.icon}
+                alt={item.name}
+                className="w-6 h-6"
+                draggable={false}
+              />
             ) : item.icon?.startsWith('lucide:') ? (
               (() => {
                 const Icon = LucideIcons[item.icon.slice(7)];

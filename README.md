@@ -1484,6 +1484,22 @@ src/
 
 - "Comida" aparece entre los objetos predeterminados del gestor de objetos personalizados.
 
+**Resumen de cambios v2.4.44:**
+
+- El editor de color para objetos de inventario personalizados permite ingresar códigos hexadecimales.
+
+**Resumen de cambios v2.4.45:**
+
+- Las imágenes personalizadas de los objetos de inventario ya no pueden arrastrarse accidentalmente al moverlos.
+
+**Resumen de cambios v2.4.46:**
+
+- Los cuadros del inventario ahora tiñen su borde con el color de los objetos personalizados.
+
+**Resumen de cambios v2.4.47:**
+
+- Los tooltips de los objetos del inventario se muestran por encima del formulario de búsqueda.
+
 ## 🔄 Historial de cambios previos
 
 <details>
