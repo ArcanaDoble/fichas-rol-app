@@ -6,37 +6,6 @@ import Input from '../Input';
 import * as LucideIcons from 'lucide-react';
 import { db } from '../../firebase';
 
-const DEFAULT_CUSTOM_ITEMS = [
-  {
-    type: 'chatarra',
-    name: 'Chatarra',
-    icon: '⚙️',
-    description: 'Partes de recambio variadas',
-    color: '#facc15',
-  },
-  {
-    type: 'remedio',
-    name: 'Remedio',
-    icon: '💊',
-    description: 'Un remedio curativo',
-    color: '#60a5fa',
-  },
-  {
-    type: 'comida',
-    name: 'Comida',
-    icon: '🍖',
-    description: 'Provisiones comestibles',
-    color: '#86efac',
-  },
-  {
-    type: 'polvora',
-    name: 'Pólvora',
-    icon: '💥',
-    description: 'Material explosivo en polvo',
-    color: '#6b7280',
-  },
-];
-
 const CustomItemManager = () => {
   const [items, setItems] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -51,18 +20,9 @@ const CustomItemManager = () => {
       try {
         const snap = await getDocs(collection(db, 'customItems'));
         const fetched = snap.docs.map(d => d.data());
-        const merged = [...DEFAULT_CUSTOM_ITEMS];
-        fetched.forEach(it => {
-          const idx = merged.findIndex(d => d.type === it.type);
-          if (idx >= 0) {
-            merged[idx] = it;
-          } else {
-            merged.push(it);
-          }
-        });
-        setItems(merged);
+        setItems(fetched);
       } catch {
-        setItems(DEFAULT_CUSTOM_ITEMS);
+        setItems([]);
       }
     };
     fetchItems();
@@ -132,7 +92,7 @@ const CustomItemManager = () => {
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
-            className="w-full relative z-10"
+            className="w-full relative"
             placeholder="Buscar objeto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -184,7 +144,12 @@ const CustomItemManager = () => {
             className="flex items-center gap-2 p-2 border border-gray-600 rounded"
           >
             {item.icon?.startsWith('data:') ? (
-              <img src={item.icon} alt={item.name} className="w-6 h-6" />
+              <img
+                src={item.icon}
+                alt={item.name}
+                className="w-6 h-6"
+                draggable={false}
+              />
             ) : item.icon?.startsWith('lucide:') ? (
               (() => {
                 const Icon = LucideIcons[item.icon.slice(7)];

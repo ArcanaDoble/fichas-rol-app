@@ -20,10 +20,12 @@ beforeEach(() => {
   deleteDoc.mockClear();
 });
 
-test('shows default comida item', async () => {
+test('does not include default items when database is empty', async () => {
   getDocs.mockResolvedValueOnce({ docs: [] });
   render(<CustomItemManager />);
-  expect(await screen.findByText('Comida')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.queryByText('Comida')).toBeNull();
+  });
 });
 
 test('filters items by search', async () => {
@@ -41,6 +43,13 @@ test('filters items by search', async () => {
   expect(screen.queryByText('Poción')).toBeNull();
 });
 
+test('search input has no z-index so tooltips can appear above', async () => {
+  getDocs.mockResolvedValueOnce({ docs: [] });
+  render(<CustomItemManager />);
+  const search = screen.getByPlaceholderText(/buscar objeto/i);
+  expect(search.className).not.toMatch(/z-10/);
+});
+
 test('edits an item', async () => {
   getDocs.mockResolvedValueOnce({
     docs: [
@@ -53,10 +62,15 @@ test('edits an item', async () => {
   const nameInput = await screen.findByPlaceholderText('Nombre');
   await userEvent.clear(nameInput);
   await userEvent.type(nameInput, 'Perla');
+  const colorInput = screen.getByPlaceholderText('#ffffff');
+  await userEvent.clear(colorInput);
+  await userEvent.type(colorInput, '#123abc');
   await userEvent.click(screen.getByText('Guardar'));
   await screen.findByText('Perla');
   const call = setDoc.mock.calls[0];
-  expect(call[1]).toEqual(expect.objectContaining({ name: 'Perla' }));
+  expect(call[1]).toEqual(
+    expect.objectContaining({ name: 'Perla', color: '#123abc' })
+  );
 });
 
 test('deletes an item', async () => {
