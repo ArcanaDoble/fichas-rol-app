@@ -65,3 +65,26 @@ test('renders custom item from firestore', async () => {
   await screen.findByText('💎');
   await screen.findByText('1');
 });
+
+test('custom item applies animated glow with its color', async () => {
+  getDocs.mockResolvedValue({
+    docs: [
+      {
+        data: () => ({
+          name: 'Gema',
+          type: 'gema',
+          icon: '💎',
+          description: 'Una gema',
+          color: '#00ff00',
+        }),
+      },
+    ],
+  });
+  render(<ItemToken id="5" type="gema" count={1} />);
+  const icon = await screen.findByText('💎');
+  const wrapper = icon.parentElement;
+  expect(wrapper.className).toMatch(/animate-gradient/);
+  expect(wrapper.className).toMatch(/animate-glow/);
+  expect(wrapper.style.getPropertyValue('--glow-from')).toBe('rgba(0, 255, 0, 0.3)');
+  expect(wrapper.style.getPropertyValue('--glow-to')).toBe('rgba(0, 255, 0, 0.6)');
+});

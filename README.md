@@ -1500,6 +1500,10 @@ src/
 
 - Los tooltips de los objetos del inventario se muestran por encima del formulario de búsqueda.
 
+**Resumen de cambios v2.4.48:**
+
+- Los objetos personalizados del inventario incluyen el mismo efecto de degradado animado y brillo pulsante que los objetos predeterminados.
+
 ## 🔄 Historial de cambios previos
 
 <details>

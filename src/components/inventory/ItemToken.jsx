@@ -56,6 +56,14 @@ const lighten = (hex, amt) => {
   return `#${(b | (g << 8) | (r << 16)).toString(16).padStart(6, '0')}`;
 };
 
+const hexToRgba = (hex, alpha) => {
+  const num = parseInt(hex.slice(1), 16);
+  const r = num >> 16;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
       type: ItemTypes.TOKEN,
@@ -89,6 +97,8 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
 
   if (custom) {
     const light = lighten(custom.color, 40);
+    const glow = hexToRgba(custom.color, 0.3);
+    const glowStrong = hexToRgba(custom.color, 0.6);
     return (
       <div
         ref={drag}
@@ -96,7 +106,9 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
         style={{
           opacity,
           borderColor: custom.color,
-          backgroundImage: `linear-gradient(135deg, ${light}, ${custom.color}, ${light})`,
+          backgroundImage: `linear-gradient(90deg, ${light}, ${custom.color}, ${light})`,
+          '--glow-from': glow,
+          '--glow-to': glowStrong,
         }}
         data-tooltip-id={`item-${id}`}
         data-tooltip-content={custom.description}
