@@ -76,6 +76,7 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
           onKeyDown={handleKeyDown}
         />
         {suggest && (
+
           <>
             <span
               ref={mirrorRef}
