@@ -22,6 +22,13 @@ const DEFAULT_CUSTOM_ITEMS = [
     color: '#60a5fa',
   },
   {
+    type: 'comida',
+    name: 'Comida',
+    icon: '🍖',
+    description: 'Provisiones comestibles',
+    color: '#86efac',
+  },
+  {
     type: 'polvora',
     name: 'Pólvora',
     icon: '💥',

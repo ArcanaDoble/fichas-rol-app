@@ -20,6 +20,12 @@ beforeEach(() => {
   deleteDoc.mockClear();
 });
 
+test('shows default comida item', async () => {
+  getDocs.mockResolvedValueOnce({ docs: [] });
+  render(<CustomItemManager />);
+  expect(await screen.findByText('Comida')).toBeInTheDocument();
+});
+
 test('filters items by search', async () => {
   getDocs.mockResolvedValueOnce({
     docs: [

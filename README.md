@@ -1480,6 +1480,10 @@ src/
 
 - Los objetos de inventario personalizados se guardan en Firebase y se comparten entre dispositivos.
 
+**Resumen de cambios v2.4.43:**
+
+- "Comida" aparece entre los objetos predeterminados del gestor de objetos personalizados.
+
 ## 🔄 Historial de cambios previos
 
 <details>
