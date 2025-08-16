@@ -73,7 +73,7 @@ const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="relative flex-1">
           <Input
-            className="w-full relative z-10"
+            className="w-full relative"
             placeholder="Buscar objeto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

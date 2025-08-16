@@ -1496,6 +1496,10 @@ src/
 
 - Los cuadros del inventario ahora tiñen su borde con el color de los objetos personalizados.
 
+**Resumen de cambios v2.4.47:**
+
+- Los tooltips de los objetos del inventario se muestran por encima del formulario de búsqueda.
+
 ## 🔄 Historial de cambios previos
 
 <details>

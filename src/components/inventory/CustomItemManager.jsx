@@ -132,7 +132,7 @@ const CustomItemManager = () => {
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
-            className="w-full relative z-10"
+            className="w-full relative"
             placeholder="Buscar objeto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

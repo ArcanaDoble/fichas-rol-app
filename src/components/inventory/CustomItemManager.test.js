@@ -41,6 +41,13 @@ test('filters items by search', async () => {
   expect(screen.queryByText('Poción')).toBeNull();
 });
 
+test('search input has no z-index so tooltips can appear above', async () => {
+  getDocs.mockResolvedValueOnce({ docs: [] });
+  render(<CustomItemManager />);
+  const search = screen.getByPlaceholderText(/buscar objeto/i);
+  expect(search.className).not.toMatch(/z-10/);
+});
+
 test('edits an item', async () => {
   getDocs.mockResolvedValueOnce({
     docs: [
