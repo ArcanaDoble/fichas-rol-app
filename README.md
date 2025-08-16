@@ -1504,6 +1504,10 @@ src/
 
 - Los objetos personalizados del inventario incluyen el mismo efecto de degradado animado y brillo pulsante que los objetos predeterminados.
 
+**Resumen de cambios v2.4.49:**
+
+- Los objetos "Chatarra", "Comida", "Remedio" y "Pólvora" dejan de cargarse por defecto; ahora pueden editarse o eliminarse sin reaparecer.
+
 ## 🔄 Historial de cambios previos
 
 <details>

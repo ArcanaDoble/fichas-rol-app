@@ -6,37 +6,6 @@ import Input from '../Input';
 import * as LucideIcons from 'lucide-react';
 import { db } from '../../firebase';
 
-const DEFAULT_CUSTOM_ITEMS = [
-  {
-    type: 'chatarra',
-    name: 'Chatarra',
-    icon: '⚙️',
-    description: 'Partes de recambio variadas',
-    color: '#facc15',
-  },
-  {
-    type: 'remedio',
-    name: 'Remedio',
-    icon: '💊',
-    description: 'Un remedio curativo',
-    color: '#60a5fa',
-  },
-  {
-    type: 'comida',
-    name: 'Comida',
-    icon: '🍖',
-    description: 'Provisiones comestibles',
-    color: '#86efac',
-  },
-  {
-    type: 'polvora',
-    name: 'Pólvora',
-    icon: '💥',
-    description: 'Material explosivo en polvo',
-    color: '#6b7280',
-  },
-];
-
 const CustomItemManager = () => {
   const [items, setItems] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -51,18 +20,9 @@ const CustomItemManager = () => {
       try {
         const snap = await getDocs(collection(db, 'customItems'));
         const fetched = snap.docs.map(d => d.data());
-        const merged = [...DEFAULT_CUSTOM_ITEMS];
-        fetched.forEach(it => {
-          const idx = merged.findIndex(d => d.type === it.type);
-          if (idx >= 0) {
-            merged[idx] = it;
-          } else {
-            merged.push(it);
-          }
-        });
-        setItems(merged);
+        setItems(fetched);
       } catch {
-        setItems(DEFAULT_CUSTOM_ITEMS);
+        setItems([]);
       }
     };
     fetchItems();

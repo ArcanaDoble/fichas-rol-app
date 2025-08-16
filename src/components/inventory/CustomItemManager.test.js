@@ -20,10 +20,12 @@ beforeEach(() => {
   deleteDoc.mockClear();
 });
 
-test('shows default comida item', async () => {
+test('does not include default items when database is empty', async () => {
   getDocs.mockResolvedValueOnce({ docs: [] });
   render(<CustomItemManager />);
-  expect(await screen.findByText('Comida')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.queryByText('Comida')).toBeNull();
+  });
 });
 
 test('filters items by search', async () => {
