@@ -150,12 +150,27 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
       </div>
       <div className="flex flex-col sm:flex-row items-center gap-2">
         <label className="text-sm">Color:</label>
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          className="w-10 h-6 rounded border-0 p-0"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="w-10 h-6 rounded border-0 p-0"
+          />
+          <Input
+            value={color}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
+                setColor(value);
+              }
+            }}
+            size="sm"
+            className="w-24"
+            maxLength={7}
+            placeholder="#ffffff"
+          />
+        </div>
       </div>
       <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
         <Boton type="button" onClick={onCancel} color="gray" size="sm" className="w-full sm:w-auto">
