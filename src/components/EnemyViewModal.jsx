@@ -76,7 +76,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
   const windowBox = (
     <div
       ref={modalRef}
-      className="fixed bg-gray-800 rounded-xl w-full h-full sm:max-w-[80vw] sm:max-h-[70vh] overflow-y-auto p-2 sm:p-6 select-none pointer-events-auto"
+      className="fixed bg-gray-800 rounded-xl w-full max-h-screen sm:w-auto sm:max-w-[80vw] sm:max-h-[70vh] overflow-y-auto p-4 sm:p-6 select-none pointer-events-auto"
       style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={(e) => e.stopPropagation()}
@@ -85,14 +85,26 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
         <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
         <div className="flex gap-2">
           {onEdit && (
-            <Boton color="blue" onClick={() => onEdit(enemy)}>
+            <Boton
+              color="blue"
+              size="sm"
+              className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+              onClick={() => onEdit(enemy)}
+            >
               Editar
             </Boton>
           )}
-          <Boton color="gray" onClick={onClose}>✕</Boton>
+          <Boton
+            color="gray"
+            size="sm"
+            className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+            onClick={onClose}
+          >
+            ✕
+          </Boton>
         </div>
       </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Columna 1 */}
           <div className="space-y-4">
             {enemy.portrait && (

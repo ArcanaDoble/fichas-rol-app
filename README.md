@@ -928,6 +928,7 @@ src/
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
 - **Consumo de velocidad inteligente** - Las píldoras muestran el consumo real basado en emojis 🟡 del equipamiento
 - **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
+- **Mejoras responsive móviles** - Botones de Mapa de Batalla y Herramientas y formularios de enemigos se adaptan mejor a pantallas pequeñas
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo

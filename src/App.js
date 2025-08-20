@@ -3255,28 +3255,28 @@ function App() {
             {/* Botón de calculadora de dados */}
             <Boton
               onClick={() => setShowDiceCalculator(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               🎲
             </Boton>
             {/* Botón de minijuego reflejos */}
             <Boton
               onClick={() => setShowBarraReflejos(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-purple-600 hover:bg-purple-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               🔒
             </Boton>
             {/* Botón de sistema de iniciativa */}
             <Boton
               onClick={() => setShowInitiativeTracker(true)}
-              className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               ⚡
             </Boton>
             {/* Botón de Mapa de Batalla */}
             <Boton
               onClick={() => setShowPlayerBattleMap(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
               title="Mapa de Batalla"
             >
               🗺️
@@ -4168,25 +4168,47 @@ function App() {
               👹 Fichas de Enemigos
             </h1>
             <div className="flex gap-2">
-              <Boton color="indigo" onClick={() => setChosenView('canvas')}>
+              <Boton
+                color="indigo"
+                size="sm"
+                className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
+                onClick={() => setChosenView('canvas')}
+              >
                 Mapa de Batalla
               </Boton>
-              <Boton color="purple" onClick={() => setChosenView('tools')}>
+              <Boton
+                color="purple"
+                size="sm"
+                className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
+                onClick={() => setChosenView('tools')}
+              >
                 Herramientas
               </Boton>
               <Boton
+                size="sm"
                 onClick={() => setChosenView(null)}
-                className="bg-gray-700 hover:bg-gray-600"
+                className="bg-gray-700 hover:bg-gray-600 px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
               >
                 ← Volver al Menú
               </Boton>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Boton color="green" onClick={createNewEnemy}>
+            <Boton
+              color="green"
+              size="sm"
+              className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
+              onClick={createNewEnemy}
+            >
               Crear Nuevo Enemigo
             </Boton>
-            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+            <Boton
+              size="sm"
+              className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
+              onClick={refreshCatalog}
+            >
+              Refrescar
+            </Boton>
           </div>
           <Input
             placeholder="Buscar enemigo..."
@@ -4311,13 +4333,13 @@ function App() {
             }}
           >
             <div
-              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-gray-800 rounded-xl p-4 sm:p-6 w-full max-w-lg sm:max-w-6xl max-h-screen sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-xl font-bold mb-4">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 {/* Columna izquierda: Información básica */}
                 <div className="space-y-4">
                   {/* Nombre */}
