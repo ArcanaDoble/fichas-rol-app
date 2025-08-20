@@ -33,9 +33,9 @@ const EnemySheet = ({ enemy, onClose, onSave }) => {
   };
 
   const content = (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-gray-800 border border-gray-700 rounded shadow-xl max-w-[80vw] max-h-[70vh] overflow-auto p-6"
+        className="bg-gray-800 border border-gray-700 rounded shadow-xl w-full h-full sm:max-w-[80vw] sm:max-h-[70vh] overflow-y-auto p-2 sm:p-6"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
