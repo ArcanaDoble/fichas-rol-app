@@ -1508,6 +1508,10 @@ src/
 
 - Los objetos "Chatarra", "Comida", "Remedio" y "Pólvora" dejan de cargarse por defecto; ahora pueden editarse o eliminarse sin reaparecer.
 
+**Resumen de cambios v2.4.50:**
+
+- La vista de enemigos permite buscar por nombre o descripción y ordenar las fichas alfabéticamente o por nivel.
+
 ## 🔄 Historial de cambios previos
 
 <details>

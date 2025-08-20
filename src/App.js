@@ -435,6 +435,7 @@ function App() {
   const [estados, setEstados] = useState([]);
   // Estados para fichas de enemigos
   const [enemies, setEnemies] = useState([]);
+  const [enemySearch, setEnemySearch] = useState({ term: '', sort: '' });
   const [selectedEnemy, setSelectedEnemy] = useState(null);
   const [showEnemyForm, setShowEnemyForm] = useState(false);
   const [editingEnemy, setEditingEnemy] = useState(null);
@@ -4145,6 +4146,20 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    const filteredEnemies = enemies.filter((enemy) =>
+      enemy.name.toLowerCase().includes(enemySearch.term.toLowerCase()) ||
+      (enemy.description || '')
+        .toLowerCase()
+        .includes(enemySearch.term.toLowerCase())
+    );
+    const sortedEnemies =
+      enemySearch.sort === 'alpha'
+        ? [...filteredEnemies].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        : enemySearch.sort === 'level'
+        ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
+        : filteredEnemies;
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
@@ -4173,10 +4188,36 @@ function App() {
             </Boton>
             <Boton onClick={refreshCatalog}>Refrescar</Boton>
           </div>
+          <Input
+            placeholder="Buscar enemigo..."
+            value={enemySearch.term}
+            onChange={(e) =>
+              setEnemySearch({ ...enemySearch, term: e.target.value })
+            }
+            className="w-full mb-2"
+          />
+          <div className="flex gap-2 mb-4">
+            <Boton
+              size="sm"
+              onClick={() =>
+                setEnemySearch({ ...enemySearch, sort: 'alpha' })
+              }
+            >
+              A-Z
+            </Boton>
+            <Boton
+              size="sm"
+              onClick={() =>
+                setEnemySearch({ ...enemySearch, sort: 'level' })
+              }
+            >
+              Nivel
+            </Boton>
+          </div>
         </div>
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {enemies.map((enemy) => (
+          {sortedEnemies.map((enemy) => (
             <Tarjeta
               key={enemy.id}
               variant="magic"
