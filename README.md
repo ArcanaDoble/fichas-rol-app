@@ -1512,6 +1512,10 @@ src/
 
 - La vista de enemigos permite buscar por nombre o descripción y ordenar las fichas alfabéticamente o por nivel.
 
+**Resumen de cambios v2.4.51:**
+
+- Las fichas de enemigos ocupan toda la pantalla en móviles y permiten desplazarse cuando el contenido supera la altura.
+
 ## 🔄 Historial de cambios previos
 
 <details>
