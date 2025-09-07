@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
 import { motion } from 'framer-motion';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
 import ItemToken, { ItemTypes } from './ItemToken';
 
 const borderColors = {
@@ -20,10 +22,28 @@ const ringColors = {
 const Slot = ({ id, item, onDrop, onDelete }) => {
   const [animateDrop, setAnimateDrop] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [customMap, setCustomMap] = useState({});
 
   useEffect(() => {
     const check = () => setIsMobile(window.matchMedia('(max-width: 640px)').matches);
     check();
+  }, []);
+
+  useEffect(() => {
+    const fetchCustom = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'customItems'));
+        const map = snap.docs.reduce((acc, d) => {
+          const data = d.data();
+          acc[data.type || d.id] = data;
+          return acc;
+        }, {});
+        setCustomMap(map);
+      } catch {
+        setCustomMap({});
+      }
+    };
+    fetchCustom();
   }, []);
 
   const [{ isOver }, drop] = useDrop(() => ({
@@ -38,11 +58,13 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
   }), [onDrop]);
 
   const bg = 'bg-gray-700/70';
-  const border = item ? (borderColors[item.type] || 'border-gray-500') : 'border-gray-500';
-  const ringColor = item ? (ringColors[item.type] || 'ring-yellow-300') : 'ring-yellow-300';
+  const custom = item ? customMap[item.type] : null;
+  const border = custom ? '' : item ? (borderColors[item.type] || 'border-gray-500') : 'border-gray-500';
+  const ringColor = custom ? '' : item ? (ringColors[item.type] || 'ring-yellow-300') : 'ring-yellow-300';
   const highlight = isOver ? `ring-2 ${ringColor}` : '';
   const glow = item ? `ring-2 ${ringColor}` : `hover:ring-2 ${ringColor}`;
   const scale = 'scale-100 opacity-100';
+  const style = custom ? { borderColor: custom.color, '--tw-ring-color': custom.color } : {};
 
   return (
     <div
@@ -50,6 +72,7 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
       onDoubleClick={() => onDelete && !item && onDelete()}
       className={`group w-20 h-20 md:w-24 md:h-24 flex items-center justify-center border ${border} ${bg} ${highlight} ${glow} ${scale} rounded relative transition-all duration-300 transform`}
       title="Doble clic para borrar"
+      style={style}
     >
       {onDelete && !item && (
         <span className="absolute bottom-0 right-0 text-xl select-none pointer-events-none text-gray-400 hover:text-gray-300 transition-colors">

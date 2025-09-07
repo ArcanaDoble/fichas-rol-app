@@ -28,6 +28,7 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
+import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
@@ -437,6 +438,7 @@ function App() {
   const [estados, setEstados] = useState([]);
   // Estados para fichas de enemigos
   const [enemies, setEnemies] = useState([]);
+  const [enemySearch, setEnemySearch] = useState({ term: '', sort: '' });
   const [selectedEnemy, setSelectedEnemy] = useState(null);
   const [showEnemyForm, setShowEnemyForm] = useState(false);
   const [editingEnemy, setEditingEnemy] = useState(null);
@@ -3421,28 +3423,28 @@ function App() {
             {/* Botón de calculadora de dados */}
             <Boton
               onClick={() => setShowDiceCalculator(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               🎲
             </Boton>
             {/* Botón de minijuego reflejos */}
             <Boton
               onClick={() => setShowBarraReflejos(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-purple-600 hover:bg-purple-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               🔒
             </Boton>
             {/* Botón de sistema de iniciativa */}
             <Boton
               onClick={() => setShowInitiativeTracker(true)}
-              className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               ⚡
             </Boton>
             {/* Botón de Mapa de Batalla */}
             <Boton
               onClick={() => setShowPlayerBattleMap(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white w-12 h-12 rounded-lg flex items-center justify-center text-xl"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
               title="Mapa de Batalla"
             >
               🗺️
@@ -4329,6 +4331,20 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    const filteredEnemies = enemies.filter((enemy) =>
+      enemy.name.toLowerCase().includes(enemySearch.term.toLowerCase()) ||
+      (enemy.description || '')
+        .toLowerCase()
+        .includes(enemySearch.term.toLowerCase())
+    );
+    const sortedEnemies =
+      enemySearch.sort === 'alpha'
+        ? [...filteredEnemies].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        : enemySearch.sort === 'level'
+        ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
+        : filteredEnemies;
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
@@ -4340,12 +4356,18 @@ function App() {
               <Boton color="indigo" onClick={() => setChosenView('canvas')}>
                 Mapa de Batalla
               </Boton>
-              <Boton color="purple" onClick={() => setChosenView('tools')}>
+              <Boton
+                color="purple"
+                size="sm"
+                className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
+                onClick={() => setChosenView('tools')}
+              >
                 Herramientas
               </Boton>
               <Boton
+                size="sm"
                 onClick={() => setChosenView(null)}
-                className="bg-gray-700 hover:bg-gray-600"
+                className="bg-gray-700 hover:bg-gray-600 px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
               >
                 ← Volver al Menú
               </Boton>
@@ -4595,7 +4617,7 @@ function App() {
             }}
           >
             <div
-              className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-gray-800 rounded-xl p-4 sm:p-6 w-full max-w-lg sm:max-w-6xl max-h-screen sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-xl font-bold mb-2">
@@ -5333,6 +5355,9 @@ function App() {
             />
           </div>
         </div>
+        <Collapsible title="Objetos de inventario personalizados" defaultOpen={false}>
+          <CustomItemManager />
+        </Collapsible>
         <Collapsible
           title={
             editingTerm

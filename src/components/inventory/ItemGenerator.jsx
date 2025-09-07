@@ -1,21 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { collection, getDocs, setDoc, doc } from 'firebase/firestore';
 import Input from '../Input';
+import Boton from '../Boton';
+import CustomItemForm from './CustomItemForm';
+import { db } from '../../firebase';
 
-const ITEMS = ['remedio', 'chatarra', 'comida', 'polvora'];
-
-const ItemGenerator = ({ onGenerate }) => {
+const ItemGenerator = ({ onGenerate, allowCustom = false }) => {
+  const [items, setItems] = useState([]);
   const [query, setQuery] = useState('');
   const [suggest, setSuggest] = useState('');
   const mirrorRef = useRef(null);
   const [offset, setOffset] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'customItems'));
+        const types = snap.docs.map(d => d.data().type);
+        setItems(types);
+      } catch {
+        setItems([]);
+      }
+    };
+    fetchItems();
+  }, []);
 
   useEffect(() => {
     if (!query) {
       setSuggest('');
       return;
     }
-    const match = ITEMS.find((i) => i.startsWith(query.toLowerCase()));
+    const match = items.find(i => i.startsWith(query.toLowerCase()));
     if (match && match !== query.toLowerCase()) {
       setSuggest(match.slice(query.length));
     } else {
@@ -31,7 +48,7 @@ const ItemGenerator = ({ onGenerate }) => {
 
   const handleGenerate = () => {
     const type = query.toLowerCase();
-    if (ITEMS.includes(type)) {
+    if (items.includes(type)) {
       onGenerate(type);
       setQuery('');
       setSuggest('');
@@ -52,13 +69,14 @@ const ItemGenerator = ({ onGenerate }) => {
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
       <div className="relative flex-1">
         <Input
-          className="w-full text-black bg-transparent relative z-10"
+          className="w-full relative"
           placeholder="Buscar objeto"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
         />
         {suggest && (
+
           <>
             <span
               ref={mirrorRef}
@@ -67,7 +85,7 @@ const ItemGenerator = ({ onGenerate }) => {
               {query}
             </span>
             <span
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-20"
               style={{ marginLeft: offset }}
             >
               {suggest}
@@ -75,18 +93,33 @@ const ItemGenerator = ({ onGenerate }) => {
           </>
         )}
       </div>
-      <button
-        onClick={handleGenerate}
-        className="bg-blue-600 text-white px-3 py-1 rounded"
-      >
+      <Boton color="blue" size="sm" onClick={handleGenerate}>
         Generar
-      </button>
+      </Boton>
+      {allowCustom && (
+        <>
+          <Boton color="green" size="sm" onClick={() => setShowForm(true)}>
+            Nuevo
+          </Boton>
+          {showForm && (
+            <CustomItemForm
+              onSave={async (item) => {
+                await setDoc(doc(db, 'customItems', item.type), item);
+                setItems((prev) => [...prev, item.type]);
+                setShowForm(false);
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 };
 
 ItemGenerator.propTypes = {
   onGenerate: PropTypes.func.isRequired,
+  allowCustom: PropTypes.bool,
 };
 
 export default ItemGenerator;

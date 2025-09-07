@@ -1,0 +1,203 @@
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import Input from '../Input';
+import Boton from '../Boton';
+import EmojiPicker from 'emoji-picker-react';
+import LucideIconPicker from '../LucideIconPicker';
+import { Search } from 'lucide-react';
+
+const toSlug = (str) =>
+  str
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
+const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
+  const [name, setName] = useState(initial?.name || '');
+  const [description, setDescription] = useState(initial?.description || '');
+  const [icon, setIcon] = useState(initial?.icon || '');
+  const [color, setColor] = useState(initial?.color || '#a3a3a3');
+  const [showPicker, setShowPicker] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setDescription(initial.description || '');
+      setIcon(initial.icon || '');
+      setColor(initial.color || '#a3a3a3');
+    } else {
+      setName('');
+      setDescription('');
+      setIcon('');
+      setColor('#a3a3a3');
+    }
+  }, [initial]);
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') setIcon(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name) return;
+    const type = toSlug(name);
+    onSave({ name, type, icon, description, color });
+    if (!initial) {
+      setName('');
+      setDescription('');
+      setIcon('');
+      setColor('#a3a3a3');
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 p-4 border border-gray-600 rounded-lg bg-gray-800"
+    >
+      <Input
+        placeholder="Nombre"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        size="sm"
+      />
+      <Input
+        placeholder="Descripción"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        size="sm"
+      />
+      <div className="flex flex-col sm:flex-row gap-2 items-center relative">
+        <div className="relative flex-1 w-full">
+          <Input
+            className="w-full"
+            placeholder="Icono (emoji o Lucide)"
+            value={
+              icon.startsWith('data:')
+                ? ''
+                : icon.startsWith('lucide:')
+                ? icon.slice(7)
+                : icon
+            }
+            onChange={(e) => {
+              if (icon.startsWith('lucide:')) {
+                setIcon(`lucide:${e.target.value}`);
+              } else {
+                setIcon(e.target.value);
+              }
+            }}
+            size="sm"
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPicker((s) => !s);
+                setShowIconPicker(false);
+              }}
+              className="text-xl"
+            >
+              😀
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIconPicker((s) => !s);
+                setShowPicker(false);
+              }}
+              className="text-xl"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+          </div>
+          {showPicker && (
+            <div className="absolute z-20 mt-2 w-full sm:w-64">
+              <EmojiPicker
+                onEmojiClick={(e) => {
+                  setIcon(e.emoji);
+                  setShowPicker(false);
+                }}
+                theme="dark"
+                lazyLoadEmojis
+              />
+            </div>
+          )}
+          {showIconPicker && (
+            <div className="absolute z-20 mt-2 w-full sm:w-64">
+              <LucideIconPicker
+                onSelect={(name) => {
+                  setIcon(`lucide:${name}`);
+                  setShowIconPicker(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          className="text-sm text-gray-300"
+        />
+      </div>
+      <div className="flex flex-col sm:flex-row items-center gap-2">
+        <label className="text-sm">Color:</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="w-10 h-6 rounded border-0 p-0"
+          />
+          <Input
+            value={color}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
+                setColor(value);
+              }
+            }}
+            size="sm"
+            className="w-24"
+            maxLength={7}
+            placeholder="#ffffff"
+          />
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+        <Boton type="button" onClick={onCancel} color="gray" size="sm" className="w-full sm:w-auto">
+          Cancelar
+        </Boton>
+        <Boton type="submit" color="green" size="sm" className="w-full sm:w-auto">
+          Guardar
+        </Boton>
+      </div>
+    </form>
+  );
+};
+
+CustomItemForm.propTypes = {
+  onSave: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  initial: PropTypes.shape({
+    name: PropTypes.string,
+    type: PropTypes.string,
+    description: PropTypes.string,
+    icon: PropTypes.string,
+    color: PropTypes.string,
+  }),
+};
+
+CustomItemForm.defaultProps = {
+  initial: null,
+};
+
+export default CustomItemForm;

@@ -118,7 +118,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
   const windowBox = (
     <div
       ref={modalRef}
-      className="fixed bg-gray-800 rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto select-none pointer-events-auto"
+      className="fixed bg-gray-800 rounded-xl w-full max-h-screen sm:w-auto sm:max-w-[80vw] sm:max-h-[70vh] overflow-y-auto p-4 sm:p-6 select-none pointer-events-auto"
       style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={(e) => e.stopPropagation()}
@@ -137,11 +137,23 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             </Boton>
           )}
           {onEdit && (
-            <Boton color="blue" onClick={() => onEdit(enemy)}>
+            <Boton
+              color="blue"
+              size="sm"
+              className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+              onClick={() => onEdit(enemy)}
+            >
               Editar
             </Boton>
           )}
-          <Boton color="gray" onClick={onClose}>✕</Boton>
+          <Boton
+            color="gray"
+            size="sm"
+            className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+            onClick={onClose}
+          >
+            ✕
+          </Boton>
         </div>
       </div>
       {/* Buscador dentro de la ficha */}

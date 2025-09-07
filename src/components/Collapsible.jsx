@@ -7,9 +7,15 @@ function Collapsible({ title, children, defaultOpen = false }) {
   const contentRef = useRef(null);
 
   useEffect(() => {
-    if (contentRef.current) {
-      setHeight(open ? `${contentRef.current.scrollHeight}px` : '0px');
+    if (!contentRef.current) return;
+    if (open) {
+      const el = contentRef.current;
+      const h = `${el.scrollHeight}px`;
+      setHeight(h);
+      const timer = setTimeout(() => setHeight('auto'), 300);
+      return () => clearTimeout(timer);
     }
+    setHeight('0px');
   }, [open, children]);
 
   return (

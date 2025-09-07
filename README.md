@@ -155,7 +155,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Claves consumibles** - Acciones especiales con contador de usos
 - **Carga física y mental** - Sistema automático de penalizaciones por peso
 - **Estados del personaje** - Seguimiento de efectos activos con iconos
-- **Inventario tradicional** - Sistema de slots drag & drop para objetos básicos
+- **Inventario tradicional** - Sistema de slots drag & drop para objetos básicos y personalizables
 
 **Resumen de cambios v2.2.1:**
 
@@ -198,12 +198,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 **Resumen de cambios v2.2.12:**
 
 - Imagen del mapa se escala automáticamente al contenedor sin perder la relación de aspecto.
-- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 
 **Resumen de cambios v2.2.13:**
 
+- Opción para indicar el número de casillas y ajustar la grid al mapa cargado.
 - Mapa sin bordes negros utilizando escalado tipo cover o contain.
 - Zoom interactivo con la rueda del ratón en el Mapa de Batalla.
+- Búsqueda con autocompletado para objetos de inventario personalizados.
+- El formulario de nuevos objetos es ahora más usable en móviles.
+- El panel de objetos personalizados se mantiene abierto al crear un ítem.
 
 **Resumen de cambios v2.2.14:**
 
@@ -925,6 +928,7 @@ src/
 - **Corrección de error en MapCanvas** - Paréntesis faltante causaba fallo de compilación
 - **Consumo de velocidad inteligente** - Las píldoras muestran el consumo real basado en emojis 🟡 del equipamiento
 - **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
+- **Mejoras responsive móviles** - Botones de Mapa de Batalla y Herramientas y formularios de enemigos se adaptan mejor a pantallas pequeñas
 - **Interfaz más intuitiva** - Píldoras organizadas por color (azul para armas, morado para poderes) sin subtítulos
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo
@@ -1452,34 +1456,66 @@ src/
 
 **Resumen de cambios v2.4.37:**
 
-- Vista Enemigos optimizada para móvil: los botones "Mapa de Batalla", "Herramientas" y "Volver al menú" pasan a un botón flotante (FAB) con menú compacto en la esquina inferior derecha.
-- En pantallas medianas y grandes se mantienen en la cabecera, ahora oculta en móvil para evitar ocupar espacio.
-- Mejor experiencia en móviles al liberar espacio vertical de la lista de enemigos.
+- El máster puede crear objetos de inventario personalizados con nombre, descripción, icono y color desde sus herramientas.
+- Los formularios de creación de objetos personalizados usan la misma estética que los de poder, armadura o arma.
+- Los objetos personalizados pueden buscarse, editarse y eliminarse desde las herramientas del máster.
 
 **Resumen de cambios v2.4.38:**
 
-- Buscador de Enemigos recuperado y mejorado: búsqueda por nombre, descripción y equipo (armas, armaduras y poderes) con normalización de acentos.
-- Filtros en un clic: opción "Solo con retrato" y selector de orden (Nombre A→Z/Z→A, Nivel asc/desc).
-- Experiencia móvil optimizada: filtro colapsable y contador de resultados; en escritorio siempre visible.
+- "Chatarra", "Remedio" y "Pólvora" se incluyen en el buscador de objetos personalizados.
+- El formulario de objetos personalizados incorpora un selector de emojis optimizado para móvil.
 
 **Resumen de cambios v2.4.39:**
 
-- Cartas de Enemigos mejoradas sin cambiar el fondo ni la animación hover.
-- Badges superpuestos: nivel y conteo de armas, armaduras y poderes sobre el retrato.
-- Chips de resumen bajo el nombre para lectura rápida en móvil y escritorio.
-- Carga diferida de imágenes (`loading="lazy"`) para mejorar rendimiento.
+- Se reemplazó la dependencia del selector de emojis por una compatible con React 19 para evitar errores de instalación.
 
 **Resumen de cambios v2.4.40:**
 
-- Ficha de Enemigo mejorada (Viewer):
-  - Buscador interno que filtra equipo y poderes por nombre, rasgos y descripción con normalización de acentos.
-  - Tabs de navegación rápida (Resumen, Armas, Armaduras, Poderes, Notas) que hacen scroll a cada sección.
-- Barra de acciones sticky en móvil con Editar y Cerrar accesibles.
+- El formulario de objetos personalizados permite seleccionar iconos SVG de la librería Lucide.
 
 **Resumen de cambios v2.4.41:**
 
-- Sticky móvil de la Ficha: botones compactos y redondos con iconos (Mapa, Duplicar, Editar, Cerrar) para mejorar ergonomía y evitar saltos de línea.
-- Enviar al mapa mejorado: crea el token en el centro del mapa y centra la cámara automáticamente sobre él al abrir Canvas.
+- Corrección del selector de iconos Lucide evitando el error `iconNode is undefined` al abrirlo.
+
+**Resumen de cambios v2.4.42:**
+
+- Los objetos de inventario personalizados se guardan en Firebase y se comparten entre dispositivos.
+
+**Resumen de cambios v2.4.43:**
+
+- "Comida" aparece entre los objetos predeterminados del gestor de objetos personalizados.
+
+**Resumen de cambios v2.4.44:**
+
+- El editor de color para objetos de inventario personalizados permite ingresar códigos hexadecimales.
+
+**Resumen de cambios v2.4.45:**
+
+- Las imágenes personalizadas de los objetos de inventario ya no pueden arrastrarse accidentalmente al moverlos.
+
+**Resumen de cambios v2.4.46:**
+
+- Los cuadros del inventario ahora tiñen su borde con el color de los objetos personalizados.
+
+**Resumen de cambios v2.4.47:**
+
+- Los tooltips de los objetos del inventario se muestran por encima del formulario de búsqueda.
+
+**Resumen de cambios v2.4.48:**
+
+- Los objetos personalizados del inventario incluyen el mismo efecto de degradado animado y brillo pulsante que los objetos predeterminados.
+
+**Resumen de cambios v2.4.49:**
+
+- Los objetos "Chatarra", "Comida", "Remedio" y "Pólvora" dejan de cargarse por defecto; ahora pueden editarse o eliminarse sin reaparecer.
+
+**Resumen de cambios v2.4.50:**
+
+- La vista de enemigos permite buscar por nombre o descripción y ordenar las fichas alfabéticamente o por nivel.
+
+**Resumen de cambios v2.4.51:**
+
+- Las fichas de enemigos ocupan toda la pantalla en móviles y permiten desplazarse cuando el contenido supera la altura.
 
 ## 🔄 Historial de cambios previos
 
