@@ -1450,6 +1450,37 @@ src/
 - Las animaciones de daño duran ahora 10 s.
 - Los números de daño duplican su tamaño para mayor legibilidad.
 
+**Resumen de cambios v2.4.37:**
+
+- Vista Enemigos optimizada para móvil: los botones "Mapa de Batalla", "Herramientas" y "Volver al menú" pasan a un botón flotante (FAB) con menú compacto en la esquina inferior derecha.
+- En pantallas medianas y grandes se mantienen en la cabecera, ahora oculta en móvil para evitar ocupar espacio.
+- Mejor experiencia en móviles al liberar espacio vertical de la lista de enemigos.
+
+**Resumen de cambios v2.4.38:**
+
+- Buscador de Enemigos recuperado y mejorado: búsqueda por nombre, descripción y equipo (armas, armaduras y poderes) con normalización de acentos.
+- Filtros en un clic: opción "Solo con retrato" y selector de orden (Nombre A→Z/Z→A, Nivel asc/desc).
+- Experiencia móvil optimizada: filtro colapsable y contador de resultados; en escritorio siempre visible.
+
+**Resumen de cambios v2.4.39:**
+
+- Cartas de Enemigos mejoradas sin cambiar el fondo ni la animación hover.
+- Badges superpuestos: nivel y conteo de armas, armaduras y poderes sobre el retrato.
+- Chips de resumen bajo el nombre para lectura rápida en móvil y escritorio.
+- Carga diferida de imágenes (`loading="lazy"`) para mejorar rendimiento.
+
+**Resumen de cambios v2.4.40:**
+
+- Ficha de Enemigo mejorada (Viewer):
+  - Buscador interno que filtra equipo y poderes por nombre, rasgos y descripción con normalización de acentos.
+  - Tabs de navegación rápida (Resumen, Armas, Armaduras, Poderes, Notas) que hacen scroll a cada sección.
+- Barra de acciones sticky en móvil con Editar y Cerrar accesibles.
+
+**Resumen de cambios v2.4.41:**
+
+- Sticky móvil de la Ficha: botones compactos y redondos con iconos (Mapa, Duplicar, Editar, Cerrar) para mejorar ergonomía y evitar saltos de línea.
+- Enviar al mapa mejorado: crea el token en el centro del mapa y centra la cámara automáticamente sobre él al abrir Canvas.
+
 ## 🔄 Historial de cambios previos
 
 <details>
@@ -1505,3 +1536,16 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ---
 
 **Desarrollado con ❤️ para la comunidad de rol**
+
+---
+
+## Novedades: Minimapa responsive (v2.4.43)
+
+- Nuevo constructor de Minimapa en modo Máster.
+- Agrega celdas desde la periferia con botones cuadrados de borde discontinuo y “+”, ahora con mayor separación del cuadrante para evitar solapes visuales. Al pasar el ratón, se resaltan en verde.
+- Agrega celdas individuales en huecos adyacentes a celdas activas mediante “+” interno.
+- Elimina celdas de forma intuitiva: botón “−” en la celda seleccionada o modo “Editar forma”. En móvil, mantener pulsado sobre una celda activa para eliminarla.
+- Control de escala: Auto‑ajustar (por defecto en móvil) evita romper el responsive cuando crece el número de celdas; disponible control de Zoom manual.
+- Nuevo toggle “Modo legible”: engrosa temporalmente las líneas del grid para mejorar la lectura en móviles o a escalas bajas.
+
+Guía rápida: ver `docs/Minimapa.md`.

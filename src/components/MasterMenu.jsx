@@ -30,7 +30,7 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       description: 'Control total del combate con iniciativa y gestión de participantes',
       color: 'blue',
       features: ['Control Master', 'Enemigos', 'Velocidad', 'Tiempo Real'],
-      isNew: true,
+      isNew: false,
     },
     {
       id: 'enemies',
@@ -38,7 +38,7 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       description: 'Crear y gestionar fichas de enemigos con retratos',
       color: 'red',
       features: ['Fichas NPCs', 'Retratos', 'Estadísticas', 'Gestión'],
-      isNew: true,
+      isNew: false,
     },
     {
       id: 'canvas',
@@ -46,6 +46,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       description: 'Tablero virtual sencillo con grid y tokens',
       color: 'indigo',
       features: ['Mapa', 'Tokens', 'Grid'],
+      isNew: false,
+    },
+    {
+      id: 'minimap',
+      title: 'Minimapa',
+      description: 'Constructor de minimapas con vista PC y Movil',
+      color: 'green',
+      features: ['Constructor', 'PC', 'Movil', 'Iconos'],
       isNew: true,
     },
     {

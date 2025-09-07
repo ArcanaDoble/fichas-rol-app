@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
@@ -6,6 +6,7 @@ import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import Tarjeta from './Tarjeta';
 import Boton from './Boton';
+import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const defaultRecursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
@@ -23,7 +24,7 @@ const atributoColor = {
   voluntad: '#a78bfa',
 };
 
-const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floating = false }) => {
+const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, highlightText = (t) => t, floating = false }) => {
   const modalRef = useRef(null);
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 250 });
   const [dragging, setDragging] = useState(false);
@@ -73,6 +74,47 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
     }
   };
 
+  // Buscar dentro de la ficha (equipo y poderes)
+  const [query, setQuery] = useState('');
+  const normalize = (t) => (t || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const tokens = useMemo(() => normalize(query).split(/\s+/).filter(Boolean), [query]);
+  const matches = (text) => {
+    if (tokens.length === 0) return true;
+    const n = normalize(text);
+    return tokens.every((tk) => n.includes(tk));
+  };
+  const filteredWeapons = useMemo(() => {
+    const list = enemy.weapons || [];
+    if (tokens.length === 0) return list;
+    return list.filter((w) =>
+      matches(`${w?.nombre || ''} ${w?.descripcion || ''} ${w?.rasgos?.join(', ') || ''} ${w?.dano || ''} ${w?.tipoDano || ''}`)
+    );
+  }, [enemy.weapons, tokens]);
+  const filteredArmors = useMemo(() => {
+    const list = enemy.armaduras || [];
+    if (tokens.length === 0) return list;
+    return list.filter((a) =>
+      matches(`${a?.nombre || ''} ${a?.descripcion || ''} ${a?.rasgos?.join(', ') || ''} ${a?.defensa || ''}`)
+    );
+  }, [enemy.armaduras, tokens]);
+  const filteredPowers = useMemo(() => {
+    const list = enemy.poderes || [];
+    if (tokens.length === 0) return list;
+    return list.filter((p) =>
+      matches(`${p?.nombre || ''} ${p?.descripcion || ''} ${p?.rasgos?.join(', ') || ''} ${p?.poder || ''} ${p?.alcance || ''}`)
+    );
+  }, [enemy.poderes, tokens]);
+
+  const scrollTo = (id) => {
+    if (!modalRef.current) return;
+    const el = modalRef.current.querySelector(`#${id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const windowBox = (
     <div
       ref={modalRef}
@@ -83,7 +125,17 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
     >
       <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
         <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
+          {onSendToMap && (
+            <Boton color="indigo" onClick={() => onSendToMap(enemy)}>
+              Enviar al mapa
+            </Boton>
+          )}
+          {onDuplicate && (
+            <Boton color="yellow" onClick={() => onDuplicate(enemy)}>
+              Duplicar
+            </Boton>
+          )}
           {onEdit && (
             <Boton color="blue" onClick={() => onEdit(enemy)}>
               Editar
@@ -91,6 +143,25 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
           )}
           <Boton color="gray" onClick={onClose}>✕</Boton>
         </div>
+      </div>
+      {/* Buscador dentro de la ficha */}
+      <div className="mb-3 relative">
+        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar en equipo y poderes (nombre, rasgos, descripción...)"
+          className="w-full pl-10 pr-3 py-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600"
+        />
+      </div>
+      {/* Tabs de navegación rápida */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('info')}>Resumen</button>
+        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('weapons')}>Armas</button>
+        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('armors')}>Armaduras</button>
+        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('powers')}>Poderes</button>
+        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('notes')}>Notas</button>
       </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Columna 1 */}
@@ -105,7 +176,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                 />
               </div>
             )}
-            <div className="bg-gray-700 rounded-lg p-4 space-y-2">
+            <div id="info" className="bg-gray-700 rounded-lg p-4 space-y-2">
               <h3 className="font-semibold text-lg">Información Básica</h3>
               <div className="text-sm space-y-1">
                 <p><span className="font-medium">Nivel:</span> {enemy.nivel || 1}</p>
@@ -120,7 +191,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
               </div>
             )}
             {enemy.notas && (
-              <div className="bg-gray-700 rounded-lg p-4">
+              <div id="notes" className="bg-gray-700 rounded-lg p-4">
                 <h3 className="font-semibold mb-2">Notas</h3>
                 <p className="text-gray-300 text-sm">{highlightText(enemy.notas)}</p>
               </div>
@@ -171,11 +242,11 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
           </div>
           {/* Columna 3 */}
           <div className="space-y-4">
-            <div className="bg-gray-700 rounded-lg p-4">
+            <div id="weapons" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armas Equipadas</h3>
-              {enemy.weapons?.length > 0 ? (
+              {filteredWeapons?.length > 0 ? (
                 <div className="space-y-2">
-                  {enemy.weapons.map((weapon, index) => (
+                  {filteredWeapons.map((weapon, index) => (
                     <Tarjeta key={index} variant="weapon" className="text-xs">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-lg">⚔️</span>
@@ -207,11 +278,11 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                 <p className="text-gray-400 text-sm">Sin armas equipadas</p>
               )}
             </div>
-            <div className="bg-gray-700 rounded-lg p-4">
+            <div id="armors" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
-              {enemy.armaduras?.length > 0 ? (
+              {filteredArmors?.length > 0 ? (
                 <div className="space-y-2">
-                  {enemy.armaduras.map((armor, index) => (
+                  {filteredArmors.map((armor, index) => (
                     <Tarjeta key={index} variant="armor" className="text-xs">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-lg">🛡️</span>
@@ -237,11 +308,11 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
                 <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
               )}
             </div>
-            <div className="bg-gray-700 rounded-lg p-4">
+            <div id="powers" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Poderes Equipados</h3>
-              {enemy.poderes?.length > 0 ? (
+              {filteredPowers?.length > 0 ? (
                 <div className="space-y-2">
-                  {enemy.poderes.map((power, index) => (
+                  {filteredPowers.map((power, index) => (
                     <Tarjeta key={index} variant="power" className="text-xs">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-lg">💪</span>
@@ -275,6 +346,53 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, highlightText = (t) => t, floa
             </div>
           </div>
         </div>
+        {/* Barra de acciones sticky para móvil */}
+        <div className="md:hidden sticky bottom-0 left-0 right-0 bg-gray-900/95 border-t border-gray-700 mt-3 -mx-6 px-4 py-2">
+          <div className="flex items-center justify-around gap-3">
+            {onSendToMap && (
+              <button
+                type="button"
+                title="Enviar al mapa"
+                aria-label="Enviar al mapa"
+                onClick={() => onSendToMap(enemy)}
+                className="h-10 w-10 rounded-full bg-indigo-600 text-white shadow flex items-center justify-center active:scale-95"
+              >
+                <FiMap />
+              </button>
+            )}
+            {onDuplicate && (
+              <button
+                type="button"
+                title="Duplicar"
+                aria-label="Duplicar"
+                onClick={() => onDuplicate(enemy)}
+                className="h-10 w-10 rounded-full bg-yellow-500 text-gray-900 shadow flex items-center justify-center active:scale-95"
+              >
+                <FiCopy />
+              </button>
+            )}
+            {onEdit && (
+              <button
+                type="button"
+                title="Editar"
+                aria-label="Editar"
+                onClick={() => onEdit(enemy)}
+                className="h-10 w-10 rounded-full bg-blue-600 text-white shadow flex items-center justify-center active:scale-95"
+              >
+                <FiEdit2 />
+              </button>
+            )}
+            <button
+              type="button"
+              title="Cerrar"
+              aria-label="Cerrar"
+              onClick={onClose}
+              className="h-10 w-10 rounded-full bg-gray-700 text-white shadow flex items-center justify-center active:scale-95"
+            >
+              <FiX />
+            </button>
+          </div>
+        </div>
       </div>
   );
 
@@ -294,6 +412,8 @@ EnemyViewModal.propTypes = {
   enemy: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onEdit: PropTypes.func,
+  onDuplicate: PropTypes.func,
+  onSendToMap: PropTypes.func,
   highlightText: PropTypes.func,
   floating: PropTypes.bool,
 };
