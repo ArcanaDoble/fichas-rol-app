@@ -956,6 +956,57 @@ const MapCanvas = ({
   useEffect(() => { tokensRef.current = tokens; }, [tokens]);
   useEffect(() => { gridOffsetXRef.current = gridOffsetX; }, [gridOffsetX]);
   useEffect(() => { gridOffsetYRef.current = gridOffsetY; }, [gridOffsetY]);
+  const [focusPings, setFocusPings] = useState([]);
+  // Centrar la cámara y mostrar ping al recibir el evento global
+  useEffect(() => {
+    const handler = (e) => {
+      const { tokenId } = e.detail || {};
+      const token = tokensRef.current.find((t) => t.id === tokenId);
+      if (!token || !stageRef.current || !containerRef.current) return;
+      try {
+        const scale = baseScaleRef.current * zoomRef.current;
+        const gSize = gridSizeRef.current;
+        const centerX = token.x * gSize + gridOffsetXRef.current + ((token.w || 1) * gSize) / 2;
+        const centerY = token.y * gSize + gridOffsetYRef.current + ((token.h || 1) * gSize) / 2;
+        const rect = containerRef.current.getBoundingClientRect();
+        const gx = rect.width / 2 - centerX * scale;
+        const gy = rect.height / 2 - centerY * scale;
+        setGroupPos({ x: gx, y: gy });
+
+        // Coordenadas de pantalla para ping visual
+        const stageRect = stageRef.current.container().getBoundingClientRect();
+        const screenX = centerX * scale + gx + stageRect.left - rect.left;
+        const screenY = centerY * scale + gy + stageRect.top - rect.top;
+        const id = nanoid();
+        setFocusPings((ps) => [...ps, { id, x: screenX, y: screenY }]);
+        setTimeout(() => setFocusPings((ps) => ps.filter((p) => p.id !== id)), 1200);
+      } catch {}
+    };
+    window.addEventListener('focusToken', handler);
+    return () => window.removeEventListener('focusToken', handler);
+  }, []);
+  // Centrar la cámara en un token recién creado cuando se dispare el evento global
+  useEffect(() => {
+    const handler = (e) => {
+      const { tokenId } = e.detail || {};
+      const token = tokensRef.current.find((t) => t.id === tokenId);
+      if (!token || !stageRef.current || !containerRef.current) return;
+      try {
+        const scale = baseScaleRef.current * zoomRef.current;
+        const gSize = gridSizeRef.current;
+        const cellToPx = (cell, offset) => cell * gSize + (gridOffsetXRef.current);
+        const cellToPy = (cell, offset) => cell * gSize + (gridOffsetYRef.current);
+        const centerX = cellToPx(token.x) + ((token.w || 1) * gSize) / 2;
+        const centerY = cellToPy(token.y) + ((token.h || 1) * gSize) / 2;
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        const gx = width / 2 - centerX * scale;
+        const gy = height / 2 - centerY * scale;
+        setGroupPos({ x: gx, y: gy });
+      } catch {}
+    };
+    window.addEventListener('focusToken', handler);
+    return () => window.removeEventListener('focusToken', handler);
+  }, []);
   useEffect(() => {
     const migrateTokens = async () => {
       if (!pageId) return;
@@ -2677,10 +2728,20 @@ const MapCanvas = ({
 
   const handleOpenSettings = (id) => {
     setSettingsTokenIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    try {
+      window.dispatchEvent(
+        new CustomEvent('tokenSettingsEditing', { detail: { delta: 1 } })
+      );
+    } catch {}
   };
 
   const handleCloseSettings = (id) => {
     setSettingsTokenIds((prev) => prev.filter((sid) => sid !== id));
+    try {
+      window.dispatchEvent(
+        new CustomEvent('tokenSettingsEditing', { detail: { delta: -1 } })
+      );
+    } catch {}
   };
 
   const handleOpenEstados = (id) => {
@@ -4573,6 +4634,15 @@ const MapCanvas = ({
         </Stage>
       </div>
       <div className="absolute inset-0 pointer-events-none z-40">
+        {/* Ping de enfoque al centrar cámara */}
+        {focusPings.map((p) => (
+          <div key={p.id} style={{ position: 'absolute', left: p.x - 12, top: p.y - 12 }}>
+            <div className="relative h-6 w-6">
+              <div className="absolute inset-0 rounded-full bg-blue-400/40"></div>
+              <div className="absolute inset-0 rounded-full border-2 border-blue-300 animate-ping"></div>
+            </div>
+          </div>
+        ))}
         {(() => {
           const groups = damagePopups.reduce((acc, p) => {
             acc[p.tokenId] = acc[p.tokenId] || [];

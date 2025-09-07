@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue } from 'react';
 import fetchSheetData from './utils/fetchSheetData';
 import {
   doc,
@@ -10,11 +10,13 @@ import {
   collection,
   getDocs,
   onSnapshot,
+  addDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
-import { GiFist } from 'react-icons/gi';
+import { GiFist, GiCrossedSwords, GiShield, GiSpellBook } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
+import { FiMap, FiTool, FiArrowLeft, FiPlus, FiX, FiSearch, FiFilter, FiXCircle, FiStar } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -37,8 +39,9 @@ import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
+const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
-import { saveTokenSheet } from './utils/token';
+import { saveTokenSheet, ensureSheetDefaults } from './utils/token';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -454,6 +457,7 @@ function App() {
     notas: '',
     estados: [],
   });
+  const [enemyEditorTab, setEnemyEditorTab] = useState('ficha'); // 'ficha' | 'equipo'
   // Estados para equipar items a enemigos
   const [enemyInputArma, setEnemyInputArma] = useState('');
   const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
@@ -463,6 +467,56 @@ function App() {
   const [enemyPoderError, setEnemyPoderError] = useState('');
   // Vista elegida por el máster (inventario prototipo u opciones clásicas)
   const [chosenView, setChosenView] = useState(null);
+  // Acciones móviles (FAB) para la vista de Enemigos
+  const [enemyActionsOpen, setEnemyActionsOpen] = useState(false);
+  // Buscador y filtros de Enemigos
+  const [enemySearch, setEnemySearch] = useState('');
+  const deferredEnemySearch = useDeferredValue(enemySearch);
+  const [enemyOnlyPortraits, setEnemyOnlyPortraits] = useState(false);
+  const [enemySort, setEnemySort] = useState('name'); // 'name' | 'nivel'
+  const [enemySortDir, setEnemySortDir] = useState('asc'); // 'asc' | 'desc'
+  const [enemyFiltersOpen, setEnemyFiltersOpen] = useState(false);
+
+  const normalizeText = (t) =>
+    (t || '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+  const filteredEnemies = useMemo(() => {
+    const tokens = normalizeText(deferredEnemySearch).split(/\s+/).filter(Boolean);
+    const list = (enemies || []).filter((e) => {
+      if (enemyOnlyPortraits && !e.portrait) return false;
+      if (tokens.length === 0) return true;
+      const hay = [
+        e.name,
+        e.description,
+        e.notas,
+        ...(e.weapons || []).map((w) => w?.nombre || w?.name || ''),
+        ...(e.armaduras || []).map((a) => a?.nombre || a?.name || ''),
+        ...(e.poderes || []).map((p) => p?.nombre || p?.name || ''),
+        Object.keys(e.atributos || {}).join(' '),
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const normalized = normalizeText(hay);
+      return tokens.every((t) => normalized.includes(t));
+    });
+    const dir = enemySortDir === 'asc' ? 1 : -1;
+    return list.sort((a, b) => {
+      if (enemySort === 'nivel') {
+        const an = parseInt(a.nivel || 0, 10);
+        const bn = parseInt(b.nivel || 0, 10);
+        if (an !== bn) return (an - bn) * dir;
+      }
+      const an = normalizeText(a.name || '');
+      const bn = normalizeText(b.name || '');
+      if (an < bn) return -1 * dir;
+      if (an > bn) return 1 * dir;
+      return 0;
+    });
+  }, [enemies, deferredEnemySearch, enemyOnlyPortraits, enemySort, enemySortDir]);
   // Glosario de términos destacados
   const {
     glossary,
@@ -493,6 +547,8 @@ function App() {
   const canvasTokensRef = useRef([]);
   const isLocalTokenEdit = useRef(false);
   const isRemoteTokenUpdate = useRef(false);
+  // Señal para diferir guardado de tokens cuando haya ajustes abiertos
+  const pendingTokenSaveRef = useRef(false);
   const prevLinesRef = useRef([]);
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
@@ -508,6 +564,19 @@ function App() {
     grid: 0,
   });
   const loadVersionRef = useRef(0);
+  // Evitar guardados de tokens mientras está abierto TokenSettings
+  const settingsEditingCountRef = useRef(0);
+  useEffect(() => {
+    const handler = (e) => {
+      const { delta } = e.detail || {};
+      settingsEditingCountRef.current = Math.max(
+        0,
+        settingsEditingCountRef.current + (typeof delta === 'number' ? delta : 0)
+      );
+    };
+    window.addEventListener('tokenSettingsEditing', handler);
+    return () => window.removeEventListener('tokenSettingsEditing', handler);
+  }, []);
   // Tokens para el Mapa de Batalla
   const [canvasTokens, setCanvasTokens] = useState([]);
   const [canvasLines, setCanvasLines] = useState([]);
@@ -581,6 +650,46 @@ function App() {
     checkedPagesRef.current[pageId] = true;
     return updated;
   }, []);
+
+  // Al cerrar el panel de Ajustes de Token, si hubo cambios mientras estaba abierto
+  // y se pospuso el guardado, hacemos un guardado único ahora.
+  useEffect(() => {
+    const maybeFlush = () => {
+      setTimeout(async () => {
+        if (settingsEditingCountRef.current !== 0 || !pendingTokenSaveRef.current) return;
+        try {
+          const pageId = pages[currentPage]?.id;
+          if (!pageId) return;
+          const tokens = await Promise.all(
+            canvasTokens.map(async (t) => {
+              if (t.url && t.url.startsWith('data:')) {
+                const url = await uploadDataUrl(t.url, `canvas-tokens/${t.id}`);
+                return { ...t, url };
+              }
+              return t;
+            })
+          );
+          const tokensRef = collection(db, 'pages', pageId, 'tokens');
+          const toDelete = (prevTokensRef.current || []).filter(
+            (pt) => !tokens.some((t) => t.id === pt.id)
+          );
+          await Promise.all([
+            ...tokens.map((t) => setDoc(doc(tokensRef, String(t.id)), t)),
+            ...toDelete.map((t) => deleteDoc(doc(tokensRef, String(t.id)))),
+          ]);
+        } catch (err) {
+          console.error('Error guardando tokens (al cerrar ajustes):', err);
+        } finally {
+          isLocalTokenEdit.current = false;
+          isRemoteTokenUpdate.current = false;
+          pendingTokenSaveRef.current = false;
+          prevTokensRef.current = canvasTokens;
+        }
+      }, 10);
+    };
+    window.addEventListener('tokenSettingsEditing', maybeFlush);
+    return () => window.removeEventListener('tokenSettingsEditing', maybeFlush);
+  }, [currentPage, pages, canvasTokens]);
 
   // Control de visibilidad de páginas para jugadores
   const [playerVisiblePageId, setPlayerVisiblePageId] = useState(null);
@@ -766,6 +875,8 @@ function App() {
     if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
+    // Si hay paneles de ajustes abiertos, no dispares guardado
+    if (settingsEditingCountRef.current > 0) return;
 
     const pageRef = doc(db, 'pages', pageId);
     const tokensRef = collection(pageRef, 'tokens');
@@ -964,9 +1075,9 @@ function App() {
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
     if (deepEqual(canvasTokens, prevTokensRef.current)) return;
+    if (settingsEditingCountRef.current > 0) { pendingTokenSaveRef.current = true; return; }
 
     const prevTokens = prevTokensRef.current;
-    prevTokensRef.current = canvasTokens;
     if (isRemoteTokenUpdate.current) {
       isRemoteTokenUpdate.current = false;
       isLocalTokenEdit.current = false;
@@ -1025,6 +1136,7 @@ function App() {
         } finally {
           isLocalTokenEdit.current = false;
           isRemoteTokenUpdate.current = false;
+          prevTokensRef.current = canvasTokens;
         }
       };
       saveTokens();
@@ -2188,6 +2300,62 @@ function App() {
     setEditingEnemy(enemy.id);
     setSelectedEnemy(null); // Close preview when switching to edit mode
     setShowEnemyForm(true);
+  };
+
+  const duplicateEnemy = async (enemy) => {
+    if (!enemy) return;
+    try {
+      const { id, updatedAt, ...rest } = enemy;
+      const copy = {
+        ...rest,
+        name: enemy.name ? `${enemy.name} (copia)` : 'Enemigo (copia)',
+      };
+      const newId = await saveEnemy(copy);
+      const saved = { ...copy, id: newId };
+      setSelectedEnemy(saved);
+    } catch (e) {
+      console.error('Error duplicando enemigo', e);
+    }
+  };
+
+  const sendEnemyToMap = async (enemy) => {
+    try {
+      const pageId = pages[currentPage]?.id || pages[0]?.id;
+      if (!pageId || !enemy) return;
+      const tokensRef = collection(doc(db, 'pages', pageId), 'tokens');
+      // Preparar una hoja propia de token clonando la ficha del enemigo
+      const tokenSheetId = nanoid();
+      const clonedSheet = ensureSheetDefaults({ id: tokenSheetId, ...enemy });
+      await saveTokenSheet(clonedSheet);
+
+      // Colocar en el centro aproximado del mapa
+      const pg = pages.find((p) => p.id === pageId) || {};
+      const cells = Math.max(1, pg.gridCells || 30);
+      const centerCell = Math.floor(cells / 2);
+      const docRef = await addDoc(tokensRef, {
+        x: centerCell,
+        y: centerCell,
+        url: enemy.portrait || '',
+        name: enemy.name || 'Enemigo',
+        enemyId: enemy.id,
+        tokenSheetId,
+        showName: false,
+        controlledBy: 'master',
+        barsVisibility: 'all',
+        opacity: 1,
+      });
+      // Cambiar a la vista de mapa y centrar el nuevo token
+      setChosenView('canvas');
+      setTimeout(() => {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('focusToken', { detail: { tokenId: docRef.id } })
+          );
+        } catch {}
+      }, 400);
+    } catch (e) {
+      console.error('Error enviando enemigo al mapa', e);
+    }
   };
 
   const updateEnemyFromToken = async (enemy) => {
@@ -3646,6 +3814,23 @@ function App() {
                       {newResError}
                     </p>
                   )}
+                  {/* Metadatos superpuestos */}
+                  <div className="absolute top-2 left-2">
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 border border-yellow-600/40 text-yellow-300 font-semibold inline-flex items-center gap-1 shadow-sm">
+                      <FiStar /> Nivel {enemy.nivel || 1}
+                    </span>
+                  </div>
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
+                      <GiCrossedSwords className="text-yellow-300" /> {enemy.weapons?.length || 0}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
+                      <GiShield className="text-blue-300" /> {enemy.armaduras?.length || 0}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
+                      <GiSpellBook className="text-purple-300" /> {enemy.poderes?.length || 0}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -4167,13 +4352,8 @@ function App() {
             <h1 className="text-2xl font-bold text-white">
               👹 Fichas de Enemigos
             </h1>
-            <div className="flex gap-2">
-              <Boton
-                color="indigo"
-                size="sm"
-                className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
-                onClick={() => setChosenView('canvas')}
-              >
+            <div className="hidden md:flex gap-2">
+              <Boton color="indigo" onClick={() => setChosenView('canvas')}>
                 Mapa de Batalla
               </Boton>
               <Boton
@@ -4193,53 +4373,141 @@ function App() {
               </Boton>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Boton
-              color="green"
-              size="sm"
-              className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
-              onClick={createNewEnemy}
-            >
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Boton color="green" onClick={createNewEnemy}>
               Crear Nuevo Enemigo
             </Boton>
-            <Boton
-              size="sm"
-              className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base"
-              onClick={refreshCatalog}
+            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+            <button
+              type="button"
+              className="md:hidden ml-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
+              onClick={() => setEnemyFiltersOpen((v) => !v)}
+              aria-expanded={enemyFiltersOpen}
+              aria-controls="enemy-filters"
             >
-              Refrescar
-            </Boton>
+              <FiFilter /> Filtros
+            </button>
           </div>
-          <Input
-            placeholder="Buscar enemigo..."
-            value={enemySearch.term}
-            onChange={(e) =>
-              setEnemySearch({ ...enemySearch, term: e.target.value })
-            }
-            className="w-full mb-2"
+          <div className="space-y-2" id="enemy-filters">
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={enemySearch}
+                onChange={(e) => setEnemySearch(e.target.value)}
+                placeholder="Buscar enemigos (nombre, descripción, equipo...)"
+                className="w-full pl-10 pr-10 py-2 rounded-md bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              {enemySearch && (
+                <button
+                  type="button"
+                  onClick={() => setEnemySearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <FiXCircle />
+                </button>
+              )}
+            </div>
+            <div className={`grid grid-cols-1 md:grid-cols-3 gap-2 ${enemyFiltersOpen ? 'block' : 'hidden md:grid'}`}>
+              <label className="inline-flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={enemyOnlyPortraits}
+                  onChange={(e) => setEnemyOnlyPortraits(e.target.checked)}
+                />
+                <span>Solo con retrato</span>
+              </label>
+              <div className="bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                <label className="block text-xs text-gray-400 mb-1">Ordenar por</label>
+                <select
+                  value={`${enemySort}:${enemySortDir}`}
+                  onChange={(e) => {
+                    const [s, d] = e.target.value.split(':');
+                    setEnemySort(s);
+                    setEnemySortDir(d);
+                  }}
+                  className="w-full bg-gray-700 rounded px-2 py-1"
+                >
+                  <option value="name:asc">Nombre (A→Z)</option>
+                  <option value="name:desc">Nombre (Z→A)</option>
+                  <option value="nivel:asc">Nivel (menor→mayor)</option>
+                  <option value="nivel:desc">Nivel (mayor→menor)</option>
+                </select>
+              </div>
+              <div className="flex items-center text-sm text-gray-400 px-1">
+                {filteredEnemies.length !== enemies.length ? (
+                  <span>
+                    {filteredEnemies.length} resultado{filteredEnemies.length === 1 ? '' : 's'}
+                  </span>
+                ) : (
+                  <span>{enemies.length} enemigos</span>
+                )}
+              </div>
+            </div>
+          </div>
+          </div>
+        {/* Acciones flotantes (móvil) */}
+        {enemyActionsOpen && (
+          <div
+            className="fixed inset-0 bg-black/20 md:hidden z-40"
+            onClick={() => setEnemyActionsOpen(false)}
           />
-          <div className="flex gap-2 mb-4">
-            <Boton
-              size="sm"
-              onClick={() =>
-                setEnemySearch({ ...enemySearch, sort: 'alpha' })
-              }
+        )}
+        <div className="fixed bottom-4 right-4 md:hidden z-50">
+          <div
+            className={`flex flex-col items-end gap-2 mb-2 transition-all ${
+              enemyActionsOpen
+                ? 'opacity-100 translate-y-0'
+                : 'opacity-0 translate-y-2 pointer-events-none'
+            }`}
+          >
+            <button
+              onClick={() => {
+                setChosenView('canvas');
+                setEnemyActionsOpen(false);
+              }}
+              aria-label="Abrir mapa de batalla"
+              className="h-11 w-11 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center"
             >
-              A-Z
-            </Boton>
-            <Boton
-              size="sm"
-              onClick={() =>
-                setEnemySearch({ ...enemySearch, sort: 'level' })
-              }
+              <FiMap className="text-xl" />
+            </button>
+            <button
+              onClick={() => {
+                setChosenView('tools');
+                setEnemyActionsOpen(false);
+              }}
+              aria-label="Abrir herramientas"
+              className="h-11 w-11 rounded-full bg-purple-600 text-white shadow-lg flex items-center justify-center"
             >
-              Nivel
-            </Boton>
+              <FiTool className="text-xl" />
+            </button>
+            <button
+              onClick={() => {
+                setChosenView(null);
+                setEnemyActionsOpen(false);
+              }}
+              aria-label="Volver al menú"
+              className="h-11 w-11 rounded-full bg-gray-700 text-white shadow-lg flex items-center justify-center"
+            >
+              <FiArrowLeft className="text-xl" />
+            </button>
           </div>
+          <button
+            onClick={() => setEnemyActionsOpen((v) => !v)}
+            aria-label={enemyActionsOpen ? 'Cerrar acciones' : 'Abrir acciones'}
+            className="h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl flex items-center justify-center"
+          >
+            {enemyActionsOpen ? (
+              <FiX className="text-2xl" />
+            ) : (
+              <FiPlus className="text-2xl" />
+            )}
+          </button>
         </div>
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {sortedEnemies.map((enemy) => (
+          {filteredEnemies.map((enemy) => (
             <Tarjeta
               key={enemy.id}
               variant="magic"
@@ -4247,12 +4515,13 @@ function App() {
             >
               <div className="flex flex-col h-full">
                 {/* Imagen tipo Magic */}
-                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30">
+                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30 relative">
                   {enemy.portrait ? (
                     <img
                       src={enemy.portrait}
                       alt={enemy.name}
                       className="w-full h-full object-contain object-center"
+                      loading="lazy"
                       style={{ background: '#222' }}
                     />
                   ) : (
@@ -4269,6 +4538,21 @@ function App() {
                   >
                     {enemy.name}
                   </h3>
+                  {/* Chips de resumen */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-yellow-500/10 border border-yellow-600/30 text-yellow-200 inline-flex items-center gap-1">
+                      <FiStar className="opacity-90" /> Nivel {enemy.nivel || 1}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
+                      <GiCrossedSwords /> {enemy.weapons?.length || 0} armas
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
+                      <GiShield /> {enemy.armaduras?.length || 0} armaduras
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
+                      <GiSpellBook /> {enemy.poderes?.length || 0} poderes
+                    </span>
+                  </div>
                   {enemy.description && (
                     <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">
                       {enemy.description}
@@ -4336,10 +4620,23 @@ function App() {
               className="bg-gray-800 rounded-xl p-4 sm:p-6 w-full max-w-lg sm:max-w-6xl max-h-screen sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-bold mb-4">
+              <h2 className="text-xl font-bold mb-2">
                 {editingEnemy ? 'Editar Enemigo' : 'Crear Nuevo Enemigo'}
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              <div className="sticky top-0 z-10 -mx-6 px-6 pb-3 bg-gray-800">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                  <button type="button" onClick={() => setEnemyEditorTab('ficha')}
+                    className={`px-3 py-1 rounded-full border text-sm ${enemyEditorTab === 'ficha' ? 'bg-white/15 border-white/30' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                    Ficha
+                  </button>
+                  <button type="button" onClick={() => setEnemyEditorTab('equipo')}
+                    className={`px-3 py-1 rounded-full border text-sm ${enemyEditorTab === 'equipo' ? 'bg-white/15 border-white/30' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                    Equipo
+                  </button>
+                </div>
+              </div>
+              {enemyEditorTab === 'ficha' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Columna izquierda: Información básica */}
                 <div className="space-y-4">
                   {/* Nombre */}
@@ -4368,12 +4665,11 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     />
                     {newEnemy.portrait && (
-                      <div className="mt-2 w-32 h-32 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
+                      <div className="mt-2 w-full max-w-md aspect-square rounded-lg overflow-hidden bg-gray-800/80 flex items-center justify-center">
                         <img
                           src={newEnemy.portrait}
                           alt="Preview"
                           className="w-full h-full object-contain object-center rounded-lg shadow border border-gray-800"
-                          style={{ background: '#222' }}
                         />
                       </div>
                     )}
@@ -4614,9 +4910,10 @@ function App() {
                     </div>
                   </div>
                 </div>
-              </div>
+                </div>
+              )}
               {/* Sección de Equipo */}
-              <div className="mt-6 space-y-4">
+              {enemyEditorTab === 'equipo' && (<div className="mt-2 space-y-4">
                 <h3 className="text-lg font-semibold">Equipo</h3>
                 {/* Armas Equipadas */}
                 <div>
@@ -4860,32 +5157,34 @@ function App() {
                     )}
                   </div>
                 </div>
-              </div>
-              {/* Botones */}
-              <div className="flex gap-2 pt-6 border-t border-gray-700 mt-6">
-                <Boton
-                  color="green"
-                  onClick={handleSaveEnemy}
-                  className="flex-1"
-                >
-                  {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
-                </Boton>
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setShowEnemyForm(false);
-                    setEditingEnemy(null);
-                    setEnemyInputArma('');
-                    setEnemyInputArmadura('');
-                    setEnemyInputPoder('');
-                    setEnemyArmaError('');
-                    setEnemyArmaduraError('');
-                    setEnemyPoderError('');
-                  }}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Boton>
+              </div>)}
+              {/* Botones sticky */}
+              <div className="sticky bottom-0 left-0 right-0 -mx-6 px-6 py-3 bg-gray-900/95 border-t border-gray-700 mt-4">
+                <div className="flex gap-2">
+                  <Boton
+                    color="green"
+                    onClick={handleSaveEnemy}
+                    className="flex-1"
+                  >
+                    {editingEnemy ? 'Actualizar' : 'Crear'} Enemigo
+                  </Boton>
+                  <Boton
+                    color="gray"
+                    onClick={() => {
+                      setShowEnemyForm(false);
+                      setEditingEnemy(null);
+                      setEnemyInputArma('');
+                      setEnemyInputArmadura('');
+                      setEnemyInputPoder('');
+                      setEnemyArmaError('');
+                      setEnemyArmaduraError('');
+                      setEnemyPoderError('');
+                    }}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Boton>
+                </div>
               </div>
             </div>
           </div>
@@ -4896,10 +5195,19 @@ function App() {
             enemy={selectedEnemy}
             onClose={() => setSelectedEnemy(null)}
             onEdit={editEnemy}
+            onDuplicate={duplicateEnemy}
+            onSendToMap={sendEnemyToMap}
             highlightText={highlightText}
           />
         )}
       </div>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'minimap') {
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
+        <MinimapBuilder onBack={() => setChosenView(null)} />
+      </React.Suspense>
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {

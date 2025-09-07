@@ -1572,3 +1572,16 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ---
 
 **Desarrollado con ❤️ para la comunidad de rol**
+
+---
+
+## Novedades: Minimapa responsive (v2.4.43)
+
+- Nuevo constructor de Minimapa en modo Máster.
+- Agrega celdas desde la periferia con botones cuadrados de borde discontinuo y “+”, ahora con mayor separación del cuadrante para evitar solapes visuales. Al pasar el ratón, se resaltan en verde.
+- Agrega celdas individuales en huecos adyacentes a celdas activas mediante “+” interno.
+- Elimina celdas de forma intuitiva: botón “−” en la celda seleccionada o modo “Editar forma”. En móvil, mantener pulsado sobre una celda activa para eliminarla.
+- Control de escala: Auto‑ajustar (por defecto en móvil) evita romper el responsive cuando crece el número de celdas; disponible control de Zoom manual.
+- Nuevo toggle “Modo legible”: engrosa temporalmente las líneas del grid para mejorar la lectura en móviles o a escalas bajas.
+
+Guía rápida: ver `docs/Minimapa.md`.

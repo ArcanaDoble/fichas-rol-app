@@ -251,6 +251,39 @@ const TokenSettings = ({
     }
   };
 
+  // Acciones para enemigo (modo master)
+  const restoreFromEnemy = async () => {
+    if (!token.tokenSheetId || !token.enemyId) return;
+    try {
+      const snap = await getDoc(doc(db, 'enemies', token.enemyId));
+      if (snap.exists()) {
+        const stored = localStorage.getItem('tokenSheets');
+        const sheets = stored ? JSON.parse(stored) : {};
+        const sheet = ensureSheetDefaults({ id: token.tokenSheetId, ...snap.data() });
+        sheet.portrait = token.url;
+        sheets[token.tokenSheetId] = sheet;
+        localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+        window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: sheet }));
+      }
+    } catch (err) {
+      console.error('restore enemy sheet', err);
+    }
+  };
+
+  const updateEnemySheet = async () => {
+    if (!token.tokenSheetId || !token.enemyId) return;
+    const stored = localStorage.getItem('tokenSheets');
+    if (!stored) return;
+    const sheets = JSON.parse(stored);
+    const sheet = sheets[token.tokenSheetId];
+    if (!sheet) return;
+    try {
+      await setDoc(doc(db, 'enemies', token.enemyId), { ...sheet, id: token.enemyId });
+    } catch (err) {
+      console.error('update enemy sheet', err);
+    }
+  };
+
   const handleControlledByChange = (e) => {
     const value = e.target.value;
     setControlledBy(value);
@@ -681,6 +714,14 @@ const TokenSettings = ({
                         🔗 Vinculado a tu ficha
                       </span>
                     )}
+                  </div>
+                )}
+                {controlledBy === 'master' && token.tokenSheetId && token.enemyId && (
+                  <div className="flex flex-col items-center gap-1 mt-2">
+                    <div className="flex justify-center gap-2">
+                      <Boton size="sm" onClick={restoreFromEnemy}>Restaurar ficha</Boton>
+                      <Boton size="sm" onClick={updateEnemySheet}>Subir cambios</Boton>
+                    </div>
                   </div>
                 )}
                 <Boton
