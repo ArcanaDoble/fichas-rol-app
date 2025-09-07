@@ -438,7 +438,6 @@ function App() {
   const [estados, setEstados] = useState([]);
   // Estados para fichas de enemigos
   const [enemies, setEnemies] = useState([]);
-  const [enemySearch, setEnemySearch] = useState({ term: '', sort: '' });
   const [selectedEnemy, setSelectedEnemy] = useState(null);
   const [showEnemyForm, setShowEnemyForm] = useState(false);
   const [editingEnemy, setEditingEnemy] = useState(null);
@@ -4332,17 +4331,13 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     const filteredEnemies = enemies.filter((enemy) =>
-      enemy.name.toLowerCase().includes(enemySearch.term.toLowerCase()) ||
-      (enemy.description || '')
-        .toLowerCase()
-        .includes(enemySearch.term.toLowerCase())
+      enemy.name.toLowerCase().includes(enemySearch.toLowerCase()) ||
+      (enemy.description || '').toLowerCase().includes(enemySearch.toLowerCase())
     );
     const sortedEnemies =
-      enemySearch.sort === 'alpha'
-        ? [...filteredEnemies].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
-        : enemySearch.sort === 'level'
+      enemySort === 'alpha'
+        ? [...filteredEnemies].sort((a, b) => a.name.localeCompare(b.name))
+        : enemySort === 'level'
         ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
         : filteredEnemies;
     return (

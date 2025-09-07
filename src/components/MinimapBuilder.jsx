@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import Boton from './Boton';
 import { ESTADOS } from './EstadoSelector';
 import { getOrUploadFile } from '../utils/storage';
+import * as LucideIcons from 'lucide-react';
 
 const L = {
   arrow: '\u2190', back: 'Men\u00FA M\u00E1ster', new: 'NUEVO', pc: 'PC', mobile: 'M\u00F3vil',
@@ -39,9 +40,8 @@ function MinimapBuilder({ onBack }) {
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
-  const [emojiInput, setEmojiInput] = useState('');
-  const [lucideName, setLucideName] = useState('');
-  const [lucideMsg, setLucideMsg] = useState('');
+  const [emojiSearch, setEmojiSearch] = useState('');
+  const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState(() => { try { const raw = localStorage.getItem('minimapCustomIcons'); return raw ? JSON.parse(raw) : []; } catch { return []; } });
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
@@ -60,7 +60,6 @@ function MinimapBuilder({ onBack }) {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   };
-  const lucideDataUrl = (d) => `data:image/svg+xml;utf8,${`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`}`;
 
   // CatÃ¡logo bÃ¡sico (Estados/Personalizados). Emojis/Lucide se aÃ±aden por entrada.
   const allIcons = useMemo(() => {
@@ -96,35 +95,22 @@ function MinimapBuilder({ onBack }) {
     loadEmojis();
   }, [iconSource, emojiGroups]);
 
-  // Cargar todos los nombres de Lucide (scrape del Ã­ndice de unpkg)
+  // Cargar todos los nombres de Lucide localmente del paquete
   useEffect(() => {
-    const loadLucide = async () => {
-      if (lucideNames || iconSource !== 'lucide') return;
-      setIconsLoading(true);
-      try {
-        const html = await (await fetch('https://unpkg.com/lucide-static@latest/icons', { mode: 'cors' })).text();
-        const names = Array.from(html.matchAll(/icons\/([a-z0-9-]+)\.svg/gi)).map((m) => m[1]);
-        names.sort();
-        setLucideNames(names);
-      } catch {
-        setLucideNames(['sword','shield','map','flame','snow','zap','key','scroll','door']);
-      } finally {
-        setIconsLoading(false);
-      }
-    };
-    loadLucide();
+    if (lucideNames || iconSource !== 'lucide') return;
+    setIconsLoading(true);
+    try {
+      const names = Object.keys(LucideIcons)
+        .filter((n) => /^[A-Z]/.test(n) && n !== 'Icon')
+        .map((n) => n.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase())
+        .sort();
+      setLucideNames(names);
+    } finally {
+      setIconsLoading(false);
+    }
   }, [iconSource, lucideNames]);
 
-  const handleAddEmoji = () => { const ch = (emojiInput || '').trim(); if (!ch) return; const url = emojiDataUrl(ch); if (selectedCell) updateCell(selectedCell.r, selectedCell.c, { icon: url }); };
-  const fetchLucideSvg = async (name) => {
-    const base = 'https://unpkg.com/lucide-static@latest/icons';
-    const urls = [`${base}/${name}.svg`, `https://unpkg.com/lucide-static/icons/${name}.svg`];
-    for (const u of urls) { try { const res = await fetch(u, { mode: 'cors' }); if (res.ok) { const text = await res.text(); return `data:image/svg+xml;utf8,${encodeURIComponent(text)}`; } } catch {} }
-    throw new Error('No se pudo descargar el icono');
-  };
-  const handleAddLucide = async () => { const name = (lucideName || '').trim().toLowerCase(); if (!name) return; setLucideMsg('Descargandoâ€¦'); try { const url = await fetchLucideSvg(name); if (selectedCell) updateCell(selectedCell.r, selectedCell.c, { icon: url }); setLucideMsg('Listo'); setTimeout(() => setLucideMsg(''), 1200); } catch { setLucideMsg('No encontrado'); setTimeout(() => setLucideMsg(''), 1500); } };
-
-  const gridWidth = cols * cellSize; const gridHeight = rows * cellSize;
+    const gridWidth = cols * cellSize; const gridHeight = rows * cellSize;
   const adderSize = Math.max(24, Math.min(36, Math.round(cellSize * 0.75))); const adderBtn = Math.max(22, Math.min(adderSize - 6, Math.round(cellSize * 0.75)));
   const perimGap = Math.max(10, Math.min(24, Math.round(cellSize * 0.35))); const perimMargin = perimGap + adderBtn;
 
@@ -191,21 +177,27 @@ function MinimapBuilder({ onBack }) {
                 <div className="flex flex-wrap gap-2 mb-2">{[{ id: 'estados', label: 'Estados' }, { id: 'personalizados', label: 'Personalizados' }, { id: 'emojis', label: 'Emojis' }, { id: 'lucide', label: 'Lucide' }].map((b) => (<button key={b.id} onClick={() => setIconSource(b.id)} className={`px-2 py-1 rounded border text-xs ${iconSource === b.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}`}>{b.label}</button>))}</div>
                 {iconSource === 'emojis' && emojiGroups && (
                   <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
-                    {Object.entries(emojiGroups).map(([group, chars]) => (
-                      <div key={group}>
-                        <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{group}</div>
-                        <div className="flex flex-wrap gap-2">
-                          {chars.map((ch, i) => (
-                            <IconThumb key={`${group}-${i}`} src={emojiDataUrl(ch)} label={ch} selected={selected.icon === emojiDataUrl(ch)} onClick={() => updateCell(selectedCell.r, selectedCell.c, { icon: emojiDataUrl(ch) })} />
-                          ))}
+                    <input type="text" value={emojiSearch} onChange={(e) => setEmojiSearch(e.target.value)} placeholder="Buscar" className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white" />
+                    {Object.entries(emojiGroups).map(([group, chars]) => {
+                      const filteredChars = chars.filter((ch) => ch.includes(emojiSearch));
+                      if (!filteredChars.length) return null;
+                      return (
+                        <div key={group}>
+                          <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{group}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {filteredChars.map((ch, i) => (
+                              <IconThumb key={`${group}-${i}`} src={emojiDataUrl(ch)} label={ch} selected={selected.icon === emojiDataUrl(ch)} onClick={() => updateCell(selectedCell.r, selectedCell.c, { icon: emojiDataUrl(ch) })} />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {iconSource === 'lucide' && lucideNames && (
                   <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
-                    {Object.entries(lucideNames.reduce((acc, name) => { const k = name[0].toUpperCase(); (acc[k] ||= []).push(name); return acc; }, {})).map(([letter, names]) => (
+                    <input type="text" value={lucideSearch} onChange={(e) => setLucideSearch(e.target.value)} placeholder="Buscar" className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white" />
+                    {Object.entries(lucideNames.filter((n) => n.includes(lucideSearch.toLowerCase())).reduce((acc, name) => { const k = name[0].toUpperCase(); (acc[k] ||= []).push(name); return acc; }, {})).map(([letter, names]) => (
                       <div key={letter}>
                         <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{letter}</div>
                         <div className="flex flex-wrap gap-2">
@@ -258,7 +250,7 @@ function MinimapBuilder({ onBack }) {
                             className={`group relative z-0 select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
                             style={{ background: cell.fill, borderColor: cell.borderColor, borderWidth: `${(readableMode || device === 'mobile') ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`, borderStyle: cell.borderStyle, width: `${cellSize}px`, height: `${cellSize}px`, zIndex: isSelected ? 20 : undefined }}>
                             {cell.icon && (<img src={cell.icon} alt="icon" className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]" />)}
-                            <button type="button" className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded bg-rose-600 text-white flex items-center justify-center shadow transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} title="Eliminar celda" onClick={(e) => { e.stopPropagation(); setActive(r, c, false); }}>
+                            <button type="button" className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} title="Eliminar celda" onClick={(e) => { e.stopPropagation(); setActive(r, c, false); }}>
                               <svg width='10' height='10' viewBox='0 0 24 24' aria-hidden='true' focusable='false'><path d='M5 5L19 19M19 5L5 19' stroke='currentColor' strokeWidth='2' strokeLinecap='round'/></svg>
                             </button>
                           </div>
