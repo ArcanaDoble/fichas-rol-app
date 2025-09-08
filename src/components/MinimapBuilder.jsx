@@ -53,6 +53,7 @@ const L = {
   bounce: 'Rebote',
   spin: 'Giro',
   shake: 'Temblor',
+  sparkle: 'Destellos',
   saveQuadrant: 'Guardar cuadrante',
   saveChanges: 'Guardar cambios',
   savedQuadrants: 'Cuadrantes guardados',
@@ -120,6 +121,67 @@ const QuadrantPreview = ({ q }) => {
   );
 };
 QuadrantPreview.propTypes = { q: PropTypes.object.isRequired };
+
+const SparkleEffect = ({ color }) => {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 6 }).map(() => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        delay: Math.random(),
+      })),
+    []
+  );
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none overflow-visible"
+      style={{ zIndex: 5 }}
+    >
+      {particles.map((p, i) => (
+        <span
+          // eslint-disable-next-line react/no-array-index-key
+          key={i}
+          className="absolute w-1 h-1 rounded-full opacity-80 animate-sparkle"
+          style={{
+            backgroundColor: color,
+            left: `${p.left}%`,
+            top: `${p.top}%`,
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+SparkleEffect.propTypes = {
+  color: PropTypes.string,
+};
+
+const EffectOverlay = ({ effect }) => {
+  if (!effect || effect.type === 'none') return null;
+  if (effect.type === 'glow' || effect.type === 'pulse') {
+    return (
+      <div
+        className="absolute inset-0 rounded pointer-events-none"
+        style={{
+          boxShadow: `0 0 10px 2px ${effect.color}`,
+          animation: effect.type === 'pulse' ? 'pulse 1.5s infinite' : undefined,
+          zIndex: -1,
+        }}
+      />
+    );
+  }
+  if (effect.type === 'sparkle') {
+    return <SparkleEffect color={effect.color} />;
+  }
+  return null;
+};
+EffectOverlay.propTypes = {
+  effect: PropTypes.shape({
+    type: PropTypes.string,
+    color: PropTypes.string,
+  }),
+};
 
 const defaultCell = () => ({
   fill: '#111827',
@@ -901,16 +963,15 @@ function MinimapBuilder({ onBack }) {
                                 borderColor: p.borderColor,
                                 borderWidth: p.borderWidth,
                                 borderStyle: p.borderStyle,
-                                boxShadow:
-                                  p.effect?.type === 'glow' || p.effect?.type === 'pulse'
-                                    ? `0 0 10px 2px ${p.effect.color}`
-                                    : undefined,
                                 animation:
                                   p.effect?.type === 'pulse'
                                     ? 'pulse 1.5s infinite'
                                     : undefined,
                               }}
                             >
+                              {p.effect?.type !== 'none' && (
+                                <EffectOverlay effect={p.effect} />
+                              )}
                               {p.icon && (
                                 <img
                                   src={p.icon}
@@ -999,6 +1060,7 @@ function MinimapBuilder({ onBack }) {
                         <option value="bounce">{L.bounce}</option>
                         <option value="spin">{L.spin}</option>
                         <option value="shake">{L.shake}</option>
+                        <option value="sparkle">{L.sparkle}</option>
                       </select>
                     </label>
                     {selected.effect?.type !== 'none' && (
@@ -1518,10 +1580,6 @@ function MinimapBuilder({ onBack }) {
                                   borderStyle: cell.borderStyle,
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
-                                  boxShadow:
-                                    cell.effect?.type === 'glow' || cell.effect?.type === 'pulse'
-                                      ? `0 0 10px 2px ${cell.effect.color}`
-                                      : undefined,
                                   animation:
                                     cell.effect?.type === 'pulse'
                                       ? 'pulse 1.5s infinite'
@@ -1532,14 +1590,16 @@ function MinimapBuilder({ onBack }) {
                                       : cell.effect?.type === 'shake'
                                       ? 'shake 0.5s infinite'
                                       : undefined,
-                                  zIndex:
-                                    isSelected
-                                      ? 20
-                                      : cell.effect?.type !== 'none'
-                                      ? 10
-                                      : undefined,
+                                  zIndex: isSelected
+                                    ? 30
+                                    : cell.effect?.type !== 'none'
+                                    ? 20
+                                    : 10,
                                 }}
                               >
+                                {cell.effect?.type !== 'none' && (
+                                  <EffectOverlay effect={cell.effect} />
+                                )}
                                 {cell.icon && (
                                   <img
                                     src={cell.icon}
@@ -1607,7 +1667,7 @@ function MinimapBuilder({ onBack }) {
                               <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full" />
                               {showTooltip && (
                                 <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
-                                  <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line">
+                                  <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line text-center">
                                     {a.text}
                                     <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
                                   </div>
