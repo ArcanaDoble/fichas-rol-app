@@ -103,6 +103,14 @@ function MinimapBuilder({ onBack }) {
       return [];
     }
   });
+  const [cellStylePresets, setCellStylePresets] = useState(() => {
+    try {
+      const raw = localStorage.getItem('minimapCellStylePresets');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
@@ -123,6 +131,14 @@ function MinimapBuilder({ onBack }) {
       localStorage.setItem('minimapCustomIcons', JSON.stringify(customIcons));
     } catch {}
   }, [customIcons]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'minimapCellStylePresets',
+        JSON.stringify(cellStylePresets)
+      );
+    } catch {}
+  }, [cellStylePresets]);
 
   const emojiDataUrl = (ch) => {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
@@ -284,6 +300,22 @@ function MinimapBuilder({ onBack }) {
     });
   const setActive = (r, c, active) => updateCell(r, c, { active });
   const clearIcon = (r, c) => updateCell(r, c, { icon: null });
+  const saveCellPreset = () => {
+    if (!selectedCell) return;
+    const cell = grid[selectedCell.r][selectedCell.c];
+    const preset = {
+      fill: cell.fill,
+      borderColor: cell.borderColor,
+      borderWidth: cell.borderWidth,
+      borderStyle: cell.borderStyle,
+      icon: cell.icon,
+    };
+    setCellStylePresets((p) => [...p, preset]);
+  };
+  const applyCellPreset = (preset) => {
+    if (!selectedCell) return;
+    updateCell(selectedCell.r, selectedCell.c, preset);
+  };
   const handleFileUpload = async (file) => {
     if (!file) return;
     try {
@@ -496,6 +528,44 @@ function MinimapBuilder({ onBack }) {
                     {'\u00D7'}
                     {selectedCell.c + 1})
                   </h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Estilos</h4>
+                      <Boton size="sm" onClick={saveCellPreset}>
+                        Guardar estilo
+                      </Boton>
+                    </div>
+                    {cellStylePresets.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {cellStylePresets.map((p, i) => (
+                          <button
+                            key={i}
+                            onClick={() => applyCellPreset(p)}
+                            className="w-8 h-8 rounded overflow-hidden border border-gray-600 hover:border-gray-400"
+                            title="Aplicar preset"
+                          >
+                            <div
+                              className="w-full h-full"
+                              style={{
+                                backgroundColor: p.fill,
+                                borderColor: p.borderColor,
+                                borderWidth: p.borderWidth,
+                                borderStyle: p.borderStyle,
+                              }}
+                            >
+                              {p.icon && (
+                                <img
+                                  src={p.icon}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <label className="flex items-center gap-2">
                       <span>{L.color}</span>
