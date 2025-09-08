@@ -334,6 +334,11 @@ function MinimapBuilder({ onBack }) {
   const [autoFit, setAutoFit] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [fitScale, setFitScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+  const pointersRef = useRef(new Map());
+  const pinchDistRef = useRef(0);
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -354,6 +359,104 @@ function MinimapBuilder({ onBack }) {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [recomputeFit]);
+
+  useEffect(() => {
+    if (autoFit) setOffset({ x: 0, y: 0 });
+  }, [autoFit]);
+
+  const handleWheel = useCallback(
+    (e) => {
+      if (autoFit) return;
+      e.preventDefault();
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      setZoom((z) => {
+        const newZoom = Math.min(2, Math.max(0.35, z - e.deltaY * 0.001));
+        const scale = newZoom / z;
+        setOffset((prev) => ({
+          x: prev.x - (mx - prev.x) * (scale - 1),
+          y: prev.y - (my - prev.y) * (scale - 1),
+        }));
+        return newZoom;
+      });
+    },
+    [autoFit]
+  );
+
+  const handlePointerDown = useCallback(
+    (e) => {
+      if (autoFit) return;
+      e.preventDefault();
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size === 1) {
+        isPanningRef.current = true;
+        lastPosRef.current = { x: e.clientX, y: e.clientY };
+      } else if (pointersRef.current.size === 2) {
+        const [p1, p2] = Array.from(pointersRef.current.values());
+        pinchDistRef.current = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      }
+    },
+    [autoFit]
+  );
+
+  const handlePointerMove = useCallback(
+    (e) => {
+      if (autoFit) return;
+      e.preventDefault();
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size === 2) {
+        const [p1, p2] = Array.from(pointersRef.current.values());
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const midX = (p1.x + p2.x) / 2 - rect.left;
+        const midY = (p1.y + p2.y) / 2 - rect.top;
+        setZoom((z) => {
+          const newZoom = Math.min(
+            2,
+            Math.max(0.35, (z * dist) / (pinchDistRef.current || dist))
+          );
+          const scale = newZoom / z;
+          setOffset((prev) => ({
+            x: prev.x - (midX - prev.x) * (scale - 1),
+            y: prev.y - (midY - prev.y) * (scale - 1),
+          }));
+          return newZoom;
+        });
+        pinchDistRef.current = dist;
+      } else if (isPanningRef.current) {
+        const pos = pointersRef.current.get(e.pointerId);
+        const dx = pos.x - lastPosRef.current.x;
+        const dy = pos.y - lastPosRef.current.y;
+        setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+        lastPosRef.current = pos;
+      }
+    },
+    [autoFit]
+  );
+
+  const handlePointerUp = useCallback(
+    (e) => {
+      if (autoFit) return;
+      e.preventDefault();
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) {
+        pinchDistRef.current = 0;
+      }
+      if (pointersRef.current.size === 0) {
+        isPanningRef.current = false;
+      } else if (pointersRef.current.size === 1) {
+        const pos = Array.from(pointersRef.current.values())[0];
+        lastPosRef.current = pos;
+      }
+    },
+    [autoFit]
+  );
 
   const handleCellClick = (r, c) =>
     setSelectedCells((prev) => {
@@ -574,6 +677,9 @@ function MinimapBuilder({ onBack }) {
               <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
             </div>
           )}
+          <Boton size="sm" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }}>
+            {L.reset}
+          </Boton>
           <Boton
             size="sm"
             color={device === 'pc' ? 'blue' : 'gray'}
@@ -966,7 +1072,16 @@ function MinimapBuilder({ onBack }) {
         </div>
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[50vh]">
-          <div className="h-full w-full overflow-auto" ref={containerRef}>
+          <div
+            className="h-full w-full overflow-hidden touch-none"
+            ref={containerRef}
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
             <div
               className={
                 device === 'mobile' ? 'mx-auto w-full max-w-[420px]' : ''
@@ -983,7 +1098,9 @@ function MinimapBuilder({ onBack }) {
                   className="absolute top-0 left-0"
                   style={{
                     transformOrigin: 'top left',
-                    transform: `scale(${autoFit ? fitScale : zoom})`,
+                    transform: `translate(${offset.x}px, ${offset.y}px) scale(${
+                      autoFit ? fitScale : zoom
+                    })`,
                     width: `${gridWidth + perimMargin * 2}px`,
                     height: `${gridHeight + perimMargin * 2}px`,
                   }}
@@ -1257,6 +1374,9 @@ function MinimapBuilder({ onBack }) {
                 />
               </div>
             )}
+            <Boton size="sm" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }}>
+              {L.reset}
+            </Boton>
           </div>
         </div>
       </div>
