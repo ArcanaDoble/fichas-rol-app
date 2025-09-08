@@ -1532,6 +1532,10 @@ src/
 
 - El constructor de minimapas permite guardar presets de estilo de celda y aplicarlos rápidamente desde una barra dedicada.
 
+**Resumen de cambios v2.4.53:**
+
+- Los cuadros del minimapa pueden restablecer su estilo al predeterminado.
+
 ## 🔄 Historial de cambios previos
 
 <details>
