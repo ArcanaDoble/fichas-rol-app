@@ -127,17 +127,22 @@ html {
 
 @keyframes sparkle {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0) scale(0.5) rotate(0deg);
     opacity: 1;
   }
+  70% {
+    transform: translate(calc(var(--tx) * 0.7), calc(var(--ty) * 0.7)) scale(1.5)
+      rotate(calc(var(--rot) * 0.5));
+    opacity: 0.8;
+  }
   100% {
-    transform: translate(var(--tx), var(--ty)) scale(0);
+    transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot));
     opacity: 0;
   }
 }
 
 .animate-sparkle {
-  animation: sparkle 1.2s linear infinite;
+  animation: sparkle 1.4s ease-out infinite;
 }
 
 /* Clases de utilidad para animaciones */
