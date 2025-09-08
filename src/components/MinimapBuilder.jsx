@@ -11,6 +11,14 @@ import { ESTADOS } from './EstadoSelector';
 import { getOrUploadFile } from '../utils/storage';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+} from 'firebase/firestore';
+import { db } from '../firebase';
 
 const L = {
   arrow: '\u2190',
@@ -36,11 +44,11 @@ const L = {
   none: 'Ninguno',
   icon: 'Icono',
   iconAdd: 'A\u00F1adir icono personalizado',
-  layers: 'Capas',
-  gridLayer: 'Cuadrícula',
   annotations: 'Anotaciones',
-  layerUp: 'Subir',
-  layerDown: 'Bajar',
+  effect: 'Efecto',
+  effectColor: 'Color del efecto',
+  glow: 'Brillo',
+  pulse: 'Pulso',
   saveQuadrant: 'Guardar cuadrante',
   savedQuadrants: 'Cuadrantes guardados',
   title: 'T\u00EDtulo',
@@ -114,6 +122,7 @@ const defaultCell = () => ({
   borderWidth: 1,
   borderStyle: 'solid',
   icon: null,
+  effect: { type: 'none', color: '#ffff00' },
   active: true,
 });
 const buildGrid = (rows, cols, prev = []) =>
@@ -132,10 +141,6 @@ function MinimapBuilder({ onBack }) {
   const [selectedCells, setSelectedCells] = useState([]);
   const selectedCell = selectedCells[0];
   const [hoveredCell, setHoveredCell] = useState(null);
-  const [layers, setLayers] = useState([
-    { id: 'grid', name: L.gridLayer, visible: true },
-    { id: 'annotations', name: L.annotations, visible: true },
-  ]);
   const [annotations, setAnnotations] = useState([]);
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
@@ -170,32 +175,20 @@ function MinimapBuilder({ onBack }) {
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
-
-  const toggleLayer = (id) =>
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
-    );
-
-  const moveLayer = (index, dir) =>
-    setLayers((prev) => {
-      const next = [...prev];
-      const newIndex = index + dir;
-      if (newIndex < 0 || newIndex >= next.length) return prev;
-      const [item] = next.splice(index, 1);
-      next.splice(newIndex, 0, item);
-      return next;
-    });
-
-  const setAnnotation = (r, c, data) =>
+  const setAnnotation = (r, c, data) => {
+    const key = `${r}-${c}`;
     setAnnotations((prev) => {
-      const key = `${r}-${c}`;
       const next = prev.filter((a) => a.key !== key);
       if (data.text || data.icon) next.push({ key, r, c, ...data });
       return next;
     });
-
-  const layerIndex = (id) => layers.findIndex((l) => l.id === id);
-  const layerVisible = (id) => layers.find((l) => l.id === id)?.visible;
+    const ref = doc(db, 'minimapAnnotations', key);
+    if (data.text || data.icon) {
+      setDoc(ref, { r, c, ...data }).catch(() => {});
+    } else {
+      deleteDoc(ref).catch(() => {});
+    }
+  };
 
   const containerRef = useRef(null);
   const skipRebuildRef = useRef(false);
@@ -208,6 +201,19 @@ function MinimapBuilder({ onBack }) {
   useEffect(() => {
     if (device === 'mobile' && !readableMode) setReadableMode(true);
   }, [device]);
+  useEffect(() => {
+    const fetchAnnotations = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'minimapAnnotations'));
+        const list = snap.docs.map((d) => {
+          const data = d.data();
+          return { key: `${data.r}-${data.c}`, ...data };
+        });
+        setAnnotations(list);
+      } catch {}
+    };
+    fetchAnnotations();
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem('minimapCustomIcons', JSON.stringify(customIcons));
@@ -566,6 +572,7 @@ function MinimapBuilder({ onBack }) {
       borderWidth: cell.borderWidth,
       borderStyle: cell.borderStyle,
       icon: cell.icon,
+      effect: cell.effect,
     };
     setCellStylePresets((p) => [...p, preset]);
   };
@@ -742,44 +749,6 @@ function MinimapBuilder({ onBack }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 space-y-3 lg:col-span-1">
-          <div className="space-y-2">
-            <h2 className="font-semibold">{L.layers}</h2>
-            {layers.map((layer, i) => (
-              <div
-                key={layer.id}
-                className="flex items-center justify-between text-sm"
-              >
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={layer.visible}
-                    onChange={() => toggleLayer(layer.id)}
-                  />
-                  <span>{layer.name}</span>
-                </label>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveLayer(i, -1)}
-                    disabled={i === 0}
-                    className="p-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
-                    title={L.layerUp}
-                  >
-                    <LucideIcons.ChevronUp size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveLayer(i, 1)}
-                    disabled={i === layers.length - 1}
-                    className="p-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
-                    title={L.layerDown}
-                  >
-                    <LucideIcons.ChevronDown size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
           <h2 className="font-semibold">{L.quadrant}</h2>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <label className="flex flex-col gap-1">
@@ -890,6 +859,14 @@ function MinimapBuilder({ onBack }) {
                                 borderColor: p.borderColor,
                                 borderWidth: p.borderWidth,
                                 borderStyle: p.borderStyle,
+                                boxShadow:
+                                  p.effect?.type === 'glow' || p.effect?.type === 'pulse'
+                                    ? `0 0 10px 2px ${p.effect.color}`
+                                    : undefined,
+                                animation:
+                                  p.effect?.type === 'pulse'
+                                    ? 'pulse 1.5s infinite'
+                                    : undefined,
                               }}
                             >
                               {p.icon && (
@@ -962,6 +939,42 @@ function MinimapBuilder({ onBack }) {
                         <option value="none">{L.none}</option>
                       </select>
                     </label>
+                    <label className="flex items-center gap-2 col-span-2">
+                      <span>{L.effect}</span>
+                      <select
+                        value={selected.effect?.type || 'none'}
+                        onChange={(e) =>
+                          updateCell(selectedCells, {
+                            effect: {
+                              ...selected.effect,
+                              type: e.target.value,
+                            },
+                          })
+                        }
+                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                      >
+                        <option value="none">{L.none}</option>
+                        <option value="glow">{L.glow}</option>
+                        <option value="pulse">{L.pulse}</option>
+                      </select>
+                    </label>
+                    {selected.effect?.type !== 'none' && (
+                      <label className="flex items-center gap-2 col-span-2">
+                        <span>{L.effectColor}</span>
+                        <input
+                          type="color"
+                          value={selected.effect?.color || '#ffff00'}
+                          onChange={(e) =>
+                            updateCell(selectedCells, {
+                              effect: {
+                                ...selected.effect,
+                                color: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1314,23 +1327,22 @@ function MinimapBuilder({ onBack }) {
 
                   <div
                     className="absolute"
-                    style={{
-                      left: perimMargin,
-                      top: perimMargin,
-                      width: gridWidth,
-                      height: gridHeight,
-                    }}
-                  >
-                    {layerVisible('grid') && (
-                      <div
-                        className="grid"
-                        style={{
-                          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-                          gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
-                          position: 'relative',
-                          zIndex: layerIndex('grid') + 1,
-                        }}
-                      >
+                  style={{
+                    left: perimMargin,
+                    top: perimMargin,
+                    width: gridWidth,
+                    height: gridHeight,
+                  }}
+                >
+                    <div
+                      className="grid"
+                      style={{
+                        gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                        gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                        position: 'relative',
+                        zIndex: 1,
+                      }}
+                    >
                         {grid.map((row, r) =>
                           row.map((cell, c) => {
                             const key = `${r}-${c}`;
@@ -1427,6 +1439,14 @@ function MinimapBuilder({ onBack }) {
                                   borderStyle: cell.borderStyle,
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
+                                  boxShadow:
+                                    cell.effect?.type === 'glow' || cell.effect?.type === 'pulse'
+                                      ? `0 0 10px 2px ${cell.effect.color}`
+                                      : undefined,
+                                  animation:
+                                    cell.effect?.type === 'pulse'
+                                      ? 'pulse 1.5s infinite'
+                                      : undefined,
                                   zIndex: isSelected ? 20 : undefined,
                                 }}
                               >
@@ -1471,13 +1491,11 @@ function MinimapBuilder({ onBack }) {
                           })
                         )}
                       </div>
-                    )}
-                    {layerVisible('annotations') && (
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ zIndex: layerIndex('annotations') + 1 }}
-                      >
-                        {annotations.map((a) => {
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ zIndex: 2 }}
+                    >
+                      {annotations.map((a) => {
                           const showTooltip =
                             (hoveredCell &&
                               hoveredCell.r === a.r &&
@@ -1507,9 +1525,8 @@ function MinimapBuilder({ onBack }) {
                               )}
                             </div>
                           );
-                        })}
-                      </div>
-                    )}
+                        })
+                    </div>
                   </div>
                 </div>
               </div>

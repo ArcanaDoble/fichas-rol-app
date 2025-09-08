@@ -1552,6 +1552,12 @@ src/
 
 - El constructor de minimapas permite hacer zoom y desplazarse con rueda del ratón o gestos táctiles y añade un botón "Reset" para volver a la vista inicial.
 
+**Resumen de cambios v2.4.57:**
+
+- Las anotaciones del minimapa se guardan en Firebase y siempre se muestran sobre el cuadrante.
+- Se elimina el selector de capas para las anotaciones.
+- Se añaden efectos de celda (brillo o pulso) con color personalizable para destacar cuadros específicos.
+
 ## 🔄 Historial de cambios previos
 
 <details>
