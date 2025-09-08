@@ -61,7 +61,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Notas en Ajustes de ficha** - Editor enriquecido para que jugadores y máster anoten información sobre el token con opciones de alineado de texto
 - **Selector de iconos optimizado** - Los iconos de Lucide y los emojis se generan localmente y se cargan más rápido; además, el botón «+» para crear celdas queda centrado
 - **Buscador de emojis bilingüe** - El minimapa permite buscar emojis tanto en inglés como en español
-- **Capas de anotaciones** - El minimapa permite activar, desactivar y reordenar capas como una de anotaciones para iconos o texto
+- **Anotaciones emergentes** - Ahora puedes agregar notas a cada celda y se muestran en un cuadro de diálogo al seleccionarla o pasar el cursor
 
 ### 🎲 **Gestión de Personajes**
 

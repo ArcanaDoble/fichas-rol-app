@@ -97,9 +97,7 @@ const QuadrantPreview = ({ q }) => {
               height: cell,
               background: cellData.active ? cellData.fill : 'transparent',
               border: `1px solid ${
-                cellData.active
-                  ? cellData.borderColor
-                  : 'rgba(255,255,255,0.1)'
+                cellData.active ? cellData.borderColor : 'rgba(255,255,255,0.1)'
               }`,
             }}
           />
@@ -133,6 +131,7 @@ function MinimapBuilder({ onBack }) {
   const [grid, setGrid] = useState(() => buildGrid(8, 12));
   const [selectedCells, setSelectedCells] = useState([]);
   const selectedCell = selectedCells[0];
+  const [hoveredCell, setHoveredCell] = useState(null);
   const [layers, setLayers] = useState([
     { id: 'grid', name: L.gridLayer, visible: true },
     { id: 'annotations', name: L.annotations, visible: true },
@@ -274,7 +273,7 @@ function MinimapBuilder({ onBack }) {
     };
   }, [customIcons]);
 
-    // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
+  // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
     const loadEmojis = async () => {
       if (emojiGroups || iconSource !== 'emojis') return;
@@ -342,7 +341,7 @@ function MinimapBuilder({ onBack }) {
     loadEmojis();
   }, [iconSource, emojiGroups]);
 
-// Cargar todos los nombres de Lucide localmente del paquete
+  // Cargar todos los nombres de Lucide localmente del paquete
   useEffect(() => {
     if (lucideNames || iconSource !== 'lucide') return;
     setIconsLoading(true);
@@ -497,8 +496,7 @@ function MinimapBuilder({ onBack }) {
   const handleCellClick = (r, c) =>
     setSelectedCells((prev) => {
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
-      if (exists)
-        return prev.filter((cell) => cell.r !== r || cell.c !== c);
+      if (exists) return prev.filter((cell) => cell.r !== r || cell.c !== c);
       return [...prev, { r, c }];
     });
   const updateCell = (cells, updater) =>
@@ -713,7 +711,13 @@ function MinimapBuilder({ onBack }) {
               <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
             </div>
           )}
-          <Boton size="sm" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }}>
+          <Boton
+            size="sm"
+            onClick={() => {
+              setZoom(1);
+              setOffset({ x: 0, y: 0 });
+            }}
+          >
             {L.reset}
           </Boton>
           <Boton
@@ -824,7 +828,11 @@ function MinimapBuilder({ onBack }) {
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={selectedCells.length > 0} readOnly />
+              <input
+                type="checkbox"
+                checked={selectedCells.length > 0}
+                readOnly
+              />
               <span>{L.selectedCell}</span>
             </label>
             {selectedCells.length > 0 && (
@@ -855,7 +863,10 @@ function MinimapBuilder({ onBack }) {
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium">Estilos</h4>
                       <div className="flex gap-2">
-                        <Boton size="sm" onClick={() => resetCellStyle(selectedCells)}>
+                        <Boton
+                          size="sm"
+                          onClick={() => resetCellStyle(selectedCells)}
+                        >
                           {L.reset}
                         </Boton>
                         <Boton size="sm" onClick={saveCellPreset}>
@@ -995,15 +1006,17 @@ function MinimapBuilder({ onBack }) {
                             .toLowerCase()
                             .normalize('NFD')
                             .replace(/\p{Diacritic}/gu, '');
-                          const filtered = items.filter(({ ch, name, nameEs }) => {
-                            const hay = [ch, name, nameEs].map((s) =>
-                              (s || '')
-                                .toLowerCase()
-                                .normalize('NFD')
-                                .replace(/\p{Diacritic}/gu, '')
-                            );
-                            return hay.some((h) => h.includes(term));
-                          });
+                          const filtered = items.filter(
+                            ({ ch, name, nameEs }) => {
+                              const hay = [ch, name, nameEs].map((s) =>
+                                (s || '')
+                                  .toLowerCase()
+                                  .normalize('NFD')
+                                  .replace(/\p{Diacritic}/gu, '')
+                              );
+                              return hay.some((h) => h.includes(term));
+                            }
+                          );
                           if (!filtered.length) return null;
                           return (
                             <div key={group}>
@@ -1356,7 +1369,8 @@ function MinimapBuilder({ onBack }) {
                                   const keyId = `${r}-${c}`;
                                   if (
                                     lastLongPressRef.current.key === keyId &&
-                                    Date.now() - lastLongPressRef.current.t < 700
+                                    Date.now() - lastLongPressRef.current.t <
+                                      700
                                   ) {
                                     e.preventDefault();
                                     return;
@@ -1400,6 +1414,8 @@ function MinimapBuilder({ onBack }) {
                                     longPressTimersRef.current.delete(keyId);
                                   }
                                 }}
+                                onMouseEnter={() => setHoveredCell({ r, c })}
+                                onMouseLeave={() => setHoveredCell(null)}
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
@@ -1461,33 +1477,34 @@ function MinimapBuilder({ onBack }) {
                         className="absolute inset-0 pointer-events-none"
                         style={{ zIndex: layerIndex('annotations') + 1 }}
                       >
-                        {annotations.map((a) => (
-                          <div
-                            key={a.key}
-                            className="absolute flex items-center justify-center text-white"
-                            style={{
-                              left: a.c * cellSize,
-                              top: a.r * cellSize,
-                              width: cellSize,
-                              height: cellSize,
-                            }}
-                          >
-                            {a.icon ? (
-                              <img
-                                src={a.icon}
-                                alt=""
-                                className="max-w-full max-h-full object-contain"
-                              />
-                            ) : (
-                              <span
-                                className="leading-none"
-                                style={{ fontSize: cellSize * 0.6 }}
-                              >
-                                {a.text}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                        {annotations.map((a) => {
+                          const showTooltip =
+                            (hoveredCell &&
+                              hoveredCell.r === a.r &&
+                              hoveredCell.c === a.c) ||
+                            selectedCells.some(
+                              (cell) => cell.r === a.r && cell.c === a.c
+                            );
+                          return (
+                            <div
+                              key={a.key}
+                              className="absolute"
+                              style={{
+                                left: a.c * cellSize,
+                                top: a.r * cellSize,
+                                width: cellSize,
+                                height: cellSize,
+                              }}
+                            >
+                              <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full" />
+                              {showTooltip && (
+                                <div className="absolute z-30 left-1/2 -translate-x-1/2 -translate-y-full mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg whitespace-pre-line">
+                                  {a.text}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1528,7 +1545,13 @@ function MinimapBuilder({ onBack }) {
                 />
               </div>
             )}
-            <Boton size="sm" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }}>
+            <Boton
+              size="sm"
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+            >
               {L.reset}
             </Boton>
           </div>
