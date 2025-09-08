@@ -1206,6 +1206,10 @@ const MapCanvas = ({
       );
     }
   }, [selectedTextId, selectedTexts, updateTexts]);
+
+  const textMenuVisible =
+    activeTool === 'text' || selectedTextId != null || selectedTexts.length > 0;
+
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
@@ -4799,6 +4803,7 @@ const MapCanvas = ({
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
+        showTextMenu={textMenuVisible}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
         isPlayerView={isPlayerView}

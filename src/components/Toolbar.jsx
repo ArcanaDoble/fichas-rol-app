@@ -65,6 +65,7 @@ const Toolbar = ({
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
+  showTextMenu = false,
   activeLayer = 'fichas',
   onLayerChange,
   isPlayerView = false,
@@ -215,7 +216,7 @@ const Toolbar = ({
           </div>
         </motion.div>
       )}
-      {activeTool === 'text' && (
+      {showTextMenu && (
         <motion.div
           key="text-menu"
           initial={{ opacity: 0, x: -10 }}
@@ -402,6 +403,7 @@ Toolbar.propTypes = {
   ),
   onSaveStylePreset: PropTypes.func,
   onApplyStylePreset: PropTypes.func,
+  showTextMenu: PropTypes.bool,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
   isPlayerView: PropTypes.bool,
