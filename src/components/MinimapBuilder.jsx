@@ -322,8 +322,8 @@ function MinimapBuilder({ onBack }) {
     setCellStylePresets((p) => [...p, preset]);
   };
   const applyCellPreset = (preset) => {
-    if (!selectedCell) return;
-    updateCell(selectedCell.r, selectedCell.c, preset);
+    if (selectedCells.length === 0) return;
+    updateCell(selectedCells, preset);
   };
   const handleFileUpload = async (file) => {
     if (!file) return;
