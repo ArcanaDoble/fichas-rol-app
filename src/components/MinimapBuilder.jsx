@@ -36,6 +36,9 @@ const L = {
   none: 'Ninguno',
   icon: 'Icono',
   iconAdd: 'A\u00F1adir icono personalizado',
+  saveQuadrant: 'Guardar cuadrante',
+  savedQuadrants: 'Cuadrantes guardados',
+  title: 'T\u00EDtulo',
   addRowTop: 'A\u00F1adir fila desde arriba',
   addRowBottom: 'A\u00F1adir fila desde abajo',
   addColLeft: 'A\u00F1adir columna izquierda',
@@ -113,6 +116,15 @@ function MinimapBuilder({ onBack }) {
       return [];
     }
   });
+  const [quadrantTitle, setQuadrantTitle] = useState('');
+  const [quadrants, setQuadrants] = useState(() => {
+    try {
+      const raw = localStorage.getItem('minimapQuadrants');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
@@ -141,6 +153,24 @@ function MinimapBuilder({ onBack }) {
       );
     } catch {}
   }, [cellStylePresets]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('minimapQuadrants', JSON.stringify(quadrants));
+    } catch {}
+  }, [quadrants]);
+  useEffect(() => {
+    if (shapeEdit) {
+      const all = [];
+      grid.forEach((row, r) =>
+        row.forEach((cell, c) => {
+          if (cell.active) all.push({ r, c });
+        })
+      );
+      setSelectedCells(all);
+    } else {
+      setSelectedCells([]);
+    }
+  }, [shapeEdit, grid]);
 
   const emojiDataUrl = (ch) => {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
@@ -308,7 +338,44 @@ function MinimapBuilder({ onBack }) {
       });
       return next;
     });
-  const setActive = (cells, active) => updateCell(cells, { active });
+  const trimGrid = (g) => {
+    let next = g;
+    let newRows = next.length;
+    let newCols = next[0]?.length || 0;
+    const rowEmpty = (row) => row.every((cell) => !cell.active);
+    const colEmpty = (idx) => next.every((row) => !row[idx].active);
+    while (newRows > 1 && rowEmpty(next[0])) {
+      next = next.slice(1);
+      newRows--;
+    }
+    while (newRows > 1 && rowEmpty(next[newRows - 1])) {
+      next = next.slice(0, -1);
+      newRows--;
+    }
+    while (newCols > 1 && colEmpty(0)) {
+      next = next.map((row) => row.slice(1));
+      newCols--;
+    }
+    while (newCols > 1 && colEmpty(newCols - 1)) {
+      next = next.map((row) => row.slice(0, -1));
+      newCols--;
+    }
+    if (newRows !== rows) setRows(newRows);
+    if (newCols !== cols) setCols(newCols);
+    setSelectedCells((prev) =>
+      prev.filter(({ r, c }) => r < newRows && c < newCols && next[r][c].active)
+    );
+    return next;
+  };
+  const setActive = (cells, active) =>
+    setGrid((prev) => {
+      let next = prev.map((row) => row.slice());
+      (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
+        next[r] = next[r].slice();
+        next[r][c] = { ...next[r][c], active };
+      });
+      return trimGrid(next);
+    });
   const clearIcon = (cells) => updateCell(cells, { icon: null });
   const resetCellStyle = (cells) =>
     setGrid((prev) => {
@@ -351,6 +418,26 @@ function MinimapBuilder({ onBack }) {
       if (typeof fr.result === 'string')
         setCustomIcons((p) => [...p, fr.result]);
     }
+  };
+
+  const saveQuadrant = () => {
+    const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
+    const data = {
+      title,
+      rows,
+      cols,
+      cellSize,
+      grid,
+    };
+    setQuadrants((p) => [...p, data]);
+    setQuadrantTitle('');
+  };
+  const loadQuadrant = (q) => {
+    setRows(q.rows);
+    setCols(q.cols);
+    setCellSize(q.cellSize);
+    setGrid(() => buildGrid(q.rows, q.cols, q.grid));
+    setSelectedCells([]);
   };
 
   const effectiveReadable = readableMode || device === 'mobile';
@@ -808,6 +895,38 @@ function MinimapBuilder({ onBack }) {
                       }
                       className="block w-full text-sm text-gray-300 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600"
                     />
+                    <div className="mt-4 space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={quadrantTitle}
+                          onChange={(e) => setQuadrantTitle(e.target.value)}
+                          placeholder={L.title}
+                          className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+                        />
+                        <Boton size="sm" onClick={saveQuadrant}>
+                          {L.saveQuadrant}
+                        </Boton>
+                      </div>
+                      {quadrants.length > 0 && (
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-300">
+                            {L.savedQuadrants}:
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {quadrants.map((q, i) => (
+                              <button
+                                key={`quad-${i}`}
+                                onClick={() => loadQuadrant(q)}
+                                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                              >
+                                {q.title}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
