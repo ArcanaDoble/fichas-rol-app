@@ -1060,6 +1060,97 @@ const MapCanvas = ({
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
+  // Estado para simulación de vista de jugador
+  const [playerViewMode, setPlayerViewMode] = useState(false);
+
+  // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
+  const saveDelayRef = useRef(150);
+  const setSaveDelay = (ms) => {
+    saveDelayRef.current = Math.max(150, Math.min(300, ms));
+  };
+
+  // Crear syncManager para jugadores usando la función global
+  const syncManager = useMemo(() => {
+    if (!isPlayerView || !pageId || !playerName) return null;
+
+    // Crear el manager con refs y callbacks dentro del componente
+    const saveTimeouts = {
+      tokens: null,
+      lines: null,
+      walls: null,
+      texts: null,
+    };
+    let pendingTokenChanges = [];
+    const prevData = {
+      lines: [],
+      walls: [],
+      texts: [],
+    };
+
+    const saveToFirebase = async (type, data) => {
+      if (!pageId || !isPlayerView) return;
+
+      if (type === 'tokens') {
+        if (!Array.isArray(data) || data.length === 0) return;
+
+        pendingTokenChanges = mergeTokens(pendingTokenChanges, data);
+
+        if (saveTimeouts.tokens) {
+          clearTimeout(saveTimeouts.tokens);
+        }
+
+        saveTimeouts.tokens = setTimeout(async () => {
+          try {
+            const tokensRef = collection(db, 'pages', pageId, 'tokens');
+            const filtered = pendingTokenChanges.filter(
+              (tk) => tk._deleted || tk.controlledBy === playerName
+            );
+
+            await Promise.all(
+              filtered.map((tk) =>
+                tk._deleted
+                  ? deleteDoc(doc(tokensRef, String(tk.id)))
+                  : setDoc(doc(tokensRef, String(tk.id)), tk)
+              )
+            );
+
+            console.log(
+              `✅ Jugador ${playerName} guardó tokens (${filtered.length} cambios)`,
+              new Date().toISOString()
+            );
+            pendingTokenChanges = [];
+          } catch (error) {
+            console.error('Error guardando tokens para jugador:', error);
+          }
+        }, saveDelayRef.current);
+        return;
+      }
+
+      // Verificar si hay cambios reales para otros tipos
+      if (deepEqual(data, prevData[type])) return;
+
+      if (saveTimeouts[type]) {
+        clearTimeout(saveTimeouts[type]);
+      }
+
+      saveTimeouts[type] = setTimeout(async () => {
+        try {
+          const filteredData = data;
+          prevData[type] = filteredData;
+          await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
+          console.log(
+            `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`,
+            new Date().toISOString()
+          );
+        } catch (error) {
+          console.error(`Error guardando ${type} para jugador:`, error);
+        }
+      }, saveDelayRef.current);
+    };
+
+    return { saveToFirebase, setSaveDelay };
+  }, [isPlayerView, pageId, playerName]);
+
   const handleTextsChange = useCallback((newTexts) => {
     if (isPlayerView && syncManager) {
       syncManager.saveToFirebase('texts', newTexts);
@@ -1232,101 +1323,9 @@ const MapCanvas = ({
   
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
-
   // Estados para el sistema de visión de jugadores
   const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
   const [combinedPlayerVision, setCombinedPlayerVision] = useState([]);
-
-  // Estado para simulación de vista de jugador
-  const [playerViewMode, setPlayerViewMode] = useState(false);
-
-  // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
-  const saveDelayRef = useRef(150);
-  const setSaveDelay = (ms) => {
-    saveDelayRef.current = Math.max(150, Math.min(300, ms));
-  };
-
-  // Crear syncManager para jugadores usando la función global
-  const syncManager = useMemo(() => {
-    if (!isPlayerView || !pageId || !playerName) return null;
-
-    // Crear el manager con refs y callbacks dentro del componente
-    const saveTimeouts = {
-      tokens: null,
-      lines: null,
-      walls: null,
-      texts: null,
-    };
-    let pendingTokenChanges = [];
-    const prevData = {
-      lines: [],
-      walls: [],
-      texts: [],
-    };
-
-    const saveToFirebase = async (type, data) => {
-      if (!pageId || !isPlayerView) return;
-
-      if (type === 'tokens') {
-        if (!Array.isArray(data) || data.length === 0) return;
-
-        pendingTokenChanges = mergeTokens(pendingTokenChanges, data);
-
-        if (saveTimeouts.tokens) {
-          clearTimeout(saveTimeouts.tokens);
-        }
-
-        saveTimeouts.tokens = setTimeout(async () => {
-          try {
-            const tokensRef = collection(db, 'pages', pageId, 'tokens');
-            const filtered = pendingTokenChanges.filter(
-              (tk) => tk._deleted || tk.controlledBy === playerName
-            );
-
-            await Promise.all(
-              filtered.map((tk) =>
-                tk._deleted
-                  ? deleteDoc(doc(tokensRef, String(tk.id)))
-                  : setDoc(doc(tokensRef, String(tk.id)), tk)
-              )
-            );
-
-            console.log(
-              `✅ Jugador ${playerName} guardó tokens (${filtered.length} cambios)`,
-              new Date().toISOString()
-            );
-            pendingTokenChanges = [];
-          } catch (error) {
-            console.error('Error guardando tokens para jugador:', error);
-          }
-        }, saveDelayRef.current);
-        return;
-      }
-
-      // Verificar si hay cambios reales para otros tipos
-      if (deepEqual(data, prevData[type])) return;
-
-      if (saveTimeouts[type]) {
-        clearTimeout(saveTimeouts[type]);
-      }
-
-      saveTimeouts[type] = setTimeout(async () => {
-        try {
-          const filteredData = data;
-          prevData[type] = filteredData;
-          await updateDoc(doc(db, 'pages', pageId), { [type]: filteredData });
-          console.log(
-            `✅ Jugador ${playerName} guardó ${type} exitosamente (${filteredData.length} elementos)`,
-            new Date().toISOString()
-          );
-        } catch (error) {
-          console.error(`Error guardando ${type} para jugador:`, error);
-        }
-      }, saveDelayRef.current);
-    };
-    
-    return { saveToFirebase, setSaveDelay };
-  }, [isPlayerView, pageId, playerName]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
   const diffTokens = (prev, next) => {

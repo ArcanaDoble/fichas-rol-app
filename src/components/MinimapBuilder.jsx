@@ -90,6 +90,7 @@ function MinimapBuilder({ onBack }) {
   const [cellSize, setCellSize] = useState(48);
   const [grid, setGrid] = useState(() => buildGrid(8, 12));
   const [selectedCells, setSelectedCells] = useState([]);
+  const selectedCell = selectedCells[0];
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
@@ -306,8 +307,8 @@ function MinimapBuilder({ onBack }) {
       });
       return next;
     });
-  const setActive = (r, c, active) => updateCell(r, c, { active });
-  const clearIcon = (r, c) => updateCell(r, c, { icon: null });
+  const setActive = (cells, active) => updateCell(cells, { active });
+  const clearIcon = (cells) => updateCell(cells, { icon: null });
   const saveCellPreset = () => {
     if (!selectedCell) return;
     const cell = grid[selectedCell.r][selectedCell.c];
