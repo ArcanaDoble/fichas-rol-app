@@ -1558,6 +1558,13 @@ src/
 - Se elimina el selector de capas para las anotaciones.
 - Se añaden efectos de celda (brillo o pulso) con color personalizable para destacar cuadros específicos.
 
+**Resumen de cambios v2.4.58:**
+
+- El minimapa identifica el cuadrante cargado y permite guardar cambios, duplicar o eliminar cuadrantes.
+- Seleccionar un color de brillo ya no deselecciona la celda activa.
+- Los efectos de celda se muestran completos sobre las celdas adyacentes.
+- Nuevos efectos visuales disponibles: rebote, giro y temblor.
+
 ## 🔄 Historial de cambios previos
 
 <details>

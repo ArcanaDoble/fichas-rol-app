@@ -50,7 +50,11 @@ const L = {
   effectColor: 'Color del efecto',
   glow: 'Brillo',
   pulse: 'Pulso',
+  bounce: 'Rebote',
+  spin: 'Giro',
+  shake: 'Temblor',
   saveQuadrant: 'Guardar cuadrante',
+  saveChanges: 'Guardar cambios',
   savedQuadrants: 'Cuadrantes guardados',
   title: 'T\u00EDtulo',
   addRowTop: 'A\u00F1adir fila desde arriba',
@@ -173,9 +177,16 @@ function MinimapBuilder({ onBack }) {
       return [];
     }
   });
+  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
+  const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
+  const hasUnsavedChanges = useMemo(() => {
+    if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
+    const current = { rows, cols, cellSize, grid };
+    return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
+  }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
   const setAnnotation = (r, c, data) => {
     const key = `${r}-${c}`;
     setAnnotations((prev) => {
@@ -242,10 +253,11 @@ function MinimapBuilder({ onBack }) {
         })
       );
       setSelectedCells(all);
-    } else {
-      setSelectedCells([]);
     }
   }, [shapeEdit, grid]);
+  useEffect(() => {
+    if (!shapeEdit) setSelectedCells([]);
+  }, [shapeEdit]);
 
   const emojiDataUrl = (ch) => {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
@@ -600,22 +612,51 @@ function MinimapBuilder({ onBack }) {
 
   const saveQuadrant = () => {
     const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
-    const data = {
-      title,
-      rows,
-      cols,
-      cellSize,
-      grid,
-    };
+    const data = { title, rows, cols, cellSize, grid };
     setQuadrants((p) => [...p, data]);
     setQuadrantTitle('');
+    setCurrentQuadrantIndex(quadrants.length);
+    setLoadedQuadrantData({ rows, cols, cellSize, grid });
   };
-  const loadQuadrant = (q) => {
+  const loadQuadrant = (q, idx) => {
     setRows(q.rows);
     setCols(q.cols);
     setCellSize(q.cellSize);
     setGrid(() => buildGrid(q.rows, q.cols, q.grid));
     setSelectedCells([]);
+    setCurrentQuadrantIndex(idx);
+    setLoadedQuadrantData({ rows: q.rows, cols: q.cols, cellSize: q.cellSize, grid: q.grid });
+  };
+  const saveQuadrantChanges = () => {
+    if (currentQuadrantIndex === null) return;
+    const data = {
+      title: quadrants[currentQuadrantIndex].title,
+      rows,
+      cols,
+      cellSize,
+      grid,
+    };
+    setQuadrants((prev) => {
+      const next = prev.slice();
+      next[currentQuadrantIndex] = data;
+      return next;
+    });
+    setLoadedQuadrantData({ rows, cols, cellSize, grid });
+  };
+  const duplicateQuadrant = (i) => {
+    setQuadrants((p) => [...p, { ...p[i], title: `${p[i].title} copia` }]);
+  };
+  const deleteQuadrant = (i) => {
+    setQuadrants((p) => {
+      const next = p.filter((_, idx) => idx !== i);
+      if (currentQuadrantIndex === i) {
+        setCurrentQuadrantIndex(null);
+        setLoadedQuadrantData(null);
+      } else if (currentQuadrantIndex > i) {
+        setCurrentQuadrantIndex(currentQuadrantIndex - 1);
+      }
+      return next;
+    });
   };
 
   const effectiveReadable = readableMode || device === 'mobile';
@@ -955,6 +996,9 @@ function MinimapBuilder({ onBack }) {
                         <option value="none">{L.none}</option>
                         <option value="glow">{L.glow}</option>
                         <option value="pulse">{L.pulse}</option>
+                        <option value="bounce">{L.bounce}</option>
+                        <option value="spin">{L.spin}</option>
+                        <option value="shake">{L.shake}</option>
                       </select>
                     </label>
                     {selected.effect?.type !== 'none' && (
@@ -1186,19 +1230,56 @@ function MinimapBuilder({ onBack }) {
                 {L.saveQuadrant}
               </Boton>
             </div>
+            {currentQuadrantIndex !== null && (
+              <div className="text-xs text-emerald-400">
+                Editando: {quadrants[currentQuadrantIndex]?.title}
+              </div>
+            )}
+            {currentQuadrantIndex !== null && hasUnsavedChanges && (
+              <div>
+                <Boton size="sm" onClick={saveQuadrantChanges}>
+                  {L.saveChanges}
+                </Boton>
+              </div>
+            )}
             {quadrants.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-1 mt-2">
                 <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
                 <div className="flex flex-wrap gap-2">
                   {quadrants.map((q, i) => (
-                    <button
-                      key={`quad-${i}`}
-                      onClick={() => loadQuadrant(q)}
-                      className="flex flex-col items-center p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
-                    >
-                      <QuadrantPreview q={q} />
-                      <span className="mt-1">{q.title}</span>
-                    </button>
+                    <div key={`quad-${i}`} className="relative">
+                      <button
+                        onClick={() => loadQuadrant(q, i)}
+                        className={`flex flex-col items-center p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
+                          currentQuadrantIndex === i ? 'ring-2 ring-emerald-400' : ''
+                        }`}
+                      >
+                        <QuadrantPreview q={q} />
+                        <span className="mt-1">{q.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-gray-300 rounded-full flex items-center justify-center hover:bg-gray-700"
+                        title="Duplicar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          duplicateQuadrant(i);
+                        }}
+                      >
+                        <LucideIcons.Copy size={10} />
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
+                        title="Eliminar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteQuadrant(i);
+                        }}
+                      >
+                        <LucideIcons.Trash2 size={10} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1429,7 +1510,7 @@ function MinimapBuilder({ onBack }) {
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
-                                className={`group relative z-0 select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
+                                className={`group relative z-0 overflow-visible select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
                                 style={{
                                   background: cell.fill,
                                   borderColor: cell.borderColor,
@@ -1444,8 +1525,19 @@ function MinimapBuilder({ onBack }) {
                                   animation:
                                     cell.effect?.type === 'pulse'
                                       ? 'pulse 1.5s infinite'
+                                      : cell.effect?.type === 'bounce'
+                                      ? 'bounce 1s infinite'
+                                      : cell.effect?.type === 'spin'
+                                      ? 'spin 1s infinite linear'
+                                      : cell.effect?.type === 'shake'
+                                      ? 'shake 0.5s infinite'
                                       : undefined,
-                                  zIndex: isSelected ? 20 : undefined,
+                                  zIndex:
+                                    isSelected
+                                      ? 20
+                                      : cell.effect?.type !== 'none'
+                                      ? 10
+                                      : undefined,
                                 }}
                               >
                                 {cell.icon && (
