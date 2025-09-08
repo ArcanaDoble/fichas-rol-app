@@ -1547,6 +1547,10 @@ src/
 - Guardar o cargar cuadrantes ya no requiere tener celdas seleccionadas.
 - Los cuadrantes guardados muestran una mini previsualización para su identificación.
 
+**Resumen de cambios v2.4.56:**
+
+- El constructor de minimapas permite hacer zoom y desplazarse con rueda del ratón o gestos táctiles y añade un botón "Reset" para volver a la vista inicial.
+
 ## 🔄 Historial de cambios previos
 
 <details>
