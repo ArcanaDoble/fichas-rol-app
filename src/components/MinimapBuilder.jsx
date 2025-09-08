@@ -8,6 +8,7 @@
 import PropTypes from 'prop-types';
 import Boton from './Boton';
 import { ESTADOS } from './EstadoSelector';
+import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -885,24 +886,22 @@ function MinimapBuilder({ onBack }) {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <label className="flex items-center gap-2">
                       <span>{L.color}</span>
-                      <input
-                        type="color"
+                      <HexColorInput
                         value={selected.fill}
-                        onChange={(e) =>
+                        onChange={(v) =>
                           updateCell(selectedCells, {
-                            fill: e.target.value,
+                            fill: v,
                           })
                         }
                       />
                     </label>
                     <label className="flex items-center gap-2">
                       <span>{L.border}</span>
-                      <input
-                        type="color"
+                      <HexColorInput
                         value={selected.borderColor}
-                        onChange={(e) =>
+                        onChange={(v) =>
                           updateCell(selectedCells, {
-                            borderColor: e.target.value,
+                            borderColor: v,
                           })
                         }
                       />
@@ -961,14 +960,13 @@ function MinimapBuilder({ onBack }) {
                     {selected.effect?.type !== 'none' && (
                       <label className="flex items-center gap-2 col-span-2">
                         <span>{L.effectColor}</span>
-                        <input
-                          type="color"
+                        <HexColorInput
                           value={selected.effect?.color || '#ffff00'}
-                          onChange={(e) =>
+                          onChange={(v) =>
                             updateCell(selectedCells, {
                               effect: {
                                 ...selected.effect,
-                                color: e.target.value,
+                                color: v,
                               },
                             })
                           }

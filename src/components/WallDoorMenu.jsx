@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import { RiDoorOpenLine, RiDoorClosedLine, RiEyeOffLine } from 'react-icons/ri';
 import Boton from './Boton';
+import HexColorInput from './HexColorInput';
 
 const WallDoorMenu = ({ wall, onClose, onUpdate, isMaster = false }) => {
   const [door, setDoor] = useState(wall.door || 'closed');
@@ -75,12 +76,7 @@ const WallDoorMenu = ({ wall, onClose, onUpdate, isMaster = false }) => {
         </div>
         <div>
           <label className="block mb-1">Color del muro</label>
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => handleColor(e.target.value)}
-            className="w-full h-8 p-0 border-0"
-          />
+          <HexColorInput value={color} onChange={handleColor} />
         </div>
         {isMaster && (
           <div className="space-y-2">
