@@ -1603,3 +1603,8 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Selección múltiple de celdas para editar o eliminar varias a la vez.
 
 Guía rápida: ver `docs/Minimapa.md`.
+
+## 🐛 Correcciones
+
+- Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
+- Se solucionó un error en el mapa de batalla que provocaba un fallo al inicializar `syncManager` antes de su declaración.
