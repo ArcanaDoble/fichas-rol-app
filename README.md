@@ -1651,3 +1651,4 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se solucionó un error en el mapa de batalla que provocaba un fallo al inicializar `syncManager` antes de su declaración.
 - Corregido error al aplicar presets de estilo en el minimapa que provocaba "next[r] is undefined".
 - Se corrigió un error de compilación causado por un corchete faltante en `MinimapBuilder.jsx`.
+- Se mejoró el efecto de destellos del minimapa con trayectorias y tamaños aleatorios para cada partícula.
