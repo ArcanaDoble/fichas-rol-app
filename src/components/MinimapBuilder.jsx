@@ -1525,7 +1525,7 @@ function MinimapBuilder({ onBack }) {
                               )}
                             </div>
                           );
-                        })
+                        })}
                     </div>
                   </div>
                 </div>
