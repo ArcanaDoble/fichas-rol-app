@@ -1401,6 +1401,10 @@ src/
 - La luz tenue aplica ahora el 80% de la intensidad configurada, evitando contrastes irreales.
 - La luz brillante emplea el 100% de la intensidad seleccionada para asegurar que nunca sea menos intensa que la tenue.
 
+**Resumen de cambios v2.4.77:**
+
+- Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
