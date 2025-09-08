@@ -157,46 +157,65 @@ function MinimapBuilder({ onBack }) {
     };
   }, [customIcons]);
 
-  // Cargar todos los emojis (agrupados) cuando se selecciona la pestaÃ±a
+    // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
     const loadEmojis = async () => {
       if (emojiGroups || iconSource !== 'emojis') return;
       setIconsLoading(true);
       try {
+        // Obtener lista base de emojis (incluye nombres en inglés y grupo)
         const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
           mode: 'cors',
         });
         const list = await res.json();
+
+        // Obtener nombres de emojis en español
+        let esList = [];
+        try {
+          const resEs = await fetch(
+            'https://cdn.jsdelivr.net/npm/emojibase-data@latest/es/data.json',
+            { mode: 'cors' }
+          );
+          esList = await resEs.json();
+        } catch {
+          esList = [];
+        }
+        const esMap = new Map(esList.map((e) => [e.emoji, e.label]));
+
         const groups = {};
         list.forEach((e) => {
           const ch = e.char || e.emoji || '';
           if (!ch) return;
           const g = e.group || e.category || 'Otros';
           if (!groups[g]) groups[g] = [];
-          groups[g].push(ch);
+          groups[g].push({
+            ch,
+            name: e.name || '',
+            nameEs: esMap.get(ch) || '',
+          });
         });
         setEmojiGroups(groups);
       } catch {
-        // Fallback mÃ­nimo si no hay red
+        // Fallback mínimo si no hay red
         setEmojiGroups({
           Smileys: [
-            'ðŸ˜€',
-            'ðŸ˜„',
-            'ðŸ˜',
-            'ðŸ˜†',
-            'ðŸ˜‰',
-            'ðŸ˜Š',
-            'ðŸ˜',
-            'ðŸ˜˜',
-            'ðŸ˜œ',
-            'ðŸ¤ª',
-            'ðŸ¤—',
-            'ðŸ¤”',
-            'ðŸ¤¨',
-            'ðŸ˜',
-            'ðŸ˜´',
-            'ðŸ¤’',
-            'ðŸ¤•',
+            { ch: '😀', name: '', nameEs: '' },
+            { ch: '😄', name: '', nameEs: '' },
+            { ch: '😁', name: '', nameEs: '' },
+            { ch: '😂', name: '', nameEs: '' },
+            { ch: '😉', name: '', nameEs: '' },
+            { ch: '😊', name: '', nameEs: '' },
+            { ch: '😇', name: '', nameEs: '' },
+            { ch: '😈', name: '', nameEs: '' },
+            { ch: '😌', name: '', nameEs: '' },
+            { ch: '🤪', name: '', nameEs: '' },
+            { ch: '🤗', name: '', nameEs: '' },
+            { ch: '🤔', name: '', nameEs: '' },
+            { ch: '🤨', name: '', nameEs: '' },
+            { ch: '😃', name: '', nameEs: '' },
+            { ch: '😴', name: '', nameEs: '' },
+            { ch: '🤝', name: '', nameEs: '' },
+            { ch: '🤕', name: '', nameEs: '' },
           ],
         });
       } finally {
@@ -206,7 +225,7 @@ function MinimapBuilder({ onBack }) {
     loadEmojis();
   }, [iconSource, emojiGroups]);
 
-  // Cargar todos los nombres de Lucide localmente del paquete
+// Cargar todos los nombres de Lucide localmente del paquete
   useEffect(() => {
     if (lucideNames || iconSource !== 'lucide') return;
     setIconsLoading(true);
@@ -575,30 +594,40 @@ function MinimapBuilder({ onBack }) {
                           placeholder="Buscar"
                           className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
                         />
-                        {Object.entries(emojiGroups).map(([group, chars]) => {
-                          const filteredChars = chars.filter((ch) =>
-                            ch.includes(emojiSearch)
-                          );
-                          if (!filteredChars.length) return null;
+                        {Object.entries(emojiGroups).map(([group, items]) => {
+                          const term = emojiSearch
+                            .toLowerCase()
+                            .normalize('NFD')
+                            .replace(/\p{Diacritic}/gu, '');
+                          const filtered = items.filter(({ ch, name, nameEs }) => {
+                            const hay = [ch, name, nameEs].map((s) =>
+                              (s || '')
+                                .toLowerCase()
+                                .normalize('NFD')
+                                .replace(/\p{Diacritic}/gu, '')
+                            );
+                            return hay.some((h) => h.includes(term));
+                          });
+                          if (!filtered.length) return null;
                           return (
                             <div key={group}>
                               <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
                                 {group}
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                {filteredChars.map((ch, i) => (
+                                {filtered.map((item, i) => (
                                   <IconThumb
                                     key={`${group}-${i}`}
-                                    src={emojiDataUrl(ch)}
-                                    label={ch}
+                                    src={emojiDataUrl(item.ch)}
+                                    label={item.ch}
                                     selected={
-                                      selected.icon === emojiDataUrl(ch)
+                                      selected.icon === emojiDataUrl(item.ch)
                                     }
                                     onClick={() =>
                                       updateCell(
                                         selectedCell.r,
                                         selectedCell.c,
-                                        { icon: emojiDataUrl(ch) }
+                                        { icon: emojiDataUrl(item.ch) }
                                       )
                                     }
                                   />
