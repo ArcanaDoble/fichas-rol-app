@@ -125,14 +125,15 @@ QuadrantPreview.propTypes = { q: PropTypes.object.isRequired };
 const SparkleEffect = ({ color }) => {
   const particles = useMemo(
     () =>
-      Array.from({ length: 8 }).map(() => ({
+      Array.from({ length: 12 }).map(() => ({
         left: Math.random() * 100,
         top: Math.random() * 100,
         delay: Math.random() * 1.5,
-        size: 1 + Math.random() * 2,
-        tx: (Math.random() - 0.5) * 20,
-        ty: (Math.random() - 0.5) * 20,
-        duration: 0.8 + Math.random() * 0.7,
+        size: 2 + Math.random() * 2,
+        tx: (Math.random() - 0.5) * 40,
+        ty: (Math.random() - 0.5) * 40,
+        rot: Math.random() * 720,
+        duration: 1 + Math.random() * 0.8,
       })),
     []
   );
@@ -148,6 +149,7 @@ const SparkleEffect = ({ color }) => {
           className="absolute rounded-full opacity-80 animate-sparkle"
           style={{
             backgroundColor: color,
+            boxShadow: `0 0 6px ${color}`,
             left: `${p.left}%`,
             top: `${p.top}%`,
             width: `${p.size}px`,
@@ -156,6 +158,7 @@ const SparkleEffect = ({ color }) => {
             animationDuration: `${p.duration}s`,
             '--tx': `${p.tx}px`,
             '--ty': `${p.ty}px`,
+            '--rot': `${p.rot}deg`,
           }}
         />
       ))}
