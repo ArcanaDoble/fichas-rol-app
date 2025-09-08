@@ -89,7 +89,7 @@ function MinimapBuilder({ onBack }) {
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
   const [grid, setGrid] = useState(() => buildGrid(8, 12));
-  const [selectedCell, setSelectedCell] = useState(null);
+  const [selectedCells, setSelectedCells] = useState([]);
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
@@ -274,16 +274,24 @@ function MinimapBuilder({ onBack }) {
     return () => window.removeEventListener('resize', onResize);
   }, [recomputeFit]);
 
-  const handleCellClick = (r, c) => setSelectedCell({ r, c });
-  const updateCell = (r, c, updater) =>
+  const handleCellClick = (r, c) =>
+    setSelectedCells((prev) => {
+      const exists = prev.some((cell) => cell.r === r && cell.c === c);
+      if (exists)
+        return prev.filter((cell) => cell.r !== r || cell.c !== c);
+      return [...prev, { r, c }];
+    });
+  const updateCell = (cells, updater) =>
     setGrid((prev) => {
       const next = prev.map((row) => row.slice());
-      next[r] = next[r].slice();
-      next[r][c] = { ...next[r][c], ...updater };
+      (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
+        next[r] = next[r].slice();
+        next[r][c] = { ...next[r][c], ...updater };
+      });
       return next;
     });
-  const setActive = (r, c, active) => updateCell(r, c, { active });
-  const clearIcon = (r, c) => updateCell(r, c, { icon: null });
+  const setActive = (cells, active) => updateCell(cells, { active });
+  const clearIcon = (cells) => updateCell(cells, { icon: null });
   const handleFileUpload = async (file) => {
     if (!file) return;
     try {
@@ -472,30 +480,39 @@ function MinimapBuilder({ onBack }) {
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!selectedCell} readOnly />
+              <input type="checkbox" checked={selectedCells.length > 0} readOnly />
               <span>{L.selectedCell}</span>
             </label>
-            {selectedCell && (
+            {selectedCells.length > 0 && (
               <Boton
                 size="sm"
                 color="red"
-                onClick={() => setActive(selectedCell.r, selectedCell.c, false)}
+                onClick={() => {
+                  setActive(selectedCells, false);
+                  setSelectedCells([]);
+                }}
               >
                 {L.delCell}
               </Boton>
             )}
           </div>
 
-          {selectedCell &&
+          {selectedCells.length > 0 &&
             (() => {
-              const selected = grid[selectedCell.r][selectedCell.c];
+              const selected = grid[selectedCells[0].r][selectedCells[0].c];
               return (
                 <div className="mt-2 border-t border-gray-700 pt-3 space-y-3">
-                  <h3 className="font-semibold">
-                    Celda ({selectedCell.r + 1}
-                    {'\u00D7'}
-                    {selectedCell.c + 1})
-                  </h3>
+                  {selectedCells.length === 1 ? (
+                    <h3 className="font-semibold">
+                      Celda ({selectedCells[0].r + 1}
+                      {'\u00D7'}
+                      {selectedCells[0].c + 1})
+                    </h3>
+                  ) : (
+                    <h3 className="font-semibold">
+                      {selectedCells.length} celdas
+                    </h3>
+                  )}
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <label className="flex items-center gap-2">
                       <span>{L.color}</span>
@@ -503,7 +520,7 @@ function MinimapBuilder({ onBack }) {
                         type="color"
                         value={selected.fill}
                         onChange={(e) =>
-                          updateCell(selectedCell.r, selectedCell.c, {
+                          updateCell(selectedCells, {
                             fill: e.target.value,
                           })
                         }
@@ -515,7 +532,7 @@ function MinimapBuilder({ onBack }) {
                         type="color"
                         value={selected.borderColor}
                         onChange={(e) =>
-                          updateCell(selectedCell.r, selectedCell.c, {
+                          updateCell(selectedCells, {
                             borderColor: e.target.value,
                           })
                         }
@@ -529,7 +546,7 @@ function MinimapBuilder({ onBack }) {
                         max={6}
                         value={selected.borderWidth}
                         onChange={(e) =>
-                          updateCell(selectedCell.r, selectedCell.c, {
+                          updateCell(selectedCells, {
                             borderWidth: Number(e.target.value) || 0,
                           })
                         }
@@ -541,7 +558,7 @@ function MinimapBuilder({ onBack }) {
                       <select
                         value={selected.borderStyle}
                         onChange={(e) =>
-                          updateCell(selectedCell.r, selectedCell.c, {
+                          updateCell(selectedCells, {
                             borderStyle: e.target.value,
                           })
                         }
@@ -561,9 +578,7 @@ function MinimapBuilder({ onBack }) {
                       {selected.icon && (
                         <button
                           className="text-sm text-red-300 hover:text-red-200 underline"
-                          onClick={() =>
-                            clearIcon(selectedCell.r, selectedCell.c)
-                          }
+                          onClick={() => clearIcon(selectedCells)}
                         >
                           Quitar
                         </button>
@@ -624,11 +639,9 @@ function MinimapBuilder({ onBack }) {
                                       selected.icon === emojiDataUrl(item.ch)
                                     }
                                     onClick={() =>
-                                      updateCell(
-                                        selectedCell.r,
-                                        selectedCell.c,
-                                        { icon: emojiDataUrl(item.ch) }
-                                      )
+                                      updateCell(selectedCells, {
+                                        icon: emojiDataUrl(item.ch),
+                                      })
                                     }
                                   />
                                 ))}
@@ -672,11 +685,7 @@ function MinimapBuilder({ onBack }) {
                                     label={n}
                                     selected={selected.icon === url}
                                     onClick={() =>
-                                      updateCell(
-                                        selectedCell.r,
-                                        selectedCell.c,
-                                        { icon: url }
-                                      )
+                                      updateCell(selectedCells, { icon: url })
                                     }
                                   />
                                 );
@@ -696,9 +705,7 @@ function MinimapBuilder({ onBack }) {
                             label={ico.name}
                             selected={selected.icon === ico.url}
                             onClick={() =>
-                              updateCell(selectedCell.r, selectedCell.c, {
-                                icon: ico.url,
-                              })
+                              updateCell(selectedCells, { icon: ico.url })
                             }
                           />
                         ))}
@@ -846,10 +853,9 @@ function MinimapBuilder({ onBack }) {
                       {grid.map((row, r) =>
                         row.map((cell, c) => {
                           const key = `${r}-${c}`;
-                          const isSelected =
-                            selectedCell &&
-                            selectedCell.r === r &&
-                            selectedCell.c === c;
+                          const isSelected = selectedCells.some(
+                            (cell) => cell.r === r && cell.c === c
+                          );
                           if (!cell.active) {
                             const showAdder = hasActiveNeighbor(r, c);
                             return (
@@ -864,7 +870,7 @@ function MinimapBuilder({ onBack }) {
                                 {showAdder && (
                                   <button
                                     className="absolute inset-0 m-auto w-7 h-7 rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-xs shadow transition"
-                                    onClick={() => setActive(r, c, true)}
+                                    onClick={() => setActive({ r, c }, true)}
                                     title={L.addCell}
                                   >
                                     <LucideIcons.Plus size={14} />
@@ -892,8 +898,12 @@ function MinimapBuilder({ onBack }) {
                               onTouchStart={() => {
                                 const keyId = `${r}-${c}`;
                                 const timer = setTimeout(() => {
-                                  setActive(r, c, false);
-                                  setSelectedCell(null);
+                                  setActive({ r, c }, false);
+                                  setSelectedCells((prev) =>
+                                    prev.filter(
+                                      (cell) => cell.r !== r || cell.c !== c
+                                    )
+                                  );
                                   lastLongPressRef.current = {
                                     key: keyId,
                                     t: Date.now(),
@@ -949,7 +959,12 @@ function MinimapBuilder({ onBack }) {
                                 title="Eliminar celda"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setActive(r, c, false);
+                                  setActive({ r, c }, false);
+                                  setSelectedCells((prev) =>
+                                    prev.filter(
+                                      (cell) => cell.r !== r || cell.c !== c
+                                    )
+                                  );
                                 }}
                               >
                                 <svg

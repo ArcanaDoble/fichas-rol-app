@@ -1407,7 +1407,7 @@ src/
 
 **Resumen de cambios v2.4.78:**
 
-- Se reordena la función `updateTexts` en **MapCanvas** para evitar errores de compilación.
+- El constructor de minimapa permite seleccionar múltiples celdas y aplicar cambios de forma simultánea.
 
 **Resumen de cambios v2.4.25:**
 
@@ -1596,5 +1596,6 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Nuevo toggle “Modo legible”: engrosa temporalmente las líneas del grid para mejorar la lectura en móviles o a escalas bajas.
 - Buscadores de emojis y Lucide con listado completo de iconos cargados localmente.
 - Botón de eliminación de celdas sin fondo, solo la “X” roja.
+- Selección múltiple de celdas para editar o eliminar varias a la vez.
 
 Guía rápida: ver `docs/Minimapa.md`.
