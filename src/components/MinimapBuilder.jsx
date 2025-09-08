@@ -72,6 +72,39 @@ IconThumb.propTypes = {
   label: PropTypes.string,
 };
 
+const QuadrantPreview = ({ q }) => {
+  const size = 36;
+  const cell = size / Math.max(q.rows, q.cols);
+  return (
+    <div
+      className="grid"
+      style={{
+        gridTemplateColumns: `repeat(${q.cols}, ${cell}px)`,
+        gridTemplateRows: `repeat(${q.rows}, ${cell}px)`,
+      }}
+    >
+      {q.grid.map((row, r) =>
+        row.map((cellData, c) => (
+          <div
+            key={`${r}-${c}`}
+            style={{
+              width: cell,
+              height: cell,
+              background: cellData.active ? cellData.fill : 'transparent',
+              border: `1px solid ${
+                cellData.active
+                  ? cellData.borderColor
+                  : 'rgba(255,255,255,0.1)'
+              }`,
+            }}
+          />
+        ))
+      )}
+    </div>
+  );
+};
+QuadrantPreview.propTypes = { q: PropTypes.object.isRequired };
+
 const defaultCell = () => ({
   fill: '#111827',
   borderColor: '#374151',
@@ -880,7 +913,7 @@ function MinimapBuilder({ onBack }) {
                       </div>
                     )}
                     {iconsLoading && (
-                      <div className="text-xs text-gray-400">Cargandoâ€¦</div>
+                      <div className="text-xs text-gray-400">Cargando…</div>
                     )}
                     <label className="block text-xs text-gray-300">
                       {L.iconAdd}
@@ -895,42 +928,41 @@ function MinimapBuilder({ onBack }) {
                       }
                       className="block w-full text-sm text-gray-300 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600"
                     />
-                    <div className="mt-4 space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={quadrantTitle}
-                          onChange={(e) => setQuadrantTitle(e.target.value)}
-                          placeholder={L.title}
-                          className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
-                        />
-                        <Boton size="sm" onClick={saveQuadrant}>
-                          {L.saveQuadrant}
-                        </Boton>
-                      </div>
-                      {quadrants.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="text-xs text-gray-300">
-                            {L.savedQuadrants}:
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {quadrants.map((q, i) => (
-                              <button
-                                key={`quad-${i}`}
-                                onClick={() => loadQuadrant(q)}
-                                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
-                              >
-                                {q.title}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
             })()}
+          <div className="mt-4 space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={quadrantTitle}
+                onChange={(e) => setQuadrantTitle(e.target.value)}
+                placeholder={L.title}
+                className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+              />
+              <Boton size="sm" onClick={saveQuadrant}>
+                {L.saveQuadrant}
+              </Boton>
+            </div>
+            {quadrants.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
+                <div className="flex flex-wrap gap-2">
+                  {quadrants.map((q, i) => (
+                    <button
+                      key={`quad-${i}`}
+                      onClick={() => loadQuadrant(q)}
+                      className="flex flex-col items-center p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                    >
+                      <QuadrantPreview q={q} />
+                      <span className="mt-1">{q.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[50vh]">

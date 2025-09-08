@@ -1542,6 +1542,11 @@ src/
 - Los botones "+" del minimapa ya no quedan flotando tras eliminar celdas adyacentes.
 - Se pueden guardar cuadrantes completos con título y cargarlos desde el constructor.
 
+**Resumen de cambios v2.4.55:**
+
+- Guardar o cargar cuadrantes ya no requiere tener celdas seleccionadas.
+- Los cuadrantes guardados muestran una mini previsualización para su identificación.
+
 ## 🔄 Historial de cambios previos
 
 <details>
