@@ -125,6 +125,21 @@ html {
   }
 }
 
+@keyframes sparkle {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-6px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.animate-sparkle {
+  animation: sparkle 1.2s linear infinite;
+}
+
 /* Clases de utilidad para animaciones */
 .animate-in {
   animation: fadeIn 0.5s ease-out;

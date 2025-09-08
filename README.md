@@ -1319,7 +1319,7 @@ src/
 
 - "Subir cambios" ahora confirma antes de actualizar y avisa si la ficha no está enlazada.
 
-**Resumen de cambios v2.4.58:**
+**Resumen de cambios v2.4.59:**
 
 - Redimensionado de tokens sin snapping hasta soltar, para un ajuste más cómodo.
   **Resumen de cambios v2.4.59:**
@@ -1557,6 +1557,13 @@ src/
 - Las anotaciones del minimapa se guardan en Firebase y siempre se muestran sobre el cuadrante.
 - Se elimina el selector de capas para las anotaciones.
 - Se añaden efectos de celda (brillo o pulso) con color personalizable para destacar cuadros específicos.
+
+**Resumen de cambios v2.4.59:**
+
+- El texto de las anotaciones del minimapa se muestra centrado.
+- Nuevo efecto de celda "Destellos" con pequeñas partículas brillantes animadas.
+- La selección de celdas con efectos visuales se visualiza correctamente.
+- Los efectos de celdas no seleccionadas ya no se recortan por superposición con otras celdas.
 
 **Resumen de cambios v2.4.58:**
 
