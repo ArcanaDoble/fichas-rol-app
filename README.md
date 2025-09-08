@@ -1536,6 +1536,12 @@ src/
 
 - Los cuadros del minimapa pueden restablecer su estilo al predeterminado.
 
+**Resumen de cambios v2.4.54:**
+
+- Activar "Editar forma" selecciona todas las celdas para aplicar estilos globales.
+- Los botones "+" del minimapa ya no quedan flotando tras eliminar celdas adyacentes.
+- Se pueden guardar cuadrantes completos con título y cargarlos desde el constructor.
+
 ## 🔄 Historial de cambios previos
 
 <details>
