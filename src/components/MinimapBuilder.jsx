@@ -36,6 +36,11 @@ const L = {
   none: 'Ninguno',
   icon: 'Icono',
   iconAdd: 'A\u00F1adir icono personalizado',
+  layers: 'Capas',
+  gridLayer: 'Cuadrícula',
+  annotations: 'Anotaciones',
+  layerUp: 'Subir',
+  layerDown: 'Bajar',
   saveQuadrant: 'Guardar cuadrante',
   savedQuadrants: 'Cuadrantes guardados',
   title: 'T\u00EDtulo',
@@ -128,6 +133,11 @@ function MinimapBuilder({ onBack }) {
   const [grid, setGrid] = useState(() => buildGrid(8, 12));
   const [selectedCells, setSelectedCells] = useState([]);
   const selectedCell = selectedCells[0];
+  const [layers, setLayers] = useState([
+    { id: 'grid', name: L.gridLayer, visible: true },
+    { id: 'annotations', name: L.annotations, visible: true },
+  ]);
+  const [annotations, setAnnotations] = useState([]);
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
@@ -161,6 +171,32 @@ function MinimapBuilder({ onBack }) {
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
+
+  const toggleLayer = (id) =>
+    setLayers((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
+    );
+
+  const moveLayer = (index, dir) =>
+    setLayers((prev) => {
+      const next = [...prev];
+      const newIndex = index + dir;
+      if (newIndex < 0 || newIndex >= next.length) return prev;
+      const [item] = next.splice(index, 1);
+      next.splice(newIndex, 0, item);
+      return next;
+    });
+
+  const setAnnotation = (r, c, data) =>
+    setAnnotations((prev) => {
+      const key = `${r}-${c}`;
+      const next = prev.filter((a) => a.key !== key);
+      if (data.text || data.icon) next.push({ key, r, c, ...data });
+      return next;
+    });
+
+  const layerIndex = (id) => layers.findIndex((l) => l.id === id);
+  const layerVisible = (id) => layers.find((l) => l.id === id)?.visible;
 
   const containerRef = useRef(null);
   const skipRebuildRef = useRef(false);
@@ -702,6 +738,44 @@ function MinimapBuilder({ onBack }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 space-y-3 lg:col-span-1">
+          <div className="space-y-2">
+            <h2 className="font-semibold">{L.layers}</h2>
+            {layers.map((layer, i) => (
+              <div
+                key={layer.id}
+                className="flex items-center justify-between text-sm"
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={layer.visible}
+                    onChange={() => toggleLayer(layer.id)}
+                  />
+                  <span>{layer.name}</span>
+                </label>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveLayer(i, -1)}
+                    disabled={i === 0}
+                    className="p-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+                    title={L.layerUp}
+                  >
+                    <LucideIcons.ChevronUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveLayer(i, 1)}
+                    disabled={i === layers.length - 1}
+                    className="p-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+                    title={L.layerDown}
+                  >
+                    <LucideIcons.ChevronDown size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
           <h2 className="font-semibold">{L.quadrant}</h2>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <label className="flex flex-col gap-1">
@@ -1034,6 +1108,43 @@ function MinimapBuilder({ onBack }) {
                       }
                       className="block w-full text-sm text-gray-300 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600"
                     />
+                    <div className="mt-2 border-t border-gray-700 pt-2">
+                      <h4 className="font-medium mb-1">{L.annotations}</h4>
+                      {(() => {
+                        const ann = annotations.find(
+                          (a) =>
+                            a.r === selectedCell.r && a.c === selectedCell.c
+                        );
+                        return (
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              value={ann?.text || ''}
+                              onChange={(e) =>
+                                setAnnotation(selectedCell.r, selectedCell.c, {
+                                  text: e.target.value,
+                                  icon: ann?.icon || '',
+                                })
+                              }
+                              placeholder="Texto"
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                            />
+                            <input
+                              type="text"
+                              value={ann?.icon || ''}
+                              onChange={(e) =>
+                                setAnnotation(selectedCell.r, selectedCell.c, {
+                                  text: ann?.text || '',
+                                  icon: e.target.value,
+                                })
+                              }
+                              placeholder="URL icono"
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                            />
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               );
@@ -1190,152 +1301,195 @@ function MinimapBuilder({ onBack }) {
 
                   <div
                     className="absolute"
-                    style={{ left: perimMargin, top: perimMargin }}
+                    style={{
+                      left: perimMargin,
+                      top: perimMargin,
+                      width: gridWidth,
+                      height: gridHeight,
+                    }}
                   >
-                    <div
-                      className="grid"
-                      style={{
-                        gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-                        gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
-                      }}
-                    >
-                      {grid.map((row, r) =>
-                        row.map((cell, c) => {
-                          const key = `${r}-${c}`;
-                          const isSelected = selectedCells.some(
-                            (cell) => cell.r === r && cell.c === c
-                          );
-                          if (!cell.active) {
-                            const showAdder = hasActiveNeighbor(r, c);
+                    {layerVisible('grid') && (
+                      <div
+                        className="grid"
+                        style={{
+                          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                          gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                          position: 'relative',
+                          zIndex: layerIndex('grid') + 1,
+                        }}
+                      >
+                        {grid.map((row, r) =>
+                          row.map((cell, c) => {
+                            const key = `${r}-${c}`;
+                            const isSelected = selectedCells.some(
+                              (cell) => cell.r === r && cell.c === c
+                            );
+                            if (!cell.active) {
+                              const showAdder = hasActiveNeighbor(r, c);
+                              return (
+                                <div
+                                  key={key}
+                                  className="relative"
+                                  style={{
+                                    width: `${cellSize}px`,
+                                    height: `${cellSize}px`,
+                                  }}
+                                >
+                                  {showAdder && (
+                                    <button
+                                      className="absolute inset-0 m-auto w-7 h-7 rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-xs shadow transition"
+                                      onClick={() => setActive({ r, c }, true)}
+                                      title={L.addCell}
+                                    >
+                                      <LucideIcons.Plus size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
                             return (
                               <div
                                 key={key}
-                                className="relative"
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  const keyId = `${r}-${c}`;
+                                  if (
+                                    lastLongPressRef.current.key === keyId &&
+                                    Date.now() - lastLongPressRef.current.t < 700
+                                  ) {
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  handleCellClick(r, c);
+                                }}
+                                onTouchStart={() => {
+                                  const keyId = `${r}-${c}`;
+                                  const timer = setTimeout(() => {
+                                    setActive({ r, c }, false);
+                                    setSelectedCells((prev) =>
+                                      prev.filter(
+                                        (cell) => cell.r !== r || cell.c !== c
+                                      )
+                                    );
+                                    lastLongPressRef.current = {
+                                      key: keyId,
+                                      t: Date.now(),
+                                    };
+                                    longPressTimersRef.current.delete(keyId);
+                                  }, 550);
+                                  longPressTimersRef.current.set(keyId, {
+                                    id: timer,
+                                  });
+                                }}
+                                onTouchEnd={() => {
+                                  const keyId = `${r}-${c}`;
+                                  const st =
+                                    longPressTimersRef.current.get(keyId);
+                                  if (st) {
+                                    clearTimeout(st.id);
+                                    longPressTimersRef.current.delete(keyId);
+                                  }
+                                }}
+                                onTouchMove={() => {
+                                  const keyId = `${r}-${c}`;
+                                  const st =
+                                    longPressTimersRef.current.get(keyId);
+                                  if (st) {
+                                    clearTimeout(st.id);
+                                    longPressTimersRef.current.delete(keyId);
+                                  }
+                                }}
+                                onKeyDown={(e) =>
+                                  e.key === 'Enter' && handleCellClick(r, c)
+                                }
+                                className={`group relative z-0 select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
                                 style={{
+                                  background: cell.fill,
+                                  borderColor: cell.borderColor,
+                                  borderWidth: `${readableMode || device === 'mobile' ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
+                                  borderStyle: cell.borderStyle,
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
+                                  zIndex: isSelected ? 20 : undefined,
                                 }}
                               >
-                                {showAdder && (
-                                  <button
-                                    className="absolute inset-0 m-auto w-7 h-7 rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-xs shadow transition"
-                                    onClick={() => setActive({ r, c }, true)}
-                                    title={L.addCell}
-                                  >
-                                    <LucideIcons.Plus size={14} />
-                                  </button>
+                                {cell.icon && (
+                                  <img
+                                    src={cell.icon}
+                                    alt="icon"
+                                    className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
+                                  />
                                 )}
+                                <button
+                                  type="button"
+                                  className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                                  title="Eliminar celda"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActive({ r, c }, false);
+                                    setSelectedCells((prev) =>
+                                      prev.filter(
+                                        (cell) => cell.r !== r || cell.c !== c
+                                      )
+                                    );
+                                  }}
+                                >
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                  >
+                                    <path
+                                      d="M5 5L19 19M19 5L5 19"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             );
-                          }
-                          return (
-                            <div
-                              key={key}
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                const keyId = `${r}-${c}`;
-                                if (
-                                  lastLongPressRef.current.key === keyId &&
-                                  Date.now() - lastLongPressRef.current.t < 700
-                                ) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                handleCellClick(r, c);
-                              }}
-                              onTouchStart={() => {
-                                const keyId = `${r}-${c}`;
-                                const timer = setTimeout(() => {
-                                  setActive({ r, c }, false);
-                                  setSelectedCells((prev) =>
-                                    prev.filter(
-                                      (cell) => cell.r !== r || cell.c !== c
-                                    )
-                                  );
-                                  lastLongPressRef.current = {
-                                    key: keyId,
-                                    t: Date.now(),
-                                  };
-                                  longPressTimersRef.current.delete(keyId);
-                                }, 550);
-                                longPressTimersRef.current.set(keyId, {
-                                  id: timer,
-                                });
-                              }}
-                              onTouchEnd={() => {
-                                const keyId = `${r}-${c}`;
-                                const st =
-                                  longPressTimersRef.current.get(keyId);
-                                if (st) {
-                                  clearTimeout(st.id);
-                                  longPressTimersRef.current.delete(keyId);
-                                }
-                              }}
-                              onTouchMove={() => {
-                                const keyId = `${r}-${c}`;
-                                const st =
-                                  longPressTimersRef.current.get(keyId);
-                                if (st) {
-                                  clearTimeout(st.id);
-                                  longPressTimersRef.current.delete(keyId);
-                                }
-                              }}
-                              onKeyDown={(e) =>
-                                e.key === 'Enter' && handleCellClick(r, c)
-                              }
-                              className={`group relative z-0 select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
-                              style={{
-                                background: cell.fill,
-                                borderColor: cell.borderColor,
-                                borderWidth: `${readableMode || device === 'mobile' ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
-                                borderStyle: cell.borderStyle,
-                                width: `${cellSize}px`,
-                                height: `${cellSize}px`,
-                                zIndex: isSelected ? 20 : undefined,
-                              }}
-                            >
-                              {cell.icon && (
-                                <img
-                                  src={cell.icon}
-                                  alt="icon"
-                                  className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
-                                />
-                              )}
-                              <button
-                                type="button"
-                                className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-                                title="Eliminar celda"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActive({ r, c }, false);
-                                  setSelectedCells((prev) =>
-                                    prev.filter(
-                                      (cell) => cell.r !== r || cell.c !== c
-                                    )
-                                  );
-                                }}
+                          })
+                        )}
+                      </div>
+                    )}
+                    {layerVisible('annotations') && (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ zIndex: layerIndex('annotations') + 1 }}
+                      >
+                        {annotations.map((a) => (
+                          <div
+                            key={a.key}
+                            className="absolute flex items-center justify-center text-white"
+                            style={{
+                              left: a.c * cellSize,
+                              top: a.r * cellSize,
+                              width: cellSize,
+                              height: cellSize,
+                            }}
+                          >
+                            {a.icon ? (
+                              <img
+                                src={a.icon}
+                                alt=""
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            ) : (
+                              <span
+                                className="leading-none"
+                                style={{ fontSize: cellSize * 0.6 }}
                               >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  aria-hidden="true"
-                                  focusable="false"
-                                >
-                                  <path
-                                    d="M5 5L19 19M19 5L5 19"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
+                                {a.text}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
