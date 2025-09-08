@@ -1572,6 +1572,10 @@ src/
 - Los efectos de celda se muestran completos sobre las celdas adyacentes.
 - Nuevos efectos visuales disponibles: rebote, giro y temblor.
 
+**Resumen de cambios v2.4.60:**
+
+- Tras cargar un cuadrante guardado, el constructor de minimapas ofrece un botón para volver al cuadrante predeterminado.
+
 ## 🔄 Historial de cambios previos
 
 <details>

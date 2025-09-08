@@ -57,6 +57,7 @@ const L = {
   saveQuadrant: 'Guardar cuadrante',
   saveChanges: 'Guardar cambios',
   savedQuadrants: 'Cuadrantes guardados',
+  defaultQuadrant: 'Cuadrante predeterminado',
   title: 'T\u00EDtulo',
   addRowTop: 'A\u00F1adir fila desde arriba',
   addRowBottom: 'A\u00F1adir fila desde abajo',
@@ -701,6 +702,19 @@ function MinimapBuilder({ onBack }) {
     setCurrentQuadrantIndex(idx);
     setLoadedQuadrantData({ rows: q.rows, cols: q.cols, cellSize: q.cellSize, grid: q.grid });
   };
+  const loadDefaultQuadrant = () => {
+    const dRows = 8;
+    const dCols = 12;
+    const dSize = 48;
+    setRows(dRows);
+    setCols(dCols);
+    setCellSize(dSize);
+    setGrid(buildGrid(dRows, dCols));
+    setSelectedCells([]);
+    setCurrentQuadrantIndex(null);
+    setLoadedQuadrantData(null);
+    setAnnotations([]);
+  };
   const saveQuadrantChanges = () => {
     if (currentQuadrantIndex === null) return;
     const data = {
@@ -1313,6 +1327,13 @@ function MinimapBuilder({ onBack }) {
               <div>
                 <Boton size="sm" onClick={saveQuadrantChanges}>
                   {L.saveChanges}
+                </Boton>
+              </div>
+            )}
+            {currentQuadrantIndex !== null && (
+              <div>
+                <Boton size="sm" onClick={loadDefaultQuadrant}>
+                  {L.defaultQuadrant}
                 </Boton>
               </div>
             )}
