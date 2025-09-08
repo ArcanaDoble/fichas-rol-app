@@ -1635,3 +1635,4 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
 - Se solucionó un error en el mapa de batalla que provocaba un fallo al inicializar `syncManager` antes de su declaración.
 - Corregido error al aplicar presets de estilo en el minimapa que provocaba "next[r] is undefined".
+- Se corrigió un error de compilación causado por un corchete faltante en `MinimapBuilder.jsx`.
