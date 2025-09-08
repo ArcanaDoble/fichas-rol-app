@@ -1528,6 +1528,10 @@ src/
 
 - Las fichas de enemigos ocupan toda la pantalla en móviles y permiten desplazarse cuando el contenido supera la altura.
 
+**Resumen de cambios v2.4.52:**
+
+- El constructor de minimapas permite guardar presets de estilo de celda y aplicarlos rápidamente desde una barra dedicada.
+
 ## 🔄 Historial de cambios previos
 
 <details>
