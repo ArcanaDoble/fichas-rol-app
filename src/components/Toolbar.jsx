@@ -61,6 +61,11 @@ const Toolbar = ({
   onMeasureVisibleChange,
   textOptions,
   onTextOptionsChange,
+  onResetTextOptions,
+  stylePresets = [],
+  onSaveStylePreset,
+  onApplyStylePreset,
+  showTextMenu = false,
   activeLayer = 'fichas',
   onLayerChange,
   isPlayerView = false,
@@ -211,7 +216,7 @@ const Toolbar = ({
           </div>
         </motion.div>
       )}
-      {activeTool === 'text' && (
+      {showTextMenu && (
         <motion.div
           key="text-menu"
           initial={{ opacity: 0, x: -10 }}
@@ -318,6 +323,41 @@ const Toolbar = ({
               S
             </button>
           </div>
+          <div className="flex space-x-1 mt-2">
+            <button
+              onClick={onResetTextOptions}
+              className="px-2 py-1 rounded text-xs bg-gray-600"
+            >
+              Reset
+            </button>
+            <button
+              onClick={onSaveStylePreset}
+              className="px-2 py-1 rounded text-xs bg-gray-600"
+            >
+              Guardar
+            </button>
+          </div>
+          {stylePresets.length > 0 && (
+            <div className="mt-2">
+              <div className="text-xs mb-1">Guardados</div>
+              <div className="flex space-x-2 overflow-x-auto pb-1">
+                {stylePresets.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onApplyStylePreset && onApplyStylePreset(preset)}
+                    className="w-8 h-8 flex-shrink-0 rounded border flex items-center justify-center"
+                    style={{
+                      backgroundColor: preset.bgColor,
+                      color: preset.fill,
+                      fontFamily: preset.fontFamily,
+                    }}
+                  >
+                    A
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
@@ -348,6 +388,22 @@ Toolbar.propTypes = {
     underline: PropTypes.bool,
   }),
   onTextOptionsChange: PropTypes.func,
+  onResetTextOptions: PropTypes.func,
+  stylePresets: PropTypes.arrayOf(
+    PropTypes.shape({
+      text: PropTypes.string,
+      fill: PropTypes.string,
+      bgColor: PropTypes.string,
+      fontFamily: PropTypes.string,
+      fontSize: PropTypes.number,
+      bold: PropTypes.bool,
+      italic: PropTypes.bool,
+      underline: PropTypes.bool,
+    })
+  ),
+  onSaveStylePreset: PropTypes.func,
+  onApplyStylePreset: PropTypes.func,
+  showTextMenu: PropTypes.bool,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
   isPlayerView: PropTypes.bool,
