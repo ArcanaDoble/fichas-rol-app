@@ -42,6 +42,7 @@ const L = {
   addColRight: 'A\u00F1adir columna derecha',
   addCell: 'A\u00F1adir celda',
   delCell: 'Eliminar celda',
+  reset: 'Restablecer',
 };
 
 function IconThumb({ src, selected, onClick, label }) {
@@ -309,6 +310,16 @@ function MinimapBuilder({ onBack }) {
     });
   const setActive = (cells, active) => updateCell(cells, { active });
   const clearIcon = (cells) => updateCell(cells, { icon: null });
+  const resetCellStyle = (cells) =>
+    setGrid((prev) => {
+      const next = prev.map((row) => row.slice());
+      (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
+        next[r] = next[r].slice();
+        const active = next[r][c].active;
+        next[r][c] = { ...defaultCell(), active };
+      });
+      return next;
+    });
   const saveCellPreset = () => {
     if (!selectedCell) return;
     const cell = grid[selectedCell.r][selectedCell.c];
@@ -543,9 +554,14 @@ function MinimapBuilder({ onBack }) {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium">Estilos</h4>
-                      <Boton size="sm" onClick={saveCellPreset}>
-                        Guardar estilo
-                      </Boton>
+                      <div className="flex gap-2">
+                        <Boton size="sm" onClick={() => resetCellStyle(selectedCells)}>
+                          {L.reset}
+                        </Boton>
+                        <Boton size="sm" onClick={saveCellPreset}>
+                          Guardar estilo
+                        </Boton>
+                      </div>
                     </div>
                     {cellStylePresets.length > 0 && (
                       <div className="flex flex-wrap gap-2">
