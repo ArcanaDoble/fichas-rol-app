@@ -125,10 +125,14 @@ QuadrantPreview.propTypes = { q: PropTypes.object.isRequired };
 const SparkleEffect = ({ color }) => {
   const particles = useMemo(
     () =>
-      Array.from({ length: 6 }).map(() => ({
+      Array.from({ length: 8 }).map(() => ({
         left: Math.random() * 100,
         top: Math.random() * 100,
-        delay: Math.random(),
+        delay: Math.random() * 1.5,
+        size: 1 + Math.random() * 2,
+        tx: (Math.random() - 0.5) * 20,
+        ty: (Math.random() - 0.5) * 20,
+        duration: 0.8 + Math.random() * 0.7,
       })),
     []
   );
@@ -141,12 +145,17 @@ const SparkleEffect = ({ color }) => {
         <span
           // eslint-disable-next-line react/no-array-index-key
           key={i}
-          className="absolute w-1 h-1 rounded-full opacity-80 animate-sparkle"
+          className="absolute rounded-full opacity-80 animate-sparkle"
           style={{
             backgroundColor: color,
             left: `${p.left}%`,
             top: `${p.top}%`,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
             animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            '--tx': `${p.tx}px`,
+            '--ty': `${p.ty}px`,
           }}
         />
       ))}
