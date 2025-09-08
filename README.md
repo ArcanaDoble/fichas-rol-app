@@ -1405,6 +1405,10 @@ src/
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
 
+**Resumen de cambios v2.4.78:**
+
+- Se reordena la función `updateTexts` en **MapCanvas** para evitar errores de compilación.
+
 **Resumen de cambios v2.4.25:**
 
 - ✅ El menú de ataque y defensa solo muestra armas o poderes al alcance
