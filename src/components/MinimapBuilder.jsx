@@ -1498,8 +1498,11 @@ function MinimapBuilder({ onBack }) {
                             >
                               <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full" />
                               {showTooltip && (
-                                <div className="absolute z-30 left-1/2 -translate-x-1/2 -translate-y-full mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg whitespace-pre-line">
-                                  {a.text}
+                                <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
+                                  <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line">
+                                    {a.text}
+                                    <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
+                                  </div>
                                 </div>
                               )}
                             </div>
