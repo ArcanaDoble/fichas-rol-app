@@ -1150,7 +1150,7 @@ const MapCanvas = ({
   // Estado para vista previa de pegado
   const [showPastePreview, setShowPastePreview] = useState(false);
 
-  const [textOptions, setTextOptions] = useState({
+  const DEFAULT_TEXT_OPTIONS = {
     fill: '#ffffff',
     bgColor: 'rgba(0,0,0,0.5)',
     fontFamily: 'Arial',
@@ -1158,7 +1158,54 @@ const MapCanvas = ({
     bold: false,
     italic: false,
     underline: false,
+  };
+  const [textOptions, setTextOptions] = useState(DEFAULT_TEXT_OPTIONS);
+  const [savedTextPresets, setSavedTextPresets] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('text-presets');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
   });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('text-presets', JSON.stringify(savedTextPresets));
+    }
+  }, [savedTextPresets]);
+
+  const applyTextOptions = useCallback((opts) => {
+    setTextOptions(opts);
+    if (selectedTextId != null || selectedTexts.length > 0) {
+      const ids = selectedTexts.length > 0 ? selectedTexts : [selectedTextId];
+      updateTexts(ts =>
+        ts.map(t => (ids.includes(t.id) ? { ...t, ...opts } : t))
+      );
+    }
+  }, [selectedTextId, selectedTexts, updateTexts]);
+
+  const resetTextOptions = useCallback(() => {
+    applyTextOptions(DEFAULT_TEXT_OPTIONS);
+  }, [applyTextOptions]);
+
+  const saveCurrentTextPreset = useCallback(() => {
+    if (selectedTextId != null) {
+      const t = texts.find(t => t.id === selectedTextId);
+      if (t) setSavedTextPresets(prev => [...prev, t]);
+    } else {
+      setSavedTextPresets(prev => [...prev, { text: '', ...textOptions }]);
+    }
+  }, [selectedTextId, texts, textOptions]);
+
+  const applyTextPreset = useCallback((preset) => {
+    const { text, ...opts } = preset;
+    setTextOptions(opts);
+    if (selectedTextId != null || selectedTexts.length > 0) {
+      const ids = selectedTexts.length > 0 ? selectedTexts : [selectedTextId];
+      updateTexts(ts =>
+        ts.map(t => (ids.includes(t.id) ? { ...t, ...preset } : t))
+      );
+    }
+  }, [selectedTextId, selectedTexts, updateTexts]);
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
@@ -4747,7 +4794,11 @@ const MapCanvas = ({
         measureVisible={measureVisible}
         onMeasureVisibleChange={setMeasureVisible}
         textOptions={textOptions}
-        onTextOptionsChange={setTextOptions}
+        onTextOptionsChange={applyTextOptions}
+        onResetTextOptions={resetTextOptions}
+        stylePresets={savedTextPresets}
+        onSaveStylePreset={saveCurrentTextPreset}
+        onApplyStylePreset={applyTextPreset}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
         isPlayerView={isPlayerView}
