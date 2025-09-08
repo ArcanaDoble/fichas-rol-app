@@ -1060,6 +1060,21 @@ const MapCanvas = ({
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
+  const handleTextsChange = useCallback((newTexts) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('texts', newTexts);
+    }
+    onTextsChange(newTexts);
+  }, [isPlayerView, syncManager, onTextsChange]);
+
+  const updateTexts = useCallback((updater) => {
+    setTexts((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      handleTextsChange(next);
+      return next;
+    });
+  }, [handleTextsChange]);
+
   // Estados para sistema de ataque
   const [attackSourceId, setAttackSourceId] = useState(null);
   const attackSourceIdRef = useRef(null);
@@ -1380,13 +1395,6 @@ const MapCanvas = ({
     }
     onWallsChange(newWalls);
   }, [isPlayerView, syncManager, onWallsChange]);
-
-  const handleTextsChange = useCallback((newTexts) => {
-    if (isPlayerView && syncManager) {
-      syncManager.saveToFirebase('texts', newTexts);
-    }
-    onTextsChange(newTexts);
-  }, [isPlayerView, syncManager, onTextsChange]);
 
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
@@ -2549,14 +2557,6 @@ const MapCanvas = ({
       return next;
     });
   }, [handleWallsChange]);
-
-  const updateTexts = useCallback((updater) => {
-    setTexts((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      handleTextsChange(next);
-      return next;
-    });
-  }, [handleTextsChange]);
 
   const undoLines = useCallback(() => {
     setLines((prev) => {
