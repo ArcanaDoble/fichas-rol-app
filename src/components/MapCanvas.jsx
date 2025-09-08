@@ -1197,12 +1197,13 @@ const MapCanvas = ({
   }, [selectedTextId, texts, textOptions]);
 
   const applyTextPreset = useCallback((preset) => {
-    const { text, ...opts } = preset;
+    // Ignore stored text content when applying style presets
+    const { text: _text, ...opts } = preset;
     setTextOptions(opts);
     if (selectedTextId != null || selectedTexts.length > 0) {
       const ids = selectedTexts.length > 0 ? selectedTexts : [selectedTextId];
       updateTexts(ts =>
-        ts.map(t => (ids.includes(t.id) ? { ...t, ...preset } : t))
+        ts.map(t => (ids.includes(t.id) ? { ...t, ...opts } : t))
       );
     }
   }, [selectedTextId, selectedTexts, updateTexts]);
