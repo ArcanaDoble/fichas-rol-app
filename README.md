@@ -1658,3 +1658,4 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se corrigió un error de compilación causado por un corchete faltante en `MinimapBuilder.jsx`.
 - Se mejoró el efecto de destellos del minimapa con trayectorias y tamaños aleatorios para cada partícula.
 - Se intensificó el efecto de destellos del minimapa con más partículas, rotación y resplandor para hacerlo más espectacular.
+- Se solucionó un problema en el mapa de batalla donde los jugadores veían una pantalla en blanco si la página no tenía imagen de fondo.

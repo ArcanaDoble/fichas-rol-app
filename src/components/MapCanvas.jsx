@@ -1787,9 +1787,10 @@ const MapCanvas = ({
   const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
-  const [bg, bgStatus] = useImage(backgroundImage, 'anonymous');
-  const isBgLoading = bgStatus === 'loading';
-  const isBgError = bgStatus === 'failed';
+  // Avoid showing a perpetual loading state when no background image is provided
+  const [bg, bgStatus] = useImage(backgroundImage || null, 'anonymous');
+  const isBgLoading = !!backgroundImage && bgStatus === 'loading';
+  const isBgError = !!backgroundImage && bgStatus === 'failed';
 
   useEffect(() => {
     setLines(propLines);
