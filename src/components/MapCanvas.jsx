@@ -948,6 +948,8 @@ const MapCanvas = ({
   const gridOffsetXRef = useRef(gridOffsetX);
   const gridOffsetYRef = useRef(gridOffsetY);
   const gridSizeRef = useRef(gridSize);
+  const dragMoveRafs = useRef({});
+  const dragMovePositions = useRef({});
 
   // Actualizar refs cuando cambien los valores
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -2701,7 +2703,43 @@ const MapCanvas = ({
   };
 
 
+  const handleDragMove = (id, evt) => {
+    const node = evt?.target;
+    if (!node) return;
+
+    const offX = node.offsetX();
+    const offY = node.offsetY();
+    const left = node.x() - offX;
+    const top = node.y() - offY;
+    const col = Math.round((left - gridOffsetX) / effectiveGridSize);
+    const row = Math.round((top - gridOffsetY) / effectiveGridSize);
+
+    dragMovePositions.current[id] = { col, row };
+
+    if (dragMoveRafs.current[id]) return;
+
+    dragMoveRafs.current[id] = requestAnimationFrame(() => {
+      dragMoveRafs.current[id] = null;
+      const pos = dragMovePositions.current[id];
+      if (!pos) return;
+      const token = tokensRef.current.find((t) => t.id === id);
+      if (token && (token.x !== pos.col || token.y !== pos.row)) {
+        const newTokens = tokensRef.current.map((t) =>
+          t.id === id ? { ...t, x: pos.col, y: pos.row } : t
+        );
+        handleTokensChange(newTokens);
+      }
+    });
+  };
+
+
   const handleDragEnd = (id, evt) => {
+    if (dragMoveRafs.current[id]) {
+      cancelAnimationFrame(dragMoveRafs.current[id]);
+      dragMoveRafs.current[id] = null;
+    }
+    delete dragMovePositions.current[id];
+
     const node = evt?.target;
     if (!node) return;
 
@@ -3981,6 +4019,7 @@ const MapCanvas = ({
                   isAttacker={activeTool === 'target' && token.id === attackSourceId}
                   isTarget={activeTool === 'target' && token.id === attackTargetId}
                   selected={token.id === selectedId || selectedTokens.includes(token.id)}
+                  onDragMove={(e) => handleDragMove(token.id, e)}
                   onDragEnd={handleDragEnd}
                   onDragStart={handleDragStart}
                   onClick={(e) => {
