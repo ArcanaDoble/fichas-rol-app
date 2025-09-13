@@ -4949,7 +4949,9 @@ const MapCanvas = ({
           poderesCatalog={habilidades}
           onClose={(res) => {
             setAttackReady(false);
-            if (!res) {
+            if (res) {
+              setAttackResult(res);
+            } else {
               setAttackTargetId(null);
               setAttackLine(null);
             }
