@@ -3394,7 +3394,7 @@ function App() {
             enableDarkness={effectivePage?.enableDarkness || false}
             darknessOpacity={effectivePage?.darknessOpacity || 0.8}
             activeLayer="fichas"
-            enemies={[]}
+            enemies={enemies}
             players={[playerName]}
             armas={armas}
             armaduras={armaduras}
