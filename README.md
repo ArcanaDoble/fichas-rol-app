@@ -841,6 +841,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Se añade una animación "Resiste el daño" en el mapa cuando un ataque no causa pérdida de bloques, usando el mismo color azul que en el chat.
 - La animación de daño reduce su tamaño de fuente de 40 a 30 para mejorar la legibilidad.
+- Las ventanas de ataque y defensa ahora se cierran inmediatamente después de resolver las tiradas para no bloquear las animaciones.
 
 ### 🛠️ **Características Técnicas**
 

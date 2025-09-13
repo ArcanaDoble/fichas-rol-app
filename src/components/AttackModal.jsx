@@ -268,130 +268,149 @@ const AttackModal = ({
       } else {
         result = rollExpression(formula);
       }
-      let messages = [];
-      try {
-        const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
-        if (snap.exists()) messages = snap.data().messages || [];
-      } catch (err) {
-        console.error(err);
-      }
-      const attackerName = attacker.customName || attacker.name || 'Atacante';
-      const targetName = target.customName || target.name || '';
-      const text = `${attackerName} ataca a ${targetName}`;
-      messages.push({ id: nanoid(), author: attackerName, text, result });
-      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
-      const docRef = await addDoc(collection(db, 'attacks'), {
-        attackerId: attacker.id,
-        targetId: target.id,
-        result,
-        timestamp: serverTimestamp(),
-        completed: false,
-      });
-      let updatedSheet = null;
-      setTimeout(async () => {
+
+      // Cerrar el modal inmediatamente para no bloquear la interfaz
+      onClose(result);
+      setLoading(false);
+
+      // Procesar el resto de operaciones de forma asíncrona
+      (async () => {
         try {
-          const snap = await getDoc(docRef);
-          if (!snap.exists() || snap.data().completed) return;
-          let lost = { armadura: 0, postura: 0, vida: 0 };
-          if (target.tokenSheetId) {
-            const stored = localStorage.getItem('tokenSheets');
-            if (stored) {
-              const sheets = JSON.parse(stored);
-              const sheet = sheets[target.tokenSheetId];
-              if (sheet) {
-                let updated = sheet;
-                let remaining = result.total;
-                ['postura', 'armadura', 'vida'].forEach((stat) => {
-                  const res = applyDamage(updated, remaining, stat);
-                  remaining = res.remaining;
-                  updated = res.sheet;
-                  lost[stat] = res.blocks;
-                });
-                sheets[updated.id] = updated;
-                localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-                window.dispatchEvent(
-                  new CustomEvent('tokenSheetSaved', { detail: updated })
-                );
-                saveTokenSheet(updated);
-                updatedSheet = updated;
-              }
-            }
-          }
-          for (const stat of ['postura', 'armadura', 'vida']) {
-            if (lost[stat] > 0) {
-              const anim = {
-                tokenId: target.id,
-                value: lost[stat],
-                stat,
-                ts: Date.now(),
-              };
-              // Solo guardar en Firebase para sincronización entre navegadores
-              // No disparar eventos locales para evitar duplicación
-            try {
-              // Obtener el pageId visible para jugadores para asegurar sincronización
-              let effectivePageId = pageId;
-              try {
-                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                if (visibilityDoc.exists()) {
-                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                }
-              } catch (err) {
-                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-              }
-              await addDoc(collection(db, 'damageEvents'), {
-                ...anim,
-                pageId: effectivePageId,
-                timestamp: serverTimestamp(),
-              });
-            } catch {}
-          }
-        }
-        const totalLost = lost.armadura + lost.postura + lost.vida;
-        if (totalLost === 0) {
-          const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
+          let messages = [];
           try {
-            let effectivePageId = pageId;
-            try {
-              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-              if (visibilityDoc.exists()) {
-                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-              }
-            } catch (err) {
-              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-            }
-            await addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
-            });
-          } catch {}
-        }
-        let msgs = [];
-        try {
-          const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
-          if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
-        } catch (err) {}
-        const targetName = target.customName || target.name || 'Defensor';
-        const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
-        const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
-        const diff = result.total;
-        const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-        const damageText = `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-        msgs.push({
-          id: nanoid(),
-          author: targetName,
-            text: totalLost === 0 ? noDamageText : damageText,
+            const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+            if (snap.exists()) messages = snap.data().messages || [];
+          } catch (err) {
+            console.error(err);
+          }
+          const attackerName = attacker.customName || attacker.name || 'Atacante';
+          const targetName = target.customName || target.name || '';
+          const text = `${attackerName} ataca a ${targetName}`;
+          messages.push({ id: nanoid(), author: attackerName, text, result });
+          await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
+          const docRef = await addDoc(collection(db, 'attacks'), {
+            attackerId: attacker.id,
+            targetId: target.id,
+            result,
+            timestamp: serverTimestamp(),
+            completed: false,
           });
-          await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
-          await updateDoc(docRef, { completed: true, auto: true });
+          let updatedSheet = null;
+          setTimeout(async () => {
+            try {
+              const snap = await getDoc(docRef);
+              if (!snap.exists() || snap.data().completed) return;
+              let lost = { armadura: 0, postura: 0, vida: 0 };
+              if (target.tokenSheetId) {
+                const stored = localStorage.getItem('tokenSheets');
+                if (stored) {
+                  const sheets = JSON.parse(stored);
+                  const sheet = sheets[target.tokenSheetId];
+                  if (sheet) {
+                    let updated = sheet;
+                    let remaining = result.total;
+                    ['postura', 'armadura', 'vida'].forEach((stat) => {
+                      const res = applyDamage(updated, remaining, stat);
+                      remaining = res.remaining;
+                      updated = res.sheet;
+                      lost[stat] = res.blocks;
+                    });
+                    sheets[updated.id] = updated;
+                    localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+                    window.dispatchEvent(
+                      new CustomEvent('tokenSheetSaved', { detail: updated })
+                    );
+                    saveTokenSheet(updated);
+                    updatedSheet = updated;
+                  }
+                }
+              }
+              for (const stat of ['postura', 'armadura', 'vida']) {
+                if (lost[stat] > 0) {
+                  const anim = {
+                    tokenId: target.id,
+                    value: lost[stat],
+                    stat,
+                    ts: Date.now(),
+                  };
+                  try {
+                    let effectivePageId = pageId;
+                    try {
+                      const visibilityDoc = await getDoc(
+                        doc(db, 'gameSettings', 'playerVisibility')
+                      );
+                      if (visibilityDoc.exists()) {
+                        effectivePageId =
+                          visibilityDoc.data().playerVisiblePageId || pageId;
+                      }
+                    } catch (err) {
+                      console.warn(
+                        'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                        err
+                      );
+                    }
+                    await addDoc(collection(db, 'damageEvents'), {
+                      ...anim,
+                      pageId: effectivePageId,
+                      timestamp: serverTimestamp(),
+                    });
+                  } catch {}
+                }
+              }
+              const totalLost = lost.armadura + lost.postura + lost.vida;
+              if (totalLost === 0) {
+                const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
+                try {
+                  let effectivePageId = pageId;
+                  try {
+                    const visibilityDoc = await getDoc(
+                      doc(db, 'gameSettings', 'playerVisibility')
+                    );
+                    if (visibilityDoc.exists()) {
+                      effectivePageId =
+                        visibilityDoc.data().playerVisiblePageId || pageId;
+                    }
+                  } catch (err) {
+                    console.warn(
+                      'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                      err
+                    );
+                  }
+                  await addDoc(collection(db, 'damageEvents'), {
+                    ...anim,
+                    pageId: effectivePageId,
+                    timestamp: serverTimestamp(),
+                  });
+                } catch {}
+              }
+              let msgs = [];
+              try {
+                const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+                if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
+              } catch (err) {}
+              const targetName2 = target.customName || target.name || 'Defensor';
+              const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
+              const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
+              const diff = result.total;
+              const noDamageText = `${targetName2} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+              const damageText = `${targetName2} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+              msgs.push({
+                id: nanoid(),
+                author: targetName2,
+                text: totalLost === 0 ? noDamageText : damageText,
+              });
+              await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
+              await updateDoc(docRef, { completed: true, auto: true });
+            } catch (err) {
+              console.error(err);
+            }
+          }, AUTO_RESOLVE_MS);
+          await addSpeedForToken(attacker, speedCost);
+          await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
         } catch (err) {
           console.error(err);
         }
-      }, AUTO_RESOLVE_MS);
-      await addSpeedForToken(attacker, speedCost);
-      await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
-      setLoading(false);
-      onClose(result);
+      })();
     } catch (e) {
       setLoading(false);
       alert('Fórmula inválida');

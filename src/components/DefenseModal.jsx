@@ -242,6 +242,7 @@ const DefenseModal = ({
     const hasCritical = activeRasgos.some((r) =>
       r.toLowerCase().includes('crítico')
     );
+    setLoading(true);
     try {
       let result;
       if (hasCritical) {
@@ -255,13 +256,7 @@ const DefenseModal = ({
       } else {
         result = rollExpression(formula);
       }
-      let messages = [];
-      try {
-        const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
-        if (snap.exists()) messages = snap.data().messages || [];
-      } catch (err) {
-        console.error(err);
-      }
+
       const targetName = target.customName || target.name || 'Defensor';
       const diff = result.total - (attackResult?.total || 0);
       let lost = { armadura: 0, postura: 0, vida: 0 };
@@ -307,101 +302,7 @@ const DefenseModal = ({
           }
         }
       }
-
-      let totalLost = 0;
-      if (diff === 0) {
-        const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
-        // Solo guardar en Firebase para sincronización entre navegadores
-        // No disparar eventos locales para evitar duplicación
-        try {
-          // Obtener el pageId visible para jugadores para asegurar sincronización
-          let effectivePageId = pageId;
-          try {
-            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-            if (visibilityDoc.exists()) {
-              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-            }
-          } catch (err) {
-            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-          }
-          addDoc(collection(db, 'damageEvents'), {
-            ...anim,
-            pageId: effectivePageId,
-            timestamp: serverTimestamp(),
-          }).catch(() => {});
-        } catch {}
-      } else {
-        const id = diff < 0 ? target.id : attacker.id;
-        if (diff > 0) {
-          const anim = { tokenId: attacker.id, type: 'counter', ts: Date.now() };
-          try {
-            let effectivePageId = pageId;
-            try {
-              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-              if (visibilityDoc.exists()) {
-                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-              }
-            } catch (err) {
-              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-            }
-            addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
-            }).catch(() => {});
-          } catch {}
-        }
-        for (const stat of ['postura', 'armadura', 'vida']) {
-          if (lost[stat] > 0) {
-            const anim = {
-              tokenId: id,
-              value: lost[stat],
-              stat,
-              ts: Date.now(),
-            };
-            // Solo guardar en Firebase para sincronización entre navegadores
-            // No disparar eventos locales para evitar duplicación
-            try {
-              // Obtener el pageId visible para jugadores para asegurar sincronización
-              let effectivePageId = pageId;
-              try {
-                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                if (visibilityDoc.exists()) {
-                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                }
-              } catch (err) {
-                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-              }
-              addDoc(collection(db, 'damageEvents'), {
-                ...anim,
-                pageId: effectivePageId,
-                timestamp: serverTimestamp(),
-              }).catch(() => {});
-            } catch {}
-          }
-        }
-        totalLost = lost.armadura + lost.postura + lost.vida;
-        if (diff < 0 && totalLost === 0) {
-          const anim = { tokenId: id, type: 'resist', ts: Date.now() };
-          try {
-            let effectivePageId = pageId;
-            try {
-              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-              if (visibilityDoc.exists()) {
-                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-              }
-            } catch (err) {
-              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-            }
-            addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
-            }).catch(() => {});
-          } catch {}
-        }
-      }
-
+      const totalLost = lost.armadura + lost.postura + lost.vida;
       const vigor = parseDieValue(affectedSheet?.atributos?.vigor);
       const destreza = parseDieValue(affectedSheet?.atributos?.destreza);
       let text;
@@ -416,13 +317,138 @@ const DefenseModal = ({
       } else {
         text = `${targetName} bloquea el ataque. Ataque ${attackResult?.total || 0} Defensa ${result.total}`;
       }
-      messages.push({ id: nanoid(), author: targetName, text, result });
-      setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(() => {});
 
-      await addSpeedForToken(target, speedCost);
-      await consumeStatForToken(target, 'ingenio', ingenioCost, pageId);
-      setLoading(false);
+      // Close modal quickly
       onClose(result);
+      setLoading(false);
+
+      // Run remaining async tasks in the background
+      (async () => {
+        try {
+          if (diff === 0) {
+            const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
+            try {
+              let effectivePageId = pageId;
+              try {
+                const visibilityDoc = await getDoc(
+                  doc(db, 'gameSettings', 'playerVisibility')
+                );
+                if (visibilityDoc.exists()) {
+                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+                }
+              } catch (err) {
+                console.warn(
+                  'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                  err
+                );
+              }
+              addDoc(collection(db, 'damageEvents'), {
+                ...anim,
+                pageId: effectivePageId,
+                timestamp: serverTimestamp(),
+              }).catch(() => {});
+            } catch {}
+          } else {
+            const id = diff < 0 ? target.id : attacker.id;
+            if (diff > 0) {
+              const anim = { tokenId: attacker.id, type: 'counter', ts: Date.now() };
+              try {
+                let effectivePageId = pageId;
+                try {
+                  const visibilityDoc = await getDoc(
+                    doc(db, 'gameSettings', 'playerVisibility')
+                  );
+                  if (visibilityDoc.exists()) {
+                    effectivePageId =
+                      visibilityDoc.data().playerVisiblePageId || pageId;
+                  }
+                } catch (err) {
+                  console.warn(
+                    'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                    err
+                  );
+                }
+                addDoc(collection(db, 'damageEvents'), {
+                  ...anim,
+                  pageId: effectivePageId,
+                  timestamp: serverTimestamp(),
+                }).catch(() => {});
+              } catch {}
+            }
+            for (const stat of ['postura', 'armadura', 'vida']) {
+              if (lost[stat] > 0) {
+                const anim = {
+                  tokenId: id,
+                  value: lost[stat],
+                  stat,
+                  ts: Date.now(),
+                };
+                try {
+                  let effectivePageId = pageId;
+                  try {
+                    const visibilityDoc = await getDoc(
+                      doc(db, 'gameSettings', 'playerVisibility')
+                    );
+                    if (visibilityDoc.exists()) {
+                      effectivePageId =
+                        visibilityDoc.data().playerVisiblePageId || pageId;
+                    }
+                  } catch (err) {
+                    console.warn(
+                      'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                      err
+                    );
+                  }
+                  addDoc(collection(db, 'damageEvents'), {
+                    ...anim,
+                    pageId: effectivePageId,
+                    timestamp: serverTimestamp(),
+                  }).catch(() => {});
+                } catch {}
+              }
+            }
+            if (diff < 0 && totalLost === 0) {
+              const anim = { tokenId: id, type: 'resist', ts: Date.now() };
+              try {
+                let effectivePageId = pageId;
+                try {
+                  const visibilityDoc = await getDoc(
+                    doc(db, 'gameSettings', 'playerVisibility')
+                  );
+                  if (visibilityDoc.exists()) {
+                    effectivePageId =
+                      visibilityDoc.data().playerVisiblePageId || pageId;
+                  }
+                } catch (err) {
+                  console.warn(
+                    'No se pudo obtener playerVisiblePageId, usando pageId actual:',
+                    err
+                  );
+                }
+                addDoc(collection(db, 'damageEvents'), {
+                  ...anim,
+                  pageId: effectivePageId,
+                  timestamp: serverTimestamp(),
+                }).catch(() => {});
+              } catch {}
+            }
+          }
+
+          let messages = [];
+          try {
+            const snap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+            if (snap.exists()) messages = snap.data().messages || [];
+          } catch (err) {
+            console.error(err);
+          }
+          messages.push({ id: nanoid(), author: targetName, text, result });
+          await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
+          await addSpeedForToken(target, speedCost);
+          await consumeStatForToken(target, 'ingenio', ingenioCost, pageId);
+        } catch (err) {
+          console.error(err);
+        }
+      })();
     } catch (e) {
       setLoading(false);
       alert('Fórmula inválida');
