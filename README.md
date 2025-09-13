@@ -844,6 +844,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Las ventanas de ataque y defensa ahora se cierran inmediatamente después de resolver las tiradas para no bloquear las animaciones.
 - Corregido error "enemy is not defined" que impedía ver las animaciones de daño al resolver ataques.
 
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
