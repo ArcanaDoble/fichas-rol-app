@@ -41,7 +41,7 @@ import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
-import { saveTokenSheet, ensureSheetDefaults } from './utils/token';
+import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -839,24 +839,30 @@ function App() {
     const unsubscribeTokens = onSnapshot(
       tokensRef,
       async (snap) => {
-        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const changes = snap.docChanges().map((change) =>
+          change.type === 'removed'
+            ? { id: change.doc.id, _deleted: true }
+            : { id: change.doc.id, ...change.doc.data() }
+        );
+        if (changes.length === 0) return;
         const tokensWithIds = await ensureTokenSheetIds(
           playerVisiblePageId,
-          tokens
+          changes
         );
         setPages((prevPages) => {
           const pageIndex = prevPages.findIndex((p) => p.id === playerVisiblePageId);
           if (pageIndex !== -1) {
             const updatedPages = [...prevPages];
+            const prevTokens = updatedPages[pageIndex].tokens || [];
             updatedPages[pageIndex] = {
               ...updatedPages[pageIndex],
-              tokens: tokensWithIds,
+              tokens: mergeTokens(prevTokens, tokensWithIds),
             };
             return updatedPages;
           }
           return prevPages;
         });
-        setCanvasTokens(tokensWithIds);
+        setCanvasTokens((prev) => mergeTokens(prev, tokensWithIds));
       },
       (error) => {
         console.error('Error en listener de tokens para jugador:', error);
@@ -906,10 +912,15 @@ function App() {
     const unsubscribeTokens = onSnapshot(
       tokensRef,
       async (snap) => {
-        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const tokensWithIds = await ensureTokenSheetIds(pageId, tokens);
+        const changes = snap.docChanges().map((change) =>
+          change.type === 'removed'
+            ? { id: change.doc.id, _deleted: true }
+            : { id: change.doc.id, ...change.doc.data() }
+        );
+        if (changes.length === 0) return;
+        const tokensWithIds = await ensureTokenSheetIds(pageId, changes);
         isRemoteTokenUpdate.current = true;
-        setCanvasTokens(tokensWithIds);
+        setCanvasTokens((prev) => mergeTokens(prev, tokensWithIds));
       },
       (error) => {
         console.error('Error en listener de tokens para máster:', error);
