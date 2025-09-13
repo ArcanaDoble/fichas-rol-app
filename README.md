@@ -25,6 +25,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con los mismos ajustes
 - **Tokens almacenados individualmente** - Cada ficha se guarda como documento en `pages/{pageId}/tokens/{tokenId}`
 - **Arrastre con sincronización en vivo** - La posición del token se transmite durante el movimiento
+- **Sin parpadeos al mover varios tokens** - La actualización incremental evita saltos visuales cuando varios jugadores arrastran fichas simultáneamente
 - **Fichas de jugador sin personaje persistentes** - Los tokens asignados a un jugador pero sin ficha asociada guardan sus cambios en `localStorage` igual que los del máster
 - **Cargar ficha del jugador bajo demanda** - Usa el selector o el botón "Restaurar ficha" para sincronizar manualmente
 - **Nombre en tokens** - El nombre del personaje aparece justo debajo del token en negrita con contorno negro (text-shadow en cuatro direcciones y leve desenfoque)
