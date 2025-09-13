@@ -24,12 +24,13 @@ const TokenSheetModal = ({
     let sheet = sheets[sheetId];
 
     if (!sheet) {
+      let enemyData = null;
       if (token.enemyId) {
-        const enemy = enemies.find((e) => e.id === token.enemyId);
-        if (enemy) {
-          sheet = JSON.parse(JSON.stringify(enemy));
-          sheet.id = sheetId;
-        }
+        enemyData = enemies.find((e) => e.id === token.enemyId);
+      }
+      if (enemyData) {
+        sheet = JSON.parse(JSON.stringify(enemyData));
+        sheet.id = sheetId;
       }
       if (!sheet) sheet = { id: sheetId, name: '', stats: {}, atributos: {} };
     }
