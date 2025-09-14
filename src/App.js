@@ -597,19 +597,25 @@ function App() {
   const [showVisionRanges, setShowVisionRanges] = useState(true);
 
   const diffTokens = (prev, next) => {
-    const prevMap = new Map(prev.map((t) => [t.id, t]));
+    const prevMap = new Map(
+      prev.map((t) => {
+        const id = String(t.id);
+        return [id, { ...t, id }];
+      })
+    );
     const changed = [];
     next.forEach((tk) => {
-      const old = prevMap.get(tk.id);
+      const id = String(tk.id);
+      const old = prevMap.get(id);
       if (!old) {
-        changed.push(tk);
+        changed.push({ ...tk, id });
       } else if (!deepEqual(old, tk)) {
-        changed.push(tk);
+        changed.push({ ...tk, id });
       }
-      prevMap.delete(tk.id);
+      prevMap.delete(id);
     });
     prevMap.forEach((tk) => {
-      changed.push({ id: tk.id, _deleted: true });
+      changed.push({ id: String(tk.id), _deleted: true });
     });
     return changed;
   };
@@ -866,14 +872,21 @@ function App() {
         if (changes.length === 0) return;
         const toEnsure = changes.filter((tk) => !tk._deleted);
         const ensured = await ensureTokenSheetIds(playerVisiblePageId, toEnsure);
-        const ensuredMap = new Map(ensured.map((t) => [t.id, t]));
-        const tokensWithIds = changes.map((t) =>
-          t._deleted ? t : ensuredMap.get(t.id) || t
+        const ensuredMap = new Map(
+          ensured.map((t) => {
+            const id = String(t.id);
+            return [id, { ...t, id }];
+          })
         );
+        const tokensWithIds = changes.map((t) => {
+          const id = String(t.id);
+          return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
+        });
         const filtered = tokensWithIds.filter((tk) => {
-          const pending = pendingTokenChangesRef.current.get(tk.id);
+          const pending = pendingTokenChangesRef.current.get(String(tk.id));
           if (pending) {
-            if (deepEqual(pending, tk)) pendingTokenChangesRef.current.delete(tk.id);
+            if (deepEqual(pending, tk))
+              pendingTokenChangesRef.current.delete(String(tk.id));
             return false;
           }
           return true;
@@ -950,14 +963,21 @@ function App() {
         if (changes.length === 0) return;
         const toEnsure = changes.filter((tk) => !tk._deleted);
         const ensured = await ensureTokenSheetIds(pageId, toEnsure);
-        const ensuredMap = new Map(ensured.map((t) => [t.id, t]));
-        const tokensWithIds = changes.map((t) =>
-          t._deleted ? t : ensuredMap.get(t.id) || t
+        const ensuredMap = new Map(
+          ensured.map((t) => {
+            const id = String(t.id);
+            return [id, { ...t, id }];
+          })
         );
+        const tokensWithIds = changes.map((t) => {
+          const id = String(t.id);
+          return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
+        });
         const filtered = tokensWithIds.filter((tk) => {
-          const pending = pendingTokenChangesRef.current.get(tk.id);
+          const pending = pendingTokenChangesRef.current.get(String(tk.id));
           if (pending) {
-            if (deepEqual(pending, tk)) pendingTokenChangesRef.current.delete(tk.id);
+            if (deepEqual(pending, tk))
+              pendingTokenChangesRef.current.delete(String(tk.id));
             return false;
           }
           return true;
@@ -3415,7 +3435,7 @@ function App() {
                   typeof updater === 'function' ? updater(prev) : updater;
                 const changed = diffTokens(prev, next);
                 changed.forEach((tk) =>
-                  pendingTokenChangesRef.current.set(tk.id, tk)
+                  pendingTokenChangesRef.current.set(String(tk.id), tk)
                 );
                 updatedPages[effectivePageIndex].tokens = next;
                 setPages(updatedPages);
@@ -5345,7 +5365,7 @@ function App() {
                     typeof updater === 'function' ? updater(prev) : updater;
                   const changed = diffTokens(prev, next);
                   changed.forEach((tk) =>
-                    pendingTokenChangesRef.current.set(tk.id, tk)
+                    pendingTokenChangesRef.current.set(String(tk.id), tk)
                   );
                   return next;
                 });
