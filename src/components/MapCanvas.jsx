@@ -3386,27 +3386,15 @@ const MapCanvas = ({
               pasteGridPos.y + relativeY
             );
 
+            const data = JSON.parse(JSON.stringify(token));
             const newToken = createToken({
-              ...token,
+              ...data,
               id: nanoid(),
               x: finalPos.x,
               y: finalPos.y,
               layer: activeLayer,
             });
-            const stored = localStorage.getItem('tokenSheets');
-            if (stored) {
-              const sheets = JSON.parse(stored);
-              const sheet = sheets[token.tokenSheetId];
-              if (sheet) {
-                const copy = JSON.parse(JSON.stringify(sheet));
-                copy.id = newToken.tokenSheetId;
-                sheets[newToken.tokenSheetId] = copy;
-                localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-                window.dispatchEvent(
-                  new CustomEvent('tokenSheetSaved', { detail: copy })
-                );
-              }
-            }
+            cloneTokenSheet(token.tokenSheetId, newToken.tokenSheetId);
             return newToken;
           });
           handleTokensChange([...tokens, ...newTokens]);
@@ -3831,20 +3819,7 @@ const MapCanvas = ({
           layer: activeLayer,
         });
         if (item.tokenSheetId) {
-          const stored = localStorage.getItem('tokenSheets');
-          if (stored) {
-            const sheets = JSON.parse(stored);
-            const sheet = sheets[item.tokenSheetId];
-            if (sheet) {
-              const copy = JSON.parse(JSON.stringify(sheet));
-              copy.id = newToken.tokenSheetId;
-              sheets[newToken.tokenSheetId] = copy;
-              localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-              window.dispatchEvent(
-                new CustomEvent('tokenSheetSaved', { detail: copy })
-              );
-            }
-          }
+          cloneTokenSheet(item.tokenSheetId, newToken.tokenSheetId);
         }
         handleTokensChange([...tokens, newToken]);
       },

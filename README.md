@@ -937,6 +937,7 @@ src/
 - **Corrección de desincronización** - Las páginas ya no se actualizan antes de
   cargarse por completo
 - **IDs de fichas** - Cada token creado ahora recibe un `tokenSheetId` único para evitar conflictos
+- **Copiado de tokens completo** - Al duplicar un token se clonan también sus estadísticas y se asigna un `tokenSheetId` independiente
 - **Guardado exclusivo para el máster** - Los tokens, líneas y otros datos del mapa solo se guardan si el usuario es máster
 - **Menús de token robustos** - Se eliminan IDs obsoletos al abrir configuraciones o estados, evitando errores si la ficha fue borrada
 - **Sincronización de puertas** - Abrir o cerrar puertas se guarda correctamente al mover un token
