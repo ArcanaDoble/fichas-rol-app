@@ -1601,6 +1601,10 @@ src/
 
 - Las animaciones de daño gestionan su opacidad de forma local sin alterar los tokens, evitando desincronizaciones durante la animación.
 
+**Resumen de cambios v2.4.85:**
+
+- La animación de daño utiliza ahora un `Konva.Tween` que desvanece el tinte del token de 0.5 a 0 en `DAMAGE_ANIMATION_MS`, reemplazando el `requestAnimationFrame` manual.
+
 ## 🔄 Historial de cambios previos
 
 <details>
