@@ -41,7 +41,7 @@ import sanitize from './utils/sanitize';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
-import { saveTokenSheet, ensureSheetDefaults } from './utils/token';
+import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -546,6 +546,7 @@ function App() {
   const canvasTokensRef = useRef([]);
   const isLocalTokenEdit = useRef(false);
   const isRemoteTokenUpdate = useRef(false);
+  const pendingTokenChangesRef = useRef(new Map());
   // Señal para diferir guardado de tokens cuando haya ajustes abiertos
   const pendingTokenSaveRef = useRef(false);
   const prevLinesRef = useRef([]);
@@ -594,6 +595,24 @@ function App() {
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
+
+  const diffTokens = (prev, next) => {
+    const prevMap = new Map(prev.map((t) => [t.id, t]));
+    const changed = [];
+    next.forEach((tk) => {
+      const old = prevMap.get(tk.id);
+      if (!old) {
+        changed.push(tk);
+      } else if (!deepEqual(old, tk)) {
+        changed.push(tk);
+      }
+      prevMap.delete(tk.id);
+    });
+    prevMap.forEach((tk) => {
+      changed.push({ id: tk.id, _deleted: true });
+    });
+    return changed;
+  };
 
   const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {
     if (!pageId || checkedPagesRef.current[pageId]) return tokens || [];
@@ -839,24 +858,41 @@ function App() {
     const unsubscribeTokens = onSnapshot(
       tokensRef,
       async (snap) => {
-        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const tokensWithIds = await ensureTokenSheetIds(
-          playerVisiblePageId,
-          tokens
+        const changes = snap.docChanges().map((ch) =>
+          ch.type === 'removed'
+            ? { id: ch.doc.id, _deleted: true }
+            : { id: ch.doc.id, ...ch.doc.data() }
         );
+        if (changes.length === 0) return;
+        const toEnsure = changes.filter((tk) => !tk._deleted);
+        const ensured = await ensureTokenSheetIds(playerVisiblePageId, toEnsure);
+        const ensuredMap = new Map(ensured.map((t) => [t.id, t]));
+        const tokensWithIds = changes.map((t) =>
+          t._deleted ? t : ensuredMap.get(t.id) || t
+        );
+        const filtered = tokensWithIds.filter((tk) => {
+          const pending = pendingTokenChangesRef.current.get(tk.id);
+          if (pending) {
+            if (deepEqual(pending, tk)) pendingTokenChangesRef.current.delete(tk.id);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length === 0) return;
         setPages((prevPages) => {
           const pageIndex = prevPages.findIndex((p) => p.id === playerVisiblePageId);
           if (pageIndex !== -1) {
             const updatedPages = [...prevPages];
+            const prevTokens = updatedPages[pageIndex].tokens || [];
             updatedPages[pageIndex] = {
               ...updatedPages[pageIndex],
-              tokens: tokensWithIds,
+              tokens: mergeTokens(prevTokens, filtered),
             };
             return updatedPages;
           }
           return prevPages;
         });
-        setCanvasTokens(tokensWithIds);
+        setCanvasTokens((prev) => mergeTokens(prev, filtered));
       },
       (error) => {
         console.error('Error en listener de tokens para jugador:', error);
@@ -906,10 +942,30 @@ function App() {
     const unsubscribeTokens = onSnapshot(
       tokensRef,
       async (snap) => {
-        const tokens = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const tokensWithIds = await ensureTokenSheetIds(pageId, tokens);
+        const changes = snap.docChanges().map((ch) =>
+          ch.type === 'removed'
+            ? { id: ch.doc.id, _deleted: true }
+            : { id: ch.doc.id, ...ch.doc.data() }
+        );
+        if (changes.length === 0) return;
+        const toEnsure = changes.filter((tk) => !tk._deleted);
+        const ensured = await ensureTokenSheetIds(pageId, toEnsure);
+        const ensuredMap = new Map(ensured.map((t) => [t.id, t]));
+        const tokensWithIds = changes.map((t) =>
+          t._deleted ? t : ensuredMap.get(t.id) || t
+        );
+        const filtered = tokensWithIds.filter((tk) => {
+          const pending = pendingTokenChangesRef.current.get(tk.id);
+          if (pending) {
+            if (deepEqual(pending, tk)) pendingTokenChangesRef.current.delete(tk.id);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length === 0) return;
         isRemoteTokenUpdate.current = true;
-        setCanvasTokens(tokensWithIds);
+        setCanvasTokens((prev) => mergeTokens(prev, filtered));
+        prevTokensRef.current = mergeTokens(prevTokensRef.current, filtered);
       },
       (error) => {
         console.error('Error en listener de tokens para máster:', error);
@@ -3357,6 +3413,10 @@ function App() {
                 const prev = updatedPages[effectivePageIndex].tokens || [];
                 const next =
                   typeof updater === 'function' ? updater(prev) : updater;
+                const changed = diffTokens(prev, next);
+                changed.forEach((tk) =>
+                  pendingTokenChangesRef.current.set(tk.id, tk)
+                );
                 updatedPages[effectivePageIndex].tokens = next;
                 setPages(updatedPages);
               }
@@ -5280,9 +5340,15 @@ function App() {
               gridOffsetY={gridOffsetY}
               tokens={canvasTokens}
               onTokensChange={(updater) => {
-                setCanvasTokens((prev) =>
-                  typeof updater === 'function' ? updater(prev) : updater
-                );
+                setCanvasTokens((prev) => {
+                  const next =
+                    typeof updater === 'function' ? updater(prev) : updater;
+                  const changed = diffTokens(prev, next);
+                  changed.forEach((tk) =>
+                    pendingTokenChangesRef.current.set(tk.id, tk)
+                  );
+                  return next;
+                });
                 isRemoteTokenUpdate.current = false;
                 isLocalTokenEdit.current = true;
               }}
