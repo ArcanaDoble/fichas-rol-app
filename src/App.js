@@ -2734,7 +2734,11 @@ function App() {
   // HANDLERS para Login y Equipo de objetos
   // ───────────────────────────────────────────────────────────
   const enterPlayer = () => {
-    if (playerName.trim()) setNameEntered(true);
+    const trimmed = playerName.trim();
+    if (trimmed) {
+      setPlayerName(trimmed);
+      setNameEntered(true);
+    }
   };
   const handlePlayerEquip = () => {
     if (loading) return;
@@ -3230,7 +3234,8 @@ function App() {
                     size="md"
                     className="w-full rounded-lg font-semibold text-base px-4 py-2 transition-colors duration-200"
                     onClick={() => {
-                      setPlayerName(n);
+                      const trimmed = n.trim();
+                      setPlayerName(trimmed);
                       setTimeout(() => setNameEntered(true), 0);
                     }}
                   >
@@ -3337,8 +3342,9 @@ function App() {
 
         // Verificar si el jugador tiene un token asignado en esta página
         const pageTokens = effectivePage?.tokens || [];
-        playerHasToken = pageTokens.some(
-          (token) => token.controlledBy === playerName
+        const normalized = playerName.trim().toLowerCase();
+        playerHasToken = pageTokens.some((token) =>
+          (token.controlledBy || '').trim().toLowerCase() === normalized
         );
       }
     }
