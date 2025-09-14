@@ -850,6 +850,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Corregido error "enemy is not defined" al acceder al mapa de batalla como jugador.
 
 
+
 ### 🛠️ **Características Técnicas**
 
 - **Interfaz responsive** - Optimizada para móviles y escritorio con TailwindCSS
