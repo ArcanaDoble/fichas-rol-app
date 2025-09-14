@@ -3813,23 +3813,6 @@ function App() {
                       {newResError}
                     </p>
                   )}
-                  {/* Metadatos superpuestos */}
-                  <div className="absolute top-2 left-2">
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 border border-yellow-600/40 text-yellow-300 font-semibold inline-flex items-center gap-1 shadow-sm">
-                      <FiStar /> Nivel {enemy.nivel || 1}
-                    </span>
-                  </div>
-                  <div className="absolute top-2 right-2 flex items-center gap-1">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
-                      <GiCrossedSwords className="text-yellow-300" /> {enemy.weapons?.length || 0}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
-                      <GiShield className="text-blue-300" /> {enemy.armaduras?.length || 0}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-900/60 border border-gray-700 text-gray-200 inline-flex items-center gap-1 shadow-sm">
-                      <GiSpellBook className="text-purple-300" /> {enemy.poderes?.length || 0}
-                    </span>
-                  </div>
                 </div>
               )}
             </div>

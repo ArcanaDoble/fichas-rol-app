@@ -1576,6 +1576,10 @@ src/
 
 - Tras cargar un cuadrante guardado, el constructor de minimapas ofrece un botón para volver al cuadrante predeterminado.
 
+**Resumen de cambios v2.4.79:**
+
+- Se elimina la visualización del nivel y contadores de equipo superpuestos al abrir una ficha de jugador.
+
 ## 🔄 Historial de cambios previos
 
 <details>
