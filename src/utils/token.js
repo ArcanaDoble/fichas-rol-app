@@ -4,25 +4,36 @@ import { db } from '../firebase';
 import sanitize from './sanitize';
 
 export const mergeTokens = (prevTokens, changedTokens) => {
-  const map = new Map(prevTokens.map((t) => [t.id, t]));
+  const map = new Map(
+    prevTokens.map((t) => {
+      const id = String(t.id);
+      return [id, { ...t, id }];
+    })
+  );
   changedTokens.forEach((tk) => {
+    const id = String(tk.id);
     if (tk._deleted) {
-      map.delete(tk.id);
+      map.delete(id);
     } else {
-      map.set(tk.id, tk);
+      map.set(id, { ...tk, id });
     }
   });
   return Array.from(map.values());
 };
 
 export const createToken = (data = {}) => {
-  const token = { notes: '', ...data, tokenSheetId: nanoid() };
+  const token = {
+    notes: '',
+    ...data,
+    id: data.id ? String(data.id) : nanoid(),
+    tokenSheetId: nanoid(),
+  };
   try {
     setDoc(doc(db, 'tokenSheets', token.tokenSheetId), { stats: {} });
   } catch (err) {
     console.error('create token sheet', err);
   }
-  return token;
+  return { ...token, id: String(token.id) };
 };
 
 export const updateLocalTokenSheet = (sheet) => {

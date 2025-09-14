@@ -1329,19 +1329,25 @@ const MapCanvas = ({
 
   // Función wrapper para manejar cambios de tokens con sincronización
   const diffTokens = (prev, next) => {
-    const prevMap = new Map(prev.map((t) => [t.id, t]));
+    const prevMap = new Map(
+      prev.map((t) => {
+        const id = String(t.id);
+        return [id, { ...t, id }];
+      })
+    );
     const changed = [];
     next.forEach((tk) => {
-      const old = prevMap.get(tk.id);
+      const id = String(tk.id);
+      const old = prevMap.get(id);
       if (!old) {
-        changed.push(tk);
+        changed.push({ ...tk, id });
       } else if (!deepEqual(old, tk)) {
-        changed.push(tk);
+        changed.push({ ...tk, id });
       }
-      prevMap.delete(tk.id);
+      prevMap.delete(id);
     });
     prevMap.forEach((tk) => {
-      changed.push({ id: tk.id, _deleted: true });
+      changed.push({ id: String(tk.id), _deleted: true });
     });
     return changed;
   };
@@ -3365,7 +3371,7 @@ const MapCanvas = ({
 
             const newToken = createToken({
               ...token,
-              id: Date.now() + Math.random(),
+              id: nanoid(),
               x: finalPos.x,
               y: finalPos.y,
               layer: activeLayer,
@@ -3783,7 +3789,7 @@ const MapCanvas = ({
         }
         
         const newToken = createToken({
-          id: Date.now(),
+          id: nanoid(),
           x,
           y,
           w: 1,

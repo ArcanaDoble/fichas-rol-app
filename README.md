@@ -1584,6 +1584,10 @@ src/
 
 - Las ventanas de ataque y defensa se cierran automáticamente tras resolver las tiradas para no bloquear la animación de daño.
 
+**Resumen de cambios v2.4.81:**
+
+- Se normalizan los identificadores de tokens como cadenas para evitar desincronizaciones y errores al eliminar.
+
 ## 🔄 Historial de cambios previos
 
 <details>
