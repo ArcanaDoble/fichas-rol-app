@@ -1039,6 +1039,7 @@ const MapCanvas = ({
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
+  const [damageEffects, setDamageEffects] = useState(new Map());
   const [dragShadow, setDragShadow] = useState(null);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
@@ -2058,57 +2059,52 @@ const MapCanvas = ({
     []
   );
 
-  const damageTimersRef = useRef({});
+  const damageTimersRef = useRef(new Map());
 
-  const highlightTokenDamage = useCallback(
-    (tokenId) => {
-      if (!tokenId) return;
-      const current = tokensRef.current;
-      if (!current.find((t) => t.id === tokenId)) return;
-      const startOpacity = 0.5;
-      const duration = DAMAGE_ANIMATION_MS;
+  const highlightTokenDamage = useCallback((tokenId) => {
+    if (!tokenId) return;
+    const current = tokensRef.current;
+    if (!current.find((t) => t.id === tokenId)) return;
+    const startOpacity = 0.5;
+    const duration = DAMAGE_ANIMATION_MS;
 
-      const existing = damageTimersRef.current[tokenId];
-      if (existing && existing.raf) {
-        cancelAnimationFrame(existing.raf);
-      }
+    if (damageTimersRef.current.has(tokenId)) {
+      cancelAnimationFrame(damageTimersRef.current.get(tokenId));
+    }
 
-      const highlight = current.map((t) =>
-        t.id === tokenId ? { ...t, tintOpacity: startOpacity } : t
-      );
-      handleTokensChange(highlight, { localOnly: true });
+    setDamageEffects((prev) => {
+      const map = new Map(prev);
+      map.set(tokenId, startOpacity);
+      return map;
+    });
 
-      const startTime = performance.now();
-      const animate = (time) => {
-        const progress = Math.min((time - startTime) / duration, 1);
-        const opacity = startOpacity * (1 - progress);
-        const updated = tokensRef.current.map((t) =>
-          t.id === tokenId ? { ...t, tintOpacity: Math.max(0, opacity) } : t
-        );
-        handleTokensChange(updated, { localOnly: true });
+    const startTime = performance.now();
+    const animate = (time) => {
+      const progress = Math.min((time - startTime) / duration, 1);
+      const opacity = startOpacity * (1 - progress);
+      setDamageEffects((prev) => {
+        const map = new Map(prev);
         if (progress < 1) {
-          damageTimersRef.current[tokenId].raf = requestAnimationFrame(animate);
+          map.set(tokenId, Math.max(0, opacity));
         } else {
-          delete damageTimersRef.current[tokenId];
+          map.delete(tokenId);
         }
-      };
-
-      damageTimersRef.current[tokenId] = {
-        raf: requestAnimationFrame(animate),
-      };
-    },
-    [handleTokensChange]
-  );
-
-  useEffect(
-    () => () => {
-      Object.values(damageTimersRef.current).forEach((anim) => {
-        if (anim.raf) cancelAnimationFrame(anim.raf);
+        return map;
       });
-      damageTimersRef.current = {};
-    },
-    []
-  );
+      if (progress < 1) {
+        damageTimersRef.current.set(tokenId, requestAnimationFrame(animate));
+      } else {
+        damageTimersRef.current.delete(tokenId);
+      }
+    };
+
+    damageTimersRef.current.set(tokenId, requestAnimationFrame(animate));
+  }, []);
+
+  useEffect(() => () => {
+    damageTimersRef.current.forEach((raf) => cancelAnimationFrame(raf));
+    damageTimersRef.current.clear();
+  }, []);
 
   // Listener de Firebase para eventos de daño
   useEffect(() => {
@@ -3993,7 +3989,7 @@ const MapCanvas = ({
                   showName={token.showName}
                   opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                   tintColor={token.tintColor}
-                  tintOpacity={token.tintOpacity}
+                  tintOpacity={damageEffects.get(token.id) ?? token.tintOpacity}
                   showAura={false}
                   tokenSheetId={token.tokenSheetId}
                   auraRadius={token.auraRadius}
