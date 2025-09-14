@@ -1081,6 +1081,23 @@ const MapCanvas = ({
       texts: null,
     };
     let pendingTokenChanges = [];
+    const mergeTokenChanges = (prev, next) => {
+      const map = new Map(
+        prev.map((t) => {
+          const id = String(t.id);
+          return [id, { ...t, id }];
+        })
+      );
+      next.forEach((tk) => {
+        const id = String(tk.id);
+        if (tk._deleted) {
+          map.set(id, { id, _deleted: true });
+        } else {
+          map.set(id, { ...(map.get(id) || {}), ...tk, id });
+        }
+      });
+      return Array.from(map.values());
+    };
     const prevData = {
       lines: [],
       walls: [],
@@ -1093,7 +1110,7 @@ const MapCanvas = ({
       if (type === 'tokens') {
         if (!Array.isArray(data) || data.length === 0) return;
 
-        pendingTokenChanges = mergeTokens(pendingTokenChanges, data);
+        pendingTokenChanges = mergeTokenChanges(pendingTokenChanges, data);
 
         if (saveTimeouts.tokens) {
           clearTimeout(saveTimeouts.tokens);

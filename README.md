@@ -1672,4 +1672,5 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se corrigió un fallo al abrir el mapa de batalla como jugador que generaba "enemy is not defined" cargando ahora los datos de enemigos.
 - Se añadió una verificación adicional en la hoja de fichas de tokens para evitar referencias a enemigos inexistentes en el mapa de batalla de jugadores.
 - Mejora de sincronización de tokens en el mapa de batalla: los cambios remotos se fusionan con el estado local respetando modificaciones pendientes y reflejando eliminaciones.
+- Se corrigió un problema donde la eliminación de tokens por jugadores no se reflejaba en el mapa del máster.
 
