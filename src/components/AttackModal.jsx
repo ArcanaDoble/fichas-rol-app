@@ -388,10 +388,10 @@ const AttackModal = ({
           console.error(err);
         }
       }, AUTO_RESOLVE_MS);
-      await addSpeedForToken(attacker, speedCost);
-      await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
       setLoading(false);
       onClose(result);
+      await addSpeedForToken(attacker, speedCost);
+      await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
     } catch (e) {
       setLoading(false);
       alert('Fórmula inválida');

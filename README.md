@@ -1580,6 +1580,10 @@ src/
 
 - Se elimina la visualización del nivel y contadores de equipo superpuestos al abrir una ficha de jugador.
 
+**Resumen de cambios v2.4.80:**
+
+- Las ventanas de ataque y defensa se cierran automáticamente tras resolver las tiradas para no bloquear la animación de daño.
+
 ## 🔄 Historial de cambios previos
 
 <details>

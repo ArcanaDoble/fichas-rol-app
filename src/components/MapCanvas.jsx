@@ -4930,17 +4930,24 @@ const MapCanvas = ({
             armas={armas}
             poderesCatalog={habilidades}
             onClose={async (res) => {
-              if (!res && attackResult) {
+              const currentAttackResult = attackResult;
+              const currentTargetId = attackTargetId;
+              const currentRequestId = attackRequestId;
+              setAttackTargetId(null);
+              setAttackLine(null);
+              setAttackResult(null);
+              setAttackReady(false);
+              if (!res && currentAttackResult) {
                 try {
                   let alreadyCompleted = false;
-                  if (attackRequestId) {
+                  if (currentRequestId) {
                     try {
-                      const snap = await getDoc(doc(db, 'attacks', attackRequestId));
+                      const snap = await getDoc(doc(db, 'attacks', currentRequestId));
                       if (snap.exists() && snap.data().completed) alreadyCompleted = true;
                     } catch {}
                   }
                   if (!alreadyCompleted) {
-                    const target = tokens.find(t => t.id === attackTargetId);
+                    const target = tokens.find(t => t.id === currentTargetId);
                     if (target) {
                       let lost = { armadura: 0, postura: 0, vida: 0 };
                       let updatedSheet = null;
@@ -4951,7 +4958,7 @@ const MapCanvas = ({
                           const sheet = sheets[target.tokenSheetId];
                           if (sheet) {
                             let updated = sheet;
-                            let remaining = attackResult.total;
+                            let remaining = currentAttackResult.total;
                             ['postura', 'armadura', 'vida'].forEach((stat) => {
                               const resDam = applyDamage(updated, remaining, stat);
                               remaining = resDam.remaining;
@@ -5015,18 +5022,18 @@ const MapCanvas = ({
                       const targetName = target.customName || target.name || 'Defensor';
                       const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
                       const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
-                      const diff = attackResult.total;
-                      const noDamageText = `${targetName} resiste el daño. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-                      const damageText = `${targetName} no se defendió. Ataque ${attackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                      const diff = currentAttackResult.total;
+                      const noDamageText = `${targetName} resiste el daño. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                      const damageText = `${targetName} no se defendió. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
                       msgs.push({
                         id: nanoid(),
                         author: targetName,
                         text: totalLost === 0 ? noDamageText : damageText,
                       });
                       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
-                      if (attackRequestId) {
+                      if (currentRequestId) {
                         try {
-                          await updateDoc(doc(db, 'attacks', attackRequestId), { completed: true, auto: true });
+                          await updateDoc(doc(db, 'attacks', currentRequestId), { completed: true, auto: true });
                         } catch {}
                       }
                     }
@@ -5035,18 +5042,14 @@ const MapCanvas = ({
                   console.error(err);
                 }
               }
-              if (attackRequestId) {
+              if (currentRequestId) {
                 try {
-                  await deleteDoc(doc(db, 'attacks', attackRequestId));
+                  await deleteDoc(doc(db, 'attacks', currentRequestId));
                 } catch (err) {
                   console.error(err);
                 }
                 setAttackRequestId(null);
               }
-              setAttackTargetId(null);
-              setAttackLine(null);
-              setAttackResult(null);
-              setAttackReady(false);
             }}
           />
       )}

@@ -419,10 +419,10 @@ const DefenseModal = ({
       messages.push({ id: nanoid(), author: targetName, text, result });
       setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(() => {});
 
-      await addSpeedForToken(target, speedCost);
-      await consumeStatForToken(target, 'ingenio', ingenioCost, pageId);
       setLoading(false);
       onClose(result);
+      await addSpeedForToken(target, speedCost);
+      await consumeStatForToken(target, 'ingenio', ingenioCost, pageId);
     } catch (e) {
       setLoading(false);
       alert('Fórmula inválida');
