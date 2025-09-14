@@ -4341,14 +4341,10 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
-    const filteredEnemies = enemies.filter((enemy) =>
-      enemy.name.toLowerCase().includes(enemySearch.toLowerCase()) ||
-      (enemy.description || '').toLowerCase().includes(enemySearch.toLowerCase())
-    );
     const sortedEnemies =
-      enemySort === 'alpha'
+      enemySort === 'name'
         ? [...filteredEnemies].sort((a, b) => a.name.localeCompare(b.name))
-        : enemySort === 'level'
+        : enemySort === 'nivel'
         ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
         : filteredEnemies;
     return (
@@ -4442,9 +4438,9 @@ function App() {
                 </select>
               </div>
               <div className="flex items-center text-sm text-gray-400 px-1">
-                {filteredEnemies.length !== enemies.length ? (
+                {sortedEnemies.length !== enemies.length ? (
                   <span>
-                    {filteredEnemies.length} resultado{filteredEnemies.length === 1 ? '' : 's'}
+                    {sortedEnemies.length} resultado{sortedEnemies.length === 1 ? '' : 's'}
                   </span>
                 ) : (
                   <span>{enemies.length} enemigos</span>
@@ -4513,7 +4509,7 @@ function App() {
         </div>
         {/* Lista de enemigos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {filteredEnemies.map((enemy) => (
+          {sortedEnemies.map((enemy) => (
             <Tarjeta
               key={enemy.id}
               variant="magic"

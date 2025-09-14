@@ -844,6 +844,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Las ventanas de ataque y defensa ahora se cierran inmediatamente después de resolver las tiradas para no bloquear las animaciones.
 - Corregido error "enemy is not defined" que impedía ver las animaciones de daño al resolver ataques.
 
+**Resumen de cambios v2.4.21:**
+
+- Corregido error "enemy is not defined" al ordenar y mostrar la lista de enemigos en la vista del máster.
+- Corregido error "enemy is not defined" al acceder al mapa de batalla como jugador.
+
 
 ### 🛠️ **Características Técnicas**
 
