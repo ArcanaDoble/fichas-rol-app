@@ -2059,7 +2059,7 @@ const MapCanvas = ({
     []
   );
 
-  const damageTimersRef = useRef(new Map());
+  const damageTweensRef = useRef(new Map());
 
   const highlightTokenDamage = useCallback((tokenId) => {
     if (!tokenId) return;
@@ -2068,8 +2068,12 @@ const MapCanvas = ({
     const startOpacity = 0.5;
     const duration = DAMAGE_ANIMATION_MS;
 
-    if (damageTimersRef.current.has(tokenId)) {
-      cancelAnimationFrame(damageTimersRef.current.get(tokenId));
+    const tokenRef = tokenRefs.current[tokenId];
+    const shapeNode = tokenRef?.shapeNode;
+    if (!shapeNode) return;
+
+    if (damageTweensRef.current.has(tokenId)) {
+      damageTweensRef.current.get(tokenId).destroy();
     }
 
     setDamageEffects((prev) => {
@@ -2078,32 +2082,29 @@ const MapCanvas = ({
       return map;
     });
 
-    const startTime = performance.now();
-    const animate = (time) => {
-      const progress = Math.min((time - startTime) / duration, 1);
-      const opacity = startOpacity * (1 - progress);
-      setDamageEffects((prev) => {
-        const map = new Map(prev);
-        if (progress < 1) {
-          map.set(tokenId, Math.max(0, opacity));
-        } else {
+    shapeNode.alpha(startOpacity);
+    const tween = new Konva.Tween({
+      node: shapeNode,
+      duration: duration / 1000,
+      alpha: 0,
+      onFinish: () => {
+        setDamageEffects((prev) => {
+          const map = new Map(prev);
           map.delete(tokenId);
-        }
-        return map;
-      });
-      if (progress < 1) {
-        damageTimersRef.current.set(tokenId, requestAnimationFrame(animate));
-      } else {
-        damageTimersRef.current.delete(tokenId);
-      }
-    };
+          return map;
+        });
+        damageTweensRef.current.delete(tokenId);
+        tween.destroy();
+      },
+    });
 
-    damageTimersRef.current.set(tokenId, requestAnimationFrame(animate));
+    damageTweensRef.current.set(tokenId, tween);
+    tween.play();
   }, []);
 
   useEffect(() => () => {
-    damageTimersRef.current.forEach((raf) => cancelAnimationFrame(raf));
-    damageTimersRef.current.clear();
+    damageTweensRef.current.forEach((tween) => tween.destroy());
+    damageTweensRef.current.clear();
   }, []);
 
   // Listener de Firebase para eventos de daño
