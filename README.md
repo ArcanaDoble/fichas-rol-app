@@ -1593,6 +1593,10 @@ src/
 
 - Corrección: al asignar un token a un jugador, se normaliza el nombre para evitar mensajes de "Acceso Denegado" en el mapa de batalla.
 
+**Resumen de cambios v2.4.83:**
+
+- Duración de las animaciones de daño centralizada en `DAMAGE_ANIMATION_MS` (8 s).
+
 ## 🔄 Historial de cambios previos
 
 <details>
