@@ -3322,6 +3322,20 @@ const MapCanvas = ({
                  selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
         };
 
+        // Incluir las sheets completas de los tokens para mantener todas las estadísticas
+        const stored = localStorage.getItem('tokenSheets');
+        if (stored) {
+          const sheets = JSON.parse(stored);
+          const tokenSheets = {};
+          clipboardData.tokens.forEach(tk => {
+            const sheet = sheets[tk.tokenSheetId];
+            if (sheet) {
+              tokenSheets[tk.tokenSheetId] = JSON.parse(JSON.stringify(sheet));
+            }
+          });
+          if (Object.keys(tokenSheets).length > 0) clipboardData.tokenSheets = tokenSheets;
+        }
+
         // Solo copiar si hay elementos seleccionados
         if (clipboardData.tokens.length > 0 || clipboardData.lines.length > 0 ||
             clipboardData.walls.length > 0 || clipboardData.texts.length > 0) {
@@ -3394,7 +3408,14 @@ const MapCanvas = ({
               y: finalPos.y,
               layer: activeLayer,
             });
-            cloneTokenSheet(token.tokenSheetId, newToken.tokenSheetId);
+            const sheet = clipboard.tokenSheets?.[token.tokenSheetId];
+            if (sheet) {
+              const copy = JSON.parse(JSON.stringify(sheet));
+              copy.id = newToken.tokenSheetId;
+              updateLocalTokenSheet(copy);
+            } else {
+              cloneTokenSheet(token.tokenSheetId, newToken.tokenSheetId);
+            }
             return newToken;
           });
           handleTokensChange([...tokens, ...newTokens]);
