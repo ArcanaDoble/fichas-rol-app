@@ -1597,6 +1597,10 @@ src/
 
 - Duración de las animaciones de daño centralizada en `DAMAGE_ANIMATION_MS` (8 s).
 
+**Resumen de cambios v2.4.84:**
+
+- Las animaciones de daño gestionan su opacidad de forma local sin alterar los tokens, evitando desincronizaciones durante la animación.
+
 ## 🔄 Historial de cambios previos
 
 <details>
