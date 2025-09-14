@@ -3413,6 +3413,7 @@ const MapCanvas = ({
               const copy = JSON.parse(JSON.stringify(sheet));
               copy.id = newToken.tokenSheetId;
               updateLocalTokenSheet(copy);
+              saveTokenSheet(copy);
             } else {
               cloneTokenSheet(token.tokenSheetId, newToken.tokenSheetId);
             }

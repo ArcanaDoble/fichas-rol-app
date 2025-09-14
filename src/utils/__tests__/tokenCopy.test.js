@@ -1,4 +1,5 @@
 import { createToken, cloneTokenSheet } from '../token';
+import { setDoc } from 'firebase/firestore';
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),
@@ -36,6 +37,11 @@ test('copying a token duplicates full sheet data and keeps independent stats', (
 
   const sheets = JSON.parse(localStorage.getItem('tokenSheets'));
   expect(sheets[copy.tokenSheetId]).toEqual({ ...sheet, id: copy.tokenSheetId });
+
+  expect(setDoc).toHaveBeenCalledTimes(3);
+  const saved = setDoc.mock.calls[2][1];
+  expect(saved.stats).toEqual(sheet.stats);
+  expect(saved.resourcesList).toEqual(sheet.resourcesList);
 
   sheets[copy.tokenSheetId].stats.vida.actual = 3;
   expect(sheets[original.tokenSheetId].stats.vida.actual).toBe(4);
