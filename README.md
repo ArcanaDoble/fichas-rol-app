@@ -1588,6 +1588,10 @@ src/
 
 - Se normalizan los identificadores de tokens como cadenas para evitar desincronizaciones y errores al eliminar.
 
+**Resumen de cambios v2.4.82:**
+
+- Corrección: al asignar un token a un jugador, se normaliza el nombre para evitar mensajes de "Acceso Denegado" en el mapa de batalla.
+
 ## 🔄 Historial de cambios previos
 
 <details>
