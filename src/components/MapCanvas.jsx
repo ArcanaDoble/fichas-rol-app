@@ -129,6 +129,8 @@ const DOOR_PATHS = {
   ],
 };
 
+const DAMAGE_ANIMATION_MS = 8000;
+
 const normalizeWallRotation = (x1, y1, x2, y2) => {
   let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
   deg = (deg + 360) % 180;
@@ -2048,7 +2050,7 @@ const MapCanvas = ({
 
         setTimeout(() => {
           setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-        }, 10000);
+        }, DAMAGE_ANIMATION_MS);
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
       }
@@ -2064,7 +2066,7 @@ const MapCanvas = ({
       const current = tokensRef.current;
       if (!current.find((t) => t.id === tokenId)) return;
       const startOpacity = 0.5;
-      const duration = 10000;
+      const duration = DAMAGE_ANIMATION_MS;
 
       const existing = damageTimersRef.current[tokenId];
       if (existing && existing.raf) {
@@ -2131,7 +2133,7 @@ const MapCanvas = ({
           } catch (err) {
             console.error('Error eliminando evento de daño:', err);
           }
-        }, 10000);
+        }, DAMAGE_ANIMATION_MS);
       });
     });
     return () => unsub();
