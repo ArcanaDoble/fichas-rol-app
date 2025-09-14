@@ -49,3 +49,4 @@ test('copying a token duplicates full sheet data and keeps independent stats', (
   copy.estados.push('burned');
   expect(original.estados).toEqual(['poisoned']);
 });
+
