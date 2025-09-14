@@ -66,6 +66,7 @@ export const cloneTokenSheet = (sourceId, targetId) => {
   const copy = JSON.parse(JSON.stringify(sheet));
   copy.id = targetId;
   updateLocalTokenSheet(copy);
+  saveTokenSheet(copy);
 };
 export const ensureSheetDefaults = (sheet) => {
   if (!sheet || typeof sheet !== 'object') return sheet;
