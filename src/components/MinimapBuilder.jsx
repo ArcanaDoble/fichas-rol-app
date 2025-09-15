@@ -25,8 +25,6 @@ const L = {
   arrow: '\u2190',
   back: 'Men\u00FA M\u00E1ster',
   new: 'NUEVO',
-  pc: 'PC',
-  mobile: 'M\u00F3vil',
   autoFit: 'Auto-ajustar',
   readable: 'Modo legible',
   shapeEdit: 'Editar forma',
@@ -213,7 +211,7 @@ const buildGrid = (rows, cols, prev = []) =>
   );
 
 function MinimapBuilder({ onBack }) {
-  const [device, setDevice] = useState('pc');
+  const [isMobile, setIsMobile] = useState(false);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
@@ -283,11 +281,23 @@ function MinimapBuilder({ onBack }) {
   const lastLongPressRef = useRef({ key: null, t: 0 });
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+    setIsMobile(mq.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handleChange);
+      return () => mq.removeEventListener('change', handleChange);
+    }
+    mq.addListener(handleChange);
+    return () => mq.removeListener(handleChange);
+  }, []);
+  useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
   useEffect(() => {
-    if (device === 'mobile' && !readableMode) setReadableMode(true);
-  }, [device]);
+    if (isMobile && !readableMode) setReadableMode(true);
+  }, [isMobile, readableMode]);
   useEffect(() => {
     const fetchAnnotations = async () => {
       try {
@@ -468,6 +478,11 @@ function MinimapBuilder({ onBack }) {
   const lastPosRef = useRef({ x: 0, y: 0 });
   const pointersRef = useRef(new Map());
   const pinchDistRef = useRef(0);
+  useEffect(() => {
+    if (isMobile) {
+      setAutoFit(true);
+    }
+  }, [isMobile]);
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -475,14 +490,14 @@ function MinimapBuilder({ onBack }) {
     const ch = el.clientHeight - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
-    const minScale = device === 'mobile' ? 0.8 : 0.4;
+    const minScale = isMobile ? 0.8 : 0.4;
     setFitScale(
       Math.min(1, Math.max(minScale, Math.min(cw / neededW, ch / neededH)))
     );
-  }, [gridWidth, gridHeight, perimMargin, device]);
+  }, [gridWidth, gridHeight, perimMargin, isMobile]);
   useEffect(() => {
     recomputeFit();
-  }, [recomputeFit, rows, cols, cellSize, device]);
+  }, [recomputeFit, rows, cols, cellSize, isMobile]);
   useEffect(() => {
     const onResize = () => recomputeFit();
     window.addEventListener('resize', onResize);
@@ -747,7 +762,7 @@ function MinimapBuilder({ onBack }) {
     });
   };
 
-  const effectiveReadable = readableMode || device === 'mobile';
+  const effectiveReadable = readableMode || isMobile;
 
   // Adders periferia
   const addRowTopAt = (cIndex) => {
@@ -795,23 +810,25 @@ function MinimapBuilder({ onBack }) {
     (c < cols - 1 && grid[r][c + 1]?.active);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
+    <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <Boton
             size="sm"
-            className="bg-gray-700 hover:bg-gray-600"
+            className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
             onClick={onBack}
           >
             {L.arrow} {L.back}
           </Boton>
-          <h1 className="text-xl font-bold">Minimapa</h1>
-          <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-            {L.new}
-          </span>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Minimapa</h1>
+            <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+              {L.new}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="hidden md:flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+        <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
             <input
               type="checkbox"
               checked={shapeEdit}
@@ -819,7 +836,7 @@ function MinimapBuilder({ onBack }) {
             />
             <span>{L.shapeEdit}</span>
           </label>
-          <label className="hidden md:flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
             <input
               type="checkbox"
               checked={effectiveReadable}
@@ -827,7 +844,7 @@ function MinimapBuilder({ onBack }) {
             />
             <span>{L.readable}</span>
           </label>
-          <label className="hidden md:flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
             <span>{L.autoFit}</span>
             <input
               type="checkbox"
@@ -836,7 +853,7 @@ function MinimapBuilder({ onBack }) {
             />
           </label>
           {!autoFit && (
-            <div className="hidden md:flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+            <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
               <span>Zoom</span>
               <input
                 type="range"
@@ -856,23 +873,6 @@ function MinimapBuilder({ onBack }) {
             }}
           >
             {L.reset}
-          </Boton>
-          <Boton
-            size="sm"
-            color={device === 'pc' ? 'blue' : 'gray'}
-            onClick={() => setDevice('pc')}
-          >
-            {L.pc}
-          </Boton>
-          <Boton
-            size="sm"
-            color={device === 'mobile' ? 'blue' : 'gray'}
-            onClick={() => {
-              setDevice('mobile');
-              setAutoFit(true);
-            }}
-          >
-            {L.mobile}
           </Boton>
         </div>
       </div>
@@ -1382,7 +1382,7 @@ function MinimapBuilder({ onBack }) {
           </div>
         </div>
 
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[50vh]">
+        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
           <div
             className="h-full w-full overflow-hidden touch-none"
             ref={containerRef}
@@ -1393,11 +1393,7 @@ function MinimapBuilder({ onBack }) {
             onPointerLeave={handlePointerUp}
             onPointerCancel={handlePointerUp}
           >
-            <div
-              className={
-                device === 'mobile' ? 'mx-auto w-full max-w-[420px]' : ''
-              }
-            >
+            <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
               <div
                 className="relative mx-auto"
                 style={{
@@ -1609,7 +1605,7 @@ function MinimapBuilder({ onBack }) {
                                 style={{
                                   background: cell.fill,
                                   borderColor: cell.borderColor,
-                                  borderWidth: `${readableMode || device === 'mobile' ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
+                                  borderWidth: `${readableMode || isMobile ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
                                   borderStyle: cell.borderStyle,
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
@@ -1715,21 +1711,21 @@ function MinimapBuilder({ onBack }) {
               </div>
             </div>
           </div>
-          <div className="md:hidden mt-3 flex items-center justify-between gap-2">
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+          <div className="md:hidden mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
+              <span className="font-medium text-gray-200">{L.shapeEdit}</span>
               <input
                 type="checkbox"
                 checked={shapeEdit}
                 onChange={(e) => setShapeEdit(e.target.checked)}
               />
-              <span>{L.shapeEdit}</span>
             </label>
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2 opacity-75">
+              <span className="font-medium text-gray-200">{L.readable}</span>
               <input type="checkbox" checked={true} disabled />
-              <span>{L.readable}</span>
             </label>
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>{L.autoFit}</span>
+            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
+              <span className="font-medium text-gray-200">{L.autoFit}</span>
               <input
                 type="checkbox"
                 checked={autoFit}
@@ -1737,8 +1733,8 @@ function MinimapBuilder({ onBack }) {
               />
             </label>
             {!autoFit && (
-              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-                <span>Zoom</span>
+              <div className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                <span className="font-medium text-gray-200">Zoom</span>
                 <input
                   type="range"
                   min={35}
@@ -1750,6 +1746,7 @@ function MinimapBuilder({ onBack }) {
             )}
             <Boton
               size="sm"
+              className="w-full sm:col-span-2 justify-center"
               onClick={() => {
                 setZoom(1);
                 setOffset({ x: 0, y: 0 });
