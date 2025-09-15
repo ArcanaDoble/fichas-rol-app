@@ -490,10 +490,24 @@ function MinimapBuilder({ onBack }) {
     const ch = el.clientHeight - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
+    if (neededW <= 0 || neededH <= 0) {
+      setFitScale(1);
+      return;
+    }
+    const safeCw = Math.max(cw, 1);
+    const safeCh = Math.max(ch, 1);
+    const rawScale = Math.min(safeCw / neededW, safeCh / neededH);
+    if (!Number.isFinite(rawScale) || rawScale <= 0) {
+      setFitScale(1);
+      return;
+    }
     const minScale = isMobile ? 0.8 : 0.4;
-    setFitScale(
-      Math.min(1, Math.max(minScale, Math.min(cw / neededW, ch / neededH)))
-    );
+    const canRespectMin =
+      safeCw >= neededW * minScale && safeCh >= neededH * minScale;
+    const nextScale = canRespectMin
+      ? Math.min(1, Math.max(minScale, rawScale))
+      : Math.min(1, rawScale);
+    setFitScale(nextScale);
   }, [gridWidth, gridHeight, perimMargin, isMobile]);
   useEffect(() => {
     recomputeFit();
@@ -880,7 +894,7 @@ function MinimapBuilder({ onBack }) {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 space-y-3 lg:col-span-1">
           <h2 className="font-semibold">{L.quadrant}</h2>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-gray-300">{L.rows}</span>
               <input
@@ -911,7 +925,7 @@ function MinimapBuilder({ onBack }) {
                 className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
               />
             </label>
-            <label className="flex flex-col gap-1 col-span-2">
+            <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-gray-300">
                 {L.cellSize}: {cellSize}px
               </span>
@@ -1011,8 +1025,8 @@ function MinimapBuilder({ onBack }) {
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <label className="flex items-center gap-2">
+                  <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <span>{L.color}</span>
                       <HexColorInput
                         value={selected.fill}
@@ -1023,7 +1037,7 @@ function MinimapBuilder({ onBack }) {
                         }
                       />
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <span>{L.border}</span>
                       <HexColorInput
                         value={selected.borderColor}
@@ -1034,7 +1048,7 @@ function MinimapBuilder({ onBack }) {
                         }
                       />
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <span>{L.width}</span>
                       <input
                         type="number"
@@ -1046,10 +1060,10 @@ function MinimapBuilder({ onBack }) {
                             borderWidth: Number(e.target.value) || 0,
                           })
                         }
-                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 w-16"
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-16"
                       />
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <span>{L.style}</span>
                       <select
                         value={selected.borderStyle}
@@ -1058,7 +1072,7 @@ function MinimapBuilder({ onBack }) {
                             borderStyle: e.target.value,
                           })
                         }
-                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
                       >
                         <option value="solid">{L.solid}</option>
                         <option value="dashed">{L.dashed}</option>
@@ -1066,7 +1080,7 @@ function MinimapBuilder({ onBack }) {
                         <option value="none">{L.none}</option>
                       </select>
                     </label>
-                    <label className="flex items-center gap-2 col-span-2">
+                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
                       <span>{L.effect}</span>
                       <select
                         value={selected.effect?.type || 'none'}
@@ -1078,7 +1092,7 @@ function MinimapBuilder({ onBack }) {
                             },
                           })
                         }
-                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
                       >
                         <option value="none">{L.none}</option>
                         <option value="glow">{L.glow}</option>
@@ -1090,7 +1104,7 @@ function MinimapBuilder({ onBack }) {
                       </select>
                     </label>
                     {selected.effect?.type !== 'none' && (
-                      <label className="flex items-center gap-2 col-span-2">
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
                         <span>{L.effectColor}</span>
                         <HexColorInput
                           value={selected.effect?.color || '#ffff00'}
