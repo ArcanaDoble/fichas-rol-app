@@ -480,7 +480,7 @@ function MinimapBuilder({ onBack }) {
   const pinchDistRef = useRef(0);
   useEffect(() => {
     if (isMobile) {
-      setAutoFit(true);
+      setAutoFit(false);
     }
   }, [isMobile]);
   const recomputeFit = useCallback(() => {
@@ -1398,7 +1398,7 @@ function MinimapBuilder({ onBack }) {
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
           <div
-            className="h-full w-full overflow-hidden touch-none"
+            className="h-full w-full min-h-[80vh] overflow-hidden touch-none overscroll-contain"
             ref={containerRef}
             onWheel={handleWheel}
             onPointerDown={handlePointerDown}
