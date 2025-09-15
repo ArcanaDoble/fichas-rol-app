@@ -1675,6 +1675,8 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Botón de eliminación de celdas sin fondo, solo la “X” roja.
 - Selección múltiple de celdas para editar o eliminar varias a la vez.
 - Selectores de color con opción de introducir valores HEX personalizados.
+- Ajustes de interfaz en móviles: los paneles se apilan en una sola columna sin desplazamiento horizontal y el cuadrante gana altura útil para facilitar la interacción táctil.
+- Detección automática del modo móvil con controles superiores simplificados; se retiraron los botones PC/Móvil y el botón de regreso destaca en pantallas pequeñas.
 
 Guía rápida: ver `docs/Minimapa.md`.
 
