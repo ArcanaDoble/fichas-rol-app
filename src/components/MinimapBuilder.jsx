@@ -26,6 +26,7 @@ const L = {
   back: 'Men\u00FA M\u00E1ster',
   new: 'NUEVO',
   autoFit: 'Auto-ajustar',
+  moveMode: 'Mover mapa',
   readable: 'Modo legible',
   shapeEdit: 'Editar forma',
   quadrant: 'Cuadrante',
@@ -227,6 +228,7 @@ function MinimapBuilder({ onBack }) {
   const [annotations, setAnnotations] = useState([]);
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
+  const [isMoveMode, setIsMoveMode] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
@@ -284,6 +286,23 @@ function MinimapBuilder({ onBack }) {
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
+  const activePanPointerRef = useRef(null);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const skipClickRef = useRef(false);
+  const hadMultiTouchRef = useRef(false);
+  const clearLongPressTimers = useCallback(() => {
+    longPressTimersRef.current.forEach((timer) => {
+      clearTimeout(timer.id);
+    });
+    longPressTimersRef.current.clear();
+  }, []);
+  const cancelLongPressTimer = useCallback((key) => {
+    const timer = longPressTimersRef.current.get(key);
+    if (timer) {
+      clearTimeout(timer.id);
+      longPressTimersRef.current.delete(key);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -531,6 +550,18 @@ function MinimapBuilder({ onBack }) {
   useEffect(() => {
     if (autoFit) setOffset({ x: 0, y: 0 });
   }, [autoFit]);
+  useEffect(() => {
+    if (isMoveMode) {
+      setAutoFit(false);
+      skipClickRef.current = true;
+    } else if (pointersRef.current.size === 0) {
+      skipClickRef.current = false;
+    }
+    if (!isMoveMode) {
+      isPanningRef.current = false;
+      activePanPointerRef.current = null;
+    }
+  }, [isMoveMode]);
 
   const handleWheel = useCallback(
     (e) => {
@@ -554,28 +585,58 @@ function MinimapBuilder({ onBack }) {
     [autoFit]
   );
 
+  const handlePointerDownCapture = useCallback((e) => {
+    pointersRef.current.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+      type: e.pointerType,
+    });
+  }, []);
+
   const handlePointerDown = useCallback(
     (e) => {
-      if (autoFit) return;
-      e.preventDefault();
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      pointersRef.current.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        type: e.pointerType,
+      });
       if (pointersRef.current.size === 1) {
-        isPanningRef.current = true;
+        hadMultiTouchRef.current = false;
+      } else if (pointersRef.current.size > 1) {
+        hadMultiTouchRef.current = true;
+        clearLongPressTimers();
+      }
+      skipClickRef.current = isMoveMode || pointersRef.current.size > 1;
+      if (isMoveMode) {
+        clearLongPressTimers();
+      }
+      if (autoFit && !isMoveMode) return;
+      e.preventDefault();
+      if (pointersRef.current.size === 1) {
+        activePanPointerRef.current = e.pointerId;
+        panStartRef.current = { x: e.clientX, y: e.clientY };
         lastPosRef.current = { x: e.clientX, y: e.clientY };
+        isPanningRef.current = false;
       } else if (pointersRef.current.size === 2) {
         const [p1, p2] = Array.from(pointersRef.current.values());
         pinchDistRef.current = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        isPanningRef.current = true;
+        skipClickRef.current = true;
       }
     },
-    [autoFit]
+    [autoFit, isMoveMode, clearLongPressTimers]
   );
 
   const handlePointerMove = useCallback(
     (e) => {
-      if (autoFit) return;
-      e.preventDefault();
       if (!pointersRef.current.has(e.pointerId)) return;
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      pointersRef.current.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        type: e.pointerType,
+      });
+      if (autoFit && !isMoveMode) return;
+      e.preventDefault();
       if (pointersRef.current.size === 2) {
         const [p1, p2] = Array.from(pointersRef.current.values());
         const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -584,6 +645,8 @@ function MinimapBuilder({ onBack }) {
         const rect = el.getBoundingClientRect();
         const midX = (p1.x + p2.x) / 2 - rect.left;
         const midY = (p1.y + p2.y) / 2 - rect.top;
+        skipClickRef.current = true;
+        isPanningRef.current = true;
         setZoom((z) => {
           const newZoom = Math.min(
             2,
@@ -597,36 +660,73 @@ function MinimapBuilder({ onBack }) {
           return newZoom;
         });
         pinchDistRef.current = dist;
-      } else if (isPanningRef.current) {
-        const pos = pointersRef.current.get(e.pointerId);
-        const dx = pos.x - lastPosRef.current.x;
-        const dy = pos.y - lastPosRef.current.y;
-        setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-        lastPosRef.current = pos;
+        return;
       }
+      if (activePanPointerRef.current !== e.pointerId) return;
+      const canPan = e.pointerType === 'mouse' || isMoveMode;
+      if (!canPan) return;
+      const dx = e.clientX - lastPosRef.current.x;
+      const dy = e.clientY - lastPosRef.current.y;
+      const distFromStart = Math.hypot(
+        e.clientX - panStartRef.current.x,
+        e.clientY - panStartRef.current.y
+      );
+      if (!isPanningRef.current) {
+        if (e.pointerType !== 'mouse' && distFromStart < 3) {
+          lastPosRef.current = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        isPanningRef.current = true;
+        skipClickRef.current = true;
+        clearLongPressTimers();
+      }
+      skipClickRef.current = true;
+      setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      lastPosRef.current = { x: e.clientX, y: e.clientY };
     },
-    [autoFit]
+    [autoFit, isMoveMode, clearLongPressTimers]
   );
 
   const handlePointerUp = useCallback(
     (e) => {
-      if (autoFit) return;
-      e.preventDefault();
+      const wasPanning = isPanningRef.current;
       pointersRef.current.delete(e.pointerId);
       if (pointersRef.current.size < 2) {
         pinchDistRef.current = 0;
       }
+      if (activePanPointerRef.current === e.pointerId) {
+        activePanPointerRef.current = null;
+      }
       if (pointersRef.current.size === 0) {
         isPanningRef.current = false;
-      } else if (pointersRef.current.size === 1) {
-        const pos = Array.from(pointersRef.current.values())[0];
-        lastPosRef.current = pos;
+        skipClickRef.current = hadMultiTouchRef.current
+          ? true
+          : isMoveMode || wasPanning;
+      } else {
+        skipClickRef.current = true;
+        if (pointersRef.current.size === 1) {
+          const [remainingId, pos] = pointersRef.current.entries().next().value;
+          lastPosRef.current = { x: pos.x, y: pos.y };
+          panStartRef.current = { x: pos.x, y: pos.y };
+          activePanPointerRef.current = isMoveMode ? remainingId : null;
+          isPanningRef.current = false;
+        }
       }
+      if (autoFit && !isMoveMode) return;
+      e.preventDefault();
     },
-    [autoFit]
+    [autoFit, isMoveMode]
   );
 
   const handleCellClick = (r, c) => {
+    if (
+      isMoveMode ||
+      skipClickRef.current ||
+      hadMultiTouchRef.current ||
+      isPanningRef.current
+    ) {
+      return;
+    }
     setSelectedCells((prev) => {
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
       if (exists) {
@@ -887,6 +987,14 @@ function MinimapBuilder({ onBack }) {
               onChange={(e) => setAutoFit(e.target.checked)}
             />
           </label>
+          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+            <input
+              type="checkbox"
+              checked={isMoveMode}
+              onChange={(e) => setIsMoveMode(e.target.checked)}
+            />
+            <span>{L.moveMode}</span>
+          </label>
           {!autoFit && (
             <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
               <span>Zoom</span>
@@ -1049,6 +1157,7 @@ function MinimapBuilder({ onBack }) {
             className="h-full w-full min-h-[80vh] overflow-hidden touch-none overscroll-contain"
             ref={containerRef}
             onWheel={handleWheel}
+            onPointerDownCapture={handlePointerDownCapture}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -1210,6 +1319,14 @@ function MinimapBuilder({ onBack }) {
                                 role="button"
                                 tabIndex={0}
                                 onClick={(e) => {
+                                  if (
+                                    isMoveMode ||
+                                    skipClickRef.current ||
+                                    hadMultiTouchRef.current ||
+                                    isPanningRef.current
+                                  ) {
+                                    return;
+                                  }
                                   const keyId = `${r}-${c}`;
                                   if (
                                     lastLongPressRef.current.key === keyId &&
@@ -1221,8 +1338,18 @@ function MinimapBuilder({ onBack }) {
                                   }
                                   handleCellClick(r, c);
                                 }}
-                                onTouchStart={() => {
+                                onPointerDown={(e) => {
+                                  if (
+                                    (e.pointerType !== 'touch' &&
+                                      e.pointerType !== 'pen') ||
+                                    isMoveMode ||
+                                    pointersRef.current.size > 1 ||
+                                    isPanningRef.current
+                                  ) {
+                                    return;
+                                  }
                                   const keyId = `${r}-${c}`;
+                                  cancelLongPressTimer(keyId);
                                   const timer = setTimeout(() => {
                                     setActive({ r, c }, false);
                                     setSelectedCells((prev) =>
@@ -1234,29 +1361,42 @@ function MinimapBuilder({ onBack }) {
                                       key: keyId,
                                       t: Date.now(),
                                     };
+                                    skipClickRef.current = true;
                                     longPressTimersRef.current.delete(keyId);
                                   }, 550);
                                   longPressTimersRef.current.set(keyId, {
                                     id: timer,
+                                    pointerId: e.pointerId,
                                   });
                                 }}
-                                onTouchEnd={() => {
+                                onPointerUp={(e) => {
+                                  if (
+                                    e.pointerType !== 'touch' &&
+                                    e.pointerType !== 'pen'
+                                  )
+                                    return;
                                   const keyId = `${r}-${c}`;
-                                  const st =
-                                    longPressTimersRef.current.get(keyId);
-                                  if (st) {
+                                  const st = longPressTimersRef.current.get(keyId);
+                                  if (st && st.pointerId === e.pointerId) {
                                     clearTimeout(st.id);
                                     longPressTimersRef.current.delete(keyId);
                                   }
                                 }}
-                                onTouchMove={() => {
-                                  const keyId = `${r}-${c}`;
-                                  const st =
-                                    longPressTimersRef.current.get(keyId);
-                                  if (st) {
-                                    clearTimeout(st.id);
-                                    longPressTimersRef.current.delete(keyId);
-                                  }
+                                onPointerMove={(e) => {
+                                  if (
+                                    e.pointerType !== 'touch' &&
+                                    e.pointerType !== 'pen'
+                                  )
+                                    return;
+                                  cancelLongPressTimer(`${r}-${c}`);
+                                }}
+                                onPointerCancel={(e) => {
+                                  if (
+                                    e.pointerType !== 'touch' &&
+                                    e.pointerType !== 'pen'
+                                  )
+                                    return;
+                                  cancelLongPressTimer(`${r}-${c}`);
                                 }}
                                 onMouseEnter={() => setHoveredCell({ r, c })}
                                 onMouseLeave={() => setHoveredCell(null)}
@@ -1392,6 +1532,14 @@ function MinimapBuilder({ onBack }) {
                 type="checkbox"
                 checked={autoFit}
                 onChange={(e) => setAutoFit(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
+              <span className="font-medium text-gray-200">{L.moveMode}</span>
+              <input
+                type="checkbox"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
               />
             </label>
             {!autoFit && (
