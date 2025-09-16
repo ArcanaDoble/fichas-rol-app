@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useMemo,
   useState,
   useEffect,
@@ -69,6 +69,11 @@ const L = {
   delCell: 'Eliminar celda',
   reset: 'Restablecer',
 };
+
+const stripDiacritics = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 function IconThumb({ src, selected, onClick, label }) {
   return (
@@ -1803,16 +1808,10 @@ function MinimapBuilder({ onBack }) {
                             className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
                           />
                           {Object.entries(emojiGroups).map(([group, items]) => {
-                            const term = emojiSearch
-                              .toLowerCase()
-                              .normalize('NFD')
-                              .replace(/\\p{Diacritic}/gu, '');
+                            const term = stripDiacritics(emojiSearch).toLowerCase();
                             const filtered = items.filter(({ ch, name, nameEs }) => {
                               const hay = [ch, name, nameEs].map((s) =>
-                                (s || '')
-                                  .toLowerCase()
-                                  .normalize('NFD')
-                                  .replace(/\\p{Diacritic}/gu, '')
+                                stripDiacritics(s || '').toLowerCase()
                               );
                               return hay.some((h) => h.includes(term));
                             });
