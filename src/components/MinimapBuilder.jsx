@@ -387,6 +387,11 @@ function MinimapBuilder({ onBack }) {
     }
   }, [isPropertyPanelOpen]);
   useEffect(() => {
+    if (!isPropertyPanelOpen) {
+      skipClickRef.current = false;
+    }
+  }, [isPropertyPanelOpen]);
+  useEffect(() => {
     if (!hasSelectedCells) {
       setPanelTab('style');
       setActiveColorPicker(null);
@@ -936,10 +941,6 @@ function MinimapBuilder({ onBack }) {
     setSelectedCells((prev) => {
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
       if (exists) {
-        if (!isPropertyPanelOpen && prev.length === 1) {
-          setIsPropertyPanelOpen(true);
-          return prev;
-        }
         const next = prev.filter((cell) => cell.r !== r || cell.c !== c);
         if (next.length === 0) {
           setIsPropertyPanelOpen(false);
@@ -1773,9 +1774,14 @@ function MinimapBuilder({ onBack }) {
           if (!selectedCell || !selectedCellData) return null;
           const selected = selectedCellData;
           return (
-            <div className="fixed bottom-4 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 flex-col items-end gap-2 sm:left-auto sm:right-6 sm:max-w-lg sm:translate-x-0">
+            <div
+              className={`fixed bottom-4 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 flex-col items-end gap-2 sm:left-auto sm:right-6 sm:max-w-lg sm:translate-x-0 ${
+                isPropertyPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
+              }`}
+            >
               <Boton
                 size="sm"
+                className="pointer-events-auto"
                 onClick={() => setIsPropertyPanelOpen((prev) => !prev)}
               >
                 {isPropertyPanelOpen ? L.cellPropsClose : L.cellPropsOpen}
