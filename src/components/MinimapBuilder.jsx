@@ -1732,35 +1732,37 @@ function MinimapBuilder({ onBack }) {
                                     className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
                                   />
                                 )}
-                                <button
-                                  type="button"
-                                  className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-                                  title="Eliminar celda"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActive({ r, c }, false);
-                                    setSelectedCells((prev) =>
-                                      prev.filter(
-                                        (cell) => cell.r !== r || cell.c !== c
-                                      )
-                                    );
-                                  }}
-                                >
-                                  <svg
-                                    width="10"
-                                    height="10"
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                    focusable="false"
+                                {!isMobile && (
+                                  <button
+                                    type="button"
+                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                                    title="Eliminar celda"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActive({ r, c }, false);
+                                      setSelectedCells((prev) =>
+                                        prev.filter(
+                                          (cell) => cell.r !== r || cell.c !== c
+                                        )
+                                      );
+                                    }}
                                   >
-                                    <path
-                                      d="M5 5L19 19M19 5L5 19"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
-                                </button>
+                                    <svg
+                                      width="10"
+                                      height="10"
+                                      viewBox="0 0 24 24"
+                                      aria-hidden="true"
+                                      focusable="false"
+                                    >
+                                      <path
+                                        d="M5 5L19 19M19 5L5 19"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             );
                           })
