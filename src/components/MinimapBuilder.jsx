@@ -591,6 +591,14 @@ function MinimapBuilder({ onBack }) {
   const pinchStateRef = useRef(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
+  const resetPointerState = useCallback(() => {
+    pointersRef.current.clear();
+    isPanningRef.current = false;
+    activePanPointerRef.current = null;
+    pinchDistRef.current = 0;
+    pinchStateRef.current = null;
+    hadMultiTouchRef.current = false;
+  }, []);
   useEffect(() => {
     if (isMobile) {
       setAutoFit(false);
@@ -641,17 +649,19 @@ function MinimapBuilder({ onBack }) {
     zoomRef.current = zoom;
   }, [zoom]);
   useEffect(() => {
+    resetPointerState();
     if (isMoveMode) {
       setAutoFit(false);
       skipClickRef.current = true;
-    } else if (pointersRef.current.size === 0) {
+    } else {
       skipClickRef.current = false;
     }
-    if (!isMoveMode) {
-      isPanningRef.current = false;
-      activePanPointerRef.current = null;
+  }, [isMoveMode, resetPointerState]);
+  useEffect(() => {
+    if (!isPropertyPanelOpen) {
+      resetPointerState();
     }
-  }, [isMoveMode]);
+  }, [isPropertyPanelOpen, resetPointerState]);
 
   const handleWheel = useCallback(
     (e) => {
