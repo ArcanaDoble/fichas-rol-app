@@ -99,8 +99,7 @@ IconThumb.propTypes = {
   label: PropTypes.string,
 };
 
-const QuadrantPreview = ({ q }) => {
-  const size = 36;
+const QuadrantPreview = ({ q, size = 36 }) => {
   const cell = size / Math.max(q.rows, q.cols);
   return (
     <div
@@ -128,7 +127,10 @@ const QuadrantPreview = ({ q }) => {
     </div>
   );
 };
-QuadrantPreview.propTypes = { q: PropTypes.object.isRequired };
+QuadrantPreview.propTypes = {
+  q: PropTypes.object.isRequired,
+  size: PropTypes.number,
+};
 
 const SparkleEffect = ({ color }) => {
   const particles = useMemo(
@@ -1318,41 +1320,132 @@ function MinimapBuilder({ onBack }) {
               <div className="space-y-1 mt-2">
                 <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
                 <div className="flex flex-wrap gap-2">
-                  {quadrants.map((q, i) => (
-                    <div key={`quad-${i}`} className="relative">
-                      <button
-                        onClick={() => loadQuadrant(q, i)}
-                        className={`flex flex-col items-center p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
-                          currentQuadrantIndex === i ? 'ring-2 ring-emerald-400' : ''
-                        }`}
+                  {quadrants.map((q, i) => {
+                    const keyId = `quadrant-${i}`;
+                    const isSelectedQuadrant = currentQuadrantIndex === i;
+                    return (
+                      <div
+                        key={keyId}
+                        className={`relative ${isMobile ? 'w-24' : ''}`}
                       >
-                        <QuadrantPreview q={q} />
-                        <span className="mt-1">{q.title}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-gray-300 rounded-full flex items-center justify-center hover:bg-gray-700"
-                        title="Duplicar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          duplicateQuadrant(i);
-                        }}
-                      >
-                        <LucideIcons.Copy size={10} />
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
-                        title="Eliminar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteQuadrant(i);
-                        }}
-                      >
-                        <LucideIcons.Trash2 size={10} />
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          onClick={(e) => {
+                            if (
+                              lastLongPressRef.current.key === keyId &&
+                              Date.now() - lastLongPressRef.current.t < 700
+                            ) {
+                              e.preventDefault();
+                              return;
+                            }
+                            loadQuadrant(q, i);
+                          }}
+                          onPointerDown={(e) => {
+                            if (
+                              !isMobile ||
+                              (e.pointerType !== 'touch' &&
+                                e.pointerType !== 'pen')
+                            )
+                              return;
+                            cancelLongPressTimer(keyId);
+                            const timer = setTimeout(() => {
+                              deleteQuadrant(i);
+                              lastLongPressRef.current = {
+                                key: keyId,
+                                t: Date.now(),
+                              };
+                              longPressTimersRef.current.delete(keyId);
+                            }, 600);
+                            longPressTimersRef.current.set(keyId, {
+                              id: timer,
+                              pointerId: e.pointerId,
+                            });
+                          }}
+                          onPointerUp={(e) => {
+                            if (
+                              !isMobile ||
+                              (e.pointerType !== 'touch' &&
+                                e.pointerType !== 'pen')
+                            )
+                              return;
+                            const st = longPressTimersRef.current.get(keyId);
+                            if (st && st.pointerId === e.pointerId) {
+                              clearTimeout(st.id);
+                              longPressTimersRef.current.delete(keyId);
+                            }
+                          }}
+                          onPointerLeave={(e) => {
+                            if (
+                              !isMobile ||
+                              (e.pointerType !== 'touch' &&
+                                e.pointerType !== 'pen')
+                            )
+                              return;
+                            cancelLongPressTimer(keyId);
+                          }}
+                          onPointerCancel={(e) => {
+                            if (
+                              !isMobile ||
+                              (e.pointerType !== 'touch' &&
+                                e.pointerType !== 'pen')
+                            )
+                              return;
+                            cancelLongPressTimer(keyId);
+                          }}
+                          onPointerMove={(e) => {
+                            if (
+                              !isMobile ||
+                              (e.pointerType !== 'touch' &&
+                                e.pointerType !== 'pen')
+                            )
+                              return;
+                            cancelLongPressTimer(keyId);
+                          }}
+                          className={`flex flex-col items-center rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
+                            isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
+                          } ${
+                            isMobile
+                              ? 'w-24 p-1 text-[10px] min-h-[72px]'
+                              : 'p-1 text-xs'
+                          }`}
+                        >
+                          <QuadrantPreview q={q} size={isMobile ? 28 : 36} />
+                          <span
+                            className={`mt-1 ${
+                              isMobile
+                                ? 'text-center leading-tight break-words whitespace-normal'
+                                : ''
+                            }`}
+                          >
+                            {q.title}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-gray-300 rounded-full flex items-center justify-center hover:bg-gray-700"
+                          title="Duplicar"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            duplicateQuadrant(i);
+                          }}
+                        >
+                          <LucideIcons.Copy size={10} />
+                        </button>
+                        {!isMobile && (
+                          <button
+                            type="button"
+                            className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
+                            title="Eliminar"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteQuadrant(i);
+                            }}
+                          >
+                            <LucideIcons.Trash2 size={10} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
