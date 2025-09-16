@@ -33,6 +33,9 @@ const L = {
   cols: 'Columnas',
   cellSize: 'Tama\u00F1o de celda',
   selectedCell: 'Celda seleccionada',
+  cellPropsOpen: 'Propiedades de celda',
+  cellPropsClose: 'Ocultar propiedades',
+  closePanel: 'Cerrar panel',
   color: 'Color',
   border: 'Borde',
   width: 'Ancho',
@@ -217,7 +220,9 @@ function MinimapBuilder({ onBack }) {
   const [cellSize, setCellSize] = useState(48);
   const [grid, setGrid] = useState(() => buildGrid(8, 12));
   const [selectedCells, setSelectedCells] = useState([]);
+  const hasSelectedCells = selectedCells.length > 0;
   const selectedCell = selectedCells[0];
+  const [isPropertyPanelOpen, setIsPropertyPanelOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [annotations, setAnnotations] = useState([]);
   const [shapeEdit, setShapeEdit] = useState(false);
@@ -343,6 +348,11 @@ function MinimapBuilder({ onBack }) {
   useEffect(() => {
     if (!shapeEdit) setSelectedCells([]);
   }, [shapeEdit]);
+  useEffect(() => {
+    if (!hasSelectedCells && isPropertyPanelOpen) {
+      setIsPropertyPanelOpen(false);
+    }
+  }, [hasSelectedCells, isPropertyPanelOpen]);
 
   const emojiDataUrl = (ch) => {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
@@ -616,12 +626,23 @@ function MinimapBuilder({ onBack }) {
     [autoFit]
   );
 
-  const handleCellClick = (r, c) =>
+  const handleCellClick = (r, c) => {
     setSelectedCells((prev) => {
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
-      if (exists) return prev.filter((cell) => cell.r !== r || cell.c !== c);
+      if (exists) {
+        if (!isPropertyPanelOpen && prev.length === 1) {
+          setIsPropertyPanelOpen(true);
+          return prev;
+        }
+        const next = prev.filter((cell) => cell.r !== r || cell.c !== c);
+        if (next.length === 0) {
+          setIsPropertyPanelOpen(false);
+        }
+        return next;
+      }
       return [...prev, { r, c }];
     });
+  };
   const updateCell = (cells, updater) =>
     setGrid((prev) => {
       const next = prev.map((row) => row.slice());
@@ -941,384 +962,11 @@ function MinimapBuilder({ onBack }) {
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selectedCells.length > 0}
-                readOnly
-              />
+              <input type="checkbox" checked={hasSelectedCells} readOnly />
               <span>{L.selectedCell}</span>
             </label>
-            {selectedCells.length > 0 && (
-              <Boton
-                size="sm"
-                color="red"
-                onClick={() => {
-                  setActive(selectedCells, false);
-                  setSelectedCells([]);
-                }}
-              >
-                {L.delCell}
-              </Boton>
-            )}
           </div>
 
-          {selectedCells.length > 0 &&
-            (() => {
-              const selected = grid[selectedCells[0].r][selectedCells[0].c];
-              return (
-                <div className="mt-2 border-t border-gray-700 pt-3 space-y-3">
-                  <h3 className="font-semibold">
-                    Celda ({selectedCell.r + 1}
-                    {'\u00D7'}
-                    {selectedCell.c + 1})
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">Estilos</h4>
-                      <div className="flex gap-2">
-                        <Boton
-                          size="sm"
-                          onClick={() => resetCellStyle(selectedCells)}
-                        >
-                          {L.reset}
-                        </Boton>
-                        <Boton size="sm" onClick={saveCellPreset}>
-                          Guardar estilo
-                        </Boton>
-                      </div>
-                    </div>
-                    {cellStylePresets.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {cellStylePresets.map((p, i) => (
-                          <button
-                            key={i}
-                            onClick={() => applyCellPreset(p)}
-                            className="w-8 h-8 rounded overflow-hidden border border-gray-600 hover:border-gray-400"
-                            title="Aplicar preset"
-                          >
-                            <div
-                              className="w-full h-full"
-                              style={{
-                                backgroundColor: p.fill,
-                                borderColor: p.borderColor,
-                                borderWidth: p.borderWidth,
-                                borderStyle: p.borderStyle,
-                                animation:
-                                  p.effect?.type === 'pulse'
-                                    ? 'pulse 1.5s infinite'
-                                    : undefined,
-                              }}
-                            >
-                              {p.effect?.type !== 'none' && (
-                                <EffectOverlay effect={p.effect} />
-                              )}
-                              {p.icon && (
-                                <img
-                                  src={p.icon}
-                                  alt=""
-                                  className="w-full h-full object-contain"
-                                />
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <span>{L.color}</span>
-                      <HexColorInput
-                        value={selected.fill}
-                        onChange={(v) =>
-                          updateCell(selectedCells, {
-                            fill: v,
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <span>{L.border}</span>
-                      <HexColorInput
-                        value={selected.borderColor}
-                        onChange={(v) =>
-                          updateCell(selectedCells, {
-                            borderColor: v,
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <span>{L.width}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={6}
-                        value={selected.borderWidth}
-                        onChange={(e) =>
-                          updateCell(selectedCells, {
-                            borderWidth: Number(e.target.value) || 0,
-                          })
-                        }
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-16"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <span>{L.style}</span>
-                      <select
-                        value={selected.borderStyle}
-                        onChange={(e) =>
-                          updateCell(selectedCells, {
-                            borderStyle: e.target.value,
-                          })
-                        }
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
-                      >
-                        <option value="solid">{L.solid}</option>
-                        <option value="dashed">{L.dashed}</option>
-                        <option value="dotted">{L.dotted}</option>
-                        <option value="none">{L.none}</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
-                      <span>{L.effect}</span>
-                      <select
-                        value={selected.effect?.type || 'none'}
-                        onChange={(e) =>
-                          updateCell(selectedCells, {
-                            effect: {
-                              ...selected.effect,
-                              type: e.target.value,
-                            },
-                          })
-                        }
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
-                      >
-                        <option value="none">{L.none}</option>
-                        <option value="glow">{L.glow}</option>
-                        <option value="pulse">{L.pulse}</option>
-                        <option value="bounce">{L.bounce}</option>
-                        <option value="spin">{L.spin}</option>
-                        <option value="shake">{L.shake}</option>
-                        <option value="sparkle">{L.sparkle}</option>
-                      </select>
-                    </label>
-                    {selected.effect?.type !== 'none' && (
-                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
-                        <span>{L.effectColor}</span>
-                        <HexColorInput
-                          value={selected.effect?.color || '#ffff00'}
-                          onChange={(v) =>
-                            updateCell(selectedCells, {
-                              effect: {
-                                ...selected.effect,
-                                color: v,
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{L.icon}</h4>
-                      {selected.icon && (
-                        <button
-                          className="text-sm text-red-300 hover:text-red-200 underline"
-                          onClick={() => clearIcon(selectedCells)}
-                        >
-                          Quitar
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {[
-                        { id: 'estados', label: 'Estados' },
-                        { id: 'personalizados', label: 'Personalizados' },
-                        { id: 'emojis', label: 'Emojis' },
-                        { id: 'lucide', label: 'Lucide' },
-                      ].map((b) => (
-                        <button
-                          key={b.id}
-                          onClick={() => setIconSource(b.id)}
-                          className={`px-2 py-1 rounded border text-xs ${iconSource === b.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}`}
-                        >
-                          {b.label}
-                        </button>
-                      ))}
-                    </div>
-                    {iconSource === 'emojis' && emojiGroups && (
-                      <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
-                        <input
-                          type="text"
-                          value={emojiSearch}
-                          onChange={(e) => setEmojiSearch(e.target.value)}
-                          placeholder="Buscar"
-                          className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
-                        />
-                        {Object.entries(emojiGroups).map(([group, items]) => {
-                          const term = emojiSearch
-                            .toLowerCase()
-                            .normalize('NFD')
-                            .replace(/\p{Diacritic}/gu, '');
-                          const filtered = items.filter(
-                            ({ ch, name, nameEs }) => {
-                              const hay = [ch, name, nameEs].map((s) =>
-                                (s || '')
-                                  .toLowerCase()
-                                  .normalize('NFD')
-                                  .replace(/\p{Diacritic}/gu, '')
-                              );
-                              return hay.some((h) => h.includes(term));
-                            }
-                          );
-                          if (!filtered.length) return null;
-                          return (
-                            <div key={group}>
-                              <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
-                                {group}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {filtered.map((item, i) => (
-                                  <IconThumb
-                                    key={`${group}-${i}`}
-                                    src={emojiDataUrl(item.ch)}
-                                    label={item.ch}
-                                    selected={
-                                      selected.icon === emojiDataUrl(item.ch)
-                                    }
-                                    onClick={() =>
-                                      updateCell(selectedCells, {
-                                        icon: emojiDataUrl(item.ch),
-                                      })
-                                    }
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {iconSource === 'lucide' && lucideNames && (
-                      <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
-                        <input
-                          type="text"
-                          value={lucideSearch}
-                          onChange={(e) => setLucideSearch(e.target.value)}
-                          placeholder="Buscar"
-                          className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
-                        />
-                        {Object.entries(
-                          lucideNames
-                            .filter((n) =>
-                              n.includes(lucideSearch.toLowerCase())
-                            )
-                            .reduce((acc, name) => {
-                              const k = name[0].toUpperCase();
-                              (acc[k] ||= []).push(name);
-                              return acc;
-                            }, {})
-                        ).map(([letter, names]) => (
-                          <div key={letter}>
-                            <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
-                              {letter}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {names.map((n) => {
-                                const url = lucideDataUrl(n);
-                                return (
-                                  <IconThumb
-                                    key={n}
-                                    src={url}
-                                    label={n}
-                                    selected={selected.icon === url}
-                                    onClick={() =>
-                                      updateCell(selectedCells, { icon: url })
-                                    }
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {(iconSource === 'estados' ||
-                      iconSource === 'personalizados') && (
-                      <div className="flex flex-wrap gap-2 max-h-40 overflow-auto p-1 bg-gray-900 rounded">
-                        {(allIcons[iconSource] || []).map((ico, i) => (
-                          <IconThumb
-                            key={`${iconSource}-${i}`}
-                            src={ico.url}
-                            label={ico.name}
-                            selected={selected.icon === ico.url}
-                            onClick={() =>
-                              updateCell(selectedCells, { icon: ico.url })
-                            }
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {iconsLoading && (
-                      <div className="text-xs text-gray-400">Cargando…</div>
-                    )}
-                    <label className="block text-xs text-gray-300">
-                      {L.iconAdd}
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) =>
-                        e.target.files &&
-                        e.target.files[0] &&
-                        handleFileUpload(e.target.files[0])
-                      }
-                      className="block w-full text-sm text-gray-300 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-                    />
-                    <div className="mt-2 border-t border-gray-700 pt-2">
-                      <h4 className="font-medium mb-1">{L.annotations}</h4>
-                      {(() => {
-                        const ann = annotations.find(
-                          (a) =>
-                            a.r === selectedCell.r && a.c === selectedCell.c
-                        );
-                        return (
-                          <div className="space-y-1">
-                            <input
-                              type="text"
-                              value={ann?.text || ''}
-                              onChange={(e) =>
-                                setAnnotation(selectedCell.r, selectedCell.c, {
-                                  text: e.target.value,
-                                  icon: ann?.icon || '',
-                                })
-                              }
-                              placeholder="Texto"
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                            <input
-                              type="text"
-                              value={ann?.icon || ''}
-                              onChange={(e) =>
-                                setAnnotation(selectedCell.r, selectedCell.c, {
-                                  text: ann?.text || '',
-                                  icon: e.target.value,
-                                })
-                              }
-                              placeholder="URL icono"
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
           <div className="mt-4 space-y-2">
             <div className="flex gap-2">
               <input
@@ -1771,6 +1419,401 @@ function MinimapBuilder({ onBack }) {
           </div>
         </div>
       </div>
+
+      {hasSelectedCells &&
+        (() => {
+          const first = selectedCells[0];
+          const selected = grid[first.r]?.[first.c];
+          if (!selected) return null;
+          return (
+            <div className="fixed bottom-4 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 flex-col items-end gap-2 sm:left-auto sm:right-6 sm:max-w-lg sm:translate-x-0">
+              <Boton
+                size="sm"
+                onClick={() => setIsPropertyPanelOpen((prev) => !prev)}
+              >
+                {isPropertyPanelOpen ? L.cellPropsClose : L.cellPropsOpen}
+              </Boton>
+              <div
+                className={`w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+                  isPropertyPanelOpen
+                    ? 'pointer-events-auto opacity-100 translate-y-0'
+                    : 'pointer-events-none opacity-0 translate-y-2'
+                }`}
+              >
+                <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h3 className="text-lg font-semibold">
+                      Celda ({selectedCell.r + 1}
+                      {'\\u00D7'}
+                      {selectedCell.c + 1})
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Boton
+                        size="sm"
+                        color="red"
+                        onClick={() => {
+                          setActive(selectedCells, false);
+                          setSelectedCells([]);
+                        }}
+                      >
+                        {L.delCell}
+                      </Boton>
+                      <button
+                        type="button"
+                        className="text-xs text-gray-300 hover:text-gray-100 underline"
+                        onClick={() => setIsPropertyPanelOpen(false)}
+                      >
+                        {L.closePanel}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-4 border-t border-gray-700 pt-4">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="font-medium">Estilos</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Boton size="sm" onClick={() => resetCellStyle(selectedCells)}>
+                            {L.reset}
+                          </Boton>
+                          <Boton size="sm" onClick={saveCellPreset}>
+                            Guardar estilo
+                          </Boton>
+                        </div>
+                      </div>
+                      {cellStylePresets.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {cellStylePresets.map((p, i) => (
+                            <button
+                              key={i}
+                              onClick={() => applyCellPreset(p)}
+                              className="w-8 h-8 rounded overflow-hidden border border-gray-600 hover:border-gray-400"
+                              title="Aplicar preset"
+                            >
+                              <div
+                                className="relative w-full h-full"
+                                style={{
+                                  backgroundColor: p.fill,
+                                  borderColor: p.borderColor,
+                                  borderWidth: p.borderWidth,
+                                  borderStyle: p.borderStyle,
+                                  animation:
+                                    p.effect?.type === 'pulse'
+                                      ? 'pulse 1.5s infinite'
+                                      : undefined,
+                                }}
+                              >
+                                {p.effect?.type !== 'none' && (
+                                  <EffectOverlay effect={p.effect} />
+                                )}
+                                {p.icon && (
+                                  <img
+                                    src={p.icon}
+                                    alt=""
+                                    className="w-full h-full object-contain"
+                                  />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <span>{L.color}</span>
+                        <HexColorInput
+                          value={selected.fill}
+                          onChange={(v) =>
+                            updateCell(selectedCells, {
+                              fill: v,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <span>{L.border}</span>
+                        <HexColorInput
+                          value={selected.borderColor}
+                          onChange={(v) =>
+                            updateCell(selectedCells, {
+                              borderColor: v,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <span>{L.width}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={6}
+                          value={selected.borderWidth}
+                          onChange={(e) =>
+                            updateCell(selectedCells, {
+                              borderWidth: Number(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-16"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <span>{L.style}</span>
+                        <select
+                          value={selected.borderStyle}
+                          onChange={(e) =>
+                            updateCell(selectedCells, {
+                              borderStyle: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
+                        >
+                          <option value="solid">{L.solid}</option>
+                          <option value="dashed">{L.dashed}</option>
+                          <option value="dotted">{L.dotted}</option>
+                          <option value="none">{L.none}</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
+                        <span>{L.effect}</span>
+                        <select
+                          value={selected.effect?.type || 'none'}
+                          onChange={(e) =>
+                            updateCell(selectedCells, {
+                              effect: {
+                                ...selected.effect,
+                                type: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 sm:w-auto"
+                        >
+                          <option value="none">{L.none}</option>
+                          <option value="glow">{L.glow}</option>
+                          <option value="pulse">{L.pulse}</option>
+                          <option value="bounce">{L.bounce}</option>
+                          <option value="spin">{L.spin}</option>
+                          <option value="shake">{L.shake}</option>
+                          <option value="sparkle">{L.sparkle}</option>
+                        </select>
+                      </label>
+                      {selected.effect?.type !== 'none' && (
+                        <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:col-span-2">
+                          <span>{L.effectColor}</span>
+                          <HexColorInput
+                            value={selected.effect?.color || '#ffff00'}
+                            onChange={(v) =>
+                              updateCell(selectedCells, {
+                                effect: {
+                                  ...selected.effect,
+                                  color: v,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">{L.icon}</h4>
+                        {selected.icon && (
+                          <button
+                            className="text-sm text-red-300 hover:text-red-200 underline"
+                            onClick={() => clearIcon(selectedCells)}
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {[
+                          { id: 'estados', label: 'Estados' },
+                          { id: 'personalizados', label: 'Personalizados' },
+                          { id: 'emojis', label: 'Emojis' },
+                          { id: 'lucide', label: 'Lucide' },
+                        ].map((b) => (
+                          <button
+                            key={b.id}
+                            onClick={() => setIconSource(b.id)}
+                            className={`px-2 py-1 rounded border text-xs ${
+                              iconSource === b.id
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-gray-800 border-gray-700 text-gray-300'
+                            }`}
+                          >
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                      {iconSource === 'emojis' && emojiGroups && (
+                        <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
+                          <input
+                            type="text"
+                            value={emojiSearch}
+                            onChange={(e) => setEmojiSearch(e.target.value)}
+                            placeholder="Buscar"
+                            className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
+                          />
+                          {Object.entries(emojiGroups).map(([group, items]) => {
+                            const term = emojiSearch
+                              .toLowerCase()
+                              .normalize('NFD')
+                              .replace(/\\p{Diacritic}/gu, '');
+                            const filtered = items.filter(({ ch, name, nameEs }) => {
+                              const hay = [ch, name, nameEs].map((s) =>
+                                (s || '')
+                                  .toLowerCase()
+                                  .normalize('NFD')
+                                  .replace(/\\p{Diacritic}/gu, '')
+                              );
+                              return hay.some((h) => h.includes(term));
+                            });
+                            if (!filtered.length) return null;
+                            return (
+                              <div key={group}>
+                                <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+                                  {group}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {filtered.map((item, i) => (
+                                    <IconThumb
+                                      key={`${group}-${i}`}
+                                      src={emojiDataUrl(item.ch)}
+                                      label={item.ch}
+                                      selected={
+                                        selected.icon === emojiDataUrl(item.ch)
+                                      }
+                                      onClick={() =>
+                                        updateCell(selectedCells, {
+                                          icon: emojiDataUrl(item.ch),
+                                        })
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {iconSource === 'lucide' && lucideNames && (
+                        <div className="max-h-52 overflow-auto space-y-2 p-1 bg-gray-900 rounded">
+                          <input
+                            type="text"
+                            value={lucideSearch}
+                            onChange={(e) => setLucideSearch(e.target.value)}
+                            placeholder="Buscar"
+                            className="w-full mb-2 p-1 rounded bg-gray-800 text-xs text-white"
+                          />
+                          {Object.entries(
+                            lucideNames
+                              .filter((n) => n.includes(lucideSearch.toLowerCase()))
+                              .reduce((acc, name) => {
+                                const k = name[0].toUpperCase();
+                                (acc[k] ||= []).push(name);
+                                return acc;
+                              }, {})
+                          ).map(([letter, names]) => (
+                            <div key={letter}>
+                              <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+                                {letter}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {names.map((n) => {
+                                  const url = lucideDataUrl(n);
+                                  return (
+                                    <IconThumb
+                                      key={n}
+                                      src={url}
+                                      label={n}
+                                      selected={selected.icon === url}
+                                      onClick={() =>
+                                        updateCell(selectedCells, { icon: url })
+                                      }
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(iconSource === 'estados' || iconSource === 'personalizados') && (
+                        <div className="flex flex-wrap gap-2 max-h-40 overflow-auto p-1 bg-gray-900 rounded">
+                          {(allIcons[iconSource] || []).map((ico, i) => (
+                            <IconThumb
+                              key={`${iconSource}-${i}`}
+                              src={ico.url}
+                              label={ico.name}
+                              selected={selected.icon === ico.url}
+                              onClick={() =>
+                                updateCell(selectedCells, { icon: ico.url })
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {iconsLoading && (
+                        <div className="text-xs text-gray-400">Cargando…</div>
+                      )}
+                      <label className="block text-xs text-gray-300">
+                        {L.iconAdd}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          e.target.files &&
+                          e.target.files[0] &&
+                          handleFileUpload(e.target.files[0])
+                        }
+                        className="block w-full text-sm text-gray-300 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                      />
+                      <div className="border-t border-gray-700 pt-3">
+                        <h4 className="font-medium mb-1">{L.annotations}</h4>
+                        {(() => {
+                          const ann = annotations.find(
+                            (a) =>
+                              a.r === selectedCell.r && a.c === selectedCell.c
+                          );
+                          return (
+                            <div className="space-y-1">
+                              <input
+                                type="text"
+                                value={ann?.text || ''}
+                                onChange={(e) =>
+                                  setAnnotation(selectedCell.r, selectedCell.c, {
+                                    text: e.target.value,
+                                    icon: ann?.icon || '',
+                                  })
+                                }
+                                placeholder="Texto"
+                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={ann?.icon || ''}
+                                onChange={(e) =>
+                                  setAnnotation(selectedCell.r, selectedCell.c, {
+                                    text: ann?.text || '',
+                                    icon: e.target.value,
+                                  })
+                                }
+                                placeholder="URL icono"
+                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                              />
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
     </div>
   );
 }
