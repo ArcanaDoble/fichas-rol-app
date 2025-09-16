@@ -1429,7 +1429,7 @@ function MinimapBuilder({ onBack }) {
                               : 'p-1 text-xs'
                           }`}
                         >
-                          <QuadrantPreview q={q} size={isMobile ? 28 : 36} />
+                          <QuadrantPreview q={q} size={36} />
                           <span
                             className={`mt-1 ${
                               isMobile
