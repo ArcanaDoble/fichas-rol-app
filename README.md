@@ -1670,6 +1670,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Agrega celdas individuales en huecos adyacentes a celdas activas mediante “+” interno.
 - Elimina celdas de forma intuitiva: botón “−” en la celda seleccionada o modo “Editar forma”. En móvil, mantener pulsado sobre una celda activa para eliminarla.
 - Control de escala: Auto‑ajustar (por defecto en móvil) evita romper el responsive cuando crece el número de celdas; disponible control de Zoom manual.
+- Nuevo modo “Mover mapa”: activa el toggle dedicado o mantén dos dedos sobre el minimapa para arrastrarlo sin editar celdas; desactívalo para volver al modo de edición.
 - Nuevo toggle “Modo legible”: engrosa temporalmente las líneas del grid para mejorar la lectura en móviles o a escalas bajas.
 - Buscadores de emojis y Lucide con listado completo de iconos cargados localmente.
 - Botón de eliminación de celdas sin fondo, solo la “X” roja.
