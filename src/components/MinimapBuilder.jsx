@@ -512,6 +512,9 @@ function MinimapBuilder({ onBack }) {
   const lastPosRef = useRef({ x: 0, y: 0 });
   const pointersRef = useRef(new Map());
   const pinchDistRef = useRef(0);
+  const pinchStateRef = useRef(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
   useEffect(() => {
     if (isMobile) {
       setAutoFit(false);
@@ -556,6 +559,12 @@ function MinimapBuilder({ onBack }) {
     if (autoFit) setOffset({ x: 0, y: 0 });
   }, [autoFit]);
   useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
     if (isMoveMode) {
       setAutoFit(false);
       skipClickRef.current = true;
@@ -580,15 +589,52 @@ function MinimapBuilder({ onBack }) {
       setZoom((z) => {
         const newZoom = Math.min(2, Math.max(0.35, z - e.deltaY * 0.001));
         const scale = newZoom / z;
-        setOffset((prev) => ({
-          x: prev.x - (mx - prev.x) * (scale - 1),
-          y: prev.y - (my - prev.y) * (scale - 1),
-        }));
+        setOffset((prev) => {
+          const next = {
+            x: prev.x - (mx - prev.x) * (scale - 1),
+            y: prev.y - (my - prev.y) * (scale - 1),
+          };
+          offsetRef.current = next;
+          return next;
+        });
         return newZoom;
       });
     },
     [autoFit]
   );
+
+  const initPinchState = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const entries = Array.from(pointersRef.current.entries());
+    if (entries.length < 2) return;
+    const rect = el.getBoundingClientRect();
+    const baseScale = autoFit ? fitScale : zoomRef.current;
+    if (!Number.isFinite(baseScale) || baseScale <= 0) return;
+    const [[idA, pA], [idB, pB]] = entries;
+    const posA = { x: pA.x - rect.left, y: pA.y - rect.top };
+    const posB = { x: pB.x - rect.left, y: pB.y - rect.top };
+    const contentA = {
+      x: (posA.x - offsetRef.current.x) / baseScale,
+      y: (posA.y - offsetRef.current.y) / baseScale,
+    };
+    const contentB = {
+      x: (posB.x - offsetRef.current.x) / baseScale,
+      y: (posB.y - offsetRef.current.y) / baseScale,
+    };
+    const contentDist = Math.hypot(
+      contentB.x - contentA.x,
+      contentB.y - contentA.y
+    );
+    pinchStateRef.current = {
+      pointers: {
+        [idA]: { content: contentA },
+        [idB]: { content: contentB },
+      },
+      contentDist: contentDist > 0 ? contentDist : 0.0001,
+    };
+    pinchDistRef.current = Math.hypot(posB.x - posA.x, posB.y - posA.y);
+  }, [autoFit, fitScale]);
 
   const handlePointerDownCapture = useCallback((e) => {
     pointersRef.current.set(e.pointerId, {
@@ -607,9 +653,11 @@ function MinimapBuilder({ onBack }) {
       });
       if (pointersRef.current.size === 1) {
         hadMultiTouchRef.current = false;
+        pinchStateRef.current = null;
       } else if (pointersRef.current.size > 1) {
         hadMultiTouchRef.current = true;
         clearLongPressTimers();
+        initPinchState();
       }
       skipClickRef.current = isMoveMode || pointersRef.current.size > 1;
       if (isMoveMode) {
@@ -629,7 +677,7 @@ function MinimapBuilder({ onBack }) {
         skipClickRef.current = true;
       }
     },
-    [autoFit, isMoveMode, clearLongPressTimers]
+    [autoFit, isMoveMode, clearLongPressTimers, initPinchState]
   );
 
   const handlePointerMove = useCallback(
@@ -643,28 +691,56 @@ function MinimapBuilder({ onBack }) {
       if (autoFit && !isMoveMode) return;
       e.preventDefault();
       if (pointersRef.current.size === 2) {
-        const [p1, p2] = Array.from(pointersRef.current.values());
-        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
         const el = containerRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const midX = (p1.x + p2.x) / 2 - rect.left;
-        const midY = (p1.y + p2.y) / 2 - rect.top;
+        let state = pinchStateRef.current;
+        const entries = Array.from(pointersRef.current.entries());
+        const hasState =
+          state &&
+          state.pointers[entries[0][0]] &&
+          state.pointers[entries[1][0]];
+        if (!hasState) {
+          initPinchState();
+          state = pinchStateRef.current;
+        }
+        if (!state) return;
+        const [[idA, pA], [idB, pB]] = entries;
+        const pointerA = state.pointers[idA];
+        const pointerB = state.pointers[idB];
+        if (!pointerA || !pointerB) return;
+        const posA = { x: pA.x - rect.left, y: pA.y - rect.top };
+        const posB = { x: pB.x - rect.left, y: pB.y - rect.top };
+        const dist = Math.hypot(posB.x - posA.x, posB.y - posA.y);
+        const baseContentDist =
+          state.contentDist ||
+          Math.hypot(
+            pointerB.content.x - pointerA.content.x,
+            pointerB.content.y - pointerA.content.y
+          ) ||
+          0.0001;
+        const clampedScale = Math.min(2, Math.max(0.35, dist / baseContentDist));
+        const offsetA = {
+          x: posA.x - pointerA.content.x * clampedScale,
+          y: posA.y - pointerA.content.y * clampedScale,
+        };
+        const offsetB = {
+          x: posB.x - pointerB.content.x * clampedScale,
+          y: posB.y - pointerB.content.y * clampedScale,
+        };
+        const nextOffset = {
+          x: (offsetA.x + offsetB.x) / 2,
+          y: (offsetA.y + offsetB.y) / 2,
+        };
         skipClickRef.current = true;
         isPanningRef.current = true;
-        setZoom((z) => {
-          const newZoom = Math.min(
-            2,
-            Math.max(0.35, (z * dist) / (pinchDistRef.current || dist))
-          );
-          const scale = newZoom / z;
-          setOffset((prev) => ({
-            x: prev.x - (midX - prev.x) * (scale - 1),
-            y: prev.y - (midY - prev.y) * (scale - 1),
-          }));
-          return newZoom;
-        });
         pinchDistRef.current = dist;
+        offsetRef.current = nextOffset;
+        setOffset(nextOffset);
+        if (!autoFit) {
+          zoomRef.current = clampedScale;
+          setZoom(clampedScale);
+        }
         return;
       }
       if (activePanPointerRef.current !== e.pointerId) return;
@@ -686,10 +762,14 @@ function MinimapBuilder({ onBack }) {
         clearLongPressTimers();
       }
       skipClickRef.current = true;
-      setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setOffset((prev) => {
+        const next = { x: prev.x + dx, y: prev.y + dy };
+        offsetRef.current = next;
+        return next;
+      });
       lastPosRef.current = { x: e.clientX, y: e.clientY };
     },
-    [autoFit, isMoveMode, clearLongPressTimers]
+    [autoFit, isMoveMode, clearLongPressTimers, initPinchState]
   );
 
   const handlePointerUp = useCallback(
@@ -698,6 +778,7 @@ function MinimapBuilder({ onBack }) {
       pointersRef.current.delete(e.pointerId);
       if (pointersRef.current.size < 2) {
         pinchDistRef.current = 0;
+        pinchStateRef.current = null;
       }
       if (activePanPointerRef.current === e.pointerId) {
         activePanPointerRef.current = null;

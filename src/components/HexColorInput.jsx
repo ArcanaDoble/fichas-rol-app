@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 function HexColorInput({ value, onChange }) {
   const [color, setColor] = useState(value || '#ffffff');
+
+  useEffect(() => {
+    setColor(value || '#ffffff');
+  }, [value]);
 
   const handleColorChange = (e) => {
     const v = e.target.value;
@@ -19,13 +23,27 @@ function HexColorInput({ value, onChange }) {
   };
 
   return (
-    <div className="flex items-center gap-1">
-      <input type="color" value={color} onChange={handleColorChange} />
+    <div className="flex items-center gap-2">
+      <label className="relative">
+        <span
+          className="block h-8 w-8 rounded-md border border-gray-600 shadow-inner"
+          style={{ backgroundColor: color }}
+        />
+        <input
+          type="color"
+          value={color}
+          onChange={handleColorChange}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          aria-label="Seleccionar color"
+        />
+      </label>
       <input
         type="text"
-        value={color}
+        value={color.toUpperCase()}
         onChange={handleHexChange}
-        className="w-20 bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
+        maxLength={7}
+        spellCheck={false}
+        className="w-[72px] rounded-md border border-gray-600 bg-gray-700 px-2 py-1 text-xs uppercase tracking-wide text-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
       />
     </div>
   );
