@@ -589,16 +589,19 @@ function MinimapBuilder({ onBack }) {
   const pointersRef = useRef(new Map());
   const pinchDistRef = useRef(0);
   const pinchStateRef = useRef(null);
+  const resetPinchRefs = useCallback(() => {
+    pinchDistRef.current = 0;
+    pinchStateRef.current = null;
+  }, []);
   const offsetRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
   const resetPointerState = useCallback(() => {
     pointersRef.current.clear();
     isPanningRef.current = false;
     activePanPointerRef.current = null;
-    pinchDistRef.current = 0;
-    pinchStateRef.current = null;
+    resetPinchRefs();
     hadMultiTouchRef.current = false;
-  }, []);
+  }, [resetPinchRefs]);
   useEffect(() => {
     if (isMobile) {
       setAutoFit(false);
@@ -863,8 +866,7 @@ function MinimapBuilder({ onBack }) {
       const wasPanning = isPanningRef.current;
       pointersRef.current.delete(e.pointerId);
       if (pointersRef.current.size < 2) {
-        pinchDistRef.current = 0;
-        pinchStateRef.current = null;
+        resetPinchRefs();
       }
       if (activePanPointerRef.current === e.pointerId) {
         activePanPointerRef.current = null;
@@ -887,8 +889,40 @@ function MinimapBuilder({ onBack }) {
       if (autoFit && !isMoveMode) return;
       e.preventDefault();
     },
-    [autoFit, isMoveMode]
+    [autoFit, isMoveMode, resetPinchRefs]
   );
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+
+    const listenerOptions = { passive: false };
+    const handleDownCapture = (event) => handlePointerDownCapture(event);
+    const handleDown = (event) => handlePointerDown(event);
+    const handleMove = (event) => handlePointerMove(event);
+    const handleUp = (event) => handlePointerUp(event);
+
+    el.addEventListener('pointerdown', handleDownCapture, true);
+    el.addEventListener('pointerdown', handleDown, listenerOptions);
+    el.addEventListener('pointermove', handleMove, listenerOptions);
+    el.addEventListener('pointerup', handleUp, listenerOptions);
+    el.addEventListener('pointerleave', handleUp, listenerOptions);
+    el.addEventListener('pointercancel', handleUp, listenerOptions);
+
+    return () => {
+      el.removeEventListener('pointerdown', handleDownCapture, true);
+      el.removeEventListener('pointerdown', handleDown, listenerOptions);
+      el.removeEventListener('pointermove', handleMove, listenerOptions);
+      el.removeEventListener('pointerup', handleUp, listenerOptions);
+      el.removeEventListener('pointerleave', handleUp, listenerOptions);
+      el.removeEventListener('pointercancel', handleUp, listenerOptions);
+    };
+  }, [
+    handlePointerDownCapture,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+  ]);
 
   const handleCellClick = (r, c) => {
     if (
@@ -1325,17 +1359,11 @@ function MinimapBuilder({ onBack }) {
         </div>
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
-          <div
-            className="h-full w-full min-h-[80vh] overflow-hidden touch-none overscroll-contain"
-            ref={containerRef}
-            onWheel={handleWheel}
-            onPointerDownCapture={handlePointerDownCapture}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-          >
+        <div
+          className="h-full w-full min-h-[80vh] overflow-hidden touch-none overscroll-contain"
+          ref={containerRef}
+          onWheel={handleWheel}
+        >
             <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
               <div
                 className="relative mx-auto"

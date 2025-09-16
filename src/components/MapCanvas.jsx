@@ -2970,7 +2970,7 @@ const MapCanvas = ({
     if (pointersRef.current.size === 2) {
       const [p1, p2] = Array.from(pointersRef.current.values());
       pinchDistRef.current = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    } else if (pointersRef.current.size < 2) {
+    } else if (pointersRef.current.size <= 1) {
       pinchDistRef.current = 0;
     }
   }, []);
@@ -3962,6 +3962,8 @@ const MapCanvas = ({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onPointerLeave={handlePointerUp}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={stopPanning}

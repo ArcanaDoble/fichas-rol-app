@@ -860,6 +860,22 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - _Nuevo:_ prueba de animaciones de daño actualizada con `act()` y mocks de eventos
   (`MasterDefenseAnimation.test.js`).
 
+## 🧪 Pruebas manuales de gestos táctiles
+
+- **MinimapBuilder**
+  - Abrir el minimapa en una tablet o móvil con soporte táctil.
+  - Alternar el panel de propiedades (abrir/cerrar) y confirmar que el área del
+    cuadrante sigue respondiendo al arrastre y a los toques.
+  - Realizar un gesto de pinza para acercar/alejar y soltar todos los dedos;
+    repetir el gesto para verificar que el zoom vuelve a iniciarse desde cero
+    sin quedarse bloqueado.
+- **MapCanvas**
+  - Cargar un mapa en un dispositivo táctil y hacer zoom con el gesto de pinza.
+  - Alejar los dedos fuera del lienzo y volver a tocar para confirmar que el
+    zoom táctil sigue disponible y que el mapa no mantiene punteros fantasma.
+  - Repetir la apertura/cierre de paneles laterales del mapa para asegurarse de
+    que los listeners táctiles continúan activos en el lienzo principal.
+
 ## 🚀 Instalación y uso
 
 ### Requisitos previos
