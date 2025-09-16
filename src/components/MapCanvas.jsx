@@ -941,6 +941,8 @@ const MapCanvas = ({
   const [zoom, setZoom] = useState(initialZoom);
   const [groupPos, setGroupPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const pointersRef = useRef(new Map());
+  const pinchDistRef = useRef(0);
 
   // Refs para acceder a valores actuales sin dependencias
   const zoomRef = useRef(zoom);
@@ -2890,6 +2892,89 @@ const MapCanvas = ({
     });
   };
 
+  const handlePointerDown = useCallback((e) => {
+    const evt = e?.evt;
+    if (!evt || evt.pointerType !== 'touch') return;
+    evt.preventDefault();
+    pointersRef.current.set(evt.pointerId, {
+      x: evt.clientX,
+      y: evt.clientY,
+    });
+    if (pointersRef.current.size === 2) {
+      const [p1, p2] = Array.from(pointersRef.current.values());
+      pinchDistRef.current = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    } else if (pointersRef.current.size < 2) {
+      pinchDistRef.current = 0;
+    }
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (e) => {
+      const evt = e?.evt;
+      if (!evt || evt.pointerType !== 'touch') return;
+      if (!pointersRef.current.has(evt.pointerId)) return;
+      evt.preventDefault();
+      pointersRef.current.set(evt.pointerId, {
+        x: evt.clientX,
+        y: evt.clientY,
+      });
+
+      if (pointersRef.current.size === 2 && stageRef.current) {
+        const [p1, p2] = Array.from(pointersRef.current.values());
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        if (!dist) return;
+        const container = stageRef.current.container();
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const midX = (p1.x + p2.x) / 2 - rect.left;
+        const midY = (p1.y + p2.y) / 2 - rect.top;
+
+        const currentZoom = zoomRef.current;
+        const prevScale = baseScaleRef.current * currentZoom;
+        if (!prevScale) return;
+        const ratio = pinchDistRef.current ? dist / pinchDistRef.current : 1;
+        let nextZoom = currentZoom * ratio;
+        nextZoom = Math.min(maxZoom, Math.max(minZoom, nextZoom));
+        const nextScale = baseScaleRef.current * nextZoom;
+        const currentGroupPos = groupPosRef.current;
+        const focusPoint = {
+          x: (midX - currentGroupPos.x) / prevScale,
+          y: (midY - currentGroupPos.y) / prevScale,
+        };
+        const nextGroupPos = {
+          x: midX - focusPoint.x * nextScale,
+          y: midY - focusPoint.y * nextScale,
+        };
+        groupPosRef.current = nextGroupPos;
+        if (
+          nextGroupPos.x !== currentGroupPos.x ||
+          nextGroupPos.y !== currentGroupPos.y
+        ) {
+          setGroupPos(nextGroupPos);
+        }
+        if (nextZoom !== currentZoom) {
+          zoomRef.current = nextZoom;
+          setZoom(nextZoom);
+        }
+        pinchDistRef.current = dist;
+      }
+    },
+    [maxZoom, minZoom]
+  );
+
+  const handlePointerUp = useCallback((e) => {
+    const evt = e?.evt;
+    if (!evt || evt.pointerType !== 'touch') return;
+    evt.preventDefault();
+    pointersRef.current.delete(evt.pointerId);
+    if (pointersRef.current.size === 2) {
+      const [p1, p2] = Array.from(pointersRef.current.values());
+      pinchDistRef.current = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    } else if (pointersRef.current.size < 2) {
+      pinchDistRef.current = 0;
+    }
+  }, []);
+
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
     if (activeTool === 'target' && e.evt.button === 0) {
@@ -3874,6 +3959,9 @@ const MapCanvas = ({
           width={containerSize.width}
           height={containerSize.height}
           onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={stopPanning}
@@ -3882,6 +3970,7 @@ const MapCanvas = ({
           style={{
             background: '#000',
             cursor: activeTool === 'wall' ? 'crosshair' : 'default',
+            touchAction: 'none',
           }}
         >
           <Layer>
