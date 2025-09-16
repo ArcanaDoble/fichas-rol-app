@@ -100,29 +100,50 @@ IconThumb.propTypes = {
 };
 
 const QuadrantPreview = ({ q, size = 36 }) => {
-  const cell = size / Math.max(q.rows, q.cols);
+  const ensurePositive = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  };
+  const rows = ensurePositive(q?.rows);
+  const cols = ensurePositive(q?.cols);
+  const maxDimension = Math.max(rows, cols);
+  const cell = size / (maxDimension || 1);
+  const width = cell * cols;
+  const height = cell * rows;
+  const emptyCell = {
+    active: false,
+    fill: 'transparent',
+    borderColor: 'rgba(255,255,255,0.1)',
+  };
   return (
     <div
-      className="grid"
+      className="grid flex-shrink-0 overflow-hidden rounded border border-gray-600/70 bg-gray-900/40"
       style={{
-        gridTemplateColumns: `repeat(${q.cols}, ${cell}px)`,
-        gridTemplateRows: `repeat(${q.rows}, ${cell}px)`,
+        width,
+        height,
+        gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
+        gridTemplateRows: `repeat(${rows}, ${cell}px)`,
       }}
     >
-      {q.grid.map((row, r) =>
-        row.map((cellData, c) => (
-          <div
-            key={`${r}-${c}`}
-            style={{
-              width: cell,
-              height: cell,
-              background: cellData.active ? cellData.fill : 'transparent',
-              border: `1px solid ${
-                cellData.active ? cellData.borderColor : 'rgba(255,255,255,0.1)'
-              }`,
-            }}
-          />
-        ))
+      {Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          const cellData = q?.grid?.[r]?.[c] || emptyCell;
+          return (
+            <div
+              key={`${r}-${c}`}
+              style={{
+                width: cell,
+                height: cell,
+                background: cellData.active ? cellData.fill : 'transparent',
+                border: `1px solid ${
+                  cellData.active
+                    ? cellData.borderColor
+                    : 'rgba(255,255,255,0.1)'
+                }`,
+              }}
+            />
+          );
+        })
       )}
     </div>
   );
@@ -1408,7 +1429,7 @@ function MinimapBuilder({ onBack }) {
                               : 'p-1 text-xs'
                           }`}
                         >
-                          <QuadrantPreview q={q} size={isMobile ? 28 : 36} />
+                          <QuadrantPreview q={q} size={36} />
                           <span
                             className={`mt-1 ${
                               isMobile
