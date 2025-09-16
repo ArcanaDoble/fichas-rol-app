@@ -259,6 +259,7 @@ function MinimapBuilder({ onBack }) {
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
+  const [isMultiTouchActive, setIsMultiTouchActive] = useState(false);
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
@@ -607,6 +608,11 @@ function MinimapBuilder({ onBack }) {
   );
   const perimGap = Math.max(10, Math.min(24, Math.round(cellSize * 0.35)));
   const perimMargin = perimGap + adderBtn;
+  const touchActionClass = isMobile
+    ? isMoveMode || isMultiTouchActive
+      ? 'touch-none'
+      : 'touch-pan-y'
+    : 'touch-none';
 
   const [autoFit, setAutoFit] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -629,7 +635,8 @@ function MinimapBuilder({ onBack }) {
     activePanPointerRef.current = null;
     resetPinchRefs();
     hadMultiTouchRef.current = false;
-  }, [resetPinchRefs]);
+    setIsMultiTouchActive(false);
+  }, [resetPinchRefs, setIsMultiTouchActive]);
   useEffect(() => {
     if (isMobile) {
       setAutoFit(false);
@@ -776,9 +783,18 @@ function MinimapBuilder({ onBack }) {
         clearLongPressTimers();
         initPinchState();
       }
+      setIsMultiTouchActive(pointersRef.current.size > 1);
       skipClickRef.current = isMoveMode || pointersRef.current.size > 1;
       if (isMoveMode) {
         clearLongPressTimers();
+      }
+      const allowNativeScroll =
+        isMobile &&
+        !isMoveMode &&
+        e.pointerType === 'touch' &&
+        pointersRef.current.size === 1;
+      if (allowNativeScroll) {
+        return;
       }
       if (autoFit && !isMoveMode) return;
       e.preventDefault();
@@ -794,7 +810,14 @@ function MinimapBuilder({ onBack }) {
         skipClickRef.current = true;
       }
     },
-    [autoFit, isMoveMode, clearLongPressTimers, initPinchState]
+    [
+      autoFit,
+      isMobile,
+      isMoveMode,
+      clearLongPressTimers,
+      initPinchState,
+      setIsMultiTouchActive,
+    ]
   );
 
   const handlePointerMove = useCallback(
@@ -805,6 +828,14 @@ function MinimapBuilder({ onBack }) {
         y: e.clientY,
         type: e.pointerType,
       });
+      const allowNativeScroll =
+        isMobile &&
+        !isMoveMode &&
+        e.pointerType === 'touch' &&
+        pointersRef.current.size === 1;
+      if (allowNativeScroll) {
+        return;
+      }
       if (autoFit && !isMoveMode) return;
       e.preventDefault();
       if (pointersRef.current.size === 2) {
@@ -886,13 +917,20 @@ function MinimapBuilder({ onBack }) {
       });
       lastPosRef.current = { x: e.clientX, y: e.clientY };
     },
-    [autoFit, isMoveMode, clearLongPressTimers, initPinchState]
+    [
+      autoFit,
+      isMobile,
+      isMoveMode,
+      clearLongPressTimers,
+      initPinchState,
+    ]
   );
 
   const handlePointerUp = useCallback(
     (e) => {
       const wasPanning = isPanningRef.current;
       pointersRef.current.delete(e.pointerId);
+      setIsMultiTouchActive(pointersRef.current.size > 1);
       if (pointersRef.current.size < 2) {
         resetPinchRefs();
       }
@@ -914,10 +952,24 @@ function MinimapBuilder({ onBack }) {
           isPanningRef.current = false;
         }
       }
+      const allowNativeScroll =
+        isMobile &&
+        !isMoveMode &&
+        e.pointerType === 'touch' &&
+        !hadMultiTouchRef.current;
+      if (allowNativeScroll) {
+        return;
+      }
       if (autoFit && !isMoveMode) return;
       e.preventDefault();
     },
-    [autoFit, isMoveMode, resetPinchRefs]
+    [
+      autoFit,
+      isMobile,
+      isMoveMode,
+      resetPinchRefs,
+      setIsMultiTouchActive,
+    ]
   );
 
   useEffect(() => {
@@ -1474,11 +1526,11 @@ function MinimapBuilder({ onBack }) {
         </div>
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
-        <div
-          className="h-full w-full min-h-[80vh] overflow-hidden touch-none overscroll-contain"
-          ref={containerRef}
-          onWheel={handleWheel}
-        >
+          <div
+            className={`h-full w-full min-h-[80vh] overflow-hidden overscroll-contain ${touchActionClass}`}
+            ref={containerRef}
+            onWheel={handleWheel}
+          >
             <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
               <div
                 className="relative mx-auto"
