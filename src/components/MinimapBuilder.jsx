@@ -319,17 +319,20 @@ function MinimapBuilder({ onBack }) {
     const current = { rows, cols, cellSize, grid };
     return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
   }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
-  const setAnnotation = (r, c, data) => {
+  const setAnnotation = (r, c, data, options = {}) => {
+    const { skipLocalUpdate = false } = options;
     const key = `${activeQuadrantId}-${r}-${c}`;
     const payload = { quadrantId: activeQuadrantId, r, c, ...data };
     const legacyKey = `${r}-${c}`;
-    setAnnotations((prev) => {
-      const next = prev.filter((a) => a.key !== key);
-      if (data.text || data.icon) {
-        next.push({ key, quadrantId: activeQuadrantId, r, c, ...data });
-      }
-      return next;
-    });
+    if (!skipLocalUpdate) {
+      setAnnotations((prev) => {
+        const next = prev.filter((a) => a.key !== key);
+        if (data.text || data.icon) {
+          next.push({ key, quadrantId: activeQuadrantId, r, c, ...data });
+        }
+        return next;
+      });
+    }
     const ref = doc(db, 'minimapAnnotations', key);
     const legacyRef = legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
     if (data.text || data.icon) {
@@ -1084,13 +1087,18 @@ function MinimapBuilder({ onBack }) {
     });
   const trimGrid = (g) => {
     let next = g;
-    let newRows = next.length;
-    let newCols = next[0]?.length || 0;
+    const originalRows = next.length;
+    const originalCols = next[0]?.length || 0;
+    let newRows = originalRows;
+    let newCols = originalCols;
+    let removedTop = 0;
+    let removedLeft = 0;
     const rowEmpty = (row) => row.every((cell) => !cell.active);
     const colEmpty = (idx) => next.every((row) => !row[idx].active);
     while (newRows > 1 && rowEmpty(next[0])) {
       next = next.slice(1);
       newRows--;
+      removedTop++;
     }
     while (newRows > 1 && rowEmpty(next[newRows - 1])) {
       next = next.slice(0, -1);
@@ -1099,6 +1107,7 @@ function MinimapBuilder({ onBack }) {
     while (newCols > 1 && colEmpty(0)) {
       next = next.map((row) => row.slice(1));
       newCols--;
+      removedLeft++;
     }
     while (newCols > 1 && colEmpty(newCols - 1)) {
       next = next.map((row) => row.slice(0, -1));
@@ -1109,6 +1118,100 @@ function MinimapBuilder({ onBack }) {
     setSelectedCells((prev) =>
       prev.filter(({ r, c }) => r < newRows && c < newCols && next[r][c].active)
     );
+    const shouldAdjustAnnotations =
+      removedTop > 0 ||
+      removedLeft > 0 ||
+      newRows !== originalRows ||
+      newCols !== originalCols;
+    if (shouldAdjustAnnotations) {
+      const movedAnnotations = [];
+      const removedAnnotationKeys = new Set();
+      const removedLegacyKeys = new Set();
+      setAnnotations((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+        const nextAnnotations = [];
+        prev.forEach((ann) => {
+          if (!ann) return;
+          const annQuadrant = ann.quadrantId || 'default';
+          if (annQuadrant !== activeQuadrantId) {
+            nextAnnotations.push(ann);
+            return;
+          }
+          const oldR = ann.r;
+          const oldC = ann.c;
+          if (
+            typeof oldR !== 'number' ||
+            Number.isNaN(oldR) ||
+            typeof oldC !== 'number' ||
+            Number.isNaN(oldC)
+          ) {
+            nextAnnotations.push(ann);
+            return;
+          }
+          const newR = oldR - removedTop;
+          const newC = oldC - removedLeft;
+          if (newR < 0 || newC < 0 || newR >= newRows || newC >= newCols) {
+            if (ann.key) {
+              removedAnnotationKeys.add(ann.key);
+            }
+            if (Number.isInteger(oldR) && Number.isInteger(oldC)) {
+              removedLegacyKeys.add(`${oldR}-${oldC}`);
+            }
+            return;
+          }
+          const newKey = `${activeQuadrantId}-${newR}-${newC}`;
+          const updatedAnn = {
+            ...ann,
+            r: newR,
+            c: newC,
+            key: newKey,
+            quadrantId: activeQuadrantId,
+          };
+          nextAnnotations.push(updatedAnn);
+          if (newKey !== ann.key) {
+            movedAnnotations.push({
+              annotation: updatedAnn,
+              previousKey: ann.key,
+              previousLegacyKey:
+                Number.isInteger(oldR) && Number.isInteger(oldC)
+                  ? `${oldR}-${oldC}`
+                  : null,
+            });
+          }
+        });
+        return nextAnnotations;
+      });
+      movedAnnotations.forEach(({ annotation, previousKey, previousLegacyKey }) => {
+        if (annotation.text || annotation.icon) {
+          setAnnotation(
+            annotation.r,
+            annotation.c,
+            {
+              text: annotation.text || '',
+              icon: annotation.icon || '',
+            },
+            { skipLocalUpdate: true }
+          );
+        }
+        if (previousKey && previousKey !== annotation.key) {
+          deleteDoc(doc(db, 'minimapAnnotations', previousKey)).catch(() => {});
+        }
+        const newLegacyKey = `${annotation.r}-${annotation.c}`;
+        if (previousLegacyKey && previousLegacyKey !== newLegacyKey) {
+          deleteDoc(doc(db, 'minimapAnnotations', previousLegacyKey)).catch(() => {});
+        }
+      });
+      removedAnnotationKeys.forEach((key) => {
+        if (key) {
+          deleteDoc(doc(db, 'minimapAnnotations', key)).catch(() => {});
+        }
+      });
+      removedLegacyKeys.forEach((legacyKey) => {
+        if (legacyKey) {
+          deleteDoc(doc(db, 'minimapAnnotations', legacyKey)).catch(() => {});
+        }
+      });
+    }
     return next;
   };
   const setActive = (cells, active) =>
