@@ -75,6 +75,14 @@ const stripDiacritics = (value) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+const generateQuadrantId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `quadrant-${Date.now().toString(36)}-${rand}`;
+};
+
 function IconThumb({ src, selected, onClick, label }) {
   return (
     <button
@@ -283,7 +291,13 @@ function MinimapBuilder({ onBack }) {
   const [quadrants, setQuadrants] = useState(() => {
     try {
       const raw = localStorage.getItem('minimapQuadrants');
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((q) => ({
+        ...q,
+        id: q?.id || generateQuadrantId(),
+      }));
     } catch {
       return [];
     }
@@ -295,23 +309,35 @@ function MinimapBuilder({ onBack }) {
   const [iconsLoading, setIconsLoading] = useState(false);
   const selectedCellData =
     selectedCell ? grid[selectedCell.r]?.[selectedCell.c] || null : null;
+  const activeQuadrantId = useMemo(() => {
+    if (currentQuadrantIndex === null) return 'default';
+    const current = quadrants[currentQuadrantIndex];
+    return current?.id || 'default';
+  }, [currentQuadrantIndex, quadrants]);
   const hasUnsavedChanges = useMemo(() => {
     if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
     const current = { rows, cols, cellSize, grid };
     return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
   }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
   const setAnnotation = (r, c, data) => {
-    const key = `${r}-${c}`;
+    const key = `${activeQuadrantId}-${r}-${c}`;
+    const payload = { quadrantId: activeQuadrantId, r, c, ...data };
+    const legacyKey = `${r}-${c}`;
     setAnnotations((prev) => {
       const next = prev.filter((a) => a.key !== key);
-      if (data.text || data.icon) next.push({ key, r, c, ...data });
+      if (data.text || data.icon) {
+        next.push({ key, quadrantId: activeQuadrantId, r, c, ...data });
+      }
       return next;
     });
     const ref = doc(db, 'minimapAnnotations', key);
+    const legacyRef = legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
     if (data.text || data.icon) {
-      setDoc(ref, { r, c, ...data }).catch(() => {});
+      setDoc(ref, payload).catch(() => {});
+      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
     } else {
       deleteDoc(ref).catch(() => {});
+      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
     }
   };
 
@@ -356,18 +382,40 @@ function MinimapBuilder({ onBack }) {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
   useEffect(() => {
+    let isCancelled = false;
+    setAnnotations([]);
     const fetchAnnotations = async () => {
       try {
         const snap = await getDocs(collection(db, 'minimapAnnotations'));
-        const list = snap.docs.map((d) => {
+        const map = new Map();
+        snap.docs.forEach((d) => {
           const data = d.data();
-          return { key: `${data.r}-${data.c}`, ...data };
+          if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
+            return;
+          }
+          const quadrantId = data.quadrantId || 'default';
+          const key = `${quadrantId}-${data.r}-${data.c}`;
+          if (!map.has(key) || data.quadrantId) {
+            map.set(key, { key, quadrantId, ...data });
+          }
         });
-        setAnnotations(list);
-      } catch {}
+        const filtered = Array.from(map.values()).filter(
+          (item) => item.quadrantId === activeQuadrantId
+        );
+        if (!isCancelled) {
+          setAnnotations(filtered);
+        }
+      } catch {
+        if (!isCancelled) {
+          setAnnotations([]);
+        }
+      }
     };
     fetchAnnotations();
-  }, []);
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeQuadrantId]);
   useEffect(() => {
     try {
       localStorage.setItem('minimapCustomIcons', JSON.stringify(customIcons));
@@ -1119,13 +1167,14 @@ function MinimapBuilder({ onBack }) {
 
   const saveQuadrant = () => {
     const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
-    const data = { title, rows, cols, cellSize, grid };
+    const data = { id: generateQuadrantId(), title, rows, cols, cellSize, grid };
     setQuadrants((p) => [...p, data]);
     setQuadrantTitle('');
     setCurrentQuadrantIndex(quadrants.length);
     setLoadedQuadrantData({ rows, cols, cellSize, grid });
   };
   const loadQuadrant = (q, idx) => {
+    if (!q) return;
     setRows(q.rows);
     setCols(q.cols);
     setCellSize(q.cellSize);
@@ -1149,8 +1198,10 @@ function MinimapBuilder({ onBack }) {
   };
   const saveQuadrantChanges = () => {
     if (currentQuadrantIndex === null) return;
+    const current = quadrants[currentQuadrantIndex];
+    if (!current) return;
     const data = {
-      title: quadrants[currentQuadrantIndex].title,
+      ...current,
       rows,
       cols,
       cellSize,
@@ -1164,7 +1215,16 @@ function MinimapBuilder({ onBack }) {
     setLoadedQuadrantData({ rows, cols, cellSize, grid });
   };
   const duplicateQuadrant = (i) => {
-    setQuadrants((p) => [...p, { ...p[i], title: `${p[i].title} copia` }]);
+    setQuadrants((p) => {
+      const source = p[i];
+      if (!source) return p;
+      const copy = {
+        ...source,
+        id: generateQuadrantId(),
+        title: `${source.title} copia`,
+      };
+      return [...p, copy];
+    });
   };
   const deleteQuadrant = (i) => {
     setQuadrants((p) => {
@@ -1394,7 +1454,7 @@ function MinimapBuilder({ onBack }) {
                 <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
                 <div className="flex flex-wrap gap-2">
                   {quadrants.map((q, i) => {
-                    const keyId = `quadrant-${i}`;
+                    const keyId = q.id || `quadrant-${i}`;
                     const isSelectedQuadrant = currentQuadrantIndex === i;
                     return (
                       <div
