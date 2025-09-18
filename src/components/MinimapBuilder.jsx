@@ -22,6 +22,8 @@ import {
   deleteDoc,
   query,
   where,
+  writeBatch,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -299,20 +301,37 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   });
   const [quadrantTitle, setQuadrantTitle] = useState('');
-  const [quadrants, setQuadrants] = useState(() => {
-    try {
-      const raw = localStorage.getItem('minimapQuadrants');
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((q) => ({
-        ...q,
-        id: q?.id || generateQuadrantId(),
-      }));
-    } catch {
-      return [];
+  const [quadrants, setQuadrants] = useState([]);
+  const localQuadrantsRef = useRef(null);
+  if (localQuadrantsRef.current === null) {
+    if (typeof window === 'undefined') {
+      localQuadrantsRef.current = [];
+    } else {
+      try {
+        const raw = window.localStorage.getItem('minimapQuadrants');
+        if (!raw) {
+          localQuadrantsRef.current = [];
+        } else {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            localQuadrantsRef.current = parsed.map((q, index) => ({
+              ...q,
+              id: q?.id || generateQuadrantId(),
+              order:
+                typeof q?.order === 'number'
+                  ? q.order
+                  : index,
+            }));
+          } else {
+            localQuadrantsRef.current = [];
+          }
+        }
+      } catch {
+        localQuadrantsRef.current = [];
+      }
     }
-  });
+  }
+  const quadrantsMigrationRef = useRef(false);
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
   const [emojiGroups, setEmojiGroups] = useState(null);
@@ -461,6 +480,128 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
   useEffect(() => {
+    const quadrantsRef = collection(db, 'minimapQuadrants');
+    let isUnmounted = false;
+
+    const migrateLocalQuadrants = () => {
+      const localQuadrants = Array.isArray(localQuadrantsRef.current)
+        ? localQuadrantsRef.current
+        : [];
+      if (localQuadrants.length === 0) {
+        return;
+      }
+      const runMigration = async () => {
+        try {
+          const batch = writeBatch(db);
+          localQuadrants.forEach((item, index) => {
+            const rowsValue = Number.isInteger(item?.rows) ? item.rows : 8;
+            const colsValue = Number.isInteger(item?.cols) ? item.cols : 12;
+            const cellSizeValue = Number.isFinite(item?.cellSize)
+              ? item.cellSize
+              : 48;
+            const gridValue = Array.isArray(item?.grid)
+              ? item.grid
+              : buildGrid(rowsValue, colsValue);
+            const orderValue =
+              typeof item?.order === 'number' ? item.order : index;
+            const docId = item?.id || generateQuadrantId();
+            batch.set(doc(db, 'minimapQuadrants', docId), {
+              title: item?.title || `Cuadrante ${index + 1}`,
+              rows: rowsValue,
+              cols: colsValue,
+              cellSize: cellSizeValue,
+              grid: gridValue,
+              order: orderValue,
+              updatedAt: serverTimestamp(),
+            });
+          });
+          await batch.commit();
+          localQuadrantsRef.current = [];
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.removeItem('minimapQuadrants');
+            } catch {}
+          }
+        } catch (error) {
+          console.error('Error migrating minimap quadrants', error);
+        }
+      };
+      runMigration();
+    };
+
+    const unsubscribe = onSnapshot(
+      quadrantsRef,
+      (snapshot) => {
+        if (isUnmounted) return;
+        const docsData = [];
+        snapshot.forEach((docSnap) => {
+          docsData.push({ id: docSnap.id, data: docSnap.data() });
+        });
+        if (docsData.length === 0) {
+          if (!quadrantsMigrationRef.current) {
+            quadrantsMigrationRef.current = true;
+            migrateLocalQuadrants();
+          }
+          setQuadrants([]);
+          return;
+        }
+        quadrantsMigrationRef.current = true;
+        const normalized = docsData
+          .map(({ id, data }, index) => {
+            const rowsValue = Number.isInteger(data?.rows) ? data.rows : 8;
+            const colsValue = Number.isInteger(data?.cols) ? data.cols : 12;
+            const cellSizeValue = Number.isFinite(data?.cellSize)
+              ? data.cellSize
+              : 48;
+            const gridValue = Array.isArray(data?.grid)
+              ? data.grid
+              : buildGrid(rowsValue, colsValue);
+            const orderValue =
+              typeof data?.order === 'number' ? data.order : index;
+            return {
+              id,
+              title: data?.title || `Cuadrante ${index + 1}`,
+              rows: rowsValue,
+              cols: colsValue,
+              cellSize: cellSizeValue,
+              grid: gridValue,
+              order: orderValue,
+              updatedAt: data?.updatedAt || null,
+            };
+          })
+          .sort((a, b) => {
+            const orderA = Number.isFinite(a.order) ? a.order : 0;
+            const orderB = Number.isFinite(b.order) ? b.order : 0;
+            if (orderA !== orderB) return orderA - orderB;
+            const titleA = a.title || '';
+            const titleB = b.title || '';
+            return titleA.localeCompare(titleB);
+          });
+        setQuadrants(normalized);
+        if (localQuadrantsRef.current && localQuadrantsRef.current.length > 0) {
+          localQuadrantsRef.current = [];
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.removeItem('minimapQuadrants');
+            } catch {}
+          }
+        }
+      },
+      (error) => {
+        if (!isUnmounted) {
+          console.error('Error fetching minimap quadrants', error);
+        }
+      }
+    );
+
+    return () => {
+      isUnmounted = true;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, []);
+  useEffect(() => {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
   useEffect(() => {
@@ -561,11 +702,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       );
     } catch {}
   }, [cellStylePresets]);
-  useEffect(() => {
-    try {
-      localStorage.setItem('minimapQuadrants', JSON.stringify(quadrants));
-    } catch {}
-  }, [quadrants]);
   useEffect(() => {
     if (shapeEdit) {
       const all = [];
@@ -1397,88 +1533,117 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   };
 
-  const saveQuadrant = () => {
+  const getNextQuadrantOrder = () => {
+    if (!Array.isArray(quadrants) || quadrants.length === 0) {
+      return 0;
+    }
+    let maxOrder = -1;
+    quadrants.forEach((q, index) => {
+      const value = Number.isFinite(q?.order) ? q.order : index;
+      if (value > maxOrder) {
+        maxOrder = value;
+      }
+    });
+    return maxOrder + 1;
+  };
+  const saveQuadrant = async () => {
     const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
     const newQuadrantId = generateQuadrantId();
-    const data = { id: newQuadrantId, title, rows, cols, cellSize, grid };
     const newQuadrantIndex = quadrants.length;
-    setQuadrants((p) => [...p, data]);
-    setQuadrantTitle('');
-    setAnnotations((prev) => {
-      if (!Array.isArray(prev) || prev.length === 0) return prev;
-      let hasChanges = false;
-      const next = prev.map((ann) => {
-        if (!ann) return ann;
-        const annQuadrant = ann?.quadrantId || 'default';
-        if (annQuadrant !== 'default') {
-          return ann;
-        }
-        const { r, c } = ann;
-        if (!Number.isInteger(r) || !Number.isInteger(c)) {
-          return ann;
-        }
-        const newKey = `${newQuadrantId}-${r}-${c}`;
-        if (ann.key === newKey && ann.quadrantId === newQuadrantId) {
-          return ann;
-        }
-        hasChanges = true;
-        return { ...ann, key: newKey, quadrantId: newQuadrantId };
-      });
-      return hasChanges ? next : prev;
-    });
-    setCurrentQuadrantIndex(newQuadrantIndex);
-    setLoadedQuadrantData({ rows, cols, cellSize, grid });
-    const migrateDefaultAnnotations = async () => {
-      try {
-        const annotationsRef = collection(db, 'minimapAnnotations');
-        const snapshot = await getDocs(annotationsRef);
-        const writes = [];
-        const updatedKeys = new Set();
-        const pendingDeletes = new Set();
-        const enqueueDelete = (id) => {
-          if (!id || pendingDeletes.has(id)) return;
-          pendingDeletes.add(id);
-          writes.push(deleteDoc(doc(db, 'minimapAnnotations', id)));
-        };
-        snapshot.forEach((docSnap) => {
-          const dataDoc = docSnap.data();
-          const hasQuadrantField = Object.prototype.hasOwnProperty.call(
-            dataDoc,
-            'quadrantId'
-          );
-          const rawQuadrantId = hasQuadrantField ? dataDoc?.quadrantId : null;
-          if (hasQuadrantField && rawQuadrantId && rawQuadrantId !== 'default') {
-            return;
+    const payload = {
+      title,
+      rows,
+      cols,
+      cellSize,
+      grid,
+      order: getNextQuadrantOrder(),
+      updatedAt: serverTimestamp(),
+    };
+    try {
+      await setDoc(doc(db, 'minimapQuadrants', newQuadrantId), payload);
+      setQuadrantTitle('');
+      setAnnotations((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+        let hasChanges = false;
+        const next = prev.map((ann) => {
+          if (!ann) return ann;
+          const annQuadrant = ann?.quadrantId || 'default';
+          if (annQuadrant !== 'default') {
+            return ann;
           }
-          const { r, c } = dataDoc || {};
+          const { r, c } = ann;
           if (!Number.isInteger(r) || !Number.isInteger(c)) {
-            return;
+            return ann;
           }
           const newKey = `${newQuadrantId}-${r}-${c}`;
-          if (!updatedKeys.has(newKey)) {
-            updatedKeys.add(newKey);
-            writes.push(
-              setDoc(doc(db, 'minimapAnnotations', newKey), {
-                ...dataDoc,
-                quadrantId: newQuadrantId,
-                key: newKey,
-              })
-            );
+          if (ann.key === newKey && ann.quadrantId === newQuadrantId) {
+            return ann;
           }
-          enqueueDelete(docSnap.id);
-          const legacyKey = `${r}-${c}`;
-          if (legacyKey !== docSnap.id) {
-            enqueueDelete(legacyKey);
-          }
+          hasChanges = true;
+          return { ...ann, key: newKey, quadrantId: newQuadrantId };
         });
-        if (writes.length > 0) {
-          await Promise.all(writes);
+        return hasChanges ? next : prev;
+      });
+      setCurrentQuadrantIndex(newQuadrantIndex);
+      setLoadedQuadrantData({ rows, cols, cellSize, grid });
+      const migrateDefaultAnnotations = async () => {
+        try {
+          const annotationsRef = collection(db, 'minimapAnnotations');
+          const snapshot = await getDocs(annotationsRef);
+          const writes = [];
+          const updatedKeys = new Set();
+          const pendingDeletes = new Set();
+          const enqueueDelete = (id) => {
+            if (!id || pendingDeletes.has(id)) return;
+            pendingDeletes.add(id);
+            writes.push(deleteDoc(doc(db, 'minimapAnnotations', id)));
+          };
+          snapshot.forEach((docSnap) => {
+            const dataDoc = docSnap.data();
+            const hasQuadrantField = Object.prototype.hasOwnProperty.call(
+              dataDoc,
+              'quadrantId'
+            );
+            const rawQuadrantId = hasQuadrantField ? dataDoc?.quadrantId : null;
+            if (
+              hasQuadrantField &&
+              rawQuadrantId &&
+              rawQuadrantId !== 'default'
+            ) {
+              return;
+            }
+            const { r, c } = dataDoc || {};
+            if (!Number.isInteger(r) || !Number.isInteger(c)) {
+              return;
+            }
+            const newKey = `${newQuadrantId}-${r}-${c}`;
+            if (!updatedKeys.has(newKey)) {
+              updatedKeys.add(newKey);
+              writes.push(
+                setDoc(doc(db, 'minimapAnnotations', newKey), {
+                  ...dataDoc,
+                  quadrantId: newQuadrantId,
+                  key: newKey,
+                })
+              );
+            }
+            enqueueDelete(docSnap.id);
+            const legacyKey = `${r}-${c}`;
+            if (legacyKey !== docSnap.id) {
+              enqueueDelete(legacyKey);
+            }
+          });
+          if (writes.length > 0) {
+            await Promise.all(writes);
+          }
+        } catch (error) {
+          console.error('Error migrating default minimap annotations', error);
         }
-      } catch (error) {
-        console.error('Error migrating default minimap annotations', error);
-      }
-    };
-    migrateDefaultAnnotations();
+      };
+      migrateDefaultAnnotations();
+    } catch (error) {
+      console.error('Error saving minimap quadrant', error);
+    }
   };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
@@ -1503,113 +1668,125 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setLoadedQuadrantData(null);
     setAnnotations([]);
   };
-  const saveQuadrantChanges = () => {
+  const saveQuadrantChanges = async () => {
     if (currentQuadrantIndex === null) return;
     const current = quadrants[currentQuadrantIndex];
-    if (!current) return;
-    const data = {
-      ...current,
+    if (!current?.id) return;
+    const orderValue = Number.isFinite(current?.order)
+      ? current.order
+      : currentQuadrantIndex;
+    const payload = {
+      title: current?.title || `Cuadrante ${currentQuadrantIndex + 1}`,
       rows,
       cols,
       cellSize,
       grid,
+      order: orderValue,
+      updatedAt: serverTimestamp(),
     };
-    setQuadrants((prev) => {
-      const next = prev.slice();
-      next[currentQuadrantIndex] = data;
-      return next;
-    });
-    setLoadedQuadrantData({ rows, cols, cellSize, grid });
-  };
-  const duplicateQuadrant = (i) => {
-    let sourceId = null;
-    let copyId = null;
-    setQuadrants((p) => {
-      const source = p[i];
-      if (!source) return p;
-      sourceId = source.id || 'default';
-      const copy = {
-        ...source,
-        id: generateQuadrantId(),
-        title: `${source.title} copia`,
-      };
-      copyId = copy.id;
-      return [...p, copy];
-    });
-    if (!sourceId || !copyId) {
-      return;
-    }
-    if (sourceId === activeQuadrantId) {
-      setAnnotations((prev) => {
-        const clones = prev
-          .filter((ann) => (ann?.quadrantId || 'default') === sourceId)
-          .map((ann) => {
-            if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
-              return null;
-            }
-            const newKey = `${copyId}-${ann.r}-${ann.c}`;
-            return {
-              ...ann,
-              key: newKey,
-              quadrantId: copyId,
-            };
-          })
-          .filter(Boolean);
-        if (clones.length === 0) {
-          return prev;
-        }
-        return [...prev, ...clones];
+    try {
+      await setDoc(doc(db, 'minimapQuadrants', current.id), payload, {
+        merge: true,
       });
+      setLoadedQuadrantData({ rows, cols, cellSize, grid });
+    } catch (error) {
+      console.error('Error saving minimap quadrant changes', error);
     }
-    const duplicateAnnotations = async () => {
-      try {
-        const annotationsRef = collection(db, 'minimapAnnotations');
-        const annotationsQuery = query(
-          annotationsRef,
-          where('quadrantId', '==', sourceId)
-        );
-        const snap = await getDocs(annotationsQuery);
-        const writes = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
-            return;
-          }
-          const newKey = `${copyId}-${data.r}-${data.c}`;
-          writes.push(
-            setDoc(doc(db, 'minimapAnnotations', newKey), {
-              ...data,
-              quadrantId: copyId,
-              key: newKey,
-            })
-          );
-        });
-        await Promise.all(writes);
-      } catch (error) {
-        console.error('Error duplicating minimap annotations', error);
-      }
-    };
-    duplicateAnnotations();
   };
-  const deleteQuadrant = (i) => {
+  const duplicateQuadrant = async (i) => {
+    const source = quadrants[i];
+    if (!source?.id) return;
+    const sourceId = source.id;
+    const copyId = generateQuadrantId();
+    const title = `${source?.title || `Cuadrante ${i + 1}`} copia`;
+    const payload = {
+      title,
+      rows: Number.isInteger(source?.rows) ? source.rows : rows,
+      cols: Number.isInteger(source?.cols) ? source.cols : cols,
+      cellSize: Number.isFinite(source?.cellSize)
+        ? source.cellSize
+        : cellSize,
+      grid: Array.isArray(source?.grid) ? source.grid : grid,
+      order: getNextQuadrantOrder(),
+      updatedAt: serverTimestamp(),
+    };
+    try {
+      await setDoc(doc(db, 'minimapQuadrants', copyId), payload);
+      if (sourceId === activeQuadrantId) {
+        setAnnotations((prev) => {
+          const clones = prev
+            .filter((ann) => (ann?.quadrantId || 'default') === sourceId)
+            .map((ann) => {
+              if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
+                return null;
+              }
+              const newKey = `${copyId}-${ann.r}-${ann.c}`;
+              return {
+                ...ann,
+                key: newKey,
+                quadrantId: copyId,
+              };
+            })
+            .filter(Boolean);
+          if (clones.length === 0) {
+            return prev;
+          }
+          return [...prev, ...clones];
+        });
+      }
+      const duplicateAnnotations = async () => {
+        try {
+          const annotationsRef = collection(db, 'minimapAnnotations');
+          const annotationsQuery = query(
+            annotationsRef,
+            where('quadrantId', '==', sourceId)
+          );
+          const snap = await getDocs(annotationsQuery);
+          const writes = [];
+          snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
+              return;
+            }
+            const newKey = `${copyId}-${data.r}-${data.c}`;
+            writes.push(
+              setDoc(doc(db, 'minimapAnnotations', newKey), {
+                ...data,
+                quadrantId: copyId,
+                key: newKey,
+              })
+            );
+          });
+          await Promise.all(writes);
+        } catch (error) {
+          console.error('Error duplicating minimap annotations', error);
+        }
+      };
+      await duplicateAnnotations();
+    } catch (error) {
+      console.error('Error duplicating minimap quadrant', error);
+    }
+  };
+  const deleteQuadrant = async (i) => {
     const removedQuadrant = quadrants[i] || null;
     const removedId = removedQuadrant?.id;
-    setQuadrants((p) => {
-      const next = p.filter((_, idx) => idx !== i);
-      if (currentQuadrantIndex === i) {
-        setCurrentQuadrantIndex(null);
-        setLoadedQuadrantData(null);
-      } else if (currentQuadrantIndex > i) {
-        setCurrentQuadrantIndex(currentQuadrantIndex - 1);
-      }
-      return next;
-    });
+    if (currentQuadrantIndex === i) {
+      setCurrentQuadrantIndex(null);
+      setLoadedQuadrantData(null);
+    } else if (currentQuadrantIndex > i) {
+      setCurrentQuadrantIndex(currentQuadrantIndex - 1);
+    }
     if (!removedId) {
       return;
     }
     setAnnotations((prev) =>
       prev.filter((ann) => (ann?.quadrantId || 'default') !== removedId)
     );
+    try {
+      await deleteDoc(doc(db, 'minimapQuadrants', removedId));
+    } catch (error) {
+      console.error('Error deleting minimap quadrant', error);
+    }
     const cleanupAnnotations = async () => {
       try {
         const annotationsRef = collection(db, 'minimapAnnotations');
