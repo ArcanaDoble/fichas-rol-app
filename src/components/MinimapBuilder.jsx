@@ -1952,8 +1952,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         }
       };
       migrateDefaultAnnotations();
-    }
-  };
+    };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
     setRows(q.rows);
