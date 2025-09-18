@@ -1407,6 +1407,8 @@ function MinimapBuilder({ onBack }) {
     duplicateAnnotations();
   };
   const deleteQuadrant = (i) => {
+    const removedQuadrant = quadrants[i] || null;
+    const removedId = removedQuadrant?.id;
     setQuadrants((p) => {
       const next = p.filter((_, idx) => idx !== i);
       if (currentQuadrantIndex === i) {
@@ -1417,6 +1419,30 @@ function MinimapBuilder({ onBack }) {
       }
       return next;
     });
+    if (!removedId) {
+      return;
+    }
+    setAnnotations((prev) =>
+      prev.filter((ann) => (ann?.quadrantId || 'default') !== removedId)
+    );
+    const cleanupAnnotations = async () => {
+      try {
+        const annotationsRef = collection(db, 'minimapAnnotations');
+        const annotationsQuery = query(
+          annotationsRef,
+          where('quadrantId', '==', removedId)
+        );
+        const snapshot = await getDocs(annotationsQuery);
+        const deletions = [];
+        snapshot.forEach((docSnap) => {
+          deletions.push(deleteDoc(docSnap.ref));
+        });
+        await Promise.all(deletions);
+      } catch (error) {
+        // ignore cleanup errors to avoid interrupting the flow
+      }
+    };
+    cleanupAnnotations();
   };
 
   const effectiveReadable = readableMode || isMobile;
