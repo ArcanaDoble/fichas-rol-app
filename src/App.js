@@ -3545,10 +3545,10 @@ function App() {
             {/* Botón de minimapa */}
             <Boton
               onClick={() => setShowPlayerMinimap(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white w-10 h-10 rounded-lg flex items-center justify-center sm:w-12 sm:h-12"
+              className="bg-teal-600 hover:bg-teal-700 text-white text-lg sm:text-xl w-10 h-10 rounded-lg flex items-center justify-center sm:w-12 sm:h-12"
               title="Minimapa"
             >
-              <FiMap className="text-lg sm:text-xl" />
+              ⌚️
             </Boton>
             {/* Botón de Mapa de Batalla */}
             <Boton
