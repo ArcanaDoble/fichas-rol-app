@@ -3336,7 +3336,12 @@ function App() {
           </div>
         }
       >
-        <MinimapBuilder onBack={() => setShowPlayerMinimap(false)} />
+        <MinimapBuilder
+          mode="player"
+          backLabel="Volver a Ficha"
+          showNewBadge={false}
+          onBack={() => setShowPlayerMinimap(false)}
+        />
       </React.Suspense>
     );
   }
@@ -5294,7 +5299,10 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'minimap') {
     return (
       <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
-        <MinimapBuilder onBack={() => setChosenView(null)} />
+        <MinimapBuilder
+          mode="master"
+          onBack={() => setChosenView(null)}
+        />
       </React.Suspense>
     );
   }

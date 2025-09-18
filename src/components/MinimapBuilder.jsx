@@ -257,7 +257,11 @@ const buildGrid = (rows, cols, prev = []) =>
     )
   );
 
-function MinimapBuilder({ onBack }) {
+function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
+  const isPlayerMode = mode === 'player';
+  const effectiveBackLabel = backLabel || L.back;
+  const shouldShowNewBadge =
+    typeof showNewBadge === 'boolean' ? showNewBadge : !isPlayerMode;
   const [isMobile, setIsMobile] = useState(false);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
@@ -1682,13 +1686,15 @@ function MinimapBuilder({ onBack }) {
             className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
             onClick={onBack}
           >
-            {L.arrow} {L.back}
+            {L.arrow} {effectiveBackLabel}
           </Boton>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold">Minimapa</h1>
-            <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-              {L.new}
-            </span>
+            {shouldShowNewBadge && (
+              <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+                {L.new}
+              </span>
+            )}
           </div>
         </div>
         <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
@@ -2846,5 +2852,10 @@ function MinimapBuilder({ onBack }) {
   );
 }
 
-MinimapBuilder.propTypes = { onBack: PropTypes.func.isRequired };
+MinimapBuilder.propTypes = {
+  onBack: PropTypes.func.isRequired,
+  backLabel: PropTypes.string,
+  showNewBadge: PropTypes.bool,
+  mode: PropTypes.oneOf(['master', 'player']),
+};
 export default MinimapBuilder;
