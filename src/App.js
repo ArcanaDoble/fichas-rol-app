@@ -535,6 +535,8 @@ function App() {
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  // Minimapa para jugadores
+  const [showPlayerMinimap, setShowPlayerMinimap] = useState(false);
   // Mapa de Batalla para jugadores
   const [showPlayerBattleMap, setShowPlayerBattleMap] = useState(false);
   // Páginas para el Mapa de Batalla
@@ -3324,6 +3326,20 @@ function App() {
       />
     );
   }
+  // MINIMAPA PARA JUGADORES
+  if (userType === 'player' && nameEntered && showPlayerMinimap) {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
+            Cargando Minimapa…
+          </div>
+        }
+      >
+        <MinimapBuilder onBack={() => setShowPlayerMinimap(false)} />
+      </React.Suspense>
+    );
+  }
   // MAPA DE BATALLA PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerBattleMap) {
     // Usar la página configurada como visible para jugadores por el Master
@@ -3525,6 +3541,14 @@ function App() {
               className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
             >
               ⚡
+            </Boton>
+            {/* Botón de minimapa */}
+            <Boton
+              onClick={() => setShowPlayerMinimap(true)}
+              className="bg-teal-600 hover:bg-teal-700 text-white text-lg sm:text-xl w-10 h-10 rounded-lg flex items-center justify-center sm:w-12 sm:h-12"
+              title="Minimapa"
+            >
+              ⌚️
             </Boton>
             {/* Botón de Mapa de Batalla */}
             <Boton
