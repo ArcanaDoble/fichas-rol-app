@@ -1289,11 +1289,86 @@ function MinimapBuilder({ onBack }) {
 
   const saveQuadrant = () => {
     const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
-    const data = { id: generateQuadrantId(), title, rows, cols, cellSize, grid };
+    const newQuadrantId = generateQuadrantId();
+    const data = { id: newQuadrantId, title, rows, cols, cellSize, grid };
+    const newQuadrantIndex = quadrants.length;
     setQuadrants((p) => [...p, data]);
     setQuadrantTitle('');
-    setCurrentQuadrantIndex(quadrants.length);
+    setAnnotations((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      let hasChanges = false;
+      const next = prev.map((ann) => {
+        if (!ann) return ann;
+        const annQuadrant = ann?.quadrantId || 'default';
+        if (annQuadrant !== 'default') {
+          return ann;
+        }
+        const { r, c } = ann;
+        if (!Number.isInteger(r) || !Number.isInteger(c)) {
+          return ann;
+        }
+        const newKey = `${newQuadrantId}-${r}-${c}`;
+        if (ann.key === newKey && ann.quadrantId === newQuadrantId) {
+          return ann;
+        }
+        hasChanges = true;
+        return { ...ann, key: newKey, quadrantId: newQuadrantId };
+      });
+      return hasChanges ? next : prev;
+    });
+    setCurrentQuadrantIndex(newQuadrantIndex);
     setLoadedQuadrantData({ rows, cols, cellSize, grid });
+    const migrateDefaultAnnotations = async () => {
+      try {
+        const annotationsRef = collection(db, 'minimapAnnotations');
+        const snapshot = await getDocs(annotationsRef);
+        const writes = [];
+        const updatedKeys = new Set();
+        const pendingDeletes = new Set();
+        const enqueueDelete = (id) => {
+          if (!id || pendingDeletes.has(id)) return;
+          pendingDeletes.add(id);
+          writes.push(deleteDoc(doc(db, 'minimapAnnotations', id)));
+        };
+        snapshot.forEach((docSnap) => {
+          const dataDoc = docSnap.data();
+          const hasQuadrantField = Object.prototype.hasOwnProperty.call(
+            dataDoc,
+            'quadrantId'
+          );
+          const rawQuadrantId = hasQuadrantField ? dataDoc?.quadrantId : null;
+          if (hasQuadrantField && rawQuadrantId && rawQuadrantId !== 'default') {
+            return;
+          }
+          const { r, c } = dataDoc || {};
+          if (!Number.isInteger(r) || !Number.isInteger(c)) {
+            return;
+          }
+          const newKey = `${newQuadrantId}-${r}-${c}`;
+          if (!updatedKeys.has(newKey)) {
+            updatedKeys.add(newKey);
+            writes.push(
+              setDoc(doc(db, 'minimapAnnotations', newKey), {
+                ...dataDoc,
+                quadrantId: newQuadrantId,
+                key: newKey,
+              })
+            );
+          }
+          enqueueDelete(docSnap.id);
+          const legacyKey = `${r}-${c}`;
+          if (legacyKey !== docSnap.id) {
+            enqueueDelete(legacyKey);
+          }
+        });
+        if (writes.length > 0) {
+          await Promise.all(writes);
+        }
+      } catch (error) {
+        console.error('Error migrating default minimap annotations', error);
+      }
+    };
+    migrateDefaultAnnotations();
   };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
