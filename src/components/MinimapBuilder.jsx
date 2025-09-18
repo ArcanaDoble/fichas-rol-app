@@ -53,6 +53,7 @@ const L = {
   none: 'Ninguno',
   icon: 'Icono',
   iconAdd: 'A\u00F1adir icono personalizado',
+  iconDelete: 'Eliminar icono',
   annotations: 'Anotaciones',
   effect: 'Efecto',
   effectColor: 'Color del efecto',
@@ -92,21 +93,38 @@ const generateQuadrantId = () => {
   return `quadrant-${Date.now().toString(36)}-${rand}`;
 };
 
-function IconThumb({ src, selected, onClick, label }) {
+function IconThumb({ src, selected, onClick, label, onDelete }) {
+  const DeleteIcon = LucideIcons.Trash2 || LucideIcons.X || null;
   return (
-    <button
-      type="button"
-      title={label || ''}
-      onClick={onClick}
-      className={`relative w-14 h-14 rounded-lg overflow-hidden border transition ${selected ? 'border-green-400 ring-2 ring-green-400' : 'border-gray-600 hover:border-gray-400'}`}
-    >
-      <img
-        loading="lazy"
-        src={src}
-        alt={label || 'icon'}
-        className="w-full h-full object-contain bg-gray-800"
-      />
-    </button>
+    <div className="relative inline-block">
+      <button
+        type="button"
+        title={label || ''}
+        onClick={onClick}
+        className={`relative w-14 h-14 rounded-lg overflow-hidden border transition ${selected ? 'border-green-400 ring-2 ring-green-400' : 'border-gray-600 hover:border-gray-400'}`}
+      >
+        <img
+          loading="lazy"
+          src={src}
+          alt={label || 'icon'}
+          className="w-full h-full object-contain bg-gray-800"
+        />
+      </button>
+      {onDelete && DeleteIcon && (
+        <button
+          type="button"
+          aria-label={L.iconDelete}
+          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-1 ring-black/40 transition hover:bg-red-500"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <DeleteIcon className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   );
 }
 IconThumb.propTypes = {
@@ -114,6 +132,7 @@ IconThumb.propTypes = {
   selected: PropTypes.bool,
   onClick: PropTypes.func,
   label: PropTypes.string,
+  onDelete: PropTypes.func,
 };
 
 const QuadrantPreview = ({ q, size = 36 }) => {
@@ -1811,6 +1830,14 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         setCustomIcons((p) => [...p, fr.result]);
     }
   };
+  const handleRemoveCustomIcon = (index) => {
+    setCustomIcons((prev) => {
+      if (!Array.isArray(prev) || index < 0 || index >= prev.length) {
+        return prev;
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const getNextQuadrantOrder = () => {
     if (!Array.isArray(quadrants) || quadrants.length === 0) {
@@ -3250,6 +3277,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                   selected={selected.icon === ico.url}
                                   onClick={() =>
                                     updateCell(selectedCells, { icon: ico.url })
+                                  }
+                                  onDelete={
+                                    iconSource === 'personalizados'
+                                      ? () => handleRemoveCustomIcon(i)
+                                      : undefined
                                   }
                                 />
                               ))}
