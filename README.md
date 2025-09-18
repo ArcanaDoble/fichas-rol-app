@@ -1683,6 +1683,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ## Novedades: Minimapa responsive (v2.4.43)
 
 - Nuevo constructor de Minimapa en modo Máster.
+- Iconos personalizados y presets de estilo se sincronizan ahora a través del documento `minimapSettings/customization` en Firestore para que máster y jugadores compartan los mismos recursos visuales.
 - Guardado protegido: aviso persistente de cambios sin guardar y confirmación antes de cambiar o eliminar cuadrantes activos.
 - Agrega celdas desde la periferia con botones cuadrados de borde discontinuo y “+”, ahora con mayor separación del cuadrante para evitar solapes visuales. Al pasar el ratón, se resaltan en verde.
 - Agrega celdas individuales en huecos adyacentes a celdas activas mediante “+” interno.

@@ -252,6 +252,40 @@ const defaultCell = () => ({
   effect: { type: 'none', color: '#ffff00' },
   active: true,
 });
+const sanitizeCustomIcons = (icons) => {
+  if (!Array.isArray(icons)) return [];
+  return icons.filter((icon) => typeof icon === 'string' && icon);
+};
+const sanitizeCellStylePresets = (presets) => {
+  if (!Array.isArray(presets)) return [];
+  return presets
+    .filter((preset) => preset && typeof preset === 'object')
+    .map((preset) => ({ ...preset }));
+};
+const readLocalCustomization = () => {
+  const result = {
+    customIcons: [],
+    cellStylePresets: [],
+  };
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return result;
+  }
+  try {
+    const rawIcons = window.localStorage.getItem('minimapCustomIcons');
+    if (rawIcons) {
+      result.customIcons = sanitizeCustomIcons(JSON.parse(rawIcons));
+    }
+  } catch {}
+  try {
+    const rawPresets = window.localStorage.getItem('minimapCellStylePresets');
+    if (rawPresets) {
+      result.cellStylePresets = sanitizeCellStylePresets(
+        JSON.parse(rawPresets)
+      );
+    }
+  } catch {}
+  return result;
+};
 const buildGrid = (rows, cols, prev = []) =>
   Array.from({ length: rows }, (_, r) =>
     Array.from({ length: cols }, (_, c) =>
@@ -284,22 +318,17 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
-  const [customIcons, setCustomIcons] = useState(() => {
-    try {
-      const raw = localStorage.getItem('minimapCustomIcons');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+  const [customIcons, setCustomIcons] = useState([]);
+  const [cellStylePresets, setCellStylePresets] = useState([]);
+  const customizationDocRef = useMemo(
+    () => doc(db, 'minimapSettings', 'customization'),
+    [db]
+  );
+  const customizationSnapshotRef = useRef({
+    icons: JSON.stringify([]),
+    presets: JSON.stringify([]),
   });
-  const [cellStylePresets, setCellStylePresets] = useState(() => {
-    try {
-      const raw = localStorage.getItem('minimapCellStylePresets');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [isCustomizationReady, setCustomizationReady] = useState(false);
   const [quadrantTitle, setQuadrantTitle] = useState('');
   const [quadrants, setQuadrants] = useState([]);
   const localQuadrantsRef = useRef(null);
@@ -690,18 +719,112 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     };
   }, [activeQuadrantId, migrateLegacyAnnotations]);
   useEffect(() => {
-    try {
-      localStorage.setItem('minimapCustomIcons', JSON.stringify(customIcons));
-    } catch {}
-  }, [customIcons]);
+    let isUnmounted = false;
+    const fallback = readLocalCustomization();
+    const unsubscribe = onSnapshot(
+      customizationDocRef,
+      (snapshot) => {
+        if (isUnmounted) return;
+        let nextIcons = [];
+        let nextPresets = [];
+        if (snapshot.exists()) {
+          const data = snapshot.data() || {};
+          nextIcons = sanitizeCustomIcons(data.customIcons);
+          nextPresets = sanitizeCellStylePresets(data.cellStylePresets);
+        } else {
+          nextIcons = fallback.customIcons;
+          nextPresets = fallback.cellStylePresets;
+          setDoc(
+            customizationDocRef,
+            {
+              customIcons: nextIcons,
+              cellStylePresets: nextPresets,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          ).catch((error) => {
+            console.error('Error initializing minimap customization', error);
+          });
+        }
+        const iconsStr = JSON.stringify(nextIcons);
+        const presetsStr = JSON.stringify(nextPresets);
+        customizationSnapshotRef.current = {
+          icons: iconsStr,
+          presets: presetsStr,
+        };
+        setCustomIcons((prev) => {
+          const prevStr = JSON.stringify(prev);
+          if (prevStr === iconsStr) {
+            return prev;
+          }
+          return nextIcons;
+        });
+        setCellStylePresets((prev) => {
+          const prevStr = JSON.stringify(prev);
+          if (prevStr === presetsStr) {
+            return prev;
+          }
+          return nextPresets;
+        });
+        setCustomizationReady(true);
+      },
+      (error) => {
+        if (!isUnmounted) {
+          console.error('Error fetching minimap customization', error);
+        }
+      }
+    );
+    return () => {
+      isUnmounted = true;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [customizationDocRef]);
   useEffect(() => {
+    if (!isCustomizationReady || typeof window === 'undefined') return;
+    const sanitizedIcons = sanitizeCustomIcons(customIcons);
+    const sanitizedPresets = sanitizeCellStylePresets(cellStylePresets);
     try {
-      localStorage.setItem(
-        'minimapCellStylePresets',
-        JSON.stringify(cellStylePresets)
+      window.localStorage.setItem(
+        'minimapCustomIcons',
+        JSON.stringify(sanitizedIcons)
       );
     } catch {}
-  }, [cellStylePresets]);
+    try {
+      window.localStorage.setItem(
+        'minimapCellStylePresets',
+        JSON.stringify(sanitizedPresets)
+      );
+    } catch {}
+  }, [customIcons, cellStylePresets, isCustomizationReady]);
+  useEffect(() => {
+    if (!isCustomizationReady) return;
+    const sanitizedIcons = sanitizeCustomIcons(customIcons);
+    const sanitizedPresets = sanitizeCellStylePresets(cellStylePresets);
+    const iconsStr = JSON.stringify(sanitizedIcons);
+    const presetsStr = JSON.stringify(sanitizedPresets);
+    const last = customizationSnapshotRef.current;
+    if (iconsStr === last.icons && presetsStr === last.presets) {
+      return;
+    }
+    setDoc(
+      customizationDocRef,
+      {
+        customIcons: sanitizedIcons,
+        cellStylePresets: sanitizedPresets,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) => {
+      console.error('Error saving minimap customization', error);
+    });
+  }, [
+    customIcons,
+    cellStylePresets,
+    isCustomizationReady,
+    customizationDocRef,
+  ]);
   useEffect(() => {
     if (shapeEdit) {
       const all = [];
