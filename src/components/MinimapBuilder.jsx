@@ -252,6 +252,155 @@ const defaultCell = () => ({
   effect: { type: 'none', color: '#ffff00' },
   active: true,
 });
+
+const VALID_BORDER_STYLES = new Set(['solid', 'dashed', 'dotted', 'none']);
+const VALID_EFFECT_TYPES = new Set([
+  'none',
+  'glow',
+  'pulse',
+  'bounce',
+  'spin',
+  'shake',
+  'sparkle',
+]);
+
+const clampNumber = (value, min, max, fallback) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  const rounded = Math.round(num);
+  if (rounded < min) return min;
+  if (rounded > max) return max;
+  return rounded;
+};
+
+const sanitizeEffect = (value, fallback) => {
+  const base = fallback || defaultCell().effect;
+  if (!value || typeof value !== 'object') {
+    return { ...base };
+  }
+  const type =
+    typeof value.type === 'string' && VALID_EFFECT_TYPES.has(value.type)
+      ? value.type
+      : 'none';
+  const color =
+    typeof value.color === 'string' && value.color.trim()
+      ? value.color
+      : base.color;
+  if (type === 'none') {
+    return { type: 'none', color: base.color };
+  }
+  return { type, color };
+};
+
+const sanitizeCell = (cell) => {
+  const base = defaultCell();
+  if (!cell || typeof cell !== 'object') {
+    return { ...base };
+  }
+  const fill =
+    typeof cell.fill === 'string' && cell.fill.trim() ? cell.fill : base.fill;
+  const borderColor =
+    typeof cell.borderColor === 'string' && cell.borderColor.trim()
+      ? cell.borderColor
+      : base.borderColor;
+  const borderWidthValue = Number(cell.borderWidth);
+  const borderWidth = Number.isFinite(borderWidthValue)
+    ? Math.min(Math.max(Math.round(borderWidthValue), 0), 6)
+    : base.borderWidth;
+  const style =
+    typeof cell.borderStyle === 'string' ? cell.borderStyle.trim() : base.borderStyle;
+  const borderStyle = VALID_BORDER_STYLES.has(style) ? style : base.borderStyle;
+  const icon =
+    typeof cell.icon === 'string' && cell.icon.trim() ? cell.icon : null;
+  let active;
+  if (typeof cell.active === 'boolean') {
+    active = cell.active;
+  } else if (
+    cell.active === 0 ||
+    cell.active === '0' ||
+    cell.active === 'false'
+  ) {
+    active = false;
+  } else if (
+    cell.active === 1 ||
+    cell.active === '1' ||
+    cell.active === 'true'
+  ) {
+    active = true;
+  } else if (typeof cell.active !== 'undefined') {
+    active = Boolean(cell.active);
+  } else {
+    active = base.active;
+  }
+  const effect = sanitizeEffect(cell.effect, base.effect);
+  return {
+    fill,
+    borderColor,
+    borderWidth,
+    borderStyle,
+    icon,
+    effect,
+    active,
+  };
+};
+
+const getGridCell = (grid, r, c) =>
+  Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r][c] : null;
+
+const sanitizeGridStructure = (grid, rows, cols) => {
+  const fallbackRows = Array.isArray(grid) && grid.length > 0 ? grid.length : 8;
+  const fallbackCols =
+    Array.isArray(grid) && Array.isArray(grid[0]) && grid[0].length > 0
+      ? grid[0].length
+      : 12;
+  const safeRows = clampNumber(rows, 1, 200, fallbackRows);
+  const safeCols = clampNumber(cols, 1, 200, fallbackCols);
+  const sanitizedGrid = Array.from({ length: safeRows }, (_, r) =>
+    Array.from({ length: safeCols }, (_, c) => sanitizeCell(getGridCell(grid, r, c)))
+  );
+  return { rows: safeRows, cols: safeCols, grid: sanitizedGrid };
+};
+
+const sanitizeCellSize = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 48;
+  if (num <= 8) return 8;
+  if (num >= 512) return 512;
+  return Math.round(num);
+};
+
+const sanitizeTitle = (value, fallback) => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  } else if (typeof value === 'number') {
+    const stringified = String(value).trim();
+    if (stringified) return stringified;
+  }
+  return fallback || 'Cuadrante';
+};
+
+const sanitizeOrder = (value, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const sanitizeQuadrantValues = (data = {}, options = {}) => {
+  const { titleFallback = 'Cuadrante', orderFallback = 0 } = options;
+  const { rows, cols, grid } = sanitizeGridStructure(
+    data.grid,
+    data.rows,
+    data.cols
+  );
+  return {
+    title: sanitizeTitle(data.title, titleFallback),
+    rows,
+    cols,
+    cellSize: sanitizeCellSize(data.cellSize),
+    grid,
+    order: sanitizeOrder(data.order, orderFallback),
+  };
+};
 const sanitizeCustomIcons = (icons) => {
   if (!Array.isArray(icons)) return [];
   return icons.filter((icon) => typeof icon === 'string' && icon);
@@ -523,24 +672,13 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         try {
           const batch = writeBatch(db);
           localQuadrants.forEach((item, index) => {
-            const rowsValue = Number.isInteger(item?.rows) ? item.rows : 8;
-            const colsValue = Number.isInteger(item?.cols) ? item.cols : 12;
-            const cellSizeValue = Number.isFinite(item?.cellSize)
-              ? item.cellSize
-              : 48;
-            const gridValue = Array.isArray(item?.grid)
-              ? item.grid
-              : buildGrid(rowsValue, colsValue);
-            const orderValue =
-              typeof item?.order === 'number' ? item.order : index;
             const docId = item?.id || generateQuadrantId();
+            const sanitized = sanitizeQuadrantValues(item, {
+              titleFallback: `Cuadrante ${index + 1}`,
+              orderFallback: index,
+            });
             batch.set(doc(db, 'minimapQuadrants', docId), {
-              title: item?.title || `Cuadrante ${index + 1}`,
-              rows: rowsValue,
-              cols: colsValue,
-              cellSize: cellSizeValue,
-              grid: gridValue,
-              order: orderValue,
+              ...sanitized,
               updatedAt: serverTimestamp(),
             });
           });
@@ -577,34 +715,19 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         quadrantsMigrationRef.current = true;
         const normalized = docsData
           .map(({ id, data }, index) => {
-            const rowsValue = Number.isInteger(data?.rows) ? data.rows : 8;
-            const colsValue = Number.isInteger(data?.cols) ? data.cols : 12;
-            const cellSizeValue = Number.isFinite(data?.cellSize)
-              ? data.cellSize
-              : 48;
-            const gridValue = Array.isArray(data?.grid)
-              ? data.grid
-              : buildGrid(rowsValue, colsValue);
-            const orderValue =
-              typeof data?.order === 'number' ? data.order : index;
+            const sanitized = sanitizeQuadrantValues(data, {
+              titleFallback: `Cuadrante ${index + 1}`,
+              orderFallback: index,
+            });
             return {
               id,
-              title: data?.title || `Cuadrante ${index + 1}`,
-              rows: rowsValue,
-              cols: colsValue,
-              cellSize: cellSizeValue,
-              grid: gridValue,
-              order: orderValue,
+              ...sanitized,
               updatedAt: data?.updatedAt || null,
             };
           })
           .sort((a, b) => {
-            const orderA = Number.isFinite(a.order) ? a.order : 0;
-            const orderB = Number.isFinite(b.order) ? b.order : 0;
-            if (orderA !== orderB) return orderA - orderB;
-            const titleA = a.title || '';
-            const titleB = b.title || '';
-            return titleA.localeCompare(titleB);
+            if (a.order !== b.order) return a.order - b.order;
+            return a.title.localeCompare(b.title);
           });
         setQuadrants(normalized);
         if (localQuadrantsRef.current && localQuadrantsRef.current.length > 0) {
@@ -1670,16 +1793,23 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     return maxOrder + 1;
   };
   const saveQuadrant = async () => {
-    const title = quadrantTitle.trim() || `Cuadrante ${quadrants.length + 1}`;
+    const nextOrder = getNextQuadrantOrder();
+    const fallbackTitle = `Cuadrante ${quadrants.length + 1}`;
+    const sanitized = sanitizeQuadrantValues(
+      {
+        title: quadrantTitle,
+        rows,
+        cols,
+        cellSize,
+        grid,
+        order: nextOrder,
+      },
+      { titleFallback: fallbackTitle, orderFallback: nextOrder }
+    );
     const newQuadrantId = generateQuadrantId();
     const newQuadrantIndex = quadrants.length;
     const payload = {
-      title,
-      rows,
-      cols,
-      cellSize,
-      grid,
-      order: getNextQuadrantOrder(),
+      ...sanitized,
       updatedAt: serverTimestamp(),
     };
     try {
@@ -1708,7 +1838,12 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         return hasChanges ? next : prev;
       });
       setCurrentQuadrantIndex(newQuadrantIndex);
-      setLoadedQuadrantData({ rows, cols, cellSize, grid });
+      setLoadedQuadrantData({
+        rows: sanitized.rows,
+        cols: sanitized.cols,
+        cellSize: sanitized.cellSize,
+        grid: sanitized.grid,
+      });
       const migrateDefaultAnnotations = async () => {
         try {
           const annotationsRef = collection(db, 'minimapAnnotations');
@@ -1798,20 +1933,32 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const orderValue = Number.isFinite(current?.order)
       ? current.order
       : currentQuadrantIndex;
-    const payload = {
-      title: current?.title || `Cuadrante ${currentQuadrantIndex + 1}`,
-      rows,
-      cols,
-      cellSize,
-      grid,
-      order: orderValue,
-      updatedAt: serverTimestamp(),
-    };
+    const fallbackTitle = current?.title || `Cuadrante ${currentQuadrantIndex + 1}`;
+    const sanitized = sanitizeQuadrantValues(
+      {
+        title: current?.title,
+        rows,
+        cols,
+        cellSize,
+        grid,
+        order: orderValue,
+      },
+      { titleFallback: fallbackTitle, orderFallback: orderValue }
+    );
     try {
-      await setDoc(doc(db, 'minimapQuadrants', current.id), payload, {
-        merge: true,
+      await setDoc(
+        doc(db, 'minimapQuadrants', current.id),
+        { ...sanitized, updatedAt: serverTimestamp() },
+        {
+          merge: true,
+        }
+      );
+      setLoadedQuadrantData({
+        rows: sanitized.rows,
+        cols: sanitized.cols,
+        cellSize: sanitized.cellSize,
+        grid: sanitized.grid,
       });
-      setLoadedQuadrantData({ rows, cols, cellSize, grid });
     } catch (error) {
       console.error('Error saving minimap quadrant changes', error);
     }
@@ -1822,19 +1969,23 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const sourceId = source.id;
     const copyId = generateQuadrantId();
     const title = `${source?.title || `Cuadrante ${i + 1}`} copia`;
-    const payload = {
-      title,
-      rows: Number.isInteger(source?.rows) ? source.rows : rows,
-      cols: Number.isInteger(source?.cols) ? source.cols : cols,
-      cellSize: Number.isFinite(source?.cellSize)
-        ? source.cellSize
-        : cellSize,
-      grid: Array.isArray(source?.grid) ? source.grid : grid,
-      order: getNextQuadrantOrder(),
-      updatedAt: serverTimestamp(),
-    };
+    const nextOrder = getNextQuadrantOrder();
+    const sanitized = sanitizeQuadrantValues(
+      {
+        title,
+        rows: source?.rows,
+        cols: source?.cols,
+        cellSize: source?.cellSize,
+        grid: source?.grid,
+        order: nextOrder,
+      },
+      { titleFallback: title, orderFallback: nextOrder }
+    );
     try {
-      await setDoc(doc(db, 'minimapQuadrants', copyId), payload);
+      await setDoc(doc(db, 'minimapQuadrants', copyId), {
+        ...sanitized,
+        updatedAt: serverTimestamp(),
+      });
       if (sourceId === activeQuadrantId) {
         setAnnotations((prev) => {
           const clones = prev
