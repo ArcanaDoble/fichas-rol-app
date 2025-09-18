@@ -1683,6 +1683,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ## Novedades: Minimapa responsive (v2.4.43)
 
 - Nuevo constructor de Minimapa en modo Máster.
+- Guardado protegido: aviso persistente de cambios sin guardar y confirmación antes de cambiar o eliminar cuadrantes activos.
 - Agrega celdas desde la periferia con botones cuadrados de borde discontinuo y “+”, ahora con mayor separación del cuadrante para evitar solapes visuales. Al pasar el ratón, se resaltan en verde.
 - Agrega celdas individuales en huecos adyacentes a celdas activas mediante “+” interno.
 - Elimina celdas de forma intuitiva: botón “−” en la celda seleccionada o modo “Editar forma”. En móvil, mantener pulsado sobre una celda activa para eliminarla.

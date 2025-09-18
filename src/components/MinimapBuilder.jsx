@@ -10,6 +10,7 @@ import Boton from './Boton';
 import { ESTADOS } from './EstadoSelector';
 import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
+import useConfirm from '../hooks/useConfirm';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -64,6 +65,9 @@ const L = {
   savedQuadrants: 'Cuadrantes guardados',
   defaultQuadrant: 'Cuadrante predeterminado',
   title: 'T\u00EDtulo',
+  unsavedChangesConfirm:
+    'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
+  unsavedChangesIndicator: 'Cambios sin guardar en el cuadrante actual',
   addRowTop: 'A\u00F1adir fila desde arriba',
   addRowBottom: 'A\u00F1adir fila desde abajo',
   addColLeft: 'A\u00F1adir columna izquierda',
@@ -310,6 +314,7 @@ function MinimapBuilder({ onBack }) {
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
   const [iconsLoading, setIconsLoading] = useState(false);
+  const confirmAction = useConfirm();
   const selectedCellData =
     selectedCell ? grid[selectedCell.r]?.[selectedCell.c] || null : null;
   const activeQuadrantId = useMemo(() => {
@@ -329,6 +334,21 @@ function MinimapBuilder({ onBack }) {
     const current = { rows, cols, cellSize, grid };
     return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
   }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
+  const runUnsavedChangesGuard = useCallback(
+    (callback) => {
+      if (typeof callback !== 'function') return false;
+      if (!hasUnsavedChanges) {
+        callback();
+        return true;
+      }
+      if (confirmAction(L.unsavedChangesConfirm)) {
+        callback();
+        return true;
+      }
+      return false;
+    },
+    [hasUnsavedChanges, confirmAction]
+  );
   const setAnnotation = (r, c, data, options = {}) => {
     const { skipLocalUpdate = false } = options;
     const key = `${activeQuadrantId}-${r}-${c}`;
@@ -1803,7 +1823,14 @@ function MinimapBuilder({ onBack }) {
               </div>
             )}
             {currentQuadrantIndex !== null && hasUnsavedChanges && (
-              <div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 rounded border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  <LucideIcons.AlertTriangle
+                    size={14}
+                    className="flex-shrink-0 text-amber-300"
+                  />
+                  <span>{L.unsavedChangesIndicator}</span>
+                </div>
                 <Boton size="sm" onClick={saveQuadrantChanges}>
                   {L.saveChanges}
                 </Boton>
@@ -1811,7 +1838,10 @@ function MinimapBuilder({ onBack }) {
             )}
             {currentQuadrantIndex !== null && (
               <div>
-                <Boton size="sm" onClick={loadDefaultQuadrant}>
+                <Boton
+                  size="sm"
+                  onClick={() => runUnsavedChangesGuard(() => loadDefaultQuadrant())}
+                >
                   {L.defaultQuadrant}
                 </Boton>
               </div>
@@ -1837,7 +1867,7 @@ function MinimapBuilder({ onBack }) {
                               e.preventDefault();
                               return;
                             }
-                            loadQuadrant(q, i);
+                            runUnsavedChangesGuard(() => loadQuadrant(q, i));
                           }}
                           onPointerDown={(e) => {
                             if (
@@ -1848,11 +1878,15 @@ function MinimapBuilder({ onBack }) {
                               return;
                             cancelLongPressTimer(keyId);
                             const timer = setTimeout(() => {
-                              deleteQuadrant(i);
-                              lastLongPressRef.current = {
-                                key: keyId,
-                                t: Date.now(),
-                              };
+                              const executed = runUnsavedChangesGuard(() =>
+                                deleteQuadrant(i)
+                              );
+                              if (executed) {
+                                lastLongPressRef.current = {
+                                  key: keyId,
+                                  t: Date.now(),
+                                };
+                              }
                               longPressTimersRef.current.delete(keyId);
                             }, 600);
                             longPressTimersRef.current.set(keyId, {
@@ -1937,7 +1971,7 @@ function MinimapBuilder({ onBack }) {
                             title="Eliminar"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteQuadrant(i);
+                              runUnsavedChangesGuard(() => deleteQuadrant(i));
                             }}
                           >
                             <LucideIcons.Trash2 size={10} />
