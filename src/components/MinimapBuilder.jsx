@@ -15,6 +15,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   collection,
   getDocs,
+  onSnapshot,
   doc,
   setDoc,
   deleteDoc,
@@ -353,6 +354,51 @@ function MinimapBuilder({ onBack }) {
     }
   };
 
+  const migratedLegacyAnnotationIdsRef = useRef(new Set());
+  const migrateLegacyAnnotations = useCallback((entries) => {
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    const pending = entries.filter(
+      ({ docId }) => docId && !migratedLegacyAnnotationIdsRef.current.has(docId)
+    );
+    if (pending.length === 0) {
+      return;
+    }
+    pending.forEach(({ docId }) => {
+      if (docId) {
+        migratedLegacyAnnotationIdsRef.current.add(docId);
+      }
+    });
+    const writes = pending.map(({ annotation, docId }) => {
+      const nextKey = annotation?.key;
+      if (!nextKey) {
+        return Promise.resolve();
+      }
+      const payload = {
+        ...annotation,
+        quadrantId: annotation?.quadrantId || 'default',
+        key: nextKey,
+      };
+      return setDoc(doc(db, 'minimapAnnotations', nextKey), payload)
+        .then(() => {
+          if (docId && docId !== nextKey) {
+            return deleteDoc(doc(db, 'minimapAnnotations', docId)).catch(() => {});
+          }
+          return undefined;
+        })
+        .catch((error) => {
+          console.error('Error migrating legacy minimap annotation', error);
+          if (docId) {
+            migratedLegacyAnnotationIdsRef.current.delete(docId);
+          }
+        });
+    });
+    if (writes.length > 0) {
+      Promise.all(writes).catch((error) => {
+        console.error('Error migrating legacy minimap annotations', error);
+      });
+    }
+  }, []);
+
   const containerRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
@@ -394,50 +440,90 @@ function MinimapBuilder({ onBack }) {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
   useEffect(() => {
-    let isCancelled = false;
-    const fetchAnnotations = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'minimapAnnotations'));
-        const map = new Map();
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
-            return;
+    const annotationsRef = collection(db, 'minimapAnnotations');
+    const activeQueries = [
+      query(annotationsRef, where('quadrantId', '==', activeQuadrantId)),
+    ];
+    if (activeQuadrantId === 'default') {
+      activeQueries.push(query(annotationsRef, where('quadrantId', '==', null)));
+    }
+    const snapshotsByQuery = new Map();
+    let isUnmounted = false;
+
+    const updateFromSnapshots = () => {
+      const byKey = new Map();
+      const legacyEntries = [];
+      snapshotsByQuery.forEach((entries) => {
+        entries.forEach(({ annotation, hasQuadrantValue, docId }) => {
+          if (!byKey.has(annotation.key) || hasQuadrantValue) {
+            byKey.set(annotation.key, annotation);
           }
-          const quadrantId = data.quadrantId || 'default';
-          const key = `${quadrantId}-${data.r}-${data.c}`;
-          if (!map.has(key) || data.quadrantId) {
-            map.set(key, { key, quadrantId, ...data });
+          if (!hasQuadrantValue) {
+            legacyEntries.push({ annotation, docId });
           }
         });
-        const filtered = Array.from(map.values()).filter(
-          (item) => item.quadrantId === activeQuadrantId
+      });
+      const filtered = Array.from(byKey.values()).filter(
+        (item) => (item?.quadrantId || 'default') === activeQuadrantId
+      );
+      setAnnotations((prev) => {
+        const others = prev.filter(
+          (item) => (item?.quadrantId || 'default') !== activeQuadrantId
         );
-        if (!isCancelled) {
-          setAnnotations((prev) => {
-            const others = prev.filter(
-              (item) => (item?.quadrantId || 'default') !== activeQuadrantId
-            );
-            if (filtered.length === 0) {
-              const existing = prev.filter(
-                (item) => (item?.quadrantId || 'default') === activeQuadrantId
-              );
-              return [...others, ...existing];
-            }
-            return [...others, ...filtered];
-          });
+        if (filtered.length === 0) {
+          const existing = prev.filter(
+            (item) => (item?.quadrantId || 'default') === activeQuadrantId
+          );
+          return [...others, ...existing];
         }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error('Error fetching minimap annotations', error);
-        }
+        return [...others, ...filtered];
+      });
+      if (activeQuadrantId === 'default' && legacyEntries.length > 0) {
+        migrateLegacyAnnotations(legacyEntries);
       }
     };
-    fetchAnnotations();
+
+    const unsubscribeFns = activeQueries.map((q, index) =>
+      onSnapshot(
+        q,
+        (snapshot) => {
+          const entries = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
+              return;
+            }
+            const quadrantValue = data?.quadrantId || 'default';
+            const hasQuadrantValue = Boolean(data?.quadrantId);
+            const key = `${quadrantValue}-${data.r}-${data.c}`;
+            entries.push({
+              annotation: { ...data, quadrantId: quadrantValue, key },
+              hasQuadrantValue,
+              docId: docSnap.id,
+            });
+          });
+          snapshotsByQuery.set(index, entries);
+          if (!isUnmounted) {
+            updateFromSnapshots();
+          }
+        },
+        (error) => {
+          if (!isUnmounted) {
+            console.error('Error fetching minimap annotations', error);
+          }
+        }
+      )
+    );
+
     return () => {
-      isCancelled = true;
+      isUnmounted = true;
+      unsubscribeFns.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch {}
+      });
     };
-  }, [activeQuadrantId]);
+  }, [activeQuadrantId, migrateLegacyAnnotations]);
   useEffect(() => {
     try {
       localStorage.setItem('minimapCustomIcons', JSON.stringify(customIcons));
