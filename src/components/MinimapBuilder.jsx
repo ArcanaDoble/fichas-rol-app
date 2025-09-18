@@ -329,7 +329,7 @@ function MinimapBuilder({ onBack }) {
     return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
   }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
   const setAnnotation = (r, c, data, options = {}) => {
-    const { skipLocalUpdate = false } = options;
+    const { skipLocalUpdate = false, debounce = false } = options;
     const key = `${activeQuadrantId}-${r}-${c}`;
     const payload = { quadrantId: activeQuadrantId, r, c, ...data };
     const legacyKey = `${r}-${c}`;
@@ -342,19 +342,42 @@ function MinimapBuilder({ onBack }) {
         return next;
       });
     }
-    const ref = doc(db, 'minimapAnnotations', key);
-    const legacyRef = legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
-    if (data.text || data.icon) {
-      setDoc(ref, payload).catch(() => {});
-      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+    const runRemoteUpdate = () => {
+      const ref = doc(db, 'minimapAnnotations', key);
+      const legacyRef =
+        legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
+      if (data.text || data.icon) {
+        setDoc(ref, payload).catch(() => {});
+        if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+      } else {
+        deleteDoc(ref).catch(() => {});
+        if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+      }
+    };
+    const timers = annotationWriteTimersRef.current;
+    if (debounce) {
+      const existing = timers.get(key);
+      if (existing) {
+        clearTimeout(existing);
+      }
+      const timerId = setTimeout(() => {
+        timers.delete(key);
+        runRemoteUpdate();
+      }, 400);
+      timers.set(key, timerId);
     } else {
-      deleteDoc(ref).catch(() => {});
-      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+      const existing = timers.get(key);
+      if (existing) {
+        clearTimeout(existing);
+        timers.delete(key);
+      }
+      runRemoteUpdate();
     }
   };
 
   const containerRef = useRef(null);
   const skipRebuildRef = useRef(false);
+  const annotationWriteTimersRef = useRef(new Map());
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
   const activePanPointerRef = useRef(null);
@@ -436,6 +459,14 @@ function MinimapBuilder({ onBack }) {
     fetchAnnotations();
     return () => {
       isCancelled = true;
+    };
+  }, [activeQuadrantId]);
+  useEffect(() => {
+    return () => {
+      annotationWriteTimersRef.current.forEach((timerId) => {
+        clearTimeout(timerId);
+      });
+      annotationWriteTimersRef.current.clear();
     };
   }, [activeQuadrantId]);
   useEffect(() => {
@@ -2616,7 +2647,7 @@ function MinimapBuilder({ onBack }) {
                                     setAnnotation(selectedCell.r, selectedCell.c, {
                                       text: e.target.value,
                                       icon: ann?.icon || '',
-                                    })
+                                    }, { debounce: true })
                                   }
                                   placeholder="Texto"
                                   className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -2628,7 +2659,7 @@ function MinimapBuilder({ onBack }) {
                                     setAnnotation(selectedCell.r, selectedCell.c, {
                                       text: ann?.text || '',
                                       icon: e.target.value,
-                                    })
+                                    }, { debounce: true })
                                   }
                                   placeholder="URL icono"
                                   className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
