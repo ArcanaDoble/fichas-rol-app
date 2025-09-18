@@ -1708,6 +1708,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Corregido error al aplicar presets de estilo en el minimapa que provocaba "next[r] is undefined".
 - Se corrigió un error de compilación causado por un corchete faltante en `MinimapBuilder.jsx`.
 - Se mejoró el efecto de destellos del minimapa con trayectorias y tamaños aleatorios para cada partícula.
+- El constructor de minimapas vuelve a mostrar y guardar cuadrantes aunque la sincronización con Firestore falle, guardando una copia local como respaldo.
 - Se intensificó el efecto de destellos del minimapa con más partículas, rotación y resplandor para hacerlo más espectacular.
 - Se corrigió un fallo al abrir el mapa de batalla como jugador que generaba "enemy is not defined" cargando ahora los datos de enemigos.
 - Se añadió una verificación adicional en la hoja de fichas de tokens para evitar referencias a enemigos inexistentes en el mapa de batalla de jugadores.

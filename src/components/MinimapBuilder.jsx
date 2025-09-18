@@ -401,6 +401,69 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     order: sanitizeOrder(data.order, orderFallback),
   };
 };
+
+const LOCAL_QUADRANTS_KEY = 'minimapQuadrants';
+
+const sortQuadrantsList = (items = []) =>
+  [...items]
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.title.localeCompare(b.title);
+    });
+
+const prepareQuadrantForLocalStorage = (quadrant) => ({
+  id: quadrant.id,
+  title: quadrant.title,
+  rows: quadrant.rows,
+  cols: quadrant.cols,
+  cellSize: quadrant.cellSize,
+  grid: quadrant.grid,
+  order: quadrant.order,
+});
+
+const persistQuadrantsToLocalStorage = (items) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload = items.map(prepareQuadrantForLocalStorage);
+    window.localStorage.setItem(LOCAL_QUADRANTS_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.error('Error writing local minimap quadrants', error);
+  }
+};
+
+const readQuadrantsFromLocalStorage = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_QUADRANTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    let needsRewrite = false;
+    const normalized = parsed.map((item, index) => {
+      const sanitized = sanitizeQuadrantValues(item, {
+        titleFallback: `Cuadrante ${index + 1}`,
+        orderFallback: index,
+      });
+      let id =
+        typeof item?.id === 'string' && item.id.trim() ? item.id.trim() : null;
+      if (!id) {
+        id = generateQuadrantId();
+        needsRewrite = true;
+      }
+      return { id, ...sanitized, updatedAt: item?.updatedAt || null };
+    });
+    const sorted = sortQuadrantsList(normalized);
+    if (needsRewrite) {
+      persistQuadrantsToLocalStorage(sorted);
+    }
+    return sorted;
+  } catch (error) {
+    console.error('Error reading local minimap quadrants', error);
+    return [];
+  }
+};
+
 const sanitizeCustomIcons = (icons) => {
   if (!Array.isArray(icons)) return [];
   return icons.filter((icon) => typeof icon === 'string' && icon);
@@ -479,36 +542,18 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   });
   const [isCustomizationReady, setCustomizationReady] = useState(false);
   const [quadrantTitle, setQuadrantTitle] = useState('');
-  const [quadrants, setQuadrants] = useState([]);
+  const [quadrants, setQuadrants] = useState(() => readQuadrantsFromLocalStorage());
   const localQuadrantsRef = useRef(null);
   if (localQuadrantsRef.current === null) {
-    if (typeof window === 'undefined') {
-      localQuadrantsRef.current = [];
-    } else {
-      try {
-        const raw = window.localStorage.getItem('minimapQuadrants');
-        if (!raw) {
-          localQuadrantsRef.current = [];
-        } else {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            localQuadrantsRef.current = parsed.map((q, index) => ({
-              ...q,
-              id: q?.id || generateQuadrantId(),
-              order:
-                typeof q?.order === 'number'
-                  ? q.order
-                  : index,
-            }));
-          } else {
-            localQuadrantsRef.current = [];
-          }
-        }
-      } catch {
-        localQuadrantsRef.current = [];
-      }
-    }
+    localQuadrantsRef.current = quadrants;
   }
+  const updateLocalQuadrants = (items) => {
+    const sorted = sortQuadrantsList(items);
+    localQuadrantsRef.current = sorted;
+    persistQuadrantsToLocalStorage(sorted);
+  };
+  const getLocalQuadrantsSnapshot = () =>
+    Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
@@ -683,12 +728,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             });
           });
           await batch.commit();
-          localQuadrantsRef.current = [];
-          if (typeof window !== 'undefined') {
-            try {
-              window.localStorage.removeItem('minimapQuadrants');
-            } catch {}
-          }
+          updateLocalQuadrants([]);
         } catch (error) {
           console.error('Error migrating minimap quadrants', error);
         }
@@ -709,12 +749,13 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             quadrantsMigrationRef.current = true;
             migrateLocalQuadrants();
           }
-          setQuadrants([]);
+          const fallback = getLocalQuadrantsSnapshot();
+          setQuadrants(fallback);
           return;
         }
         quadrantsMigrationRef.current = true;
-        const normalized = docsData
-          .map(({ id, data }, index) => {
+        const normalized = sortQuadrantsList(
+          docsData.map(({ id, data }, index) => {
             const sanitized = sanitizeQuadrantValues(data, {
               titleFallback: `Cuadrante ${index + 1}`,
               orderFallback: index,
@@ -725,23 +766,15 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               updatedAt: data?.updatedAt || null,
             };
           })
-          .sort((a, b) => {
-            if (a.order !== b.order) return a.order - b.order;
-            return a.title.localeCompare(b.title);
-          });
+        );
         setQuadrants(normalized);
-        if (localQuadrantsRef.current && localQuadrantsRef.current.length > 0) {
-          localQuadrantsRef.current = [];
-          if (typeof window !== 'undefined') {
-            try {
-              window.localStorage.removeItem('minimapQuadrants');
-            } catch {}
-          }
-        }
+        updateLocalQuadrants(normalized);
       },
       (error) => {
         if (!isUnmounted) {
           console.error('Error fetching minimap quadrants', error);
+          const fallback = getLocalQuadrantsSnapshot();
+          setQuadrants(fallback);
         }
       }
     );
@@ -1807,48 +1840,68 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       { titleFallback: fallbackTitle, orderFallback: nextOrder }
     );
     const newQuadrantId = generateQuadrantId();
-    const newQuadrantIndex = quadrants.length;
-    const payload = {
+    const localQuadrant = {
+      id: newQuadrantId,
       ...sanitized,
-      updatedAt: serverTimestamp(),
+      updatedAt: new Date().toISOString(),
     };
+    const nextQuadrantsState = sortQuadrantsList([
+      ...quadrants.filter(Boolean),
+      localQuadrant,
+    ]);
+    const newQuadrantIndex = nextQuadrantsState.findIndex(
+      (item) => item.id === newQuadrantId
+    );
+    setQuadrants(nextQuadrantsState);
+    updateLocalQuadrants(nextQuadrantsState);
+    setCurrentQuadrantIndex(newQuadrantIndex);
+    setLoadedQuadrantData({
+      rows: sanitized.rows,
+      cols: sanitized.cols,
+      cellSize: sanitized.cellSize,
+      grid: sanitized.grid,
+    });
+    setQuadrantTitle('');
+    let savedRemotely = true;
     try {
-      await setDoc(doc(db, 'minimapQuadrants', newQuadrantId), payload);
-      setQuadrantTitle('');
-      setAnnotations((prev) => {
-        if (!Array.isArray(prev) || prev.length === 0) return prev;
-        let hasChanges = false;
-        const next = prev.map((ann) => {
-          if (!ann) return ann;
-          const annQuadrant = ann?.quadrantId || 'default';
-          if (annQuadrant !== 'default') {
-            return ann;
-          }
-          const { r, c } = ann;
-          if (!Number.isInteger(r) || !Number.isInteger(c)) {
-            return ann;
-          }
-          const newKey = `${newQuadrantId}-${r}-${c}`;
-          if (ann.key === newKey && ann.quadrantId === newQuadrantId) {
-            return ann;
-          }
-          hasChanges = true;
-          return { ...ann, key: newKey, quadrantId: newQuadrantId };
-        });
-        return hasChanges ? next : prev;
+      await setDoc(doc(db, 'minimapQuadrants', newQuadrantId), {
+        ...sanitized,
+        updatedAt: serverTimestamp(),
       });
-      setCurrentQuadrantIndex(newQuadrantIndex);
-      setLoadedQuadrantData({
-        rows: sanitized.rows,
-        cols: sanitized.cols,
-        cellSize: sanitized.cellSize,
-        grid: sanitized.grid,
+    } catch (error) {
+      savedRemotely = false;
+      console.error('Error saving minimap quadrant', error);
+    }
+    setAnnotations((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      let hasChanges = false;
+      const next = prev.map((ann) => {
+        if (!ann) return ann;
+        const annQuadrant = ann?.quadrantId || 'default';
+        if (annQuadrant !== 'default') {
+          return ann;
+        }
+        const { r, c } = ann;
+        if (!Number.isInteger(r) || !Number.isInteger(c)) {
+          return ann;
+        }
+        const newKey = `${newQuadrantId}-${r}-${c}`;
+        if (ann.key === newKey && ann.quadrantId === newQuadrantId) {
+          return ann;
+        }
+        hasChanges = true;
+        return { ...ann, key: newKey, quadrantId: newQuadrantId };
       });
-      const migrateDefaultAnnotations = async () => {
-        try {
-          const annotationsRef = collection(db, 'minimapAnnotations');
-          const snapshot = await getDocs(annotationsRef);
-          const writes = [];
+      return hasChanges ? next : prev;
+    });
+    if (!savedRemotely) {
+      return;
+    }
+    const migrateDefaultAnnotations = async () => {
+      try {
+        const annotationsRef = collection(db, 'minimapAnnotations');
+        const snapshot = await getDocs(annotationsRef);
+        const writes = [];
           const updatedKeys = new Set();
           const pendingDeletes = new Set();
           const enqueueDelete = (id) => {
@@ -1899,8 +1952,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         }
       };
       migrateDefaultAnnotations();
-    } catch (error) {
-      console.error('Error saving minimap quadrant', error);
     }
   };
   const loadQuadrant = (q, idx) => {
@@ -1945,6 +1996,17 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       },
       { titleFallback: fallbackTitle, orderFallback: orderValue }
     );
+    const updatedQuadrant = {
+      ...current,
+      ...sanitized,
+      id: current.id,
+      updatedAt: current?.updatedAt || new Date().toISOString(),
+    };
+    const nextQuadrantsState = sortQuadrantsList(
+      quadrants.map((item) => (item?.id === current.id ? updatedQuadrant : item))
+    );
+    setQuadrants(nextQuadrantsState);
+    updateLocalQuadrants(nextQuadrantsState);
     try {
       await setDoc(
         doc(db, 'minimapQuadrants', current.id),
@@ -1953,15 +2015,15 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           merge: true,
         }
       );
-      setLoadedQuadrantData({
-        rows: sanitized.rows,
-        cols: sanitized.cols,
-        cellSize: sanitized.cellSize,
-        grid: sanitized.grid,
-      });
     } catch (error) {
       console.error('Error saving minimap quadrant changes', error);
     }
+    setLoadedQuadrantData({
+      rows: sanitized.rows,
+      cols: sanitized.cols,
+      cellSize: sanitized.cellSize,
+      grid: sanitized.grid,
+    });
   };
   const duplicateQuadrant = async (i) => {
     const source = quadrants[i];
@@ -1976,38 +2038,49 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         rows: source?.rows,
         cols: source?.cols,
         cellSize: source?.cellSize,
-        grid: source?.grid,
-        order: nextOrder,
-      },
-      { titleFallback: title, orderFallback: nextOrder }
-    );
+      grid: source?.grid,
+      order: nextOrder,
+    },
+    { titleFallback: title, orderFallback: nextOrder }
+  );
+    const copyQuadrant = {
+      id: copyId,
+      ...sanitized,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextQuadrantsState = sortQuadrantsList([
+      ...quadrants.filter(Boolean),
+      copyQuadrant,
+    ]);
+    setQuadrants(nextQuadrantsState);
+    updateLocalQuadrants(nextQuadrantsState);
+    if (sourceId === activeQuadrantId) {
+      setAnnotations((prev) => {
+        const clones = prev
+          .filter((ann) => (ann?.quadrantId || 'default') === sourceId)
+          .map((ann) => {
+            if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
+              return null;
+            }
+            const newKey = `${copyId}-${ann.r}-${ann.c}`;
+            return {
+              ...ann,
+              key: newKey,
+              quadrantId: copyId,
+            };
+          })
+          .filter(Boolean);
+        if (clones.length === 0) {
+          return prev;
+        }
+        return [...prev, ...clones];
+      });
+    }
     try {
       await setDoc(doc(db, 'minimapQuadrants', copyId), {
         ...sanitized,
         updatedAt: serverTimestamp(),
       });
-      if (sourceId === activeQuadrantId) {
-        setAnnotations((prev) => {
-          const clones = prev
-            .filter((ann) => (ann?.quadrantId || 'default') === sourceId)
-            .map((ann) => {
-              if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
-                return null;
-              }
-              const newKey = `${copyId}-${ann.r}-${ann.c}`;
-              return {
-                ...ann,
-                key: newKey,
-                quadrantId: copyId,
-              };
-            })
-            .filter(Boolean);
-          if (clones.length === 0) {
-            return prev;
-          }
-          return [...prev, ...clones];
-        });
-      }
       const duplicateAnnotations = async () => {
         try {
           const annotationsRef = collection(db, 'minimapAnnotations');
@@ -2053,6 +2126,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     if (!removedId) {
       return;
     }
+    const nextQuadrantsState = quadrants.filter((item) => item?.id !== removedId);
+    setQuadrants(nextQuadrantsState);
+    updateLocalQuadrants(nextQuadrantsState);
     setAnnotations((prev) =>
       prev.filter((ann) => (ann?.quadrantId || 'default') !== removedId)
     );
