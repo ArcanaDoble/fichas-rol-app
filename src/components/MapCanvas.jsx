@@ -1109,7 +1109,41 @@ const MapCanvas = ({
       texts: [],
     };
 
-    const saveToFirebase = async (type, data) => {
+    const flushPendingTokens = async () => {
+      if (!pageId || !isPlayerView) return;
+
+      if (saveTimeouts.tokens) {
+        clearTimeout(saveTimeouts.tokens);
+        saveTimeouts.tokens = null;
+      }
+
+      if (pendingTokenChanges.length === 0) return;
+
+      try {
+        const tokensRef = collection(db, 'pages', pageId, 'tokens');
+        const filtered = pendingTokenChanges.filter(
+          (tk) => tk._deleted || tk.controlledBy === playerName
+        );
+
+        await Promise.all(
+          filtered.map((tk) =>
+            tk._deleted
+              ? deleteDoc(doc(tokensRef, String(tk.id)))
+              : setDoc(doc(tokensRef, String(tk.id)), tk)
+          )
+        );
+
+        console.log(
+          `✅ Jugador ${playerName} guardó tokens (${filtered.length} cambios)`,
+          new Date().toISOString()
+        );
+        pendingTokenChanges = [];
+      } catch (error) {
+        console.error('Error guardando tokens para jugador:', error);
+      }
+    };
+
+    const saveToFirebase = async (type, data, options = {}) => {
       if (!pageId || !isPlayerView) return;
 
       if (type === 'tokens') {
@@ -1121,29 +1155,13 @@ const MapCanvas = ({
           clearTimeout(saveTimeouts.tokens);
         }
 
-        saveTimeouts.tokens = setTimeout(async () => {
-          try {
-            const tokensRef = collection(db, 'pages', pageId, 'tokens');
-            const filtered = pendingTokenChanges.filter(
-              (tk) => tk._deleted || tk.controlledBy === playerName
-            );
+        if (options.flushNow) {
+          await flushPendingTokens();
+          return;
+        }
 
-            await Promise.all(
-              filtered.map((tk) =>
-                tk._deleted
-                  ? deleteDoc(doc(tokensRef, String(tk.id)))
-                  : setDoc(doc(tokensRef, String(tk.id)), tk)
-              )
-            );
-
-            console.log(
-              `✅ Jugador ${playerName} guardó tokens (${filtered.length} cambios)`,
-              new Date().toISOString()
-            );
-            pendingTokenChanges = [];
-          } catch (error) {
-            console.error('Error guardando tokens para jugador:', error);
-          }
+        saveTimeouts.tokens = setTimeout(() => {
+          flushPendingTokens();
         }, saveDelayRef.current);
         return;
       }
@@ -1170,7 +1188,7 @@ const MapCanvas = ({
       }, saveDelayRef.current);
     };
 
-    return { saveToFirebase, setSaveDelay };
+    return { saveToFirebase, setSaveDelay, flushPendingTokens };
   }, [isPlayerView, pageId, playerName]);
 
   const handleTextsChange = useCallback((newTexts) => {
@@ -1395,7 +1413,16 @@ const MapCanvas = ({
         if (allowed.length === 0) return;
         console.log('[tokens] cambios permitidos', new Date().toISOString(), allowed);
         if (syncManager) {
-          syncManager.saveToFirebase('tokens', allowed);
+          const savePromise = syncManager.saveToFirebase('tokens', allowed, options);
+          if (options.flushNow && syncManager.flushPendingTokens && savePromise?.then) {
+            savePromise
+              .then(() => {
+                syncManager.flushPendingTokens();
+              })
+              .catch((error) => {
+                console.error('Error forzando guardado inmediato de tokens:', error);
+              });
+          }
         }
         onTokensChange((prevTokens) => mergeTokens(prevTokens, allowed));
       } else {
@@ -2779,7 +2806,7 @@ const MapCanvas = ({
       const newTokens = tokens.map((t) =>
         t.id === id ? { ...t, x: col, y: row } : t
       );
-      handleTokensChange(newTokens);
+      handleTokensChange(newTokens, { flushNow: true });
     }
     setDragShadow(null);
   };
