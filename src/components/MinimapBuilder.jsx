@@ -42,6 +42,8 @@ const L = {
   selectedCell: 'Celda seleccionada',
   cellPropsOpen: 'Propiedades de celda',
   cellPropsClose: 'Ocultar propiedades',
+  quadrantPanelOpen: 'Opciones de cuadrante',
+  quadrantPanelClose: 'Ocultar opciones',
   closePanel: 'Cerrar panel',
   color: 'Color',
   border: 'Borde',
@@ -78,6 +80,9 @@ const L = {
   addCell: 'A\u00F1adir celda',
   delCell: 'Eliminar celda',
   reset: 'Restablecer',
+  mobileQuickControls: 'Controles r\u00E1pidos',
+  mobileReadableHint: 'Activo autom\u00E1ticamente en m\u00F3vil',
+  zoom: 'Zoom',
 };
 
 const stripDiacritics = (value) =>
@@ -617,6 +622,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const hasSelectedCells = selectedCells.length > 0;
   const selectedCell = selectedCells[0];
   const [isPropertyPanelOpen, setIsPropertyPanelOpen] = useState(false);
+  const [isQuadrantPanelOpen, setIsQuadrantPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState('style');
   const [activeColorPicker, setActiveColorPicker] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
@@ -797,6 +803,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     mq.addListener(handleChange);
     return () => mq.removeListener(handleChange);
   }, []);
+  useEffect(() => {
+    if (!isMobile) {
+      setIsQuadrantPanelOpen(false);
+    }
+  }, [isMobile]);
   useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
@@ -2277,6 +2288,330 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     (c > 0 && grid[r][c - 1]?.active) ||
     (c < cols - 1 && grid[r][c + 1]?.active);
 
+  const mobileToggleRowClass =
+    'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
+  const mobileToggleGroupClass =
+    'space-y-2 rounded-xl border border-gray-700 bg-gray-900/60 p-3 shadow-inner backdrop-blur-sm';
+
+  const quadrantSettingsBody = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">{L.quadrant}</h2>
+        {isMobile && (
+          <button
+            type="button"
+            className="text-xs text-gray-300 hover:text-gray-100 underline"
+            onClick={() => setIsQuadrantPanelOpen(false)}
+          >
+            {L.closePanel}
+          </button>
+        )}
+      </div>
+      {isMobile && (
+        <div className="space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {L.mobileQuickControls}
+          </div>
+          <div className={mobileToggleGroupClass}>
+            <label className={mobileToggleRowClass}>
+              <span className="text-sm font-medium text-gray-200">{L.shapeEdit}</span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+              />
+            </label>
+            <div className={`${mobileToggleRowClass} opacity-80`}>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-200">{L.readable}</span>
+                <span className="text-[11px] text-gray-400">{L.mobileReadableHint}</span>
+              </div>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={effectiveReadable}
+                readOnly
+                disabled
+              />
+            </div>
+            <div className={mobileToggleRowClass}>
+              <span className="text-sm font-medium text-gray-200">{L.moveMode}</span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-200">{L.autoFit}</span>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-emerald-500"
+                  checked={autoFit}
+                  onChange={(e) => setAutoFit(e.target.checked)}
+                />
+              </div>
+              {!autoFit && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{L.zoom}</span>
+                    <span className="font-semibold text-gray-200">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={35}
+                    max={200}
+                    value={Math.round(zoom * 100)}
+                    onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                    className="h-2 w-full accent-emerald-500"
+                  />
+                </div>
+              )}
+              <Boton
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => {
+                  setZoom(1);
+                  setOffset({ x: 0, y: 0 });
+                }}
+              >
+                {L.reset}
+              </Boton>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-300">{L.rows}</span>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={rows}
+            onChange={(e) =>
+              setRows(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
+            }
+            className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-300">{L.cols}</span>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={cols}
+            onChange={(e) =>
+              setCols(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
+            }
+            className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+          />
+        </label>
+        <label className="flex flex-col gap-1 sm:col-span-2">
+          <span className="text-gray-300">
+            {L.cellSize}: {cellSize}px
+          </span>
+          <input
+            type="range"
+            min={24}
+            max={96}
+            step={4}
+            value={cellSize}
+            onChange={(e) => setCellSize(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={hasSelectedCells} readOnly />
+          <span>{L.selectedCell}</span>
+        </label>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={quadrantTitle}
+            onChange={(e) => setQuadrantTitle(e.target.value)}
+            placeholder={L.title}
+            className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+          />
+          <Boton size="sm" onClick={saveQuadrant}>
+            {L.saveQuadrant}
+          </Boton>
+        </div>
+        {currentQuadrantIndex !== null && (
+          <div className="text-xs text-emerald-400">
+            Editando: {quadrants[currentQuadrantIndex]?.title}
+          </div>
+        )}
+        {currentQuadrantIndex !== null && hasUnsavedChanges && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <LucideIcons.AlertTriangle
+                size={14}
+                className="flex-shrink-0 text-amber-300"
+              />
+              <span>{L.unsavedChangesIndicator}</span>
+            </div>
+            <Boton size="sm" onClick={saveQuadrantChanges}>
+              {L.saveChanges}
+            </Boton>
+          </div>
+        )}
+        {currentQuadrantIndex !== null && (
+          <div>
+            <Boton
+              size="sm"
+              onClick={() => runUnsavedChangesGuard(() => loadDefaultQuadrant())}
+            >
+              {L.defaultQuadrant}
+            </Boton>
+          </div>
+        )}
+        {quadrants.length > 0 && (
+          <div className="space-y-1 mt-2">
+            <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
+            <div className="flex flex-wrap gap-2">
+              {quadrants.map((q, i) => {
+                const keyId = q.id || `quadrant-${i}`;
+                const isSelectedQuadrant = currentQuadrantIndex === i;
+                return (
+                  <div
+                    key={keyId}
+                    className={`relative ${isMobile ? 'w-24' : ''}`}
+                  >
+                    <button
+                      onClick={(e) => {
+                        if (
+                          lastLongPressRef.current.key === keyId &&
+                          Date.now() - lastLongPressRef.current.t < 700
+                        ) {
+                          e.preventDefault();
+                          return;
+                        }
+                        runUnsavedChangesGuard(() => loadQuadrant(q, i));
+                      }}
+                      onPointerDown={(e) => {
+                        if (
+                          !isMobile ||
+                          (e.pointerType !== 'touch' && e.pointerType !== 'pen')
+                        )
+                          return;
+                        cancelLongPressTimer(keyId);
+                        const timer = setTimeout(() => {
+                          const executed = runUnsavedChangesGuard(() =>
+                            deleteQuadrant(i)
+                          );
+                          if (executed) {
+                            lastLongPressRef.current = {
+                              key: keyId,
+                              t: Date.now(),
+                            };
+                          }
+                          longPressTimersRef.current.delete(keyId);
+                        }, 600);
+                        longPressTimersRef.current.set(keyId, {
+                          id: timer,
+                          pointerId: e.pointerId,
+                        });
+                      }}
+                      onPointerUp={(e) => {
+                        if (
+                          !isMobile ||
+                          (e.pointerType !== 'touch' && e.pointerType !== 'pen')
+                        )
+                          return;
+                        const st = longPressTimersRef.current.get(keyId);
+                        if (st && st.pointerId === e.pointerId) {
+                          clearTimeout(st.id);
+                          longPressTimersRef.current.delete(keyId);
+                        }
+                      }}
+                      onPointerLeave={(e) => {
+                        if (
+                          !isMobile ||
+                          (e.pointerType !== 'touch' && e.pointerType !== 'pen')
+                        )
+                          return;
+                        cancelLongPressTimer(keyId);
+                      }}
+                      onPointerCancel={(e) => {
+                        if (
+                          !isMobile ||
+                          (e.pointerType !== 'touch' && e.pointerType !== 'pen')
+                        )
+                          return;
+                        cancelLongPressTimer(keyId);
+                      }}
+                      onPointerMove={(e) => {
+                        if (
+                          !isMobile ||
+                          (e.pointerType !== 'touch' && e.pointerType !== 'pen')
+                        )
+                          return;
+                        cancelLongPressTimer(keyId);
+                      }}
+                      className={`flex flex-col items-center rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
+                        isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
+                      } ${
+                        isMobile
+                          ? 'w-24 p-1 text-[10px] min-h-[72px]'
+                          : 'p-1 text-xs'
+                      }`}
+                    >
+                      <QuadrantPreview q={q} size={36} />
+                      <span
+                        className={`mt-1 ${
+                          isMobile
+                            ? 'text-center leading-tight break-words whitespace-normal'
+                            : ''
+                        }`}
+                      >
+                        {q.title}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-gray-300 rounded-full flex items-center justify-center hover:bg-gray-700"
+                      title="Duplicar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateQuadrant(i);
+                      }}
+                    >
+                      <LucideIcons.Copy size={10} />
+                    </button>
+                    {!isMobile && (
+                      <button
+                        type="button"
+                        className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
+                        title="Eliminar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          runUnsavedChangesGuard(() => deleteQuadrant(i));
+                        }}
+                      >
+                        <LucideIcons.Trash2 size={10} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
@@ -2356,241 +2691,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 space-y-3 lg:col-span-1">
-          <h2 className="font-semibold">{L.quadrant}</h2>
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-gray-300">{L.rows}</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={rows}
-                onChange={(e) =>
-                  setRows(
-                    Math.max(1, Math.min(200, Number(e.target.value) || 1))
-                  )
-                }
-                className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-gray-300">{L.cols}</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={cols}
-                onChange={(e) =>
-                  setCols(
-                    Math.max(1, Math.min(200, Number(e.target.value) || 1))
-                  )
-                }
-                className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
-              />
-            </label>
-            <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-gray-300">
-                {L.cellSize}: {cellSize}px
-              </span>
-              <input
-                type="range"
-                min={24}
-                max={96}
-                step={4}
-                value={cellSize}
-                onChange={(e) => setCellSize(Number(e.target.value))}
-              />
-            </label>
+        {!isMobile && (
+          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 lg:col-span-1">
+            {quadrantSettingsBody}
           </div>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={hasSelectedCells} readOnly />
-              <span>{L.selectedCell}</span>
-            </label>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={quadrantTitle}
-                onChange={(e) => setQuadrantTitle(e.target.value)}
-                placeholder={L.title}
-                className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
-              />
-              <Boton size="sm" onClick={saveQuadrant}>
-                {L.saveQuadrant}
-              </Boton>
-            </div>
-            {currentQuadrantIndex !== null && (
-              <div className="text-xs text-emerald-400">
-                Editando: {quadrants[currentQuadrantIndex]?.title}
-              </div>
-            )}
-            {currentQuadrantIndex !== null && hasUnsavedChanges && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 rounded border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  <LucideIcons.AlertTriangle
-                    size={14}
-                    className="flex-shrink-0 text-amber-300"
-                  />
-                  <span>{L.unsavedChangesIndicator}</span>
-                </div>
-                <Boton size="sm" onClick={saveQuadrantChanges}>
-                  {L.saveChanges}
-                </Boton>
-              </div>
-            )}
-            {currentQuadrantIndex !== null && (
-              <div>
-                <Boton
-                  size="sm"
-                  onClick={() => runUnsavedChangesGuard(() => loadDefaultQuadrant())}
-                >
-                  {L.defaultQuadrant}
-                </Boton>
-              </div>
-            )}
-            {quadrants.length > 0 && (
-              <div className="space-y-1 mt-2">
-                <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
-                <div className="flex flex-wrap gap-2">
-                  {quadrants.map((q, i) => {
-                    const keyId = q.id || `quadrant-${i}`;
-                    const isSelectedQuadrant = currentQuadrantIndex === i;
-                    return (
-                      <div
-                        key={keyId}
-                        className={`relative ${isMobile ? 'w-24' : ''}`}
-                      >
-                        <button
-                          onClick={(e) => {
-                            if (
-                              lastLongPressRef.current.key === keyId &&
-                              Date.now() - lastLongPressRef.current.t < 700
-                            ) {
-                              e.preventDefault();
-                              return;
-                            }
-                            runUnsavedChangesGuard(() => loadQuadrant(q, i));
-                          }}
-                          onPointerDown={(e) => {
-                            if (
-                              !isMobile ||
-                              (e.pointerType !== 'touch' &&
-                                e.pointerType !== 'pen')
-                            )
-                              return;
-                            cancelLongPressTimer(keyId);
-                            const timer = setTimeout(() => {
-                              const executed = runUnsavedChangesGuard(() =>
-                                deleteQuadrant(i)
-                              );
-                              if (executed) {
-                                lastLongPressRef.current = {
-                                  key: keyId,
-                                  t: Date.now(),
-                                };
-                              }
-                              longPressTimersRef.current.delete(keyId);
-                            }, 600);
-                            longPressTimersRef.current.set(keyId, {
-                              id: timer,
-                              pointerId: e.pointerId,
-                            });
-                          }}
-                          onPointerUp={(e) => {
-                            if (
-                              !isMobile ||
-                              (e.pointerType !== 'touch' &&
-                                e.pointerType !== 'pen')
-                            )
-                              return;
-                            const st = longPressTimersRef.current.get(keyId);
-                            if (st && st.pointerId === e.pointerId) {
-                              clearTimeout(st.id);
-                              longPressTimersRef.current.delete(keyId);
-                            }
-                          }}
-                          onPointerLeave={(e) => {
-                            if (
-                              !isMobile ||
-                              (e.pointerType !== 'touch' &&
-                                e.pointerType !== 'pen')
-                            )
-                              return;
-                            cancelLongPressTimer(keyId);
-                          }}
-                          onPointerCancel={(e) => {
-                            if (
-                              !isMobile ||
-                              (e.pointerType !== 'touch' &&
-                                e.pointerType !== 'pen')
-                            )
-                              return;
-                            cancelLongPressTimer(keyId);
-                          }}
-                          onPointerMove={(e) => {
-                            if (
-                              !isMobile ||
-                              (e.pointerType !== 'touch' &&
-                                e.pointerType !== 'pen')
-                            )
-                              return;
-                            cancelLongPressTimer(keyId);
-                          }}
-                          className={`flex flex-col items-center rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
-                            isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
-                          } ${
-                            isMobile
-                              ? 'w-24 p-1 text-[10px] min-h-[72px]'
-                              : 'p-1 text-xs'
-                          }`}
-                        >
-                          <QuadrantPreview q={q} size={36} />
-                          <span
-                            className={`mt-1 ${
-                              isMobile
-                                ? 'text-center leading-tight break-words whitespace-normal'
-                                : ''
-                            }`}
-                          >
-                            {q.title}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-gray-300 rounded-full flex items-center justify-center hover:bg-gray-700"
-                          title="Duplicar"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            duplicateQuadrant(i);
-                          }}
-                        >
-                          <LucideIcons.Copy size={10} />
-                        </button>
-                        {!isMobile && (
-                          <button
-                            type="button"
-                            className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
-                            title="Eliminar"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              runUnsavedChangesGuard(() => deleteQuadrant(i));
-                            }}
-                          >
-                            <LucideIcons.Trash2 size={10} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
           <div
@@ -2949,60 +3054,35 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               </div>
             </div>
           </div>
-          <div className="md:hidden mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.shapeEdit}</span>
-              <input
-                type="checkbox"
-                checked={shapeEdit}
-                onChange={(e) => setShapeEdit(e.target.checked)}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2 opacity-75">
-              <span className="font-medium text-gray-200">{L.readable}</span>
-              <input type="checkbox" checked={true} disabled />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.autoFit}</span>
-              <input
-                type="checkbox"
-                checked={autoFit}
-                onChange={(e) => setAutoFit(e.target.checked)}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.moveMode}</span>
-              <input
-                type="checkbox"
-                checked={isMoveMode}
-                onChange={(e) => setIsMoveMode(e.target.checked)}
-              />
-            </label>
-            {!autoFit && (
-              <div className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <span className="font-medium text-gray-200">Zoom</span>
-                <input
-                  type="range"
-                  min={35}
-                  max={200}
-                  value={Math.round(zoom * 100)}
-                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
-                />
-              </div>
-            )}
-            <Boton
-              size="sm"
-              className="w-full sm:col-span-2 justify-center"
-              onClick={() => {
-                setZoom(1);
-                setOffset({ x: 0, y: 0 });
-              }}
-            >
-              {L.reset}
-            </Boton>
+      </div>
+    </div>
+
+      {isMobile && (
+        <div
+          className={`fixed bottom-4 left-4 right-4 z-50 flex flex-col items-start gap-2 ${
+            isQuadrantPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
+          }`}
+        >
+          <Boton
+            size="sm"
+            className="pointer-events-auto"
+            onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
+          >
+            {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
+          </Boton>
+          <div
+            className={`w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+              isQuadrantPanelOpen
+                ? 'pointer-events-auto opacity-100 translate-y-0'
+                : 'pointer-events-none opacity-0 translate-y-2'
+            }`}
+          >
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              {quadrantSettingsBody}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {hasSelectedCells &&
         (() => {
