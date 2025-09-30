@@ -85,6 +85,85 @@ const stripDiacritics = (value) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+const FALLBACK_EMOJI_GROUPS = {
+  Smileys: [
+    { ch: '😀', name: '', nameEs: '' },
+    { ch: '😄', name: '', nameEs: '' },
+    { ch: '😁', name: '', nameEs: '' },
+    { ch: '😂', name: '', nameEs: '' },
+    { ch: '😉', name: '', nameEs: '' },
+    { ch: '😊', name: '', nameEs: '' },
+    { ch: '😇', name: '', nameEs: '' },
+    { ch: '😈', name: '', nameEs: '' },
+    { ch: '😌', name: '', nameEs: '' },
+    { ch: '🤪', name: '', nameEs: '' },
+    { ch: '🤗', name: '', nameEs: '' },
+    { ch: '🤔', name: '', nameEs: '' },
+    { ch: '🤨', name: '', nameEs: '' },
+    { ch: '😃', name: '', nameEs: '' },
+    { ch: '😴', name: '', nameEs: '' },
+    { ch: '🤝', name: '', nameEs: '' },
+    { ch: '🤕', name: '', nameEs: '' },
+  ],
+};
+
+let emojiGroupsCache = null;
+let emojiGroupsPromise = null;
+
+const fetchEmojiGroupsFromNetwork = async () => {
+  const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
+    mode: 'cors',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch emoji list');
+  }
+  const list = await res.json();
+
+  let esList = [];
+  try {
+    const resEs = await fetch(
+      'https://cdn.jsdelivr.net/npm/emojibase-data@latest/es/data.json',
+      { mode: 'cors' }
+    );
+    if (resEs.ok) {
+      esList = await resEs.json();
+    }
+  } catch {
+    esList = [];
+  }
+  const esMap = new Map(esList.map((e) => [e.emoji, e.label]));
+
+  const groups = {};
+  list.forEach((e) => {
+    const ch = e.char || e.emoji || '';
+    if (!ch) return;
+    const g = e.group || e.category || 'Otros';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push({
+      ch,
+      name: e.name || '',
+      nameEs: esMap.get(ch) || '',
+    });
+  });
+  return groups;
+};
+
+const ensureEmojiGroups = async () => {
+  if (emojiGroupsCache) return emojiGroupsCache;
+  if (!emojiGroupsPromise) {
+    emojiGroupsPromise = fetchEmojiGroupsFromNetwork()
+      .catch(() => FALLBACK_EMOJI_GROUPS)
+      .then((groups) => {
+        emojiGroupsCache = groups;
+        return groups;
+      })
+      .finally(() => {
+        emojiGroupsPromise = null;
+      });
+  }
+  return emojiGroupsPromise;
+};
+
 const generateQuadrantId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -1132,70 +1211,38 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
-    const loadEmojis = async () => {
-      if (emojiGroups || iconSource !== 'emojis') return;
-      setIconsLoading(true);
-      try {
-        // Obtener lista base de emojis (incluye nombres en inglés y grupo)
-        const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
-          mode: 'cors',
-        });
-        const list = await res.json();
+    if (emojiGroups || iconSource !== 'emojis') return undefined;
+    let isMounted = true;
 
-        // Obtener nombres de emojis en español
-        let esList = [];
-        try {
-          const resEs = await fetch(
-            'https://cdn.jsdelivr.net/npm/emojibase-data@latest/es/data.json',
-            { mode: 'cors' }
-          );
-          esList = await resEs.json();
-        } catch {
-          esList = [];
-        }
-        const esMap = new Map(esList.map((e) => [e.emoji, e.label]));
+    const cachedGroups = emojiGroupsCache;
+    if (cachedGroups) {
+      setEmojiGroups(cachedGroups);
+      setIconsLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
 
-        const groups = {};
-        list.forEach((e) => {
-          const ch = e.char || e.emoji || '';
-          if (!ch) return;
-          const g = e.group || e.category || 'Otros';
-          if (!groups[g]) groups[g] = [];
-          groups[g].push({
-            ch,
-            name: e.name || '',
-            nameEs: esMap.get(ch) || '',
-          });
-        });
+    setIconsLoading(true);
+    ensureEmojiGroups()
+      .then((groups) => {
+        if (!isMounted) return;
         setEmojiGroups(groups);
-      } catch {
-        // Fallback mínimo si no hay red
-        setEmojiGroups({
-          Smileys: [
-            { ch: '😀', name: '', nameEs: '' },
-            { ch: '😄', name: '', nameEs: '' },
-            { ch: '😁', name: '', nameEs: '' },
-            { ch: '😂', name: '', nameEs: '' },
-            { ch: '😉', name: '', nameEs: '' },
-            { ch: '😊', name: '', nameEs: '' },
-            { ch: '😇', name: '', nameEs: '' },
-            { ch: '😈', name: '', nameEs: '' },
-            { ch: '😌', name: '', nameEs: '' },
-            { ch: '🤪', name: '', nameEs: '' },
-            { ch: '🤗', name: '', nameEs: '' },
-            { ch: '🤔', name: '', nameEs: '' },
-            { ch: '🤨', name: '', nameEs: '' },
-            { ch: '😃', name: '', nameEs: '' },
-            { ch: '😴', name: '', nameEs: '' },
-            { ch: '🤝', name: '', nameEs: '' },
-            { ch: '🤕', name: '', nameEs: '' },
-          ],
-        });
-      } finally {
-        setIconsLoading(false);
-      }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        emojiGroupsCache = FALLBACK_EMOJI_GROUPS;
+        setEmojiGroups(FALLBACK_EMOJI_GROUPS);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIconsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
     };
-    loadEmojis();
   }, [iconSource, emojiGroups]);
 
   // Cargar todos los nombres de Lucide localmente del paquete
