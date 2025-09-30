@@ -80,6 +80,9 @@ const L = {
   addCell: 'A\u00F1adir celda',
   delCell: 'Eliminar celda',
   reset: 'Restablecer',
+  mobileQuickControls: 'Controles r\u00E1pidos',
+  mobileReadableHint: 'Activo autom\u00E1ticamente en m\u00F3vil',
+  zoom: 'Zoom',
 };
 
 const stripDiacritics = (value) =>
@@ -2285,6 +2288,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     (c > 0 && grid[r][c - 1]?.active) ||
     (c < cols - 1 && grid[r][c + 1]?.active);
 
+  const mobileToggleRowClass =
+    'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
+  const mobileToggleGroupClass =
+    'space-y-2 rounded-xl border border-gray-700 bg-gray-900/60 p-3 shadow-inner backdrop-blur-sm';
+
   const quadrantSettingsBody = (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -2299,6 +2307,85 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </button>
         )}
       </div>
+      {isMobile && (
+        <div className="space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {L.mobileQuickControls}
+          </div>
+          <div className={mobileToggleGroupClass}>
+            <label className={mobileToggleRowClass}>
+              <span className="text-sm font-medium text-gray-200">{L.shapeEdit}</span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+              />
+            </label>
+            <div className={`${mobileToggleRowClass} opacity-80`}>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-200">{L.readable}</span>
+                <span className="text-[11px] text-gray-400">{L.mobileReadableHint}</span>
+              </div>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={effectiveReadable}
+                readOnly
+                disabled
+              />
+            </div>
+            <div className={mobileToggleRowClass}>
+              <span className="text-sm font-medium text-gray-200">{L.moveMode}</span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-200">{L.autoFit}</span>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-emerald-500"
+                  checked={autoFit}
+                  onChange={(e) => setAutoFit(e.target.checked)}
+                />
+              </div>
+              {!autoFit && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{L.zoom}</span>
+                    <span className="font-semibold text-gray-200">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={35}
+                    max={200}
+                    value={Math.round(zoom * 100)}
+                    onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                    className="h-2 w-full accent-emerald-500"
+                  />
+                </div>
+              )}
+              <Boton
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => {
+                  setZoom(1);
+                  setOffset({ x: 0, y: 0 });
+                }}
+              >
+                {L.reset}
+              </Boton>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-gray-300">{L.rows}</span>
@@ -2966,58 +3053,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                 </div>
               </div>
             </div>
-          </div>
-          <div className="md:hidden mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.shapeEdit}</span>
-              <input
-                type="checkbox"
-                checked={shapeEdit}
-                onChange={(e) => setShapeEdit(e.target.checked)}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2 opacity-75">
-              <span className="font-medium text-gray-200">{L.readable}</span>
-              <input type="checkbox" checked={true} disabled />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.autoFit}</span>
-              <input
-                type="checkbox"
-                checked={autoFit}
-                onChange={(e) => setAutoFit(e.target.checked)}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-              <span className="font-medium text-gray-200">{L.moveMode}</span>
-              <input
-                type="checkbox"
-                checked={isMoveMode}
-                onChange={(e) => setIsMoveMode(e.target.checked)}
-              />
-            </label>
-            {!autoFit && (
-              <div className="flex items-center justify-between gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <span className="font-medium text-gray-200">Zoom</span>
-                <input
-                  type="range"
-                  min={35}
-                  max={200}
-                  value={Math.round(zoom * 100)}
-                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
-                />
-              </div>
-            )}
-            <Boton
-              size="sm"
-              className="w-full sm:col-span-2 justify-center"
-              onClick={() => {
-                setZoom(1);
-                setOffset({ x: 0, y: 0 });
-              }}
-            >
-              {L.reset}
-            </Boton>
           </div>
       </div>
     </div>
