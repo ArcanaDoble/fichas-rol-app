@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useLayoutEffect,
 } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
@@ -614,6 +615,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const shouldShowNewBadge =
     typeof showNewBadge === 'boolean' ? showNewBadge : !isPlayerMode;
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileMapTop, setMobileMapTop] = useState(0);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
@@ -631,10 +633,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
   const [isMultiTouchActive, setIsMultiTouchActive] = useState(false);
-  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
+  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | recursos | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState([]);
+  const [resourceItems, setResourceItems] = useState([]);
   const [cellStylePresets, setCellStylePresets] = useState([]);
   const customizationDocRef = useMemo(
     () => doc(db, 'minimapSettings', 'customization'),
@@ -770,6 +773,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   }, []);
 
   const containerRef = useRef(null);
+  const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
@@ -790,6 +794,37 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       longPressTimersRef.current.delete(key);
     }
   }, []);
+
+  const updateMobileMapTop = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) {
+      setMobileMapTop(0);
+      return;
+    }
+    const headerEl = headerSectionRef.current;
+    if (!headerEl) return;
+    const rect = headerEl.getBoundingClientRect();
+    const spacing = 12;
+    const nextTop = Math.max(rect.bottom + spacing, 0);
+    setMobileMapTop((prev) => (Math.abs(prev - nextTop) > 0.5 ? nextTop : prev));
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    updateMobileMapTop();
+    if (!isMobile) return undefined;
+    window.addEventListener('resize', updateMobileMapTop);
+    window.addEventListener('orientationchange', updateMobileMapTop);
+    return () => {
+      window.removeEventListener('resize', updateMobileMapTop);
+      window.removeEventListener('orientationchange', updateMobileMapTop);
+    };
+  }, [isMobile, updateMobileMapTop]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    updateMobileMapTop();
+  }, [isMobile, updateMobileMapTop, isQuadrantPanelOpen, shouldShowNewBadge]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -1133,27 +1168,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, [activeColorPicker, selectedCellData]);
 
-  const emojiDataUrl = (ch) => {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  };
-
-  const lucideCache = useRef(new Map());
-  const lucideDataUrl = (name) => {
-    const cache = lucideCache.current;
-    if (cache.has(name)) return cache.get(name);
-    const pascal = name
-      .split('-')
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-      .join('');
-    const Icon = LucideIcons[pascal];
-    if (!Icon) return '';
-    const svg = renderToStaticMarkup(<Icon size={64} />);
-    const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    cache.set(name, url);
-    return url;
-  };
-
   const ColorPickerButton = ({
     id,
     label,
@@ -1208,17 +1222,103 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     );
   };
 
-  // CatÃ¡logo bÃ¡sico (Estados/Personalizados). Emojis/Lucide se aÃ±aden por entrada.
-  const allIcons = useMemo(() => {
+  // Catálogo básico (Estados/Personalizados). Emojis/Lucide se añaden por entrada.
+  const baseIconCatalog = useMemo(() => {
     const estadoIcons = ESTADOS.map((e) => ({ url: e.img, name: e.name }));
     const custom = customIcons.map((u) => ({ url: u, name: 'Personalizado' }));
     return {
       estados: estadoIcons,
       personalizados: custom,
-      emojis: [],
-      lucide: [],
     };
   }, [customIcons]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const itemsRef = collection(db, 'customItems');
+    const unsubscribe = onSnapshot(
+      itemsRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        const entries = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        setResourceItems(entries);
+      },
+      (error) => {
+        if (!isMounted) return;
+        console.error('Error fetching custom inventory items', error);
+        setResourceItems([]);
+      }
+    );
+    return () => {
+      isMounted = false;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db]);
+
+  const emojiDataUrl = useCallback((ch) => {
+    const safe = ch && typeof ch === 'string' && ch.length ? ch : '❔';
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${safe}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, []);
+
+  const lucideCache = useRef(new Map());
+  const lucideDataUrl = useCallback(
+    (name) => {
+      if (!name) return '';
+      const cache = lucideCache.current;
+      if (cache.has(name)) return cache.get(name);
+      const pascal = name
+        .split('-')
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join('');
+      const Icon = LucideIcons[pascal];
+      if (!Icon) return '';
+      const svg = renderToStaticMarkup(<Icon size={64} />);
+      const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      cache.set(name, url);
+      return url;
+    },
+    []
+  );
+
+  const resourceCatalog = useMemo(() => {
+    if (!resourceItems.length) return [];
+    const fallback = emojiDataUrl('❔');
+    const seen = new Set();
+    return resourceItems
+      .map((item) => {
+        if (!item) return null;
+        const label = item.name || item.type || 'Recurso';
+        const icon = item.icon || '';
+        let url = '';
+        if (typeof icon === 'string' && icon.startsWith('data:')) {
+          url = icon;
+        } else if (typeof icon === 'string' && icon.startsWith('lucide:')) {
+          url = lucideDataUrl(icon.slice(7));
+        } else if (typeof icon === 'string' && /^https?:/i.test(icon)) {
+          url = icon;
+        } else if (icon) {
+          url = emojiDataUrl(icon);
+        }
+        const finalUrl = url || fallback;
+        if (seen.has(finalUrl)) return null;
+        seen.add(finalUrl);
+        return { url: finalUrl, name: label };
+      })
+      .filter(Boolean);
+  }, [resourceItems, emojiDataUrl, lucideDataUrl]);
+
+  const allIcons = useMemo(
+    () => ({
+      estados: baseIconCatalog.estados,
+      personalizados: baseIconCatalog.personalizados,
+      recursos: resourceCatalog,
+      emojis: [],
+      lucide: [],
+    }),
+    [baseIconCatalog, resourceCatalog]
+  );
 
   // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
@@ -1317,8 +1417,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const cw = el.clientWidth - 16;
-    const ch = el.clientHeight - 16;
+    const rect = el.getBoundingClientRect();
+    const cw = (Number.isFinite(rect.width) ? rect.width : el.clientWidth) - 16;
+    const ch = (Number.isFinite(rect.height) ? rect.height : el.clientHeight) - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
     if (neededW <= 0 || neededH <= 0) {
@@ -1343,6 +1444,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   useEffect(() => {
     recomputeFit();
   }, [recomputeFit, rows, cols, cellSize, isMobile]);
+  useEffect(() => {
+    if (!isMobile) return;
+    recomputeFit();
+  }, [isMobile, mobileMapTop, recomputeFit]);
   useEffect(() => {
     const onResize = () => recomputeFit();
     window.addEventListener('resize', onResize);
@@ -2614,80 +2719,96 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Boton
-            size="sm"
-            className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
-            onClick={onBack}
-          >
-            {L.arrow} {effectiveBackLabel}
-          </Boton>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Minimapa</h1>
-            {shouldShowNewBadge && (
-              <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-                {L.new}
-              </span>
+      <div ref={headerSectionRef} className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Boton
+              size="sm"
+              className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
+              onClick={onBack}
+            >
+              {L.arrow} {effectiveBackLabel}
+            </Boton>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Minimapa</h1>
+              {shouldShowNewBadge && (
+                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+                  {L.new}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+              />
+              <span>{L.shapeEdit}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={effectiveReadable}
+                onChange={(e) => setReadableMode(e.target.checked)}
+              />
+              <span>{L.readable}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <span>{L.autoFit}</span>
+              <input
+                type="checkbox"
+                checked={autoFit}
+                onChange={(e) => setAutoFit(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+              <span>{L.moveMode}</span>
+            </label>
+            {!autoFit && (
+              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={35}
+                  max={200}
+                  value={Math.round(zoom * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                />
+                <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
+              </div>
             )}
+            <Boton
+              size="sm"
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+            >
+              {L.reset}
+            </Boton>
           </div>
         </div>
-        <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={shapeEdit}
-              onChange={(e) => setShapeEdit(e.target.checked)}
-            />
-            <span>{L.shapeEdit}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={effectiveReadable}
-              onChange={(e) => setReadableMode(e.target.checked)}
-            />
-            <span>{L.readable}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <span>{L.autoFit}</span>
-            <input
-              type="checkbox"
-              checked={autoFit}
-              onChange={(e) => setAutoFit(e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={isMoveMode}
-              onChange={(e) => setIsMoveMode(e.target.checked)}
-            />
-            <span>{L.moveMode}</span>
-          </label>
-          {!autoFit && (
-            <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min={35}
-                max={200}
-                value={Math.round(zoom * 100)}
-                onChange={(e) => setZoom(Number(e.target.value) / 100)}
-              />
-              <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
-            </div>
-          )}
-          <Boton
-            size="sm"
-            onClick={() => {
-              setZoom(1);
-              setOffset({ x: 0, y: 0 });
-            }}
-          >
-            {L.reset}
-          </Boton>
-        </div>
+        {isMobile && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-800/60 px-3 py-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+              {L.quadrant}
+            </h2>
+            <Boton
+              size="sm"
+              className="shrink-0"
+              onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
+            >
+              {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
+            </Boton>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -2697,13 +2818,21 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </div>
         )}
 
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
+        <div
+          className={`bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh] flex flex-col ${
+            isMobile ? 'fixed inset-x-0 bottom-0' : ''
+          }`}
+          style={isMobile ? { top: Math.max(mobileMapTop, 0) } : undefined}
+        >
           <div
-            className={`h-full w-full min-h-[80vh] overflow-hidden overscroll-contain ${touchActionClass}`}
+            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass}`}
             ref={containerRef}
             onWheel={handleWheel}
           >
-            <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
+            <div
+              className={`${isMobile ? 'mx-auto w-full max-w-full px-1' : ''} h-full`}
+              style={{ height: '100%' }}
+            >
               <div
                 className="relative mx-auto"
                 style={{
@@ -3058,20 +3187,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     </div>
 
       {isMobile && (
-        <div
-          className={`fixed bottom-4 left-4 right-4 z-50 flex flex-col items-start gap-2 ${
-            isQuadrantPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
-        >
-          <Boton
-            size="sm"
-            className="pointer-events-auto"
-            onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
-          >
-            {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
-          </Boton>
+        <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
           <div
-            className={`w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+            className={`mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
               isQuadrantPanelOpen
                 ? 'pointer-events-auto opacity-100 translate-y-0'
                 : 'pointer-events-none opacity-0 translate-y-2'
@@ -3292,6 +3410,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                             {[
                               { id: 'estados', label: 'Estados' },
                               { id: 'personalizados', label: 'Personalizados' },
+                              { id: 'recursos', label: 'Recursos' },
                               { id: 'emojis', label: 'Emojis' },
                               { id: 'lucide', label: 'Lucide' },
                             ].map((b) => (
@@ -3394,7 +3513,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                               ))}
                             </div>
                           )}
-                          {(iconSource === 'estados' || iconSource === 'personalizados') && (
+                          {['estados', 'personalizados', 'recursos'].includes(iconSource) && (
                             <div className="max-h-40 flex flex-wrap gap-2 overflow-auto rounded-lg bg-gray-900 p-2">
                               {(allIcons[iconSource] || []).map((ico, i) => (
                                 <IconThumb
