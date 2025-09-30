@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useLayoutEffect,
 } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
@@ -614,6 +615,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const shouldShowNewBadge =
     typeof showNewBadge === 'boolean' ? showNewBadge : !isPlayerMode;
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileMapTop, setMobileMapTop] = useState(0);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
@@ -770,6 +772,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   }, []);
 
   const containerRef = useRef(null);
+  const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
@@ -790,6 +793,37 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       longPressTimersRef.current.delete(key);
     }
   }, []);
+
+  const updateMobileMapTop = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) {
+      setMobileMapTop(0);
+      return;
+    }
+    const headerEl = headerSectionRef.current;
+    if (!headerEl) return;
+    const rect = headerEl.getBoundingClientRect();
+    const spacing = 12;
+    const nextTop = Math.max(rect.bottom + spacing, 0);
+    setMobileMapTop((prev) => (Math.abs(prev - nextTop) > 0.5 ? nextTop : prev));
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    updateMobileMapTop();
+    if (!isMobile) return undefined;
+    window.addEventListener('resize', updateMobileMapTop);
+    window.addEventListener('orientationchange', updateMobileMapTop);
+    return () => {
+      window.removeEventListener('resize', updateMobileMapTop);
+      window.removeEventListener('orientationchange', updateMobileMapTop);
+    };
+  }, [isMobile, updateMobileMapTop]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    updateMobileMapTop();
+  }, [isMobile, updateMobileMapTop, isQuadrantPanelOpen, shouldShowNewBadge]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -1317,8 +1351,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const cw = el.clientWidth - 16;
-    const ch = el.clientHeight - 16;
+    const rect = el.getBoundingClientRect();
+    const cw = (Number.isFinite(rect.width) ? rect.width : el.clientWidth) - 16;
+    const ch = (Number.isFinite(rect.height) ? rect.height : el.clientHeight) - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
     if (neededW <= 0 || neededH <= 0) {
@@ -1343,6 +1378,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   useEffect(() => {
     recomputeFit();
   }, [recomputeFit, rows, cols, cellSize, isMobile]);
+  useEffect(() => {
+    if (!isMobile) return;
+    recomputeFit();
+  }, [isMobile, mobileMapTop, recomputeFit]);
   useEffect(() => {
     const onResize = () => recomputeFit();
     window.addEventListener('resize', onResize);
@@ -2614,80 +2653,96 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Boton
-            size="sm"
-            className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
-            onClick={onBack}
-          >
-            {L.arrow} {effectiveBackLabel}
-          </Boton>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Minimapa</h1>
-            {shouldShowNewBadge && (
-              <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-                {L.new}
-              </span>
+      <div ref={headerSectionRef} className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Boton
+              size="sm"
+              className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
+              onClick={onBack}
+            >
+              {L.arrow} {effectiveBackLabel}
+            </Boton>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Minimapa</h1>
+              {shouldShowNewBadge && (
+                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+                  {L.new}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+              />
+              <span>{L.shapeEdit}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={effectiveReadable}
+                onChange={(e) => setReadableMode(e.target.checked)}
+              />
+              <span>{L.readable}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <span>{L.autoFit}</span>
+              <input
+                type="checkbox"
+                checked={autoFit}
+                onChange={(e) => setAutoFit(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+              <span>{L.moveMode}</span>
+            </label>
+            {!autoFit && (
+              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={35}
+                  max={200}
+                  value={Math.round(zoom * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                />
+                <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
+              </div>
             )}
+            <Boton
+              size="sm"
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+            >
+              {L.reset}
+            </Boton>
           </div>
         </div>
-        <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={shapeEdit}
-              onChange={(e) => setShapeEdit(e.target.checked)}
-            />
-            <span>{L.shapeEdit}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={effectiveReadable}
-              onChange={(e) => setReadableMode(e.target.checked)}
-            />
-            <span>{L.readable}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <span>{L.autoFit}</span>
-            <input
-              type="checkbox"
-              checked={autoFit}
-              onChange={(e) => setAutoFit(e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={isMoveMode}
-              onChange={(e) => setIsMoveMode(e.target.checked)}
-            />
-            <span>{L.moveMode}</span>
-          </label>
-          {!autoFit && (
-            <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min={35}
-                max={200}
-                value={Math.round(zoom * 100)}
-                onChange={(e) => setZoom(Number(e.target.value) / 100)}
-              />
-              <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
-            </div>
-          )}
-          <Boton
-            size="sm"
-            onClick={() => {
-              setZoom(1);
-              setOffset({ x: 0, y: 0 });
-            }}
-          >
-            {L.reset}
-          </Boton>
-        </div>
+        {isMobile && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-800/60 px-3 py-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+              {L.quadrant}
+            </h2>
+            <Boton
+              size="sm"
+              className="shrink-0"
+              onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
+            >
+              {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
+            </Boton>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -2697,13 +2752,21 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </div>
         )}
 
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
+        <div
+          className={`bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh] flex flex-col ${
+            isMobile ? 'fixed inset-x-0 bottom-0' : ''
+          }`}
+          style={isMobile ? { top: Math.max(mobileMapTop, 0) } : undefined}
+        >
           <div
-            className={`h-full w-full min-h-[80vh] overflow-hidden overscroll-contain ${touchActionClass}`}
+            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass}`}
             ref={containerRef}
             onWheel={handleWheel}
           >
-            <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
+            <div
+              className={`${isMobile ? 'mx-auto w-full max-w-full px-1' : ''} h-full`}
+              style={{ height: '100%' }}
+            >
               <div
                 className="relative mx-auto"
                 style={{
@@ -3058,20 +3121,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     </div>
 
       {isMobile && (
-        <div
-          className={`fixed bottom-4 left-4 right-4 z-50 flex flex-col items-start gap-2 ${
-            isQuadrantPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
-        >
-          <Boton
-            size="sm"
-            className="pointer-events-auto"
-            onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
-          >
-            {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
-          </Boton>
+        <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
           <div
-            className={`w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+            className={`mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
               isQuadrantPanelOpen
                 ? 'pointer-events-auto opacity-100 translate-y-0'
                 : 'pointer-events-none opacity-0 translate-y-2'
