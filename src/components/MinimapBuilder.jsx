@@ -633,10 +633,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
   const [isMultiTouchActive, setIsMultiTouchActive] = useState(false);
-  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
+  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | recursos | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState([]);
+  const [resourceItems, setResourceItems] = useState([]);
   const [cellStylePresets, setCellStylePresets] = useState([]);
   const customizationDocRef = useMemo(
     () => doc(db, 'minimapSettings', 'customization'),
@@ -1167,27 +1168,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, [activeColorPicker, selectedCellData]);
 
-  const emojiDataUrl = (ch) => {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  };
-
-  const lucideCache = useRef(new Map());
-  const lucideDataUrl = (name) => {
-    const cache = lucideCache.current;
-    if (cache.has(name)) return cache.get(name);
-    const pascal = name
-      .split('-')
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-      .join('');
-    const Icon = LucideIcons[pascal];
-    if (!Icon) return '';
-    const svg = renderToStaticMarkup(<Icon size={64} />);
-    const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    cache.set(name, url);
-    return url;
-  };
-
   const ColorPickerButton = ({
     id,
     label,
@@ -1242,17 +1222,103 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     );
   };
 
-  // CatÃ¡logo bÃ¡sico (Estados/Personalizados). Emojis/Lucide se aÃ±aden por entrada.
-  const allIcons = useMemo(() => {
+  // Catálogo básico (Estados/Personalizados). Emojis/Lucide se añaden por entrada.
+  const baseIconCatalog = useMemo(() => {
     const estadoIcons = ESTADOS.map((e) => ({ url: e.img, name: e.name }));
     const custom = customIcons.map((u) => ({ url: u, name: 'Personalizado' }));
     return {
       estados: estadoIcons,
       personalizados: custom,
-      emojis: [],
-      lucide: [],
     };
   }, [customIcons]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const itemsRef = collection(db, 'customItems');
+    const unsubscribe = onSnapshot(
+      itemsRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        const entries = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        setResourceItems(entries);
+      },
+      (error) => {
+        if (!isMounted) return;
+        console.error('Error fetching custom inventory items', error);
+        setResourceItems([]);
+      }
+    );
+    return () => {
+      isMounted = false;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db]);
+
+  const emojiDataUrl = useCallback((ch) => {
+    const safe = ch && typeof ch === 'string' && ch.length ? ch : '❔';
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${safe}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, []);
+
+  const lucideCache = useRef(new Map());
+  const lucideDataUrl = useCallback(
+    (name) => {
+      if (!name) return '';
+      const cache = lucideCache.current;
+      if (cache.has(name)) return cache.get(name);
+      const pascal = name
+        .split('-')
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join('');
+      const Icon = LucideIcons[pascal];
+      if (!Icon) return '';
+      const svg = renderToStaticMarkup(<Icon size={64} />);
+      const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      cache.set(name, url);
+      return url;
+    },
+    []
+  );
+
+  const resourceCatalog = useMemo(() => {
+    if (!resourceItems.length) return [];
+    const fallback = emojiDataUrl('❔');
+    const seen = new Set();
+    return resourceItems
+      .map((item) => {
+        if (!item) return null;
+        const label = item.name || item.type || 'Recurso';
+        const icon = item.icon || '';
+        let url = '';
+        if (typeof icon === 'string' && icon.startsWith('data:')) {
+          url = icon;
+        } else if (typeof icon === 'string' && icon.startsWith('lucide:')) {
+          url = lucideDataUrl(icon.slice(7));
+        } else if (typeof icon === 'string' && /^https?:/i.test(icon)) {
+          url = icon;
+        } else if (icon) {
+          url = emojiDataUrl(icon);
+        }
+        const finalUrl = url || fallback;
+        if (seen.has(finalUrl)) return null;
+        seen.add(finalUrl);
+        return { url: finalUrl, name: label };
+      })
+      .filter(Boolean);
+  }, [resourceItems, emojiDataUrl, lucideDataUrl]);
+
+  const allIcons = useMemo(
+    () => ({
+      estados: baseIconCatalog.estados,
+      personalizados: baseIconCatalog.personalizados,
+      recursos: resourceCatalog,
+      emojis: [],
+      lucide: [],
+    }),
+    [baseIconCatalog, resourceCatalog]
+  );
 
   // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
@@ -3344,6 +3410,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                             {[
                               { id: 'estados', label: 'Estados' },
                               { id: 'personalizados', label: 'Personalizados' },
+                              { id: 'recursos', label: 'Recursos' },
                               { id: 'emojis', label: 'Emojis' },
                               { id: 'lucide', label: 'Lucide' },
                             ].map((b) => (
@@ -3446,7 +3513,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                               ))}
                             </div>
                           )}
-                          {(iconSource === 'estados' || iconSource === 'personalizados') && (
+                          {['estados', 'personalizados', 'recursos'].includes(iconSource) && (
                             <div className="max-h-40 flex flex-wrap gap-2 overflow-auto rounded-lg bg-gray-900 p-2">
                               {(allIcons[iconSource] || []).map((ico, i) => (
                                 <IconThumb

@@ -1694,6 +1694,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Nuevo modo “Mover mapa”: activa el toggle dedicado o mantén dos dedos sobre el minimapa para arrastrarlo sin editar celdas; desactívalo para volver al modo de edición.
 - Nuevo toggle “Modo legible”: engrosa temporalmente las líneas del grid para mejorar la lectura en móviles o a escalas bajas.
 - Buscadores de emojis y Lucide con listado completo de iconos cargados localmente.
+- Nueva categoría «Recursos» que añade al selector los iconos de objetos personalizados del inventario creados desde las herramientas de máster.
 - Botón de eliminación de celdas sin fondo, solo la “X” roja.
 - Selección múltiple de celdas para editar o eliminar varias a la vez.
 - Selectores de color con opción de introducir valores HEX personalizados.
