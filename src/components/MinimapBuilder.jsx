@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
+import Modal from './Modal';
 import { ESTADOS } from './EstadoSelector';
 import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
@@ -60,6 +61,18 @@ const L = {
   iconAdd: 'A\u00F1adir icono personalizado',
   iconDelete: 'Eliminar icono',
   annotations: 'Anotaciones',
+  masterNotesSummary: 'Notas del cuadrante',
+  masterNotesButton: 'Resumen para el Máster',
+  masterNotesTitle: 'Resumen de anotaciones',
+  masterNotesEmpty: 'No hay anotaciones registradas en este cuadrante.',
+  masterNotesSearchPlaceholder: 'Buscar por celda, autor o texto…',
+  masterNotesCounter: 'Anotaciones: {count}',
+  masterNotesCell: 'Celda',
+  masterNotesNoteSingular: 'nota',
+  masterNotesNotePlural: 'notas',
+  masterNotesViewCell: 'Ver celda',
+  masterNotesRemove: 'Eliminar',
+  masterNotesNoText: 'Sin texto, solo icono.',
   masterNoteTag: 'Máster',
   playerNoteTag: 'Jugador',
   playerNotesList: 'Notas de jugadores',
@@ -923,6 +936,8 @@ function MinimapBuilder({
   const [activeColorPicker, setActiveColorPicker] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [annotations, setAnnotations] = useState([]);
+  const [isMasterNotesOpen, setIsMasterNotesOpen] = useState(false);
+  const [masterNotesSearch, setMasterNotesSearch] = useState('');
   const [shapeEdit, setShapeEdit] = useState(false);
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
@@ -994,6 +1009,11 @@ function MinimapBuilder({
     localQuadrantsRef.current = filtered;
     persistQuadrantsToLocalStorage(filtered);
   };
+  useEffect(() => {
+    if (!isMasterNotesOpen) {
+      setMasterNotesSearch('');
+    }
+  }, [isMasterNotesOpen]);
   useEffect(() => {
     setQuadrants((prev) => filterQuadrantsForMode(prev));
     localQuadrantsRef.current = filterQuadrantsForMode(
@@ -1095,6 +1115,90 @@ function MinimapBuilder({
     if (!isPlayerMode) return activeAnnotations;
     return activeAnnotations.filter((ann) => ann.authorRole !== 'master');
   }, [activeAnnotations, isPlayerMode]);
+  const masterAnnotationsSummary = useMemo(() => {
+    if (isPlayerMode) return [];
+    const groups = new Map();
+    activeAnnotations.forEach((ann) => {
+      const cellKey = `${ann.r}-${ann.c}`;
+      if (!groups.has(cellKey)) {
+        groups.set(cellKey, {
+          key: cellKey,
+          r: ann.r,
+          c: ann.c,
+          notes: [],
+        });
+      }
+      groups.get(cellKey).notes.push(ann);
+    });
+    const sortNotes = (a, b) => {
+      if (a.authorRole !== b.authorRole) {
+        return a.authorRole === 'master' ? -1 : 1;
+      }
+      const nameA = stripDiacritics(a.authorName || '').toLowerCase();
+      const nameB = stripDiacritics(b.authorName || '').toLowerCase();
+      if (nameA < nameB) return -1;
+      if (nameA > nameB) return 1;
+      const textA = stripDiacritics(a.text || '').toLowerCase();
+      const textB = stripDiacritics(b.text || '').toLowerCase();
+      if (textA < textB) return -1;
+      if (textA > textB) return 1;
+      return 0;
+    };
+    return Array.from(groups.values())
+      .map((entry) => ({
+        ...entry,
+        notes: entry.notes.slice().sort(sortNotes),
+      }))
+      .sort((a, b) => {
+        if (a.r !== b.r) return a.r - b.r;
+        return a.c - b.c;
+      });
+  }, [activeAnnotations, isPlayerMode]);
+  const masterAnnotationsCount = useMemo(
+    () =>
+      masterAnnotationsSummary.reduce(
+        (total, entry) => total + entry.notes.length,
+        0
+      ),
+    [masterAnnotationsSummary]
+  );
+  const filteredMasterAnnotations = useMemo(() => {
+    if (isPlayerMode) return [];
+    const normalizedTerm = stripDiacritics(masterNotesSearch || '')
+      .toLowerCase()
+      .trim();
+    if (!normalizedTerm) {
+      return masterAnnotationsSummary;
+    }
+    return masterAnnotationsSummary
+      .map((entry) => {
+        const filteredNotes = entry.notes.filter((note) => {
+          const haystack = [
+            `${entry.r + 1}`,
+            `${entry.c + 1}`,
+            `${entry.r + 1}x${entry.c + 1}`,
+            `${entry.r + 1},${entry.c + 1}`,
+            note.text,
+            note.icon,
+            note.authorName,
+            note.authorRole === 'master' ? L.masterNoteTag : L.playerNoteTag,
+          ];
+          return haystack.some((value) => {
+            if (!value) return false;
+            return stripDiacritics(String(value))
+              .toLowerCase()
+              .includes(normalizedTerm);
+          });
+        });
+        if (filteredNotes.length === 0) return null;
+        return { ...entry, notes: filteredNotes };
+      })
+      .filter(Boolean);
+  }, [
+    isPlayerMode,
+    masterNotesSearch,
+    masterAnnotationsSummary,
+  ]);
   const propertyTabs = useMemo(() => {
     const tabs = [];
     if (canEditActiveQuadrant) {
@@ -3553,6 +3657,28 @@ function MinimapBuilder({
             )}
           </div>
         )}
+        {!isPlayerMode && (
+          <div className="space-y-2 rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {L.masterNotesSummary}
+              </span>
+              <span className="text-[11px] text-gray-400">
+                {L.masterNotesCounter.replace(
+                  '{count}',
+                  String(masterAnnotationsCount)
+                )}
+              </span>
+            </div>
+            <Boton
+              size="sm"
+              className="w-full justify-center"
+              onClick={() => setIsMasterNotesOpen(true)}
+            >
+              {L.masterNotesButton}
+            </Boton>
+          </div>
+        )}
         {currentQuadrantIndex !== null && (
           <div className="text-xs text-emerald-400">
             Editando: {quadrants[currentQuadrantIndex]?.title}
@@ -5078,6 +5204,129 @@ function MinimapBuilder({
             </div>
           );
         })()}
+
+      {!isPlayerMode && (
+        <Modal
+          isOpen={isMasterNotesOpen}
+          onClose={() => setIsMasterNotesOpen(false)}
+          title={L.masterNotesTitle}
+          size="lg"
+        >
+          <div className="space-y-4 text-sm">
+            <div className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  {L.masterNotesSummary}
+                </p>
+                <p className="text-[11px] text-gray-400">
+                  {L.masterNotesCounter.replace(
+                    '{count}',
+                    String(masterAnnotationsCount)
+                  )}
+                </p>
+              </div>
+              <input
+                type="text"
+                value={masterNotesSearch}
+                onChange={(e) => setMasterNotesSearch(e.target.value)}
+                placeholder={L.masterNotesSearchPlaceholder}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            {filteredMasterAnnotations.length === 0 ? (
+              <p className="text-sm text-gray-400">{L.masterNotesEmpty}</p>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {filteredMasterAnnotations.map((entry) => (
+                  <div
+                    key={entry.key}
+                    className="rounded-lg border border-gray-700 bg-gray-800/70"
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2 text-xs text-gray-300">
+                      <span className="font-semibold uppercase tracking-wide">
+                        {L.masterNotesCell} {entry.r + 1} × {entry.c + 1}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        {entry.notes.length}{' '}
+                        {entry.notes.length === 1
+                          ? L.masterNotesNoteSingular
+                          : L.masterNotesNotePlural}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-700">
+                      {entry.notes.map((note) => (
+                        <div
+                          key={note.key}
+                          className="space-y-2 px-3 py-2 text-sm text-gray-200"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                            <span
+                              className={`font-semibold uppercase tracking-wide ${
+                                note.authorRole === 'master'
+                                  ? 'text-emerald-300'
+                                  : 'text-amber-200'
+                              }`}
+                            >
+                              {note.authorRole === 'master'
+                                ? L.masterNoteTag
+                                : note.authorName || L.playerNoteTag}
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Boton
+                                size="xs"
+                                onClick={() => {
+                                  setSelectedCells([{ r: note.r, c: note.c }]);
+                                  setPanelTab('notes');
+                                  setIsPropertyPanelOpen(true);
+                                  setIsMasterNotesOpen(false);
+                                }}
+                              >
+                                {L.masterNotesViewCell}
+                              </Boton>
+                              <Boton
+                                size="xs"
+                                color="red"
+                                onClick={() =>
+                                  setAnnotation(
+                                    note.r,
+                                    note.c,
+                                    { text: '', icon: '' },
+                                    { existing: note, override: true }
+                                  )
+                                }
+                              >
+                                {L.masterNotesRemove}
+                              </Boton>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            {note.icon && (
+                              <img
+                                src={note.icon}
+                                alt=""
+                                className="h-8 w-8 flex-shrink-0 rounded border border-gray-700 bg-gray-900 object-contain"
+                              />
+                            )}
+                            <div className="space-y-1">
+                              {note.text ? (
+                                <p className="text-sm text-gray-100">{note.text}</p>
+                              ) : (
+                                <p className="text-xs italic text-gray-400">
+                                  {L.masterNotesNoText}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
 
     </div>
   );
