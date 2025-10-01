@@ -11,6 +11,7 @@ import Boton from './Boton';
 import { ESTADOS } from './EstadoSelector';
 import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
+import { updateMinimapExplorationCells } from '../utils/minimapExploration';
 import useConfirm from '../hooks/useConfirm';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -81,6 +82,13 @@ const L = {
   noPlayers: 'Sin jugadores disponibles',
   sharedQuadrantTag: 'Compartido',
   sharedQuadrantHint: 'Asignado por el M\u00E1ster',
+  explorerMasterHint:
+    'Controla qu\u00E9 zonas descubre el modo explorador compartido.',
+  explorerMasterToggle: 'Herramientas del m\u00E1ster',
+  explorerMasterToggleHide: 'Ocultar herramientas',
+  explorerRevealFrontier: 'Revelar frontera',
+  explorerRevealSelection: 'Revelar selecci\u00F3n',
+  explorerHideSelection: 'Ocultar selecci\u00F3n',
   masterQuadrantLocked:
     'Este cuadrante fue compartido por el M\u00E1ster y es de solo lectura.',
   unsavedChangesConfirm:
@@ -925,6 +933,8 @@ function MinimapBuilder({
   const [customIcons, setCustomIcons] = useState([]);
   const [resourceItems, setResourceItems] = useState([]);
   const [exploredCellKeys, setExploredCellKeys] = useState([]);
+  const [showMasterExplorerControls, setShowMasterExplorerControls] =
+    useState(false);
   const [explorationLoaded, setExplorationLoaded] = useState(false);
   const [playersList, setPlayersList] = useState([]);
   const trimmedPlayerName =
@@ -1038,6 +1048,12 @@ function MinimapBuilder({
     if (!isPlayerMode) return false;
     return activeOwnerKey === 'master';
   }, [isPlayerMode, activeOwnerKey]);
+  const isMasterSharingQuadrant = useMemo(() => {
+    if (isPlayerMode) return false;
+    return Array.isArray(activeQuadrantSharedWith)
+      ? activeQuadrantSharedWith.length > 0
+      : false;
+  }, [activeQuadrantSharedWith, isPlayerMode]);
   const canEditActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
     if (!activeOwnerKey) return true;
@@ -1114,9 +1130,15 @@ function MinimapBuilder({
     () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
     [isPlayerMode, isSharedMasterQuadrant, originCellKey]
   );
+  const shouldTrackExploration = useMemo(() => {
+    if (isPlayerMode) {
+      return isSharedMasterQuadrant;
+    }
+    return isMasterSharingQuadrant;
+  }, [isMasterSharingQuadrant, isPlayerMode, isSharedMasterQuadrant]);
 
   const explorerState = useMemo(() => {
-    if (!isExplorerModeActive) {
+    if (!isExplorerModeActive && !isMasterSharingQuadrant) {
       return { exploredSet: new Set(), frontierSet: new Set() };
     }
     const validExplored = new Set();
@@ -1150,6 +1172,7 @@ function MinimapBuilder({
     exploredCellKeys,
     grid,
     isExplorerModeActive,
+    isMasterSharingQuadrant,
     originCellKey,
     rows,
     cols,
@@ -1163,6 +1186,48 @@ function MinimapBuilder({
     explorerFrontierSet.forEach((key) => combined.add(key));
     return combined;
   }, [exploredCellsSet, explorerFrontierSet, isExplorerModeActive]);
+  const selectedExplorerFrontierKeys = useMemo(() => {
+    if (!isMasterSharingQuadrant || selectedCells.length === 0) return [];
+    const seen = new Set();
+    const keys = [];
+    selectedCells.forEach(({ r, c }) => {
+      if (r < 0 || c < 0) return;
+      const key = cellKeyFromIndices(r, c);
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (!explorerFrontierSet.has(key)) return;
+      if (exploredCellsSet.has(key)) return;
+      keys.push(key);
+    });
+    return keys;
+  }, [
+    exploredCellsSet,
+    explorerFrontierSet,
+    isMasterSharingQuadrant,
+    selectedCells,
+  ]);
+  const selectedExploredKeys = useMemo(() => {
+    if (!isMasterSharingQuadrant || selectedCells.length === 0) return [];
+    const seen = new Set();
+    const keys = [];
+    selectedCells.forEach(({ r, c }) => {
+      if (r < 0 || c < 0) return;
+      const key = cellKeyFromIndices(r, c);
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (!exploredCellsSet.has(key)) return;
+      if (originCellKey && key === originCellKey) return;
+      keys.push(key);
+    });
+    return keys;
+  }, [
+    exploredCellsSet,
+    isMasterSharingQuadrant,
+    originCellKey,
+    selectedCells,
+  ]);
+  const shouldShowExplorerNotice =
+    isExplorerModeActive || isMasterSharingQuadrant;
   useEffect(() => {
     if (propertyTabs.length === 0) return;
     if (!propertyTabs.some((tab) => tab.id === panelTab)) {
@@ -1466,7 +1531,12 @@ function MinimapBuilder({
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
   useEffect(() => {
-    if (!isPlayerMode || !isSharedMasterQuadrant || !activeQuadrantId) {
+    if (!isMasterSharingQuadrant) {
+      setShowMasterExplorerControls(false);
+    }
+  }, [isMasterSharingQuadrant]);
+  useEffect(() => {
+    if (!activeQuadrantId || !shouldTrackExploration) {
       setExplorationLoaded(false);
       setExploredCellKeys([]);
       return undefined;
@@ -1511,12 +1581,7 @@ function MinimapBuilder({
       } catch {}
       setExplorationLoaded(false);
     };
-  }, [
-    activeQuadrantId,
-    db,
-    isPlayerMode,
-    isSharedMasterQuadrant,
-  ]);
+  }, [activeQuadrantId, db, shouldTrackExploration]);
   useEffect(() => {
     if (!isExplorerModeActive || !originCellKey) return;
     if (!explorationLoaded) return;
@@ -2494,26 +2559,57 @@ function MinimapBuilder({
     handlePointerUp,
   ]);
 
+  const applyExplorerMutation = ({
+    keys,
+    action,
+    masterModeOverride = false,
+  }) => {
+    if (!activeQuadrantId) return;
+    updateMinimapExplorationCells({
+      db,
+      quadrantId: activeQuadrantId,
+      keys,
+      action,
+      masterMode: masterModeOverride,
+      exploredCellsSet,
+      explorerFrontierSet,
+      setExploredCellKeys,
+    }).catch((error) => {
+      console.error('Error updating minimap exploration cells', error);
+    });
+  };
   const revealExplorerCell = (r, c) => {
     if (!isExplorerModeActive) return;
     const key = cellKeyFromIndices(r, c);
-    if (exploredCellsSet.has(key)) return;
-    if (!explorerFrontierSet.has(key)) return;
-    setExploredCellKeys((prev) =>
-      prev.includes(key) ? prev : [...prev, key]
-    );
-    if (!activeQuadrantId) return;
-    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
-    setDoc(
-      explorationDocRef,
-      {
-        cells: arrayUnion(key),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    ).catch((error) =>
-      console.error('Error revealing minimap exploration cell', error)
-    );
+    applyExplorerMutation({ keys: [key], action: 'add' });
+  };
+  const handleMasterRevealFrontier = () => {
+    if (!isMasterSharingQuadrant) return;
+    const keys = Array.from(explorerFrontierSet);
+    if (keys.length === 0) return;
+    applyExplorerMutation({
+      keys,
+      action: 'add',
+      masterModeOverride: true,
+    });
+  };
+  const handleMasterRevealSelection = () => {
+    if (!isMasterSharingQuadrant) return;
+    if (selectedExplorerFrontierKeys.length === 0) return;
+    applyExplorerMutation({
+      keys: selectedExplorerFrontierKeys,
+      action: 'add',
+      masterModeOverride: true,
+    });
+  };
+  const handleMasterHideSelection = () => {
+    if (!isMasterSharingQuadrant) return;
+    if (selectedExploredKeys.length === 0) return;
+    applyExplorerMutation({
+      keys: selectedExploredKeys,
+      action: 'remove',
+      masterModeOverride: true,
+    });
   };
   const handleCellClick = (r, c) => {
     if (isExplorerModeActive) {
@@ -3760,17 +3856,61 @@ function MinimapBuilder({
             </Boton>
           </div>
         )}
-        {isExplorerModeActive && (
-          <div className="flex items-center gap-3 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner">
-            <LucideIcons.Compass className="h-5 w-5 text-sky-300" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
-                Modo explorador
-              </span>
-              <span className="text-xs text-sky-100/80">
-                Descubre celdas adyacentes para revelar el cuadrante compartido.
-              </span>
+        {shouldShowExplorerNotice && (
+          <div className="flex flex-col gap-2 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <LucideIcons.Compass className="h-5 w-5 text-sky-300" />
+              <div className="flex flex-col leading-tight">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                  Modo explorador
+                </span>
+                <span className="text-xs text-sky-100/80">
+                  {isPlayerMode
+                    ? 'Descubre celdas adyacentes para revelar el cuadrante compartido.'
+                    : L.explorerMasterHint}
+                </span>
+              </div>
             </div>
+            {isMasterSharingQuadrant && (
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <Boton
+                  size="xs"
+                  className="justify-center border border-sky-600/40 bg-sky-800/60 text-sky-100 hover:bg-sky-700/60"
+                  onClick={() =>
+                    setShowMasterExplorerControls((prev) => !prev)
+                  }
+                >
+                  {showMasterExplorerControls
+                    ? L.explorerMasterToggleHide
+                    : L.explorerMasterToggle}
+                </Boton>
+                {showMasterExplorerControls && (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Boton
+                      size="xs"
+                      onClick={handleMasterRevealFrontier}
+                      disabled={explorerFrontierSet.size === 0}
+                    >
+                      {L.explorerRevealFrontier}
+                    </Boton>
+                    <Boton
+                      size="xs"
+                      onClick={handleMasterRevealSelection}
+                      disabled={selectedExplorerFrontierKeys.length === 0}
+                    >
+                      {L.explorerRevealSelection}
+                    </Boton>
+                    <Boton
+                      size="xs"
+                      onClick={handleMasterHideSelection}
+                      disabled={selectedExploredKeys.length === 0}
+                    >
+                      {L.explorerHideSelection}
+                    </Boton>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
