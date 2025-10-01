@@ -25,6 +25,7 @@ import {
   where,
   writeBatch,
   serverTimestamp,
+  arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -545,6 +546,27 @@ const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
 const getGridCell = (grid, r, c) =>
   Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r][c] : null;
 
+const cellKeyFromIndices = (r, c) => `${r}-${c}`;
+
+const parseCellKey = (key) => {
+  if (typeof key !== 'string') return null;
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('-');
+  if (parts.length !== 2) return null;
+  const r = Number.parseInt(parts[0], 10);
+  const c = Number.parseInt(parts[1], 10);
+  if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
+  return { r, c };
+};
+
+const getOrthogonalNeighbors = (r, c) => [
+  { r: r - 1, c },
+  { r: r + 1, c },
+  { r, c: c - 1 },
+  { r, c: c + 1 },
+];
+
 const sanitizeGridStructure = (grid, rows, cols) => {
   const fallbackRows = Array.isArray(grid) && grid.length > 0 ? grid.length : 8;
   const fallbackCols =
@@ -608,6 +630,70 @@ const sanitizeSharedWith = (value) => {
     result.push(trimmed);
   });
   return result;
+};
+
+const arraysShallowEqual = (a = [], b = []) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const createQuadrantSnapshot = (data = {}) => {
+  const { rows, cols, grid } = sanitizeGridStructure(
+    data.grid,
+    data.rows,
+    data.cols
+  );
+  return {
+    rows,
+    cols,
+    cellSize: sanitizeCellSize(data.cellSize),
+    grid,
+    sharedWith: sanitizeSharedWith(data.sharedWith),
+  };
+};
+
+const quadrantSnapshotsEqual = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.rows !== b.rows || a.cols !== b.cols) return false;
+  if (a.cellSize !== b.cellSize) return false;
+  if (!sharedWithEquals(a.sharedWith, b.sharedWith)) return false;
+  if (a.grid.length !== b.grid.length) return false;
+  for (let r = 0; r < a.grid.length; r += 1) {
+    const rowA = a.grid[r];
+    const rowB = b.grid[r];
+    if (!rowA || !rowB || rowA.length !== rowB.length) return false;
+    for (let c = 0; c < rowA.length; c += 1) {
+      const cellA = rowA[c];
+      const cellB = rowB[c];
+      if (!cellA || !cellB) return false;
+      if (
+        cellA.fill !== cellB.fill ||
+        cellA.borderColor !== cellB.borderColor ||
+        cellA.borderWidth !== cellB.borderWidth ||
+        cellA.borderStyle !== cellB.borderStyle ||
+        cellA.icon !== cellB.icon ||
+        cellA.iconRotation !== cellB.iconRotation ||
+        cellA.active !== cellB.active
+      ) {
+        return false;
+      }
+      const effectA = cellA.effect || { type: 'none', color: '' };
+      const effectB = cellB.effect || { type: 'none', color: '' };
+      if (
+        effectA.type !== effectB.type ||
+        effectA.color !== effectB.color
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
 };
 
 const normalizeAnnotationMetadata = (
@@ -838,6 +924,8 @@ function MinimapBuilder({
   const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState([]);
   const [resourceItems, setResourceItems] = useState([]);
+  const [exploredCellKeys, setExploredCellKeys] = useState([]);
+  const [explorationLoaded, setExplorationLoaded] = useState(false);
   const [playersList, setPlayersList] = useState([]);
   const trimmedPlayerName =
     typeof playerName === 'string' ? playerName.trim() : '';
@@ -915,6 +1003,16 @@ function MinimapBuilder({
     const sanitizedShared = sanitizeSharedWith(current.sharedWith);
     setActiveQuadrantSharedWith((prev) =>
       sharedWithEquals(prev, sanitizedShared) ? prev : sanitizedShared
+    );
+    const snapshot = createQuadrantSnapshot({
+      rows: current.rows,
+      cols: current.cols,
+      cellSize: current.cellSize,
+      grid: current.grid,
+      sharedWith: sanitizedShared,
+    });
+    setLoadedQuadrantData((prev) =>
+      prev && quadrantSnapshotsEqual(prev, snapshot) ? prev : snapshot
     );
   }, [quadrants, currentQuadrantIndex, defaultOwner]);
   const getLocalQuadrantsSnapshot = () =>
@@ -995,6 +1093,75 @@ function MinimapBuilder({
     }
     return tabs;
   }, [canEditActiveQuadrant, canAnnotateActiveQuadrant]);
+  const originCellPosition = useMemo(() => {
+    if (!isPlayerMode) return null;
+    for (let r = 0; r < grid.length; r += 1) {
+      const row = grid[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length; c += 1) {
+        const cell = row[c];
+        if (cell && cell.icon === ORIGIN_ICON_DATA_URL) {
+          return { r, c };
+        }
+      }
+    }
+    return null;
+  }, [grid, isPlayerMode]);
+  const originCellKey = originCellPosition
+    ? cellKeyFromIndices(originCellPosition.r, originCellPosition.c)
+    : null;
+  const isExplorerModeActive = useMemo(
+    () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
+    [isPlayerMode, isSharedMasterQuadrant, originCellKey]
+  );
+  const explorerState = useMemo(() => {
+    if (!isExplorerModeActive) {
+      return { exploredSet: new Set(), frontierSet: new Set() };
+    }
+    const validExplored = new Set();
+    exploredCellKeys.forEach((key) => {
+      const pos = parseCellKey(key);
+      if (!pos) return;
+      const { r, c } = pos;
+      if (r < 0 || c < 0 || r >= rows || c >= cols) return;
+      const cell = grid[r]?.[c];
+      if (!cell || !cell.active) return;
+      validExplored.add(cellKeyFromIndices(r, c));
+    });
+    if (originCellKey && !validExplored.has(originCellKey)) {
+      validExplored.add(originCellKey);
+    }
+    const frontier = new Set();
+    validExplored.forEach((key) => {
+      const pos = parseCellKey(key);
+      if (!pos) return;
+      getOrthogonalNeighbors(pos.r, pos.c).forEach(({ r, c }) => {
+        if (r < 0 || c < 0 || r >= rows || c >= cols) return;
+        const neighbor = grid[r]?.[c];
+        if (!neighbor || !neighbor.active) return;
+        const neighborKey = cellKeyFromIndices(r, c);
+        if (validExplored.has(neighborKey)) return;
+        frontier.add(neighborKey);
+      });
+    });
+    return { exploredSet: validExplored, frontierSet: frontier };
+  }, [
+    exploredCellKeys,
+    grid,
+    isExplorerModeActive,
+    originCellKey,
+    rows,
+    cols,
+  ]);
+  const exploredCellsSet = explorerState.exploredSet;
+  const explorerFrontierSet = explorerState.frontierSet;
+  const explorerVisibleSet = useMemo(() => {
+    if (!isExplorerModeActive) return null;
+    const combined = new Set();
+    exploredCellsSet.forEach((key) => combined.add(key));
+    explorerFrontierSet.forEach((key) => combined.add(key));
+    return combined;
+  }, [exploredCellsSet, explorerFrontierSet, isExplorerModeActive]);
   useEffect(() => {
     if (propertyTabs.length === 0) return;
     if (!propertyTabs.some((tab) => tab.id === panelTab)) {
@@ -1004,18 +1171,14 @@ function MinimapBuilder({
   const hasUnsavedChanges = useMemo(() => {
     if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
     if (!canEditActiveQuadrant) return false;
-    const baseline = {
-      rows: loadedQuadrantData.rows,
-      cols: loadedQuadrantData.cols,
-      cellSize: loadedQuadrantData.cellSize,
-      grid: loadedQuadrantData.grid,
-    };
-    const current = { rows, cols, cellSize, grid };
-    if (JSON.stringify(current) !== JSON.stringify(baseline)) {
-      return true;
-    }
-    const lastSharedWith = loadedQuadrantData.sharedWith || [];
-    return !sharedWithEquals(activeQuadrantSharedWith, lastSharedWith);
+    const currentSnapshot = createQuadrantSnapshot({
+      rows,
+      cols,
+      cellSize,
+      grid,
+      sharedWith: activeQuadrantSharedWith,
+    });
+    return !quadrantSnapshotsEqual(loadedQuadrantData, currentSnapshot);
   }, [
     activeQuadrantSharedWith,
     canEditActiveQuadrant,
@@ -1301,6 +1464,85 @@ function MinimapBuilder({
   useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
+  useEffect(() => {
+    if (!isPlayerMode || !isSharedMasterQuadrant || !activeQuadrantId) {
+      setExplorationLoaded(false);
+      setExploredCellKeys([]);
+      return undefined;
+    }
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    let isCancelled = false;
+    setExplorationLoaded(false);
+    const unsubscribe = onSnapshot(
+      explorationDocRef,
+      (snapshot) => {
+        if (isCancelled) return;
+        setExplorationLoaded(true);
+        const data = snapshot.data();
+        if (!data || !Array.isArray(data.cells)) {
+          setExploredCellKeys((prev) => (prev.length === 0 ? prev : []));
+          return;
+        }
+        const seen = new Set();
+        const sanitized = [];
+        data.cells.forEach((entry) => {
+          if (typeof entry !== 'string') return;
+          const trimmed = entry.trim();
+          if (!trimmed || seen.has(trimmed)) return;
+          if (!/^\d+-\d+$/.test(trimmed)) return;
+          seen.add(trimmed);
+          sanitized.push(trimmed);
+        });
+        setExploredCellKeys((prev) =>
+          arraysShallowEqual(prev, sanitized) ? prev : sanitized
+        );
+      },
+      (error) => {
+        if (isCancelled) return;
+        console.error('Error fetching minimap exploration', error);
+        setExplorationLoaded(true);
+      }
+    );
+    return () => {
+      isCancelled = true;
+      try {
+        unsubscribe();
+      } catch {}
+      setExplorationLoaded(false);
+    };
+  }, [
+    activeQuadrantId,
+    db,
+    isPlayerMode,
+    isSharedMasterQuadrant,
+  ]);
+  useEffect(() => {
+    if (!isExplorerModeActive || !originCellKey) return;
+    if (!explorationLoaded) return;
+    if (exploredCellsSet.has(originCellKey)) return;
+    setExploredCellKeys((prev) =>
+      prev.includes(originCellKey) ? prev : [...prev, originCellKey]
+    );
+    if (!activeQuadrantId) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    setDoc(
+      explorationDocRef,
+      {
+        cells: arrayUnion(originCellKey),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) =>
+      console.error('Error registering minimap origin exploration', error)
+    );
+  }, [
+    activeQuadrantId,
+    db,
+    explorationLoaded,
+    exploredCellsSet,
+    isExplorerModeActive,
+    originCellKey,
+  ]);
   useEffect(() => {
     const quadrantsRef = collection(db, 'minimapQuadrants');
     let isUnmounted = false;
@@ -2251,7 +2493,37 @@ function MinimapBuilder({
     handlePointerUp,
   ]);
 
+  const revealExplorerCell = (r, c) => {
+    if (!isExplorerModeActive) return;
+    const key = cellKeyFromIndices(r, c);
+    if (exploredCellsSet.has(key)) return;
+    if (!explorerFrontierSet.has(key)) return;
+    setExploredCellKeys((prev) =>
+      prev.includes(key) ? prev : [...prev, key]
+    );
+    if (!activeQuadrantId) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    setDoc(
+      explorationDocRef,
+      {
+        cells: arrayUnion(key),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) =>
+      console.error('Error revealing minimap exploration cell', error)
+    );
+  };
   const handleCellClick = (r, c) => {
+    if (isExplorerModeActive) {
+      const key = cellKeyFromIndices(r, c);
+      if (!exploredCellsSet.has(key)) {
+        if (explorerFrontierSet.has(key)) {
+          revealExplorerCell(r, c);
+        }
+        return;
+      }
+    }
     if (!canEditActiveQuadrant && !canAnnotateActiveQuadrant) return;
     if (
       isMoveMode ||
@@ -2563,14 +2835,8 @@ function MinimapBuilder({
     setCurrentQuadrantIndex(newQuadrantIndex === -1 ? null : newQuadrantIndex);
     setActiveQuadrantOwner(sanitized.owner);
     setActiveQuadrantSharedWith(sanitized.sharedWith);
-    setLoadedQuadrantData({
-      rows: sanitized.rows,
-      cols: sanitized.cols,
-      cellSize: sanitized.cellSize,
-      grid: sanitized.grid,
-      sharedWith: sanitized.sharedWith,
-      owner: sanitized.owner,
-    });
+    const savedSnapshot = createQuadrantSnapshot(sanitized);
+    setLoadedQuadrantData(savedSnapshot);
     setQuadrantTitle('');
     let savedRemotely = true;
     try {
@@ -2667,6 +2933,10 @@ function MinimapBuilder({
     if (!q) return;
     const sanitizedShared = sanitizeSharedWith(q.sharedWith);
     const ownerValue = sanitizeOwner(q.owner, defaultOwner);
+    if (isPlayerMode) {
+      setExploredCellKeys([]);
+      setExplorationLoaded(false);
+    }
     setRows(q.rows);
     setCols(q.cols);
     setCellSize(q.cellSize);
@@ -2675,14 +2945,14 @@ function MinimapBuilder({
     setCurrentQuadrantIndex(idx);
     setActiveQuadrantOwner(ownerValue);
     setActiveQuadrantSharedWith(sanitizedShared);
-    setLoadedQuadrantData({
+    const snapshot = createQuadrantSnapshot({
       rows: q.rows,
       cols: q.cols,
       cellSize: q.cellSize,
       grid: q.grid,
       sharedWith: sanitizedShared,
-      owner: ownerValue,
     });
+    setLoadedQuadrantData(snapshot);
   };
   const loadDefaultQuadrant = () => {
     const dRows = 8;
@@ -2698,6 +2968,8 @@ function MinimapBuilder({
     setAnnotations([]);
     setActiveQuadrantOwner(defaultOwner);
     setActiveQuadrantSharedWith([]);
+    setExploredCellKeys([]);
+    setExplorationLoaded(false);
   };
   const saveQuadrantChanges = async () => {
     if (!canEditActiveQuadrant) return;
@@ -2750,14 +3022,8 @@ function MinimapBuilder({
     } catch (error) {
       console.error('Error saving minimap quadrant changes', error);
     }
-    setLoadedQuadrantData({
-      rows: sanitized.rows,
-      cols: sanitized.cols,
-      cellSize: sanitized.cellSize,
-      grid: sanitized.grid,
-      sharedWith: sanitized.sharedWith,
-      owner: sanitized.owner,
-    });
+    const savedSnapshot = createQuadrantSnapshot(sanitized);
+    setLoadedQuadrantData(savedSnapshot);
     setActiveQuadrantOwner(sanitized.owner);
     setActiveQuadrantSharedWith(sanitized.sharedWith);
   };
@@ -3493,6 +3759,19 @@ function MinimapBuilder({
             </Boton>
           </div>
         )}
+        {isExplorerModeActive && (
+          <div className="flex items-center gap-3 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner">
+            <LucideIcons.Compass className="h-5 w-5 text-sky-300" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                Modo explorador
+              </span>
+              <span className="text-xs text-sky-100/80">
+                Descubre celdas adyacentes para revelar el cuadrante compartido.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -3643,6 +3922,7 @@ function MinimapBuilder({
                         {grid.map((row, r) =>
                           row.map((cell, c) => {
                             const key = `${r}-${c}`;
+                            const cellKey = key;
                             const isSelected = selectedCells.some(
                               (cell) => cell.r === r && cell.c === c
                             );
@@ -3670,6 +3950,71 @@ function MinimapBuilder({
                                 </div>
                               );
                             }
+                            const isExplorerVisible =
+                              !isExplorerModeActive ||
+                              (explorerVisibleSet
+                                ? explorerVisibleSet.has(cellKey)
+                                : false);
+                            if (isExplorerModeActive && !isExplorerVisible) {
+                              return (
+                                <div
+                                  key={key}
+                                  className="relative"
+                                  style={{
+                                    width: `${cellSize}px`,
+                                    height: `${cellSize}px`,
+                                    background: '#020617',
+                                    border: '1px solid #0f172a',
+                                  }}
+                                />
+                              );
+                            }
+                            const isExplorerExplored =
+                              isExplorerModeActive && exploredCellsSet.has(cellKey);
+                            const isExplorerFrontier =
+                              isExplorerModeActive && explorerFrontierSet.has(cellKey);
+                            const showCellContent =
+                              !isExplorerModeActive || isExplorerExplored;
+                            const showQuestionFace =
+                              isExplorerModeActive &&
+                              !isExplorerExplored &&
+                              isExplorerFrontier;
+                            const borderWidthValue =
+                              readableMode || isMobile
+                                ? Math.max(cell.borderWidth, 2)
+                                : cell.borderWidth;
+                            const effectiveBorderWidth = showCellContent
+                              ? borderWidthValue
+                              : Math.max(borderWidthValue, 2);
+                            const displayBackground = showCellContent
+                              ? cell.fill
+                              : '#0f172a';
+                            const displayBorderColor = showCellContent
+                              ? cell.borderColor
+                              : '#1e293b';
+                            const displayBorderStyle = showCellContent
+                              ? cell.borderStyle
+                              : 'solid';
+                            const displayAnimation = showCellContent
+                              ? cell.effect?.type === 'pulse'
+                                ? 'pulse 1.5s infinite'
+                                : cell.effect?.type === 'bounce'
+                                ? 'bounce 1s infinite'
+                                : cell.effect?.type === 'spin'
+                                ? 'spin 1s infinite linear'
+                                : cell.effect?.type === 'shake'
+                                ? 'shake 0.5s infinite'
+                                : undefined
+                              : undefined;
+                            const zIndex = isSelected
+                              ? 30
+                              : showCellContent && cell.effect?.type !== 'none'
+                              ? 20
+                              : 10;
+                            const explorerCursorClass =
+                              isExplorerModeActive && !showCellContent && isExplorerFrontier
+                                ? 'cursor-pointer'
+                                : '';
                             return (
                               <div
                                 key={key}
@@ -3703,6 +4048,9 @@ function MinimapBuilder({
                                     pointersRef.current.size > 1 ||
                                     isPanningRef.current
                                   ) {
+                                    return;
+                                  }
+                                  if (isExplorerModeActive && !showCellContent) {
                                     return;
                                   }
                                   const keyId = `${r}-${c}`;
@@ -3745,6 +4093,9 @@ function MinimapBuilder({
                                     e.pointerType !== 'pen'
                                   )
                                     return;
+                                  if (isExplorerModeActive && !showCellContent) {
+                                    return;
+                                  }
                                   cancelLongPressTimer(`${r}-${c}`);
                                 }}
                                 onPointerCancel={(e) => {
@@ -3755,55 +4106,111 @@ function MinimapBuilder({
                                     return;
                                   cancelLongPressTimer(`${r}-${c}`);
                                 }}
-                                onMouseEnter={() => setHoveredCell({ r, c })}
+                                onMouseEnter={() => {
+                                  if (isExplorerModeActive && !showCellContent) return;
+                                  setHoveredCell({ r, c });
+                                }}
                                 onMouseLeave={() => setHoveredCell(null)}
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
-                                className={`group relative z-0 overflow-visible select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
+                                className={`group relative z-0 overflow-visible select-none transition-transform duration-150 ease-out ${
+                                  isSelected
+                                    ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10'
+                                    : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'
+                                } ${explorerCursorClass}`}
                                 style={{
-                                  background: cell.fill,
-                                  borderColor: cell.borderColor,
-                                  borderWidth: `${readableMode || isMobile ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
-                                  borderStyle: cell.borderStyle,
+                                  background: 'transparent',
+                                  borderColor: 'transparent',
+                                  borderWidth: 0,
+                                  borderStyle: 'solid',
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
-                                  animation:
-                                    cell.effect?.type === 'pulse'
-                                      ? 'pulse 1.5s infinite'
-                                      : cell.effect?.type === 'bounce'
-                                      ? 'bounce 1s infinite'
-                                      : cell.effect?.type === 'spin'
-                                      ? 'spin 1s infinite linear'
-                                      : cell.effect?.type === 'shake'
-                                      ? 'shake 0.5s infinite'
-                                      : undefined,
-                                  zIndex: isSelected
-                                    ? 30
-                                    : cell.effect?.type !== 'none'
-                                    ? 20
-                                    : 10,
+                                  animation: undefined,
+                                  zIndex,
                                 }}
                               >
-                                {cell.effect?.type !== 'none' && (
-                                  <EffectOverlay effect={cell.effect} />
-                                )}
-                                {cell.icon && (
-                                  <img
-                                    src={cell.icon}
-                                    alt="icon"
-                                    className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
-                                    style={{
-                                      transform: cell.iconRotation
-                                        ? `rotate(${cell.iconRotation}deg)`
-                                        : undefined,
-                                    }}
-                                  />
-                                )}
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    pointerEvents: 'none',
+                                    perspective: isExplorerModeActive
+                                      ? '1200px'
+                                      : undefined,
+                                  }}
+                                >
+                                  <div
+                                    className={`relative h-full w-full ${
+                                      isExplorerModeActive
+                                        ? 'transition-transform duration-500'
+                                        : ''
+                                    }`}
+                                    style={
+                                      isExplorerModeActive
+                                        ? {
+                                            transform: `rotateY(${showCellContent ? 0 : 180}deg)`,
+                                            transformStyle: 'preserve-3d',
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{
+                                        backfaceVisibility: isExplorerModeActive
+                                          ? 'hidden'
+                                          : undefined,
+                                        background: displayBackground,
+                                        borderColor: displayBorderColor,
+                                        borderWidth: `${effectiveBorderWidth}px`,
+                                        borderStyle: displayBorderStyle,
+                                        animation: displayAnimation,
+                                      }}
+                                    >
+                                      {showCellContent &&
+                                        cell.effect?.type !== 'none' && (
+                                          <EffectOverlay effect={cell.effect} />
+                                        )}
+                                      {showCellContent && cell.icon && (
+                                        <img
+                                          src={cell.icon}
+                                          alt="icon"
+                                          className="absolute inset-0 m-auto h-2/3 w-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
+                                          style={{
+                                            transform: cell.iconRotation
+                                              ? `rotate(${cell.iconRotation}deg)`
+                                              : undefined,
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                    {isExplorerModeActive && (
+                                      <div
+                                        className="absolute inset-0 flex items-center justify-center"
+                                        style={{
+                                          transform: 'rotateY(180deg)',
+                                          backfaceVisibility: 'hidden',
+                                          background: '#0f172a',
+                                          borderColor: '#1e293b',
+                                          borderWidth: `${Math.max(borderWidthValue, 2)}px`,
+                                          borderStyle: 'solid',
+                                        }}
+                                      >
+                                        {showQuestionFace && (
+                                          <LucideIcons.HelpCircle className="h-1/2 w-1/2 text-sky-300 drop-shadow-[0_2px_6px_rgba(56,189,248,0.45)]" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                                 {!isMobile && (
                                   <button
                                     type="button"
-                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${
+                                      shapeEdit || isSelected
+                                        ? 'opacity-100 pointer-events-auto'
+                                        : 'opacity-0 pointer-events-none'
+                                    }`}
                                     title="Eliminar celda"
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -3841,9 +4248,15 @@ function MinimapBuilder({
                       style={{ zIndex: 2 }}
                     >
                       {visibleAnnotations.map((a) => {
-                          const showTooltip =
-                            (hoveredCell &&
-                              hoveredCell.r === a.r &&
+                        if (
+                          isExplorerModeActive &&
+                          !exploredCellsSet.has(cellKeyFromIndices(a.r, a.c))
+                        ) {
+                          return null;
+                        }
+                        const showTooltip =
+                          (hoveredCell &&
+                            hoveredCell.r === a.r &&
                               hoveredCell.c === a.c) ||
                             selectedCells.some(
                               (cell) => cell.r === a.r && cell.c === a.c
