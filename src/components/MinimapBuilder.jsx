@@ -227,7 +227,7 @@ IconThumb.propTypes = {
   onDelete: PropTypes.func,
 };
 
-const QuadrantPreview = ({ q, size = 36 }) => {
+const QuadrantPreview = ({ q, size = 72 }) => {
   const ensurePositive = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
@@ -235,7 +235,8 @@ const QuadrantPreview = ({ q, size = 36 }) => {
   const rows = ensurePositive(q?.rows);
   const cols = ensurePositive(q?.cols);
   const maxDimension = Math.max(rows, cols);
-  const cell = size / (maxDimension || 1);
+  const dimension = Math.max(size, 1);
+  const cell = dimension / (maxDimension || 1);
   const width = cell * cols;
   const height = cell * rows;
   const emptyCell = {
@@ -245,34 +246,39 @@ const QuadrantPreview = ({ q, size = 36 }) => {
   };
   return (
     <div
-      className="grid flex-shrink-0 overflow-hidden rounded border border-gray-600/70 bg-gray-900/40"
-      style={{
-        width,
-        height,
-        gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
-        gridTemplateRows: `repeat(${rows}, ${cell}px)`,
-      }}
+      className="relative flex flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-600/70 bg-gray-900/40"
+      style={{ width: dimension, height: dimension }}
     >
-      {Array.from({ length: rows }, (_, r) =>
-        Array.from({ length: cols }, (_, c) => {
-          const cellData = q?.grid?.[r]?.[c] || emptyCell;
-          return (
-            <div
-              key={`${r}-${c}`}
-              style={{
-                width: cell,
-                height: cell,
-                background: cellData.active ? cellData.fill : 'transparent',
-                border: `1px solid ${
-                  cellData.active
-                    ? cellData.borderColor
-                    : 'rgba(255,255,255,0.1)'
-                }`,
-              }}
-            />
-          );
-        })
-      )}
+      <div
+        className="grid"
+        style={{
+          width,
+          height,
+          gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cell}px)`,
+        }}
+      >
+        {Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
+            const cellData = q?.grid?.[r]?.[c] || emptyCell;
+            return (
+              <div
+                key={`${r}-${c}`}
+                style={{
+                  width: cell,
+                  height: cell,
+                  background: cellData.active ? cellData.fill : 'transparent',
+                  border: `1px solid ${
+                    cellData.active
+                      ? cellData.borderColor
+                      : 'rgba(255,255,255,0.1)'
+                  }`,
+                }}
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };
@@ -804,6 +810,10 @@ function MinimapBuilder({
     if (!normalizedPlayerName) return false;
     return ownerKey === normalizedPlayerName;
   }, [isPlayerMode, activeQuadrantOwner, normalizedPlayerName]);
+  const quadrantPreviewSize = useMemo(
+    () => (isMobile ? 96 : 120),
+    [isMobile]
+  );
   const activeAnnotations = useMemo(
     () =>
       annotations.filter(
@@ -2951,10 +2961,13 @@ function MinimapBuilder({
                     (entry) => normalizePlayerName(entry) === normalizedPlayerName
                   );
                 const canDeleteQuadrant = !isPlayerMode || isOwnedByPlayer;
+                const tileWidth = quadrantPreviewSize + (isMobile ? 36 : 48);
+                const tileMinHeight = quadrantPreviewSize + (isMobile ? 52 : 68);
                 return (
                   <div
                     key={keyId}
-                    className={`relative ${isMobile ? 'w-24' : ''}`}
+                    className="relative"
+                    style={{ width: tileWidth }}
                   >
                     <button
                       onClick={(e) => {
@@ -3030,7 +3043,7 @@ function MinimapBuilder({
                           return;
                         cancelLongPressTimer(keyId);
                       }}
-                      className={`relative flex flex-col items-center rounded border ${
+                      className={`relative flex w-full flex-col items-center rounded border ${
                         isSharedFromMaster
                           ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
                           : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
@@ -3038,9 +3051,10 @@ function MinimapBuilder({
                         isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
                       } ${
                         isMobile
-                          ? 'w-24 p-1 text-[10px] min-h-[72px]'
-                          : 'p-1 text-xs'
+                          ? 'gap-1.5 p-2 text-[11px]'
+                          : 'gap-2 p-3 text-xs'
                       }`}
+                      style={{ minHeight: tileMinHeight }}
                     >
                       <div
                         className={`flex w-full justify-center min-h-[18px] ${
@@ -3056,7 +3070,7 @@ function MinimapBuilder({
                           </span>
                         )}
                       </div>
-                      <QuadrantPreview q={q} size={36} />
+                      <QuadrantPreview q={q} size={quadrantPreviewSize} />
                       <span
                         className={`mt-1 ${
                           isMobile
@@ -3240,88 +3254,92 @@ function MinimapBuilder({
                     height: `${gridHeight + perimMargin * 2}px`,
                   }}
                 >
-                  {Array.from({ length: cols }).map((_, c) => (
-                    <button
-                      key={`top-${c}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        top: (perimMargin - adderBtn) / 2,
-                        left:
-                          perimMargin +
-                          c * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addRowTop}
-                      onClick={() => addRowTopAt(c)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: cols }).map((_, c) => (
-                    <button
-                      key={`bottom-${c}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        top:
-                          perimMargin +
-                          gridHeight +
-                          (perimMargin - adderBtn) / 2,
-                        left:
-                          perimMargin +
-                          c * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addRowBottom}
-                      onClick={() => addRowBottomAt(c)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: rows }).map((_, r) => (
-                    <button
-                      key={`left-${r}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        left: (perimMargin - adderBtn) / 2,
-                        top:
-                          perimMargin +
-                          r * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addColLeft}
-                      onClick={() => addColLeftAt(r)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: rows }).map((_, r) => (
-                    <button
-                      key={`right-${r}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        left:
-                          perimMargin +
-                          gridWidth +
-                          (perimMargin - adderBtn) / 2,
-                        top:
-                          perimMargin +
-                          r * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addColRight}
-                      onClick={() => addColRightAt(r)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: cols }).map((_, c) => (
+                      <button
+                        key={`top-${c}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          top: (perimMargin - adderBtn) / 2,
+                          left:
+                            perimMargin +
+                            c * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addRowTop}
+                        onClick={() => addRowTopAt(c)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: cols }).map((_, c) => (
+                      <button
+                        key={`bottom-${c}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          top:
+                            perimMargin +
+                            gridHeight +
+                            (perimMargin - adderBtn) / 2,
+                          left:
+                            perimMargin +
+                            c * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addRowBottom}
+                        onClick={() => addRowBottomAt(c)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: rows }).map((_, r) => (
+                      <button
+                        key={`left-${r}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          left: (perimMargin - adderBtn) / 2,
+                          top:
+                            perimMargin +
+                            r * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addColLeft}
+                        onClick={() => addColLeftAt(r)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: rows }).map((_, r) => (
+                      <button
+                        key={`right-${r}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          left:
+                            perimMargin +
+                            gridWidth +
+                            (perimMargin - adderBtn) / 2,
+                          top:
+                            perimMargin +
+                            r * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addColRight}
+                        onClick={() => addColRightAt(r)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
 
                   <div
                     className="absolute"
@@ -3348,7 +3366,8 @@ function MinimapBuilder({
                               (cell) => cell.r === r && cell.c === c
                             );
                             if (!cell.active) {
-                              const showAdder = hasActiveNeighbor(r, c);
+                              const showAdder =
+                                canEditActiveQuadrant && hasActiveNeighbor(r, c);
                               return (
                                 <div
                                   key={key}
