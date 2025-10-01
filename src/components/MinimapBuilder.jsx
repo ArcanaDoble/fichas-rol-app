@@ -722,6 +722,7 @@ function MinimapBuilder({
   const [isCustomizationReady, setCustomizationReady] = useState(false);
   const [quadrantTitle, setQuadrantTitle] = useState('');
   const [quadrants, setQuadrants] = useState(() => readQuadrantsFromLocalStorage());
+  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
@@ -785,7 +786,6 @@ function MinimapBuilder({
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
-  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
