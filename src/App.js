@@ -3341,6 +3341,7 @@ function App() {
           backLabel="Volver a Ficha"
           showNewBadge={false}
           onBack={() => setShowPlayerMinimap(false)}
+          playerName={playerName}
         />
       </React.Suspense>
     );
