@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useLayoutEffect,
 } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
@@ -70,6 +71,13 @@ const L = {
   savedQuadrants: 'Cuadrantes guardados',
   defaultQuadrant: 'Cuadrante predeterminado',
   title: 'T\u00EDtulo',
+  permissions: 'Permisos',
+  sharedWithPlayers: 'Compartir con jugadores',
+  noPlayers: 'Sin jugadores disponibles',
+  sharedQuadrantTag: 'Compartido',
+  sharedQuadrantHint: 'Asignado por el M\u00E1ster',
+  masterQuadrantLocked:
+    'Este cuadrante fue compartido por el M\u00E1ster y es de solo lectura.',
   unsavedChangesConfirm:
     'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
   unsavedChangesIndicator: 'Cambios sin guardar en el cuadrante actual',
@@ -488,8 +496,51 @@ const sanitizeOrder = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const normalizePlayerName = (value) =>
+  stripDiacritics(String(value || '')).toLowerCase().trim();
+
+const sanitizeOwner = (value, fallback = 'master') => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return fallback;
+};
+
+const sanitizeSharedWith = (value) => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const result = [];
+  value.forEach((entry) => {
+    if (typeof entry !== 'string') return;
+    const trimmed = entry.trim();
+    if (!trimmed) return;
+    const key = normalizePlayerName(trimmed);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(trimmed);
+  });
+  return result;
+};
+
+const sharedWithEquals = (a = [], b = []) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const normA = a.map(normalizePlayerName).sort();
+  const normB = b.map(normalizePlayerName).sort();
+  for (let i = 0; i < normA.length; i += 1) {
+    if (normA[i] !== normB[i]) return false;
+  }
+  return true;
+};
+
 const sanitizeQuadrantValues = (data = {}, options = {}) => {
-  const { titleFallback = 'Cuadrante', orderFallback = 0 } = options;
+  const {
+    titleFallback = 'Cuadrante',
+    orderFallback = 0,
+    ownerFallback = 'master',
+  } = options;
   const { rows, cols, grid } = sanitizeGridStructure(
     data.grid,
     data.rows,
@@ -502,6 +553,8 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     cellSize: sanitizeCellSize(data.cellSize),
     grid,
     order: sanitizeOrder(data.order, orderFallback),
+    owner: sanitizeOwner(data.owner, ownerFallback),
+    sharedWith: sanitizeSharedWith(data.sharedWith),
   };
 };
 
@@ -523,6 +576,8 @@ const prepareQuadrantForLocalStorage = (quadrant) => ({
   cellSize: quadrant.cellSize,
   grid: quadrant.grid,
   order: quadrant.order,
+  owner: quadrant.owner,
+  sharedWith: quadrant.sharedWith,
 });
 
 const persistQuadrantsToLocalStorage = (items) => {
@@ -608,12 +663,19 @@ const buildGrid = (rows, cols, prev = []) =>
     )
   );
 
-function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
+function MinimapBuilder({
+  onBack,
+  backLabel,
+  showNewBadge,
+  mode = 'master',
+  playerName = '',
+}) {
   const isPlayerMode = mode === 'player';
   const effectiveBackLabel = backLabel || L.back;
   const shouldShowNewBadge =
     typeof showNewBadge === 'boolean' ? showNewBadge : !isPlayerMode;
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileMapTop, setMobileMapTop] = useState(0);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
@@ -631,11 +693,24 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
   const [isMultiTouchActive, setIsMultiTouchActive] = useState(false);
-  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
+  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | recursos | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState([]);
+  const [resourceItems, setResourceItems] = useState([]);
+  const [playersList, setPlayersList] = useState([]);
+  const trimmedPlayerName =
+    typeof playerName === 'string' ? playerName.trim() : '';
+  const defaultOwner = isPlayerMode
+    ? trimmedPlayerName || 'player'
+    : 'master';
+  const [activeQuadrantOwner, setActiveQuadrantOwner] = useState(defaultOwner);
+  const [activeQuadrantSharedWith, setActiveQuadrantSharedWith] = useState([]);
   const [cellStylePresets, setCellStylePresets] = useState([]);
+  const normalizedPlayerName = useMemo(
+    () => normalizePlayerName(trimmedPlayerName),
+    [trimmedPlayerName]
+  );
   const customizationDocRef = useMemo(
     () => doc(db, 'minimapSettings', 'customization'),
     [db]
@@ -647,19 +722,64 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [isCustomizationReady, setCustomizationReady] = useState(false);
   const [quadrantTitle, setQuadrantTitle] = useState('');
   const [quadrants, setQuadrants] = useState(() => readQuadrantsFromLocalStorage());
+  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
+  const filterQuadrantsForMode = useCallback(
+    (items = []) => {
+      const sorted = sortQuadrantsList(items);
+      if (!isPlayerMode) {
+        return sorted;
+      }
+      return sorted.filter((item) => {
+        const ownerKey = normalizePlayerName(item?.owner);
+        if (ownerKey && ownerKey !== 'master') {
+          return true;
+        }
+        if (!normalizedPlayerName) {
+          return false;
+        }
+        const sharedWith = Array.isArray(item?.sharedWith)
+          ? item.sharedWith
+          : [];
+        return sharedWith.some(
+          (entry) => normalizePlayerName(entry) === normalizedPlayerName
+        );
+      });
+    },
+    [isPlayerMode, normalizedPlayerName]
+  );
   const updateLocalQuadrants = (items) => {
-    const sorted = sortQuadrantsList(items);
-    localQuadrantsRef.current = sorted;
-    persistQuadrantsToLocalStorage(sorted);
+    const filtered = filterQuadrantsForMode(items);
+    localQuadrantsRef.current = filtered;
+    persistQuadrantsToLocalStorage(filtered);
   };
+  useEffect(() => {
+    setQuadrants((prev) => filterQuadrantsForMode(prev));
+    localQuadrantsRef.current = filterQuadrantsForMode(
+      Array.isArray(localQuadrantsRef.current)
+        ? localQuadrantsRef.current
+        : []
+    );
+  }, [filterQuadrantsForMode]);
+  useEffect(() => {
+    if (currentQuadrantIndex === null) return;
+    const current = quadrants[currentQuadrantIndex];
+    if (!current) return;
+    const ownerValue = sanitizeOwner(current.owner, defaultOwner);
+    setActiveQuadrantOwner((prev) =>
+      prev === ownerValue ? prev : ownerValue
+    );
+    const sanitizedShared = sanitizeSharedWith(current.sharedWith);
+    setActiveQuadrantSharedWith((prev) =>
+      sharedWithEquals(prev, sanitizedShared) ? prev : sanitizedShared
+    );
+  }, [quadrants, currentQuadrantIndex, defaultOwner]);
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
-  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
@@ -672,6 +792,18 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const current = quadrants[currentQuadrantIndex];
     return current?.id || 'default';
   }, [currentQuadrantIndex, quadrants]);
+  const isSharedMasterQuadrant = useMemo(() => {
+    if (!isPlayerMode) return false;
+    return normalizePlayerName(activeQuadrantOwner) === 'master';
+  }, [isPlayerMode, activeQuadrantOwner]);
+  const canEditActiveQuadrant = useMemo(() => {
+    if (!isPlayerMode) return true;
+    const ownerKey = normalizePlayerName(activeQuadrantOwner);
+    if (!ownerKey) return true;
+    if (ownerKey === 'master') return false;
+    if (!normalizedPlayerName) return false;
+    return ownerKey === normalizedPlayerName;
+  }, [isPlayerMode, activeQuadrantOwner, normalizedPlayerName]);
   const activeAnnotations = useMemo(
     () =>
       annotations.filter(
@@ -681,9 +813,29 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   );
   const hasUnsavedChanges = useMemo(() => {
     if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
+    if (!canEditActiveQuadrant) return false;
+    const baseline = {
+      rows: loadedQuadrantData.rows,
+      cols: loadedQuadrantData.cols,
+      cellSize: loadedQuadrantData.cellSize,
+      grid: loadedQuadrantData.grid,
+    };
     const current = { rows, cols, cellSize, grid };
-    return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
-  }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
+    if (JSON.stringify(current) !== JSON.stringify(baseline)) {
+      return true;
+    }
+    const lastSharedWith = loadedQuadrantData.sharedWith || [];
+    return !sharedWithEquals(activeQuadrantSharedWith, lastSharedWith);
+  }, [
+    activeQuadrantSharedWith,
+    canEditActiveQuadrant,
+    currentQuadrantIndex,
+    grid,
+    loadedQuadrantData,
+    rows,
+    cols,
+    cellSize,
+  ]);
   const runUnsavedChangesGuard = useCallback(
     (callback) => {
       if (typeof callback !== 'function') return false;
@@ -700,6 +852,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     [hasUnsavedChanges, confirmAction]
   );
   const setAnnotation = (r, c, data, options = {}) => {
+    if (!canEditActiveQuadrant) return;
     const { skipLocalUpdate = false } = options;
     const key = `${activeQuadrantId}-${r}-${c}`;
     const payload = { quadrantId: activeQuadrantId, r, c, ...data };
@@ -770,6 +923,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   }, []);
 
   const containerRef = useRef(null);
+  const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
@@ -791,6 +945,37 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, []);
 
+  const updateMobileMapTop = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) {
+      setMobileMapTop(0);
+      return;
+    }
+    const headerEl = headerSectionRef.current;
+    if (!headerEl) return;
+    const rect = headerEl.getBoundingClientRect();
+    const spacing = 12;
+    const nextTop = Math.max(rect.bottom + spacing, 0);
+    setMobileMapTop((prev) => (Math.abs(prev - nextTop) > 0.5 ? nextTop : prev));
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    updateMobileMapTop();
+    if (!isMobile) return undefined;
+    window.addEventListener('resize', updateMobileMapTop);
+    window.addEventListener('orientationchange', updateMobileMapTop);
+    return () => {
+      window.removeEventListener('resize', updateMobileMapTop);
+      window.removeEventListener('orientationchange', updateMobileMapTop);
+    };
+  }, [isMobile, updateMobileMapTop]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    updateMobileMapTop();
+  }, [isMobile, updateMobileMapTop, isQuadrantPanelOpen, shouldShowNewBadge]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const mq = window.matchMedia('(max-width: 767px)');
@@ -808,6 +993,65 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       setIsQuadrantPanelOpen(false);
     }
   }, [isMobile]);
+  useEffect(() => {
+    if (isPlayerMode) {
+      setPlayersList([]);
+      return undefined;
+    }
+    const playersRef = collection(db, 'players');
+    const unsubscribe = onSnapshot(
+      playersRef,
+      (snapshot) => {
+        const names = [];
+        snapshot.forEach((docSnap) => {
+          const id = docSnap.id;
+          if (typeof id === 'string') {
+            const trimmed = id.trim();
+            if (trimmed) {
+              names.push(trimmed);
+            }
+          }
+        });
+        names.sort((a, b) =>
+          a.localeCompare(b, 'es', { sensitivity: 'accent', usage: 'sort' })
+        );
+        setPlayersList(names);
+      },
+      (error) => {
+        console.error('Error fetching minimap players', error);
+        setPlayersList([]);
+      }
+    );
+    return () => {
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db, isPlayerMode]);
+  useEffect(() => {
+    if (isPlayerMode) return;
+    if (playersList.length === 0) return;
+    const allowed = new Set(playersList.map((name) => normalizePlayerName(name)));
+    setActiveQuadrantSharedWith((prev) => {
+      const sanitized = sanitizeSharedWith(prev);
+      const filtered = sanitized.filter((name) =>
+        allowed.has(normalizePlayerName(name))
+      );
+      if (filtered.length === prev.length) {
+        let unchanged = true;
+        for (let i = 0; i < filtered.length; i += 1) {
+          if (filtered[i] !== prev[i]) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) {
+          return prev;
+        }
+      }
+      return filtered;
+    });
+  }, [isPlayerMode, playersList]);
   useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
@@ -830,6 +1074,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             const sanitized = sanitizeQuadrantValues(item, {
               titleFallback: `Cuadrante ${index + 1}`,
               orderFallback: index,
+              ownerFallback: defaultOwner,
             });
             batch.set(doc(db, 'minimapQuadrants', docId), {
               ...sanitized,
@@ -858,31 +1103,31 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             quadrantsMigrationRef.current = true;
             migrateLocalQuadrants();
           }
-          const fallback = getLocalQuadrantsSnapshot();
+          const fallback = filterQuadrantsForMode(getLocalQuadrantsSnapshot());
           setQuadrants(fallback);
           return;
         }
         quadrantsMigrationRef.current = true;
-        const normalized = sortQuadrantsList(
-          docsData.map(({ id, data }, index) => {
-            const sanitized = sanitizeQuadrantValues(data, {
-              titleFallback: `Cuadrante ${index + 1}`,
-              orderFallback: index,
-            });
-            return {
-              id,
-              ...sanitized,
-              updatedAt: data?.updatedAt || null,
-            };
-          })
-        );
-        setQuadrants(normalized);
-        updateLocalQuadrants(normalized);
+        const normalized = docsData.map(({ id, data }, index) => {
+          const sanitized = sanitizeQuadrantValues(data, {
+            titleFallback: `Cuadrante ${index + 1}`,
+            orderFallback: index,
+            ownerFallback: 'master',
+          });
+          return {
+            id,
+            ...sanitized,
+            updatedAt: data?.updatedAt || null,
+          };
+        });
+        const filtered = filterQuadrantsForMode(normalized);
+        setQuadrants(filtered);
+        updateLocalQuadrants(filtered);
       },
       (error) => {
         if (!isUnmounted) {
           console.error('Error fetching minimap quadrants', error);
-          const fallback = getLocalQuadrantsSnapshot();
+          const fallback = filterQuadrantsForMode(getLocalQuadrantsSnapshot());
           setQuadrants(fallback);
         }
       }
@@ -1102,6 +1347,12 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, [shapeEdit, grid]);
   useEffect(() => {
+    if (canEditActiveQuadrant) return;
+    if (shapeEdit) setShapeEdit(false);
+    if (isPropertyPanelOpen) setIsPropertyPanelOpen(false);
+    if (selectedCells.length > 0) setSelectedCells([]);
+  }, [canEditActiveQuadrant, shapeEdit, isPropertyPanelOpen, selectedCells.length]);
+  useEffect(() => {
     if (!shapeEdit) setSelectedCells([]);
   }, [shapeEdit]);
   useEffect(() => {
@@ -1132,27 +1383,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       setActiveColorPicker(null);
     }
   }, [activeColorPicker, selectedCellData]);
-
-  const emojiDataUrl = (ch) => {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  };
-
-  const lucideCache = useRef(new Map());
-  const lucideDataUrl = (name) => {
-    const cache = lucideCache.current;
-    if (cache.has(name)) return cache.get(name);
-    const pascal = name
-      .split('-')
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-      .join('');
-    const Icon = LucideIcons[pascal];
-    if (!Icon) return '';
-    const svg = renderToStaticMarkup(<Icon size={64} />);
-    const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    cache.set(name, url);
-    return url;
-  };
 
   const ColorPickerButton = ({
     id,
@@ -1208,17 +1438,103 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     );
   };
 
-  // CatÃ¡logo bÃ¡sico (Estados/Personalizados). Emojis/Lucide se aÃ±aden por entrada.
-  const allIcons = useMemo(() => {
+  // Catálogo básico (Estados/Personalizados). Emojis/Lucide se añaden por entrada.
+  const baseIconCatalog = useMemo(() => {
     const estadoIcons = ESTADOS.map((e) => ({ url: e.img, name: e.name }));
     const custom = customIcons.map((u) => ({ url: u, name: 'Personalizado' }));
     return {
       estados: estadoIcons,
       personalizados: custom,
-      emojis: [],
-      lucide: [],
     };
   }, [customIcons]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const itemsRef = collection(db, 'customItems');
+    const unsubscribe = onSnapshot(
+      itemsRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        const entries = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        setResourceItems(entries);
+      },
+      (error) => {
+        if (!isMounted) return;
+        console.error('Error fetching custom inventory items', error);
+        setResourceItems([]);
+      }
+    );
+    return () => {
+      isMounted = false;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db]);
+
+  const emojiDataUrl = useCallback((ch) => {
+    const safe = ch && typeof ch === 'string' && ch.length ? ch : '❔';
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${safe}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, []);
+
+  const lucideCache = useRef(new Map());
+  const lucideDataUrl = useCallback(
+    (name) => {
+      if (!name) return '';
+      const cache = lucideCache.current;
+      if (cache.has(name)) return cache.get(name);
+      const pascal = name
+        .split('-')
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join('');
+      const Icon = LucideIcons[pascal];
+      if (!Icon) return '';
+      const svg = renderToStaticMarkup(<Icon size={64} />);
+      const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      cache.set(name, url);
+      return url;
+    },
+    []
+  );
+
+  const resourceCatalog = useMemo(() => {
+    if (!resourceItems.length) return [];
+    const fallback = emojiDataUrl('❔');
+    const seen = new Set();
+    return resourceItems
+      .map((item) => {
+        if (!item) return null;
+        const label = item.name || item.type || 'Recurso';
+        const icon = item.icon || '';
+        let url = '';
+        if (typeof icon === 'string' && icon.startsWith('data:')) {
+          url = icon;
+        } else if (typeof icon === 'string' && icon.startsWith('lucide:')) {
+          url = lucideDataUrl(icon.slice(7));
+        } else if (typeof icon === 'string' && /^https?:/i.test(icon)) {
+          url = icon;
+        } else if (icon) {
+          url = emojiDataUrl(icon);
+        }
+        const finalUrl = url || fallback;
+        if (seen.has(finalUrl)) return null;
+        seen.add(finalUrl);
+        return { url: finalUrl, name: label };
+      })
+      .filter(Boolean);
+  }, [resourceItems, emojiDataUrl, lucideDataUrl]);
+
+  const allIcons = useMemo(
+    () => ({
+      estados: baseIconCatalog.estados,
+      personalizados: baseIconCatalog.personalizados,
+      recursos: resourceCatalog,
+      emojis: [],
+      lucide: [],
+    }),
+    [baseIconCatalog, resourceCatalog]
+  );
 
   // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
@@ -1317,8 +1633,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const cw = el.clientWidth - 16;
-    const ch = el.clientHeight - 16;
+    const rect = el.getBoundingClientRect();
+    const cw = (Number.isFinite(rect.width) ? rect.width : el.clientWidth) - 16;
+    const ch = (Number.isFinite(rect.height) ? rect.height : el.clientHeight) - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
     if (neededW <= 0 || neededH <= 0) {
@@ -1343,6 +1660,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   useEffect(() => {
     recomputeFit();
   }, [recomputeFit, rows, cols, cellSize, isMobile]);
+  useEffect(() => {
+    if (!isMobile) return;
+    recomputeFit();
+  }, [isMobile, mobileMapTop, recomputeFit]);
   useEffect(() => {
     const onResize = () => recomputeFit();
     window.addEventListener('resize', onResize);
@@ -1677,6 +1998,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   ]);
 
   const handleCellClick = (r, c) => {
+    if (!canEditActiveQuadrant) return;
     if (
       isMoveMode ||
       skipClickRef.current ||
@@ -1699,6 +2021,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   };
   const updateCell = (cells, updater) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       const next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1707,6 +2030,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       return next;
     });
   const trimGrid = (g) => {
+    if (!canEditActiveQuadrant) return g;
     let next = g;
     const originalRows = next.length;
     const originalCols = next[0]?.length || 0;
@@ -1837,6 +2161,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   };
   const setActive = (cells, active) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       let next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1847,6 +2172,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const clearIcon = (cells) => updateCell(cells, { icon: null });
   const resetCellStyle = (cells) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       const next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1913,6 +2239,8 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const saveQuadrant = async () => {
     const nextOrder = getNextQuadrantOrder();
     const fallbackTitle = `Cuadrante ${quadrants.length + 1}`;
+    const ownerValue = isPlayerMode ? defaultOwner : 'master';
+    const sharedList = isPlayerMode ? [] : activeQuadrantSharedWith;
     const sanitized = sanitizeQuadrantValues(
       {
         title: quadrantTitle,
@@ -1921,8 +2249,14 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         cellSize,
         grid,
         order: nextOrder,
+        owner: ownerValue,
+        sharedWith: sharedList,
       },
-      { titleFallback: fallbackTitle, orderFallback: nextOrder }
+      {
+        titleFallback: fallbackTitle,
+        orderFallback: nextOrder,
+        ownerFallback: ownerValue,
+      }
     );
     const newQuadrantId = generateQuadrantId();
     const localQuadrant = {
@@ -1934,17 +2268,22 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       ...quadrants.filter(Boolean),
       localQuadrant,
     ]);
-    const newQuadrantIndex = nextQuadrantsState.findIndex(
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    const newQuadrantIndex = filteredState.findIndex(
       (item) => item.id === newQuadrantId
     );
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
-    setCurrentQuadrantIndex(newQuadrantIndex);
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
+    setCurrentQuadrantIndex(newQuadrantIndex === -1 ? null : newQuadrantIndex);
+    setActiveQuadrantOwner(sanitized.owner);
+    setActiveQuadrantSharedWith(sanitized.sharedWith);
     setLoadedQuadrantData({
       rows: sanitized.rows,
       cols: sanitized.cols,
       cellSize: sanitized.cellSize,
       grid: sanitized.grid,
+      sharedWith: sanitized.sharedWith,
+      owner: sanitized.owner,
     });
     setQuadrantTitle('');
     let savedRemotely = true;
@@ -2040,13 +2379,24 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
+    const sanitizedShared = sanitizeSharedWith(q.sharedWith);
+    const ownerValue = sanitizeOwner(q.owner, defaultOwner);
     setRows(q.rows);
     setCols(q.cols);
     setCellSize(q.cellSize);
     setGrid(() => buildGrid(q.rows, q.cols, q.grid));
     setSelectedCells([]);
     setCurrentQuadrantIndex(idx);
-    setLoadedQuadrantData({ rows: q.rows, cols: q.cols, cellSize: q.cellSize, grid: q.grid });
+    setActiveQuadrantOwner(ownerValue);
+    setActiveQuadrantSharedWith(sanitizedShared);
+    setLoadedQuadrantData({
+      rows: q.rows,
+      cols: q.cols,
+      cellSize: q.cellSize,
+      grid: q.grid,
+      sharedWith: sanitizedShared,
+      owner: ownerValue,
+    });
   };
   const loadDefaultQuadrant = () => {
     const dRows = 8;
@@ -2060,8 +2410,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setCurrentQuadrantIndex(null);
     setLoadedQuadrantData(null);
     setAnnotations([]);
+    setActiveQuadrantOwner(defaultOwner);
+    setActiveQuadrantSharedWith([]);
   };
   const saveQuadrantChanges = async () => {
+    if (!canEditActiveQuadrant) return;
     if (currentQuadrantIndex === null) return;
     const current = quadrants[currentQuadrantIndex];
     if (!current?.id) return;
@@ -2077,8 +2430,16 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         cellSize,
         grid,
         order: orderValue,
+        owner: current?.owner,
+        sharedWith: isPlayerMode
+          ? current?.sharedWith || []
+          : activeQuadrantSharedWith,
       },
-      { titleFallback: fallbackTitle, orderFallback: orderValue }
+      {
+        titleFallback: fallbackTitle,
+        orderFallback: orderValue,
+        ownerFallback: current?.owner || defaultOwner,
+      }
     );
     const updatedQuadrant = {
       ...current,
@@ -2089,8 +2450,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const nextQuadrantsState = sortQuadrantsList(
       quadrants.map((item) => (item?.id === current.id ? updatedQuadrant : item))
     );
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
     try {
       await setDoc(
         doc(db, 'minimapQuadrants', current.id),
@@ -2107,7 +2469,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       cols: sanitized.cols,
       cellSize: sanitized.cellSize,
       grid: sanitized.grid,
+      sharedWith: sanitized.sharedWith,
+      owner: sanitized.owner,
     });
+    setActiveQuadrantOwner(sanitized.owner);
+    setActiveQuadrantSharedWith(sanitized.sharedWith);
   };
   const duplicateQuadrant = async (i) => {
     const source = quadrants[i];
@@ -2116,17 +2482,28 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const copyId = generateQuadrantId();
     const title = `${source?.title || `Cuadrante ${i + 1}`} copia`;
     const nextOrder = getNextQuadrantOrder();
+    const sourceOwner = sanitizeOwner(source?.owner, defaultOwner);
+    const copyOwner = isPlayerMode ? defaultOwner : sourceOwner;
+    const copySharedWith = isPlayerMode
+      ? []
+      : sanitizeSharedWith(source?.sharedWith);
     const sanitized = sanitizeQuadrantValues(
       {
         title,
         rows: source?.rows,
         cols: source?.cols,
         cellSize: source?.cellSize,
-      grid: source?.grid,
-      order: nextOrder,
-    },
-    { titleFallback: title, orderFallback: nextOrder }
-  );
+        grid: source?.grid,
+        order: nextOrder,
+        owner: copyOwner,
+        sharedWith: copySharedWith,
+      },
+      {
+        titleFallback: title,
+        orderFallback: nextOrder,
+        ownerFallback: copyOwner,
+      }
+    );
     const copyQuadrant = {
       id: copyId,
       ...sanitized,
@@ -2136,8 +2513,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       ...quadrants.filter(Boolean),
       copyQuadrant,
     ]);
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
     if (sourceId === activeQuadrantId) {
       setAnnotations((prev) => {
         const clones = prev
@@ -2199,6 +2577,12 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   };
   const deleteQuadrant = async (i) => {
+    if (isPlayerMode) {
+      const target = quadrants[i];
+      const ownerKey = normalizePlayerName(target?.owner);
+      if (ownerKey === 'master') return;
+      if (ownerKey && ownerKey !== normalizedPlayerName) return;
+    }
     const removedQuadrant = quadrants[i] || null;
     const removedId = removedQuadrant?.id;
     if (currentQuadrantIndex === i) {
@@ -2245,6 +2629,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   // Adders periferia
   const addRowTopAt = (cIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) => {
       const newRow = Array.from({ length: cols }, () => ({
         ...defaultCell(),
@@ -2257,6 +2642,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setRows((r) => r + 1);
   };
   const addRowBottomAt = (cIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) => {
       const newRow = Array.from({ length: cols }, () => ({
         ...defaultCell(),
@@ -2269,6 +2655,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setRows((r) => r + 1);
   };
   const addColLeftAt = (rIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) =>
       prev.map((row, r) => [{ ...defaultCell(), active: r === rIndex }, ...row])
     );
@@ -2276,6 +2663,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setCols((c) => c + 1);
   };
   const addColRightAt = (rIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) =>
       prev.map((row, r) => [...row, { ...defaultCell(), active: r === rIndex }])
     );
@@ -2287,6 +2675,23 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     (r < rows - 1 && grid[r + 1][c]?.active) ||
     (c > 0 && grid[r][c - 1]?.active) ||
     (c < cols - 1 && grid[r][c + 1]?.active);
+  const toggleQuadrantPlayer = (name) => {
+    if (isPlayerMode) return;
+    const normalized = normalizePlayerName(name);
+    if (!normalized) return;
+    setActiveQuadrantSharedWith((prev) => {
+      const sanitized = sanitizeSharedWith(prev);
+      const exists = sanitized.some(
+        (entry) => normalizePlayerName(entry) === normalized
+      );
+      if (exists) {
+        return sanitized.filter(
+          (entry) => normalizePlayerName(entry) !== normalized
+        );
+      }
+      return [...sanitized, name];
+    });
+  };
 
   const mobileToggleRowClass =
     'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
@@ -2307,19 +2712,29 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </button>
         )}
       </div>
+      {isSharedMasterQuadrant && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+          {L.masterQuadrantLocked}
+        </div>
+      )}
       {isMobile && (
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {L.mobileQuickControls}
           </div>
           <div className={mobileToggleGroupClass}>
-            <label className={mobileToggleRowClass}>
+            <label
+              className={`${mobileToggleRowClass} ${
+                canEditActiveQuadrant ? '' : 'opacity-40'
+              }`}
+            >
               <span className="text-sm font-medium text-gray-200">{L.shapeEdit}</span>
               <input
                 type="checkbox"
                 className="h-5 w-5 accent-emerald-500"
                 checked={shapeEdit}
                 onChange={(e) => setShapeEdit(e.target.checked)}
+                disabled={!canEditActiveQuadrant}
               />
             </label>
             <div className={`${mobileToggleRowClass} opacity-80`}>
@@ -2398,6 +2813,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               setRows(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
             }
             className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+            disabled={!canEditActiveQuadrant}
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -2411,6 +2827,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               setCols(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
             }
             className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+            disabled={!canEditActiveQuadrant}
           />
         </label>
         <label className="flex flex-col gap-1 sm:col-span-2">
@@ -2424,6 +2841,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             step={4}
             value={cellSize}
             onChange={(e) => setCellSize(Number(e.target.value))}
+            disabled={!canEditActiveQuadrant}
           />
         </label>
       </div>
@@ -2442,11 +2860,45 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             onChange={(e) => setQuadrantTitle(e.target.value)}
             placeholder={L.title}
             className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+            disabled={!canEditActiveQuadrant}
           />
-          <Boton size="sm" onClick={saveQuadrant}>
+          <Boton size="sm" onClick={saveQuadrant} disabled={!canEditActiveQuadrant}>
             {L.saveQuadrant}
           </Boton>
         </div>
+        {!isPlayerMode && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              {L.permissions}
+            </div>
+            <div className="text-xs text-gray-400">{L.sharedWithPlayers}</div>
+            {playersList.length === 0 ? (
+              <div className="text-xs text-gray-500">{L.noPlayers}</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {playersList.map((player) => {
+                  const isSelected = activeQuadrantSharedWith.some(
+                    (entry) => normalizePlayerName(entry) === normalizePlayerName(player)
+                  );
+                  return (
+                    <button
+                      key={player}
+                      type="button"
+                      onClick={() => toggleQuadrantPlayer(player)}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                        isSelected
+                          ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                          : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-emerald-400 hover:text-emerald-200'
+                      }`}
+                    >
+                      {player}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {currentQuadrantIndex !== null && (
           <div className="text-xs text-emerald-400">
             Editando: {quadrants[currentQuadrantIndex]?.title}
@@ -2461,7 +2913,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               />
               <span>{L.unsavedChangesIndicator}</span>
             </div>
-            <Boton size="sm" onClick={saveQuadrantChanges}>
+            <Boton
+              size="sm"
+              onClick={saveQuadrantChanges}
+              disabled={!canEditActiveQuadrant}
+            >
               {L.saveChanges}
             </Boton>
           </div>
@@ -2483,6 +2939,18 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               {quadrants.map((q, i) => {
                 const keyId = q.id || `quadrant-${i}`;
                 const isSelectedQuadrant = currentQuadrantIndex === i;
+                const ownerKey = normalizePlayerName(q?.owner);
+                const isMasterQuadrant = ownerKey === 'master';
+                const isOwnedByPlayer =
+                  !!normalizedPlayerName && ownerKey === normalizedPlayerName;
+                const isSharedFromMaster =
+                  isPlayerMode &&
+                  isMasterQuadrant &&
+                  Array.isArray(q?.sharedWith) &&
+                  q.sharedWith.some(
+                    (entry) => normalizePlayerName(entry) === normalizedPlayerName
+                  );
+                const canDeleteQuadrant = !isPlayerMode || isOwnedByPlayer;
                 return (
                   <div
                     key={keyId}
@@ -2506,6 +2974,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                         )
                           return;
                         cancelLongPressTimer(keyId);
+                        if (!canDeleteQuadrant) {
+                          return;
+                        }
                         const timer = setTimeout(() => {
                           const executed = runUnsavedChangesGuard(() =>
                             deleteQuadrant(i)
@@ -2559,7 +3030,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                           return;
                         cancelLongPressTimer(keyId);
                       }}
-                      className={`flex flex-col items-center rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
+                      className={`relative flex flex-col items-center rounded border ${
+                        isSharedFromMaster
+                          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+                          : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
+                      } ${
                         isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
                       } ${
                         isMobile
@@ -2567,6 +3042,20 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                           : 'p-1 text-xs'
                       }`}
                     >
+                      <div
+                        className={`flex w-full justify-center min-h-[18px] ${
+                          isSharedFromMaster ? 'mb-1' : 'mb-0.5'
+                        }`}
+                      >
+                        {isSharedFromMaster && (
+                          <span
+                            className="rounded-full border border-emerald-400 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-100"
+                            title={L.sharedQuadrantHint}
+                          >
+                            {L.sharedQuadrantTag}
+                          </span>
+                        )}
+                      </div>
                       <QuadrantPreview q={q} size={36} />
                       <span
                         className={`mt-1 ${
@@ -2589,7 +3078,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                     >
                       <LucideIcons.Copy size={10} />
                     </button>
-                    {!isMobile && (
+                    {!isMobile && canDeleteQuadrant && (
                       <button
                         type="button"
                         className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
@@ -2614,80 +3103,101 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Boton
-            size="sm"
-            className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
-            onClick={onBack}
-          >
-            {L.arrow} {effectiveBackLabel}
-          </Boton>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Minimapa</h1>
-            {shouldShowNewBadge && (
-              <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-                {L.new}
-              </span>
+      <div ref={headerSectionRef} className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Boton
+              size="sm"
+              className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
+              onClick={onBack}
+            >
+              {L.arrow} {effectiveBackLabel}
+            </Boton>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Minimapa</h1>
+              {shouldShowNewBadge && (
+                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+                  {L.new}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+            <label
+              className={`flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1 ${
+                canEditActiveQuadrant ? '' : 'opacity-40'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+                disabled={!canEditActiveQuadrant}
+              />
+              <span>{L.shapeEdit}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={effectiveReadable}
+                onChange={(e) => setReadableMode(e.target.checked)}
+              />
+              <span>{L.readable}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <span>{L.autoFit}</span>
+              <input
+                type="checkbox"
+                checked={autoFit}
+                onChange={(e) => setAutoFit(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+              <span>{L.moveMode}</span>
+            </label>
+            {!autoFit && (
+              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={35}
+                  max={200}
+                  value={Math.round(zoom * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                />
+                <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
+              </div>
             )}
+            <Boton
+              size="sm"
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+            >
+              {L.reset}
+            </Boton>
           </div>
         </div>
-        <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={shapeEdit}
-              onChange={(e) => setShapeEdit(e.target.checked)}
-            />
-            <span>{L.shapeEdit}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={effectiveReadable}
-              onChange={(e) => setReadableMode(e.target.checked)}
-            />
-            <span>{L.readable}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <span>{L.autoFit}</span>
-            <input
-              type="checkbox"
-              checked={autoFit}
-              onChange={(e) => setAutoFit(e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={isMoveMode}
-              onChange={(e) => setIsMoveMode(e.target.checked)}
-            />
-            <span>{L.moveMode}</span>
-          </label>
-          {!autoFit && (
-            <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min={35}
-                max={200}
-                value={Math.round(zoom * 100)}
-                onChange={(e) => setZoom(Number(e.target.value) / 100)}
-              />
-              <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
-            </div>
-          )}
-          <Boton
-            size="sm"
-            onClick={() => {
-              setZoom(1);
-              setOffset({ x: 0, y: 0 });
-            }}
-          >
-            {L.reset}
-          </Boton>
-        </div>
+        {isMobile && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-800/60 px-3 py-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+              {L.quadrant}
+            </h2>
+            <Boton
+              size="sm"
+              className="shrink-0"
+              onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
+            >
+              {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
+            </Boton>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -2697,13 +3207,21 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </div>
         )}
 
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
+        <div
+          className={`bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh] flex flex-col ${
+            isMobile ? 'fixed inset-x-0 bottom-0' : ''
+          }`}
+          style={isMobile ? { top: Math.max(mobileMapTop, 0) } : undefined}
+        >
           <div
-            className={`h-full w-full min-h-[80vh] overflow-hidden overscroll-contain ${touchActionClass}`}
+            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass}`}
             ref={containerRef}
             onWheel={handleWheel}
           >
-            <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
+            <div
+              className={`${isMobile ? 'mx-auto w-full max-w-full px-1' : ''} h-full`}
+              style={{ height: '100%' }}
+            >
               <div
                 className="relative mx-auto"
                 style={{
@@ -3058,20 +3576,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     </div>
 
       {isMobile && (
-        <div
-          className={`fixed bottom-4 left-4 right-4 z-50 flex flex-col items-start gap-2 ${
-            isQuadrantPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
-        >
-          <Boton
-            size="sm"
-            className="pointer-events-auto"
-            onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
-          >
-            {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
-          </Boton>
+        <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
           <div
-            className={`w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+            className={`mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
               isQuadrantPanelOpen
                 ? 'pointer-events-auto opacity-100 translate-y-0'
                 : 'pointer-events-none opacity-0 translate-y-2'
@@ -3123,6 +3630,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                           setActive(selectedCells, false);
                           setSelectedCells([]);
                         }}
+                        disabled={!canEditActiveQuadrant}
                       >
                         {L.delCell}
                       </Boton>
@@ -3292,6 +3800,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                             {[
                               { id: 'estados', label: 'Estados' },
                               { id: 'personalizados', label: 'Personalizados' },
+                              { id: 'recursos', label: 'Recursos' },
                               { id: 'emojis', label: 'Emojis' },
                               { id: 'lucide', label: 'Lucide' },
                             ].map((b) => (
@@ -3394,7 +3903,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                               ))}
                             </div>
                           )}
-                          {(iconSource === 'estados' || iconSource === 'personalizados') && (
+                          {['estados', 'personalizados', 'recursos'].includes(iconSource) && (
                             <div className="max-h-40 flex flex-wrap gap-2 overflow-auto rounded-lg bg-gray-900 p-2">
                               {(allIcons[iconSource] || []).map((ico, i) => (
                                 <IconThumb
@@ -3542,5 +4051,6 @@ MinimapBuilder.propTypes = {
   backLabel: PropTypes.string,
   showNewBadge: PropTypes.bool,
   mode: PropTypes.oneOf(['master', 'player']),
+  playerName: PropTypes.string,
 };
 export default MinimapBuilder;
