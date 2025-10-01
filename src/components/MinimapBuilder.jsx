@@ -769,20 +769,14 @@ function MinimapBuilder({
     const current = quadrants[currentQuadrantIndex];
     if (!current) return;
     const ownerValue = sanitizeOwner(current.owner, defaultOwner);
-    if (ownerValue !== activeQuadrantOwner) {
-      setActiveQuadrantOwner(ownerValue);
-    }
+    setActiveQuadrantOwner((prev) =>
+      prev === ownerValue ? prev : ownerValue
+    );
     const sanitizedShared = sanitizeSharedWith(current.sharedWith);
-    if (!sharedWithEquals(activeQuadrantSharedWith, sanitizedShared)) {
-      setActiveQuadrantSharedWith(sanitizedShared);
-    }
-  }, [
-    quadrants,
-    currentQuadrantIndex,
-    defaultOwner,
-    activeQuadrantOwner,
-    activeQuadrantSharedWith,
-  ]);
+    setActiveQuadrantSharedWith((prev) =>
+      sharedWithEquals(prev, sanitizedShared) ? prev : sanitizedShared
+    );
+  }, [quadrants, currentQuadrantIndex, defaultOwner]);
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
@@ -3048,14 +3042,20 @@ function MinimapBuilder({
                           : 'p-1 text-xs'
                       }`}
                     >
-                      {isSharedFromMaster && (
-                        <span
-                          className="absolute right-1 top-1 rounded-full border border-emerald-400 bg-emerald-500/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-100"
-                          title={L.sharedQuadrantHint}
-                        >
-                          {L.sharedQuadrantTag}
-                        </span>
-                      )}
+                      <div
+                        className={`flex w-full justify-center min-h-[18px] ${
+                          isSharedFromMaster ? 'mb-1' : 'mb-0.5'
+                        }`}
+                      >
+                        {isSharedFromMaster && (
+                          <span
+                            className="rounded-full border border-emerald-400 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-100"
+                            title={L.sharedQuadrantHint}
+                          >
+                            {L.sharedQuadrantTag}
+                          </span>
+                        )}
+                      </div>
                       <QuadrantPreview q={q} size={36} />
                       <span
                         className={`mt-1 ${
