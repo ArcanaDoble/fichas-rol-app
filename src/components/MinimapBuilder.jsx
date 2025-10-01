@@ -96,12 +96,23 @@ const L = {
   mobileReadableHint: 'Activo autom\u00E1ticamente en m\u00F3vil',
   zoom: 'Zoom',
   originStyle: 'Origen',
+  originNorth: 'Arriba',
+  originSouth: 'Abajo',
+  originEast: 'Derecha',
+  originWest: 'Izquierda',
 };
 
 const stripDiacritics = (value) =>
   String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+
+const normalizeRotation = (value, fallback = 0) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const wrapped = Math.round(parsed) % 360;
+  return wrapped >= 0 ? wrapped : wrapped + 360;
+};
 
 const FALLBACK_EMOJI_GROUPS = {
   Smileys: [
@@ -371,6 +382,7 @@ const defaultCell = () => ({
   borderWidth: 1,
   borderStyle: 'solid',
   icon: null,
+  iconRotation: 0,
   effect: { type: 'none', color: '#ffff00' },
   active: true,
 });
@@ -434,6 +446,7 @@ const sanitizeCell = (cell) => {
   const borderStyle = VALID_BORDER_STYLES.has(style) ? style : base.borderStyle;
   const icon =
     typeof cell.icon === 'string' && cell.icon.trim() ? cell.icon : null;
+  const iconRotation = normalizeRotation(cell.iconRotation, base.iconRotation);
   let active;
   if (typeof cell.active === 'boolean') {
     active = cell.active;
@@ -461,6 +474,7 @@ const sanitizeCell = (cell) => {
     borderWidth,
     borderStyle,
     icon,
+    iconRotation,
     effect,
     active,
   };
@@ -485,14 +499,42 @@ const ORIGIN_ICON_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
   ORIGIN_ICON_SVG
 )}`;
 
-const ORIGIN_CELL_STYLE = {
+const ORIGIN_BASE_STYLE = {
   fill: '#0f172a',
   borderColor: '#38bdf8',
   borderWidth: 2,
   borderStyle: 'solid',
   icon: ORIGIN_ICON_DATA_URL,
+  iconRotation: 0,
   effect: { type: 'none', color: '#38bdf8' },
 };
+
+const ORIGIN_DIRECTIONS = [
+  { id: 'north', rotation: 0, icon: LucideIcons.ArrowUp, labelKey: 'originNorth' },
+  {
+    id: 'east',
+    rotation: 90,
+    icon: LucideIcons.ArrowRight,
+    labelKey: 'originEast',
+  },
+  {
+    id: 'south',
+    rotation: 180,
+    icon: LucideIcons.ArrowDown,
+    labelKey: 'originSouth',
+  },
+  {
+    id: 'west',
+    rotation: 270,
+    icon: LucideIcons.ArrowLeft,
+    labelKey: 'originWest',
+  },
+];
+
+const buildOriginCellStyle = (rotation = 0) => ({
+  ...ORIGIN_BASE_STYLE,
+  iconRotation: rotation,
+});
 
 const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
   const base = `${quadrantId}-${r}-${c}`;
@@ -724,7 +766,11 @@ const sanitizeCellStylePresets = (presets) => {
   if (!Array.isArray(presets)) return [];
   return presets
     .filter((preset) => preset && typeof preset === 'object')
-    .map((preset) => ({ ...preset }));
+    .map((preset) => {
+      const sanitized = sanitizeCell({ ...defaultCell(), ...preset });
+      const { active, ...style } = sanitized;
+      return style;
+    });
 };
 const readLocalCustomization = () => {
   const result = {
@@ -2408,7 +2454,7 @@ function MinimapBuilder({
       });
       return trimGrid(next);
     });
-  const clearIcon = (cells) => updateCell(cells, { icon: null });
+  const clearIcon = (cells) => updateCell(cells, { icon: null, iconRotation: 0 });
   const resetCellStyle = (cells) =>
     setGrid((prev) => {
       if (!canEditActiveQuadrant) return prev;
@@ -2429,6 +2475,7 @@ function MinimapBuilder({
       borderWidth: cell.borderWidth,
       borderStyle: cell.borderStyle,
       icon: cell.icon,
+      iconRotation: cell.iconRotation,
       effect: cell.effect,
     };
     setCellStylePresets((p) => [...p, preset]);
@@ -3746,6 +3793,11 @@ function MinimapBuilder({
                                     src={cell.icon}
                                     alt="icon"
                                     className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
+                                    style={{
+                                      transform: cell.iconRotation
+                                        ? `rotate(${cell.iconRotation}deg)`
+                                        : undefined,
+                                    }}
                                   />
                                 )}
                                 {!isMobile && (
@@ -3951,12 +4003,48 @@ function MinimapBuilder({
                                 Guardar estilo
                               </Boton>
                               {!isPlayerMode && (
-                                <Boton
-                                  size="sm"
-                                  onClick={() => updateCell(selectedCells, ORIGIN_CELL_STYLE)}
-                                >
-                                  {L.originStyle}
-                                </Boton>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-300">
+                                    {L.originStyle}
+                                  </span>
+                                  <div className="flex overflow-hidden rounded-md border border-gray-700 bg-gray-800/70">
+                                    {ORIGIN_DIRECTIONS.map((direction) => {
+                                      const DirectionIcon = direction.icon;
+                                      const isActive =
+                                        selected?.icon === ORIGIN_ICON_DATA_URL &&
+                                        normalizeRotation(selected?.iconRotation ?? 0) ===
+                                          direction.rotation;
+                                      return (
+                                        <button
+                                          key={direction.id}
+                                          type="button"
+                                          disabled={!hasSelectedCells}
+                                          onClick={() => {
+                                            if (!hasSelectedCells) return;
+                                            updateCell(
+                                              selectedCells,
+                                              buildOriginCellStyle(direction.rotation)
+                                            );
+                                          }}
+                                          title={`${L.originStyle} · ${L[direction.labelKey]}`}
+                                          className={`flex h-8 w-8 items-center justify-center text-gray-300 transition ${
+                                            isActive
+                                              ? 'bg-blue-600 text-white shadow-inner'
+                                              : 'hover:bg-gray-700/80'
+                                          } ${
+                                            hasSelectedCells
+                                              ? ''
+                                              : 'cursor-not-allowed opacity-40'
+                                          }`}
+                                        >
+                                          {DirectionIcon && (
+                                            <DirectionIcon className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -3984,7 +4072,16 @@ function MinimapBuilder({
                                   >
                                     {p.effect?.type !== 'none' && <EffectOverlay effect={p.effect} />}
                                     {p.icon && (
-                                      <img src={p.icon} alt="" className="h-full w-full object-contain" />
+                                      <img
+                                        src={p.icon}
+                                        alt=""
+                                        className="h-full w-full object-contain"
+                                        style={{
+                                          transform: p.iconRotation
+                                            ? `rotate(${p.iconRotation}deg)`
+                                            : undefined,
+                                        }}
+                                      />
                                     )}
                                   </div>
                                 </button>
@@ -4124,6 +4221,7 @@ function MinimapBuilder({
                                           onClick={() =>
                                             updateCell(selectedCells, {
                                               icon: emojiDataUrl(item.ch),
+                                              iconRotation: 0,
                                             })
                                           }
                                         />
@@ -4166,7 +4264,10 @@ function MinimapBuilder({
                                           label={n}
                                           selected={selected.icon === url}
                                           onClick={() =>
-                                            updateCell(selectedCells, { icon: url })
+                                            updateCell(selectedCells, {
+                                              icon: url,
+                                              iconRotation: 0,
+                                            })
                                           }
                                         />
                                       );
@@ -4185,7 +4286,10 @@ function MinimapBuilder({
                                   label={ico.name}
                                   selected={selected.icon === ico.url}
                                   onClick={() =>
-                                    updateCell(selectedCells, { icon: ico.url })
+                                    updateCell(selectedCells, {
+                                      icon: ico.url,
+                                      iconRotation: 0,
+                                    })
                                   }
                                   onDelete={
                                     iconSource === 'personalizados'
