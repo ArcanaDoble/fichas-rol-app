@@ -4033,12 +4033,21 @@ function MinimapBuilder({
                                 60 + stackBoost
                               );
                             }
+                            const hasVividEffect =
+                              showCellContent &&
+                              ['glow', 'sparkle', 'pulse'].includes(
+                                cell.effect?.type
+                              );
                             const selectionAura =
                               isSelected || isHovered ? (
                                 <span
                                   className={`pointer-events-none absolute inset-[3px] rounded-lg transition-all duration-150 ${
                                     isSelected
-                                      ? 'bg-sky-400/15 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.6),0_0_10px_4px_rgba(56,189,248,0.35)] scale-[0.97] animate-[pulse_2s_ease-in-out_infinite]'
+                                      ? `bg-sky-400/15 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.6),0_0_10px_4px_rgba(56,189,248,0.35)] scale-[0.97] animate-[pulse_2s_ease-in-out_infinite]${
+                                          hasVividEffect
+                                            ? ' ring-2 ring-white/80 ring-offset-[2px] ring-offset-slate-950/60 drop-shadow-[0_0_8px_rgba(15,23,42,0.55)]'
+                                            : ''
+                                        }`
                                       : ''
                                   } ${
                                     isHovered
