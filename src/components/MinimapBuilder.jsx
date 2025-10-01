@@ -811,7 +811,7 @@ function MinimapBuilder({
     return ownerKey === normalizedPlayerName;
   }, [isPlayerMode, activeQuadrantOwner, normalizedPlayerName]);
   const quadrantPreviewSize = useMemo(
-    () => (isMobile ? 96 : 120),
+    () => (isMobile ? 72 : 96),
     [isMobile]
   );
   const activeAnnotations = useMemo(
@@ -2961,8 +2961,8 @@ function MinimapBuilder({
                     (entry) => normalizePlayerName(entry) === normalizedPlayerName
                   );
                 const canDeleteQuadrant = !isPlayerMode || isOwnedByPlayer;
-                const tileWidth = quadrantPreviewSize + (isMobile ? 36 : 48);
-                const tileMinHeight = quadrantPreviewSize + (isMobile ? 52 : 68);
+                const tileWidth = quadrantPreviewSize + (isMobile ? 28 : 40);
+                const tileMinHeight = quadrantPreviewSize + (isMobile ? 40 : 56);
                 return (
                   <div
                     key={keyId}
