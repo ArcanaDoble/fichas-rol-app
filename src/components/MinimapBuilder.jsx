@@ -1114,6 +1114,7 @@ function MinimapBuilder({
     () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
     [isPlayerMode, isSharedMasterQuadrant, originCellKey]
   );
+
   const explorerState = useMemo(() => {
     if (!isExplorerModeActive) {
       return { exploredSet: new Set(), frontierSet: new Set() };
