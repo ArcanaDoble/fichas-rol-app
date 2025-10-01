@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useLayoutEffect,
 } from 'react';
 import PropTypes from 'prop-types';
 import Boton from './Boton';
@@ -24,6 +25,7 @@ import {
   where,
   writeBatch,
   serverTimestamp,
+  arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -57,6 +59,10 @@ const L = {
   iconAdd: 'A\u00F1adir icono personalizado',
   iconDelete: 'Eliminar icono',
   annotations: 'Anotaciones',
+  masterNoteTag: 'Máster',
+  playerNoteTag: 'Jugador',
+  playerNotesList: 'Notas de jugadores',
+  yourNote: 'Tu nota',
   effect: 'Efecto',
   effectColor: 'Color del efecto',
   glow: 'Brillo',
@@ -70,6 +76,13 @@ const L = {
   savedQuadrants: 'Cuadrantes guardados',
   defaultQuadrant: 'Cuadrante predeterminado',
   title: 'T\u00EDtulo',
+  permissions: 'Permisos',
+  sharedWithPlayers: 'Compartir con jugadores',
+  noPlayers: 'Sin jugadores disponibles',
+  sharedQuadrantTag: 'Compartido',
+  sharedQuadrantHint: 'Asignado por el M\u00E1ster',
+  masterQuadrantLocked:
+    'Este cuadrante fue compartido por el M\u00E1ster y es de solo lectura.',
   unsavedChangesConfirm:
     'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
   unsavedChangesIndicator: 'Cambios sin guardar en el cuadrante actual',
@@ -83,12 +96,24 @@ const L = {
   mobileQuickControls: 'Controles r\u00E1pidos',
   mobileReadableHint: 'Activo autom\u00E1ticamente en m\u00F3vil',
   zoom: 'Zoom',
+  originStyle: 'Origen',
+  originNorth: 'Arriba',
+  originSouth: 'Abajo',
+  originEast: 'Derecha',
+  originWest: 'Izquierda',
 };
 
 const stripDiacritics = (value) =>
   String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+
+const normalizeRotation = (value, fallback = 0) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const wrapped = Math.round(parsed) % 360;
+  return wrapped >= 0 ? wrapped : wrapped + 360;
+};
 
 const FALLBACK_EMOJI_GROUPS = {
   Smileys: [
@@ -219,7 +244,7 @@ IconThumb.propTypes = {
   onDelete: PropTypes.func,
 };
 
-const QuadrantPreview = ({ q, size = 36 }) => {
+const QuadrantPreview = ({ q, size = 72 }) => {
   const ensurePositive = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
@@ -227,7 +252,8 @@ const QuadrantPreview = ({ q, size = 36 }) => {
   const rows = ensurePositive(q?.rows);
   const cols = ensurePositive(q?.cols);
   const maxDimension = Math.max(rows, cols);
-  const cell = size / (maxDimension || 1);
+  const dimension = Math.max(size, 1);
+  const cell = dimension / (maxDimension || 1);
   const width = cell * cols;
   const height = cell * rows;
   const emptyCell = {
@@ -237,34 +263,39 @@ const QuadrantPreview = ({ q, size = 36 }) => {
   };
   return (
     <div
-      className="grid flex-shrink-0 overflow-hidden rounded border border-gray-600/70 bg-gray-900/40"
-      style={{
-        width,
-        height,
-        gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
-        gridTemplateRows: `repeat(${rows}, ${cell}px)`,
-      }}
+      className="relative flex flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-600/70 bg-gray-900/40"
+      style={{ width: dimension, height: dimension }}
     >
-      {Array.from({ length: rows }, (_, r) =>
-        Array.from({ length: cols }, (_, c) => {
-          const cellData = q?.grid?.[r]?.[c] || emptyCell;
-          return (
-            <div
-              key={`${r}-${c}`}
-              style={{
-                width: cell,
-                height: cell,
-                background: cellData.active ? cellData.fill : 'transparent',
-                border: `1px solid ${
-                  cellData.active
-                    ? cellData.borderColor
-                    : 'rgba(255,255,255,0.1)'
-                }`,
-              }}
-            />
-          );
-        })
-      )}
+      <div
+        className="grid"
+        style={{
+          width,
+          height,
+          gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cell}px)`,
+        }}
+      >
+        {Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
+            const cellData = q?.grid?.[r]?.[c] || emptyCell;
+            return (
+              <div
+                key={`${r}-${c}`}
+                style={{
+                  width: cell,
+                  height: cell,
+                  background: cellData.active ? cellData.fill : 'transparent',
+                  border: `1px solid ${
+                    cellData.active
+                      ? cellData.borderColor
+                      : 'rgba(255,255,255,0.1)'
+                  }`,
+                }}
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };
@@ -352,6 +383,7 @@ const defaultCell = () => ({
   borderWidth: 1,
   borderStyle: 'solid',
   icon: null,
+  iconRotation: 0,
   effect: { type: 'none', color: '#ffff00' },
   active: true,
 });
@@ -415,6 +447,7 @@ const sanitizeCell = (cell) => {
   const borderStyle = VALID_BORDER_STYLES.has(style) ? style : base.borderStyle;
   const icon =
     typeof cell.icon === 'string' && cell.icon.trim() ? cell.icon : null;
+  const iconRotation = normalizeRotation(cell.iconRotation, base.iconRotation);
   let active;
   if (typeof cell.active === 'boolean') {
     active = cell.active;
@@ -442,13 +475,97 @@ const sanitizeCell = (cell) => {
     borderWidth,
     borderStyle,
     icon,
+    iconRotation,
     effect,
     active,
   };
 };
 
+const ORIGIN_ICON_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+    <defs>
+      <linearGradient id="originArrow" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.65" />
+        <stop offset="100%" stop-color="#38bdf8" />
+      </linearGradient>
+    </defs>
+    <g stroke="url(#originArrow)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M48 80V24" />
+      <path d="M24 44L48 16L72 44" fill="url(#originArrow)" />
+    </g>
+  </svg>
+`;
+
+const ORIGIN_ICON_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
+  ORIGIN_ICON_SVG
+)}`;
+
+const ORIGIN_BASE_STYLE = {
+  fill: '#0f172a',
+  borderColor: '#38bdf8',
+  borderWidth: 2,
+  borderStyle: 'solid',
+  icon: ORIGIN_ICON_DATA_URL,
+  iconRotation: 0,
+  effect: { type: 'none', color: '#38bdf8' },
+};
+
+const ORIGIN_DIRECTIONS = [
+  { id: 'north', rotation: 0, icon: LucideIcons.ArrowUp, labelKey: 'originNorth' },
+  {
+    id: 'east',
+    rotation: 90,
+    icon: LucideIcons.ArrowRight,
+    labelKey: 'originEast',
+  },
+  {
+    id: 'south',
+    rotation: 180,
+    icon: LucideIcons.ArrowDown,
+    labelKey: 'originSouth',
+  },
+  {
+    id: 'west',
+    rotation: 270,
+    icon: LucideIcons.ArrowLeft,
+    labelKey: 'originWest',
+  },
+];
+
+const buildOriginCellStyle = (rotation = 0) => ({
+  ...ORIGIN_BASE_STYLE,
+  iconRotation: rotation,
+});
+
+const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
+  const base = `${quadrantId}-${r}-${c}`;
+  if (!scope) return base;
+  return `${base}-${scope}`;
+};
+
 const getGridCell = (grid, r, c) =>
   Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r][c] : null;
+
+const cellKeyFromIndices = (r, c) => `${r}-${c}`;
+
+const parseCellKey = (key) => {
+  if (typeof key !== 'string') return null;
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('-');
+  if (parts.length !== 2) return null;
+  const r = Number.parseInt(parts[0], 10);
+  const c = Number.parseInt(parts[1], 10);
+  if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
+  return { r, c };
+};
+
+const getOrthogonalNeighbors = (r, c) => [
+  { r: r - 1, c },
+  { r: r + 1, c },
+  { r, c: c - 1 },
+  { r, c: c + 1 },
+];
 
 const sanitizeGridStructure = (grid, rows, cols) => {
   const fallbackRows = Array.isArray(grid) && grid.length > 0 ? grid.length : 8;
@@ -488,8 +605,164 @@ const sanitizeOrder = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const normalizePlayerName = (value) =>
+  stripDiacritics(String(value || '')).toLowerCase().trim();
+
+const sanitizeOwner = (value, fallback = 'master') => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return fallback;
+};
+
+const sanitizeSharedWith = (value) => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const result = [];
+  value.forEach((entry) => {
+    if (typeof entry !== 'string') return;
+    const trimmed = entry.trim();
+    if (!trimmed) return;
+    const key = normalizePlayerName(trimmed);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(trimmed);
+  });
+  return result;
+};
+
+const arraysShallowEqual = (a = [], b = []) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const createQuadrantSnapshot = (data = {}) => {
+  const { rows, cols, grid } = sanitizeGridStructure(
+    data.grid,
+    data.rows,
+    data.cols
+  );
+  return {
+    rows,
+    cols,
+    cellSize: sanitizeCellSize(data.cellSize),
+    grid,
+    sharedWith: sanitizeSharedWith(data.sharedWith),
+  };
+};
+
+const quadrantSnapshotsEqual = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.rows !== b.rows || a.cols !== b.cols) return false;
+  if (a.cellSize !== b.cellSize) return false;
+  if (!sharedWithEquals(a.sharedWith, b.sharedWith)) return false;
+  if (a.grid.length !== b.grid.length) return false;
+  for (let r = 0; r < a.grid.length; r += 1) {
+    const rowA = a.grid[r];
+    const rowB = b.grid[r];
+    if (!rowA || !rowB || rowA.length !== rowB.length) return false;
+    for (let c = 0; c < rowA.length; c += 1) {
+      const cellA = rowA[c];
+      const cellB = rowB[c];
+      if (!cellA || !cellB) return false;
+      if (
+        cellA.fill !== cellB.fill ||
+        cellA.borderColor !== cellB.borderColor ||
+        cellA.borderWidth !== cellB.borderWidth ||
+        cellA.borderStyle !== cellB.borderStyle ||
+        cellA.icon !== cellB.icon ||
+        cellA.iconRotation !== cellB.iconRotation ||
+        cellA.active !== cellB.active
+      ) {
+        return false;
+      }
+      const effectA = cellA.effect || { type: 'none', color: '' };
+      const effectB = cellB.effect || { type: 'none', color: '' };
+      if (
+        effectA.type !== effectB.type ||
+        effectA.color !== effectB.color
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+const normalizeAnnotationMetadata = (
+  annotation,
+  { ownerKey = 'master' } = {}
+) => {
+  if (!annotation || typeof annotation !== 'object') {
+    return {
+      scope: '',
+      authorRole: ownerKey === 'master' ? 'master' : 'player',
+      authorKey: ownerKey === 'master' ? 'master' : ownerKey || 'player',
+      authorName: ownerKey === 'master' ? 'Máster' : 'Jugador',
+    };
+  }
+  const rawScope = typeof annotation.scope === 'string' ? annotation.scope.trim() : '';
+  const scope = rawScope;
+  const computedAuthorKey = (() => {
+    if (typeof annotation.authorKey === 'string' && annotation.authorKey.trim()) {
+      return annotation.authorKey.trim();
+    }
+    if (scope) return scope;
+    if (ownerKey === 'master') return 'master';
+    if (typeof annotation.createdBy === 'string' && annotation.createdBy.trim()) {
+      return normalizePlayerName(annotation.createdBy.trim()) || 'player';
+    }
+    return ownerKey || 'player';
+  })();
+  const authorRole = (() => {
+    if (typeof annotation.authorRole === 'string' && annotation.authorRole.trim()) {
+      return annotation.authorRole.trim();
+    }
+    return computedAuthorKey === 'master' ? 'master' : 'player';
+  })();
+  const authorName = (() => {
+    if (typeof annotation.authorName === 'string' && annotation.authorName.trim()) {
+      return annotation.authorName.trim();
+    }
+    if (authorRole === 'master') return 'Máster';
+    if (typeof annotation.createdBy === 'string' && annotation.createdBy.trim()) {
+      return annotation.createdBy.trim();
+    }
+    return 'Jugador';
+  })();
+  return {
+    scope,
+    authorRole,
+    authorKey: computedAuthorKey,
+    authorName,
+  };
+};
+
+const sharedWithEquals = (a = [], b = []) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const normA = a.map(normalizePlayerName).sort();
+  const normB = b.map(normalizePlayerName).sort();
+  for (let i = 0; i < normA.length; i += 1) {
+    if (normA[i] !== normB[i]) return false;
+  }
+  return true;
+};
+
 const sanitizeQuadrantValues = (data = {}, options = {}) => {
-  const { titleFallback = 'Cuadrante', orderFallback = 0 } = options;
+  const {
+    titleFallback = 'Cuadrante',
+    orderFallback = 0,
+    ownerFallback = 'master',
+  } = options;
   const { rows, cols, grid } = sanitizeGridStructure(
     data.grid,
     data.rows,
@@ -502,6 +775,8 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     cellSize: sanitizeCellSize(data.cellSize),
     grid,
     order: sanitizeOrder(data.order, orderFallback),
+    owner: sanitizeOwner(data.owner, ownerFallback),
+    sharedWith: sanitizeSharedWith(data.sharedWith),
   };
 };
 
@@ -523,6 +798,8 @@ const prepareQuadrantForLocalStorage = (quadrant) => ({
   cellSize: quadrant.cellSize,
   grid: quadrant.grid,
   order: quadrant.order,
+  owner: quadrant.owner,
+  sharedWith: quadrant.sharedWith,
 });
 
 const persistQuadrantsToLocalStorage = (items) => {
@@ -575,7 +852,11 @@ const sanitizeCellStylePresets = (presets) => {
   if (!Array.isArray(presets)) return [];
   return presets
     .filter((preset) => preset && typeof preset === 'object')
-    .map((preset) => ({ ...preset }));
+    .map((preset) => {
+      const sanitized = sanitizeCell({ ...defaultCell(), ...preset });
+      const { active, ...style } = sanitized;
+      return style;
+    });
 };
 const readLocalCustomization = () => {
   const result = {
@@ -608,12 +889,19 @@ const buildGrid = (rows, cols, prev = []) =>
     )
   );
 
-function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
+function MinimapBuilder({
+  onBack,
+  backLabel,
+  showNewBadge,
+  mode = 'master',
+  playerName = '',
+}) {
   const isPlayerMode = mode === 'player';
   const effectiveBackLabel = backLabel || L.back;
   const shouldShowNewBadge =
     typeof showNewBadge === 'boolean' ? showNewBadge : !isPlayerMode;
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileMapTop, setMobileMapTop] = useState(0);
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(12);
   const [cellSize, setCellSize] = useState(48);
@@ -631,11 +919,26 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [readableMode, setReadableMode] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
   const [isMultiTouchActive, setIsMultiTouchActive] = useState(false);
-  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | emojis | lucide
+  const [iconSource, setIconSource] = useState('estados'); // estados | personalizados | recursos | emojis | lucide
   const [emojiSearch, setEmojiSearch] = useState('');
   const [lucideSearch, setLucideSearch] = useState('');
   const [customIcons, setCustomIcons] = useState([]);
+  const [resourceItems, setResourceItems] = useState([]);
+  const [exploredCellKeys, setExploredCellKeys] = useState([]);
+  const [explorationLoaded, setExplorationLoaded] = useState(false);
+  const [playersList, setPlayersList] = useState([]);
+  const trimmedPlayerName =
+    typeof playerName === 'string' ? playerName.trim() : '';
+  const defaultOwner = isPlayerMode
+    ? trimmedPlayerName || 'player'
+    : 'master';
+  const [activeQuadrantOwner, setActiveQuadrantOwner] = useState(defaultOwner);
+  const [activeQuadrantSharedWith, setActiveQuadrantSharedWith] = useState([]);
   const [cellStylePresets, setCellStylePresets] = useState([]);
+  const normalizedPlayerName = useMemo(
+    () => normalizePlayerName(trimmedPlayerName),
+    [trimmedPlayerName]
+  );
   const customizationDocRef = useMemo(
     () => doc(db, 'minimapSettings', 'customization'),
     [db]
@@ -647,19 +950,74 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const [isCustomizationReady, setCustomizationReady] = useState(false);
   const [quadrantTitle, setQuadrantTitle] = useState('');
   const [quadrants, setQuadrants] = useState(() => readQuadrantsFromLocalStorage());
+  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
+  const filterQuadrantsForMode = useCallback(
+    (items = []) => {
+      const sorted = sortQuadrantsList(items);
+      if (!isPlayerMode) {
+        return sorted;
+      }
+      return sorted.filter((item) => {
+        const ownerKey = normalizePlayerName(item?.owner);
+        if (ownerKey && ownerKey !== 'master') {
+          return true;
+        }
+        if (!normalizedPlayerName) {
+          return false;
+        }
+        const sharedWith = Array.isArray(item?.sharedWith)
+          ? item.sharedWith
+          : [];
+        return sharedWith.some(
+          (entry) => normalizePlayerName(entry) === normalizedPlayerName
+        );
+      });
+    },
+    [isPlayerMode, normalizedPlayerName]
+  );
   const updateLocalQuadrants = (items) => {
-    const sorted = sortQuadrantsList(items);
-    localQuadrantsRef.current = sorted;
-    persistQuadrantsToLocalStorage(sorted);
+    const filtered = filterQuadrantsForMode(items);
+    localQuadrantsRef.current = filtered;
+    persistQuadrantsToLocalStorage(filtered);
   };
+  useEffect(() => {
+    setQuadrants((prev) => filterQuadrantsForMode(prev));
+    localQuadrantsRef.current = filterQuadrantsForMode(
+      Array.isArray(localQuadrantsRef.current)
+        ? localQuadrantsRef.current
+        : []
+    );
+  }, [filterQuadrantsForMode]);
+  useEffect(() => {
+    if (currentQuadrantIndex === null) return;
+    const current = quadrants[currentQuadrantIndex];
+    if (!current) return;
+    const ownerValue = sanitizeOwner(current.owner, defaultOwner);
+    setActiveQuadrantOwner((prev) =>
+      prev === ownerValue ? prev : ownerValue
+    );
+    const sanitizedShared = sanitizeSharedWith(current.sharedWith);
+    setActiveQuadrantSharedWith((prev) =>
+      sharedWithEquals(prev, sanitizedShared) ? prev : sanitizedShared
+    );
+    const snapshot = createQuadrantSnapshot({
+      rows: current.rows,
+      cols: current.cols,
+      cellSize: current.cellSize,
+      grid: current.grid,
+      sharedWith: sanitizedShared,
+    });
+    setLoadedQuadrantData((prev) =>
+      prev && quadrantSnapshotsEqual(prev, snapshot) ? prev : snapshot
+    );
+  }, [quadrants, currentQuadrantIndex, defaultOwner]);
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
-  const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const [loadedQuadrantData, setLoadedQuadrantData] = useState(null);
   const [emojiGroups, setEmojiGroups] = useState(null);
   const [lucideNames, setLucideNames] = useState(null);
@@ -672,18 +1030,165 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const current = quadrants[currentQuadrantIndex];
     return current?.id || 'default';
   }, [currentQuadrantIndex, quadrants]);
-  const activeAnnotations = useMemo(
-    () =>
-      annotations.filter(
-        (ann) => (ann?.quadrantId || 'default') === activeQuadrantId
-      ),
-    [annotations, activeQuadrantId]
+  const activeOwnerKey = useMemo(
+    () => normalizePlayerName(activeQuadrantOwner),
+    [activeQuadrantOwner]
   );
+  const isSharedMasterQuadrant = useMemo(() => {
+    if (!isPlayerMode) return false;
+    return activeOwnerKey === 'master';
+  }, [isPlayerMode, activeOwnerKey]);
+  const canEditActiveQuadrant = useMemo(() => {
+    if (!isPlayerMode) return true;
+    if (!activeOwnerKey) return true;
+    if (activeOwnerKey === 'master') return false;
+    if (!normalizedPlayerName) return false;
+    return activeOwnerKey === normalizedPlayerName;
+  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const canAnnotateActiveQuadrant = useMemo(() => {
+    if (!isPlayerMode) return true;
+    if (!normalizedPlayerName) return false;
+    if (!activeOwnerKey) return true;
+    return (
+      activeOwnerKey === normalizedPlayerName || activeOwnerKey === 'master'
+    );
+  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const playerAnnotationKey = useMemo(() => {
+    if (!isPlayerMode) return 'master';
+    if (!normalizedPlayerName) return '';
+    const base = `player-${normalizedPlayerName}`;
+    if (activeOwnerKey === 'master') {
+      return base;
+    }
+    return base;
+  }, [isPlayerMode, normalizedPlayerName, activeOwnerKey]);
+  const quadrantPreviewSize = useMemo(
+    () => (isMobile ? 72 : 96),
+    [isMobile]
+  );
+  const activeAnnotations = useMemo(() => {
+    const ownerKey = activeOwnerKey;
+    return annotations
+      .filter((ann) => (ann?.quadrantId || 'default') === activeQuadrantId)
+      .map((ann) => ({
+        ...ann,
+        ...normalizeAnnotationMetadata(ann, { ownerKey }),
+      }));
+  }, [annotations, activeQuadrantId, activeOwnerKey]);
+  const visibleAnnotations = useMemo(() => {
+    if (!isPlayerMode) return activeAnnotations;
+    return activeAnnotations.filter((ann) => ann.authorRole !== 'master');
+  }, [activeAnnotations, isPlayerMode]);
+  const propertyTabs = useMemo(() => {
+    const tabs = [];
+    if (canEditActiveQuadrant) {
+      tabs.push(
+        { id: 'style', label: 'Estilos', icon: LucideIcons.Palette },
+        { id: 'icon', label: L.icon, icon: LucideIcons.Images },
+        { id: 'effect', label: L.effect, icon: LucideIcons.Wand2 }
+      );
+    }
+    if (canAnnotateActiveQuadrant) {
+      tabs.push({ id: 'notes', label: L.annotations, icon: LucideIcons.NotebookText });
+    }
+    return tabs;
+  }, [canEditActiveQuadrant, canAnnotateActiveQuadrant]);
+  const originCellPosition = useMemo(() => {
+    if (!isPlayerMode) return null;
+    for (let r = 0; r < grid.length; r += 1) {
+      const row = grid[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length; c += 1) {
+        const cell = row[c];
+        if (cell && cell.icon === ORIGIN_ICON_DATA_URL) {
+          return { r, c };
+        }
+      }
+    }
+    return null;
+  }, [grid, isPlayerMode]);
+  const originCellKey = originCellPosition
+    ? cellKeyFromIndices(originCellPosition.r, originCellPosition.c)
+    : null;
+  const isExplorerModeActive = useMemo(
+    () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
+    [isPlayerMode, isSharedMasterQuadrant, originCellKey]
+  );
+  const explorerState = useMemo(() => {
+    if (!isExplorerModeActive) {
+      return { exploredSet: new Set(), frontierSet: new Set() };
+    }
+    const validExplored = new Set();
+    exploredCellKeys.forEach((key) => {
+      const pos = parseCellKey(key);
+      if (!pos) return;
+      const { r, c } = pos;
+      if (r < 0 || c < 0 || r >= rows || c >= cols) return;
+      const cell = grid[r]?.[c];
+      if (!cell || !cell.active) return;
+      validExplored.add(cellKeyFromIndices(r, c));
+    });
+    if (originCellKey && !validExplored.has(originCellKey)) {
+      validExplored.add(originCellKey);
+    }
+    const frontier = new Set();
+    validExplored.forEach((key) => {
+      const pos = parseCellKey(key);
+      if (!pos) return;
+      getOrthogonalNeighbors(pos.r, pos.c).forEach(({ r, c }) => {
+        if (r < 0 || c < 0 || r >= rows || c >= cols) return;
+        const neighbor = grid[r]?.[c];
+        if (!neighbor || !neighbor.active) return;
+        const neighborKey = cellKeyFromIndices(r, c);
+        if (validExplored.has(neighborKey)) return;
+        frontier.add(neighborKey);
+      });
+    });
+    return { exploredSet: validExplored, frontierSet: frontier };
+  }, [
+    exploredCellKeys,
+    grid,
+    isExplorerModeActive,
+    originCellKey,
+    rows,
+    cols,
+  ]);
+  const exploredCellsSet = explorerState.exploredSet;
+  const explorerFrontierSet = explorerState.frontierSet;
+  const explorerVisibleSet = useMemo(() => {
+    if (!isExplorerModeActive) return null;
+    const combined = new Set();
+    exploredCellsSet.forEach((key) => combined.add(key));
+    explorerFrontierSet.forEach((key) => combined.add(key));
+    return combined;
+  }, [exploredCellsSet, explorerFrontierSet, isExplorerModeActive]);
+  useEffect(() => {
+    if (propertyTabs.length === 0) return;
+    if (!propertyTabs.some((tab) => tab.id === panelTab)) {
+      setPanelTab(propertyTabs[0].id);
+    }
+  }, [panelTab, propertyTabs]);
   const hasUnsavedChanges = useMemo(() => {
     if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
-    const current = { rows, cols, cellSize, grid };
-    return JSON.stringify(current) !== JSON.stringify(loadedQuadrantData);
-  }, [currentQuadrantIndex, loadedQuadrantData, rows, cols, cellSize, grid]);
+    if (!canEditActiveQuadrant) return false;
+    const currentSnapshot = createQuadrantSnapshot({
+      rows,
+      cols,
+      cellSize,
+      grid,
+      sharedWith: activeQuadrantSharedWith,
+    });
+    return !quadrantSnapshotsEqual(loadedQuadrantData, currentSnapshot);
+  }, [
+    activeQuadrantSharedWith,
+    canEditActiveQuadrant,
+    currentQuadrantIndex,
+    grid,
+    loadedQuadrantData,
+    rows,
+    cols,
+    cellSize,
+  ]);
   const runUnsavedChangesGuard = useCallback(
     (callback) => {
       if (typeof callback !== 'function') return false;
@@ -700,22 +1205,79 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     [hasUnsavedChanges, confirmAction]
   );
   const setAnnotation = (r, c, data, options = {}) => {
-    const { skipLocalUpdate = false } = options;
-    const key = `${activeQuadrantId}-${r}-${c}`;
-    const payload = { quadrantId: activeQuadrantId, r, c, ...data };
-    const legacyKey = `${r}-${c}`;
+    if (!canAnnotateActiveQuadrant && !options?.override) return;
+    const { skipLocalUpdate = false, existing = null } = options;
+    const baseData = typeof data === 'object' && data ? data : {};
+    const text = typeof baseData.text === 'string' ? baseData.text : '';
+    const icon = typeof baseData.icon === 'string' ? baseData.icon : '';
+    const hasContent = Boolean(text.trim() || icon.trim());
+    const existingMeta = existing
+      ? normalizeAnnotationMetadata(existing, { ownerKey: activeOwnerKey })
+      : null;
+    let scope = existingMeta?.scope || '';
+    let authorKey = existingMeta?.authorKey || '';
+    let authorRole = existingMeta?.authorRole || '';
+    let authorName = existingMeta?.authorName || '';
+    if (!authorKey) {
+      if (!isPlayerMode) {
+        authorKey = 'master';
+      } else if (activeOwnerKey === 'master') {
+        authorKey = playerAnnotationKey || 'player';
+      } else if (normalizedPlayerName) {
+        authorKey = `player-${normalizedPlayerName}`;
+      } else {
+        authorKey = 'player';
+      }
+    }
+    if (!authorRole) {
+      authorRole = authorKey === 'master' ? 'master' : 'player';
+    }
+    if (!authorName) {
+      authorName =
+        authorRole === 'master'
+          ? 'Máster'
+          : trimmedPlayerName || existing?.authorName || 'Jugador';
+    }
+    if (!scope) {
+      if (authorKey === 'master') {
+        scope = '';
+      } else if (existingMeta?.scope) {
+        scope = existingMeta.scope;
+      } else if (activeOwnerKey === 'master') {
+        scope = authorKey;
+      } else {
+        scope = '';
+      }
+    }
+    const key = buildAnnotationKey(activeQuadrantId, r, c, scope);
+    const payload = {
+      quadrantId: activeQuadrantId,
+      r,
+      c,
+      text,
+      icon,
+      key,
+      scope,
+      authorRole,
+      authorKey,
+      authorName,
+    };
     if (!skipLocalUpdate) {
       setAnnotations((prev) => {
         const next = prev.filter((a) => a.key !== key);
-        if (data.text || data.icon) {
-          next.push({ key, quadrantId: activeQuadrantId, r, c, ...data });
+        if (hasContent) {
+          next.push(payload);
         }
         return next;
       });
     }
     const ref = doc(db, 'minimapAnnotations', key);
-    const legacyRef = legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
-    if (data.text || data.icon) {
+    const legacyKey = scope ? null : `${r}-${c}`;
+    const legacyRef =
+      legacyKey && legacyKey !== key
+        ? doc(db, 'minimapAnnotations', legacyKey)
+        : null;
+    if (hasContent) {
       setDoc(ref, payload).catch(() => {});
       if (legacyRef) deleteDoc(legacyRef).catch(() => {});
     } else {
@@ -770,6 +1332,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   }, []);
 
   const containerRef = useRef(null);
+  const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastLongPressRef = useRef({ key: null, t: 0 });
@@ -791,6 +1354,37 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, []);
 
+  const updateMobileMapTop = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) {
+      setMobileMapTop(0);
+      return;
+    }
+    const headerEl = headerSectionRef.current;
+    if (!headerEl) return;
+    const rect = headerEl.getBoundingClientRect();
+    const spacing = 12;
+    const nextTop = Math.max(rect.bottom + spacing, 0);
+    setMobileMapTop((prev) => (Math.abs(prev - nextTop) > 0.5 ? nextTop : prev));
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    updateMobileMapTop();
+    if (!isMobile) return undefined;
+    window.addEventListener('resize', updateMobileMapTop);
+    window.addEventListener('orientationchange', updateMobileMapTop);
+    return () => {
+      window.removeEventListener('resize', updateMobileMapTop);
+      window.removeEventListener('orientationchange', updateMobileMapTop);
+    };
+  }, [isMobile, updateMobileMapTop]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    updateMobileMapTop();
+  }, [isMobile, updateMobileMapTop, isQuadrantPanelOpen, shouldShowNewBadge]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const mq = window.matchMedia('(max-width: 767px)');
@@ -809,8 +1403,146 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, [isMobile]);
   useEffect(() => {
+    if (isPlayerMode) {
+      setPlayersList([]);
+      return undefined;
+    }
+    const playersRef = collection(db, 'players');
+    const unsubscribe = onSnapshot(
+      playersRef,
+      (snapshot) => {
+        const names = [];
+        snapshot.forEach((docSnap) => {
+          const id = docSnap.id;
+          if (typeof id === 'string') {
+            const trimmed = id.trim();
+            if (trimmed) {
+              names.push(trimmed);
+            }
+          }
+        });
+        names.sort((a, b) =>
+          a.localeCompare(b, 'es', { sensitivity: 'accent', usage: 'sort' })
+        );
+        setPlayersList(names);
+      },
+      (error) => {
+        console.error('Error fetching minimap players', error);
+        setPlayersList([]);
+      }
+    );
+    return () => {
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db, isPlayerMode]);
+  useEffect(() => {
+    if (isPlayerMode) return;
+    if (playersList.length === 0) return;
+    const allowed = new Set(playersList.map((name) => normalizePlayerName(name)));
+    setActiveQuadrantSharedWith((prev) => {
+      const sanitized = sanitizeSharedWith(prev);
+      const filtered = sanitized.filter((name) =>
+        allowed.has(normalizePlayerName(name))
+      );
+      if (filtered.length === prev.length) {
+        let unchanged = true;
+        for (let i = 0; i < filtered.length; i += 1) {
+          if (filtered[i] !== prev[i]) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) {
+          return prev;
+        }
+      }
+      return filtered;
+    });
+  }, [isPlayerMode, playersList]);
+  useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
+  useEffect(() => {
+    if (!isPlayerMode || !isSharedMasterQuadrant || !activeQuadrantId) {
+      setExplorationLoaded(false);
+      setExploredCellKeys([]);
+      return undefined;
+    }
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    let isCancelled = false;
+    setExplorationLoaded(false);
+    const unsubscribe = onSnapshot(
+      explorationDocRef,
+      (snapshot) => {
+        if (isCancelled) return;
+        setExplorationLoaded(true);
+        const data = snapshot.data();
+        if (!data || !Array.isArray(data.cells)) {
+          setExploredCellKeys((prev) => (prev.length === 0 ? prev : []));
+          return;
+        }
+        const seen = new Set();
+        const sanitized = [];
+        data.cells.forEach((entry) => {
+          if (typeof entry !== 'string') return;
+          const trimmed = entry.trim();
+          if (!trimmed || seen.has(trimmed)) return;
+          if (!/^\d+-\d+$/.test(trimmed)) return;
+          seen.add(trimmed);
+          sanitized.push(trimmed);
+        });
+        setExploredCellKeys((prev) =>
+          arraysShallowEqual(prev, sanitized) ? prev : sanitized
+        );
+      },
+      (error) => {
+        if (isCancelled) return;
+        console.error('Error fetching minimap exploration', error);
+        setExplorationLoaded(true);
+      }
+    );
+    return () => {
+      isCancelled = true;
+      try {
+        unsubscribe();
+      } catch {}
+      setExplorationLoaded(false);
+    };
+  }, [
+    activeQuadrantId,
+    db,
+    isPlayerMode,
+    isSharedMasterQuadrant,
+  ]);
+  useEffect(() => {
+    if (!isExplorerModeActive || !originCellKey) return;
+    if (!explorationLoaded) return;
+    if (exploredCellsSet.has(originCellKey)) return;
+    setExploredCellKeys((prev) =>
+      prev.includes(originCellKey) ? prev : [...prev, originCellKey]
+    );
+    if (!activeQuadrantId) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    setDoc(
+      explorationDocRef,
+      {
+        cells: arrayUnion(originCellKey),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) =>
+      console.error('Error registering minimap origin exploration', error)
+    );
+  }, [
+    activeQuadrantId,
+    db,
+    explorationLoaded,
+    exploredCellsSet,
+    isExplorerModeActive,
+    originCellKey,
+  ]);
   useEffect(() => {
     const quadrantsRef = collection(db, 'minimapQuadrants');
     let isUnmounted = false;
@@ -830,6 +1562,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             const sanitized = sanitizeQuadrantValues(item, {
               titleFallback: `Cuadrante ${index + 1}`,
               orderFallback: index,
+              ownerFallback: defaultOwner,
             });
             batch.set(doc(db, 'minimapQuadrants', docId), {
               ...sanitized,
@@ -858,31 +1591,31 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             quadrantsMigrationRef.current = true;
             migrateLocalQuadrants();
           }
-          const fallback = getLocalQuadrantsSnapshot();
+          const fallback = filterQuadrantsForMode(getLocalQuadrantsSnapshot());
           setQuadrants(fallback);
           return;
         }
         quadrantsMigrationRef.current = true;
-        const normalized = sortQuadrantsList(
-          docsData.map(({ id, data }, index) => {
-            const sanitized = sanitizeQuadrantValues(data, {
-              titleFallback: `Cuadrante ${index + 1}`,
-              orderFallback: index,
-            });
-            return {
-              id,
-              ...sanitized,
-              updatedAt: data?.updatedAt || null,
-            };
-          })
-        );
-        setQuadrants(normalized);
-        updateLocalQuadrants(normalized);
+        const normalized = docsData.map(({ id, data }, index) => {
+          const sanitized = sanitizeQuadrantValues(data, {
+            titleFallback: `Cuadrante ${index + 1}`,
+            orderFallback: index,
+            ownerFallback: 'master',
+          });
+          return {
+            id,
+            ...sanitized,
+            updatedAt: data?.updatedAt || null,
+          };
+        });
+        const filtered = filterQuadrantsForMode(normalized);
+        setQuadrants(filtered);
+        updateLocalQuadrants(filtered);
       },
       (error) => {
         if (!isUnmounted) {
           console.error('Error fetching minimap quadrants', error);
-          const fallback = getLocalQuadrantsSnapshot();
+          const fallback = filterQuadrantsForMode(getLocalQuadrantsSnapshot());
           setQuadrants(fallback);
         }
       }
@@ -1102,6 +1835,20 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   }, [shapeEdit, grid]);
   useEffect(() => {
+    if (canEditActiveQuadrant) return;
+    if (shapeEdit) setShapeEdit(false);
+  }, [canEditActiveQuadrant, shapeEdit]);
+  useEffect(() => {
+    if (canEditActiveQuadrant || canAnnotateActiveQuadrant) return;
+    if (isPropertyPanelOpen) setIsPropertyPanelOpen(false);
+    if (selectedCells.length > 0) setSelectedCells([]);
+  }, [
+    canEditActiveQuadrant,
+    canAnnotateActiveQuadrant,
+    isPropertyPanelOpen,
+    selectedCells.length,
+  ]);
+  useEffect(() => {
     if (!shapeEdit) setSelectedCells([]);
   }, [shapeEdit]);
   useEffect(() => {
@@ -1132,27 +1879,6 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       setActiveColorPicker(null);
     }
   }, [activeColorPicker, selectedCellData]);
-
-  const emojiDataUrl = (ch) => {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${ch}</text></svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  };
-
-  const lucideCache = useRef(new Map());
-  const lucideDataUrl = (name) => {
-    const cache = lucideCache.current;
-    if (cache.has(name)) return cache.get(name);
-    const pascal = name
-      .split('-')
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-      .join('');
-    const Icon = LucideIcons[pascal];
-    if (!Icon) return '';
-    const svg = renderToStaticMarkup(<Icon size={64} />);
-    const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    cache.set(name, url);
-    return url;
-  };
 
   const ColorPickerButton = ({
     id,
@@ -1208,17 +1934,103 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     );
   };
 
-  // CatÃ¡logo bÃ¡sico (Estados/Personalizados). Emojis/Lucide se aÃ±aden por entrada.
-  const allIcons = useMemo(() => {
+  // Catálogo básico (Estados/Personalizados). Emojis/Lucide se añaden por entrada.
+  const baseIconCatalog = useMemo(() => {
     const estadoIcons = ESTADOS.map((e) => ({ url: e.img, name: e.name }));
     const custom = customIcons.map((u) => ({ url: u, name: 'Personalizado' }));
     return {
       estados: estadoIcons,
       personalizados: custom,
-      emojis: [],
-      lucide: [],
     };
   }, [customIcons]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const itemsRef = collection(db, 'customItems');
+    const unsubscribe = onSnapshot(
+      itemsRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        const entries = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        setResourceItems(entries);
+      },
+      (error) => {
+        if (!isMounted) return;
+        console.error('Error fetching custom inventory items', error);
+        setResourceItems([]);
+      }
+    );
+    return () => {
+      isMounted = false;
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }, [db]);
+
+  const emojiDataUrl = useCallback((ch) => {
+    const safe = ch && typeof ch === 'string' && ch.length ? ch : '❔';
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='52'>${safe}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, []);
+
+  const lucideCache = useRef(new Map());
+  const lucideDataUrl = useCallback(
+    (name) => {
+      if (!name) return '';
+      const cache = lucideCache.current;
+      if (cache.has(name)) return cache.get(name);
+      const pascal = name
+        .split('-')
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join('');
+      const Icon = LucideIcons[pascal];
+      if (!Icon) return '';
+      const svg = renderToStaticMarkup(<Icon size={64} />);
+      const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      cache.set(name, url);
+      return url;
+    },
+    []
+  );
+
+  const resourceCatalog = useMemo(() => {
+    if (!resourceItems.length) return [];
+    const fallback = emojiDataUrl('❔');
+    const seen = new Set();
+    return resourceItems
+      .map((item) => {
+        if (!item) return null;
+        const label = item.name || item.type || 'Recurso';
+        const icon = item.icon || '';
+        let url = '';
+        if (typeof icon === 'string' && icon.startsWith('data:')) {
+          url = icon;
+        } else if (typeof icon === 'string' && icon.startsWith('lucide:')) {
+          url = lucideDataUrl(icon.slice(7));
+        } else if (typeof icon === 'string' && /^https?:/i.test(icon)) {
+          url = icon;
+        } else if (icon) {
+          url = emojiDataUrl(icon);
+        }
+        const finalUrl = url || fallback;
+        if (seen.has(finalUrl)) return null;
+        seen.add(finalUrl);
+        return { url: finalUrl, name: label };
+      })
+      .filter(Boolean);
+  }, [resourceItems, emojiDataUrl, lucideDataUrl]);
+
+  const allIcons = useMemo(
+    () => ({
+      estados: baseIconCatalog.estados,
+      personalizados: baseIconCatalog.personalizados,
+      recursos: resourceCatalog,
+      emojis: [],
+      lucide: [],
+    }),
+    [baseIconCatalog, resourceCatalog]
+  );
 
   // Cargar todos los emojis (agrupados) cuando se selecciona la pestaña
   useEffect(() => {
@@ -1317,8 +2129,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const recomputeFit = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const cw = el.clientWidth - 16;
-    const ch = el.clientHeight - 16;
+    const rect = el.getBoundingClientRect();
+    const cw = (Number.isFinite(rect.width) ? rect.width : el.clientWidth) - 16;
+    const ch = (Number.isFinite(rect.height) ? rect.height : el.clientHeight) - 16;
     const neededW = gridWidth + perimMargin * 2;
     const neededH = gridHeight + perimMargin * 2;
     if (neededW <= 0 || neededH <= 0) {
@@ -1343,6 +2156,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   useEffect(() => {
     recomputeFit();
   }, [recomputeFit, rows, cols, cellSize, isMobile]);
+  useEffect(() => {
+    if (!isMobile) return;
+    recomputeFit();
+  }, [isMobile, mobileMapTop, recomputeFit]);
   useEffect(() => {
     const onResize = () => recomputeFit();
     window.addEventListener('resize', onResize);
@@ -1676,7 +2493,38 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     handlePointerUp,
   ]);
 
+  const revealExplorerCell = (r, c) => {
+    if (!isExplorerModeActive) return;
+    const key = cellKeyFromIndices(r, c);
+    if (exploredCellsSet.has(key)) return;
+    if (!explorerFrontierSet.has(key)) return;
+    setExploredCellKeys((prev) =>
+      prev.includes(key) ? prev : [...prev, key]
+    );
+    if (!activeQuadrantId) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    setDoc(
+      explorationDocRef,
+      {
+        cells: arrayUnion(key),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) =>
+      console.error('Error revealing minimap exploration cell', error)
+    );
+  };
   const handleCellClick = (r, c) => {
+    if (isExplorerModeActive) {
+      const key = cellKeyFromIndices(r, c);
+      if (!exploredCellsSet.has(key)) {
+        if (explorerFrontierSet.has(key)) {
+          revealExplorerCell(r, c);
+        }
+        return;
+      }
+    }
+    if (!canEditActiveQuadrant && !canAnnotateActiveQuadrant) return;
     if (
       isMoveMode ||
       skipClickRef.current ||
@@ -1685,7 +2533,19 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     ) {
       return;
     }
+    let didSelect = false;
+    let didDeselect = false;
     setSelectedCells((prev) => {
+      if (!canEditActiveQuadrant) {
+        const isSame =
+          prev.length === 1 && prev[0].r === r && prev[0].c === c;
+        if (isSame) {
+          didDeselect = true;
+          return [];
+        }
+        didSelect = true;
+        return [{ r, c }];
+      }
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
       if (exists) {
         const next = prev.filter((cell) => cell.r !== r || cell.c !== c);
@@ -1696,9 +2556,17 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       }
       return [...prev, { r, c }];
     });
+    if (!canEditActiveQuadrant) {
+      if (didSelect) {
+        setIsPropertyPanelOpen(true);
+      } else if (didDeselect) {
+        setIsPropertyPanelOpen(false);
+      }
+    }
   };
   const updateCell = (cells, updater) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       const next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1707,6 +2575,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       return next;
     });
   const trimGrid = (g) => {
+    if (!canEditActiveQuadrant) return g;
     let next = g;
     const originalRows = next.length;
     const originalCols = next[0]?.length || 0;
@@ -1775,18 +2644,24 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             if (ann.key) {
               removedAnnotationKeys.add(ann.key);
             }
-            if (Number.isInteger(oldR) && Number.isInteger(oldC)) {
+            if (
+              !ann.scope &&
+              Number.isInteger(oldR) &&
+              Number.isInteger(oldC)
+            ) {
               removedLegacyKeys.add(`${oldR}-${oldC}`);
             }
             return;
           }
-          const newKey = `${activeQuadrantId}-${newR}-${newC}`;
+          const nextScope = typeof ann.scope === 'string' ? ann.scope : '';
+          const newKey = buildAnnotationKey(activeQuadrantId, newR, newC, nextScope);
           const updatedAnn = {
             ...ann,
             r: newR,
             c: newC,
             key: newKey,
             quadrantId: activeQuadrantId,
+            scope: nextScope,
           };
           nextAnnotations.push(updatedAnn);
           if (newKey !== ann.key) {
@@ -1794,7 +2669,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               annotation: updatedAnn,
               previousKey: ann.key,
               previousLegacyKey:
-                Number.isInteger(oldR) && Number.isInteger(oldC)
+                !nextScope && Number.isInteger(oldR) && Number.isInteger(oldC)
                   ? `${oldR}-${oldC}`
                   : null,
             });
@@ -1811,14 +2686,20 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               text: annotation.text || '',
               icon: annotation.icon || '',
             },
-            { skipLocalUpdate: true }
+            { skipLocalUpdate: true, existing: annotation, override: true }
           );
         }
         if (previousKey && previousKey !== annotation.key) {
           deleteDoc(doc(db, 'minimapAnnotations', previousKey)).catch(() => {});
         }
-        const newLegacyKey = `${annotation.r}-${annotation.c}`;
-        if (previousLegacyKey && previousLegacyKey !== newLegacyKey) {
+        const newLegacyKey = annotation.scope
+          ? null
+          : `${annotation.r}-${annotation.c}`;
+        if (
+          previousLegacyKey &&
+          newLegacyKey &&
+          previousLegacyKey !== newLegacyKey
+        ) {
           deleteDoc(doc(db, 'minimapAnnotations', previousLegacyKey)).catch(() => {});
         }
       });
@@ -1837,6 +2718,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   };
   const setActive = (cells, active) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       let next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1844,9 +2726,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       });
       return trimGrid(next);
     });
-  const clearIcon = (cells) => updateCell(cells, { icon: null });
+  const clearIcon = (cells) => updateCell(cells, { icon: null, iconRotation: 0 });
   const resetCellStyle = (cells) =>
     setGrid((prev) => {
+      if (!canEditActiveQuadrant) return prev;
       const next = prev.map((row) => row.slice());
       (Array.isArray(cells) ? cells : [cells]).forEach(({ r, c }) => {
         next[r] = next[r].slice();
@@ -1864,6 +2747,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       borderWidth: cell.borderWidth,
       borderStyle: cell.borderStyle,
       icon: cell.icon,
+      iconRotation: cell.iconRotation,
       effect: cell.effect,
     };
     setCellStylePresets((p) => [...p, preset]);
@@ -1913,6 +2797,8 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
   const saveQuadrant = async () => {
     const nextOrder = getNextQuadrantOrder();
     const fallbackTitle = `Cuadrante ${quadrants.length + 1}`;
+    const ownerValue = isPlayerMode ? defaultOwner : 'master';
+    const sharedList = isPlayerMode ? [] : activeQuadrantSharedWith;
     const sanitized = sanitizeQuadrantValues(
       {
         title: quadrantTitle,
@@ -1921,8 +2807,14 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         cellSize,
         grid,
         order: nextOrder,
+        owner: ownerValue,
+        sharedWith: sharedList,
       },
-      { titleFallback: fallbackTitle, orderFallback: nextOrder }
+      {
+        titleFallback: fallbackTitle,
+        orderFallback: nextOrder,
+        ownerFallback: ownerValue,
+      }
     );
     const newQuadrantId = generateQuadrantId();
     const localQuadrant = {
@@ -1934,18 +2826,17 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       ...quadrants.filter(Boolean),
       localQuadrant,
     ]);
-    const newQuadrantIndex = nextQuadrantsState.findIndex(
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    const newQuadrantIndex = filteredState.findIndex(
       (item) => item.id === newQuadrantId
     );
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
-    setCurrentQuadrantIndex(newQuadrantIndex);
-    setLoadedQuadrantData({
-      rows: sanitized.rows,
-      cols: sanitized.cols,
-      cellSize: sanitized.cellSize,
-      grid: sanitized.grid,
-    });
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
+    setCurrentQuadrantIndex(newQuadrantIndex === -1 ? null : newQuadrantIndex);
+    setActiveQuadrantOwner(sanitized.owner);
+    setActiveQuadrantSharedWith(sanitized.sharedWith);
+    const savedSnapshot = createQuadrantSnapshot(sanitized);
+    setLoadedQuadrantData(savedSnapshot);
     setQuadrantTitle('');
     let savedRemotely = true;
     try {
@@ -2040,13 +2931,28 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
+    const sanitizedShared = sanitizeSharedWith(q.sharedWith);
+    const ownerValue = sanitizeOwner(q.owner, defaultOwner);
+    if (isPlayerMode) {
+      setExploredCellKeys([]);
+      setExplorationLoaded(false);
+    }
     setRows(q.rows);
     setCols(q.cols);
     setCellSize(q.cellSize);
     setGrid(() => buildGrid(q.rows, q.cols, q.grid));
     setSelectedCells([]);
     setCurrentQuadrantIndex(idx);
-    setLoadedQuadrantData({ rows: q.rows, cols: q.cols, cellSize: q.cellSize, grid: q.grid });
+    setActiveQuadrantOwner(ownerValue);
+    setActiveQuadrantSharedWith(sanitizedShared);
+    const snapshot = createQuadrantSnapshot({
+      rows: q.rows,
+      cols: q.cols,
+      cellSize: q.cellSize,
+      grid: q.grid,
+      sharedWith: sanitizedShared,
+    });
+    setLoadedQuadrantData(snapshot);
   };
   const loadDefaultQuadrant = () => {
     const dRows = 8;
@@ -2060,8 +2966,13 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setCurrentQuadrantIndex(null);
     setLoadedQuadrantData(null);
     setAnnotations([]);
+    setActiveQuadrantOwner(defaultOwner);
+    setActiveQuadrantSharedWith([]);
+    setExploredCellKeys([]);
+    setExplorationLoaded(false);
   };
   const saveQuadrantChanges = async () => {
+    if (!canEditActiveQuadrant) return;
     if (currentQuadrantIndex === null) return;
     const current = quadrants[currentQuadrantIndex];
     if (!current?.id) return;
@@ -2077,8 +2988,16 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
         cellSize,
         grid,
         order: orderValue,
+        owner: current?.owner,
+        sharedWith: isPlayerMode
+          ? current?.sharedWith || []
+          : activeQuadrantSharedWith,
       },
-      { titleFallback: fallbackTitle, orderFallback: orderValue }
+      {
+        titleFallback: fallbackTitle,
+        orderFallback: orderValue,
+        ownerFallback: current?.owner || defaultOwner,
+      }
     );
     const updatedQuadrant = {
       ...current,
@@ -2089,8 +3008,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const nextQuadrantsState = sortQuadrantsList(
       quadrants.map((item) => (item?.id === current.id ? updatedQuadrant : item))
     );
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
     try {
       await setDoc(
         doc(db, 'minimapQuadrants', current.id),
@@ -2102,12 +3022,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     } catch (error) {
       console.error('Error saving minimap quadrant changes', error);
     }
-    setLoadedQuadrantData({
-      rows: sanitized.rows,
-      cols: sanitized.cols,
-      cellSize: sanitized.cellSize,
-      grid: sanitized.grid,
-    });
+    const savedSnapshot = createQuadrantSnapshot(sanitized);
+    setLoadedQuadrantData(savedSnapshot);
+    setActiveQuadrantOwner(sanitized.owner);
+    setActiveQuadrantSharedWith(sanitized.sharedWith);
   };
   const duplicateQuadrant = async (i) => {
     const source = quadrants[i];
@@ -2116,17 +3034,28 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     const copyId = generateQuadrantId();
     const title = `${source?.title || `Cuadrante ${i + 1}`} copia`;
     const nextOrder = getNextQuadrantOrder();
+    const sourceOwner = sanitizeOwner(source?.owner, defaultOwner);
+    const copyOwner = isPlayerMode ? defaultOwner : sourceOwner;
+    const copySharedWith = isPlayerMode
+      ? []
+      : sanitizeSharedWith(source?.sharedWith);
     const sanitized = sanitizeQuadrantValues(
       {
         title,
         rows: source?.rows,
         cols: source?.cols,
         cellSize: source?.cellSize,
-      grid: source?.grid,
-      order: nextOrder,
-    },
-    { titleFallback: title, orderFallback: nextOrder }
-  );
+        grid: source?.grid,
+        order: nextOrder,
+        owner: copyOwner,
+        sharedWith: copySharedWith,
+      },
+      {
+        titleFallback: title,
+        orderFallback: nextOrder,
+        ownerFallback: copyOwner,
+      }
+    );
     const copyQuadrant = {
       id: copyId,
       ...sanitized,
@@ -2136,8 +3065,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
       ...quadrants.filter(Boolean),
       copyQuadrant,
     ]);
-    setQuadrants(nextQuadrantsState);
-    updateLocalQuadrants(nextQuadrantsState);
+    const filteredState = filterQuadrantsForMode(nextQuadrantsState);
+    setQuadrants(filteredState);
+    updateLocalQuadrants(filteredState);
     if (sourceId === activeQuadrantId) {
       setAnnotations((prev) => {
         const clones = prev
@@ -2146,11 +3076,13 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
               return null;
             }
-            const newKey = `${copyId}-${ann.r}-${ann.c}`;
+            const scope = typeof ann.scope === 'string' ? ann.scope : '';
+            const newKey = buildAnnotationKey(copyId, ann.r, ann.c, scope);
             return {
               ...ann,
               key: newKey,
               quadrantId: copyId,
+              scope,
             };
           })
           .filter(Boolean);
@@ -2179,12 +3111,15 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
               return;
             }
-            const newKey = `${copyId}-${data.r}-${data.c}`;
+            const scope =
+              typeof data?.scope === 'string' ? data.scope.trim() : '';
+            const newKey = buildAnnotationKey(copyId, data.r, data.c, scope);
             writes.push(
               setDoc(doc(db, 'minimapAnnotations', newKey), {
                 ...data,
                 quadrantId: copyId,
                 key: newKey,
+                scope,
               })
             );
           });
@@ -2199,6 +3134,12 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     }
   };
   const deleteQuadrant = async (i) => {
+    if (isPlayerMode) {
+      const target = quadrants[i];
+      const ownerKey = normalizePlayerName(target?.owner);
+      if (ownerKey === 'master') return;
+      if (ownerKey && ownerKey !== normalizedPlayerName) return;
+    }
     const removedQuadrant = quadrants[i] || null;
     const removedId = removedQuadrant?.id;
     if (currentQuadrantIndex === i) {
@@ -2245,6 +3186,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   // Adders periferia
   const addRowTopAt = (cIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) => {
       const newRow = Array.from({ length: cols }, () => ({
         ...defaultCell(),
@@ -2257,6 +3199,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setRows((r) => r + 1);
   };
   const addRowBottomAt = (cIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) => {
       const newRow = Array.from({ length: cols }, () => ({
         ...defaultCell(),
@@ -2269,6 +3212,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setRows((r) => r + 1);
   };
   const addColLeftAt = (rIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) =>
       prev.map((row, r) => [{ ...defaultCell(), active: r === rIndex }, ...row])
     );
@@ -2276,6 +3220,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     setCols((c) => c + 1);
   };
   const addColRightAt = (rIndex) => {
+    if (!canEditActiveQuadrant) return;
     setGrid((prev) =>
       prev.map((row, r) => [...row, { ...defaultCell(), active: r === rIndex }])
     );
@@ -2287,6 +3232,23 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     (r < rows - 1 && grid[r + 1][c]?.active) ||
     (c > 0 && grid[r][c - 1]?.active) ||
     (c < cols - 1 && grid[r][c + 1]?.active);
+  const toggleQuadrantPlayer = (name) => {
+    if (isPlayerMode) return;
+    const normalized = normalizePlayerName(name);
+    if (!normalized) return;
+    setActiveQuadrantSharedWith((prev) => {
+      const sanitized = sanitizeSharedWith(prev);
+      const exists = sanitized.some(
+        (entry) => normalizePlayerName(entry) === normalized
+      );
+      if (exists) {
+        return sanitized.filter(
+          (entry) => normalizePlayerName(entry) !== normalized
+        );
+      }
+      return [...sanitized, name];
+    });
+  };
 
   const mobileToggleRowClass =
     'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
@@ -2307,19 +3269,29 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </button>
         )}
       </div>
+      {isSharedMasterQuadrant && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+          {L.masterQuadrantLocked}
+        </div>
+      )}
       {isMobile && (
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {L.mobileQuickControls}
           </div>
           <div className={mobileToggleGroupClass}>
-            <label className={mobileToggleRowClass}>
+            <label
+              className={`${mobileToggleRowClass} ${
+                canEditActiveQuadrant ? '' : 'opacity-40'
+              }`}
+            >
               <span className="text-sm font-medium text-gray-200">{L.shapeEdit}</span>
               <input
                 type="checkbox"
                 className="h-5 w-5 accent-emerald-500"
                 checked={shapeEdit}
                 onChange={(e) => setShapeEdit(e.target.checked)}
+                disabled={!canEditActiveQuadrant}
               />
             </label>
             <div className={`${mobileToggleRowClass} opacity-80`}>
@@ -2398,6 +3370,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               setRows(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
             }
             className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+            disabled={!canEditActiveQuadrant}
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -2411,6 +3384,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               setCols(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
             }
             className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
+            disabled={!canEditActiveQuadrant}
           />
         </label>
         <label className="flex flex-col gap-1 sm:col-span-2">
@@ -2424,6 +3398,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             step={4}
             value={cellSize}
             onChange={(e) => setCellSize(Number(e.target.value))}
+            disabled={!canEditActiveQuadrant}
           />
         </label>
       </div>
@@ -2442,11 +3417,45 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
             onChange={(e) => setQuadrantTitle(e.target.value)}
             placeholder={L.title}
             className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+            disabled={!canEditActiveQuadrant}
           />
-          <Boton size="sm" onClick={saveQuadrant}>
+          <Boton size="sm" onClick={saveQuadrant} disabled={!canEditActiveQuadrant}>
             {L.saveQuadrant}
           </Boton>
         </div>
+        {!isPlayerMode && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              {L.permissions}
+            </div>
+            <div className="text-xs text-gray-400">{L.sharedWithPlayers}</div>
+            {playersList.length === 0 ? (
+              <div className="text-xs text-gray-500">{L.noPlayers}</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {playersList.map((player) => {
+                  const isSelected = activeQuadrantSharedWith.some(
+                    (entry) => normalizePlayerName(entry) === normalizePlayerName(player)
+                  );
+                  return (
+                    <button
+                      key={player}
+                      type="button"
+                      onClick={() => toggleQuadrantPlayer(player)}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                        isSelected
+                          ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                          : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-emerald-400 hover:text-emerald-200'
+                      }`}
+                    >
+                      {player}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {currentQuadrantIndex !== null && (
           <div className="text-xs text-emerald-400">
             Editando: {quadrants[currentQuadrantIndex]?.title}
@@ -2461,7 +3470,11 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               />
               <span>{L.unsavedChangesIndicator}</span>
             </div>
-            <Boton size="sm" onClick={saveQuadrantChanges}>
+            <Boton
+              size="sm"
+              onClick={saveQuadrantChanges}
+              disabled={!canEditActiveQuadrant}
+            >
               {L.saveChanges}
             </Boton>
           </div>
@@ -2483,10 +3496,25 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
               {quadrants.map((q, i) => {
                 const keyId = q.id || `quadrant-${i}`;
                 const isSelectedQuadrant = currentQuadrantIndex === i;
+                const ownerKey = normalizePlayerName(q?.owner);
+                const isMasterQuadrant = ownerKey === 'master';
+                const isOwnedByPlayer =
+                  !!normalizedPlayerName && ownerKey === normalizedPlayerName;
+                const isSharedFromMaster =
+                  isPlayerMode &&
+                  isMasterQuadrant &&
+                  Array.isArray(q?.sharedWith) &&
+                  q.sharedWith.some(
+                    (entry) => normalizePlayerName(entry) === normalizedPlayerName
+                  );
+                const canDeleteQuadrant = !isPlayerMode || isOwnedByPlayer;
+                const tileWidth = quadrantPreviewSize + (isMobile ? 28 : 40);
+                const tileMinHeight = quadrantPreviewSize + (isMobile ? 40 : 56);
                 return (
                   <div
                     key={keyId}
-                    className={`relative ${isMobile ? 'w-24' : ''}`}
+                    className="relative"
+                    style={{ width: tileWidth }}
                   >
                     <button
                       onClick={(e) => {
@@ -2506,6 +3534,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                         )
                           return;
                         cancelLongPressTimer(keyId);
+                        if (!canDeleteQuadrant) {
+                          return;
+                        }
                         const timer = setTimeout(() => {
                           const executed = runUnsavedChangesGuard(() =>
                             deleteQuadrant(i)
@@ -2559,15 +3590,34 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                           return;
                         cancelLongPressTimer(keyId);
                       }}
-                      className={`flex flex-col items-center rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 ${
+                      className={`relative flex w-full flex-col items-center rounded border ${
+                        isSharedFromMaster
+                          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+                          : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
+                      } ${
                         isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
                       } ${
                         isMobile
-                          ? 'w-24 p-1 text-[10px] min-h-[72px]'
-                          : 'p-1 text-xs'
+                          ? 'gap-1.5 p-2 text-[11px]'
+                          : 'gap-2 p-3 text-xs'
                       }`}
+                      style={{ minHeight: tileMinHeight }}
                     >
-                      <QuadrantPreview q={q} size={36} />
+                      <div
+                        className={`flex w-full justify-center min-h-[18px] ${
+                          isSharedFromMaster ? 'mb-1' : 'mb-0.5'
+                        }`}
+                      >
+                        {isSharedFromMaster && (
+                          <span
+                            className="rounded-full border border-emerald-400 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-100"
+                            title={L.sharedQuadrantHint}
+                          >
+                            {L.sharedQuadrantTag}
+                          </span>
+                        )}
+                      </div>
+                      <QuadrantPreview q={q} size={quadrantPreviewSize} />
                       <span
                         className={`mt-1 ${
                           isMobile
@@ -2589,7 +3639,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                     >
                       <LucideIcons.Copy size={10} />
                     </button>
-                    {!isMobile && (
+                    {!isMobile && canDeleteQuadrant && (
                       <button
                         type="button"
                         className="absolute -top-1 -left-1 w-4 h-4 bg-gray-800 text-rose-500 rounded-full flex items-center justify-center hover:bg-gray-700"
@@ -2614,80 +3664,114 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Boton
-            size="sm"
-            className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
-            onClick={onBack}
-          >
-            {L.arrow} {effectiveBackLabel}
-          </Boton>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Minimapa</h1>
-            {shouldShowNewBadge && (
-              <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-                {L.new}
-              </span>
+      <div ref={headerSectionRef} className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Boton
+              size="sm"
+              className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
+              onClick={onBack}
+            >
+              {L.arrow} {effectiveBackLabel}
+            </Boton>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">Minimapa</h1>
+              {shouldShowNewBadge && (
+                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
+                  {L.new}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+            <label
+              className={`flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1 ${
+                canEditActiveQuadrant ? '' : 'opacity-40'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={shapeEdit}
+                onChange={(e) => setShapeEdit(e.target.checked)}
+                disabled={!canEditActiveQuadrant}
+              />
+              <span>{L.shapeEdit}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={effectiveReadable}
+                onChange={(e) => setReadableMode(e.target.checked)}
+              />
+              <span>{L.readable}</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <span>{L.autoFit}</span>
+              <input
+                type="checkbox"
+                checked={autoFit}
+                onChange={(e) => setAutoFit(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+              <input
+                type="checkbox"
+                checked={isMoveMode}
+                onChange={(e) => setIsMoveMode(e.target.checked)}
+              />
+              <span>{L.moveMode}</span>
+            </label>
+            {!autoFit && (
+              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={35}
+                  max={200}
+                  value={Math.round(zoom * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                />
+                <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
+              </div>
             )}
+            <Boton
+              size="sm"
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+            >
+              {L.reset}
+            </Boton>
           </div>
         </div>
-        <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={shapeEdit}
-              onChange={(e) => setShapeEdit(e.target.checked)}
-            />
-            <span>{L.shapeEdit}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={effectiveReadable}
-              onChange={(e) => setReadableMode(e.target.checked)}
-            />
-            <span>{L.readable}</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <span>{L.autoFit}</span>
-            <input
-              type="checkbox"
-              checked={autoFit}
-              onChange={(e) => setAutoFit(e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-            <input
-              type="checkbox"
-              checked={isMoveMode}
-              onChange={(e) => setIsMoveMode(e.target.checked)}
-            />
-            <span>{L.moveMode}</span>
-          </label>
-          {!autoFit && (
-            <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min={35}
-                max={200}
-                value={Math.round(zoom * 100)}
-                onChange={(e) => setZoom(Number(e.target.value) / 100)}
-              />
-              <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
+        {isMobile && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-800/60 px-3 py-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+              {L.quadrant}
+            </h2>
+            <Boton
+              size="sm"
+              className="shrink-0"
+              onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
+            >
+              {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
+            </Boton>
+          </div>
+        )}
+        {isExplorerModeActive && (
+          <div className="flex items-center gap-3 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner">
+            <LucideIcons.Compass className="h-5 w-5 text-sky-300" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                Modo explorador
+              </span>
+              <span className="text-xs text-sky-100/80">
+                Descubre celdas adyacentes para revelar el cuadrante compartido.
+              </span>
             </div>
-          )}
-          <Boton
-            size="sm"
-            onClick={() => {
-              setZoom(1);
-              setOffset({ x: 0, y: 0 });
-            }}
-          >
-            {L.reset}
-          </Boton>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -2697,13 +3781,21 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
           </div>
         )}
 
-        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh]">
+        <div
+          className={`bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh] flex flex-col ${
+            isMobile ? 'fixed inset-x-0 bottom-0' : ''
+          }`}
+          style={isMobile ? { top: Math.max(mobileMapTop, 0) } : undefined}
+        >
           <div
-            className={`h-full w-full min-h-[80vh] overflow-hidden overscroll-contain ${touchActionClass}`}
+            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass}`}
             ref={containerRef}
             onWheel={handleWheel}
           >
-            <div className={isMobile ? 'mx-auto w-full max-w-full px-1' : ''}>
+            <div
+              className={`${isMobile ? 'mx-auto w-full max-w-full px-1' : ''} h-full`}
+              style={{ height: '100%' }}
+            >
               <div
                 className="relative mx-auto"
                 style={{
@@ -2722,88 +3814,92 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                     height: `${gridHeight + perimMargin * 2}px`,
                   }}
                 >
-                  {Array.from({ length: cols }).map((_, c) => (
-                    <button
-                      key={`top-${c}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        top: (perimMargin - adderBtn) / 2,
-                        left:
-                          perimMargin +
-                          c * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addRowTop}
-                      onClick={() => addRowTopAt(c)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: cols }).map((_, c) => (
-                    <button
-                      key={`bottom-${c}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        top:
-                          perimMargin +
-                          gridHeight +
-                          (perimMargin - adderBtn) / 2,
-                        left:
-                          perimMargin +
-                          c * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addRowBottom}
-                      onClick={() => addRowBottomAt(c)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: rows }).map((_, r) => (
-                    <button
-                      key={`left-${r}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        left: (perimMargin - adderBtn) / 2,
-                        top:
-                          perimMargin +
-                          r * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addColLeft}
-                      onClick={() => addColLeftAt(r)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
-                  {Array.from({ length: rows }).map((_, r) => (
-                    <button
-                      key={`right-${r}`}
-                      className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
-                      style={{
-                        width: adderBtn,
-                        height: adderBtn,
-                        left:
-                          perimMargin +
-                          gridWidth +
-                          (perimMargin - adderBtn) / 2,
-                        top:
-                          perimMargin +
-                          r * cellSize +
-                          (cellSize - adderBtn) / 2,
-                      }}
-                      title={L.addColRight}
-                      onClick={() => addColRightAt(r)}
-                    >
-                      <LucideIcons.Plus size={adderBtn * 0.6} />
-                    </button>
-                  ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: cols }).map((_, c) => (
+                      <button
+                        key={`top-${c}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          top: (perimMargin - adderBtn) / 2,
+                          left:
+                            perimMargin +
+                            c * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addRowTop}
+                        onClick={() => addRowTopAt(c)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: cols }).map((_, c) => (
+                      <button
+                        key={`bottom-${c}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          top:
+                            perimMargin +
+                            gridHeight +
+                            (perimMargin - adderBtn) / 2,
+                          left:
+                            perimMargin +
+                            c * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addRowBottom}
+                        onClick={() => addRowBottomAt(c)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: rows }).map((_, r) => (
+                      <button
+                        key={`left-${r}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          left: (perimMargin - adderBtn) / 2,
+                          top:
+                            perimMargin +
+                            r * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addColLeft}
+                        onClick={() => addColLeftAt(r)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
+                  {canEditActiveQuadrant &&
+                    Array.from({ length: rows }).map((_, r) => (
+                      <button
+                        key={`right-${r}`}
+                        className="absolute rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-base shadow transition"
+                        style={{
+                          width: adderBtn,
+                          height: adderBtn,
+                          left:
+                            perimMargin +
+                            gridWidth +
+                            (perimMargin - adderBtn) / 2,
+                          top:
+                            perimMargin +
+                            r * cellSize +
+                            (cellSize - adderBtn) / 2,
+                        }}
+                        title={L.addColRight}
+                        onClick={() => addColRightAt(r)}
+                      >
+                        <LucideIcons.Plus size={adderBtn * 0.6} />
+                      </button>
+                    ))}
 
                   <div
                     className="absolute"
@@ -2826,11 +3922,20 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                         {grid.map((row, r) =>
                           row.map((cell, c) => {
                             const key = `${r}-${c}`;
+                            const cellKey = key;
                             const isSelected = selectedCells.some(
                               (cell) => cell.r === r && cell.c === c
                             );
+                            const isHovered =
+                              hoveredCell?.r === r && hoveredCell?.c === c;
+                            const selectedStackIndex = isSelected
+                              ? selectedCells.findIndex(
+                                  (cell) => cell.r === r && cell.c === c
+                                )
+                              : -1;
                             if (!cell.active) {
-                              const showAdder = hasActiveNeighbor(r, c);
+                              const showAdder =
+                                canEditActiveQuadrant && hasActiveNeighbor(r, c);
                               return (
                                 <div
                                   key={key}
@@ -2852,6 +3957,90 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                 </div>
                               );
                             }
+                            const isExplorerVisible =
+                              !isExplorerModeActive ||
+                              (explorerVisibleSet
+                                ? explorerVisibleSet.has(cellKey)
+                                : false);
+                            if (isExplorerModeActive && !isExplorerVisible) {
+                              return (
+                                <div
+                                  key={key}
+                                  className="relative"
+                                  style={{
+                                    width: `${cellSize}px`,
+                                    height: `${cellSize}px`,
+                                    background: '#020617',
+                                    border: '1px solid #0f172a',
+                                  }}
+                                />
+                              );
+                            }
+                            const isExplorerExplored =
+                              isExplorerModeActive && exploredCellsSet.has(cellKey);
+                            const isExplorerFrontier =
+                              isExplorerModeActive && explorerFrontierSet.has(cellKey);
+                            const showCellContent =
+                              !isExplorerModeActive || isExplorerExplored;
+                            const showQuestionFace =
+                              isExplorerModeActive &&
+                              !isExplorerExplored &&
+                              isExplorerFrontier;
+                            const borderWidthValue =
+                              readableMode || isMobile
+                                ? Math.max(cell.borderWidth, 2)
+                                : cell.borderWidth;
+                            const effectiveBorderWidth = showCellContent
+                              ? borderWidthValue
+                              : Math.max(borderWidthValue, 2);
+                            const displayBackground = showCellContent
+                              ? cell.fill
+                              : '#0f172a';
+                            const displayBorderColor = showCellContent
+                              ? cell.borderColor
+                              : '#1e293b';
+                            const displayBorderStyle = showCellContent
+                              ? cell.borderStyle
+                              : 'solid';
+                            const displayAnimation = showCellContent
+                              ? cell.effect?.type === 'pulse'
+                                ? 'pulse 1.5s infinite'
+                                : cell.effect?.type === 'bounce'
+                                ? 'bounce 1s infinite'
+                                : cell.effect?.type === 'spin'
+                                ? 'spin 1s infinite linear'
+                                : cell.effect?.type === 'shake'
+                                ? 'shake 0.5s infinite'
+                                : undefined
+                              : undefined;
+                            const zIndex = isSelected
+                              ? 30
+                              : showCellContent && cell.effect?.type !== 'none'
+                              ? 20
+                              : 10;
+                            let computedZIndex = zIndex;
+                            if (isHovered) {
+                              computedZIndex = Math.max(computedZIndex, 40);
+                            }
+                            if (isSelected) {
+                              const stackBoost =
+                                selectedStackIndex >= 0
+                                  ? selectedCells.length - selectedStackIndex
+                                  : 0;
+                              computedZIndex = Math.max(
+                                computedZIndex,
+                                60 + stackBoost
+                              );
+                            }
+                            const focusShadow = isSelected
+                              ? '0 18px 35px rgba(15, 23, 42, 0.6)'
+                              : isHovered
+                              ? '0 12px 28px rgba(15, 23, 42, 0.45)'
+                              : undefined;
+                            const explorerCursorClass =
+                              isExplorerModeActive && !showCellContent && isExplorerFrontier
+                                ? 'cursor-pointer'
+                                : '';
                             return (
                               <div
                                 key={key}
@@ -2885,6 +4074,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                     pointersRef.current.size > 1 ||
                                     isPanningRef.current
                                   ) {
+                                    return;
+                                  }
+                                  if (isExplorerModeActive && !showCellContent) {
                                     return;
                                   }
                                   const keyId = `${r}-${c}`;
@@ -2927,6 +4119,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                     e.pointerType !== 'pen'
                                   )
                                     return;
+                                  if (isExplorerModeActive && !showCellContent) {
+                                    return;
+                                  }
                                   cancelLongPressTimer(`${r}-${c}`);
                                 }}
                                 onPointerCancel={(e) => {
@@ -2937,50 +4132,114 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                     return;
                                   cancelLongPressTimer(`${r}-${c}`);
                                 }}
-                                onMouseEnter={() => setHoveredCell({ r, c })}
+                                onMouseEnter={() => {
+                                  if (isExplorerModeActive && !showCellContent) return;
+                                  setHoveredCell({ r, c });
+                                }}
                                 onMouseLeave={() => setHoveredCell(null)}
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
-                                className={`group relative z-0 overflow-visible select-none transition-transform duration-150 ease-out ${isSelected ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10' : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'}`}
+                                className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ${
+                                  isSelected
+                                    ? 'ring-2 ring-blue-400 outline outline-2 outline-white/10'
+                                    : isHovered
+                                    ? 'ring-2 ring-white/15'
+                                    : ''
+                                } ${explorerCursorClass}`}
                                 style={{
-                                  background: cell.fill,
-                                  borderColor: cell.borderColor,
-                                  borderWidth: `${readableMode || isMobile ? Math.max(cell.borderWidth, 2) : cell.borderWidth}px`,
-                                  borderStyle: cell.borderStyle,
+                                  background: 'transparent',
+                                  borderColor: 'transparent',
+                                  borderWidth: 0,
+                                  borderStyle: 'solid',
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
-                                  animation:
-                                    cell.effect?.type === 'pulse'
-                                      ? 'pulse 1.5s infinite'
-                                      : cell.effect?.type === 'bounce'
-                                      ? 'bounce 1s infinite'
-                                      : cell.effect?.type === 'spin'
-                                      ? 'spin 1s infinite linear'
-                                      : cell.effect?.type === 'shake'
-                                      ? 'shake 0.5s infinite'
-                                      : undefined,
-                                  zIndex: isSelected
-                                    ? 30
-                                    : cell.effect?.type !== 'none'
-                                    ? 20
-                                    : 10,
+                                  animation: undefined,
+                                  zIndex: computedZIndex,
+                                  boxShadow: focusShadow,
                                 }}
                               >
-                                {cell.effect?.type !== 'none' && (
-                                  <EffectOverlay effect={cell.effect} />
-                                )}
-                                {cell.icon && (
-                                  <img
-                                    src={cell.icon}
-                                    alt="icon"
-                                    className="absolute inset-0 m-auto w-2/3 h-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
-                                  />
-                                )}
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    pointerEvents: 'none',
+                                    perspective: isExplorerModeActive
+                                      ? '1200px'
+                                      : undefined,
+                                  }}
+                                >
+                                  <div
+                                    className={`relative h-full w-full ${
+                                      isExplorerModeActive
+                                        ? 'transition-transform duration-500'
+                                        : ''
+                                    }`}
+                                    style={
+                                      isExplorerModeActive
+                                        ? {
+                                            transform: `rotateY(${showCellContent ? 0 : 180}deg)`,
+                                            transformStyle: 'preserve-3d',
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{
+                                        backfaceVisibility: isExplorerModeActive
+                                          ? 'hidden'
+                                          : undefined,
+                                        background: displayBackground,
+                                        borderColor: displayBorderColor,
+                                        borderWidth: `${effectiveBorderWidth}px`,
+                                        borderStyle: displayBorderStyle,
+                                        animation: displayAnimation,
+                                      }}
+                                    >
+                                      {showCellContent &&
+                                        cell.effect?.type !== 'none' && (
+                                          <EffectOverlay effect={cell.effect} />
+                                        )}
+                                      {showCellContent && cell.icon && (
+                                        <img
+                                          src={cell.icon}
+                                          alt="icon"
+                                          className="absolute inset-0 m-auto h-2/3 w-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
+                                          style={{
+                                            transform: cell.iconRotation
+                                              ? `rotate(${cell.iconRotation}deg)`
+                                              : undefined,
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                    {isExplorerModeActive && (
+                                      <div
+                                        className="absolute inset-0 flex items-center justify-center"
+                                        style={{
+                                          transform: 'rotateY(180deg)',
+                                          backfaceVisibility: 'hidden',
+                                          background: '#0f172a',
+                                          borderColor: '#1e293b',
+                                          borderWidth: `${Math.max(borderWidthValue, 2)}px`,
+                                          borderStyle: 'solid',
+                                        }}
+                                      >
+                                        {showQuestionFace && (
+                                          <LucideIcons.HelpCircle className="h-1/2 w-1/2 text-sky-300 drop-shadow-[0_2px_6px_rgba(56,189,248,0.45)]" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                                 {!isMobile && (
                                   <button
                                     type="button"
-                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${
+                                      shapeEdit || isSelected
+                                        ? 'opacity-100 pointer-events-auto'
+                                        : 'opacity-0 pointer-events-none'
+                                    }`}
                                     title="Eliminar celda"
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -3017,10 +4276,16 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                       className="absolute inset-0 pointer-events-none"
                       style={{ zIndex: 2 }}
                     >
-                      {activeAnnotations.map((a) => {
-                          const showTooltip =
-                            (hoveredCell &&
-                              hoveredCell.r === a.r &&
+                      {visibleAnnotations.map((a) => {
+                        if (
+                          isExplorerModeActive &&
+                          !exploredCellsSet.has(cellKeyFromIndices(a.r, a.c))
+                        ) {
+                          return null;
+                        }
+                        const showTooltip =
+                          (hoveredCell &&
+                            hoveredCell.r === a.r &&
                               hoveredCell.c === a.c) ||
                             selectedCells.some(
                               (cell) => cell.r === a.r && cell.c === a.c
@@ -3036,11 +4301,28 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                 height: cellSize,
                               }}
                             >
-                              <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full" />
+                              <div
+                                className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ${
+                                  a.authorRole === 'master'
+                                    ? 'bg-emerald-400'
+                                    : 'border border-amber-200 bg-amber-400'
+                                }`}
+                              />
                               {showTooltip && (
                                 <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
                                   <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line text-center">
-                                    {a.text}
+                                    <div className="flex flex-col gap-1">
+                                      {a.authorRole === 'master' ? (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                                          {L.masterNoteTag}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                          {a.authorName || L.playerNoteTag}
+                                        </span>
+                                      )}
+                                      <span>{a.text}</span>
+                                    </div>
                                     <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
                                   </div>
                                 </div>
@@ -3058,20 +4340,9 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
     </div>
 
       {isMobile && (
-        <div
-          className={`fixed bottom-4 left-4 right-4 z-50 flex flex-col items-start gap-2 ${
-            isQuadrantPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
-        >
-          <Boton
-            size="sm"
-            className="pointer-events-auto"
-            onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
-          >
-            {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
-          </Boton>
+        <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
           <div
-            className={`w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
+            className={`mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
               isQuadrantPanelOpen
                 ? 'pointer-events-auto opacity-100 translate-y-0'
                 : 'pointer-events-none opacity-0 translate-y-2'
@@ -3111,9 +4382,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                 <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h3 className="text-lg font-semibold">
-                      Celda ({selectedCell.r + 1}
-                      {'\\u00D7'}
-                      {selectedCell.c + 1})
+                      Celda ({selectedCell.r + 1} × {selectedCell.c + 1})
                     </h3>
                     <div className="flex flex-wrap items-center gap-2">
                       <Boton
@@ -3123,6 +4392,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                           setActive(selectedCells, false);
                           setSelectedCells([]);
                         }}
+                        disabled={!canEditActiveQuadrant}
                       >
                         {L.delCell}
                       </Boton>
@@ -3138,12 +4408,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
 
                   <div className="space-y-4 border-t border-gray-700 pt-4">
                     <div className="flex flex-wrap gap-2 text-xs">
-                      {[
-                        { id: 'style', label: 'Estilos', icon: LucideIcons.Palette },
-                        { id: 'icon', label: L.icon, icon: LucideIcons.Images },
-                        { id: 'effect', label: L.effect, icon: LucideIcons.Wand2 },
-                        { id: 'notes', label: L.annotations, icon: LucideIcons.NotebookText },
-                      ].map((tab) => {
+                      {propertyTabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = panelTab === tab.id;
                         return (
@@ -3177,6 +4442,50 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                               <Boton size="sm" onClick={saveCellPreset}>
                                 Guardar estilo
                               </Boton>
+                              {!isPlayerMode && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-300">
+                                    {L.originStyle}
+                                  </span>
+                                  <div className="flex overflow-hidden rounded-md border border-gray-700 bg-gray-800/70">
+                                    {ORIGIN_DIRECTIONS.map((direction) => {
+                                      const DirectionIcon = direction.icon;
+                                      const isActive =
+                                        selected?.icon === ORIGIN_ICON_DATA_URL &&
+                                        normalizeRotation(selected?.iconRotation ?? 0) ===
+                                          direction.rotation;
+                                      return (
+                                        <button
+                                          key={direction.id}
+                                          type="button"
+                                          disabled={!hasSelectedCells}
+                                          onClick={() => {
+                                            if (!hasSelectedCells) return;
+                                            updateCell(
+                                              selectedCells,
+                                              buildOriginCellStyle(direction.rotation)
+                                            );
+                                          }}
+                                          title={`${L.originStyle} · ${L[direction.labelKey]}`}
+                                          className={`flex h-8 w-8 items-center justify-center text-gray-300 transition ${
+                                            isActive
+                                              ? 'bg-blue-600 text-white shadow-inner'
+                                              : 'hover:bg-gray-700/80'
+                                          } ${
+                                            hasSelectedCells
+                                              ? ''
+                                              : 'cursor-not-allowed opacity-40'
+                                          }`}
+                                        >
+                                          {DirectionIcon && (
+                                            <DirectionIcon className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           {cellStylePresets.length > 0 && (
@@ -3203,7 +4512,16 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                   >
                                     {p.effect?.type !== 'none' && <EffectOverlay effect={p.effect} />}
                                     {p.icon && (
-                                      <img src={p.icon} alt="" className="h-full w-full object-contain" />
+                                      <img
+                                        src={p.icon}
+                                        alt=""
+                                        className="h-full w-full object-contain"
+                                        style={{
+                                          transform: p.iconRotation
+                                            ? `rotate(${p.iconRotation}deg)`
+                                            : undefined,
+                                        }}
+                                      />
                                     )}
                                   </div>
                                 </button>
@@ -3292,6 +4610,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                             {[
                               { id: 'estados', label: 'Estados' },
                               { id: 'personalizados', label: 'Personalizados' },
+                              { id: 'recursos', label: 'Recursos' },
                               { id: 'emojis', label: 'Emojis' },
                               { id: 'lucide', label: 'Lucide' },
                             ].map((b) => (
@@ -3342,6 +4661,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                           onClick={() =>
                                             updateCell(selectedCells, {
                                               icon: emojiDataUrl(item.ch),
+                                              iconRotation: 0,
                                             })
                                           }
                                         />
@@ -3384,7 +4704,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                           label={n}
                                           selected={selected.icon === url}
                                           onClick={() =>
-                                            updateCell(selectedCells, { icon: url })
+                                            updateCell(selectedCells, {
+                                              icon: url,
+                                              iconRotation: 0,
+                                            })
                                           }
                                         />
                                       );
@@ -3394,7 +4717,7 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                               ))}
                             </div>
                           )}
-                          {(iconSource === 'estados' || iconSource === 'personalizados') && (
+                          {['estados', 'personalizados', 'recursos'].includes(iconSource) && (
                             <div className="max-h-40 flex flex-wrap gap-2 overflow-auto rounded-lg bg-gray-900 p-2">
                               {(allIcons[iconSource] || []).map((ico, i) => (
                                 <IconThumb
@@ -3403,7 +4726,10 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                                   label={ico.name}
                                   selected={selected.icon === ico.url}
                                   onClick={() =>
-                                    updateCell(selectedCells, { icon: ico.url })
+                                    updateCell(selectedCells, {
+                                      icon: ico.url,
+                                      iconRotation: 0,
+                                    })
                                   }
                                   onDelete={
                                     iconSource === 'personalizados'
@@ -3484,44 +4810,103 @@ function MinimapBuilder({ onBack, backLabel, showNewBadge, mode = 'master' }) {
                         </div>
                       )}
                       {panelTab === 'notes' && (
-                        <div className="space-y-2 text-xs">
-                          <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-200">
-                            {L.annotations}
-                          </h4>
-                          {(() => {
-                            const ann = activeAnnotations.find(
-                              (a) =>
-                                a.r === selectedCell.r && a.c === selectedCell.c
-                            );
-                            return (
-                              <div className="space-y-2">
-                                <input
-                                  type="text"
-                                  value={ann?.text || ''}
-                                  onChange={(e) =>
-                                    setAnnotation(selectedCell.r, selectedCell.c, {
-                                      text: e.target.value,
-                                      icon: ann?.icon || '',
-                                    })
-                                  }
-                                  placeholder="Texto"
-                                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <input
-                                  type="text"
-                                  value={ann?.icon || ''}
-                                  onChange={(e) =>
-                                    setAnnotation(selectedCell.r, selectedCell.c, {
-                                      text: ann?.text || '',
-                                      icon: e.target.value,
-                                    })
-                                  }
-                                  placeholder="URL icono"
-                                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                            );
-                          })()}
+                        <div className="space-y-3 text-xs">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-200">
+                              {L.annotations}
+                            </h4>
+                            {(() => {
+                              const annotationsAtCell = activeAnnotations.filter(
+                                (a) => a.r === selectedCell.r && a.c === selectedCell.c
+                              );
+                              const playerKeyCandidates = [];
+                              if (playerAnnotationKey) playerKeyCandidates.push(playerAnnotationKey);
+                              if (normalizedPlayerName)
+                                playerKeyCandidates.push(normalizedPlayerName);
+                              const isViewerPlayerNote = (annotation) => {
+                                if (annotation.authorRole === 'master') return false;
+                                if (annotation.authorKey) {
+                                  return playerKeyCandidates.some(
+                                    (candidate) => candidate && candidate === annotation.authorKey
+                                  );
+                                }
+                                return playerKeyCandidates.length === 0;
+                              };
+                              const editableAnn = isPlayerMode
+                                ? annotationsAtCell.find((a) => isViewerPlayerNote(a))
+                                : annotationsAtCell.find((a) => a.authorRole === 'master');
+                              const otherNotes = annotationsAtCell.filter((a) => {
+                                if (a.authorRole === 'master') return false;
+                                if (!isPlayerMode) return true;
+                                return !isViewerPlayerNote(a);
+                              });
+                              return (
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                      {isPlayerMode ? L.yourNote : L.masterNoteTag}
+                                    </p>
+                                    <input
+                                      type="text"
+                                      value={editableAnn?.text || ''}
+                                      onChange={(e) =>
+                                        setAnnotation(
+                                          selectedCell.r,
+                                          selectedCell.c,
+                                          {
+                                            text: e.target.value,
+                                            icon: editableAnn?.icon || '',
+                                          },
+                                          { existing: editableAnn }
+                                        )
+                                      }
+                                      placeholder="Texto"
+                                      disabled={!canAnnotateActiveQuadrant}
+                                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={editableAnn?.icon || ''}
+                                      onChange={(e) =>
+                                        setAnnotation(
+                                          selectedCell.r,
+                                          selectedCell.c,
+                                          {
+                                            text: editableAnn?.text || '',
+                                            icon: e.target.value,
+                                          },
+                                          { existing: editableAnn }
+                                        )
+                                      }
+                                      placeholder="URL icono"
+                                      disabled={!canAnnotateActiveQuadrant}
+                                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                                    />
+                                  </div>
+                                  {otherNotes.length > 0 && (
+                                    <div className="space-y-1 rounded-md border border-gray-800 bg-gray-900/70 p-2">
+                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                        {L.playerNotesList}
+                                      </p>
+                                      <div className="space-y-1">
+                                        {otherNotes.map((note) => (
+                                          <div
+                                            key={note.key}
+                                            className="rounded bg-gray-800/80 px-2 py-1 text-[11px] text-gray-200"
+                                          >
+                                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                              {note.authorName || L.playerNoteTag}
+                                            </span>
+                                            <span>{note.text}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3542,5 +4927,6 @@ MinimapBuilder.propTypes = {
   backLabel: PropTypes.string,
   showNewBadge: PropTypes.bool,
   mode: PropTypes.oneOf(['master', 'player']),
+  playerName: PropTypes.string,
 };
 export default MinimapBuilder;
