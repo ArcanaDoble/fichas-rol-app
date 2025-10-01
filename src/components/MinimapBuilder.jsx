@@ -4036,15 +4036,16 @@ function MinimapBuilder({
                             const selectionAura =
                               isSelected || isHovered ? (
                                 <span
-                                  className="pointer-events-none absolute inset-[2px] rounded-lg animate-pulse"
-                                  style={{
-                                    mixBlendMode: 'screen',
-                                    zIndex: 15,
-                                    opacity: isSelected ? 1 : 0.9,
-                                    background: isSelected
-                                      ? 'radial-gradient(circle at center, rgba(59, 130, 246, 0.95) 0%, rgba(56, 189, 248, 0.7) 42%, rgba(37, 99, 235, 0.28) 68%, transparent 90%)'
-                                      : 'radial-gradient(circle at center, rgba(226, 232, 240, 0.6) 0%, rgba(148, 163, 184, 0.38) 50%, rgba(148, 163, 184, 0.12) 72%, transparent 90%)',
-                                  }}
+                                  className={`pointer-events-none absolute inset-[3px] rounded-lg transition-all duration-150 ${
+                                    isSelected
+                                      ? 'bg-sky-400/15 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.6),0_0_10px_4px_rgba(56,189,248,0.35)] scale-[0.97] animate-[pulse_2s_ease-in-out_infinite]'
+                                      : ''
+                                  } ${
+                                    isHovered
+                                      ? 'bg-slate-200/10 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.45),0_0_6px_2px_rgba(148,163,184,0.25)]'
+                                      : ''
+                                  }`}
+                                  style={{ zIndex: 15 }}
                                 />
                               ) : null;
                             const explorerCursorClass =
