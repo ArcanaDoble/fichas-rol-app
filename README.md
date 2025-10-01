@@ -63,6 +63,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Buscador de emojis bilingüe** - El minimapa permite buscar emojis tanto en inglés como en español
 - **Buscador de iconos en caché** - El minimapa reutiliza los datos de emojis descargados para evitar peticiones repetidas al desplazarse por el listado
 - **Anotaciones emergentes** - Ahora puedes agregar notas a cada celda y se muestran en un tooltip estilizado al seleccionarla o pasar el cursor
+- **Pings temporales en el minimapa** - Haz doble clic o Alt+clic sobre una celda para resaltar su posición con una animación breve sincronizada
 - **Anotaciones por cuadrante** - Cada cuadrante guarda sus notas con un identificador persistente en Firestore y las migraciones de datos antiguos se aplican automáticamente en memoria
 - **Panel maestro de notas** - Revisa y gestiona todas las anotaciones de un cuadrante desde un resumen consolidado
 
