@@ -1114,6 +1114,7 @@ function MinimapBuilder({
     () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
     [isPlayerMode, isSharedMasterQuadrant, originCellKey]
   );
+
   const explorerState = useMemo(() => {
     if (!isExplorerModeActive) {
       return { exploredSet: new Set(), frontierSet: new Set() };
@@ -3926,6 +3927,13 @@ function MinimapBuilder({
                             const isSelected = selectedCells.some(
                               (cell) => cell.r === r && cell.c === c
                             );
+                            const isHovered =
+                              hoveredCell?.r === r && hoveredCell?.c === c;
+                            const selectedStackIndex = isSelected
+                              ? selectedCells.findIndex(
+                                  (cell) => cell.r === r && cell.c === c
+                                )
+                              : -1;
                             if (!cell.active) {
                               const showAdder =
                                 canEditActiveQuadrant && hasActiveNeighbor(r, c);
@@ -4011,6 +4019,25 @@ function MinimapBuilder({
                               : showCellContent && cell.effect?.type !== 'none'
                               ? 20
                               : 10;
+                            let computedZIndex = zIndex;
+                            if (isHovered) {
+                              computedZIndex = Math.max(computedZIndex, 40);
+                            }
+                            if (isSelected) {
+                              const stackBoost =
+                                selectedStackIndex >= 0
+                                  ? selectedCells.length - selectedStackIndex
+                                  : 0;
+                              computedZIndex = Math.max(
+                                computedZIndex,
+                                60 + stackBoost
+                              );
+                            }
+                            const focusShadow = isSelected
+                              ? '0 18px 35px rgba(15, 23, 42, 0.6)'
+                              : isHovered
+                              ? '0 12px 28px rgba(15, 23, 42, 0.45)'
+                              : undefined;
                             const explorerCursorClass =
                               isExplorerModeActive && !showCellContent && isExplorerFrontier
                                 ? 'cursor-pointer'
@@ -4114,10 +4141,12 @@ function MinimapBuilder({
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
-                                className={`group relative z-0 overflow-visible select-none transition-transform duration-150 ease-out ${
+                                className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ${
                                   isSelected
-                                    ? 'z-10 scale-[1.06] ring-2 ring-blue-400 outline outline-2 outline-white/10'
-                                    : 'hover:z-10 hover:scale-[1.06] hover:outline hover:outline-2 hover:outline-white/10'
+                                    ? 'ring-2 ring-blue-400 outline outline-2 outline-white/10'
+                                    : isHovered
+                                    ? 'ring-2 ring-white/15'
+                                    : ''
                                 } ${explorerCursorClass}`}
                                 style={{
                                   background: 'transparent',
@@ -4127,7 +4156,8 @@ function MinimapBuilder({
                                   width: `${cellSize}px`,
                                   height: `${cellSize}px`,
                                   animation: undefined,
-                                  zIndex,
+                                  zIndex: computedZIndex,
+                                  boxShadow: focusShadow,
                                 }}
                               >
                                 <div
@@ -4353,9 +4383,7 @@ function MinimapBuilder({
                 <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h3 className="text-lg font-semibold">
-                      Celda ({selectedCell.r + 1}
-                      {'\\u00D7'}
-                      {selectedCell.c + 1})
+                      Celda ({selectedCell.r + 1} × {selectedCell.c + 1})
                     </h3>
                     <div className="flex flex-wrap items-center gap-2">
                       <Boton
