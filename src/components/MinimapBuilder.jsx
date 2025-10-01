@@ -4033,11 +4033,20 @@ function MinimapBuilder({
                                 60 + stackBoost
                               );
                             }
-                            const focusShadow = isSelected
-                              ? '0 18px 35px rgba(15, 23, 42, 0.6)'
-                              : isHovered
-                              ? '0 12px 28px rgba(15, 23, 42, 0.45)'
-                              : undefined;
+                            const selectionAura =
+                              isSelected || isHovered ? (
+                                <span
+                                  className="pointer-events-none absolute inset-[2px] rounded-lg animate-pulse"
+                                  style={{
+                                    mixBlendMode: 'screen',
+                                    zIndex: 15,
+                                    opacity: isSelected ? 1 : 0.9,
+                                    background: isSelected
+                                      ? 'radial-gradient(circle at center, rgba(59, 130, 246, 0.95) 0%, rgba(56, 189, 248, 0.7) 42%, rgba(37, 99, 235, 0.28) 68%, transparent 90%)'
+                                      : 'radial-gradient(circle at center, rgba(226, 232, 240, 0.6) 0%, rgba(148, 163, 184, 0.38) 50%, rgba(148, 163, 184, 0.12) 72%, transparent 90%)',
+                                  }}
+                                />
+                              ) : null;
                             const explorerCursorClass =
                               isExplorerModeActive && !showCellContent && isExplorerFrontier
                                 ? 'cursor-pointer'
@@ -4141,13 +4150,7 @@ function MinimapBuilder({
                                 onKeyDown={(e) =>
                                   e.key === 'Enter' && handleCellClick(r, c)
                                 }
-                                className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ${
-                                  isSelected
-                                    ? 'ring-2 ring-blue-400 outline outline-2 outline-white/10'
-                                    : isHovered
-                                    ? 'ring-2 ring-white/15'
-                                    : ''
-                                } ${explorerCursorClass}`}
+                                className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ring-0 ${explorerCursorClass}`}
                                 style={{
                                   background: 'transparent',
                                   borderColor: 'transparent',
@@ -4157,13 +4160,15 @@ function MinimapBuilder({
                                   height: `${cellSize}px`,
                                   animation: undefined,
                                   zIndex: computedZIndex,
-                                  boxShadow: focusShadow,
+                                  boxShadow: 'none',
                                 }}
                               >
+                                {selectionAura}
                                 <div
                                   className="absolute inset-0"
                                   style={{
                                     pointerEvents: 'none',
+                                    zIndex: 10,
                                     perspective: isExplorerModeActive
                                       ? '1200px'
                                       : undefined,
@@ -4195,7 +4200,12 @@ function MinimapBuilder({
                                         borderWidth: `${effectiveBorderWidth}px`,
                                         borderStyle: displayBorderStyle,
                                         animation: displayAnimation,
+                                        zIndex: 10,
                                       }}
+                                    />
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{ pointerEvents: 'none', zIndex: 20 }}
                                     >
                                       {showCellContent &&
                                         cell.effect?.type !== 'none' && (
