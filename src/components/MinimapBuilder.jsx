@@ -58,6 +58,10 @@ const L = {
   iconAdd: 'A\u00F1adir icono personalizado',
   iconDelete: 'Eliminar icono',
   annotations: 'Anotaciones',
+  masterNoteTag: 'Máster',
+  playerNoteTag: 'Jugador',
+  playerNotesList: 'Notas de jugadores',
+  yourNote: 'Tu nota',
   effect: 'Efecto',
   effectColor: 'Color del efecto',
   glow: 'Brillo',
@@ -91,6 +95,7 @@ const L = {
   mobileQuickControls: 'Controles r\u00E1pidos',
   mobileReadableHint: 'Activo autom\u00E1ticamente en m\u00F3vil',
   zoom: 'Zoom',
+  originStyle: 'Origen',
 };
 
 const stripDiacritics = (value) =>
@@ -461,6 +466,40 @@ const sanitizeCell = (cell) => {
   };
 };
 
+const ORIGIN_ICON_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+    <defs>
+      <linearGradient id="originArrow" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.65" />
+        <stop offset="100%" stop-color="#38bdf8" />
+      </linearGradient>
+    </defs>
+    <g stroke="url(#originArrow)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M48 80V24" />
+      <path d="M24 44L48 16L72 44" fill="url(#originArrow)" />
+    </g>
+  </svg>
+`;
+
+const ORIGIN_ICON_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
+  ORIGIN_ICON_SVG
+)}`;
+
+const ORIGIN_CELL_STYLE = {
+  fill: '#0f172a',
+  borderColor: '#38bdf8',
+  borderWidth: 2,
+  borderStyle: 'solid',
+  icon: ORIGIN_ICON_DATA_URL,
+  effect: { type: 'none', color: '#38bdf8' },
+};
+
+const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
+  const base = `${quadrantId}-${r}-${c}`;
+  if (!scope) return base;
+  return `${base}-${scope}`;
+};
+
 const getGridCell = (grid, r, c) =>
   Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r][c] : null;
 
@@ -527,6 +566,55 @@ const sanitizeSharedWith = (value) => {
     result.push(trimmed);
   });
   return result;
+};
+
+const normalizeAnnotationMetadata = (
+  annotation,
+  { ownerKey = 'master' } = {}
+) => {
+  if (!annotation || typeof annotation !== 'object') {
+    return {
+      scope: '',
+      authorRole: ownerKey === 'master' ? 'master' : 'player',
+      authorKey: ownerKey === 'master' ? 'master' : ownerKey || 'player',
+      authorName: ownerKey === 'master' ? 'Máster' : 'Jugador',
+    };
+  }
+  const rawScope = typeof annotation.scope === 'string' ? annotation.scope.trim() : '';
+  const scope = rawScope;
+  const computedAuthorKey = (() => {
+    if (typeof annotation.authorKey === 'string' && annotation.authorKey.trim()) {
+      return annotation.authorKey.trim();
+    }
+    if (scope) return scope;
+    if (ownerKey === 'master') return 'master';
+    if (typeof annotation.createdBy === 'string' && annotation.createdBy.trim()) {
+      return normalizePlayerName(annotation.createdBy.trim()) || 'player';
+    }
+    return ownerKey || 'player';
+  })();
+  const authorRole = (() => {
+    if (typeof annotation.authorRole === 'string' && annotation.authorRole.trim()) {
+      return annotation.authorRole.trim();
+    }
+    return computedAuthorKey === 'master' ? 'master' : 'player';
+  })();
+  const authorName = (() => {
+    if (typeof annotation.authorName === 'string' && annotation.authorName.trim()) {
+      return annotation.authorName.trim();
+    }
+    if (authorRole === 'master') return 'Máster';
+    if (typeof annotation.createdBy === 'string' && annotation.createdBy.trim()) {
+      return annotation.createdBy.trim();
+    }
+    return 'Jugador';
+  })();
+  return {
+    scope,
+    authorRole,
+    authorKey: computedAuthorKey,
+    authorName,
+  };
 };
 
 const sharedWithEquals = (a = [], b = []) => {
@@ -798,29 +886,75 @@ function MinimapBuilder({
     const current = quadrants[currentQuadrantIndex];
     return current?.id || 'default';
   }, [currentQuadrantIndex, quadrants]);
+  const activeOwnerKey = useMemo(
+    () => normalizePlayerName(activeQuadrantOwner),
+    [activeQuadrantOwner]
+  );
   const isSharedMasterQuadrant = useMemo(() => {
     if (!isPlayerMode) return false;
-    return normalizePlayerName(activeQuadrantOwner) === 'master';
-  }, [isPlayerMode, activeQuadrantOwner]);
+    return activeOwnerKey === 'master';
+  }, [isPlayerMode, activeOwnerKey]);
   const canEditActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
-    const ownerKey = normalizePlayerName(activeQuadrantOwner);
-    if (!ownerKey) return true;
-    if (ownerKey === 'master') return false;
+    if (!activeOwnerKey) return true;
+    if (activeOwnerKey === 'master') return false;
     if (!normalizedPlayerName) return false;
-    return ownerKey === normalizedPlayerName;
-  }, [isPlayerMode, activeQuadrantOwner, normalizedPlayerName]);
+    return activeOwnerKey === normalizedPlayerName;
+  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const canAnnotateActiveQuadrant = useMemo(() => {
+    if (!isPlayerMode) return true;
+    if (!normalizedPlayerName) return false;
+    if (!activeOwnerKey) return true;
+    return (
+      activeOwnerKey === normalizedPlayerName || activeOwnerKey === 'master'
+    );
+  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const playerAnnotationKey = useMemo(() => {
+    if (!isPlayerMode) return 'master';
+    if (!normalizedPlayerName) return '';
+    const base = `player-${normalizedPlayerName}`;
+    if (activeOwnerKey === 'master') {
+      return base;
+    }
+    return base;
+  }, [isPlayerMode, normalizedPlayerName, activeOwnerKey]);
   const quadrantPreviewSize = useMemo(
     () => (isMobile ? 72 : 96),
     [isMobile]
   );
-  const activeAnnotations = useMemo(
-    () =>
-      annotations.filter(
-        (ann) => (ann?.quadrantId || 'default') === activeQuadrantId
-      ),
-    [annotations, activeQuadrantId]
-  );
+  const activeAnnotations = useMemo(() => {
+    const ownerKey = activeOwnerKey;
+    return annotations
+      .filter((ann) => (ann?.quadrantId || 'default') === activeQuadrantId)
+      .map((ann) => ({
+        ...ann,
+        ...normalizeAnnotationMetadata(ann, { ownerKey }),
+      }));
+  }, [annotations, activeQuadrantId, activeOwnerKey]);
+  const visibleAnnotations = useMemo(() => {
+    if (!isPlayerMode) return activeAnnotations;
+    return activeAnnotations.filter((ann) => ann.authorRole !== 'master');
+  }, [activeAnnotations, isPlayerMode]);
+  const propertyTabs = useMemo(() => {
+    const tabs = [];
+    if (canEditActiveQuadrant) {
+      tabs.push(
+        { id: 'style', label: 'Estilos', icon: LucideIcons.Palette },
+        { id: 'icon', label: L.icon, icon: LucideIcons.Images },
+        { id: 'effect', label: L.effect, icon: LucideIcons.Wand2 }
+      );
+    }
+    if (canAnnotateActiveQuadrant) {
+      tabs.push({ id: 'notes', label: L.annotations, icon: LucideIcons.NotebookText });
+    }
+    return tabs;
+  }, [canEditActiveQuadrant, canAnnotateActiveQuadrant]);
+  useEffect(() => {
+    if (propertyTabs.length === 0) return;
+    if (!propertyTabs.some((tab) => tab.id === panelTab)) {
+      setPanelTab(propertyTabs[0].id);
+    }
+  }, [panelTab, propertyTabs]);
   const hasUnsavedChanges = useMemo(() => {
     if (currentQuadrantIndex === null || !loadedQuadrantData) return false;
     if (!canEditActiveQuadrant) return false;
@@ -862,23 +996,79 @@ function MinimapBuilder({
     [hasUnsavedChanges, confirmAction]
   );
   const setAnnotation = (r, c, data, options = {}) => {
-    if (!canEditActiveQuadrant) return;
-    const { skipLocalUpdate = false } = options;
-    const key = `${activeQuadrantId}-${r}-${c}`;
-    const payload = { quadrantId: activeQuadrantId, r, c, ...data };
-    const legacyKey = `${r}-${c}`;
+    if (!canAnnotateActiveQuadrant && !options?.override) return;
+    const { skipLocalUpdate = false, existing = null } = options;
+    const baseData = typeof data === 'object' && data ? data : {};
+    const text = typeof baseData.text === 'string' ? baseData.text : '';
+    const icon = typeof baseData.icon === 'string' ? baseData.icon : '';
+    const hasContent = Boolean(text.trim() || icon.trim());
+    const existingMeta = existing
+      ? normalizeAnnotationMetadata(existing, { ownerKey: activeOwnerKey })
+      : null;
+    let scope = existingMeta?.scope || '';
+    let authorKey = existingMeta?.authorKey || '';
+    let authorRole = existingMeta?.authorRole || '';
+    let authorName = existingMeta?.authorName || '';
+    if (!authorKey) {
+      if (!isPlayerMode) {
+        authorKey = 'master';
+      } else if (activeOwnerKey === 'master') {
+        authorKey = playerAnnotationKey || 'player';
+      } else if (normalizedPlayerName) {
+        authorKey = `player-${normalizedPlayerName}`;
+      } else {
+        authorKey = 'player';
+      }
+    }
+    if (!authorRole) {
+      authorRole = authorKey === 'master' ? 'master' : 'player';
+    }
+    if (!authorName) {
+      authorName =
+        authorRole === 'master'
+          ? 'Máster'
+          : trimmedPlayerName || existing?.authorName || 'Jugador';
+    }
+    if (!scope) {
+      if (authorKey === 'master') {
+        scope = '';
+      } else if (existingMeta?.scope) {
+        scope = existingMeta.scope;
+      } else if (activeOwnerKey === 'master') {
+        scope = authorKey;
+      } else {
+        scope = '';
+      }
+    }
+    const key = buildAnnotationKey(activeQuadrantId, r, c, scope);
+    const payload = {
+      quadrantId: activeQuadrantId,
+      r,
+      c,
+      text,
+      icon,
+      key,
+      scope,
+      authorRole,
+      authorKey,
+      authorName,
+    };
     if (!skipLocalUpdate) {
       setAnnotations((prev) => {
         const next = prev.filter((a) => a.key !== key);
-        if (data.text || data.icon) {
-          next.push({ key, quadrantId: activeQuadrantId, r, c, ...data });
+        if (hasContent) {
+          next.push(payload);
         }
         return next;
       });
     }
     const ref = doc(db, 'minimapAnnotations', key);
-    const legacyRef = legacyKey !== key ? doc(db, 'minimapAnnotations', legacyKey) : null;
-    if (data.text || data.icon) {
+    const legacyKey = scope ? null : `${r}-${c}`;
+    const legacyRef =
+      legacyKey && legacyKey !== key
+        ? doc(db, 'minimapAnnotations', legacyKey)
+        : null;
+    if (hasContent) {
       setDoc(ref, payload).catch(() => {});
       if (legacyRef) deleteDoc(legacyRef).catch(() => {});
     } else {
@@ -1359,9 +1549,17 @@ function MinimapBuilder({
   useEffect(() => {
     if (canEditActiveQuadrant) return;
     if (shapeEdit) setShapeEdit(false);
+  }, [canEditActiveQuadrant, shapeEdit]);
+  useEffect(() => {
+    if (canEditActiveQuadrant || canAnnotateActiveQuadrant) return;
     if (isPropertyPanelOpen) setIsPropertyPanelOpen(false);
     if (selectedCells.length > 0) setSelectedCells([]);
-  }, [canEditActiveQuadrant, shapeEdit, isPropertyPanelOpen, selectedCells.length]);
+  }, [
+    canEditActiveQuadrant,
+    canAnnotateActiveQuadrant,
+    isPropertyPanelOpen,
+    selectedCells.length,
+  ]);
   useEffect(() => {
     if (!shapeEdit) setSelectedCells([]);
   }, [shapeEdit]);
@@ -2008,7 +2206,7 @@ function MinimapBuilder({
   ]);
 
   const handleCellClick = (r, c) => {
-    if (!canEditActiveQuadrant) return;
+    if (!canEditActiveQuadrant && !canAnnotateActiveQuadrant) return;
     if (
       isMoveMode ||
       skipClickRef.current ||
@@ -2017,7 +2215,19 @@ function MinimapBuilder({
     ) {
       return;
     }
+    let didSelect = false;
+    let didDeselect = false;
     setSelectedCells((prev) => {
+      if (!canEditActiveQuadrant) {
+        const isSame =
+          prev.length === 1 && prev[0].r === r && prev[0].c === c;
+        if (isSame) {
+          didDeselect = true;
+          return [];
+        }
+        didSelect = true;
+        return [{ r, c }];
+      }
       const exists = prev.some((cell) => cell.r === r && cell.c === c);
       if (exists) {
         const next = prev.filter((cell) => cell.r !== r || cell.c !== c);
@@ -2028,6 +2238,13 @@ function MinimapBuilder({
       }
       return [...prev, { r, c }];
     });
+    if (!canEditActiveQuadrant) {
+      if (didSelect) {
+        setIsPropertyPanelOpen(true);
+      } else if (didDeselect) {
+        setIsPropertyPanelOpen(false);
+      }
+    }
   };
   const updateCell = (cells, updater) =>
     setGrid((prev) => {
@@ -2109,18 +2326,24 @@ function MinimapBuilder({
             if (ann.key) {
               removedAnnotationKeys.add(ann.key);
             }
-            if (Number.isInteger(oldR) && Number.isInteger(oldC)) {
+            if (
+              !ann.scope &&
+              Number.isInteger(oldR) &&
+              Number.isInteger(oldC)
+            ) {
               removedLegacyKeys.add(`${oldR}-${oldC}`);
             }
             return;
           }
-          const newKey = `${activeQuadrantId}-${newR}-${newC}`;
+          const nextScope = typeof ann.scope === 'string' ? ann.scope : '';
+          const newKey = buildAnnotationKey(activeQuadrantId, newR, newC, nextScope);
           const updatedAnn = {
             ...ann,
             r: newR,
             c: newC,
             key: newKey,
             quadrantId: activeQuadrantId,
+            scope: nextScope,
           };
           nextAnnotations.push(updatedAnn);
           if (newKey !== ann.key) {
@@ -2128,7 +2351,7 @@ function MinimapBuilder({
               annotation: updatedAnn,
               previousKey: ann.key,
               previousLegacyKey:
-                Number.isInteger(oldR) && Number.isInteger(oldC)
+                !nextScope && Number.isInteger(oldR) && Number.isInteger(oldC)
                   ? `${oldR}-${oldC}`
                   : null,
             });
@@ -2145,14 +2368,20 @@ function MinimapBuilder({
               text: annotation.text || '',
               icon: annotation.icon || '',
             },
-            { skipLocalUpdate: true }
+            { skipLocalUpdate: true, existing: annotation, override: true }
           );
         }
         if (previousKey && previousKey !== annotation.key) {
           deleteDoc(doc(db, 'minimapAnnotations', previousKey)).catch(() => {});
         }
-        const newLegacyKey = `${annotation.r}-${annotation.c}`;
-        if (previousLegacyKey && previousLegacyKey !== newLegacyKey) {
+        const newLegacyKey = annotation.scope
+          ? null
+          : `${annotation.r}-${annotation.c}`;
+        if (
+          previousLegacyKey &&
+          newLegacyKey &&
+          previousLegacyKey !== newLegacyKey
+        ) {
           deleteDoc(doc(db, 'minimapAnnotations', previousLegacyKey)).catch(() => {});
         }
       });
@@ -2534,11 +2763,13 @@ function MinimapBuilder({
             if (typeof ann?.r !== 'number' || typeof ann?.c !== 'number') {
               return null;
             }
-            const newKey = `${copyId}-${ann.r}-${ann.c}`;
+            const scope = typeof ann.scope === 'string' ? ann.scope : '';
+            const newKey = buildAnnotationKey(copyId, ann.r, ann.c, scope);
             return {
               ...ann,
               key: newKey,
               quadrantId: copyId,
+              scope,
             };
           })
           .filter(Boolean);
@@ -2567,12 +2798,15 @@ function MinimapBuilder({
             if (typeof data?.r !== 'number' || typeof data?.c !== 'number') {
               return;
             }
-            const newKey = `${copyId}-${data.r}-${data.c}`;
+            const scope =
+              typeof data?.scope === 'string' ? data.scope.trim() : '';
+            const newKey = buildAnnotationKey(copyId, data.r, data.c, scope);
             writes.push(
               setDoc(doc(db, 'minimapAnnotations', newKey), {
                 ...data,
                 quadrantId: copyId,
                 key: newKey,
+                scope,
               })
             );
           });
@@ -3554,7 +3788,7 @@ function MinimapBuilder({
                       className="absolute inset-0 pointer-events-none"
                       style={{ zIndex: 2 }}
                     >
-                      {activeAnnotations.map((a) => {
+                      {visibleAnnotations.map((a) => {
                           const showTooltip =
                             (hoveredCell &&
                               hoveredCell.r === a.r &&
@@ -3573,11 +3807,28 @@ function MinimapBuilder({
                                 height: cellSize,
                               }}
                             >
-                              <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full" />
+                              <div
+                                className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ${
+                                  a.authorRole === 'master'
+                                    ? 'bg-emerald-400'
+                                    : 'border border-amber-200 bg-amber-400'
+                                }`}
+                              />
                               {showTooltip && (
                                 <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
                                   <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line text-center">
-                                    {a.text}
+                                    <div className="flex flex-col gap-1">
+                                      {a.authorRole === 'master' ? (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                                          {L.masterNoteTag}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                          {a.authorName || L.playerNoteTag}
+                                        </span>
+                                      )}
+                                      <span>{a.text}</span>
+                                    </div>
                                     <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
                                   </div>
                                 </div>
@@ -3665,12 +3916,7 @@ function MinimapBuilder({
 
                   <div className="space-y-4 border-t border-gray-700 pt-4">
                     <div className="flex flex-wrap gap-2 text-xs">
-                      {[
-                        { id: 'style', label: 'Estilos', icon: LucideIcons.Palette },
-                        { id: 'icon', label: L.icon, icon: LucideIcons.Images },
-                        { id: 'effect', label: L.effect, icon: LucideIcons.Wand2 },
-                        { id: 'notes', label: L.annotations, icon: LucideIcons.NotebookText },
-                      ].map((tab) => {
+                      {propertyTabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = panelTab === tab.id;
                         return (
@@ -3704,6 +3950,14 @@ function MinimapBuilder({
                               <Boton size="sm" onClick={saveCellPreset}>
                                 Guardar estilo
                               </Boton>
+                              {!isPlayerMode && (
+                                <Boton
+                                  size="sm"
+                                  onClick={() => updateCell(selectedCells, ORIGIN_CELL_STYLE)}
+                                >
+                                  {L.originStyle}
+                                </Boton>
+                              )}
                             </div>
                           </div>
                           {cellStylePresets.length > 0 && (
@@ -4012,44 +4266,103 @@ function MinimapBuilder({
                         </div>
                       )}
                       {panelTab === 'notes' && (
-                        <div className="space-y-2 text-xs">
-                          <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-200">
-                            {L.annotations}
-                          </h4>
-                          {(() => {
-                            const ann = activeAnnotations.find(
-                              (a) =>
-                                a.r === selectedCell.r && a.c === selectedCell.c
-                            );
-                            return (
-                              <div className="space-y-2">
-                                <input
-                                  type="text"
-                                  value={ann?.text || ''}
-                                  onChange={(e) =>
-                                    setAnnotation(selectedCell.r, selectedCell.c, {
-                                      text: e.target.value,
-                                      icon: ann?.icon || '',
-                                    })
-                                  }
-                                  placeholder="Texto"
-                                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <input
-                                  type="text"
-                                  value={ann?.icon || ''}
-                                  onChange={(e) =>
-                                    setAnnotation(selectedCell.r, selectedCell.c, {
-                                      text: ann?.text || '',
-                                      icon: e.target.value,
-                                    })
-                                  }
-                                  placeholder="URL icono"
-                                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                            );
-                          })()}
+                        <div className="space-y-3 text-xs">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-200">
+                              {L.annotations}
+                            </h4>
+                            {(() => {
+                              const annotationsAtCell = activeAnnotations.filter(
+                                (a) => a.r === selectedCell.r && a.c === selectedCell.c
+                              );
+                              const playerKeyCandidates = [];
+                              if (playerAnnotationKey) playerKeyCandidates.push(playerAnnotationKey);
+                              if (normalizedPlayerName)
+                                playerKeyCandidates.push(normalizedPlayerName);
+                              const isViewerPlayerNote = (annotation) => {
+                                if (annotation.authorRole === 'master') return false;
+                                if (annotation.authorKey) {
+                                  return playerKeyCandidates.some(
+                                    (candidate) => candidate && candidate === annotation.authorKey
+                                  );
+                                }
+                                return playerKeyCandidates.length === 0;
+                              };
+                              const editableAnn = isPlayerMode
+                                ? annotationsAtCell.find((a) => isViewerPlayerNote(a))
+                                : annotationsAtCell.find((a) => a.authorRole === 'master');
+                              const otherNotes = annotationsAtCell.filter((a) => {
+                                if (a.authorRole === 'master') return false;
+                                if (!isPlayerMode) return true;
+                                return !isViewerPlayerNote(a);
+                              });
+                              return (
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                      {isPlayerMode ? L.yourNote : L.masterNoteTag}
+                                    </p>
+                                    <input
+                                      type="text"
+                                      value={editableAnn?.text || ''}
+                                      onChange={(e) =>
+                                        setAnnotation(
+                                          selectedCell.r,
+                                          selectedCell.c,
+                                          {
+                                            text: e.target.value,
+                                            icon: editableAnn?.icon || '',
+                                          },
+                                          { existing: editableAnn }
+                                        )
+                                      }
+                                      placeholder="Texto"
+                                      disabled={!canAnnotateActiveQuadrant}
+                                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={editableAnn?.icon || ''}
+                                      onChange={(e) =>
+                                        setAnnotation(
+                                          selectedCell.r,
+                                          selectedCell.c,
+                                          {
+                                            text: editableAnn?.text || '',
+                                            icon: e.target.value,
+                                          },
+                                          { existing: editableAnn }
+                                        )
+                                      }
+                                      placeholder="URL icono"
+                                      disabled={!canAnnotateActiveQuadrant}
+                                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                                    />
+                                  </div>
+                                  {otherNotes.length > 0 && (
+                                    <div className="space-y-1 rounded-md border border-gray-800 bg-gray-900/70 p-2">
+                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                        {L.playerNotesList}
+                                      </p>
+                                      <div className="space-y-1">
+                                        {otherNotes.map((note) => (
+                                          <div
+                                            key={note.key}
+                                            className="rounded bg-gray-800/80 px-2 py-1 text-[11px] text-gray-200"
+                                          >
+                                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                              {note.authorName || L.playerNoteTag}
+                                            </span>
+                                            <span>{note.text}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                       )}
                     </div>
