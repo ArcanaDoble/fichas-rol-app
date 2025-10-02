@@ -1255,11 +1255,14 @@ function MinimapBuilder({
     [isPlayerMode, isSharedMasterQuadrant, originCellKey]
   );
   const shouldTrackExploration = useMemo(() => {
+    if (!activeQuadrantId) {
+      return false;
+    }
     if (isPlayerMode) {
       return isSharedMasterQuadrant;
     }
-    return isMasterSharingQuadrant;
-  }, [isMasterSharingQuadrant, isPlayerMode, isSharedMasterQuadrant]);
+    return true;
+  }, [activeQuadrantId, isPlayerMode, isSharedMasterQuadrant]);
 
   const explorerState = useMemo(() => {
     if (!isExplorerModeActive && !isMasterSharingQuadrant) {
