@@ -1255,8 +1255,8 @@ function MinimapBuilder({
     ? cellKeyFromIndices(originCellPosition.r, originCellPosition.c)
     : null;
   const isExplorerModeActive = useMemo(
-    () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
-    [isPlayerMode, isSharedMasterQuadrant, originCellKey]
+    () => isPlayerMode && isSharedMasterQuadrant,
+    [isPlayerMode, isSharedMasterQuadrant]
   );
   const shouldTrackExploration = useMemo(() => {
     if (!activeQuadrantId) {
@@ -1358,7 +1358,7 @@ function MinimapBuilder({
     selectedCells,
   ]);
   const shouldShowExplorerNotice =
-    isExplorerModeActive || isMasterSharingQuadrant;
+    isSharedMasterQuadrant || isMasterSharingQuadrant;
   useEffect(() => {
     if (propertyTabs.length === 0) return;
     if (!propertyTabs.some((tab) => tab.id === panelTab)) {
