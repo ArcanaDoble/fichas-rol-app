@@ -29,6 +29,7 @@ import {
   writeBatch,
   serverTimestamp,
   arrayUnion,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -953,6 +954,7 @@ function MinimapBuilder({
   const [customIcons, setCustomIcons] = useState([]);
   const [resourceItems, setResourceItems] = useState([]);
   const [exploredCellKeys, setExploredCellKeys] = useState([]);
+  const [remoteExplorerOrigin, setRemoteExplorerOrigin] = useState(null);
   const [showMasterExplorerControls, setShowMasterExplorerControls] =
     useState(false);
   const [explorationLoaded, setExplorationLoaded] = useState(false);
@@ -1238,22 +1240,48 @@ function MinimapBuilder({
     return tabs;
   }, [canEditActiveQuadrant, canAnnotateActiveQuadrant]);
   const originCellPosition = useMemo(() => {
-    if (!isPlayerMode) return null;
     for (let r = 0; r < grid.length; r += 1) {
       const row = grid[r];
       if (!Array.isArray(row)) continue;
       for (let c = 0; c < row.length; c += 1) {
         const cell = row[c];
-        if (cell && cell.icon === ORIGIN_ICON_DATA_URL) {
+        if (cell && cell.active && cell.icon === ORIGIN_ICON_DATA_URL) {
           return { r, c };
         }
       }
     }
     return null;
-  }, [grid, isPlayerMode]);
-  const originCellKey = originCellPosition
+  }, [grid]);
+  const gridOriginCellKey = originCellPosition
     ? cellKeyFromIndices(originCellPosition.r, originCellPosition.c)
     : null;
+  const originCellKey = useMemo(() => {
+    if (gridOriginCellKey) {
+      return gridOriginCellKey;
+    }
+    if (!remoteExplorerOrigin) {
+      return null;
+    }
+    const parsed = parseCellKey(remoteExplorerOrigin);
+    if (!parsed) {
+      return null;
+    }
+    const { r, c } = parsed;
+    if (r < 0 || c < 0 || r >= rows || c >= cols) {
+      return null;
+    }
+    const cell = grid[r]?.[c];
+    if (!cell || !cell.active) {
+      return null;
+    }
+    return cellKeyFromIndices(r, c);
+  }, [
+    cols,
+    grid,
+    gridOriginCellKey,
+    remoteExplorerOrigin,
+    rows,
+  ]);
   const isExplorerModeActive = useMemo(
     () => isPlayerMode && isSharedMasterQuadrant,
     [isPlayerMode, isSharedMasterQuadrant]
@@ -1359,6 +1387,49 @@ function MinimapBuilder({
   ]);
   const shouldShowExplorerNotice =
     isSharedMasterQuadrant || isMasterSharingQuadrant;
+  useEffect(() => {
+    if (!isMasterSharingQuadrant) return;
+    if (!activeQuadrantId) return;
+    if (!explorationLoaded) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    if (gridOriginCellKey) {
+      const alreadySynced =
+        remoteExplorerOrigin === gridOriginCellKey &&
+        exploredCellKeys.includes(gridOriginCellKey);
+      if (alreadySynced) {
+        return;
+      }
+      setDoc(
+        explorationDocRef,
+        {
+          origin: gridOriginCellKey,
+          cells: arrayUnion(gridOriginCellKey),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch((error) =>
+        console.error('Error syncing minimap origin', error)
+      );
+      return;
+    }
+    if (remoteExplorerOrigin) {
+      setDoc(
+        explorationDocRef,
+        { origin: deleteField(), updatedAt: serverTimestamp() },
+        { merge: true }
+      ).catch((error) =>
+        console.error('Error clearing minimap origin', error)
+      );
+    }
+  }, [
+    activeQuadrantId,
+    db,
+    exploredCellKeys,
+    explorationLoaded,
+    gridOriginCellKey,
+    isMasterSharingQuadrant,
+    remoteExplorerOrigin,
+  ]);
   useEffect(() => {
     if (propertyTabs.length === 0) return;
     if (!propertyTabs.some((tab) => tab.id === panelTab)) {
@@ -1703,6 +1774,7 @@ function MinimapBuilder({
     if (!activeQuadrantId || !shouldTrackExploration) {
       setExplorationLoaded(false);
       setExploredCellKeys([]);
+      setRemoteExplorerOrigin(null);
       return undefined;
     }
     const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
@@ -1714,6 +1786,13 @@ function MinimapBuilder({
         if (isCancelled) return;
         setExplorationLoaded(true);
         const data = snapshot.data();
+        const originValue =
+          data && typeof data.origin === 'string' ? data.origin.trim() : '';
+        const sanitizedOrigin =
+          originValue && /^\d+-\d+$/.test(originValue) ? originValue : null;
+        setRemoteExplorerOrigin((prev) =>
+          prev === sanitizedOrigin ? prev : sanitizedOrigin
+        );
         if (!data || !Array.isArray(data.cells)) {
           setExploredCellKeys((prev) => (prev.length === 0 ? prev : []));
           return;
@@ -1736,6 +1815,7 @@ function MinimapBuilder({
         if (isCancelled) return;
         console.error('Error fetching minimap exploration', error);
         setExplorationLoaded(true);
+        setRemoteExplorerOrigin((prev) => (prev === null ? prev : null));
       }
     );
     return () => {
@@ -1744,6 +1824,7 @@ function MinimapBuilder({
         unsubscribe();
       } catch {}
       setExplorationLoaded(false);
+      setRemoteExplorerOrigin(null);
     };
   }, [activeQuadrantId, db, shouldTrackExploration]);
   useEffect(() => {
