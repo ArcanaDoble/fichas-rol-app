@@ -1531,6 +1531,38 @@ function MinimapBuilder({
   const skipClickRef = useRef(false);
   const hadMultiTouchRef = useRef(false);
   const pingCleanupTimerRef = useRef(null);
+  const cleanupExpiredPings = useCallback(() => {
+    const now = Date.now();
+    const expiredIds = [];
+    setPings((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return prev;
+      }
+      const next = [];
+      prev.forEach((ping) => {
+        if (!ping || !Number.isFinite(ping.createdAtMs)) {
+          return;
+        }
+        if (now - ping.createdAtMs >= PING_TTL_MS) {
+          if (ping.id) {
+            expiredIds.push(ping.id);
+          }
+        } else {
+          next.push(ping);
+        }
+      });
+      if (next.length === prev.length) {
+        return prev;
+      }
+      return next;
+    });
+    if (expiredIds.length > 0) {
+      expiredIds.forEach((pingId) => {
+        if (!pingId) return;
+        deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
+      });
+    }
+  }, [db]);
   const clearLongPressTimers = useCallback(() => {
     longPressTimersRef.current.forEach((timer) => {
       clearTimeout(timer.id);
@@ -2826,38 +2858,6 @@ function MinimapBuilder({
       masterModeOverride: true,
     });
   };
-  const cleanupExpiredPings = useCallback(() => {
-    const now = Date.now();
-    const expiredIds = [];
-    setPings((prev) => {
-      if (!Array.isArray(prev) || prev.length === 0) {
-        return prev;
-      }
-      const next = [];
-      prev.forEach((ping) => {
-        if (!ping || !Number.isFinite(ping.createdAtMs)) {
-          return;
-        }
-        if (now - ping.createdAtMs >= PING_TTL_MS) {
-          if (ping.id) {
-            expiredIds.push(ping.id);
-          }
-        } else {
-          next.push(ping);
-        }
-      });
-      if (next.length === prev.length) {
-        return prev;
-      }
-      return next;
-    });
-    if (expiredIds.length > 0) {
-      expiredIds.forEach((pingId) => {
-        if (!pingId) return;
-        deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
-      });
-    }
-  }, [db]);
   const createPing = useCallback(
     (r, c) => {
       if (!activeQuadrantId) return false;
