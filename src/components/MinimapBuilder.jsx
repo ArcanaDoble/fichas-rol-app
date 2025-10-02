@@ -17,6 +17,7 @@ import useConfirm from '../hooks/useConfirm';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  addDoc,
   collection,
   getDocs,
   onSnapshot,
@@ -160,6 +161,9 @@ const FALLBACK_EMOJI_GROUPS = {
 
 let emojiGroupsCache = null;
 let emojiGroupsPromise = null;
+
+const PING_TTL_MS = 15000;
+const PING_CLEANUP_INTERVAL_MS = 5000;
 
 const fetchEmojiGroupsFromNetwork = async () => {
   const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
@@ -936,6 +940,7 @@ function MinimapBuilder({
   const [activeColorPicker, setActiveColorPicker] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [annotations, setAnnotations] = useState([]);
+  const [pings, setPings] = useState([]);
   const [isMasterNotesOpen, setIsMasterNotesOpen] = useState(false);
   const [masterNotesSearch, setMasterNotesSearch] = useState('');
   const [shapeEdit, setShapeEdit] = useState(false);
@@ -1098,6 +1103,10 @@ function MinimapBuilder({
     }
     return base;
   }, [isPlayerMode, normalizedPlayerName, activeOwnerKey]);
+  const pingAuthor = useMemo(
+    () => (isPlayerMode ? trimmedPlayerName || 'player' : 'master'),
+    [isPlayerMode, trimmedPlayerName]
+  );
   const quadrantPreviewSize = useMemo(
     () => (isMobile ? 72 : 96),
     [isMobile]
@@ -1115,6 +1124,17 @@ function MinimapBuilder({
     if (!isPlayerMode) return activeAnnotations;
     return activeAnnotations.filter((ann) => ann.authorRole !== 'master');
   }, [activeAnnotations, isPlayerMode]);
+  const visiblePings = useMemo(() => {
+    if (!Array.isArray(pings) || pings.length === 0) return [];
+    return pings
+      .filter(
+        (ping) =>
+          Number.isInteger(ping?.r) &&
+          Number.isInteger(ping?.c) &&
+          Number.isFinite(ping?.createdAtMs)
+      )
+      .sort((a, b) => a.createdAtMs - b.createdAtMs);
+  }, [pings]);
   const masterAnnotationsSummary = useMemo(() => {
     if (isPlayerMode) return [];
     const groups = new Map();
@@ -1510,6 +1530,39 @@ function MinimapBuilder({
   const panStartRef = useRef({ x: 0, y: 0 });
   const skipClickRef = useRef(false);
   const hadMultiTouchRef = useRef(false);
+  const pingCleanupTimerRef = useRef(null);
+  const cleanupExpiredPings = useCallback(() => {
+    const now = Date.now();
+    const expiredIds = [];
+    setPings((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return prev;
+      }
+      const next = [];
+      prev.forEach((ping) => {
+        if (!ping || !Number.isFinite(ping.createdAtMs)) {
+          return;
+        }
+        if (now - ping.createdAtMs >= PING_TTL_MS) {
+          if (ping.id) {
+            expiredIds.push(ping.id);
+          }
+        } else {
+          next.push(ping);
+        }
+      });
+      if (next.length === prev.length) {
+        return prev;
+      }
+      return next;
+    });
+    if (expiredIds.length > 0) {
+      expiredIds.forEach((pingId) => {
+        if (!pingId) return;
+        deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
+      });
+    }
+  }, [db]);
   const clearLongPressTimers = useCallback(() => {
     longPressTimersRef.current.forEach((timer) => {
       clearTimeout(timer.id);
@@ -1801,6 +1854,96 @@ function MinimapBuilder({
   useEffect(() => {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
+  useEffect(() => {
+    if (!activeQuadrantId) {
+      setPings([]);
+      return undefined;
+    }
+    const pingsRef = collection(db, 'minimapPings');
+    const pingQuery = query(
+      pingsRef,
+      where('quadrantId', '==', activeQuadrantId)
+    );
+    let isUnmounted = false;
+    const unsubscribe = onSnapshot(
+      pingQuery,
+      (snapshot) => {
+        if (isUnmounted) return;
+        const now = Date.now();
+        const entries = [];
+        const expiredIds = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const row = Number.isInteger(data?.r) ? data.r : null;
+          const col = Number.isInteger(data?.c) ? data.c : null;
+          if (row === null || col === null) {
+            return;
+          }
+          const createdAtRaw = data?.createdAt;
+          const createdAtMs =
+            createdAtRaw && typeof createdAtRaw.toMillis === 'function'
+              ? createdAtRaw.toMillis()
+              : typeof createdAtRaw === 'number'
+              ? createdAtRaw
+              : Date.now();
+          if (!Number.isFinite(createdAtMs)) {
+            return;
+          }
+          if (now - createdAtMs >= PING_TTL_MS) {
+            expiredIds.push(docSnap.id);
+            return;
+          }
+          entries.push({
+            id: docSnap.id,
+            r: row,
+            c: col,
+            author: typeof data?.author === 'string' ? data.author : '',
+            createdAtMs,
+          });
+        });
+        setPings(entries);
+        if (expiredIds.length > 0) {
+          expiredIds.forEach((pingId) => {
+            if (!pingId) return;
+            deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
+          });
+        }
+      },
+      (error) => {
+        console.error('Error fetching minimap pings', error);
+        if (!isUnmounted) {
+          setPings([]);
+        }
+      }
+    );
+    return () => {
+      isUnmounted = true;
+      try {
+        unsubscribe();
+      } catch {}
+      setPings([]);
+    };
+  }, [activeQuadrantId, db]);
+  useEffect(() => {
+    let isCancelled = false;
+    const scheduleCleanup = () => {
+      if (isCancelled) return;
+      pingCleanupTimerRef.current = setTimeout(() => {
+        if (isCancelled) return;
+        cleanupExpiredPings();
+        scheduleCleanup();
+      }, PING_CLEANUP_INTERVAL_MS);
+    };
+    cleanupExpiredPings();
+    scheduleCleanup();
+    return () => {
+      isCancelled = true;
+      if (pingCleanupTimerRef.current) {
+        clearTimeout(pingCleanupTimerRef.current);
+        pingCleanupTimerRef.current = null;
+      }
+    };
+  }, [cleanupExpiredPings]);
   useEffect(() => {
     const annotationsRef = collection(db, 'minimapAnnotations');
     const activeQueries = [
@@ -2715,13 +2858,62 @@ function MinimapBuilder({
       masterModeOverride: true,
     });
   };
-  const handleCellClick = (r, c) => {
+  const createPing = useCallback(
+    (r, c) => {
+      if (!activeQuadrantId) return false;
+      if (!(canEditActiveQuadrant || canAnnotateActiveQuadrant)) return false;
+      if (isExplorerModeActive) {
+        const key = cellKeyFromIndices(r, c);
+        if (!exploredCellsSet.has(key)) {
+          return false;
+        }
+      }
+      const payload = {
+        quadrantId: activeQuadrantId,
+        r,
+        c,
+        createdAt: serverTimestamp(),
+        author: pingAuthor,
+      };
+      addDoc(collection(db, 'minimapPings'), payload).catch((error) => {
+        console.error('Error creating minimap ping', error);
+      });
+      return true;
+    },
+    [
+      activeQuadrantId,
+      db,
+      canAnnotateActiveQuadrant,
+      canEditActiveQuadrant,
+      exploredCellsSet,
+      isExplorerModeActive,
+      pingAuthor,
+    ]
+  );
+  const handleCellClick = (r, c, event) => {
     if (isExplorerModeActive) {
       const key = cellKeyFromIndices(r, c);
       if (!exploredCellsSet.has(key)) {
         if (explorerFrontierSet.has(key)) {
           revealExplorerCell(r, c);
         }
+        return;
+      }
+    }
+    const isClickEvent = event && event.type === 'click';
+    const isPrimaryButton =
+      !isClickEvent || typeof event.button !== 'number'
+        ? true
+        : event.button === 0;
+    const hasPingModifier =
+      isClickEvent && isPrimaryButton && (event.altKey || event.metaKey);
+    const isDoubleClick =
+      isClickEvent && isPrimaryButton && event.detail >= 2;
+    if (isClickEvent && (isDoubleClick || hasPingModifier)) {
+      const didCreatePing = createPing(r, c);
+      if (didCreatePing) {
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
     }
@@ -4350,7 +4542,7 @@ function MinimapBuilder({
                                     e.preventDefault();
                                     return;
                                   }
-                                  handleCellClick(r, c);
+                                  handleCellClick(r, c, e);
                                 }}
                                 onPointerDown={(e) => {
                                   if (
@@ -4424,7 +4616,7 @@ function MinimapBuilder({
                                 }}
                                 onMouseLeave={() => setHoveredCell(null)}
                                 onKeyDown={(e) =>
-                                  e.key === 'Enter' && handleCellClick(r, c)
+                                  e.key === 'Enter' && handleCellClick(r, c, e)
                                 }
                                 className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ring-0 ${explorerCursorClass}`}
                                 style={{
@@ -4614,9 +4806,64 @@ function MinimapBuilder({
                                   </div>
                                 </div>
                               )}
-                            </div>
-                          );
-                        })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ zIndex: 3 }}
+                    >
+                      {visiblePings.map((ping) => {
+                        const cellKey = cellKeyFromIndices(ping.r, ping.c);
+                        if (
+                          isExplorerModeActive &&
+                          !exploredCellsSet.has(cellKey)
+                        ) {
+                          return null;
+                        }
+                        const dotSize = Math.max(
+                          12,
+                          Math.min(28, Math.round(cellSize * 0.6))
+                        );
+                        const coreSize = Math.max(
+                          8,
+                          Math.round(dotSize * 0.55)
+                        );
+                        const ringClass =
+                          ping.author && ping.author !== 'master'
+                            ? 'bg-sky-400'
+                            : 'bg-emerald-400';
+                        const coreClass =
+                          ping.author && ping.author !== 'master'
+                            ? 'bg-sky-300'
+                            : 'bg-emerald-300';
+                        return (
+                          <div
+                            key={ping.id}
+                            className="absolute pointer-events-none"
+                            style={{
+                              left: ping.c * cellSize + cellSize / 2,
+                              top: ping.r * cellSize + cellSize / 2,
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                          >
+                            <span
+                              className="relative flex items-center justify-center"
+                              style={{ width: dotSize, height: dotSize }}
+                            >
+                              <span
+                                className={`absolute inline-flex rounded-full opacity-60 ${ringClass} animate-ping`}
+                                style={{ width: dotSize, height: dotSize }}
+                              />
+                              <span
+                                className={`relative inline-flex rounded-full shadow ${coreClass}`}
+                                style={{ width: coreSize, height: coreSize }}
+                              />
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
