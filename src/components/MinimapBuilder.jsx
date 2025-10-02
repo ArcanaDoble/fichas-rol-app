@@ -162,8 +162,8 @@ const FALLBACK_EMOJI_GROUPS = {
 let emojiGroupsCache = null;
 let emojiGroupsPromise = null;
 
-const PING_TTL_MS = 15000;
-const PING_CLEANUP_INTERVAL_MS = 5000;
+const PING_TTL_MS = 6000;
+const PING_CLEANUP_INTERVAL_MS = 4000;
 
 const fetchEmojiGroupsFromNetwork = async () => {
   const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
