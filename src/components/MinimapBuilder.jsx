@@ -29,6 +29,7 @@ import {
   writeBatch,
   serverTimestamp,
   arrayUnion,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -953,6 +954,7 @@ function MinimapBuilder({
   const [customIcons, setCustomIcons] = useState([]);
   const [resourceItems, setResourceItems] = useState([]);
   const [exploredCellKeys, setExploredCellKeys] = useState([]);
+  const [remoteExplorerOrigin, setRemoteExplorerOrigin] = useState(null);
   const [showMasterExplorerControls, setShowMasterExplorerControls] =
     useState(false);
   const [explorationLoaded, setExplorationLoaded] = useState(false);
@@ -982,6 +984,7 @@ function MinimapBuilder({
   const [quadrants, setQuadrants] = useState(() => readQuadrantsFromLocalStorage());
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
+  const pendingSharedWithRef = useRef(null);
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
@@ -1009,11 +1012,14 @@ function MinimapBuilder({
     },
     [isPlayerMode, normalizedPlayerName]
   );
-  const updateLocalQuadrants = (items) => {
-    const filtered = filterQuadrantsForMode(items);
-    localQuadrantsRef.current = filtered;
-    persistQuadrantsToLocalStorage(filtered);
-  };
+  const updateLocalQuadrants = useCallback(
+    (items) => {
+      const filtered = filterQuadrantsForMode(items);
+      localQuadrantsRef.current = filtered;
+      persistQuadrantsToLocalStorage(filtered);
+    },
+    [filterQuadrantsForMode]
+  );
   useEffect(() => {
     if (!isMasterNotesOpen) {
       setMasterNotesSearch('');
@@ -1234,32 +1240,61 @@ function MinimapBuilder({
     return tabs;
   }, [canEditActiveQuadrant, canAnnotateActiveQuadrant]);
   const originCellPosition = useMemo(() => {
-    if (!isPlayerMode) return null;
     for (let r = 0; r < grid.length; r += 1) {
       const row = grid[r];
       if (!Array.isArray(row)) continue;
       for (let c = 0; c < row.length; c += 1) {
         const cell = row[c];
-        if (cell && cell.icon === ORIGIN_ICON_DATA_URL) {
+        if (cell && cell.active && cell.icon === ORIGIN_ICON_DATA_URL) {
           return { r, c };
         }
       }
     }
     return null;
-  }, [grid, isPlayerMode]);
-  const originCellKey = originCellPosition
+  }, [grid]);
+  const gridOriginCellKey = originCellPosition
     ? cellKeyFromIndices(originCellPosition.r, originCellPosition.c)
     : null;
+  const originCellKey = useMemo(() => {
+    if (gridOriginCellKey) {
+      return gridOriginCellKey;
+    }
+    if (!remoteExplorerOrigin) {
+      return null;
+    }
+    const parsed = parseCellKey(remoteExplorerOrigin);
+    if (!parsed) {
+      return null;
+    }
+    const { r, c } = parsed;
+    if (r < 0 || c < 0 || r >= rows || c >= cols) {
+      return null;
+    }
+    const cell = grid[r]?.[c];
+    if (!cell || !cell.active) {
+      return null;
+    }
+    return cellKeyFromIndices(r, c);
+  }, [
+    cols,
+    grid,
+    gridOriginCellKey,
+    remoteExplorerOrigin,
+    rows,
+  ]);
   const isExplorerModeActive = useMemo(
-    () => isPlayerMode && isSharedMasterQuadrant && originCellKey !== null,
-    [isPlayerMode, isSharedMasterQuadrant, originCellKey]
+    () => isPlayerMode && isSharedMasterQuadrant,
+    [isPlayerMode, isSharedMasterQuadrant]
   );
   const shouldTrackExploration = useMemo(() => {
+    if (!activeQuadrantId) {
+      return false;
+    }
     if (isPlayerMode) {
       return isSharedMasterQuadrant;
     }
-    return isMasterSharingQuadrant;
-  }, [isMasterSharingQuadrant, isPlayerMode, isSharedMasterQuadrant]);
+    return true;
+  }, [activeQuadrantId, isPlayerMode, isSharedMasterQuadrant]);
 
   const explorerState = useMemo(() => {
     if (!isExplorerModeActive && !isMasterSharingQuadrant) {
@@ -1351,7 +1386,50 @@ function MinimapBuilder({
     selectedCells,
   ]);
   const shouldShowExplorerNotice =
-    isExplorerModeActive || isMasterSharingQuadrant;
+    isSharedMasterQuadrant || isMasterSharingQuadrant;
+  useEffect(() => {
+    if (!isMasterSharingQuadrant) return;
+    if (!activeQuadrantId) return;
+    if (!explorationLoaded) return;
+    const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
+    if (gridOriginCellKey) {
+      const alreadySynced =
+        remoteExplorerOrigin === gridOriginCellKey &&
+        exploredCellKeys.includes(gridOriginCellKey);
+      if (alreadySynced) {
+        return;
+      }
+      setDoc(
+        explorationDocRef,
+        {
+          origin: gridOriginCellKey,
+          cells: arrayUnion(gridOriginCellKey),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch((error) =>
+        console.error('Error syncing minimap origin', error)
+      );
+      return;
+    }
+    if (remoteExplorerOrigin) {
+      setDoc(
+        explorationDocRef,
+        { origin: deleteField(), updatedAt: serverTimestamp() },
+        { merge: true }
+      ).catch((error) =>
+        console.error('Error clearing minimap origin', error)
+      );
+    }
+  }, [
+    activeQuadrantId,
+    db,
+    exploredCellKeys,
+    explorationLoaded,
+    gridOriginCellKey,
+    isMasterSharingQuadrant,
+    remoteExplorerOrigin,
+  ]);
   useEffect(() => {
     if (propertyTabs.length === 0) return;
     if (!propertyTabs.some((tab) => tab.id === panelTab)) {
@@ -1696,6 +1774,7 @@ function MinimapBuilder({
     if (!activeQuadrantId || !shouldTrackExploration) {
       setExplorationLoaded(false);
       setExploredCellKeys([]);
+      setRemoteExplorerOrigin(null);
       return undefined;
     }
     const explorationDocRef = doc(db, 'minimapExplorations', activeQuadrantId);
@@ -1707,6 +1786,13 @@ function MinimapBuilder({
         if (isCancelled) return;
         setExplorationLoaded(true);
         const data = snapshot.data();
+        const originValue =
+          data && typeof data.origin === 'string' ? data.origin.trim() : '';
+        const sanitizedOrigin =
+          originValue && /^\d+-\d+$/.test(originValue) ? originValue : null;
+        setRemoteExplorerOrigin((prev) =>
+          prev === sanitizedOrigin ? prev : sanitizedOrigin
+        );
         if (!data || !Array.isArray(data.cells)) {
           setExploredCellKeys((prev) => (prev.length === 0 ? prev : []));
           return;
@@ -1729,6 +1815,7 @@ function MinimapBuilder({
         if (isCancelled) return;
         console.error('Error fetching minimap exploration', error);
         setExplorationLoaded(true);
+        setRemoteExplorerOrigin((prev) => (prev === null ? prev : null));
       }
     );
     return () => {
@@ -1737,6 +1824,7 @@ function MinimapBuilder({
         unsubscribe();
       } catch {}
       setExplorationLoaded(false);
+      setRemoteExplorerOrigin(null);
     };
   }, [activeQuadrantId, db, shouldTrackExploration]);
   useEffect(() => {
@@ -3629,19 +3717,125 @@ function MinimapBuilder({
     if (isPlayerMode) return;
     const normalized = normalizePlayerName(name);
     if (!normalized) return;
+    let nextSharedWith = null;
     setActiveQuadrantSharedWith((prev) => {
       const sanitized = sanitizeSharedWith(prev);
       const exists = sanitized.some(
         (entry) => normalizePlayerName(entry) === normalized
       );
-      if (exists) {
-        return sanitized.filter(
-          (entry) => normalizePlayerName(entry) !== normalized
-        );
-      }
-      return [...sanitized, name];
+      nextSharedWith = exists
+        ? sanitized.filter(
+            (entry) => normalizePlayerName(entry) !== normalized
+          )
+        : [...sanitized, name];
+      return nextSharedWith;
     });
+    if (
+      nextSharedWith &&
+      activeQuadrantId &&
+      activeQuadrantId !== 'default'
+    ) {
+      pendingSharedWithRef.current = {
+        sharedWith: nextSharedWith,
+        quadrantId: activeQuadrantId,
+      };
+    }
   };
+
+  const persistQuadrantSharedWith = useCallback(
+    async (nextSharedWith) => {
+      if (
+        isPlayerMode ||
+        !Array.isArray(nextSharedWith) ||
+        !activeQuadrantId ||
+        activeQuadrantId === 'default'
+      ) {
+        return;
+      }
+      const sanitized = sanitizeSharedWith(nextSharedWith);
+      const currentQuadrant = quadrants.find(
+        (item) => (item?.id || 'default') === activeQuadrantId
+      );
+      const matchesCurrent = sharedWithEquals(
+        currentQuadrant?.sharedWith,
+        sanitized
+      );
+      const matchesSnapshot = sharedWithEquals(
+        loadedQuadrantData?.sharedWith,
+        sanitized
+      );
+      if (matchesCurrent && matchesSnapshot) {
+        return;
+      }
+      if (matchesCurrent && !matchesSnapshot) {
+        setLoadedQuadrantData((prev) => {
+          if (!prev) return prev;
+          if (sharedWithEquals(prev.sharedWith, sanitized)) return prev;
+          return { ...prev, sharedWith: sanitized };
+        });
+        return;
+      }
+      try {
+        await setDoc(
+          doc(db, 'minimapQuadrants', activeQuadrantId),
+          { sharedWith: sanitized, updatedAt: serverTimestamp() },
+          { merge: true }
+        );
+        setLoadedQuadrantData((prev) => {
+          if (!prev) return prev;
+          if (sharedWithEquals(prev.sharedWith, sanitized)) return prev;
+          return { ...prev, sharedWith: sanitized };
+        });
+        setQuadrants((prev) => {
+          let hasChanges = false;
+          const nextState = prev.map((item) => {
+            if ((item?.id || 'default') !== activeQuadrantId) {
+              return item;
+            }
+            if (sharedWithEquals(item?.sharedWith, sanitized)) {
+              return item;
+            }
+            hasChanges = true;
+            return { ...item, sharedWith: sanitized };
+          });
+          if (!hasChanges) {
+            return prev;
+          }
+          const filtered = filterQuadrantsForMode(nextState);
+          updateLocalQuadrants(filtered);
+          return filtered;
+        });
+      } catch (error) {
+        console.error('Error updating minimap quadrant sharing', error);
+      }
+    },
+    [
+      activeQuadrantId,
+      db,
+      filterQuadrantsForMode,
+      isPlayerMode,
+      loadedQuadrantData,
+      quadrants,
+      updateLocalQuadrants,
+    ]
+  );
+
+  useEffect(() => {
+    if (isPlayerMode) return;
+    const pending = pendingSharedWithRef.current;
+    if (!pending) return;
+    if (pending.quadrantId !== activeQuadrantId) return;
+    if (!sharedWithEquals(pending.sharedWith, activeQuadrantSharedWith)) {
+      return;
+    }
+    pendingSharedWithRef.current = null;
+    persistQuadrantSharedWith(pending.sharedWith);
+  }, [
+    activeQuadrantId,
+    activeQuadrantSharedWith,
+    isPlayerMode,
+    persistQuadrantSharedWith,
+  ]);
 
   const mobileToggleRowClass =
     'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
