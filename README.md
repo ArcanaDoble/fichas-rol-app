@@ -1627,6 +1627,10 @@ src/
 
 - La animación de daño utiliza ahora un `Konva.Tween` que desvanece el tinte del token de 0.5 a 0 en `DAMAGE_ANIMATION_MS`, reemplazando el `requestAnimationFrame` manual.
 
+**Resumen de cambios v2.4.86:**
+
+- La sincronización del minimapa vuelve a ser inmediata: los cuadrantes actualizan su cuadrícula, estilo y casilla de origen en todos los dispositivos sin recargar manualmente.
+
 ## 🔄 Historial de cambios previos
 
 <details>
@@ -1715,6 +1719,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
 - Se solucionó que el aviso de cambios sin guardar del minimapa siguiera apareciendo después de guardar cuadrantes o ajustar la flecha de origen.
+- Se restableció el estado de cambios sin guardar tras recibir actualizaciones remotas, evitando que los cuadrantes compartidos perdieran estilos u origen al recargarlos.
+- Se corrigió la carga de cuadrantes del minimapa cuando Firestore devolvía la cuadrícula como objeto en lugar de matriz, evitando que se reiniciara tras guardar y recargar.
+- Se evitó que al reconstruir cuadrículas del minimapa desde Firestore se perdieran estilos, iconos y exploración al compartir un cuadrante con jugadores.
 - Se optimizó la edición de celdas del minimapa en móvil apilando los controles de estilo y ajustando el auto-ajuste para evitar que el cuadrante se recorte.
 - Se solucionó un error en el mapa de batalla que provocaba un fallo al inicializar `syncManager` antes de su declaración.
 - Corregido error al aplicar presets de estilo en el minimapa que provocaba "next[r] is undefined".
