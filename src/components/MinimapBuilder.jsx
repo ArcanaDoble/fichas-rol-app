@@ -569,8 +569,40 @@ const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
   return `${base}-${scope}`;
 };
 
-const getGridCell = (grid, r, c) =>
-  Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r][c] : null;
+const sortNumericEntries = (value) =>
+  Object.keys(value || {})
+    .map((key) => [Number.parseInt(key, 10), key])
+    .filter(([index, key]) => !Number.isNaN(index) && /^\d+$/.test(key.trim()))
+    .sort((a, b) => a[0] - b[0]);
+
+const normalizeGridRow = (row) => {
+  if (Array.isArray(row)) {
+    return row;
+  }
+  if (row && typeof row === 'object') {
+    return sortNumericEntries(row).map(([, key]) => row[key]);
+  }
+  return [];
+};
+
+const normalizeGridMatrix = (grid) => {
+  if (Array.isArray(grid)) {
+    return grid.map((row) => normalizeGridRow(row));
+  }
+  if (grid && typeof grid === 'object') {
+    return sortNumericEntries(grid).map(([, key]) =>
+      normalizeGridRow(grid[key])
+    );
+  }
+  return [];
+};
+
+const getGridCell = (grid, r, c) => {
+  if (!Array.isArray(grid)) return null;
+  const row = Array.isArray(grid[r]) ? grid[r] : null;
+  if (!row) return null;
+  return row[c] !== undefined ? row[c] : null;
+};
 
 const cellKeyFromIndices = (r, c) => `${r}-${c}`;
 
@@ -594,15 +626,20 @@ const getOrthogonalNeighbors = (r, c) => [
 ];
 
 const sanitizeGridStructure = (grid, rows, cols) => {
-  const fallbackRows = Array.isArray(grid) && grid.length > 0 ? grid.length : 8;
-  const fallbackCols =
-    Array.isArray(grid) && Array.isArray(grid[0]) && grid[0].length > 0
-      ? grid[0].length
-      : 12;
+  const normalizedGrid = normalizeGridMatrix(grid);
+  const fallbackRows = normalizedGrid.length > 0 ? normalizedGrid.length : 8;
+  const fallbackCols = normalizedGrid.reduce((max, row) => {
+    if (!Array.isArray(row) || row.length === 0) {
+      return max;
+    }
+    return Math.max(max, row.length);
+  }, 0);
+  const safeCols = clampNumber(cols, 1, 200, fallbackCols > 0 ? fallbackCols : 12);
   const safeRows = clampNumber(rows, 1, 200, fallbackRows);
-  const safeCols = clampNumber(cols, 1, 200, fallbackCols);
   const sanitizedGrid = Array.from({ length: safeRows }, (_, r) =>
-    Array.from({ length: safeCols }, (_, c) => sanitizeCell(getGridCell(grid, r, c)))
+    Array.from({ length: safeCols }, (_, c) =>
+      sanitizeCell(getGridCell(normalizedGrid, r, c))
+    )
   );
   return { rows: safeRows, cols: safeCols, grid: sanitizedGrid };
 };

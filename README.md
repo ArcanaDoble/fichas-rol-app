@@ -1720,6 +1720,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
 - Se solucionó que el aviso de cambios sin guardar del minimapa siguiera apareciendo después de guardar cuadrantes o ajustar la flecha de origen.
 - Se restableció el estado de cambios sin guardar tras recibir actualizaciones remotas, evitando que los cuadrantes compartidos perdieran estilos u origen al recargarlos.
+- Se corrigió la carga de cuadrantes del minimapa cuando Firestore devolvía la cuadrícula como objeto en lugar de matriz, evitando que se reiniciara tras guardar y recargar.
 - Se optimizó la edición de celdas del minimapa en móvil apilando los controles de estilo y ajustando el auto-ajuste para evitar que el cuadrante se recorte.
 - Se solucionó un error en el mapa de batalla que provocaba un fallo al inicializar `syncManager` antes de su declaración.
 - Corregido error al aplicar presets de estilo en el minimapa que provocaba "next[r] is undefined".
