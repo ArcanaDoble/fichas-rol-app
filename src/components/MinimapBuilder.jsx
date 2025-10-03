@@ -1494,6 +1494,7 @@ function MinimapBuilder({
       if (cols !== current.cols) setCols(current.cols);
       if (cellSize !== current.cellSize) setCellSize(current.cellSize);
       setGrid(() => buildGrid(current.rows, current.cols, current.grid));
+      setLoadedQuadrantData(remoteSnapshot);
       setSelectedCells([]);
     }
   }, [
