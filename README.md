@@ -1627,6 +1627,10 @@ src/
 
 - La animación de daño utiliza ahora un `Konva.Tween` que desvanece el tinte del token de 0.5 a 0 en `DAMAGE_ANIMATION_MS`, reemplazando el `requestAnimationFrame` manual.
 
+**Resumen de cambios v2.4.86:**
+
+- La sincronización del minimapa vuelve a ser inmediata: los cuadrantes actualizan su cuadrícula, estilo y casilla de origen en todos los dispositivos sin recargar manualmente.
+
 ## 🔄 Historial de cambios previos
 
 <details>
