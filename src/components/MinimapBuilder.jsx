@@ -1457,6 +1457,57 @@ function MinimapBuilder({
     cols,
     cellSize,
   ]);
+  useEffect(() => {
+    if (currentQuadrantIndex === null) return;
+    const current = quadrants[currentQuadrantIndex];
+    if (!current) return;
+    const sanitizedShared = sanitizeSharedWith(current.sharedWith);
+    const remoteSnapshot = createQuadrantSnapshot({
+      rows: current.rows,
+      cols: current.cols,
+      cellSize: current.cellSize,
+      grid: current.grid,
+      sharedWith: sanitizedShared,
+    });
+    const localSnapshot = createQuadrantSnapshot({
+      rows,
+      cols,
+      cellSize,
+      grid,
+      sharedWith: activeQuadrantSharedWith,
+    });
+    if (quadrantSnapshotsEqual(localSnapshot, remoteSnapshot)) {
+      return;
+    }
+    if (canEditActiveQuadrant && hasUnsavedChanges) {
+      return;
+    }
+    if (!sharedWithEquals(activeQuadrantSharedWith, sanitizedShared)) {
+      setActiveQuadrantSharedWith(sanitizedShared);
+    }
+    const localWithRemoteShared = {
+      ...localSnapshot,
+      sharedWith: remoteSnapshot.sharedWith,
+    };
+    if (!quadrantSnapshotsEqual(localWithRemoteShared, remoteSnapshot)) {
+      if (rows !== current.rows) setRows(current.rows);
+      if (cols !== current.cols) setCols(current.cols);
+      if (cellSize !== current.cellSize) setCellSize(current.cellSize);
+      setGrid(() => buildGrid(current.rows, current.cols, current.grid));
+      setSelectedCells([]);
+    }
+    setLoadedQuadrantData(remoteSnapshot);
+  }, [
+    activeQuadrantSharedWith,
+    canEditActiveQuadrant,
+    cellSize,
+    cols,
+    currentQuadrantIndex,
+    grid,
+    hasUnsavedChanges,
+    quadrants,
+    rows,
+  ]);
   const runUnsavedChangesGuard = useCallback(
     (callback) => {
       if (typeof callback !== 'function') return false;
