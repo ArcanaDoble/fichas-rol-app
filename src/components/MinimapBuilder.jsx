@@ -945,12 +945,14 @@ const readLocalCustomization = () => {
   } catch {}
   return result;
 };
-const buildGrid = (rows, cols, prev = []) =>
-  Array.from({ length: rows }, (_, r) =>
+const buildGrid = (rows, cols, prev = []) => {
+  const normalizedPrev = normalizeGridMatrix(prev);
+  return Array.from({ length: rows }, (_, r) =>
     Array.from({ length: cols }, (_, c) =>
-      prev[r] && prev[r][c] ? { ...prev[r][c] } : defaultCell()
+      sanitizeCell(getGridCell(normalizedPrev, r, c))
     )
   );
+};
 
 function MinimapBuilder({
   onBack,
