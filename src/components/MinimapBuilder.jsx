@@ -3880,6 +3880,13 @@ function MinimapBuilder({
         }
       );
       const quadrantSnapshot = createQuadrantSnapshot(sanitizedQuadrant);
+      const recreatePayload = {
+        ...sanitizedQuadrant,
+        updatedAt: serverTimestamp(),
+      };
+      if (currentQuadrant?.createdAt) {
+        recreatePayload.createdAt = currentQuadrant.createdAt;
+      }
       const matchesCurrent = sharedWithEquals(
         currentQuadrant?.sharedWith,
         sanitizedQuadrant.sharedWith
@@ -3899,6 +3906,7 @@ function MinimapBuilder({
       }
       const quadrantDocRef = doc(db, 'minimapQuadrants', activeQuadrantId);
       let synced = false;
+      let localUpdatedAt = null;
       try {
         await updateDoc(quadrantDocRef, {
           sharedWith: sanitizedQuadrant.sharedWith,
@@ -3906,25 +3914,32 @@ function MinimapBuilder({
         });
         synced = true;
       } catch (updateError) {
-        if (updateError?.code === 'not-found') {
-          try {
-            await setDoc(quadrantDocRef, {
-              ...sanitizedQuadrant,
-              updatedAt: serverTimestamp(),
-            });
-            synced = true;
-          } catch (setError) {
-            console.error(
-              'Error recreating minimap quadrant after missing document',
-              setError
-            );
-            console.error('Error updating minimap quadrant sharing', updateError);
-            if (showErrorToast) {
-              showErrorToast('No se pudieron guardar los permisos del cuadrante.');
-            }
-            return;
+        const updateErrorCode =
+          typeof updateError?.code === 'string' ? updateError.code : '';
+        const updateMessage =
+          typeof updateError?.message === 'string' ? updateError.message : '';
+        const normalizedErrorCode = updateErrorCode
+          .toLowerCase()
+          .replace(/_/g, '-');
+        const missingDocument =
+          normalizedErrorCode === 'not-found' ||
+          normalizedErrorCode === 'failed-precondition' ||
+          updateMessage.toLowerCase().includes('no document to update');
+        if (!missingDocument) {
+          console.error('Error updating minimap quadrant sharing', updateError);
+          if (showErrorToast) {
+            showErrorToast('No se pudieron guardar los permisos del cuadrante.');
           }
-        } else {
+          return;
+        }
+        try {
+          await setDoc(quadrantDocRef, recreatePayload);
+          synced = true;
+        } catch (setError) {
+          console.error(
+            'Error recreating minimap quadrant after missing document',
+            setError
+          );
           console.error('Error updating minimap quadrant sharing', updateError);
           if (showErrorToast) {
             showErrorToast('No se pudieron guardar los permisos del cuadrante.');
@@ -3935,6 +3950,7 @@ function MinimapBuilder({
       if (!synced) {
         return;
       }
+      localUpdatedAt = new Date().toISOString();
       setLoadedQuadrantData((prev) =>
         quadrantSnapshotsEqual(prev, quadrantSnapshot) ? prev : quadrantSnapshot
       );
@@ -3944,7 +3960,11 @@ function MinimapBuilder({
           if ((item?.id || 'default') !== activeQuadrantId) {
             return item;
           }
-          const nextQuadrant = { ...item, ...sanitizedQuadrant };
+          const nextQuadrant = {
+            ...item,
+            ...sanitizedQuadrant,
+            updatedAt: localUpdatedAt || item?.updatedAt || null,
+          };
           const sameSharedWith = sharedWithEquals(
             item?.sharedWith,
             sanitizedQuadrant.sharedWith
