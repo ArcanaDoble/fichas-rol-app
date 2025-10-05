@@ -1338,6 +1338,38 @@ function MinimapBuilder({
       normalizedPlayerName,
     ]
   );
+  useEffect(() => {
+    if (!shouldShowPlayerOwnerLock) {
+      lastReadOnlyToastKeyRef.current = '';
+      return;
+    }
+    if (!activeQuadrantId) return;
+    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
+    if (lastReadOnlyToastKeyRef.current === toastKey) {
+      return;
+    }
+    lastReadOnlyToastKeyRef.current = toastKey;
+    showInfoToast(
+      <span className="leading-snug">
+        {L.playerQuadrantLockedIntro}{' '}
+        <span className="font-semibold" style={activeOwnerHighlightStyle}>
+          {activeOwnerNameForDisplay}
+        </span>
+        {'. '}
+        {L.playerQuadrantLockedOutro}
+      </span>,
+      {
+        title: L.playerQuadrantLockedTitle,
+      }
+    );
+  }, [
+    activeOwnerHighlightStyle,
+    activeOwnerKey,
+    activeOwnerNameForDisplay,
+    activeQuadrantId,
+    showInfoToast,
+    shouldShowPlayerOwnerLock,
+  ]);
   const canAnnotateActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
     if (!normalizedPlayerName) return false;
