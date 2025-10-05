@@ -1238,38 +1238,6 @@ function MinimapBuilder({
       prev && quadrantSnapshotsEqual(prev, snapshot) ? prev : snapshot
     );
   }, [quadrants, currentQuadrantIndex, defaultOwner]);
-  useEffect(() => {
-    if (!shouldShowPlayerOwnerLock) {
-      lastReadOnlyToastKeyRef.current = '';
-      return;
-    }
-    if (!activeQuadrantId) return;
-    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
-    if (lastReadOnlyToastKeyRef.current === toastKey) {
-      return;
-    }
-    lastReadOnlyToastKeyRef.current = toastKey;
-    showInfoToast(
-      <span className="leading-snug">
-        {L.playerQuadrantLockedIntro}{' '}
-        <span className="font-semibold" style={activeOwnerHighlightStyle}>
-          {activeOwnerNameForDisplay}
-        </span>
-        {'. '}
-        {L.playerQuadrantLockedOutro}
-      </span>,
-      {
-        title: L.playerQuadrantLockedTitle,
-      }
-    );
-  }, [
-    activeOwnerHighlightStyle,
-    activeOwnerKey,
-    activeOwnerNameForDisplay,
-    activeQuadrantId,
-    showInfoToast,
-    shouldShowPlayerOwnerLock,
-  ]);
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
@@ -1343,6 +1311,38 @@ function MinimapBuilder({
       normalizedPlayerName,
     ]
   );
+  useEffect(() => {
+    if (!shouldShowPlayerOwnerLock) {
+      lastReadOnlyToastKeyRef.current = '';
+      return;
+    }
+    if (!activeQuadrantId) return;
+    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
+    if (lastReadOnlyToastKeyRef.current === toastKey) {
+      return;
+    }
+    lastReadOnlyToastKeyRef.current = toastKey;
+    showInfoToast(
+      <span className="leading-snug">
+        {L.playerQuadrantLockedIntro}{' '}
+        <span className="font-semibold" style={activeOwnerHighlightStyle}>
+          {activeOwnerNameForDisplay}
+        </span>
+        {'. '}
+        {L.playerQuadrantLockedOutro}
+      </span>,
+      {
+        title: L.playerQuadrantLockedTitle,
+      }
+    );
+  }, [
+    activeOwnerHighlightStyle,
+    activeOwnerKey,
+    activeOwnerNameForDisplay,
+    activeQuadrantId,
+    showInfoToast,
+    shouldShowPlayerOwnerLock,
+  ]);
   useEffect(() => {
     if (!shouldShowPlayerOwnerLock) {
       lastReadOnlyToastKeyRef.current = '';
