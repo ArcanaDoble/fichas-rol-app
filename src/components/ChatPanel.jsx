@@ -7,8 +7,8 @@ import { db } from '../firebase';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 import highlightBattleText from '../utils/highlightBattleText';
+import { getPlayerColor, MASTER_COLOR } from '../utils/playerColors';
 
-const MASTER_COLOR = "#FFD700";
 const SPECIAL_TRAIT_COLOR = '#ef4444';
 const ChatPanel = ({ playerName = '', isMaster = false }) => {
   const [messages, setMessages] = useState([]);
@@ -66,18 +66,6 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
     setDoc(doc(db, 'assetSidebar', 'chat'), { messages }).catch(console.error);
     prevMessagesRef.current = messages;
   }, [messages, chatLoaded]);
-
-  const getPlayerColor = (name) => {
-    if (!name || name === 'Master') return MASTER_COLOR;
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash) % 360;
-    const saturation = 65 + (Math.abs(hash) % 20);
-    const lightness = 55 + (Math.abs(hash) % 15);
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  };
 
   const sendMessage = () => {
     const text = message.trim();
