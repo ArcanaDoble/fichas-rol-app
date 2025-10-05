@@ -13,6 +13,7 @@ import { ESTADOS } from './EstadoSelector';
 import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
 import { updateMinimapExplorationCells } from '../utils/minimapExploration';
+import { getPlayerColor, MASTER_COLOR } from '../utils/playerColors';
 import useConfirm from '../hooks/useConfirm';
 import { useToast } from './Toast';
 import * as LucideIcons from 'lucide-react';
@@ -108,6 +109,11 @@ const L = {
   explorerHideSelection: 'Ocultar selecci\u00F3n',
   masterQuadrantLocked:
     'Este cuadrante fue compartido por el M\u00E1ster y es de solo lectura.',
+  playerQuadrantLockedTitle: 'Cuadrante de otro jugador',
+  playerQuadrantLockedIntro: 'Este cuadrante pertenece a',
+  playerQuadrantLockedOutro:
+    'No puedes modificarlo ni eliminarlo a menos que esa persona te otorgue permisos.',
+  playerQuadrantLockedUnknown: 'otro jugador',
   unsavedChangesConfirm:
     'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
   unsavedChangesIndicator: 'Cambios sin guardar en el cuadrante actual',
@@ -1142,7 +1148,7 @@ function MinimapBuilder({
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   const pendingSharedWithRef = useRef(null);
-  const { error: showErrorToast } = useToast();
+  const { error: showErrorToast, info: showInfoToast } = useToast();
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
@@ -1220,6 +1226,38 @@ function MinimapBuilder({
       prev && quadrantSnapshotsEqual(prev, snapshot) ? prev : snapshot
     );
   }, [quadrants, currentQuadrantIndex, defaultOwner]);
+  useEffect(() => {
+    if (!shouldShowPlayerOwnerLock) {
+      lastReadOnlyToastKeyRef.current = '';
+      return;
+    }
+    if (!activeQuadrantId) return;
+    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
+    if (lastReadOnlyToastKeyRef.current === toastKey) {
+      return;
+    }
+    lastReadOnlyToastKeyRef.current = toastKey;
+    showInfoToast(
+      <span className="leading-snug">
+        {L.playerQuadrantLockedIntro}{' '}
+        <span className="font-semibold" style={activeOwnerHighlightStyle}>
+          {activeOwnerNameForDisplay}
+        </span>
+        {'. '}
+        {L.playerQuadrantLockedOutro}
+      </span>,
+      {
+        title: L.playerQuadrantLockedTitle,
+      }
+    );
+  }, [
+    activeOwnerHighlightStyle,
+    activeOwnerKey,
+    activeOwnerNameForDisplay,
+    activeQuadrantId,
+    showInfoToast,
+    shouldShowPlayerOwnerLock,
+  ]);
   const getLocalQuadrantsSnapshot = () =>
     Array.isArray(localQuadrantsRef.current) ? localQuadrantsRef.current : [];
   const quadrantsMigrationRef = useRef(false);
@@ -1239,6 +1277,35 @@ function MinimapBuilder({
     () => normalizePlayerName(activeQuadrantOwner),
     [activeQuadrantOwner]
   );
+  const activeOwnerDisplayName = useMemo(() => {
+    if (typeof activeQuadrantOwner !== 'string') return '';
+    const trimmed = activeQuadrantOwner.trim();
+    if (!trimmed) return '';
+    if (normalizePlayerName(trimmed) === 'master') {
+      return 'Máster';
+    }
+    return trimmed;
+  }, [activeQuadrantOwner]);
+  const activeOwnerNameForDisplay = useMemo(() => {
+    if (activeOwnerDisplayName) return activeOwnerDisplayName;
+    if (typeof activeQuadrantOwner === 'string' && activeQuadrantOwner.trim()) {
+      return activeQuadrantOwner.trim();
+    }
+    return L.playerQuadrantLockedUnknown;
+  }, [activeQuadrantOwner, activeOwnerDisplayName]);
+  const activeOwnerDisplayColor = useMemo(
+    () => getPlayerColor(activeOwnerNameForDisplay),
+    [activeOwnerNameForDisplay]
+  );
+  const activeOwnerHighlightStyle = useMemo(() => {
+    if (activeOwnerKey === 'master') {
+      return {
+        color: MASTER_COLOR,
+        textShadow: `0 0 6px ${MASTER_COLOR}`,
+      };
+    }
+    return { color: activeOwnerDisplayColor };
+  }, [activeOwnerDisplayColor, activeOwnerKey]);
   const isSharedMasterQuadrant = useMemo(() => {
     if (!isPlayerMode) return false;
     return activeOwnerKey === 'master';
@@ -1256,6 +1323,20 @@ function MinimapBuilder({
     if (!normalizedPlayerName) return false;
     return activeOwnerKey === normalizedPlayerName;
   }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const shouldShowPlayerOwnerLock = useMemo(
+    () =>
+      isPlayerMode &&
+      !canEditActiveQuadrant &&
+      activeOwnerKey &&
+      activeOwnerKey !== 'master' &&
+      activeOwnerKey !== normalizedPlayerName,
+    [
+      activeOwnerKey,
+      canEditActiveQuadrant,
+      isPlayerMode,
+      normalizedPlayerName,
+    ]
+  );
   const canAnnotateActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
     if (!normalizedPlayerName) return false;
@@ -1818,6 +1899,7 @@ function MinimapBuilder({
   const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
+  const lastReadOnlyToastKeyRef = useRef('');
   const lastLongPressRef = useRef({ key: null, t: 0 });
   const activePanPointerRef = useRef(null);
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -4206,6 +4288,18 @@ function MinimapBuilder({
       {isSharedMasterQuadrant && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
           {L.masterQuadrantLocked}
+        </div>
+      )}
+      {!isSharedMasterQuadrant && shouldShowPlayerOwnerLock && (
+        <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+          <p>
+            {L.playerQuadrantLockedIntro}{' '}
+            <span className="font-semibold" style={activeOwnerHighlightStyle}>
+              {activeOwnerNameForDisplay}
+            </span>
+            {'. '}
+            {L.playerQuadrantLockedOutro}
+          </p>
         </div>
       )}
       {isMobile && (
