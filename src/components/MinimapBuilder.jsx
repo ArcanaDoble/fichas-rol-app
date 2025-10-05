@@ -2043,7 +2043,7 @@ function MinimapBuilder({
         unsubscribe();
       } catch {}
     };
-  }, []);
+  }, [db, defaultOwner, filterQuadrantsForMode, updateLocalQuadrants]);
   useEffect(() => {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
