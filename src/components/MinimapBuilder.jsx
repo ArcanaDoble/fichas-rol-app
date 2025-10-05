@@ -571,6 +571,66 @@ const buildAnnotationKey = (quadrantId, r, c, scope = '') => {
   return `${base}-${scope}`;
 };
 
+const cellKeyFromIndices = (r, c) => `${r}-${c}`;
+
+const parseCellKey = (key) => {
+  if (typeof key !== 'string') return null;
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('-');
+  if (parts.length !== 2) return null;
+  const r = Number.parseInt(parts[0], 10);
+  const c = Number.parseInt(parts[1], 10);
+  if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
+  return { r, c };
+};
+
+const GRID_STORAGE_VERSION = 'sparse-v1';
+
+const isSparseGridPayload = (value) =>
+  Boolean(
+    value &&
+      typeof value === 'object' &&
+      value.version === GRID_STORAGE_VERSION
+  );
+
+const expandSparseGridMatrix = (payload = {}) => {
+  const safeRows = clampNumber(payload.rows, 1, 200, 8);
+  const safeCols = clampNumber(payload.cols, 1, 200, 12);
+  const defaults = defaultCell();
+  const grid = Array.from({ length: safeRows }, () =>
+    Array.from({ length: safeCols }, () => ({ ...defaults }))
+  );
+  const inactive = new Set();
+  if (Array.isArray(payload.inactive)) {
+    payload.inactive.forEach((key) => {
+      const coords = parseCellKey(key);
+      if (!coords) return;
+      const { r, c } = coords;
+      if (r < 0 || r >= safeRows || c < 0 || c >= safeCols) return;
+      inactive.add(cellKeyFromIndices(r, c));
+      grid[r][c].active = false;
+    });
+  }
+  const cells = payload.cells;
+  if (cells && typeof cells === 'object') {
+    Object.entries(cells).forEach(([key, value]) => {
+      if (!value || typeof value !== 'object') return;
+      const coords = parseCellKey(key);
+      if (!coords) return;
+      const { r, c } = coords;
+      if (r < 0 || r >= safeRows || c < 0 || c >= safeCols) return;
+      const baseCell = grid[r][c];
+      const merged = sanitizeCell({ ...baseCell, ...value });
+      if (inactive.has(key)) {
+        merged.active = false;
+      }
+      grid[r][c] = merged;
+    });
+  }
+  return grid;
+};
+
 const sortNumericEntries = (value) =>
   Object.keys(value || {})
     .map((key) => [Number.parseInt(key, 10), key])
@@ -588,6 +648,9 @@ const normalizeGridRow = (row) => {
 };
 
 const normalizeGridMatrix = (grid) => {
+  if (isSparseGridPayload(grid)) {
+    return expandSparseGridMatrix(grid);
+  }
   if (Array.isArray(grid)) {
     return grid.map((row) => normalizeGridRow(row));
   }
@@ -604,20 +667,6 @@ const getGridCell = (grid, r, c) => {
   const row = Array.isArray(grid[r]) ? grid[r] : null;
   if (!row) return null;
   return row[c] !== undefined ? row[c] : null;
-};
-
-const cellKeyFromIndices = (r, c) => `${r}-${c}`;
-
-const parseCellKey = (key) => {
-  if (typeof key !== 'string') return null;
-  const trimmed = key.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split('-');
-  if (parts.length !== 2) return null;
-  const r = Number.parseInt(parts[0], 10);
-  const c = Number.parseInt(parts[1], 10);
-  if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
-  return { r, c };
 };
 
 const getOrthogonalNeighbors = (r, c) => [
@@ -644,6 +693,67 @@ const sanitizeGridStructure = (grid, rows, cols) => {
     )
   );
   return { rows: safeRows, cols: safeCols, grid: sanitizedGrid };
+};
+
+const serializeGridMatrix = (grid, rows, cols) => {
+  const safeRows = clampNumber(rows, 1, 200, Array.isArray(grid) ? grid.length : 8);
+  const safeCols = clampNumber(
+    cols,
+    1,
+    200,
+    Array.isArray(grid) && grid.length > 0 && Array.isArray(grid[0])
+      ? grid[0].length
+      : 12
+  );
+  const defaults = defaultCell();
+  const inactive = [];
+  const cells = {};
+  for (let r = 0; r < safeRows; r += 1) {
+    const row = Array.isArray(grid) && Array.isArray(grid[r]) ? grid[r] : [];
+    for (let c = 0; c < safeCols; c += 1) {
+      const cell = sanitizeCell(row[c]);
+      const key = cellKeyFromIndices(r, c);
+      if (!cell.active) {
+        inactive.push(key);
+      }
+      const diff = {};
+      if (cell.fill !== defaults.fill) diff.fill = cell.fill;
+      if (cell.borderColor !== defaults.borderColor) {
+        diff.borderColor = cell.borderColor;
+      }
+      if (cell.borderWidth !== defaults.borderWidth) {
+        diff.borderWidth = cell.borderWidth;
+      }
+      if (cell.borderStyle !== defaults.borderStyle) {
+        diff.borderStyle = cell.borderStyle;
+      }
+      if (cell.icon !== defaults.icon) diff.icon = cell.icon;
+      if (cell.iconRotation !== defaults.iconRotation) {
+        diff.iconRotation = cell.iconRotation;
+      }
+      if (
+        cell.effect.type !== defaults.effect.type ||
+        cell.effect.color !== defaults.effect.color
+      ) {
+        diff.effect = { ...cell.effect };
+      }
+      if (Object.keys(diff).length > 0) {
+        cells[key] = diff;
+      }
+    }
+  }
+  const payload = {
+    version: GRID_STORAGE_VERSION,
+    rows: safeRows,
+    cols: safeCols,
+  };
+  if (inactive.length > 0) {
+    payload.inactive = inactive;
+  }
+  if (Object.keys(cells).length > 0) {
+    payload.cells = cells;
+  }
+  return payload;
 };
 
 const sanitizeCellSize = (value) => {
@@ -866,7 +976,7 @@ const prepareQuadrantForLocalStorage = (quadrant) => ({
   rows: quadrant.rows,
   cols: quadrant.cols,
   cellSize: quadrant.cellSize,
-  grid: quadrant.grid,
+  grid: serializeGridMatrix(quadrant.grid, quadrant.rows, quadrant.cols),
   order: quadrant.order,
   owner: quadrant.owner,
   sharedWith: quadrant.sharedWith,
@@ -1982,6 +2092,11 @@ function MinimapBuilder({
             });
             batch.set(doc(db, 'minimapQuadrants', docId), {
               ...sanitized,
+              grid: serializeGridMatrix(
+                sanitized.grid,
+                sanitized.rows,
+                sanitized.cols
+              ),
               updatedAt: serverTimestamp(),
             });
           });
@@ -2043,7 +2158,7 @@ function MinimapBuilder({
         unsubscribe();
       } catch {}
     };
-  }, []);
+  }, [db, defaultOwner, filterQuadrantsForMode, updateLocalQuadrants]);
   useEffect(() => {
     if (isMobile && !readableMode) setReadableMode(true);
   }, [isMobile, readableMode]);
@@ -3428,6 +3543,11 @@ function MinimapBuilder({
     try {
       await setDoc(doc(db, 'minimapQuadrants', newQuadrantId), {
         ...sanitized,
+        grid: serializeGridMatrix(
+          sanitized.grid,
+          sanitized.rows,
+          sanitized.cols
+        ),
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -3600,7 +3720,15 @@ function MinimapBuilder({
     try {
       await setDoc(
         doc(db, 'minimapQuadrants', current.id),
-        { ...sanitized, updatedAt: serverTimestamp() },
+        {
+          ...sanitized,
+          grid: serializeGridMatrix(
+            sanitized.grid,
+            sanitized.rows,
+            sanitized.cols
+          ),
+          updatedAt: serverTimestamp(),
+        },
         {
           merge: true,
         }
@@ -3681,6 +3809,11 @@ function MinimapBuilder({
     try {
       await setDoc(doc(db, 'minimapQuadrants', copyId), {
         ...sanitized,
+        grid: serializeGridMatrix(
+          sanitized.grid,
+          sanitized.rows,
+          sanitized.cols
+        ),
         updatedAt: serverTimestamp(),
       });
       const duplicateAnnotations = async () => {
@@ -3952,7 +4085,14 @@ function MinimapBuilder({
           return;
         }
         try {
-          await setDoc(quadrantDocRef, recreatePayload);
+          await setDoc(quadrantDocRef, {
+            ...recreatePayload,
+            grid: serializeGridMatrix(
+              sanitizedQuadrant.grid,
+              sanitizedQuadrant.rows,
+              sanitizedQuadrant.cols
+            ),
+          });
           synced = true;
         } catch (setError) {
           console.error(
