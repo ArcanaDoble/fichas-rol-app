@@ -176,6 +176,16 @@ let emojiGroupsPromise = null;
 const PING_TTL_MS = 6000;
 const PING_CLEANUP_INTERVAL_MS = 4000;
 
+const buildOwnerHighlightStyle = (ownerKey, displayColor) => {
+  if (ownerKey === 'master') {
+    return {
+      color: MASTER_COLOR,
+      textShadow: `0 0 6px ${MASTER_COLOR}`,
+    };
+  }
+  return { color: displayColor };
+};
+
 const fetchEmojiGroupsFromNetwork = async () => {
   const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
     mode: 'cors',
@@ -1299,15 +1309,10 @@ function MinimapBuilder({
     () => getPlayerColor(activeOwnerNameForDisplay),
     [activeOwnerNameForDisplay]
   );
-  const activeOwnerHighlightStyle = useMemo(() => {
-    if (activeOwnerKey === 'master') {
-      return {
-        color: MASTER_COLOR,
-        textShadow: `0 0 6px ${MASTER_COLOR}`,
-      };
-    }
-    return { color: activeOwnerDisplayColor };
-  }, [activeOwnerDisplayColor, activeOwnerKey]);
+  const activeOwnerHighlightStyle = useMemo(
+    () => buildOwnerHighlightStyle(activeOwnerKey, activeOwnerDisplayColor),
+    [activeOwnerDisplayColor, activeOwnerKey]
+  );
   const isSharedMasterQuadrant = useMemo(() => {
     if (!isPlayerMode) return false;
     return activeOwnerKey === 'master';
@@ -1349,10 +1354,14 @@ function MinimapBuilder({
       return;
     }
     lastReadOnlyToastKeyRef.current = toastKey;
+    const toastHighlightStyle = buildOwnerHighlightStyle(
+      activeOwnerKey,
+      activeOwnerDisplayColor
+    );
     showInfoToast(
       <span className="leading-snug">
         {L.playerQuadrantLockedIntro}{' '}
-        <span className="font-semibold" style={activeOwnerHighlightStyle}>
+        <span className="font-semibold" style={toastHighlightStyle}>
           {activeOwnerNameForDisplay}
         </span>
         {'. '}
@@ -1363,7 +1372,7 @@ function MinimapBuilder({
       }
     );
   }, [
-    activeOwnerHighlightStyle,
+    activeOwnerDisplayColor,
     activeOwnerKey,
     activeOwnerNameForDisplay,
     activeQuadrantId,
