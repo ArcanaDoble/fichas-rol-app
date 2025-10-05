@@ -13,6 +13,7 @@ import { ESTADOS } from './EstadoSelector';
 import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
 import { updateMinimapExplorationCells } from '../utils/minimapExploration';
+import { getPlayerColor, MASTER_COLOR } from '../utils/playerColors';
 import useConfirm from '../hooks/useConfirm';
 import { useToast } from './Toast';
 import * as LucideIcons from 'lucide-react';
@@ -99,6 +100,8 @@ const L = {
   noPlayers: 'Sin jugadores disponibles',
   sharedQuadrantTag: 'Compartido',
   sharedQuadrantHint: 'Asignado por el M\u00E1ster',
+  editingQuadrantLabel: 'Editando',
+  viewingQuadrantLabel: 'Solo lectura',
   explorerMasterHint:
     'Controla qu\u00E9 zonas descubre el modo explorador compartido.',
   explorerMasterToggle: 'Herramientas del m\u00E1ster',
@@ -108,6 +111,11 @@ const L = {
   explorerHideSelection: 'Ocultar selecci\u00F3n',
   masterQuadrantLocked:
     'Este cuadrante fue compartido por el M\u00E1ster y es de solo lectura.',
+  playerQuadrantLockedTitle: 'Cuadrante de otro jugador',
+  playerQuadrantLockedIntro: 'Este cuadrante pertenece a',
+  playerQuadrantLockedOutro:
+    'No puedes modificarlo ni eliminarlo a menos que esa persona te otorgue permisos.',
+  playerQuadrantLockedUnknown: 'otro jugador',
   unsavedChangesConfirm:
     'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
   unsavedChangesIndicator: 'Cambios sin guardar en el cuadrante actual',
@@ -167,6 +175,16 @@ let emojiGroupsPromise = null;
 
 const PING_TTL_MS = 6000;
 const PING_CLEANUP_INTERVAL_MS = 4000;
+
+const buildOwnerHighlightStyle = (ownerKey, displayColor) => {
+  if (ownerKey === 'master') {
+    return {
+      color: MASTER_COLOR,
+      textShadow: `0 0 6px ${MASTER_COLOR}`,
+    };
+  }
+  return { color: displayColor };
+};
 
 const fetchEmojiGroupsFromNetwork = async () => {
   const res = await fetch('https://unpkg.com/emoji.json/emoji.json', {
@@ -1142,7 +1160,7 @@ function MinimapBuilder({
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   const pendingSharedWithRef = useRef(null);
-  const { error: showErrorToast } = useToast();
+  const { error: showErrorToast, info: showInfoToast } = useToast();
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
@@ -1239,6 +1257,30 @@ function MinimapBuilder({
     () => normalizePlayerName(activeQuadrantOwner),
     [activeQuadrantOwner]
   );
+  const activeOwnerDisplayName = useMemo(() => {
+    if (typeof activeQuadrantOwner !== 'string') return '';
+    const trimmed = activeQuadrantOwner.trim();
+    if (!trimmed) return '';
+    if (normalizePlayerName(trimmed) === 'master') {
+      return 'Máster';
+    }
+    return trimmed;
+  }, [activeQuadrantOwner]);
+  const activeOwnerNameForDisplay = useMemo(() => {
+    if (activeOwnerDisplayName) return activeOwnerDisplayName;
+    if (typeof activeQuadrantOwner === 'string' && activeQuadrantOwner.trim()) {
+      return activeQuadrantOwner.trim();
+    }
+    return L.playerQuadrantLockedUnknown;
+  }, [activeQuadrantOwner, activeOwnerDisplayName]);
+  const activeOwnerDisplayColor = useMemo(
+    () => getPlayerColor(activeOwnerNameForDisplay),
+    [activeOwnerNameForDisplay]
+  );
+  const activeOwnerHighlightStyle = useMemo(
+    () => buildOwnerHighlightStyle(activeOwnerKey, activeOwnerDisplayColor),
+    [activeOwnerDisplayColor, activeOwnerKey]
+  );
   const isSharedMasterQuadrant = useMemo(() => {
     if (!isPlayerMode) return false;
     return activeOwnerKey === 'master';
@@ -1256,6 +1298,55 @@ function MinimapBuilder({
     if (!normalizedPlayerName) return false;
     return activeOwnerKey === normalizedPlayerName;
   }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  const shouldShowPlayerOwnerLock = useMemo(
+    () =>
+      isPlayerMode &&
+      !canEditActiveQuadrant &&
+      activeOwnerKey !== 'master' &&
+      activeOwnerKey !== normalizedPlayerName,
+    [
+      activeOwnerKey,
+      canEditActiveQuadrant,
+      isPlayerMode,
+      normalizedPlayerName,
+    ]
+  );
+  useEffect(() => {
+    if (!shouldShowPlayerOwnerLock) {
+      lastReadOnlyToastKeyRef.current = '';
+      return;
+    }
+    if (!activeQuadrantId) return;
+    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
+    if (lastReadOnlyToastKeyRef.current === toastKey) {
+      return;
+    }
+    lastReadOnlyToastKeyRef.current = toastKey;
+    const toastHighlightStyle = buildOwnerHighlightStyle(
+      activeOwnerKey,
+      activeOwnerDisplayColor
+    );
+    showInfoToast(
+      <span className="leading-snug">
+        {L.playerQuadrantLockedIntro}{' '}
+        <span className="font-semibold" style={toastHighlightStyle}>
+          {activeOwnerNameForDisplay}
+        </span>
+        {'. '}
+        {L.playerQuadrantLockedOutro}
+      </span>,
+      {
+        title: L.playerQuadrantLockedTitle,
+      }
+    );
+  }, [
+    activeOwnerDisplayColor,
+    activeOwnerKey,
+    activeOwnerNameForDisplay,
+    activeQuadrantId,
+    showInfoToast,
+    shouldShowPlayerOwnerLock,
+  ]);
   const canAnnotateActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
     if (!normalizedPlayerName) return false;
@@ -1818,6 +1909,7 @@ function MinimapBuilder({
   const headerSectionRef = useRef(null);
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
+  const lastReadOnlyToastKeyRef = useRef('');
   const lastLongPressRef = useRef({ key: null, t: 0 });
   const activePanPointerRef = useRef(null);
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -4208,6 +4300,18 @@ function MinimapBuilder({
           {L.masterQuadrantLocked}
         </div>
       )}
+      {!isSharedMasterQuadrant && shouldShowPlayerOwnerLock && (
+        <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+          <p>
+            {L.playerQuadrantLockedIntro}{' '}
+            <span className="font-semibold" style={activeOwnerHighlightStyle}>
+              {activeOwnerNameForDisplay}
+            </span>
+            {'. '}
+            {L.playerQuadrantLockedOutro}
+          </p>
+        </div>
+      )}
       {isMobile && (
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -4413,8 +4517,15 @@ function MinimapBuilder({
           </div>
         )}
         {currentQuadrantIndex !== null && (
-          <div className="text-xs text-emerald-400">
-            Editando: {quadrants[currentQuadrantIndex]?.title}
+          <div
+            className={`text-xs ${
+              canEditActiveQuadrant ? 'text-emerald-400' : 'text-sky-200'
+            }`}
+          >
+            {canEditActiveQuadrant
+              ? `${L.editingQuadrantLabel}: `
+              : `${L.viewingQuadrantLabel}: `}
+            {quadrants[currentQuadrantIndex]?.title}
           </div>
         )}
         {currentQuadrantIndex !== null && hasUnsavedChanges && (
@@ -4770,6 +4881,24 @@ function MinimapBuilder({
                 )}
               </div>
             )}
+          </div>
+        )}
+        {!isSharedMasterQuadrant && shouldShowPlayerOwnerLock && (
+          <div className="flex items-start gap-3 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner">
+            <LucideIcons.Lock className="mt-1 h-4 w-4 text-sky-300" />
+            <div className="flex flex-col gap-1 leading-snug">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                {L.playerQuadrantLockedTitle}
+              </span>
+              <span className="text-xs text-sky-100/90">
+                {L.playerQuadrantLockedIntro}{' '}
+                <span className="font-semibold" style={activeOwnerHighlightStyle}>
+                  {activeOwnerNameForDisplay}
+                </span>
+                {'. '}
+                {L.playerQuadrantLockedOutro}
+              </span>
+            </div>
           </div>
         )}
       </div>
