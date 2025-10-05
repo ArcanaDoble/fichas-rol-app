@@ -14,6 +14,7 @@ import HexColorInput from './HexColorInput';
 import { getOrUploadFile } from '../utils/storage';
 import { updateMinimapExplorationCells } from '../utils/minimapExploration';
 import useConfirm from '../hooks/useConfirm';
+import { useToast } from './Toast';
 import * as LucideIcons from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -23,6 +24,7 @@ import {
   onSnapshot,
   doc,
   setDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
@@ -831,6 +833,10 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     data.rows,
     data.cols
   );
+  const sharedWith = sanitizeSharedWith(data.sharedWith);
+  const sharedWithKeys = sharedWith
+    .map((entry) => normalizePlayerName(entry))
+    .filter(Boolean);
   return {
     title: sanitizeTitle(data.title, titleFallback),
     rows,
@@ -839,7 +845,8 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     grid,
     order: sanitizeOrder(data.order, orderFallback),
     owner: sanitizeOwner(data.owner, ownerFallback),
-    sharedWith: sanitizeSharedWith(data.sharedWith),
+    sharedWith,
+    sharedWithKeys,
   };
 };
 
@@ -863,6 +870,7 @@ const prepareQuadrantForLocalStorage = (quadrant) => ({
   order: quadrant.order,
   owner: quadrant.owner,
   sharedWith: quadrant.sharedWith,
+  sharedWithKeys: quadrant.sharedWithKeys,
 });
 
 const persistQuadrantsToLocalStorage = (items) => {
@@ -1024,6 +1032,7 @@ function MinimapBuilder({
   const [currentQuadrantIndex, setCurrentQuadrantIndex] = useState(null);
   const localQuadrantsRef = useRef(null);
   const pendingSharedWithRef = useRef(null);
+  const { error: showErrorToast } = useToast();
   if (localQuadrantsRef.current === null) {
     localQuadrantsRef.current = quadrants;
   }
@@ -1040,6 +1049,12 @@ function MinimapBuilder({
         }
         if (!normalizedPlayerName) {
           return false;
+        }
+        const sharedKeys = Array.isArray(item?.sharedWithKeys)
+          ? item.sharedWithKeys.filter((key) => typeof key === 'string' && key)
+          : [];
+        if (sharedKeys.length > 0) {
+          return sharedKeys.some((key) => key === normalizedPlayerName);
         }
         const sharedWith = Array.isArray(item?.sharedWith)
           ? item.sharedWith
@@ -3842,70 +3857,172 @@ function MinimapBuilder({
       ) {
         return;
       }
-      const sanitized = sanitizeSharedWith(nextSharedWith);
-      const currentQuadrant = quadrants.find(
+      const sanitizedSharedWith = sanitizeSharedWith(nextSharedWith);
+      const currentQuadrantIndex = quadrants.findIndex(
         (item) => (item?.id || 'default') === activeQuadrantId
       );
+      const currentQuadrant =
+        currentQuadrantIndex === -1 ? null : quadrants[currentQuadrantIndex];
+      if (!currentQuadrant) {
+        return;
+      }
+      const fallbackTitle =
+        currentQuadrant?.title ||
+        `Cuadrante ${
+          currentQuadrantIndex === -1 ? 1 : currentQuadrantIndex + 1
+        }`;
+      const fallbackOrder = Number.isFinite(currentQuadrant?.order)
+        ? currentQuadrant.order
+        : currentQuadrantIndex === -1
+          ? 0
+          : currentQuadrantIndex;
+      const fallbackOwner = sanitizeOwner(
+        currentQuadrant?.owner,
+        defaultOwner
+      );
+      const sanitizedQuadrant = sanitizeQuadrantValues(
+        {
+          ...currentQuadrant,
+          sharedWith: sanitizedSharedWith,
+        },
+        {
+          titleFallback: fallbackTitle,
+          orderFallback: fallbackOrder,
+          ownerFallback: fallbackOwner,
+        }
+      );
+      const quadrantSnapshot = createQuadrantSnapshot(sanitizedQuadrant);
+      const sharedWithKeys = Array.isArray(sanitizedQuadrant.sharedWithKeys)
+        ? sanitizedQuadrant.sharedWithKeys
+        : sanitizedQuadrant.sharedWith
+            .map((entry) => normalizePlayerName(entry))
+            .filter(Boolean);
+      const recreatePayload = {
+        ...sanitizedQuadrant,
+        sharedWithKeys,
+        updatedAt: serverTimestamp(),
+      };
+      if (currentQuadrant?.createdAt) {
+        recreatePayload.createdAt = currentQuadrant.createdAt;
+      }
       const matchesCurrent = sharedWithEquals(
         currentQuadrant?.sharedWith,
-        sanitized
+        sanitizedQuadrant.sharedWith
       );
       const matchesSnapshot = sharedWithEquals(
         loadedQuadrantData?.sharedWith,
-        sanitized
+        sanitizedQuadrant.sharedWith
       );
       if (matchesCurrent && matchesSnapshot) {
         return;
       }
       if (matchesCurrent && !matchesSnapshot) {
-        setLoadedQuadrantData((prev) => {
-          if (!prev) return prev;
-          if (sharedWithEquals(prev.sharedWith, sanitized)) return prev;
-          return { ...prev, sharedWith: sanitized };
-        });
+        setLoadedQuadrantData((prev) =>
+          quadrantSnapshotsEqual(prev, quadrantSnapshot) ? prev : quadrantSnapshot
+        );
         return;
       }
+      const quadrantDocRef = doc(db, 'minimapQuadrants', activeQuadrantId);
+      let synced = false;
+      let localUpdatedAt = null;
       try {
-        await setDoc(
-          doc(db, 'minimapQuadrants', activeQuadrantId),
-          { sharedWith: sanitized, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
-        setLoadedQuadrantData((prev) => {
-          if (!prev) return prev;
-          if (sharedWithEquals(prev.sharedWith, sanitized)) return prev;
-          return { ...prev, sharedWith: sanitized };
+        await updateDoc(quadrantDocRef, {
+          sharedWith: sanitizedQuadrant.sharedWith,
+          sharedWithKeys,
+          updatedAt: serverTimestamp(),
         });
-        setQuadrants((prev) => {
-          let hasChanges = false;
-          const nextState = prev.map((item) => {
-            if ((item?.id || 'default') !== activeQuadrantId) {
-              return item;
-            }
-            if (sharedWithEquals(item?.sharedWith, sanitized)) {
-              return item;
-            }
-            hasChanges = true;
-            return { ...item, sharedWith: sanitized };
-          });
-          if (!hasChanges) {
-            return prev;
+        synced = true;
+      } catch (updateError) {
+        const updateErrorCode =
+          typeof updateError?.code === 'string' ? updateError.code : '';
+        const updateMessage =
+          typeof updateError?.message === 'string' ? updateError.message : '';
+        const normalizedErrorCode = updateErrorCode
+          .toLowerCase()
+          .replace(/_/g, '-');
+        const missingDocument =
+          normalizedErrorCode === 'not-found' ||
+          normalizedErrorCode === 'failed-precondition' ||
+          updateMessage.toLowerCase().includes('no document to update');
+        if (!missingDocument) {
+          console.error('Error updating minimap quadrant sharing', updateError);
+          if (showErrorToast) {
+            showErrorToast('No se pudieron guardar los permisos del cuadrante.');
           }
-          const filtered = filterQuadrantsForMode(nextState);
-          updateLocalQuadrants(filtered);
-          return filtered;
-        });
-      } catch (error) {
-        console.error('Error updating minimap quadrant sharing', error);
+          return;
+        }
+        try {
+          await setDoc(quadrantDocRef, recreatePayload);
+          synced = true;
+        } catch (setError) {
+          console.error(
+            'Error recreating minimap quadrant after missing document',
+            setError
+          );
+          console.error('Error updating minimap quadrant sharing', updateError);
+          if (showErrorToast) {
+            showErrorToast('No se pudieron guardar los permisos del cuadrante.');
+          }
+          return;
+        }
       }
+      if (!synced) {
+        return;
+      }
+      localUpdatedAt = new Date().toISOString();
+      setLoadedQuadrantData((prev) =>
+        quadrantSnapshotsEqual(prev, quadrantSnapshot) ? prev : quadrantSnapshot
+      );
+      setQuadrants((prev) => {
+        let hasChanges = false;
+        const nextState = prev.map((item) => {
+          if ((item?.id || 'default') !== activeQuadrantId) {
+            return item;
+          }
+          const nextQuadrant = {
+            ...item,
+            ...sanitizedQuadrant,
+            updatedAt: localUpdatedAt || item?.updatedAt || null,
+          };
+          const sameSharedWith = sharedWithEquals(
+            item?.sharedWith,
+            sanitizedQuadrant.sharedWith
+          );
+          const sameSharedKeys = arraysShallowEqual(
+            Array.isArray(item?.sharedWithKeys) ? item.sharedWithKeys : [],
+            sharedWithKeys
+          );
+          const sameSnapshot = quadrantSnapshotsEqual(
+            createQuadrantSnapshot(item),
+            quadrantSnapshot
+          );
+          const sameMeta =
+            item.title === nextQuadrant.title &&
+            item.order === nextQuadrant.order &&
+            item.owner === nextQuadrant.owner;
+          if (sameSharedWith && sameSharedKeys && sameSnapshot && sameMeta) {
+            return item;
+          }
+          hasChanges = true;
+          return nextQuadrant;
+        });
+        if (!hasChanges) {
+          return prev;
+        }
+        const filtered = filterQuadrantsForMode(nextState);
+        updateLocalQuadrants(filtered);
+        return filtered;
+      });
     },
     [
       activeQuadrantId,
       db,
+      defaultOwner,
       filterQuadrantsForMode,
       isPlayerMode,
       loadedQuadrantData,
       quadrants,
+      showErrorToast,
       updateLocalQuadrants,
     ]
   );
