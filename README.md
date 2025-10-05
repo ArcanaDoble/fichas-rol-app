@@ -1719,6 +1719,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 ## 🐛 Correcciones
 
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
+- Se corrigió la sincronización de cuadrantes del minimapa para que todos los dispositivos y navegadores compartan siempre la misma lista guardada a través de Firestore.
 - Se solucionó que el aviso de cambios sin guardar del minimapa siguiera apareciendo después de guardar cuadrantes o ajustar la flecha de origen.
 - Se restableció el estado de cambios sin guardar tras recibir actualizaciones remotas, evitando que los cuadrantes compartidos perdieran estilos u origen al recargarlos.
 - Se corrigió la carga de cuadrantes del minimapa cuando Firestore devolvía la cuadrícula como objeto en lugar de matriz, evitando que se reiniciara tras guardar y recargar.
