@@ -1705,7 +1705,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 - Buscadores de emojis y Lucide con listado completo de iconos cargados localmente.
 - Nueva categoría «Recursos» que añade al selector los iconos de objetos personalizados del inventario creados desde las herramientas de máster.
 - Permisos de cuadrantes: el máster puede asignar cuadrantes a jugadores desde la sección «Permisos» y estos aparecen destacados como compartidos y de solo lectura en sus listas.
-- Aviso contextual para jugadores al abrir cuadrantes de otros jugadores: destaca con su color quién es el autor y que no podrán editarlo ni eliminarlo hasta recibir permisos.
+- Aviso contextual para jugadores al abrir cuadrantes de otros jugadores: destaca con su color quién es el autor y que no podrán editarlo ni eliminarlo hasta recibir permisos, además de mostrar una alerta fija sobre el lienzo con esa información en modo solo lectura.
 - Los jugadores pueden añadir anotaciones en cuadrantes compartidos; el máster las ve con un distintivo y sus propias notas permanecen ocultas para los jugadores.
 - Nuevo modo explorador para jugadores en cuadrantes compartidos: empiezan en la casilla de origen, ven las adyacentes como incógnitas y pueden descubrir el cuadrante de forma progresiva.
 - Estilo rápido «Origen» exclusivo del máster para marcar la casilla de inicio con una flecha orientable (arriba, abajo, izquierda o derecha).

@@ -100,6 +100,8 @@ const L = {
   noPlayers: 'Sin jugadores disponibles',
   sharedQuadrantTag: 'Compartido',
   sharedQuadrantHint: 'Asignado por el M\u00E1ster',
+  editingQuadrantLabel: 'Editando',
+  viewingQuadrantLabel: 'Solo lectura',
   explorerMasterHint:
     'Controla qu\u00E9 zonas descubre el modo explorador compartido.',
   explorerMasterToggle: 'Herramientas del m\u00E1ster',
@@ -1327,7 +1329,6 @@ function MinimapBuilder({
     () =>
       isPlayerMode &&
       !canEditActiveQuadrant &&
-      activeOwnerKey &&
       activeOwnerKey !== 'master' &&
       activeOwnerKey !== normalizedPlayerName,
     [
@@ -4507,8 +4508,15 @@ function MinimapBuilder({
           </div>
         )}
         {currentQuadrantIndex !== null && (
-          <div className="text-xs text-emerald-400">
-            Editando: {quadrants[currentQuadrantIndex]?.title}
+          <div
+            className={`text-xs ${
+              canEditActiveQuadrant ? 'text-emerald-400' : 'text-sky-200'
+            }`}
+          >
+            {canEditActiveQuadrant
+              ? `${L.editingQuadrantLabel}: `
+              : `${L.viewingQuadrantLabel}: `}
+            {quadrants[currentQuadrantIndex]?.title}
           </div>
         )}
         {currentQuadrantIndex !== null && hasUnsavedChanges && (
@@ -4864,6 +4872,24 @@ function MinimapBuilder({
                 )}
               </div>
             )}
+          </div>
+        )}
+        {!isSharedMasterQuadrant && shouldShowPlayerOwnerLock && (
+          <div className="flex items-start gap-3 rounded-xl border border-sky-500/40 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 shadow-inner">
+            <LucideIcons.Lock className="mt-1 h-4 w-4 text-sky-300" />
+            <div className="flex flex-col gap-1 leading-snug">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                {L.playerQuadrantLockedTitle}
+              </span>
+              <span className="text-xs text-sky-100/90">
+                {L.playerQuadrantLockedIntro}{' '}
+                <span className="font-semibold" style={activeOwnerHighlightStyle}>
+                  {activeOwnerNameForDisplay}
+                </span>
+                {'. '}
+                {L.playerQuadrantLockedOutro}
+              </span>
+            </div>
           </div>
         )}
       </div>
