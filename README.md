@@ -66,6 +66,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Pings temporales en el minimapa** - Haz doble clic o Alt+clic sobre una celda para resaltar su posición con una animación breve sincronizada
 - **Exploración compartida persistente** - Las casillas reveladas en el modo explorador se sincronizan al instante entre máster y jugadores y se conservan al recargar o cambiar de dispositivo
 - **Compartición instantánea de cuadrantes** - Al añadir o quitar jugadores compartidos desde el máster, los permisos se guardan automáticamente en Firebase y llegan al instante a los clientes autorizados
+- **Permisos de cuadrantes reforzados** - Los jugadores compartidos se almacenan normalizados en Firebase para que los navegadores de escritorio reciban los cuadrantes asignados sin inconsistencias
 - **Anotaciones por cuadrante** - Cada cuadrante guarda sus notas con un identificador persistente en Firestore y las migraciones de datos antiguos se aplican automáticamente en memoria
 - **Panel maestro de notas** - Revisa y gestiona todas las anotaciones de un cuadrante desde un resumen consolidado
 

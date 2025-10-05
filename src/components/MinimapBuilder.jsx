@@ -833,6 +833,10 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     data.rows,
     data.cols
   );
+  const sharedWith = sanitizeSharedWith(data.sharedWith);
+  const sharedWithKeys = sharedWith
+    .map((entry) => normalizePlayerName(entry))
+    .filter(Boolean);
   return {
     title: sanitizeTitle(data.title, titleFallback),
     rows,
@@ -841,7 +845,8 @@ const sanitizeQuadrantValues = (data = {}, options = {}) => {
     grid,
     order: sanitizeOrder(data.order, orderFallback),
     owner: sanitizeOwner(data.owner, ownerFallback),
-    sharedWith: sanitizeSharedWith(data.sharedWith),
+    sharedWith,
+    sharedWithKeys,
   };
 };
 
@@ -865,6 +870,7 @@ const prepareQuadrantForLocalStorage = (quadrant) => ({
   order: quadrant.order,
   owner: quadrant.owner,
   sharedWith: quadrant.sharedWith,
+  sharedWithKeys: quadrant.sharedWithKeys,
 });
 
 const persistQuadrantsToLocalStorage = (items) => {
@@ -1043,6 +1049,12 @@ function MinimapBuilder({
         }
         if (!normalizedPlayerName) {
           return false;
+        }
+        const sharedKeys = Array.isArray(item?.sharedWithKeys)
+          ? item.sharedWithKeys.filter((key) => typeof key === 'string' && key)
+          : [];
+        if (sharedKeys.length > 0) {
+          return sharedKeys.some((key) => key === normalizedPlayerName);
         }
         const sharedWith = Array.isArray(item?.sharedWith)
           ? item.sharedWith
@@ -3880,8 +3892,14 @@ function MinimapBuilder({
         }
       );
       const quadrantSnapshot = createQuadrantSnapshot(sanitizedQuadrant);
+      const sharedWithKeys = Array.isArray(sanitizedQuadrant.sharedWithKeys)
+        ? sanitizedQuadrant.sharedWithKeys
+        : sanitizedQuadrant.sharedWith
+            .map((entry) => normalizePlayerName(entry))
+            .filter(Boolean);
       const recreatePayload = {
         ...sanitizedQuadrant,
+        sharedWithKeys,
         updatedAt: serverTimestamp(),
       };
       if (currentQuadrant?.createdAt) {
@@ -3910,6 +3928,7 @@ function MinimapBuilder({
       try {
         await updateDoc(quadrantDocRef, {
           sharedWith: sanitizedQuadrant.sharedWith,
+          sharedWithKeys,
           updatedAt: serverTimestamp(),
         });
         synced = true;
@@ -3969,6 +3988,10 @@ function MinimapBuilder({
             item?.sharedWith,
             sanitizedQuadrant.sharedWith
           );
+          const sameSharedKeys = arraysShallowEqual(
+            Array.isArray(item?.sharedWithKeys) ? item.sharedWithKeys : [],
+            sharedWithKeys
+          );
           const sameSnapshot = quadrantSnapshotsEqual(
             createQuadrantSnapshot(item),
             quadrantSnapshot
@@ -3977,7 +4000,7 @@ function MinimapBuilder({
             item.title === nextQuadrant.title &&
             item.order === nextQuadrant.order &&
             item.owner === nextQuadrant.owner;
-          if (sameSharedWith && sameSnapshot && sameMeta) {
+          if (sameSharedWith && sameSharedKeys && sameSnapshot && sameMeta) {
             return item;
           }
           hasChanges = true;
