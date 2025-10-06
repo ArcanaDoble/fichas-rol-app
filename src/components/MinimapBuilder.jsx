@@ -115,6 +115,9 @@ const L = {
   playerQuadrantLockedIntro: 'Este cuadrante pertenece a',
   playerQuadrantLockedOutro:
     'No puedes modificarlo ni eliminarlo a menos que esa persona te otorgue permisos.',
+  playerQuadrantSharedEditTitle: 'Cuadrante compartido',
+  playerQuadrantSharedEditIntro: 'Estás editando el cuadrante de',
+  playerQuadrantSharedEditOutro: 'Los cambios se guardarán en su mapa original.',
   playerQuadrantLockedUnknown: 'otro jugador',
   unsavedChangesConfirm:
     'Tienes cambios sin guardar en el cuadrante actual. ¿Quieres continuar?',
@@ -1146,6 +1149,18 @@ function MinimapBuilder({
     () => normalizePlayerName(trimmedPlayerName),
     [trimmedPlayerName]
   );
+  const selectablePlayers = useMemo(
+    () =>
+      playersList.filter((name) => {
+        const key = normalizePlayerName(name);
+        if (!key) return false;
+        if (isPlayerMode && normalizedPlayerName) {
+          return key !== normalizedPlayerName;
+        }
+        return true;
+      }),
+    [playersList, isPlayerMode, normalizedPlayerName]
+  );
   const customizationDocRef = useMemo(
     () => doc(db, 'minimapSettings', 'customization'),
     [db]
@@ -1285,6 +1300,17 @@ function MinimapBuilder({
     if (!isPlayerMode) return false;
     return activeOwnerKey === 'master';
   }, [isPlayerMode, activeOwnerKey]);
+  const activeSharedWithKeys = useMemo(
+    () =>
+      sanitizeSharedWith(activeQuadrantSharedWith)
+        .map((entry) => normalizePlayerName(entry))
+        .filter((key) => !!key),
+    [activeQuadrantSharedWith]
+  );
+  const activeSharedWithKeySet = useMemo(
+    () => new Set(activeSharedWithKeys),
+    [activeSharedWithKeys]
+  );
   const isMasterSharingQuadrant = useMemo(() => {
     if (isPlayerMode) return false;
     return Array.isArray(activeQuadrantSharedWith)
@@ -1296,8 +1322,26 @@ function MinimapBuilder({
     if (!activeOwnerKey) return true;
     if (activeOwnerKey === 'master') return false;
     if (!normalizedPlayerName) return false;
+    if (activeOwnerKey === normalizedPlayerName) return true;
+    return activeSharedWithKeySet.has(normalizedPlayerName);
+  }, [
+    activeOwnerKey,
+    activeSharedWithKeySet,
+    isPlayerMode,
+    normalizedPlayerName,
+  ]);
+  const canManageQuadrantSharing = useMemo(() => {
+    if (!isPlayerMode) return true;
+    if (!normalizedPlayerName) return false;
+    if (!activeQuadrantId || activeQuadrantId === 'default') return false;
+    if (!activeOwnerKey) return true;
     return activeOwnerKey === normalizedPlayerName;
-  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+  }, [
+    activeOwnerKey,
+    activeQuadrantId,
+    isPlayerMode,
+    normalizedPlayerName,
+  ]);
   const shouldShowPlayerOwnerLock = useMemo(
     () =>
       isPlayerMode &&
@@ -1311,38 +1355,20 @@ function MinimapBuilder({
       normalizedPlayerName,
     ]
   );
-  useEffect(() => {
-    if (!shouldShowPlayerOwnerLock) {
-      lastReadOnlyToastKeyRef.current = '';
-      return;
-    }
-    if (!activeQuadrantId) return;
-    const toastKey = `${activeQuadrantId}:${activeOwnerKey}`;
-    if (lastReadOnlyToastKeyRef.current === toastKey) {
-      return;
-    }
-    lastReadOnlyToastKeyRef.current = toastKey;
-    showInfoToast(
-      <span className="leading-snug">
-        {L.playerQuadrantLockedIntro}{' '}
-        <span className="font-semibold" style={activeOwnerHighlightStyle}>
-          {activeOwnerNameForDisplay}
-        </span>
-        {'. '}
-        {L.playerQuadrantLockedOutro}
-      </span>,
-      {
-        title: L.playerQuadrantLockedTitle,
-      }
-    );
-  }, [
-    activeOwnerHighlightStyle,
-    activeOwnerKey,
-    activeOwnerNameForDisplay,
-    activeQuadrantId,
-    showInfoToast,
-    shouldShowPlayerOwnerLock,
-  ]);
+  const shouldShowPlayerOwnerNotice = useMemo(
+    () =>
+      isPlayerMode &&
+      canEditActiveQuadrant &&
+      activeOwnerKey !== 'master' &&
+      activeOwnerKey &&
+      activeOwnerKey !== normalizedPlayerName,
+    [
+      activeOwnerKey,
+      canEditActiveQuadrant,
+      isPlayerMode,
+      normalizedPlayerName,
+    ]
+  );
   useEffect(() => {
     if (!shouldShowPlayerOwnerLock) {
       lastReadOnlyToastKeyRef.current = '';
@@ -1365,12 +1391,12 @@ function MinimapBuilder({
           {activeOwnerNameForDisplay}
         </span>
         {'. '}
-        {L.playerQuadrantLockedOutro}
-      </span>,
-      {
-        title: L.playerQuadrantLockedTitle,
-      }
-    );
+      {L.playerQuadrantLockedOutro}
+    </span>,
+    {
+      title: L.playerQuadrantLockedTitle,
+    }
+  );
   }, [
     activeOwnerDisplayColor,
     activeOwnerKey,
@@ -1379,14 +1405,55 @@ function MinimapBuilder({
     showInfoToast,
     shouldShowPlayerOwnerLock,
   ]);
+  useEffect(() => {
+    if (!shouldShowPlayerOwnerNotice) {
+      lastSharedEditToastKeyRef.current = '';
+      return;
+    }
+    if (!activeQuadrantId) return;
+    const toastKey = `${activeQuadrantId}:${activeOwnerKey}:shared-edit`;
+    if (lastSharedEditToastKeyRef.current === toastKey) {
+      return;
+    }
+    lastSharedEditToastKeyRef.current = toastKey;
+    const toastHighlightStyle = buildOwnerHighlightStyle(
+      activeOwnerKey,
+      activeOwnerDisplayColor
+    );
+    showInfoToast(
+      <span className="leading-snug">
+        {L.playerQuadrantSharedEditIntro}{' '}
+        <span className="font-semibold" style={toastHighlightStyle}>
+          {activeOwnerNameForDisplay}
+        </span>
+        {'. '}
+        {L.playerQuadrantSharedEditOutro}
+      </span>,
+      {
+        title: L.playerQuadrantSharedEditTitle,
+      }
+    );
+  }, [
+    activeOwnerDisplayColor,
+    activeOwnerKey,
+    activeOwnerNameForDisplay,
+    activeQuadrantId,
+    showInfoToast,
+    shouldShowPlayerOwnerNotice,
+  ]);
   const canAnnotateActiveQuadrant = useMemo(() => {
     if (!isPlayerMode) return true;
     if (!normalizedPlayerName) return false;
     if (!activeOwnerKey) return true;
-    return (
-      activeOwnerKey === normalizedPlayerName || activeOwnerKey === 'master'
-    );
-  }, [isPlayerMode, activeOwnerKey, normalizedPlayerName]);
+    if (activeOwnerKey === 'master') return true;
+    if (activeOwnerKey === normalizedPlayerName) return true;
+    return activeSharedWithKeySet.has(normalizedPlayerName);
+  }, [
+    activeOwnerKey,
+    activeSharedWithKeySet,
+    isPlayerMode,
+    normalizedPlayerName,
+  ]);
   const playerAnnotationKey = useMemo(() => {
     if (!isPlayerMode) return 'master';
     if (!normalizedPlayerName) return '';
@@ -1942,6 +2009,7 @@ function MinimapBuilder({
   const skipRebuildRef = useRef(false);
   const longPressTimersRef = useRef(new Map());
   const lastReadOnlyToastKeyRef = useRef('');
+  const lastSharedEditToastKeyRef = useRef('');
   const lastLongPressRef = useRef({ key: null, t: 0 });
   const activePanPointerRef = useRef(null);
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -2043,10 +2111,6 @@ function MinimapBuilder({
     }
   }, [isMobile]);
   useEffect(() => {
-    if (isPlayerMode) {
-      setPlayersList([]);
-      return undefined;
-    }
     const playersRef = collection(db, 'players');
     const unsubscribe = onSnapshot(
       playersRef,
@@ -2076,11 +2140,32 @@ function MinimapBuilder({
         unsubscribe();
       } catch {}
     };
-  }, [db, isPlayerMode]);
+  }, [db]);
   useEffect(() => {
-    if (isPlayerMode) return;
-    if (playersList.length === 0) return;
-    const allowed = new Set(playersList.map((name) => normalizePlayerName(name)));
+    if (playersList.length === 0) {
+      setActiveQuadrantSharedWith((prev) => {
+        const sanitized = sanitizeSharedWith(prev);
+        if (sanitized.length === prev.length) {
+          let unchanged = true;
+          for (let i = 0; i < sanitized.length; i += 1) {
+            if (sanitized[i] !== prev[i]) {
+              unchanged = false;
+              break;
+            }
+          }
+          if (unchanged) {
+            return prev;
+          }
+        }
+        return sanitized;
+      });
+      return;
+    }
+    const allowed = new Set(
+      selectablePlayers
+        .map((name) => normalizePlayerName(name))
+        .filter((key) => !!key)
+    );
     setActiveQuadrantSharedWith((prev) => {
       const sanitized = sanitizeSharedWith(prev);
       const filtered = sanitized.filter((name) =>
@@ -2100,7 +2185,7 @@ function MinimapBuilder({
       }
       return filtered;
     });
-  }, [isPlayerMode, playersList]);
+  }, [playersList, selectablePlayers]);
   useEffect(() => {
     setGrid((prev) => buildGrid(rows, cols, prev));
   }, [rows, cols]);
@@ -4076,9 +4161,12 @@ function MinimapBuilder({
     (c > 0 && grid[r][c - 1]?.active) ||
     (c < cols - 1 && grid[r][c + 1]?.active);
   const toggleQuadrantPlayer = (name) => {
-    if (isPlayerMode) return;
+    if (!canManageQuadrantSharing) return;
     const normalized = normalizePlayerName(name);
     if (!normalized) return;
+    if (isPlayerMode && normalizedPlayerName && normalized === normalizedPlayerName) {
+      return;
+    }
     let nextSharedWith = null;
     setActiveQuadrantSharedWith((prev) => {
       const sanitized = sanitizeSharedWith(prev);
@@ -4107,7 +4195,7 @@ function MinimapBuilder({
   const persistQuadrantSharedWith = useCallback(
     async (nextSharedWith) => {
       if (
-        isPlayerMode ||
+        !canManageQuadrantSharing ||
         !Array.isArray(nextSharedWith) ||
         !activeQuadrantId ||
         activeQuadrantId === 'default'
@@ -4280,10 +4368,10 @@ function MinimapBuilder({
     },
     [
       activeQuadrantId,
+      canManageQuadrantSharing,
       db,
       defaultOwner,
       filterQuadrantsForMode,
-      isPlayerMode,
       loadedQuadrantData,
       quadrants,
       showErrorToast,
@@ -4292,7 +4380,7 @@ function MinimapBuilder({
   );
 
   useEffect(() => {
-    if (isPlayerMode) return;
+    if (!canManageQuadrantSharing) return;
     const pending = pendingSharedWithRef.current;
     if (!pending) return;
     if (pending.quadrantId !== activeQuadrantId) return;
@@ -4304,7 +4392,7 @@ function MinimapBuilder({
   }, [
     activeQuadrantId,
     activeQuadrantSharedWith,
-    isPlayerMode,
+    canManageQuadrantSharing,
     persistQuadrantSharedWith,
   ]);
 
@@ -4341,6 +4429,18 @@ function MinimapBuilder({
             </span>
             {'. '}
             {L.playerQuadrantLockedOutro}
+          </p>
+        </div>
+      )}
+      {!isSharedMasterQuadrant && shouldShowPlayerOwnerNotice && (
+        <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+          <p>
+            {L.playerQuadrantSharedEditIntro}{' '}
+            <span className="font-semibold" style={activeOwnerHighlightStyle}>
+              {activeOwnerNameForDisplay}
+            </span>
+            {'. '}
+            {L.playerQuadrantSharedEditOutro}
           </p>
         </div>
       )}
@@ -4493,20 +4593,19 @@ function MinimapBuilder({
             {L.saveQuadrant}
           </Boton>
         </div>
-        {!isPlayerMode && (
+        {canManageQuadrantSharing && (
           <div className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
               {L.permissions}
             </div>
             <div className="text-xs text-gray-400">{L.sharedWithPlayers}</div>
-            {playersList.length === 0 ? (
+            {selectablePlayers.length === 0 ? (
               <div className="text-xs text-gray-500">{L.noPlayers}</div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {playersList.map((player) => {
-                  const isSelected = activeQuadrantSharedWith.some(
-                    (entry) => normalizePlayerName(entry) === normalizePlayerName(player)
-                  );
+                {selectablePlayers.map((player) => {
+                  const normalized = normalizePlayerName(player);
+                  const isSelected = activeSharedWithKeySet.has(normalized);
                   return (
                     <button
                       key={player}
