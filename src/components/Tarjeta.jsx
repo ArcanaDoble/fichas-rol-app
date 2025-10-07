@@ -92,8 +92,10 @@ const Tarjeta = ({
         borderRadius: '1.25rem',
         overflow: 'visible',
         minHeight: '320px',
-        maxWidth: '420px',
-        margin: 'auto',
+        width: '100%',
+        maxWidth: 'none',
+        margin: 0,
+        height: '100%',
       }
     : {
         boxShadow: '0 2px 12px 0 #0006',

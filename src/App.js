@@ -4467,14 +4467,20 @@ function App() {
               </Boton>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <Boton color="green" onClick={createNewEnemy}>
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 mb-3">
+            <Boton
+              color="green"
+              onClick={createNewEnemy}
+              className="w-full md:w-auto"
+            >
               Crear Nuevo Enemigo
             </Boton>
-            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+            <Boton onClick={refreshCatalog} className="w-full md:w-auto">
+              Refrescar
+            </Boton>
             <button
               type="button"
-              className="md:hidden ml-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
+              className="md:hidden w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
               onClick={() => setEnemyFiltersOpen((v) => !v)}
               aria-expanded={enemyFiltersOpen}
               aria-controls="enemy-filters"
