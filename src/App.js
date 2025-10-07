@@ -4606,92 +4606,222 @@ function App() {
           </button>
         </div>
         {/* Lista de enemigos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {filteredEnemies.map((enemy) => (
-            <Tarjeta
-              key={enemy.id}
-              variant="magic"
-              className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl"
-            >
-              <div className="flex flex-col h-full">
-                {/* Imagen tipo Magic */}
-                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30 relative">
-                  {enemy.portrait ? (
-                    <img
-                      src={enemy.portrait}
-                      alt={enemy.name}
-                      className="w-full h-full object-contain object-center"
-                      loading="lazy"
-                      style={{ background: '#222' }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">
-                      👹
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          {filteredEnemies.map((enemy) => {
+            const asArray = (value) => {
+              if (!value) return [];
+              if (Array.isArray(value)) return value.filter(Boolean);
+              if (typeof value === 'string') {
+                return value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+              }
+              return [];
+            };
+            const cleanText = (value) => (typeof value === 'string' ? value.trim() : '');
+            const normalizeNumber = (value) => {
+              if (value === null || value === undefined) return null;
+              if (typeof value === 'number' && Number.isFinite(value)) return value;
+              if (typeof value === 'string') {
+                const parsed = Number(value.replace(/[^0-9.+-]/g, ''));
+                return Number.isFinite(parsed) ? parsed : null;
+              }
+              return null;
+            };
+            const pickStat = (...values) => {
+              for (const value of values) {
+                const numeric = normalizeNumber(value);
+                if (numeric !== null) {
+                  return Math.max(0, Math.round(numeric));
+                }
+              }
+              return 0;
+            };
+
+            const tags = Array.from(
+              new Set([...asArray(enemy.tags), ...asArray(enemy.etiquetas)])
+            ).slice(0, 4);
+            const typePieces = [
+              cleanText(enemy.tipo),
+              cleanText(enemy.type),
+              cleanText(enemy.subtipo),
+              cleanText(enemy.subType),
+              cleanText(enemy.categoria),
+              cleanText(enemy.category),
+            ].filter(Boolean);
+            const typeLine =
+              typePieces.length > 0
+                ? typePieces.slice(0, 2).join(' — ')
+                : tags.length > 0
+                ? tags.join(' — ')
+                : 'Criatura — Enemigo';
+            const rarity = cleanText(enemy.rareza || enemy.rarity);
+            const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
+            const attackStat = pickStat(
+              enemy?.stats?.ataque?.total,
+              enemy?.stats?.ataque,
+              enemy?.stats?.daño?.total,
+              enemy?.stats?.daño,
+              enemy.weapons?.length,
+              enemy.poderes?.length,
+              levelValue
+            );
+            const defenseStat = pickStat(
+              enemy?.stats?.defensa?.total,
+              enemy?.stats?.defensa,
+              enemy?.stats?.armadura?.total,
+              enemy?.stats?.armadura,
+              enemy.armaduras?.length,
+              enemy?.stats?.vida?.total,
+              enemy?.stats?.vida,
+              levelValue
+            );
+            const description = cleanText(enemy.description);
+            const abilityCount = pickStat(enemy.poderes?.length);
+            const statusCount = pickStat(enemy.estados?.length);
+            const weaponCount = pickStat(enemy.weapons?.length);
+            const armorCount = pickStat(enemy.armaduras?.length);
+
+            return (
+              <Tarjeta
+                key={enemy.id}
+                variant="magic"
+                className="group p-0 overflow-visible border-0 shadow-[0_22px_45px_rgba(8,7,21,0.65)]"
+              >
+                <div className="relative flex h-full flex-col rounded-[1.35rem] bg-gradient-to-br from-[#27180d]/90 via-[#140f1c]/92 to-[#09090f]/95">
+                  <div className="pointer-events-none absolute inset-0 rounded-[1.35rem] border border-amber-200/15 shadow-[0_0_45px_rgba(250,204,21,0.12)]" />
+                  <div className="pointer-events-none absolute inset-[6px] rounded-[1.15rem] border border-amber-100/10" />
+                  <div className="relative z-10 flex h-full flex-col">
+                    <div className="px-6 pt-5 pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          {rarity && (
+                            <span className="text-[10px] uppercase tracking-[0.35em] text-amber-200/60">
+                              {rarity}
+                            </span>
+                          )}
+                          <h3
+                            className="mt-1 text-2xl font-extrabold uppercase tracking-wide text-amber-100 drop-shadow-[0_8px_18px_rgba(0,0,0,0.75)]"
+                            style={{ textShadow: '0 10px 28px rgba(0,0,0,0.85)' }}
+                          >
+                            {enemy.name}
+                          </h3>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-amber-300/60 bg-gradient-to-br from-amber-200/40 via-amber-500/25 to-purple-800/40 text-lg font-semibold text-amber-50 shadow-[inset_0_0_22px_rgba(250,204,21,0.28)]">
+                          {levelValue}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.28em] text-amber-200/70 italic">
+                        {typeLine}
+                      </div>
                     </div>
-                  )}
-                </div>
-                {/* Nombre y descripción */}
-                <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
-                  <h3
-                    className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider"
-                    style={{ textShadow: '0 2px 8px #000a' }}
-                  >
-                    {enemy.name}
-                  </h3>
-                  {/* Chips de resumen */}
-                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-yellow-500/10 border border-yellow-600/30 text-yellow-200 inline-flex items-center gap-1">
-                      <FiStar className="opacity-90" /> Nivel {enemy.nivel || 1}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiCrossedSwords /> {enemy.weapons?.length || 0} armas
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiShield /> {enemy.armaduras?.length || 0} armaduras
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiSpellBook /> {enemy.poderes?.length || 0} poderes
-                    </span>
+                    <div className="relative mx-5 mt-2 mb-4 aspect-[4/3] overflow-hidden rounded-[1rem] border border-amber-200/25 bg-black/40 shadow-[0_14px_32px_rgba(0,0,0,0.45)]">
+                      {enemy.portrait ? (
+                        <img
+                          src={enemy.portrait}
+                          alt={enemy.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-5xl text-amber-200/40">
+                          👹
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-4 px-6 pb-4 text-sm text-amber-100/90">
+                      <p className="min-h-[3rem] text-center leading-relaxed italic text-amber-100/80">
+                        {description || 'Una presencia misteriosa aguarda su turno en el campo de batalla.'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-[0.18em] text-amber-200/80">
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiCrossedSwords className="text-base" /> Armas
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{weaponCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiShield className="text-base" /> Armaduras
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{armorCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-purple-400/25 bg-purple-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiSpellBook className="text-base" /> Poderes
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{abilityCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-rose-400/25 bg-rose-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <FaRadiationAlt className="text-base" /> Estados
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{statusCount}</span>
+                        </span>
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap justify-center gap-2 text-[10px] uppercase tracking-[0.25em] text-amber-200/70">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-amber-300/25 bg-black/40 px-3 py-1 shadow-inner"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-6 pb-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.22em] text-amber-200/70">
+                        <span className="flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
+                        </span>
+                        <div className="relative rounded-lg border-2 border-amber-400/50 bg-black/40 px-4 py-1.5 font-serif text-lg font-semibold text-amber-100 shadow-[inset_0_0_18px_rgba(250,204,21,0.25)]">
+                          {attackStat} / {defenseStat}
+                        </div>
+                        <span className="flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2 border-t border-amber-400/25 bg-gradient-to-r from-[#2b1c10]/85 via-[#1f1322]/85 to-[#121321]/85 px-6 pb-6 pt-4">
+                      <Boton
+                        color="blue"
+                        size="sm"
+                        onClick={() => editEnemy(enemy)}
+                        className="flex-1 min-w-[120px]"
+                      >
+                        Editar
+                      </Boton>
+                      <Boton
+                        color="purple"
+                        size="sm"
+                        onClick={() => setSelectedEnemy(enemy)}
+                        className="flex-1 min-w-[120px]"
+                      >
+                        Ver Ficha
+                      </Boton>
+                      <Boton
+                        color="red"
+                        size="sm"
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                            deleteEnemy(enemy.id);
+                          }
+                        }}
+                        className="min-w-[80px]"
+                      >
+                        🗑️
+                      </Boton>
+                    </div>
                   </div>
-                  {enemy.description && (
-                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">
-                      {enemy.description}
-                    </p>
-                  )}
                 </div>
-                {/* Acciones */}
-                <div className="flex gap-2 px-4 pb-4 pt-2 justify-center border-t border-yellow-900/20">
-                  <Boton
-                    color="blue"
-                    size="sm"
-                    onClick={() => editEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Editar
-                  </Boton>
-                  <Boton
-                    color="purple"
-                    size="sm"
-                    onClick={() => setSelectedEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Ver Ficha
-                  </Boton>
-                  <Boton
-                    color="red"
-                    size="sm"
-                    onClick={() => {
-                      if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                        deleteEnemy(enemy.id);
-                      }
-                    }}
-                  >
-                    🗑️
-                  </Boton>
-                </div>
-              </div>
-            </Tarjeta>
-          ))}
+              </Tarjeta>
+            );
+          })}
         </div>
         {enemies.length === 0 && (
           <div className="text-center py-8">
