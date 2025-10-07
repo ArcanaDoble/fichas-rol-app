@@ -101,7 +101,6 @@ const Tarjeta = ({
         overflow: 'visible',
         minHeight: '340px',
         width: '100%',
-        maxWidth: 'none',
         margin: 0,
         height: '100%',
         backgroundImage:

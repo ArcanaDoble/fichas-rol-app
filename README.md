@@ -73,7 +73,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.60**
+> **Versión actual: 2.4.61**
+
+**Resumen de cambios v2.4.61:**
+
+- Editor visual de retratos para enemigos con recorte y zoom antes y después de guardar la carta.
+- Cartas de enemigos más compactas en escritorio con cuatro columnas y líneas divisorias punteadas entre ellas.
+- Indicadores de Ataque y Defensa con etiquetas claras y textos de ayuda para explicar los valores mostrados.
+- Botones de acciones de enemigo rediseñados con iconos y degradados acordes al estilo coleccionable.
 
 **Resumen de cambios v2.4.60:**
 
