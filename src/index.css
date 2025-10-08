@@ -189,6 +189,32 @@ html {
   z-index: 10;
 }
 
+@media (min-width: 1024px) {
+  .enemy-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 28rem);
+  }
+}
+
+@media (min-width: 1280px) {
+  .enemy-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 36rem);
+  }
+}
+
+@media (min-width: 1536px) {
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 40rem);
+  }
+}
+
 .enemy-action-button {
   @apply !rounded-full !bg-gradient-to-r !from-amber-500/20 !via-purple-500/20 !to-slate-900/60 !border !border-amber-400/40 !text-xs !uppercase !tracking-[0.3em] !text-amber-100 !shadow-[0_0_18px_rgba(250,204,21,0.18)] !px-5 !py-2;
 }

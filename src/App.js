@@ -4740,7 +4740,7 @@ function App() {
           </button>
         </div>
         {/* Lista de enemigos */}
-        <div className="enemy-grid relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
+        <div className="enemy-grid relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
@@ -4817,7 +4817,7 @@ function App() {
               <Tarjeta
                 key={enemy.id}
                 variant="magic"
-                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:col-span-2 lg:max-w-[620px]"
+                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:max-w-none"
               >
                 <div className="relative flex h-full flex-col rounded-[1.25rem] bg-gradient-to-br from-[#2a1a10]/90 via-[#140f1c]/92 to-[#09090f]/95">
                   <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] border border-amber-200/15 shadow-[0_0_32px_rgba(250,204,21,0.12)]" />
