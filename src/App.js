@@ -16,7 +16,24 @@ import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist, GiCrossedSwords, GiShield, GiSpellBook } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
-import { FiMap, FiTool, FiArrowLeft, FiPlus, FiX, FiSearch, FiFilter, FiXCircle, FiStar } from 'react-icons/fi';
+import {
+  FiMap,
+  FiTool,
+  FiArrowLeft,
+  FiPlus,
+  FiX,
+  FiSearch,
+  FiFilter,
+  FiXCircle,
+  FiChevronDown,
+  FiImage,
+  FiStar,
+  FiEdit2,
+  FiEye,
+  FiTrash2,
+  FiCrop,
+  FiCheck,
+} from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -47,6 +64,7 @@ import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
+import Cropper from 'react-easy-crop';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -101,6 +119,511 @@ const defaultResourcesList = defaultRecursos.map((name) => ({
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = (dado) => `/dados/${dado}.png`;
+
+const createImageElement = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = (error) => reject(error);
+    image.src = url;
+  });
+
+const cropImageToDataUrl = async (
+  imageSrc,
+  cropPixels,
+  maxWidth = 900,
+  maxHeight = 900,
+  quality = 0.88
+) => {
+  if (!cropPixels) return imageSrc;
+  const image = await createImageElement(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const { width, height, x, y } = cropPixels;
+  const safeWidth = Math.max(width, 1);
+  const safeHeight = Math.max(height, 1);
+  const scale = Math.min(maxWidth / safeWidth, maxHeight / safeHeight, 1);
+
+  canvas.width = Math.max(1, Math.floor(safeWidth * scale));
+  canvas.height = Math.max(1, Math.floor(safeHeight * scale));
+
+  ctx.drawImage(
+    image,
+    x,
+    y,
+    safeWidth,
+    safeHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  return canvas.toDataURL('image/jpeg', quality);
+};
+
+const dataUrlToFile = async (dataUrl, filename = 'portrait.jpg') => {
+  if (!dataUrl) return null;
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const extension = blob.type === 'image/png' ? 'png' : 'jpg';
+  const safeName = filename.includes('.') ? filename : `${filename}.${extension}`;
+  return new File([blob], safeName, { type: blob.type || 'image/jpeg' });
+};
+
+const DEFAULT_ENEMY_THEME_COLOR = '#facc15';
+const DEFAULT_ENEMY_TAGS = ['Criatura', 'Enemigo'];
+const DEFAULT_ENEMY_THEME = {
+  base: DEFAULT_ENEMY_THEME_COLOR,
+  accent: '#fbbf24',
+  accentSoft: '#fde68a',
+  accentStrong: '#b45309',
+  accentGlow: '#fef08a',
+  complementary: '#7c3aed',
+  backgroundGradient:
+    'radial-gradient(circle at 12% 20%, rgba(250, 204, 21, 0.18), transparent 55%), radial-gradient(circle at 88% 16%, rgba(99, 102, 241, 0.22), transparent 60%), linear-gradient(140deg, rgba(26, 20, 12, 0.95) 0%, rgba(12, 10, 28, 0.92) 55%, rgba(15, 23, 42, 0.94) 100%)',
+  frameBorder: 'rgba(250, 204, 21, 0.25)',
+  innerBorder: 'rgba(148, 163, 184, 0.18)',
+  textPrimary: '#fefce8',
+  textSecondary: 'rgba(252, 211, 77, 0.78)',
+  typeText: 'rgba(250, 204, 21, 0.82)',
+  rarityColor: 'rgba(252, 211, 77, 0.72)',
+  levelBorder: 'rgba(250, 204, 21, 0.5)',
+  levelBackground:
+    'radial-gradient(circle at 30% 30%, rgba(250, 204, 21, 0.45), rgba(56, 41, 86, 0.85))',
+  statPalette: [
+    {
+      bg: 'rgba(250, 204, 21, 0.12)',
+      border: 'rgba(250, 204, 21, 0.38)',
+      text: '#fefce8',
+    },
+    {
+      bg: 'rgba(168, 85, 247, 0.16)',
+      border: 'rgba(192, 132, 252, 0.42)',
+      text: '#f5f3ff',
+    },
+    {
+      bg: 'rgba(56, 189, 248, 0.16)',
+      border: 'rgba(56, 189, 248, 0.4)',
+      text: '#e0f2fe',
+    },
+    {
+      bg: 'rgba(249, 115, 22, 0.16)',
+      border: 'rgba(251, 146, 60, 0.4)',
+      text: '#fff7ed',
+    },
+  ],
+  tagBackground: 'rgba(30, 41, 59, 0.65)',
+  tagBorder: 'rgba(250, 204, 21, 0.35)',
+  tagText: 'rgba(248, 250, 252, 0.85)',
+  descriptionColor: 'rgba(226, 232, 240, 0.9)',
+  xpBadge: {
+    bg: 'rgba(250, 204, 21, 0.18)',
+    border: 'rgba(250, 204, 21, 0.45)',
+    text: '#fefce8',
+  },
+  oroBadge: {
+    bg: 'rgba(168, 85, 247, 0.2)',
+    border: 'rgba(192, 132, 252, 0.45)',
+    text: '#f3e8ff',
+  },
+  cardShadow: '0 18px 36px rgba(8, 7, 21, 0.55)',
+  button: {
+    edit: {
+      from: 'rgba(250, 204, 21, 0.24)',
+      via: 'rgba(168, 85, 247, 0.24)',
+      to: 'rgba(15, 23, 42, 0.78)',
+      hoverFrom: 'rgba(250, 204, 21, 0.32)',
+      hoverVia: 'rgba(168, 85, 247, 0.32)',
+      hoverTo: 'rgba(15, 23, 42, 0.88)',
+      border: 'rgba(250, 204, 21, 0.45)',
+      hoverBorder: 'rgba(250, 204, 21, 0.65)',
+      glow: 'rgba(250, 204, 21, 0.22)',
+      iconGlow: 'rgba(250, 204, 21, 0.5)',
+    },
+    delete: {
+      from: 'rgba(248, 113, 113, 0.3)',
+      via: 'rgba(225, 29, 72, 0.32)',
+      to: 'rgba(15, 23, 42, 0.85)',
+      hoverFrom: 'rgba(248, 113, 113, 0.38)',
+      hoverVia: 'rgba(225, 29, 72, 0.4)',
+      hoverTo: 'rgba(15, 23, 42, 0.92)',
+      border: 'rgba(248, 113, 113, 0.55)',
+      hoverBorder: 'rgba(248, 113, 113, 0.75)',
+      glow: 'rgba(248, 113, 113, 0.24)',
+      iconGlow: 'rgba(248, 113, 113, 0.5)',
+    },
+    view: {
+      from: 'rgba(56, 189, 248, 0.24)',
+      via: 'rgba(99, 102, 241, 0.26)',
+      to: 'rgba(15, 23, 42, 0.82)',
+      hoverFrom: 'rgba(56, 189, 248, 0.32)',
+      hoverVia: 'rgba(99, 102, 241, 0.34)',
+      hoverTo: 'rgba(15, 23, 42, 0.9)',
+      border: 'rgba(59, 130, 246, 0.5)',
+      hoverBorder: 'rgba(59, 130, 246, 0.7)',
+      glow: 'rgba(56, 189, 248, 0.24)',
+      iconGlow: 'rgba(56, 189, 248, 0.5)',
+    },
+  },
+  buttonText: '#fefce8',
+  buttonHoverText: '#fefce8',
+  buttonBaseText: '#fefce8',
+  buttonFontShadow: '0 0 10px rgba(250, 204, 21, 0.45)',
+};
+
+const cloneDefaultEnemyTheme = () => ({
+  ...DEFAULT_ENEMY_THEME,
+  statPalette: DEFAULT_ENEMY_THEME.statPalette.map((palette) => ({
+    ...palette,
+  })),
+  xpBadge: { ...DEFAULT_ENEMY_THEME.xpBadge },
+  oroBadge: { ...DEFAULT_ENEMY_THEME.oroBadge },
+  button: {
+    edit: { ...DEFAULT_ENEMY_THEME.button.edit },
+    delete: { ...DEFAULT_ENEMY_THEME.button.delete },
+    view: { ...DEFAULT_ENEMY_THEME.button.view },
+  },
+});
+const ENEMY_THEME_PRESETS = [
+  '#facc15',
+  '#fb7185',
+  '#60a5fa',
+  '#a855f7',
+  '#34d399',
+  '#f97316',
+  '#14b8a6',
+  '#f472b6',
+];
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const expandHex = (hex) => {
+  if (!hex || typeof hex !== 'string') return null;
+  const normalized = hex.trim().toLowerCase();
+  if (/^#([0-9a-f]{6})$/.test(normalized)) return normalized;
+  if (/^#([0-9a-f]{3})$/.test(normalized)) {
+    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+  }
+  return null;
+};
+
+const normalizeHexColor = (value, fallback = DEFAULT_ENEMY_THEME_COLOR) =>
+  expandHex(value) || expandHex(fallback) || DEFAULT_ENEMY_THEME_COLOR;
+
+const hexToRgb = (hex) => {
+  const normalized = expandHex(hex);
+  if (!normalized) return { r: 0, g: 0, b: 0 };
+  const int = parseInt(normalized.slice(1), 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255,
+  };
+};
+
+const rgbToHex = (r, g, b) =>
+  `#${[r, g, b]
+    .map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0'))
+    .join('')}`;
+
+const rgbToHsl = (r, g, b) => {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h;
+  let s;
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return { h: h * 360, s, l };
+};
+
+const hslToRgb = (h, s, l) => {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = clamp(s, 0, 1);
+  const lig = clamp(l, 0, 1);
+
+  if (sat === 0) {
+    const value = Math.round(lig * 255);
+    return { r: value, g: value, b: value };
+  }
+
+  const hueToRgb = (p, q, t) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+
+  const q = lig < 0.5 ? lig * (1 + sat) : lig + sat - lig * sat;
+  const p = 2 * lig - q;
+
+  const r = hueToRgb(p, q, hue / 360 + 1 / 3);
+  const g = hueToRgb(p, q, hue / 360);
+  const b = hueToRgb(p, q, hue / 360 - 1 / 3);
+
+  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+};
+
+const hexToHsl = (hex) => {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHsl(r, g, b);
+};
+
+const hslToHex = (h, s, l) => {
+  const { r, g, b } = hslToRgb(h, s, l);
+  return rgbToHex(r, g, b);
+};
+
+const adjustLightness = (hex, amount) => {
+  const { h, s, l } = hexToHsl(hex);
+  return hslToHex(h, s, clamp(l + amount / 100, 0, 1));
+};
+
+const adjustSaturation = (hex, amount) => {
+  const { h, s, l } = hexToHsl(hex);
+  return hslToHex(h, clamp(s + amount / 100, 0, 1), l);
+};
+
+const shiftHue = (hex, amount) => {
+  const { h, s, l } = hexToHsl(hex);
+  return hslToHex(h + amount, s, l);
+};
+
+const mixColors = (hexA, hexB, weight = 0.5) => {
+  const w = clamp(weight, 0, 1);
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  const r = a.r * (1 - w) + b.r * w;
+  const g = a.g * (1 - w) + b.g * w;
+  const bl = a.b * (1 - w) + b.b * w;
+  return rgbToHex(r, g, bl);
+};
+
+const toRgba = (hex, alpha = 1) => {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${clamp(alpha, 0, 1)})`;
+};
+
+const sanitizeEnemyTags = (tags) =>
+  Array.from(
+    new Set(
+      (tags || [])
+        .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+        .filter(Boolean)
+    )
+  ).slice(0, 8);
+
+const buildEnemyTheme = (color) => {
+  const base = normalizeHexColor(color);
+
+  if (base === DEFAULT_ENEMY_THEME.base) {
+    return cloneDefaultEnemyTheme();
+  }
+
+  const accent = adjustSaturation(base, 8);
+  const accentSoft = adjustLightness(accent, 18);
+  const accentStrong = adjustLightness(accent, -28);
+  const accentGlow = adjustLightness(accent, 32);
+  const complementary = shiftHue(accent, -35);
+  const shadowTint = mixColors('#05060a', accentStrong, 0.4);
+  const midTint = mixColors('#0f0d18', complementary, 0.45);
+  const lightTint = mixColors('#1b1729', accentSoft, 0.35);
+
+  const backgroundGradient = `${`radial-gradient(circle at 12% 20%, ${toRgba(
+    accentGlow,
+    0.22
+  )}, transparent 55%)`}, ${`radial-gradient(circle at 88% 16%, ${toRgba(
+    complementary,
+    0.22
+  )}, transparent 60%)`}, linear-gradient(140deg, ${toRgba(
+    shadowTint,
+    0.96
+  )} 0%, ${toRgba(midTint, 0.92)} 55%, ${toRgba(lightTint, 0.94)} 100%)`;
+
+  const textPrimary = mixColors('#fff7ed', accentGlow, 0.25);
+  const textSecondary = toRgba(accentSoft, 0.75);
+  const frameBorder = toRgba(accentSoft, 0.2);
+  const innerBorder = toRgba(accentSoft, 0.12);
+
+  const statPalette = [
+    accent,
+    shiftHue(accent, -18),
+    shiftHue(accent, 26),
+    shiftHue(accent, -42),
+  ].map((tone) => ({
+    bg: toRgba(tone, 0.16),
+    border: toRgba(adjustLightness(tone, 12), 0.32),
+    text: textPrimary,
+  }));
+
+  const tagBackground = toRgba(mixColors(accentStrong, '#000000', 0.4), 0.55);
+  const tagBorder = toRgba(accentSoft, 0.32);
+
+  const xpColor = accent;
+  const oroColor = shiftHue(accent, -28);
+  const infoColor = shiftHue(accent, 40);
+  const dangerColor = shiftHue(accent, -65);
+  const cardShadow = `0 18px 36px ${toRgba(mixColors(shadowTint, '#080715', 0.65), 0.65)}`;
+
+  return {
+    base,
+    accent,
+    accentSoft,
+    accentStrong,
+    accentGlow,
+    complementary,
+    backgroundGradient,
+    frameBorder,
+    innerBorder,
+    textPrimary,
+    textSecondary,
+    typeText: toRgba(accentGlow, 0.82),
+    rarityColor: toRgba(accentSoft, 0.75),
+    levelBorder: toRgba(accentGlow, 0.55),
+    levelBackground: `radial-gradient(circle at 30% 30%, ${toRgba(
+      accentGlow,
+      0.45
+    )}, ${toRgba(accentStrong, 0.9)})`,
+    statPalette,
+    tagBackground,
+    tagBorder,
+    tagText: textSecondary,
+    descriptionColor: toRgba(accentGlow, 0.78),
+    xpBadge: {
+      bg: toRgba(xpColor, 0.16),
+      border: toRgba(adjustLightness(xpColor, 12), 0.45),
+      text: textPrimary,
+    },
+    oroBadge: {
+      bg: toRgba(oroColor, 0.16),
+      border: toRgba(adjustLightness(oroColor, 8), 0.45),
+      text: textPrimary,
+    },
+    cardShadow,
+    button: {
+      edit: {
+        from: toRgba(accent, 0.24),
+        via: toRgba(complementary, 0.24),
+        to: toRgba(mixColors(midTint, shadowTint, 0.6), 0.92),
+        hoverFrom: toRgba(accent, 0.32),
+        hoverVia: toRgba(complementary, 0.32),
+        hoverTo: toRgba(mixColors(lightTint, shadowTint, 0.5), 0.96),
+        border: toRgba(accentSoft, 0.55),
+        hoverBorder: toRgba(accentSoft, 0.7),
+        glow: toRgba(accent, 0.22),
+        iconGlow: toRgba(accent, 0.5),
+      },
+      delete: {
+        from: toRgba(dangerColor, 0.26),
+        via: toRgba(shiftHue(dangerColor, -8), 0.28),
+        to: toRgba(mixColors(shadowTint, '#000000', 0.35), 0.9),
+        hoverFrom: toRgba(dangerColor, 0.34),
+        hoverVia: toRgba(shiftHue(dangerColor, -12), 0.34),
+        hoverTo: toRgba(mixColors(lightTint, '#000000', 0.4), 0.94),
+        border: toRgba(adjustLightness(dangerColor, 6), 0.5),
+        hoverBorder: toRgba(adjustLightness(dangerColor, 10), 0.65),
+        glow: toRgba(dangerColor, 0.2),
+        iconGlow: toRgba(dangerColor, 0.45),
+      },
+      view: {
+        from: toRgba(infoColor, 0.22),
+        via: toRgba(shiftHue(infoColor, 12), 0.26),
+        to: toRgba(mixColors(lightTint, infoColor, 0.35), 0.9),
+        hoverFrom: toRgba(infoColor, 0.3),
+        hoverVia: toRgba(shiftHue(infoColor, 16), 0.34),
+        hoverTo: toRgba(mixColors(lightTint, infoColor, 0.5), 0.96),
+        border: toRgba(adjustLightness(infoColor, 10), 0.5),
+        hoverBorder: toRgba(adjustLightness(infoColor, 14), 0.65),
+        glow: toRgba(infoColor, 0.2),
+        iconGlow: toRgba(infoColor, 0.4),
+      },
+    },
+    buttonText: textPrimary,
+    buttonHoverText: textPrimary,
+    buttonBaseText: textPrimary,
+    buttonFontShadow: `0 0 10px ${toRgba(accentGlow, 0.4)}`,
+  };
+};
+
+const createEnemyDefaults = () => ({
+  name: '',
+  portrait: '',
+  description: '',
+  weapons: [],
+  armaduras: [],
+  poderes: [],
+  atributos: {},
+  stats: {},
+  nivel: 1,
+  experiencia: 0,
+  dinero: 0,
+  notas: '',
+  estados: [],
+  tags: [...DEFAULT_ENEMY_TAGS],
+  themeColor: DEFAULT_ENEMY_THEME_COLOR,
+});
+
+const ensureEnemyDefaults = (enemy) => {
+  const base = createEnemyDefaults();
+  const candidate = enemy || {};
+  const rawTags = [
+    ...(Array.isArray(candidate.tags) ? candidate.tags : []),
+    ...(Array.isArray(candidate.etiquetas) ? candidate.etiquetas : []),
+  ];
+  if (typeof candidate.tags === 'string') {
+    rawTags.push(
+      ...candidate.tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    );
+  }
+  if (typeof candidate.etiquetas === 'string') {
+    rawTags.push(
+      ...candidate.etiquetas
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    );
+  }
+
+  const sanitizedTags = sanitizeEnemyTags(rawTags);
+
+  return {
+    ...base,
+    ...candidate,
+    tags: sanitizedTags.length > 0 ? sanitizedTags : base.tags,
+    themeColor: normalizeHexColor(candidate.themeColor || candidate.color || base.themeColor),
+  };
+};
 
 const parseCargaValue = (v) => {
   if (!v) return 0;
@@ -441,22 +964,21 @@ function App() {
   const [selectedEnemy, setSelectedEnemy] = useState(null);
   const [showEnemyForm, setShowEnemyForm] = useState(false);
   const [editingEnemy, setEditingEnemy] = useState(null);
-  const [newEnemy, setNewEnemy] = useState({
-    name: '',
-    portrait: '',
-    description: '',
-    weapons: [],
-    armaduras: [],
-    poderes: [],
-    atributos: {},
-    stats: {},
-    nivel: 1,
-    experiencia: 0,
-    dinero: 0,
-    notas: '',
-    estados: [],
-  });
+  const [newEnemy, setNewEnemy] = useState(() => createEnemyDefaults());
+  const [enemyTagInput, setEnemyTagInput] = useState('');
+  const [enemyEditingTagIndex, setEnemyEditingTagIndex] = useState(null);
+  const [enemyTagDraft, setEnemyTagDraft] = useState('');
+  const [enemyThemeColorDraft, setEnemyThemeColorDraft] = useState(
+    DEFAULT_ENEMY_THEME_COLOR
+  );
   const [enemyEditorTab, setEnemyEditorTab] = useState('ficha'); // 'ficha' | 'equipo'
+  const [showImageCropper, setShowImageCropper] = useState(false);
+  const [imageCropSource, setImageCropSource] = useState(null);
+  const [imageCropName, setImageCropName] = useState('retrato.jpg');
+  const [imageCrop, setImageCrop] = useState({ x: 0, y: 0 });
+  const [imageCropZoom, setImageCropZoom] = useState(1);
+  const [imageCropAreaPixels, setImageCropAreaPixels] = useState(null);
+  const [imageCropLoading, setImageCropLoading] = useState(false);
   // Estados para equipar items a enemigos
   const [enemyInputArma, setEnemyInputArma] = useState('');
   const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
@@ -483,6 +1005,103 @@ function App() {
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
 
+  useEffect(() => {
+    setEnemyThemeColorDraft(
+      newEnemy.themeColor || DEFAULT_ENEMY_THEME_COLOR
+    );
+  }, [newEnemy.themeColor]);
+
+  const updateEnemyTags = useCallback(
+    (tags) => {
+      const sanitized = sanitizeEnemyTags(tags);
+      setNewEnemy((prev) => ({
+        ...prev,
+        tags: sanitized.length > 0 ? sanitized : [...DEFAULT_ENEMY_TAGS],
+      }));
+    },
+    [setNewEnemy]
+  );
+
+  const handleEnemyTagAdd = useCallback(() => {
+    const tag = enemyTagInput.trim();
+    if (!tag) return;
+    updateEnemyTags([...(newEnemy.tags || []), tag]);
+    setEnemyTagInput('');
+  }, [enemyTagInput, newEnemy.tags, updateEnemyTags]);
+
+  const handleEnemyTagRemove = useCallback(
+    (index) => {
+      const updated = (newEnemy.tags || []).filter((_, i) => i !== index);
+      updateEnemyTags(updated);
+      if (enemyEditingTagIndex === index) {
+        setEnemyEditingTagIndex(null);
+        setEnemyTagDraft('');
+      }
+    },
+    [newEnemy.tags, updateEnemyTags, enemyEditingTagIndex]
+  );
+
+  const handleEnemyTagEditStart = useCallback(
+    (index) => {
+      const tag = newEnemy.tags?.[index] || '';
+      setEnemyEditingTagIndex(index);
+      setEnemyTagDraft(tag);
+    },
+    [newEnemy.tags]
+  );
+
+  const handleEnemyTagEditCancel = useCallback(() => {
+    setEnemyEditingTagIndex(null);
+    setEnemyTagDraft('');
+  }, []);
+
+  const handleEnemyTagEditSave = useCallback(() => {
+    if (enemyEditingTagIndex === null) return;
+    const value = (enemyTagDraft || '').trim();
+    if (!value) {
+      handleEnemyTagRemove(enemyEditingTagIndex);
+      return;
+    }
+    const updated = [...(newEnemy.tags || [])];
+    updated[enemyEditingTagIndex] = value;
+    updateEnemyTags(updated);
+    setEnemyEditingTagIndex(null);
+    setEnemyTagDraft('');
+  }, [enemyEditingTagIndex, enemyTagDraft, newEnemy.tags, updateEnemyTags, handleEnemyTagRemove]);
+
+  const handleEnemyTagReset = useCallback(() => {
+    updateEnemyTags(DEFAULT_ENEMY_TAGS);
+    setEnemyTagInput('');
+    setEnemyEditingTagIndex(null);
+    setEnemyTagDraft('');
+  }, [updateEnemyTags]);
+
+  const handleEnemyThemeColorCommit = useCallback(
+    (value) => {
+      const normalized = normalizeHexColor(
+        value,
+        newEnemy.themeColor || DEFAULT_ENEMY_THEME_COLOR
+      );
+      setNewEnemy((prev) => ({ ...prev, themeColor: normalized }));
+      setEnemyThemeColorDraft(normalized);
+    },
+    [newEnemy.themeColor]
+  );
+
+  const handleEnemyThemeColorInputChange = useCallback(
+    (value) => {
+      setEnemyThemeColorDraft(value);
+      if (expandHex(value)) {
+        handleEnemyThemeColorCommit(value);
+      }
+    },
+    [handleEnemyThemeColorCommit]
+  );
+
+  const handleEnemyThemeColorBlur = useCallback(() => {
+    handleEnemyThemeColorCommit(enemyThemeColorDraft);
+  }, [enemyThemeColorDraft, handleEnemyThemeColorCommit]);
+
   const filteredEnemies = useMemo(() => {
     const tokens = normalizeText(deferredEnemySearch).split(/\s+/).filter(Boolean);
     const list = (enemies || []).filter((e) => {
@@ -496,6 +1115,12 @@ function App() {
         ...(e.armaduras || []).map((a) => a?.nombre || a?.name || ''),
         ...(e.poderes || []).map((p) => p?.nombre || p?.name || ''),
         Object.keys(e.atributos || {}).join(' '),
+        ...(e.tags || []),
+        ...(typeof e.etiquetas === 'string'
+          ? e.etiquetas.split(',').map((t) => t.trim())
+          : Array.isArray(e.etiquetas)
+          ? e.etiquetas
+          : []),
       ]
         .filter(Boolean)
         .join(' ');
@@ -516,6 +1141,10 @@ function App() {
       return 0;
     });
   }, [enemies, deferredEnemySearch, enemyOnlyPortraits, enemySort, enemySortDir]);
+  const enemyResultsLabel =
+    filteredEnemies.length !== enemies.length
+      ? `${filteredEnemies.length} resultado${filteredEnemies.length === 1 ? '' : 's'}`
+      : `${enemies.length} enemigo${enemies.length === 1 ? '' : 's'}`;
   // Glosario de términos destacados
   const {
     glossary,
@@ -1848,7 +2477,9 @@ function App() {
   const fetchEnemies = useCallback(async () => {
     try {
       const snap = await getDocs(collection(db, 'enemies'));
-      const datos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const datos = snap.docs.map((d) =>
+        ensureEnemyDefaults({ id: d.id, ...d.data() })
+      );
       setEnemies(datos);
     } catch (e) {
       // Error cargando enemigos
@@ -2327,10 +2958,13 @@ function App() {
   // ───────────────────────────────────────────────────────────
   const saveEnemy = async (enemyData) => {
     try {
-      const enemyId = enemyData.id || `enemy_${Date.now()}`;
+      const normalized = ensureEnemyDefaults(enemyData);
+      const enemyId = enemyData.id || normalized.id || `enemy_${Date.now()}`;
       const dataToSave = {
-        ...enemyData,
+        ...normalized,
         id: enemyId,
+        tags: sanitizeEnemyTags(normalized.tags),
+        themeColor: normalizeHexColor(normalized.themeColor),
         updatedAt: new Date(),
       };
       await setDoc(doc(db, 'enemies', enemyId), dataToSave);
@@ -2353,27 +2987,26 @@ function App() {
     const baseAtributos = {};
     atributos.forEach((k) => (baseAtributos[k] = 'D4'));
     const baseStats = { ...defaultStats };
+    const baseEnemy = createEnemyDefaults();
     setNewEnemy({
-      name: '',
-      portrait: '',
-      description: '',
-      weapons: [],
-      armaduras: [],
-      poderes: [],
+      ...baseEnemy,
       atributos: baseAtributos,
       stats: baseStats,
-      // Campos adicionales como jugador
-      nivel: 1,
-      experiencia: 0,
-      dinero: 0,
-      notas: '',
-      estados: [],
     });
+    setEnemyTagInput('');
+    setEnemyEditingTagIndex(null);
+    setEnemyTagDraft('');
+    setEnemyThemeColorDraft(baseEnemy.themeColor);
     setEditingEnemy(null);
     setShowEnemyForm(true);
   };
   const editEnemy = (enemy) => {
-    setNewEnemy(enemy);
+    const normalized = ensureEnemyDefaults(enemy);
+    setNewEnemy(normalized);
+    setEnemyTagInput('');
+    setEnemyEditingTagIndex(null);
+    setEnemyTagDraft('');
+    setEnemyThemeColorDraft(normalized.themeColor || DEFAULT_ENEMY_THEME_COLOR);
     setEditingEnemy(enemy.id);
     setSelectedEnemy(null); // Close preview when switching to edit mode
     setShowEnemyForm(true);
@@ -2382,10 +3015,13 @@ function App() {
   const duplicateEnemy = async (enemy) => {
     if (!enemy) return;
     try {
-      const { id, updatedAt, ...rest } = enemy;
+      const normalized = ensureEnemyDefaults(enemy);
+      const { id, updatedAt, ...rest } = normalized;
       const copy = {
         ...rest,
-        name: enemy.name ? `${enemy.name} (copia)` : 'Enemigo (copia)',
+        name: normalized.name
+          ? `${normalized.name} (copia)`
+          : 'Enemigo (copia)',
       };
       const newId = await saveEnemy(copy);
       const saved = { ...copy, id: newId };
@@ -2455,27 +3091,18 @@ function App() {
     }
     try {
       // Si estamos editando, usar el ID existente; si no, generar uno nuevo
-      const enemyToSave = {
+      const enemyToSave = ensureEnemyDefaults({
         ...newEnemy,
         id: editingEnemy || `enemy_${Date.now()}`,
-      };
+      });
       await saveEnemy(enemyToSave);
       setShowEnemyForm(false);
-      setNewEnemy({
-        name: '',
-        portrait: '',
-        description: '',
-        weapons: [],
-        armaduras: [],
-        poderes: [],
-        atributos: {},
-        stats: {},
-        nivel: 1,
-        experiencia: 0,
-        dinero: 0,
-        notas: '',
-        estados: [],
-      });
+      const defaults = createEnemyDefaults();
+      setNewEnemy(defaults);
+      setEnemyTagInput('');
+      setEnemyEditingTagIndex(null);
+      setEnemyTagDraft('');
+      setEnemyThemeColorDraft(defaults.themeColor);
       setEditingEnemy(null);
       setEnemyInputArma('');
       setEnemyInputArmadura('');
@@ -2523,39 +3150,98 @@ function App() {
     });
   };
   const handleImageUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      try {
-        // Verificar que sea una imagen
-        if (!file.type.startsWith('image/')) {
-          alert('Por favor selecciona un archivo de imagen válido');
-          return;
-        }
-        // Verificar tamaño del archivo (máximo 10MB antes de procesar)
-        if (file.size > 10 * 1024 * 1024) {
-          alert(
-            'La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB'
-          );
-          return;
-        }
-        // Redimensionar imagen
-        const resizedImage = await resizeImage(file);
-        // Verificar que el resultado no sea demasiado grande para Firestore
-        if (resizedImage.length > 900000) {
-          // ~900KB para dejar margen
-          // Si aún es muy grande, reducir más la calidad
-          const smallerImage = await resizeImage(file, 200, 200, 0.5);
-          setNewEnemy({ ...newEnemy, portrait: smallerImage });
-        } else {
-          setNewEnemy({ ...newEnemy, portrait: resizedImage });
-        }
-      } catch (error) {
-        alert(
-          'Error al procesar la imagen. Por favor intenta con otra imagen.'
-        );
-      }
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido');
+      event.target.value = '';
+      return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen es demasiado grande. Selecciona un archivo menor a 10MB');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageCropSource(reader.result);
+      setImageCropName(file.name || 'retrato.jpg');
+      setImageCrop({ x: 0, y: 0 });
+      setImageCropZoom(1);
+      setImageCropAreaPixels(null);
+      setShowImageCropper(true);
+    };
+    reader.onerror = () => {
+      alert('No se pudo leer la imagen seleccionada. Intenta nuevamente.');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
+
+  const handleCropComplete = useCallback((_, croppedAreaPixelsValue) => {
+    setImageCropAreaPixels(croppedAreaPixelsValue);
+  }, []);
+
+  const closeCropper = useCallback(() => {
+    setShowImageCropper(false);
+    setImageCropSource(null);
+    setImageCropAreaPixels(null);
+    setImageCrop({ x: 0, y: 0 });
+    setImageCropZoom(1);
+    setImageCropLoading(false);
+  }, []);
+
+  const handleConfirmCrop = useCallback(async () => {
+    if (!imageCropSource || !imageCropAreaPixels) {
+      alert('Selecciona el encuadre que deseas guardar.');
+      return;
+    }
+
+    try {
+      setImageCropLoading(true);
+      const croppedDataUrl = await cropImageToDataUrl(
+        imageCropSource,
+        imageCropAreaPixels,
+        900,
+        900,
+        0.92
+      );
+      const croppedFile = await dataUrlToFile(
+        croppedDataUrl,
+        imageCropName || 'retrato.jpg'
+      );
+      if (!croppedFile) throw new Error('No se pudo preparar el archivo recortado');
+      let optimizedImage = await resizeImage(croppedFile, 900, 900, 0.88);
+      if (optimizedImage.length > 900000) {
+        optimizedImage = await resizeImage(croppedFile, 650, 650, 0.76);
+      }
+      setNewEnemy((prev) => ({ ...prev, portrait: optimizedImage }));
+      closeCropper();
+    } catch (error) {
+      console.error('Error recortando la imagen del enemigo', error);
+      alert('Error al recortar la imagen. Intenta nuevamente con otro archivo.');
+    } finally {
+      setImageCropLoading(false);
+    }
+  }, [
+    imageCropSource,
+    imageCropAreaPixels,
+    imageCropName,
+    closeCropper,
+    resizeImage,
+  ]);
+
+  const handleRecropPortrait = useCallback(() => {
+    if (!newEnemy?.portrait) return;
+    setImageCropSource(newEnemy.portrait);
+    setImageCropName('retrato.jpg');
+    setImageCrop({ x: 0, y: 0 });
+    setImageCropZoom(1);
+    setImageCropAreaPixels(null);
+    setShowImageCropper(true);
+  }, [newEnemy?.portrait]);
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -4467,53 +5153,107 @@ function App() {
               </Boton>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <Boton color="green" onClick={createNewEnemy}>
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 mb-3">
+            <Boton
+              color="green"
+              onClick={createNewEnemy}
+              className="w-full md:w-auto"
+            >
               Crear Nuevo Enemigo
             </Boton>
-            <Boton onClick={refreshCatalog}>Refrescar</Boton>
-            <button
-              type="button"
-              className="md:hidden ml-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
-              onClick={() => setEnemyFiltersOpen((v) => !v)}
-              aria-expanded={enemyFiltersOpen}
-              aria-controls="enemy-filters"
-            >
-              <FiFilter /> Filtros
-            </button>
+            <Boton onClick={refreshCatalog} className="w-full md:w-auto">
+              Refrescar
+            </Boton>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
+              <div className="md:hidden inline-flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                  enemyFiltersOpen
+                    ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                    : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                }`}
+                onClick={() => setEnemyFiltersOpen((v) => !v)}
+                aria-expanded={enemyFiltersOpen}
+                aria-controls="enemy-filters"
+              >
+                <FiFilter />
+                <span>Filtros</span>
+                <FiChevronDown
+                  className={`transition-transform duration-200 ${
+                    enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
-          <div className="space-y-2" id="enemy-filters">
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={enemySearch}
-                onChange={(e) => setEnemySearch(e.target.value)}
-                placeholder="Buscar enemigos (nombre, descripción, equipo...)"
-                className="w-full pl-10 pr-10 py-2 rounded-md bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-              {enemySearch && (
+          <div
+            className="rounded-3xl border border-purple-500/20 bg-gray-900/80 p-4 md:p-6 shadow-[0_18px_40px_-18px_rgba(147,51,234,0.45)] backdrop-blur"
+            id="enemy-filters"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="relative flex-1">
+                <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-purple-300/60" />
+                <input
+                  type="text"
+                  value={enemySearch}
+                  onChange={(e) => setEnemySearch(e.target.value)}
+                  placeholder="Buscar enemigos (nombre, descripción, equipo...)"
+                  className="w-full rounded-2xl border border-gray-700/60 bg-gray-800/70 pl-12 pr-12 py-3 text-sm md:text-base text-gray-100 shadow-inner shadow-black/40 transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/30"
+                />
+                {enemySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setEnemySearch('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-lg text-gray-400 transition hover:text-gray-200"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <FiXCircle />
+                  </button>
+                )}
+              </div>
+              <div className="hidden lg:flex items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
+              </div>
+            </div>
+            <div
+              className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${
+                enemyFiltersOpen ? '' : 'hidden md:grid'
+              }`}
+            >
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setEnemySearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
-                  aria-label="Limpiar búsqueda"
+                  onClick={() => setEnemyOnlyPortraits((v) => !v)}
+                  aria-pressed={enemyOnlyPortraits}
+                  className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                    enemyOnlyPortraits
+                      ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                      : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                  }`}
                 >
-                  <FiXCircle />
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
+                      enemyOnlyPortraits
+                        ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
+                        : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
+                    }`}
+                  >
+                    <FiImage />
+                  </span>
+                  <span>Solo con retrato</span>
                 </button>
-              )}
-            </div>
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-2 ${enemyFiltersOpen ? 'block' : 'hidden md:grid'}`}>
-              <label className="inline-flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={enemyOnlyPortraits}
-                  onChange={(e) => setEnemyOnlyPortraits(e.target.checked)}
-                />
-                <span>Solo con retrato</span>
-              </label>
-              <div className="bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <label className="block text-xs text-gray-400 mb-1">Ordenar por</label>
+              </div>
+              <div className="rounded-2xl border border-gray-700/70 bg-gray-800/70 px-4 py-3 text-sm text-gray-200 shadow-inner shadow-black/30">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400/80">
+                  Ordenar por
+                </label>
                 <select
                   value={`${enemySort}:${enemySortDir}`}
                   onChange={(e) => {
@@ -4521,7 +5261,7 @@ function App() {
                     setEnemySort(s);
                     setEnemySortDir(d);
                   }}
-                  className="w-full bg-gray-700 rounded px-2 py-1"
+                  className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                 >
                   <option value="name:asc">Nombre (A→Z)</option>
                   <option value="name:desc">Nombre (Z→A)</option>
@@ -4529,14 +5269,10 @@ function App() {
                   <option value="nivel:desc">Nivel (mayor→menor)</option>
                 </select>
               </div>
-              <div className="flex items-center text-sm text-gray-400 px-1">
-                {filteredEnemies.length !== enemies.length ? (
-                  <span>
-                    {filteredEnemies.length} resultado{filteredEnemies.length === 1 ? '' : 's'}
-                  </span>
-                ) : (
-                  <span>{enemies.length} enemigos</span>
-                )}
+              <div className="hidden md:flex items-center justify-end">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
               </div>
             </div>
           </div>
@@ -4600,92 +5336,358 @@ function App() {
           </button>
         </div>
         {/* Lista de enemigos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {filteredEnemies.map((enemy) => (
-            <Tarjeta
-              key={enemy.id}
-              variant="magic"
-              className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl"
-            >
-              <div className="flex flex-col h-full">
-                {/* Imagen tipo Magic */}
-                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30 relative">
-                  {enemy.portrait ? (
-                    <img
-                      src={enemy.portrait}
-                      alt={enemy.name}
-                      className="w-full h-full object-contain object-center"
-                      loading="lazy"
-                      style={{ background: '#222' }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">
-                      👹
+        <div className="enemy-grid relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '25%' }}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '50%' }}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '75%' }}
+          />
+          {filteredEnemies.map((enemy) => {
+            const asArray = (value) => {
+              if (!value) return [];
+              if (Array.isArray(value)) return value.filter(Boolean);
+              if (typeof value === 'string') {
+                return value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+              }
+              return [];
+            };
+            const cleanText = (value) => (typeof value === 'string' ? value.trim() : '');
+            const normalizeNumber = (value) => {
+              if (value === null || value === undefined) return null;
+              if (typeof value === 'number' && Number.isFinite(value)) return value;
+              if (typeof value === 'string') {
+                const parsed = Number(value.replace(/[^0-9.+-]/g, ''));
+                return Number.isFinite(parsed) ? parsed : null;
+              }
+              return null;
+            };
+            const pickStat = (...values) => {
+              for (const value of values) {
+                const numeric = normalizeNumber(value);
+                if (numeric !== null) {
+                  return Math.max(0, Math.round(numeric));
+                }
+              }
+              return 0;
+            };
+
+            const tagsFromData = sanitizeEnemyTags([
+              ...asArray(enemy.tags),
+              ...asArray(enemy.etiquetas),
+            ]);
+            const tags =
+              tagsFromData.length > 0
+                ? tagsFromData
+                : [...DEFAULT_ENEMY_TAGS];
+            const typePieces = [
+              cleanText(enemy.tipo),
+              cleanText(enemy.type),
+              cleanText(enemy.subtipo),
+              cleanText(enemy.subType),
+              cleanText(enemy.categoria),
+              cleanText(enemy.category),
+            ].filter(Boolean);
+            const typeLine =
+              typePieces.length > 0
+                ? typePieces.slice(0, 2).join(' — ')
+                : tags.length > 0
+                ? tags.slice(0, 2).join(' — ')
+                : 'Criatura — Enemigo';
+            const rarity = cleanText(enemy.rareza || enemy.rarity);
+            const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
+            const description = cleanText(enemy.description);
+            const abilityCount = pickStat(enemy.poderes?.length);
+            const statusCount = pickStat(enemy.estados?.length);
+            const weaponCount = pickStat(enemy.weapons?.length);
+            const armorCount = pickStat(enemy.armaduras?.length);
+            const theme = buildEnemyTheme(enemy.themeColor);
+            const statEntries = [
+              {
+                id: 'weapons',
+                label: 'Armas',
+                value: weaponCount,
+                icon: <GiCrossedSwords className="text-base" />,
+                palette: theme.statPalette[0],
+              },
+              {
+                id: 'armors',
+                label: 'Armaduras',
+                value: armorCount,
+                icon: <GiShield className="text-base" />,
+                palette: theme.statPalette[1],
+              },
+              {
+                id: 'powers',
+                label: 'Poderes',
+                value: abilityCount,
+                icon: <GiSpellBook className="text-base" />,
+                palette: theme.statPalette[2],
+              },
+              {
+                id: 'statuses',
+                label: 'Estados',
+                value: statusCount,
+                icon: <FaRadiationAlt className="text-base" />,
+                palette: theme.statPalette[3],
+              },
+            ];
+
+            return (
+              <Tarjeta
+                key={enemy.id}
+                variant="magic"
+                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)]"
+                style={{
+                  boxShadow: theme.cardShadow,
+                  '--enemy-button-from': theme.button.edit.from,
+                  '--enemy-button-via': theme.button.edit.via,
+                  '--enemy-button-to': theme.button.edit.to,
+                  '--enemy-button-hover-from': theme.button.edit.hoverFrom,
+                  '--enemy-button-hover-via': theme.button.edit.hoverVia,
+                  '--enemy-button-hover-to': theme.button.edit.hoverTo,
+                  '--enemy-button-border': theme.button.edit.border,
+                  '--enemy-button-hover-border': theme.button.edit.hoverBorder,
+                  '--enemy-button-text': theme.buttonText,
+                  '--enemy-button-glow': theme.button.edit.glow,
+                  '--enemy-button-icon-glow': theme.button.edit.iconGlow,
+                }}
+              >
+                <div
+                  className="relative flex h-full flex-col rounded-[1.25rem]"
+                  style={{
+                    background: theme.backgroundGradient,
+                    color: theme.textPrimary,
+                  }}
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0 rounded-[1.25rem] border shadow-[0_0_32px_rgba(0,0,0,0.35)]"
+                    style={{ borderColor: theme.frameBorder }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-[6px] rounded-[1.05rem] border"
+                    style={{ borderColor: theme.innerBorder }}
+                  />
+                  <div className="relative z-10 flex h-full flex-col">
+                    <div className="px-5 pt-5 pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          {rarity && (
+                            <span
+                              className="text-[10px] uppercase tracking-[0.32em]"
+                              style={{ color: theme.rarityColor }}
+                            >
+                              {rarity}
+                            </span>
+                          )}
+                          <h3
+                            className="mt-1 text-xl font-extrabold uppercase tracking-[0.18em] drop-shadow-[0_6px_14px_rgba(0,0,0,0.75)]"
+                            style={{
+                              color: theme.textPrimary,
+                              textShadow: '0 8px 22px rgba(0,0,0,0.85)',
+                            }}
+                          >
+                            {enemy.name}
+                          </h3>
+                        </div>
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-base font-semibold shadow-[inset_0_0_18px_rgba(0,0,0,0.25)]"
+                          style={{
+                            backgroundImage: theme.levelBackground,
+                            borderColor: theme.levelBorder,
+                            color: theme.textPrimary,
+                          }}
+                        >
+                          {levelValue}
+                        </div>
+                      </div>
+                      <div
+                        className="mt-2 text-[10px] uppercase tracking-[0.26em] italic"
+                        style={{ color: theme.typeText }}
+                      >
+                        {typeLine}
+                      </div>
                     </div>
-                  )}
-                </div>
-                {/* Nombre y descripción */}
-                <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
-                  <h3
-                    className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider"
-                    style={{ textShadow: '0 2px 8px #000a' }}
-                  >
-                    {enemy.name}
-                  </h3>
-                  {/* Chips de resumen */}
-                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-yellow-500/10 border border-yellow-600/30 text-yellow-200 inline-flex items-center gap-1">
-                      <FiStar className="opacity-90" /> Nivel {enemy.nivel || 1}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiCrossedSwords /> {enemy.weapons?.length || 0} armas
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiShield /> {enemy.armaduras?.length || 0} armaduras
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiSpellBook /> {enemy.poderes?.length || 0} poderes
-                    </span>
+                    <div
+                      className="relative mx-4 mt-1 mb-4 aspect-[3/4] overflow-hidden rounded-[1rem] border shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
+                      style={{ borderColor: theme.innerBorder }}
+                    >
+                      {enemy.portrait ? (
+                        <img
+                          src={enemy.portrait}
+                          alt={enemy.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-5xl text-amber-200/40">
+                          👹
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-3 px-5 pb-4 text-sm">
+                      <p
+                        className="min-h-[2.5rem] text-center leading-relaxed italic"
+                        style={{ color: theme.descriptionColor }}
+                      >
+                        {description || 'Una presencia misteriosa aguarda su turno en el campo de batalla.'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.18em]">
+                        {statEntries.map(({ id, label, value, icon, palette }) => (
+                          <span
+                            key={id}
+                            className="flex items-center justify-between gap-2 rounded-full px-3 py-1 shadow-inner"
+                            style={{
+                              background: palette.bg,
+                              border: `1px solid ${palette.border}`,
+                              color: palette.text,
+                            }}
+                          >
+                            <span className="flex items-center gap-1 font-semibold">
+                              {icon} {label}
+                            </span>
+                            <span className="font-mono text-sm">{value}</span>
+                          </span>
+                        ))}
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap justify-center gap-2 text-[9px] uppercase tracking-[0.25em]">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full px-3 py-1 shadow-inner"
+                              style={{
+                                background: theme.tagBackground,
+                                border: `1px solid ${theme.tagBorder}`,
+                                color: theme.tagText,
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-5 pb-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em]">
+                        <span
+                          className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
+                          style={{
+                            background: theme.xpBadge.bg,
+                            border: `1px solid ${theme.xpBadge.border}`,
+                            color: theme.xpBadge.text,
+                          }}
+                        >
+                          <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
+                        </span>
+                        <span
+                          className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
+                          style={{
+                            background: theme.oroBadge.bg,
+                            border: `1px solid ${theme.oroBadge.border}`,
+                            color: theme.oroBadge.text,
+                          }}
+                        >
+                          <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className="mt-auto flex flex-wrap gap-2 border-t px-5 pb-5 pt-4"
+                      style={{
+                        borderColor: theme.innerBorder,
+                        background: theme.backgroundGradient,
+                      }}
+                    >
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => editEnemy(enemy)}
+                        className="enemy-action-button enemy-action-edit flex-1 min-w-[120px]"
+                        icon={<FiEdit2 className="text-lg" />}
+                        style={{
+                          '--enemy-button-from': theme.button.edit.from,
+                          '--enemy-button-via': theme.button.edit.via,
+                          '--enemy-button-to': theme.button.edit.to,
+                          '--enemy-button-hover-from': theme.button.edit.hoverFrom,
+                          '--enemy-button-hover-via': theme.button.edit.hoverVia,
+                          '--enemy-button-hover-to': theme.button.edit.hoverTo,
+                          '--enemy-button-border': theme.button.edit.border,
+                          '--enemy-button-hover-border': theme.button.edit.hoverBorder,
+                          '--enemy-button-text': theme.buttonText,
+                          '--enemy-button-glow': theme.button.edit.glow,
+                          '--enemy-button-icon-glow': theme.button.edit.iconGlow,
+                        }}
+                      >
+                        Editar
+                      </Boton>
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                            deleteEnemy(enemy.id);
+                          }
+                        }}
+                        className="enemy-action-button enemy-action-delete flex-1 min-w-[120px]"
+                        icon={<FiTrash2 className="text-lg" />}
+                        style={{
+                          '--enemy-button-from': theme.button.delete.from,
+                          '--enemy-button-via': theme.button.delete.via,
+                          '--enemy-button-to': theme.button.delete.to,
+                          '--enemy-button-hover-from': theme.button.delete.hoverFrom,
+                          '--enemy-button-hover-via': theme.button.delete.hoverVia,
+                          '--enemy-button-hover-to': theme.button.delete.hoverTo,
+                          '--enemy-button-border': theme.button.delete.border,
+                          '--enemy-button-hover-border': theme.button.delete.hoverBorder,
+                          '--enemy-button-text': theme.buttonText,
+                          '--enemy-button-glow': theme.button.delete.glow,
+                          '--enemy-button-icon-glow': theme.button.delete.iconGlow,
+                        }}
+                      >
+                        Eliminar
+                      </Boton>
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => setSelectedEnemy(enemy)}
+                        className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
+                        icon={<FiEye className="text-lg" />}
+                        style={{
+                          '--enemy-button-from': theme.button.view.from,
+                          '--enemy-button-via': theme.button.view.via,
+                          '--enemy-button-to': theme.button.view.to,
+                          '--enemy-button-hover-from': theme.button.view.hoverFrom,
+                          '--enemy-button-hover-via': theme.button.view.hoverVia,
+                          '--enemy-button-hover-to': theme.button.view.hoverTo,
+                          '--enemy-button-border': theme.button.view.border,
+                          '--enemy-button-hover-border': theme.button.view.hoverBorder,
+                          '--enemy-button-text': theme.buttonText,
+                          '--enemy-button-glow': theme.button.view.glow,
+                          '--enemy-button-icon-glow': theme.button.view.iconGlow,
+                        }}
+                      >
+                        Ver ficha
+                      </Boton>
+                    </div>
                   </div>
-                  {enemy.description && (
-                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">
-                      {enemy.description}
-                    </p>
-                  )}
                 </div>
-                {/* Acciones */}
-                <div className="flex gap-2 px-4 pb-4 pt-2 justify-center border-t border-yellow-900/20">
-                  <Boton
-                    color="blue"
-                    size="sm"
-                    onClick={() => editEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Editar
-                  </Boton>
-                  <Boton
-                    color="purple"
-                    size="sm"
-                    onClick={() => setSelectedEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Ver Ficha
-                  </Boton>
-                  <Boton
-                    color="red"
-                    size="sm"
-                    onClick={() => {
-                      if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                        deleteEnemy(enemy.id);
-                      }
-                    }}
-                  >
-                    🗑️
-                  </Boton>
-                </div>
-              </div>
-            </Tarjeta>
-          ))}
+              </Tarjeta>
+            );
+          })}
         </div>
         {enemies.length === 0 && (
           <div className="text-center py-8">
@@ -4759,12 +5761,21 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     />
                     {newEnemy.portrait && (
-                      <div className="mt-2 w-full max-w-md aspect-square rounded-lg overflow-hidden bg-gray-800/80 flex items-center justify-center">
-                        <img
-                          src={newEnemy.portrait}
-                          alt="Preview"
-                          className="w-full h-full object-contain object-center rounded-lg shadow border border-gray-800"
-                        />
+                      <div className="mt-2 flex w-full max-w-md flex-col items-center gap-3">
+                        <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800/80 shadow-inner">
+                          <img
+                            src={newEnemy.portrait}
+                            alt="Preview"
+                            className="h-full w-full object-contain object-center"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRecropPortrait}
+                          className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-4 py-1.5 text-sm font-medium text-amber-100 shadow-[0_0_14px_rgba(250,204,21,0.12)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
+                        >
+                          <FiCrop className="text-base" /> Ajustar recorte
+                        </button>
                       </div>
                     )}
                   </div>
@@ -4784,6 +5795,161 @@ function App() {
                       placeholder="Descripción del enemigo"
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
                     />
+                  </div>
+                  {/* Etiquetas personalizadas */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Etiquetas de criatura
+                    </label>
+                    <p className="text-xs text-gray-400">
+                      Personaliza la línea «Criatura — Enemigo» añadiendo tus propias etiquetas.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Input
+                        value={enemyTagInput}
+                        onChange={(e) => setEnemyTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleEnemyTagAdd();
+                          }
+                        }}
+                        placeholder="Añadir etiqueta"
+                        className="flex-1 min-w-[8rem]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleEnemyTagAdd}
+                        className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-100 shadow-[0_0_12px_rgba(250,204,21,0.15)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
+                      >
+                        <FiPlus /> Añadir
+                      </button>
+                    </div>
+                    {newEnemy.tags && newEnemy.tags.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {newEnemy.tags.map((tag, index) => (
+                          <div
+                            key={`${tag}-${index}`}
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-700/60 bg-gray-800/60 px-3 py-2"
+                          >
+                            {enemyEditingTagIndex === index ? (
+                              <>
+                                <Input
+                                  value={enemyTagDraft}
+                                  onChange={(e) => setEnemyTagDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleEnemyTagEditSave();
+                                    }
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      handleEnemyTagEditCancel();
+                                    }
+                                  }}
+                                  className="flex-1 min-w-[6rem]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleEnemyTagEditSave}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 text-emerald-100 transition hover:border-emerald-300/60 hover:bg-emerald-500/20"
+                                  aria-label="Guardar etiqueta"
+                                >
+                                  <FiCheck />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleEnemyTagEditCancel}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
+                                  aria-label="Cancelar edición"
+                                >
+                                  <FiX />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="flex-1 text-sm font-medium text-amber-100/90">
+                                  {tag}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEnemyTagEditStart(index)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-400/40 bg-indigo-500/10 text-indigo-100 transition hover:border-indigo-300/60 hover:bg-indigo-500/20"
+                                  aria-label={`Editar etiqueta ${tag}`}
+                                >
+                                  <FiEdit2 />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEnemyTagRemove(index)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
+                                  aria-label={`Eliminar etiqueta ${tag}`}
+                                >
+                                  <FiX />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleEnemyTagReset}
+                        className="rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
+                      >
+                        Restablecer etiquetas
+                      </button>
+                    </div>
+                  </div>
+                  {/* Tema visual de la carta */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Color base del estilo
+                    </label>
+                    <p className="text-xs text-gray-400">
+                      Selecciona un color y generaremos automáticamente el degradado y los acentos de la carta.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <input
+                        type="color"
+                        value={newEnemy.themeColor || DEFAULT_ENEMY_THEME_COLOR}
+                        onChange={(e) => handleEnemyThemeColorCommit(e.target.value)}
+                        className="h-10 w-14 cursor-pointer rounded border border-gray-600 bg-gray-700"
+                        aria-label="Elegir color base"
+                      />
+                      <Input
+                        value={enemyThemeColorDraft}
+                        onChange={(e) => handleEnemyThemeColorInputChange(e.target.value)}
+                        onBlur={handleEnemyThemeColorBlur}
+                        placeholder="#facc15"
+                        className="w-28"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleEnemyThemeColorCommit(DEFAULT_ENEMY_THEME_COLOR)}
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
+                      >
+                        Restablecer color
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {ENEMY_THEME_PRESETS.map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => handleEnemyThemeColorCommit(preset)}
+                          className={`h-8 w-8 rounded-full border ${
+                            normalizeHexColor(newEnemy.themeColor) === normalizeHexColor(preset)
+                              ? 'border-amber-300 shadow-[0_0_12px_rgba(250,204,21,0.35)]'
+                              : 'border-gray-600'
+                          } transition`}
+                          style={{ background: preset }}
+                          aria-label={`Usar color ${preset}`}
+                        />
+                      ))}
+                    </div>
                   </div>
                   {/* Nivel y Experiencia */}
                   <div className="grid grid-cols-2 gap-4">
@@ -5278,6 +6444,73 @@ function App() {
                   >
                     Cancelar
                   </Boton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showImageCropper && imageCropSource && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+            onClick={closeCropper}
+          >
+            <div
+              className="relative w-full max-w-3xl rounded-2xl bg-gray-900/95 p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-amber-100">Ajustar retrato</h3>
+              <p className="mt-1 text-sm text-gray-300">
+                Arrastra la imagen y usa el zoom para elegir qué parte se mostrará en la carta del enemigo.
+              </p>
+              <div className="relative mt-4 h-[55vh] min-h-[320px] w-full overflow-hidden rounded-xl border border-amber-300/30 bg-black/40">
+                <Cropper
+                  image={imageCropSource}
+                  crop={imageCrop}
+                  zoom={imageCropZoom}
+                  aspect={3 / 4}
+                  cropShape="rect"
+                  showGrid={false}
+                  onCropChange={setImageCrop}
+                  onCropComplete={handleCropComplete}
+                  onZoomChange={setImageCropZoom}
+                  objectFit="cover"
+                />
+              </div>
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex w-full max-w-sm items-center gap-3 text-sm text-amber-100/80">
+                  <span className="uppercase tracking-[0.24em] text-amber-200/70">Zoom</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.01"
+                    value={imageCropZoom}
+                    onChange={(e) => setImageCropZoom(Number(e.target.value))}
+                    className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-amber-500/20 accent-amber-300"
+                  />
+                </label>
+                <div className="flex flex-1 justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeCropper}
+                    disabled={imageCropLoading}
+                    className="rounded-full border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmCrop}
+                    disabled={imageCropLoading}
+                    className={`inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      imageCropLoading ? 'cursor-wait' : ''
+                    }`}
+                  >
+                    {imageCropLoading && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
+                    )}
+                    Guardar recorte
+                  </button>
                 </div>
               </div>
             </div>

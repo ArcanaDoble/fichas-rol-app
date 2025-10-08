@@ -73,7 +73,54 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.59**
+> **Versión actual: 2.4.68**
+
+**Resumen de cambios v2.4.68:**
+
+- Panel de filtros de enemigos con diseño encapsulado, bordes suaves y resultados destacados, mejorando la estética en escritorio y móvil.
+- Controles de búsqueda, orden y filtros más accesibles y responsivos, con indicadores compactos y botón de retratos en formato pill.
+
+**Resumen de cambios v2.4.67:**
+
+- Recuperado el degradado dorado y violeta clásico de las cartas de enemigos cuando no se selecciona un color personalizado, manteniendo el nuevo sistema de tematización sin perder el estilo original.
+
+**Resumen de cambios v2.4.66:**
+
+- Edición libre de etiquetas en las cartas de enemigos con chips reordenables, atajos de teclado y opción de restablecer las etiquetas clásicas «Criatura — Enemigo».
+- Selector de color base que genera automáticamente degradados, bordes y botones coordinados para cada carta de enemigo, manteniendo el estilo mágico incluso con paletas personalizadas.
+
+**Resumen de cambios v2.4.65:**
+
+- Cartas de enemigos más contenidas en escritorio gracias a un ancho máximo reducido en cada breakpoint.
+- Ajuste del layout para que cada carta respete su ancho máximo dentro de la cuadrícula de cuatro columnas.
+
+**Resumen de cambios v2.4.64:**
+
+- Rejilla de enemigos en escritorio nuevamente con cuatro columnas para recuperar la disposición solicitada inicialmente.
+- Cartas de enemigos con un ancho máximo duplicado en escritorio, aprovechando mejor cada columna sin perder la cuadrícula.
+
+**Resumen de cambios v2.4.63:**
+
+- Cartas de enemigos que ocupan dos columnas completas en escritorio para acercarse al ancho deseado y dar más protagonismo al retrato.
+- Botones de acciones reorganizados para situar «Eliminar» en el centro y mantener una jerarquía visual equilibrada junto a «Editar» y «Ver ficha».
+
+**Resumen de cambios v2.4.62:**
+
+- Cartas de enemigos un 50 % más anchas en escritorio para aprovechar mejor la cuadrícula de cuatro columnas y resaltar el retrato.
+- Eliminados los contadores de Ataque y Defensa para evitar lecturas confusas y mantener la atención en los atributos clave de la carta.
+
+**Resumen de cambios v2.4.61:**
+
+- Editor visual de retratos para enemigos con recorte y zoom antes y después de guardar la carta.
+- Cartas de enemigos más compactas en escritorio con cuatro columnas y líneas divisorias punteadas entre ellas.
+- Indicadores de Ataque y Defensa con etiquetas claras y textos de ayuda para explicar los valores mostrados.
+- Botones de acciones de enemigo rediseñados con iconos y degradados acordes al estilo coleccionable.
+
+**Resumen de cambios v2.4.60:**
+
+- Rejilla de enemigos en escritorio con cuatro columnas y mayor separación para evitar cartas gigantes.
+- Cartas de enemigos con marco y ornamentos inspirados en Magic: The Gathering, incluyendo indicador de nivel y sección de poder/defensa.
+- Nuevo tratamiento visual para la variante "magic" con brillos, degradados y bordes dorados reactivos al hover.
 
 **Resumen de cambios v2.1.1:**
 
