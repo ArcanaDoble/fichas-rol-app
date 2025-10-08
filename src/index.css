@@ -180,6 +180,39 @@ html {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
 
+.enemy-grid {
+  position: relative;
+}
+
+.enemy-grid .enemy-card {
+  position: relative;
+  z-index: 10;
+}
+
+.enemy-action-button {
+  @apply !rounded-full !bg-gradient-to-r !from-amber-500/20 !via-purple-500/20 !to-slate-900/60 !border !border-amber-400/40 !text-xs !uppercase !tracking-[0.3em] !text-amber-100 !shadow-[0_0_18px_rgba(250,204,21,0.18)] !px-5 !py-2;
+}
+
+.enemy-action-button:hover {
+  @apply !from-amber-400/30 !via-purple-500/30 !to-slate-900/70 !border-amber-300/60;
+}
+
+.enemy-action-button svg {
+  @apply drop-shadow-[0_0_10px_rgba(250,204,21,0.4)];
+}
+
+.enemy-action-edit {
+  @apply !via-purple-500/25;
+}
+
+.enemy-action-view {
+  @apply !from-sky-500/20 !via-cyan-500/20 !to-slate-900/60;
+}
+
+.enemy-action-delete {
+  @apply !from-rose-500/20 !via-red-500/20 !to-slate-900/60;
+}
+
 /* Scrollbar personalizada */
 ::-webkit-scrollbar {
   width: 8px;
