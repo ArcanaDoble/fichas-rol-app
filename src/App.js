@@ -173,6 +173,118 @@ const dataUrlToFile = async (dataUrl, filename = 'portrait.jpg') => {
 
 const DEFAULT_ENEMY_THEME_COLOR = '#facc15';
 const DEFAULT_ENEMY_TAGS = ['Criatura', 'Enemigo'];
+const DEFAULT_ENEMY_THEME = {
+  base: DEFAULT_ENEMY_THEME_COLOR,
+  accent: '#fbbf24',
+  accentSoft: '#fde68a',
+  accentStrong: '#b45309',
+  accentGlow: '#fef08a',
+  complementary: '#7c3aed',
+  backgroundGradient:
+    'radial-gradient(circle at 12% 20%, rgba(250, 204, 21, 0.18), transparent 55%), radial-gradient(circle at 88% 16%, rgba(99, 102, 241, 0.22), transparent 60%), linear-gradient(140deg, rgba(26, 20, 12, 0.95) 0%, rgba(12, 10, 28, 0.92) 55%, rgba(15, 23, 42, 0.94) 100%)',
+  frameBorder: 'rgba(250, 204, 21, 0.25)',
+  innerBorder: 'rgba(148, 163, 184, 0.18)',
+  textPrimary: '#fefce8',
+  textSecondary: 'rgba(252, 211, 77, 0.78)',
+  typeText: 'rgba(250, 204, 21, 0.82)',
+  rarityColor: 'rgba(252, 211, 77, 0.72)',
+  levelBorder: 'rgba(250, 204, 21, 0.5)',
+  levelBackground:
+    'radial-gradient(circle at 30% 30%, rgba(250, 204, 21, 0.45), rgba(56, 41, 86, 0.85))',
+  statPalette: [
+    {
+      bg: 'rgba(250, 204, 21, 0.12)',
+      border: 'rgba(250, 204, 21, 0.38)',
+      text: '#fefce8',
+    },
+    {
+      bg: 'rgba(168, 85, 247, 0.16)',
+      border: 'rgba(192, 132, 252, 0.42)',
+      text: '#f5f3ff',
+    },
+    {
+      bg: 'rgba(56, 189, 248, 0.16)',
+      border: 'rgba(56, 189, 248, 0.4)',
+      text: '#e0f2fe',
+    },
+    {
+      bg: 'rgba(249, 115, 22, 0.16)',
+      border: 'rgba(251, 146, 60, 0.4)',
+      text: '#fff7ed',
+    },
+  ],
+  tagBackground: 'rgba(30, 41, 59, 0.65)',
+  tagBorder: 'rgba(250, 204, 21, 0.35)',
+  tagText: 'rgba(248, 250, 252, 0.85)',
+  descriptionColor: 'rgba(226, 232, 240, 0.9)',
+  xpBadge: {
+    bg: 'rgba(250, 204, 21, 0.18)',
+    border: 'rgba(250, 204, 21, 0.45)',
+    text: '#fefce8',
+  },
+  oroBadge: {
+    bg: 'rgba(168, 85, 247, 0.2)',
+    border: 'rgba(192, 132, 252, 0.45)',
+    text: '#f3e8ff',
+  },
+  cardShadow: '0 18px 36px rgba(8, 7, 21, 0.55)',
+  button: {
+    edit: {
+      from: 'rgba(250, 204, 21, 0.24)',
+      via: 'rgba(168, 85, 247, 0.24)',
+      to: 'rgba(15, 23, 42, 0.78)',
+      hoverFrom: 'rgba(250, 204, 21, 0.32)',
+      hoverVia: 'rgba(168, 85, 247, 0.32)',
+      hoverTo: 'rgba(15, 23, 42, 0.88)',
+      border: 'rgba(250, 204, 21, 0.45)',
+      hoverBorder: 'rgba(250, 204, 21, 0.65)',
+      glow: 'rgba(250, 204, 21, 0.22)',
+      iconGlow: 'rgba(250, 204, 21, 0.5)',
+    },
+    delete: {
+      from: 'rgba(248, 113, 113, 0.3)',
+      via: 'rgba(225, 29, 72, 0.32)',
+      to: 'rgba(15, 23, 42, 0.85)',
+      hoverFrom: 'rgba(248, 113, 113, 0.38)',
+      hoverVia: 'rgba(225, 29, 72, 0.4)',
+      hoverTo: 'rgba(15, 23, 42, 0.92)',
+      border: 'rgba(248, 113, 113, 0.55)',
+      hoverBorder: 'rgba(248, 113, 113, 0.75)',
+      glow: 'rgba(248, 113, 113, 0.24)',
+      iconGlow: 'rgba(248, 113, 113, 0.5)',
+    },
+    view: {
+      from: 'rgba(56, 189, 248, 0.24)',
+      via: 'rgba(99, 102, 241, 0.26)',
+      to: 'rgba(15, 23, 42, 0.82)',
+      hoverFrom: 'rgba(56, 189, 248, 0.32)',
+      hoverVia: 'rgba(99, 102, 241, 0.34)',
+      hoverTo: 'rgba(15, 23, 42, 0.9)',
+      border: 'rgba(59, 130, 246, 0.5)',
+      hoverBorder: 'rgba(59, 130, 246, 0.7)',
+      glow: 'rgba(56, 189, 248, 0.24)',
+      iconGlow: 'rgba(56, 189, 248, 0.5)',
+    },
+  },
+  buttonText: '#fefce8',
+  buttonHoverText: '#fefce8',
+  buttonBaseText: '#fefce8',
+  buttonFontShadow: '0 0 10px rgba(250, 204, 21, 0.45)',
+};
+
+const cloneDefaultEnemyTheme = () => ({
+  ...DEFAULT_ENEMY_THEME,
+  statPalette: DEFAULT_ENEMY_THEME.statPalette.map((palette) => ({
+    ...palette,
+  })),
+  xpBadge: { ...DEFAULT_ENEMY_THEME.xpBadge },
+  oroBadge: { ...DEFAULT_ENEMY_THEME.oroBadge },
+  button: {
+    edit: { ...DEFAULT_ENEMY_THEME.button.edit },
+    delete: { ...DEFAULT_ENEMY_THEME.button.delete },
+    view: { ...DEFAULT_ENEMY_THEME.button.view },
+  },
+});
 const ENEMY_THEME_PRESETS = [
   '#facc15',
   '#fb7185',
@@ -329,6 +441,11 @@ const sanitizeEnemyTags = (tags) =>
 
 const buildEnemyTheme = (color) => {
   const base = normalizeHexColor(color);
+
+  if (base === DEFAULT_ENEMY_THEME.base) {
+    return cloneDefaultEnemyTheme();
+  }
+
   const accent = adjustSaturation(base, 8);
   const accentSoft = adjustLightness(accent, 18);
   const accentStrong = adjustLightness(accent, -28);
