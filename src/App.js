@@ -25,6 +25,8 @@ import {
   FiSearch,
   FiFilter,
   FiXCircle,
+  FiChevronDown,
+  FiImage,
   FiStar,
   FiEdit2,
   FiEye,
@@ -1139,6 +1141,10 @@ function App() {
       return 0;
     });
   }, [enemies, deferredEnemySearch, enemyOnlyPortraits, enemySort, enemySortDir]);
+  const enemyResultsLabel =
+    filteredEnemies.length !== enemies.length
+      ? `${filteredEnemies.length} resultado${filteredEnemies.length === 1 ? '' : 's'}`
+      : `${enemies.length} enemigo${enemies.length === 1 ? '' : 's'}`;
   // Glosario de términos destacados
   const {
     glossary,
@@ -5158,48 +5164,96 @@ function App() {
             <Boton onClick={refreshCatalog} className="w-full md:w-auto">
               Refrescar
             </Boton>
-            <button
-              type="button"
-              className="md:hidden w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
-              onClick={() => setEnemyFiltersOpen((v) => !v)}
-              aria-expanded={enemyFiltersOpen}
-              aria-controls="enemy-filters"
-            >
-              <FiFilter /> Filtros
-            </button>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
+              <div className="md:hidden inline-flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                  enemyFiltersOpen
+                    ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                    : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                }`}
+                onClick={() => setEnemyFiltersOpen((v) => !v)}
+                aria-expanded={enemyFiltersOpen}
+                aria-controls="enemy-filters"
+              >
+                <FiFilter />
+                <span>Filtros</span>
+                <FiChevronDown
+                  className={`transition-transform duration-200 ${
+                    enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
-          <div className="space-y-2" id="enemy-filters">
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={enemySearch}
-                onChange={(e) => setEnemySearch(e.target.value)}
-                placeholder="Buscar enemigos (nombre, descripción, equipo...)"
-                className="w-full pl-10 pr-10 py-2 rounded-md bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-              {enemySearch && (
+          <div
+            className="rounded-3xl border border-purple-500/20 bg-gray-900/80 p-4 md:p-6 shadow-[0_18px_40px_-18px_rgba(147,51,234,0.45)] backdrop-blur"
+            id="enemy-filters"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="relative flex-1">
+                <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-purple-300/60" />
+                <input
+                  type="text"
+                  value={enemySearch}
+                  onChange={(e) => setEnemySearch(e.target.value)}
+                  placeholder="Buscar enemigos (nombre, descripción, equipo...)"
+                  className="w-full rounded-2xl border border-gray-700/60 bg-gray-800/70 pl-12 pr-12 py-3 text-sm md:text-base text-gray-100 shadow-inner shadow-black/40 transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/30"
+                />
+                {enemySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setEnemySearch('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-lg text-gray-400 transition hover:text-gray-200"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <FiXCircle />
+                  </button>
+                )}
+              </div>
+              <div className="hidden lg:flex items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
+              </div>
+            </div>
+            <div
+              className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${
+                enemyFiltersOpen ? '' : 'hidden md:grid'
+              }`}
+            >
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setEnemySearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
-                  aria-label="Limpiar búsqueda"
+                  onClick={() => setEnemyOnlyPortraits((v) => !v)}
+                  aria-pressed={enemyOnlyPortraits}
+                  className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                    enemyOnlyPortraits
+                      ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                      : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                  }`}
                 >
-                  <FiXCircle />
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
+                      enemyOnlyPortraits
+                        ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
+                        : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
+                    }`}
+                  >
+                    <FiImage />
+                  </span>
+                  <span>Solo con retrato</span>
                 </button>
-              )}
-            </div>
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-2 ${enemyFiltersOpen ? 'block' : 'hidden md:grid'}`}>
-              <label className="inline-flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={enemyOnlyPortraits}
-                  onChange={(e) => setEnemyOnlyPortraits(e.target.checked)}
-                />
-                <span>Solo con retrato</span>
-              </label>
-              <div className="bg-gray-800 border border-gray-700 rounded px-3 py-2">
-                <label className="block text-xs text-gray-400 mb-1">Ordenar por</label>
+              </div>
+              <div className="rounded-2xl border border-gray-700/70 bg-gray-800/70 px-4 py-3 text-sm text-gray-200 shadow-inner shadow-black/30">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400/80">
+                  Ordenar por
+                </label>
                 <select
                   value={`${enemySort}:${enemySortDir}`}
                   onChange={(e) => {
@@ -5207,7 +5261,7 @@ function App() {
                     setEnemySort(s);
                     setEnemySortDir(d);
                   }}
-                  className="w-full bg-gray-700 rounded px-2 py-1"
+                  className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                 >
                   <option value="name:asc">Nombre (A→Z)</option>
                   <option value="name:desc">Nombre (Z→A)</option>
@@ -5215,14 +5269,10 @@ function App() {
                   <option value="nivel:desc">Nivel (mayor→menor)</option>
                 </select>
               </div>
-              <div className="flex items-center text-sm text-gray-400 px-1">
-                {filteredEnemies.length !== enemies.length ? (
-                  <span>
-                    {filteredEnemies.length} resultado{filteredEnemies.length === 1 ? '' : 's'}
-                  </span>
-                ) : (
-                  <span>{enemies.length} enemigos</span>
-                )}
+              <div className="hidden md:flex items-center justify-end">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {enemyResultsLabel}
+                </span>
               </div>
             </div>
           </div>
