@@ -94,22 +94,30 @@ function wallToSegments(wall) {
 }
 
 /**
- * Calcula el polígono de visibilidad desde un punto de origen
- * @param {Object} origin - Punto de origen {x, y}
- * @param {Array} walls - Array de muros
- * @param {Object} options - Opciones de configuración
- * @returns {Array} Array de puntos que forman el polígono visible
+ * Convierte un array de muros en segmentos utilizables por el algoritmo de visibilidad
+ * @param {Array} walls
+ * @returns {Array}
  */
-export function computeVisibility(origin, walls, { rays = 720, maxDistance = 500 } = {}) {
-  // Convertir muros a segmentos
+export function createVisibilitySegments(walls = []) {
   const segments = [];
   walls.forEach(wall => {
     const wallSegments = wallToSegments(wall);
-    segments.push(...wallSegments);
+    if (wallSegments.length > 0) {
+      segments.push(...wallSegments);
+    }
   });
-  
+  return segments;
+}
+
+function computeVisibilityFromSegments(
+  origin,
+  segments,
+  { rays = 720, maxDistance = 500 } = {}
+) {
+  const effectiveSegments = Array.isArray(segments) ? segments : [];
+
   // Si no hay muros, devolver un círculo completo
-  if (segments.length === 0) {
+  if (effectiveSegments.length === 0) {
     const points = [];
     const angleStep = (2 * Math.PI) / 64; // Más puntos para círculo suave
     for (let i = 0; i < 64; i++) {
@@ -126,7 +134,7 @@ export function computeVisibility(origin, walls, { rays = 720, maxDistance = 500
   // Recopilar todos los puntos críticos (esquinas de muros)
   const criticalPoints = new Set();
   
-  segments.forEach(segment => {
+  effectiveSegments.forEach(segment => {
     [segment.start, segment.end].forEach(point => {
       const dx = point.x - origin.x;
       const dy = point.y - origin.y;
@@ -180,7 +188,7 @@ export function computeVisibility(origin, walls, { rays = 720, maxDistance = 500
     let minDistance = maxDistance;
     
     // Encontrar la intersección más cercana con mayor precisión
-    segments.forEach(segment => {
+    effectiveSegments.forEach(segment => {
       const intersection = raySegmentIntersection(ray, segment);
       if (intersection && intersection.distance > 0.01 && intersection.distance < minDistance) {
         minDistance = intersection.distance;
@@ -246,6 +254,32 @@ export function computeVisibility(origin, walls, { rays = 720, maxDistance = 500
   }
   
   return filteredIntersections;
+}
+
+/**
+ * Calcula el polígono de visibilidad desde un punto de origen
+ * @param {Object} origin - Punto de origen {x, y}
+ * @param {Array} wallsOrSegments - Array de muros o segmentos precomputados
+ * @param {Object} options - Opciones de configuración
+ * @returns {Array} Array de puntos que forman el polígono visible
+ */
+export function computeVisibility(origin, wallsOrSegments, options = {}) {
+  if (!wallsOrSegments) {
+    return computeVisibilityFromSegments(origin, [], options);
+  }
+
+  const firstItem = wallsOrSegments[0];
+  const isSegment = firstItem && typeof firstItem === 'object' && 'start' in firstItem && 'end' in firstItem;
+
+  const segments = isSegment ? wallsOrSegments : createVisibilitySegments(wallsOrSegments);
+  return computeVisibilityFromSegments(origin, segments, options);
+}
+
+/**
+ * Helper expuesto para calcular la visibilidad directamente con segmentos precomputados
+ */
+export function computeVisibilityWithSegments(origin, segments, options = {}) {
+  return computeVisibilityFromSegments(origin, segments, options);
 }
 
 /**
