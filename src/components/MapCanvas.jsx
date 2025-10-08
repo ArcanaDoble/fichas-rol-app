@@ -1552,55 +1552,70 @@ const MapCanvas = ({
   }, [tokenSwitcherPos]);
 
   // Sistema de visibilidad cruzada entre capas
-  const getVisibleElements = (elements, currentLayer) => {
-    const visible = [];
-    const background = [];
-    
-    elements.forEach(element => {
-      const elementLayer = element.layer || 'fichas';
-      
-      if (elementLayer === currentLayer) {
-        // Elementos de la capa actual - opacidad normal
-        visible.push({ ...element, crossLayerOpacity: 1, isBackground: false });
-      } else {
-        // Elementos de otras capas - opacidad reducida según la capa actual
-        let opacity = 1;
-        
-        if (currentLayer === 'master') {
-          // Capa Master ve Fichas con opacidad reducida
-          if (elementLayer === 'fichas') {
-            opacity = 0.4; // Un poco más visible para mejor referencia
+  const getVisibleElements = useCallback(
+    (elements) => {
+      const visible = [];
+      const background = [];
+
+      elements.forEach((element) => {
+        const elementLayer = element.layer || 'fichas';
+
+        if (elementLayer === activeLayer) {
+          // Elementos de la capa actual - opacidad normal
+          visible.push({ ...element, crossLayerOpacity: 1, isBackground: false });
+        } else {
+          // Elementos de otras capas - opacidad reducida según la capa actual
+          let opacity = 1;
+
+          if (activeLayer === 'master') {
+            // Capa Master ve Fichas con opacidad reducida
+            if (elementLayer === 'fichas') {
+              opacity = 0.4; // Un poco más visible para mejor referencia
+            }
+          } else if (activeLayer === 'luz') {
+            // Capa Luz ve Master y Fichas con opacidad reducida
+            if (elementLayer === 'master') {
+              opacity = 0.35; // Master un poco más visible que Fichas
+            } else if (elementLayer === 'fichas') {
+              opacity = 0.25; // Fichas más tenue
+            }
           }
-        } else if (currentLayer === 'luz') {
-          // Capa Luz ve Master y Fichas con opacidad reducida
-          if (elementLayer === 'master') {
-            opacity = 0.35; // Master un poco más visible que Fichas
-          } else if (elementLayer === 'fichas') {
-            opacity = 0.25; // Fichas más tenue
+
+          // Solo agregar si debe ser visible (Fichas no ve otras capas)
+          if (activeLayer !== 'fichas' && opacity < 1) {
+            background.push({ ...element, crossLayerOpacity: opacity, isBackground: true });
           }
         }
-        
-        // Solo agregar si debe ser visible (Fichas no ve otras capas)
-        if (currentLayer !== 'fichas' && opacity < 1) {
-          background.push({ ...element, crossLayerOpacity: opacity, isBackground: true });
-        }
-      }
-    });
-    
-    return { visible, background };
-  };
+      });
+
+      return { visible, background };
+    },
+    [activeLayer]
+  );
 
   // Obtener elementos visibles y de fondo para cada tipo
-  const tokenLayers = getVisibleElements(tokens, activeLayer);
-  const lineLayers = getVisibleElements(lines, activeLayer);
-  const wallLayers = getVisibleElements(walls, activeLayer);
-  const textLayers = getVisibleElements(texts, activeLayer);
+  const tokenLayers = useMemo(() => getVisibleElements(tokens), [tokens, getVisibleElements]);
+  const lineLayers = useMemo(() => getVisibleElements(lines), [lines, getVisibleElements]);
+  const wallLayers = useMemo(() => getVisibleElements(walls), [walls, getVisibleElements]);
+  const textLayers = useMemo(() => getVisibleElements(texts), [texts, getVisibleElements]);
 
   // Combinar elementos principales y de fondo
-  const filteredTokens = [...tokenLayers.background, ...tokenLayers.visible];
-  const filteredLines = [...lineLayers.background, ...lineLayers.visible];
-  const filteredWalls = [...wallLayers.background, ...wallLayers.visible];
-  const filteredTexts = [...textLayers.background, ...textLayers.visible];
+  const filteredTokens = useMemo(
+    () => [...tokenLayers.background, ...tokenLayers.visible],
+    [tokenLayers.background, tokenLayers.visible]
+  );
+  const filteredLines = useMemo(
+    () => [...lineLayers.background, ...lineLayers.visible],
+    [lineLayers.background, lineLayers.visible]
+  );
+  const filteredWalls = useMemo(
+    () => [...wallLayers.background, ...wallLayers.visible],
+    [wallLayers.background, wallLayers.visible]
+  );
+  const filteredTexts = useMemo(
+    () => [...textLayers.background, ...textLayers.visible],
+    [textLayers.background, textLayers.visible]
+  );
 
   // Función para cambiar de capa
   const handleLayerChange = (newLayer) => {
