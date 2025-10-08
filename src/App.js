@@ -4807,25 +4807,6 @@ function App() {
                 : 'Criatura — Enemigo';
             const rarity = cleanText(enemy.rareza || enemy.rarity);
             const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
-            const attackStat = pickStat(
-              enemy?.stats?.ataque?.total,
-              enemy?.stats?.ataque,
-              enemy?.stats?.daño?.total,
-              enemy?.stats?.daño,
-              enemy.weapons?.length,
-              enemy.poderes?.length,
-              levelValue
-            );
-            const defenseStat = pickStat(
-              enemy?.stats?.defensa?.total,
-              enemy?.stats?.defensa,
-              enemy?.stats?.armadura?.total,
-              enemy?.stats?.armadura,
-              enemy.armaduras?.length,
-              enemy?.stats?.vida?.total,
-              enemy?.stats?.vida,
-              levelValue
-            );
             const description = cleanText(enemy.description);
             const abilityCount = pickStat(enemy.poderes?.length);
             const statusCount = pickStat(enemy.estados?.length);
@@ -4836,7 +4817,7 @@ function App() {
               <Tarjeta
                 key={enemy.id}
                 variant="magic"
-                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:max-w-[320px]"
+                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:max-w-[480px]"
               >
                 <div className="relative flex h-full flex-col rounded-[1.25rem] bg-gradient-to-br from-[#2a1a10]/90 via-[#140f1c]/92 to-[#09090f]/95">
                   <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] border border-amber-200/15 shadow-[0_0_32px_rgba(250,204,21,0.12)]" />
@@ -4928,28 +4909,6 @@ function App() {
                         <span className="flex items-center gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
                           <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
                         </span>
-                        <div className="flex flex-1 flex-wrap justify-center gap-3 text-left text-amber-100/90">
-                          <div
-                            className="flex min-w-[120px] items-center gap-2 rounded-lg border border-amber-400/40 bg-black/40 px-3 py-1.5 shadow-[inset_0_0_14px_rgba(250,204,21,0.22)]"
-                            title="Ataque estimado en función de nivel, armas y poderes activos"
-                          >
-                            <GiCrossedSwords className="text-lg text-amber-200" />
-                            <div className="leading-tight">
-                              <span className="block text-[9px] tracking-[0.24em] text-amber-200/70">Ataque</span>
-                              <span className="font-mono text-lg font-semibold text-amber-100">{attackStat}</span>
-                            </div>
-                          </div>
-                          <div
-                            className="flex min-w-[120px] items-center gap-2 rounded-lg border border-amber-400/40 bg-black/40 px-3 py-1.5 shadow-[inset_0_0_14px_rgba(250,204,21,0.22)]"
-                            title="Defensa estimada según vida, armadura y equipo equipado"
-                          >
-                            <GiShield className="text-lg text-amber-200" />
-                            <div className="leading-tight">
-                              <span className="block text-[9px] tracking-[0.24em] text-amber-200/70">Defensa</span>
-                              <span className="font-mono text-lg font-semibold text-amber-100">{defenseStat}</span>
-                            </div>
-                          </div>
-                        </div>
                         <span className="flex items-center gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
                           <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
                         </span>
