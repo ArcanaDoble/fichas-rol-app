@@ -4,20 +4,36 @@ import { db } from '../firebase';
 import sanitize from './sanitize';
 
 export const mergeTokens = (prevTokens, changedTokens) => {
-  const map = new Map(
-    prevTokens.map((t) => {
-      const id = String(t.id);
-      return [id, { ...t, id }];
-    })
-  );
-  changedTokens.forEach((tk) => {
-    const id = String(tk.id);
-    if (tk._deleted) {
-      map.delete(id);
+  const map = new Map();
+
+  prevTokens.forEach((token) => {
+    const id = String(token.id);
+    if (typeof token.id === 'string' && token.id === id) {
+      map.set(id, token);
     } else {
-      map.set(id, { ...tk, id });
+      map.set(id, { ...token, id });
     }
   });
+
+  changedTokens.forEach((tk) => {
+    const id = String(tk.id);
+
+    if (tk._deleted) {
+      map.delete(id);
+      return;
+    }
+
+    const prevToken = map.get(id);
+    const { _deleted, ...tokenChanges } = tk;
+    const nextToken = {
+      ...(prevToken || {}),
+      ...tokenChanges,
+      id,
+    };
+
+    map.set(id, nextToken);
+  });
+
   return Array.from(map.values());
 };
 
