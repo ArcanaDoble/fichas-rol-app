@@ -4817,7 +4817,7 @@ function App() {
               <Tarjeta
                 key={enemy.id}
                 variant="magic"
-                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:max-w-[480px]"
+                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)] lg:col-span-2 lg:max-w-[620px]"
               >
                 <div className="relative flex h-full flex-col rounded-[1.25rem] bg-gradient-to-br from-[#2a1a10]/90 via-[#140f1c]/92 to-[#09090f]/95">
                   <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] border border-amber-200/15 shadow-[0_0_32px_rgba(250,204,21,0.12)]" />
@@ -4927,24 +4927,24 @@ function App() {
                       <Boton
                         color="gray"
                         size="sm"
-                        onClick={() => setSelectedEnemy(enemy)}
-                        className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
-                        icon={<FiEye className="text-lg" />}
-                      >
-                        Ver ficha
-                      </Boton>
-                      <Boton
-                        color="gray"
-                        size="sm"
                         onClick={() => {
                           if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
                             deleteEnemy(enemy.id);
                           }
                         }}
-                        className="enemy-action-button enemy-action-delete min-w-[120px]"
+                        className="enemy-action-button enemy-action-delete flex-1 min-w-[120px]"
                         icon={<FiTrash2 className="text-lg" />}
                       >
                         Eliminar
+                      </Boton>
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => setSelectedEnemy(enemy)}
+                        className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
+                        icon={<FiEye className="text-lg" />}
+                      >
+                        Ver ficha
                       </Boton>
                     </div>
                   </div>
