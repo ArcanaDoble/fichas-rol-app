@@ -216,27 +216,44 @@ html {
 }
 
 .enemy-action-button {
-  @apply !rounded-full !bg-gradient-to-r !from-amber-500/20 !via-purple-500/20 !to-slate-900/60 !border !border-amber-400/40 !text-xs !uppercase !tracking-[0.3em] !text-amber-100 !shadow-[0_0_18px_rgba(250,204,21,0.18)] !px-5 !py-2;
+  border-radius: 9999px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3em !important;
+  font-size: 0.75rem !important;
+  padding: 0.5rem 1.25rem !important;
+  border: 1px solid var(
+      --enemy-button-border,
+      rgba(250, 204, 21, 0.4)
+    ) !important;
+  color: var(--enemy-button-text, #fefce8) !important;
+  background-image: linear-gradient(
+      135deg,
+      var(--enemy-button-from, rgba(250, 204, 21, 0.2)) 0%,
+      var(--enemy-button-via, rgba(168, 85, 247, 0.2)) 45%,
+      var(--enemy-button-to, rgba(15, 23, 42, 0.6)) 100%
+    ) !important;
+  box-shadow: 0 0 18px var(
+      --enemy-button-glow,
+      rgba(250, 204, 21, 0.18)
+    ) !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .enemy-action-button:hover {
-  @apply !from-amber-400/30 !via-purple-500/30 !to-slate-900/70 !border-amber-300/60;
+  border-color: var(
+      --enemy-button-hover-border,
+      rgba(250, 204, 21, 0.6)
+    ) !important;
+  background-image: linear-gradient(
+      135deg,
+      var(--enemy-button-hover-from, rgba(250, 204, 21, 0.28)) 0%,
+      var(--enemy-button-hover-via, rgba(168, 85, 247, 0.3)) 45%,
+      var(--enemy-button-hover-to, rgba(15, 23, 42, 0.7)) 100%
+    ) !important;
 }
 
 .enemy-action-button svg {
-  @apply drop-shadow-[0_0_10px_rgba(250,204,21,0.4)];
-}
-
-.enemy-action-edit {
-  @apply !via-purple-500/25;
-}
-
-.enemy-action-view {
-  @apply !from-sky-500/20 !via-cyan-500/20 !to-slate-900/60;
-}
-
-.enemy-action-delete {
-  @apply !from-rose-500/20 !via-red-500/20 !to-slate-900/60;
+  filter: drop-shadow(0 0 10px var(--enemy-button-icon-glow, rgba(250, 204, 21, 0.4)));
 }
 
 /* Scrollbar personalizada */

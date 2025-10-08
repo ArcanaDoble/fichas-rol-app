@@ -44,6 +44,7 @@ const Tarjeta = ({
   onClick,
   header,
   footer,
+  style: externalStyle = {},
   ...props
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -124,14 +125,17 @@ const Tarjeta = ({
     if (interactive) setIsHovered(false);
   };
 
+  const combinedStyle = { ...cardStyle, ...externalStyle };
+
   return (
     <div
       className={cardClasses}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={onClick}
-      style={cardStyle}
+      style={combinedStyle}
       tabIndex={0}
+      {...props}
     >
       {/* Gradient overlay */}
       <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} ${variant === 'magic' ? 'opacity-50' : 'opacity-20'} pointer-events-none`} />
@@ -232,6 +236,7 @@ Tarjeta.propTypes = {
   children: PropTypes.node,
   className: PropTypes.string,
   variant: PropTypes.string,
+  style: PropTypes.object,
 };
 
 export default Tarjeta;
