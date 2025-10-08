@@ -1387,7 +1387,22 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
-  
+
+  // Si se especifica el número de casillas, calculamos el tamaño de cada celda
+  const effectiveGridSize =
+    imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
+
+  // Funciones de conversión de coordenadas
+  const pxToCell = (px, offset) =>
+    Math.round((px - offset) / effectiveGridSize);
+  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  const snapCell = (px, offset) =>
+    Math.floor((px - offset) / effectiveGridSize);
+
+  useEffect(() => {
+    gridSizeRef.current = effectiveGridSize;
+  }, [effectiveGridSize]);
+
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
   // Estados para el sistema de visión de jugadores
@@ -2061,21 +2076,6 @@ const MapCanvas = ({
       sheetListeners.current = {};
     };
   }, [tokenSheetIdsKey, playerName, userType]);
-
-  // Si se especifica el número de casillas, calculamos el tamaño de cada celda
-  const effectiveGridSize =
-    imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
-
-  // Funciones de conversión de coordenadas
-  const pxToCell = (px, offset) =>
-    Math.round((px - offset) / effectiveGridSize);
-  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
-  const snapCell = (px, offset) =>
-    Math.floor((px - offset) / effectiveGridSize);
-
-  useEffect(() => {
-    gridSizeRef.current = effectiveGridSize;
-  }, [effectiveGridSize]);
 
   // Función para mostrar animaciones de daño
   const triggerDamagePopup = useCallback(
