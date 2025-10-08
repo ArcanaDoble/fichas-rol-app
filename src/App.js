@@ -16,7 +16,21 @@ import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist, GiCrossedSwords, GiShield, GiSpellBook } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
-import { FiMap, FiTool, FiArrowLeft, FiPlus, FiX, FiSearch, FiFilter, FiXCircle, FiStar } from 'react-icons/fi';
+import {
+  FiMap,
+  FiTool,
+  FiArrowLeft,
+  FiPlus,
+  FiX,
+  FiSearch,
+  FiFilter,
+  FiXCircle,
+  FiStar,
+  FiEdit2,
+  FiEye,
+  FiTrash2,
+  FiCrop,
+} from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -47,6 +61,7 @@ import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
+import Cropper from 'react-easy-crop';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -101,6 +116,59 @@ const defaultResourcesList = defaultRecursos.map((name) => ({
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = (dado) => `/dados/${dado}.png`;
+
+const createImageElement = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = (error) => reject(error);
+    image.src = url;
+  });
+
+const cropImageToDataUrl = async (
+  imageSrc,
+  cropPixels,
+  maxWidth = 900,
+  maxHeight = 900,
+  quality = 0.88
+) => {
+  if (!cropPixels) return imageSrc;
+  const image = await createImageElement(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const { width, height, x, y } = cropPixels;
+  const safeWidth = Math.max(width, 1);
+  const safeHeight = Math.max(height, 1);
+  const scale = Math.min(maxWidth / safeWidth, maxHeight / safeHeight, 1);
+
+  canvas.width = Math.max(1, Math.floor(safeWidth * scale));
+  canvas.height = Math.max(1, Math.floor(safeHeight * scale));
+
+  ctx.drawImage(
+    image,
+    x,
+    y,
+    safeWidth,
+    safeHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  return canvas.toDataURL('image/jpeg', quality);
+};
+
+const dataUrlToFile = async (dataUrl, filename = 'portrait.jpg') => {
+  if (!dataUrl) return null;
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const extension = blob.type === 'image/png' ? 'png' : 'jpg';
+  const safeName = filename.includes('.') ? filename : `${filename}.${extension}`;
+  return new File([blob], safeName, { type: blob.type || 'image/jpeg' });
+};
 
 const parseCargaValue = (v) => {
   if (!v) return 0;
@@ -457,6 +525,13 @@ function App() {
     estados: [],
   });
   const [enemyEditorTab, setEnemyEditorTab] = useState('ficha'); // 'ficha' | 'equipo'
+  const [showImageCropper, setShowImageCropper] = useState(false);
+  const [imageCropSource, setImageCropSource] = useState(null);
+  const [imageCropName, setImageCropName] = useState('retrato.jpg');
+  const [imageCrop, setImageCrop] = useState({ x: 0, y: 0 });
+  const [imageCropZoom, setImageCropZoom] = useState(1);
+  const [imageCropAreaPixels, setImageCropAreaPixels] = useState(null);
+  const [imageCropLoading, setImageCropLoading] = useState(false);
   // Estados para equipar items a enemigos
   const [enemyInputArma, setEnemyInputArma] = useState('');
   const [enemyInputArmadura, setEnemyInputArmadura] = useState('');
@@ -2523,39 +2598,98 @@ function App() {
     });
   };
   const handleImageUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      try {
-        // Verificar que sea una imagen
-        if (!file.type.startsWith('image/')) {
-          alert('Por favor selecciona un archivo de imagen válido');
-          return;
-        }
-        // Verificar tamaño del archivo (máximo 10MB antes de procesar)
-        if (file.size > 10 * 1024 * 1024) {
-          alert(
-            'La imagen es demasiado grande. Por favor selecciona una imagen menor a 10MB'
-          );
-          return;
-        }
-        // Redimensionar imagen
-        const resizedImage = await resizeImage(file);
-        // Verificar que el resultado no sea demasiado grande para Firestore
-        if (resizedImage.length > 900000) {
-          // ~900KB para dejar margen
-          // Si aún es muy grande, reducir más la calidad
-          const smallerImage = await resizeImage(file, 200, 200, 0.5);
-          setNewEnemy({ ...newEnemy, portrait: smallerImage });
-        } else {
-          setNewEnemy({ ...newEnemy, portrait: resizedImage });
-        }
-      } catch (error) {
-        alert(
-          'Error al procesar la imagen. Por favor intenta con otra imagen.'
-        );
-      }
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido');
+      event.target.value = '';
+      return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen es demasiado grande. Selecciona un archivo menor a 10MB');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageCropSource(reader.result);
+      setImageCropName(file.name || 'retrato.jpg');
+      setImageCrop({ x: 0, y: 0 });
+      setImageCropZoom(1);
+      setImageCropAreaPixels(null);
+      setShowImageCropper(true);
+    };
+    reader.onerror = () => {
+      alert('No se pudo leer la imagen seleccionada. Intenta nuevamente.');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
+
+  const handleCropComplete = useCallback((_, croppedAreaPixelsValue) => {
+    setImageCropAreaPixels(croppedAreaPixelsValue);
+  }, []);
+
+  const closeCropper = useCallback(() => {
+    setShowImageCropper(false);
+    setImageCropSource(null);
+    setImageCropAreaPixels(null);
+    setImageCrop({ x: 0, y: 0 });
+    setImageCropZoom(1);
+    setImageCropLoading(false);
+  }, []);
+
+  const handleConfirmCrop = useCallback(async () => {
+    if (!imageCropSource || !imageCropAreaPixels) {
+      alert('Selecciona el encuadre que deseas guardar.');
+      return;
+    }
+
+    try {
+      setImageCropLoading(true);
+      const croppedDataUrl = await cropImageToDataUrl(
+        imageCropSource,
+        imageCropAreaPixels,
+        900,
+        900,
+        0.92
+      );
+      const croppedFile = await dataUrlToFile(
+        croppedDataUrl,
+        imageCropName || 'retrato.jpg'
+      );
+      if (!croppedFile) throw new Error('No se pudo preparar el archivo recortado');
+      let optimizedImage = await resizeImage(croppedFile, 900, 900, 0.88);
+      if (optimizedImage.length > 900000) {
+        optimizedImage = await resizeImage(croppedFile, 650, 650, 0.76);
+      }
+      setNewEnemy((prev) => ({ ...prev, portrait: optimizedImage }));
+      closeCropper();
+    } catch (error) {
+      console.error('Error recortando la imagen del enemigo', error);
+      alert('Error al recortar la imagen. Intenta nuevamente con otro archivo.');
+    } finally {
+      setImageCropLoading(false);
+    }
+  }, [
+    imageCropSource,
+    imageCropAreaPixels,
+    imageCropName,
+    closeCropper,
+    resizeImage,
+  ]);
+
+  const handleRecropPortrait = useCallback(() => {
+    if (!newEnemy?.portrait) return;
+    setImageCropSource(newEnemy.portrait);
+    setImageCropName('retrato.jpg');
+    setImageCrop({ x: 0, y: 0 });
+    setImageCropZoom(1);
+    setImageCropAreaPixels(null);
+    setShowImageCropper(true);
+  }, [newEnemy?.portrait]);
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA EQUIPAR ITEMS A ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -4467,14 +4601,20 @@ function App() {
               </Boton>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <Boton color="green" onClick={createNewEnemy}>
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 mb-3">
+            <Boton
+              color="green"
+              onClick={createNewEnemy}
+              className="w-full md:w-auto"
+            >
               Crear Nuevo Enemigo
             </Boton>
-            <Boton onClick={refreshCatalog}>Refrescar</Boton>
+            <Boton onClick={refreshCatalog} className="w-full md:w-auto">
+              Refrescar
+            </Boton>
             <button
               type="button"
-              className="md:hidden ml-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
+              className="md:hidden w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600"
               onClick={() => setEnemyFiltersOpen((v) => !v)}
               aria-expanded={enemyFiltersOpen}
               aria-controls="enemy-filters"
@@ -4600,92 +4740,218 @@ function App() {
           </button>
         </div>
         {/* Lista de enemigos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {filteredEnemies.map((enemy) => (
-            <Tarjeta
-              key={enemy.id}
-              variant="magic"
-              className="p-0 overflow-visible bg-gradient-to-br from-yellow-100/10 to-purple-900/30 border-4 border-yellow-900/40 shadow-2xl"
-            >
-              <div className="flex flex-col h-full">
-                {/* Imagen tipo Magic */}
-                <div className="w-full aspect-[4/3] bg-gray-900 rounded-t-xl overflow-hidden flex items-center justify-center border-b-2 border-yellow-900/30 relative">
-                  {enemy.portrait ? (
-                    <img
-                      src={enemy.portrait}
-                      alt={enemy.name}
-                      className="w-full h-full object-contain object-center"
-                      loading="lazy"
-                      style={{ background: '#222' }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-5xl text-gray-700">
-                      👹
+        <div className="enemy-grid relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '25%' }}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '50%' }}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+            style={{ left: '75%' }}
+          />
+          {filteredEnemies.map((enemy) => {
+            const asArray = (value) => {
+              if (!value) return [];
+              if (Array.isArray(value)) return value.filter(Boolean);
+              if (typeof value === 'string') {
+                return value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+              }
+              return [];
+            };
+            const cleanText = (value) => (typeof value === 'string' ? value.trim() : '');
+            const normalizeNumber = (value) => {
+              if (value === null || value === undefined) return null;
+              if (typeof value === 'number' && Number.isFinite(value)) return value;
+              if (typeof value === 'string') {
+                const parsed = Number(value.replace(/[^0-9.+-]/g, ''));
+                return Number.isFinite(parsed) ? parsed : null;
+              }
+              return null;
+            };
+            const pickStat = (...values) => {
+              for (const value of values) {
+                const numeric = normalizeNumber(value);
+                if (numeric !== null) {
+                  return Math.max(0, Math.round(numeric));
+                }
+              }
+              return 0;
+            };
+
+            const tags = Array.from(
+              new Set([...asArray(enemy.tags), ...asArray(enemy.etiquetas)])
+            ).slice(0, 4);
+            const typePieces = [
+              cleanText(enemy.tipo),
+              cleanText(enemy.type),
+              cleanText(enemy.subtipo),
+              cleanText(enemy.subType),
+              cleanText(enemy.categoria),
+              cleanText(enemy.category),
+            ].filter(Boolean);
+            const typeLine =
+              typePieces.length > 0
+                ? typePieces.slice(0, 2).join(' — ')
+                : tags.length > 0
+                ? tags.join(' — ')
+                : 'Criatura — Enemigo';
+            const rarity = cleanText(enemy.rareza || enemy.rarity);
+            const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
+            const description = cleanText(enemy.description);
+            const abilityCount = pickStat(enemy.poderes?.length);
+            const statusCount = pickStat(enemy.estados?.length);
+            const weaponCount = pickStat(enemy.weapons?.length);
+            const armorCount = pickStat(enemy.armaduras?.length);
+
+            return (
+              <Tarjeta
+                key={enemy.id}
+                variant="magic"
+                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)]"
+              >
+                <div className="relative flex h-full flex-col rounded-[1.25rem] bg-gradient-to-br from-[#2a1a10]/90 via-[#140f1c]/92 to-[#09090f]/95">
+                  <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] border border-amber-200/15 shadow-[0_0_32px_rgba(250,204,21,0.12)]" />
+                  <div className="pointer-events-none absolute inset-[6px] rounded-[1.05rem] border border-amber-100/10" />
+                  <div className="relative z-10 flex h-full flex-col">
+                    <div className="px-5 pt-5 pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          {rarity && (
+                            <span className="text-[10px] uppercase tracking-[0.32em] text-amber-200/60">
+                              {rarity}
+                            </span>
+                          )}
+                          <h3
+                            className="mt-1 text-xl font-extrabold uppercase tracking-[0.18em] text-amber-100 drop-shadow-[0_6px_14px_rgba(0,0,0,0.75)]"
+                            style={{ textShadow: '0 8px 22px rgba(0,0,0,0.85)' }}
+                          >
+                            {enemy.name}
+                          </h3>
+                        </div>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-amber-300/60 bg-gradient-to-br from-amber-200/30 via-amber-500/25 to-purple-800/45 text-base font-semibold text-amber-50 shadow-[inset_0_0_18px_rgba(250,204,21,0.28)]">
+                          {levelValue}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[10px] uppercase tracking-[0.26em] text-amber-200/70 italic">
+                        {typeLine}
+                      </div>
                     </div>
-                  )}
-                </div>
-                {/* Nombre y descripción */}
-                <div className="flex-1 flex flex-col px-4 pt-3 pb-2">
-                  <h3
-                    className="text-2xl font-extrabold text-yellow-200 drop-shadow mb-1 text-center uppercase tracking-wider"
-                    style={{ textShadow: '0 2px 8px #000a' }}
-                  >
-                    {enemy.name}
-                  </h3>
-                  {/* Chips de resumen */}
-                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-yellow-500/10 border border-yellow-600/30 text-yellow-200 inline-flex items-center gap-1">
-                      <FiStar className="opacity-90" /> Nivel {enemy.nivel || 1}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiCrossedSwords /> {enemy.weapons?.length || 0} armas
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiShield /> {enemy.armaduras?.length || 0} armaduras
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/10 text-gray-200 inline-flex items-center gap-1">
-                      <GiSpellBook /> {enemy.poderes?.length || 0} poderes
-                    </span>
+                    <div className="relative mx-4 mt-1 mb-4 aspect-[3/4] overflow-hidden rounded-[1rem] border border-amber-200/25 bg-black/40 shadow-[0_12px_28px_rgba(0,0,0,0.45)]">
+                      {enemy.portrait ? (
+                        <img
+                          src={enemy.portrait}
+                          alt={enemy.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-5xl text-amber-200/40">
+                          👹
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-3 px-5 pb-4 text-sm text-amber-100/90">
+                      <p className="min-h-[2.5rem] text-center leading-relaxed italic text-amber-100/85">
+                        {description || 'Una presencia misteriosa aguarda su turno en el campo de batalla.'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.18em] text-amber-200/75">
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiCrossedSwords className="text-base" /> Armas
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{weaponCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiShield className="text-base" /> Armaduras
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{armorCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-purple-400/25 bg-purple-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <GiSpellBook className="text-base" /> Poderes
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{abilityCount}</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-2 rounded-full border border-rose-400/25 bg-rose-500/10 px-3 py-1 shadow-inner">
+                          <span className="flex items-center gap-1 font-semibold text-amber-100">
+                            <FaRadiationAlt className="text-base" /> Estados
+                          </span>
+                          <span className="font-mono text-sm text-amber-100">{statusCount}</span>
+                        </span>
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap justify-center gap-2 text-[9px] uppercase tracking-[0.25em] text-amber-200/70">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-1 shadow-inner"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-5 pb-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em] text-amber-200/70">
+                        <span className="flex items-center gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
+                        </span>
+                        <span className="flex items-center gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1 shadow-inner">
+                          <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2 border-t border-amber-400/25 bg-gradient-to-r from-[#2b1c10]/85 via-[#1f1322]/85 to-[#121321]/85 px-5 pb-5 pt-4">
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => editEnemy(enemy)}
+                        className="enemy-action-button enemy-action-edit flex-1 min-w-[120px]"
+                        icon={<FiEdit2 className="text-lg" />}
+                      >
+                        Editar
+                      </Boton>
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                            deleteEnemy(enemy.id);
+                          }
+                        }}
+                        className="enemy-action-button enemy-action-delete flex-1 min-w-[120px]"
+                        icon={<FiTrash2 className="text-lg" />}
+                      >
+                        Eliminar
+                      </Boton>
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => setSelectedEnemy(enemy)}
+                        className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
+                        icon={<FiEye className="text-lg" />}
+                      >
+                        Ver ficha
+                      </Boton>
+                    </div>
                   </div>
-                  {enemy.description && (
-                    <p className="text-gray-200 text-sm mb-2 text-center line-clamp-2 italic">
-                      {enemy.description}
-                    </p>
-                  )}
                 </div>
-                {/* Acciones */}
-                <div className="flex gap-2 px-4 pb-4 pt-2 justify-center border-t border-yellow-900/20">
-                  <Boton
-                    color="blue"
-                    size="sm"
-                    onClick={() => editEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Editar
-                  </Boton>
-                  <Boton
-                    color="purple"
-                    size="sm"
-                    onClick={() => setSelectedEnemy(enemy)}
-                    className="flex-1"
-                  >
-                    Ver Ficha
-                  </Boton>
-                  <Boton
-                    color="red"
-                    size="sm"
-                    onClick={() => {
-                      if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                        deleteEnemy(enemy.id);
-                      }
-                    }}
-                  >
-                    🗑️
-                  </Boton>
-                </div>
-              </div>
-            </Tarjeta>
-          ))}
+              </Tarjeta>
+            );
+          })}
         </div>
         {enemies.length === 0 && (
           <div className="text-center py-8">
@@ -4759,12 +5025,21 @@ function App() {
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     />
                     {newEnemy.portrait && (
-                      <div className="mt-2 w-full max-w-md aspect-square rounded-lg overflow-hidden bg-gray-800/80 flex items-center justify-center">
-                        <img
-                          src={newEnemy.portrait}
-                          alt="Preview"
-                          className="w-full h-full object-contain object-center rounded-lg shadow border border-gray-800"
-                        />
+                      <div className="mt-2 flex w-full max-w-md flex-col items-center gap-3">
+                        <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800/80 shadow-inner">
+                          <img
+                            src={newEnemy.portrait}
+                            alt="Preview"
+                            className="h-full w-full object-contain object-center"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRecropPortrait}
+                          className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-4 py-1.5 text-sm font-medium text-amber-100 shadow-[0_0_14px_rgba(250,204,21,0.12)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
+                        >
+                          <FiCrop className="text-base" /> Ajustar recorte
+                        </button>
                       </div>
                     )}
                   </div>
@@ -5278,6 +5553,73 @@ function App() {
                   >
                     Cancelar
                   </Boton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showImageCropper && imageCropSource && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+            onClick={closeCropper}
+          >
+            <div
+              className="relative w-full max-w-3xl rounded-2xl bg-gray-900/95 p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-amber-100">Ajustar retrato</h3>
+              <p className="mt-1 text-sm text-gray-300">
+                Arrastra la imagen y usa el zoom para elegir qué parte se mostrará en la carta del enemigo.
+              </p>
+              <div className="relative mt-4 h-[55vh] min-h-[320px] w-full overflow-hidden rounded-xl border border-amber-300/30 bg-black/40">
+                <Cropper
+                  image={imageCropSource}
+                  crop={imageCrop}
+                  zoom={imageCropZoom}
+                  aspect={3 / 4}
+                  cropShape="rect"
+                  showGrid={false}
+                  onCropChange={setImageCrop}
+                  onCropComplete={handleCropComplete}
+                  onZoomChange={setImageCropZoom}
+                  objectFit="cover"
+                />
+              </div>
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex w-full max-w-sm items-center gap-3 text-sm text-amber-100/80">
+                  <span className="uppercase tracking-[0.24em] text-amber-200/70">Zoom</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.01"
+                    value={imageCropZoom}
+                    onChange={(e) => setImageCropZoom(Number(e.target.value))}
+                    className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-amber-500/20 accent-amber-300"
+                  />
+                </label>
+                <div className="flex flex-1 justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeCropper}
+                    disabled={imageCropLoading}
+                    className="rounded-full border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmCrop}
+                    disabled={imageCropLoading}
+                    className={`inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      imageCropLoading ? 'cursor-wait' : ''
+                    }`}
+                  >
+                    {imageCropLoading && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
+                    )}
+                    Guardar recorte
+                  </button>
                 </div>
               </div>
             </div>
