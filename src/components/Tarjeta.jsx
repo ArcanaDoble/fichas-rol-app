@@ -24,9 +24,9 @@ const variantStyles = {
     glow: 'hover:shadow-purple-500/20',
   },
   magic: {
-    gradient: 'from-yellow-100/10 to-purple-900/30',
-    border: 'border-yellow-900/40 hover:border-yellow-400/80',
-    glow: '',
+    gradient: 'from-amber-200/10 via-purple-900/25 to-slate-900/70',
+    border: 'border-amber-400/30 hover:border-amber-300/60',
+    glow: 'hover:shadow-[0_18px_45px_rgba(250,204,21,0.25)]',
   },
   default: {
     gradient: 'from-gray-900/20 to-gray-800/20',
@@ -44,6 +44,7 @@ const Tarjeta = ({
   onClick,
   header,
   footer,
+  style: externalStyle = {},
   ...props
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -70,30 +71,42 @@ const Tarjeta = ({
     border-2
   `;
 
-  const interactiveClasses = interactive ? `
-    transform hover:-translate-y-1 hover:scale-[1.02]
+  const interactiveClasses = interactive
+    ? `
+    transform hover:-translate-y-1 hover:scale-[1.015]
     cursor-pointer
-    ${style.glow} hover:shadow-lg hover:bg-yellow-100/10 hover:bg-gradient-to-br hover:from-yellow-200/10 hover:to-purple-900/30
-  ` : '';
+    ${style.glow} hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80
+  `
+    : '';
 
   const cardClasses = `
     ${baseClasses}
     ${interactiveClasses}
     ${style.border}
     ${className}
-    ${variant === 'magic' ? 'transition-transform duration-300 will-change-transform z-10 sm:z-30 relative' : 'relative'}
+    ${
+      variant === 'magic'
+        ? 'transition-transform duration-500 will-change-transform z-10 sm:z-30 relative backdrop-saturate-150'
+        : 'relative'
+    }
   `;
 
   const cardStyle = variant === 'magic'
     ? {
-        boxShadow: isHovered ? '0 8px 32px 0 #000a, 0 0 0 4px #facc15aa' : '0 2px 12px 0 #0006',
-        transform: isHovered ? 'scale(1.04) translateZ(0.1px)' : 'scale(1)',
+        boxShadow: isHovered
+          ? '0 22px 45px -18px rgba(250, 204, 21, 0.45), 0 14px 44px rgba(56, 189, 248, 0.25)'
+          : '0 16px 40px rgba(8, 7, 21, 0.7)',
+        transform: isHovered ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
         zIndex: isHovered ? 50 : 10,
-        borderRadius: '1.25rem',
+        borderRadius: '1.6rem',
         overflow: 'visible',
-        minHeight: '320px',
-        maxWidth: '420px',
-        margin: 'auto',
+        minHeight: '340px',
+        width: '100%',
+        margin: 0,
+        height: '100%',
+        backgroundImage:
+          'radial-gradient(circle at 12% 20%, rgba(250, 204, 21, 0.18), transparent 55%), radial-gradient(circle at 88% 16%, rgba(99, 102, 241, 0.22), transparent 60%), linear-gradient(140deg, rgba(26, 20, 12, 0.95), rgba(9, 10, 20, 0.92))',
+        border: '1px solid rgba(250, 204, 21, 0.18)',
       }
     : {
         boxShadow: '0 2px 12px 0 #0006',
@@ -112,14 +125,17 @@ const Tarjeta = ({
     if (interactive) setIsHovered(false);
   };
 
+  const combinedStyle = { ...cardStyle, ...externalStyle };
+
   return (
     <div
       className={cardClasses}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={onClick}
-      style={cardStyle}
+      style={combinedStyle}
       tabIndex={0}
+      {...props}
     >
       {/* Gradient overlay */}
       <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} ${variant === 'magic' ? 'opacity-50' : 'opacity-20'} pointer-events-none`} />
@@ -220,6 +236,7 @@ Tarjeta.propTypes = {
   children: PropTypes.node,
   className: PropTypes.string,
   variant: PropTypes.string,
+  style: PropTypes.object,
 };
 
 export default Tarjeta;
