@@ -195,7 +195,7 @@ html {
   }
 
   .enemy-grid .enemy-card {
-    max-width: min(100%, 28rem);
+    max-width: min(100%, 24rem);
   }
 }
 
@@ -205,13 +205,13 @@ html {
   }
 
   .enemy-grid .enemy-card {
-    max-width: min(100%, 36rem);
+    max-width: min(100%, 26rem);
   }
 }
 
 @media (min-width: 1536px) {
   .enemy-grid .enemy-card {
-    max-width: min(100%, 40rem);
+    max-width: min(100%, 28rem);
   }
 }
 
