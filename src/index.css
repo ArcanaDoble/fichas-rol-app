@@ -180,6 +180,82 @@ html {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
 
+.enemy-grid {
+  position: relative;
+}
+
+.enemy-grid .enemy-card {
+  position: relative;
+  z-index: 10;
+}
+
+@media (min-width: 1024px) {
+  .enemy-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 24rem);
+  }
+}
+
+@media (min-width: 1280px) {
+  .enemy-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 26rem);
+  }
+}
+
+@media (min-width: 1536px) {
+  .enemy-grid .enemy-card {
+    max-width: min(100%, 28rem);
+  }
+}
+
+.enemy-action-button {
+  border-radius: 9999px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3em !important;
+  font-size: 0.75rem !important;
+  padding: 0.5rem 1.25rem !important;
+  border: 1px solid var(
+      --enemy-button-border,
+      rgba(250, 204, 21, 0.4)
+    ) !important;
+  color: var(--enemy-button-text, #fefce8) !important;
+  background-image: linear-gradient(
+      135deg,
+      var(--enemy-button-from, rgba(250, 204, 21, 0.2)) 0%,
+      var(--enemy-button-via, rgba(168, 85, 247, 0.2)) 45%,
+      var(--enemy-button-to, rgba(15, 23, 42, 0.6)) 100%
+    ) !important;
+  box-shadow: 0 0 18px var(
+      --enemy-button-glow,
+      rgba(250, 204, 21, 0.18)
+    ) !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.enemy-action-button:hover {
+  border-color: var(
+      --enemy-button-hover-border,
+      rgba(250, 204, 21, 0.6)
+    ) !important;
+  background-image: linear-gradient(
+      135deg,
+      var(--enemy-button-hover-from, rgba(250, 204, 21, 0.28)) 0%,
+      var(--enemy-button-hover-via, rgba(168, 85, 247, 0.3)) 45%,
+      var(--enemy-button-hover-to, rgba(15, 23, 42, 0.7)) 100%
+    ) !important;
+}
+
+.enemy-action-button svg {
+  filter: drop-shadow(0 0 10px var(--enemy-button-icon-glow, rgba(250, 204, 21, 0.4)));
+}
+
 /* Scrollbar personalizada */
 ::-webkit-scrollbar {
   width: 8px;
