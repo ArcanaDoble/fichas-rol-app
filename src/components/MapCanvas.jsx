@@ -51,7 +51,11 @@ import DoorCheckModal from './DoorCheckModal';
 import AttackModal from './AttackModal';
 import DefenseModal from './DefenseModal';
 import { applyDoorCheck } from '../utils/door';
-import { computeVisibility, combineVisibilityPolygons } from '../utils/visibility';
+import {
+  computeVisibilityWithSegments,
+  combineVisibilityPolygons,
+  createVisibilitySegments
+} from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import {
@@ -107,6 +111,25 @@ const mixColors = (baseHex, tintHex, opacity) => {
   const g = Math.round(base.g * (1 - opacity) + tint.g * opacity);
   const b = Math.round(base.b * (1 - opacity) + tint.b * opacity);
   return `rgb(${r},${g},${b})`;
+};
+
+const shallowEqualObjects = (objA, objB) => {
+  if (objA === objB) return true;
+  if (!objA || !objB) return false;
+
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  if (keysA.length !== keysB.length) return false;
+
+  for (let i = 0; i < keysA.length; i++) {
+    const key = keysA[i];
+    if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 const BRUSH_WIDTHS = {
@@ -1055,6 +1078,10 @@ const MapCanvas = ({
   const [selectedLineId, setSelectedLineId] = useState(null);
   const [currentWall, setCurrentWall] = useState(null);
   const [walls, setWalls] = useState(propWalls);
+  const visibilitySegments = useMemo(
+    () => createVisibilitySegments(walls),
+    [walls]
+  );
   const [selectedWallId, setSelectedWallId] = useState(null);
   const [doorMenuWallId, setDoorMenuWallId] = useState(null);
   const [doorCheckWallId, setDoorCheckWallId] = useState(null);
@@ -1360,12 +1387,45 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
-  
+
+  // Si se especifica el número de casillas, calculamos el tamaño de cada celda
+  const effectiveGridSize =
+    imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
+
+  // Funciones de conversión de coordenadas
+  const pxToCell = (px, offset) =>
+    Math.round((px - offset) / effectiveGridSize);
+  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
+  const snapCell = (px, offset) =>
+    Math.floor((px - offset) / effectiveGridSize);
+
+  useEffect(() => {
+    gridSizeRef.current = effectiveGridSize;
+  }, [effectiveGridSize]);
+
   // Estados para el sistema de iluminación
   const [lightPolygons, setLightPolygons] = useState({});
   // Estados para el sistema de visión de jugadores
   const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
   const [combinedPlayerVision, setCombinedPlayerVision] = useState([]);
+
+  const lightPolygonsRef = useRef(lightPolygons);
+  const lightPolygonStateRef = useRef(new Map());
+  const lastLightSegmentsRef = useRef(visibilitySegments);
+  const lastLightGridSizeRef = useRef(effectiveGridSize);
+
+  const playerVisionPolygonsRef = useRef(playerVisionPolygons);
+  const playerVisionStateRef = useRef(new Map());
+  const lastVisionSegmentsRef = useRef(visibilitySegments);
+  const lastVisionGridSizeRef = useRef(effectiveGridSize);
+
+  useEffect(() => {
+    lightPolygonsRef.current = lightPolygons;
+  }, [lightPolygons]);
+
+  useEffect(() => {
+    playerVisionPolygonsRef.current = playerVisionPolygons;
+  }, [playerVisionPolygons]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
   const diffTokens = (prev, next) => {
@@ -2017,21 +2077,6 @@ const MapCanvas = ({
     };
   }, [tokenSheetIdsKey, playerName, userType]);
 
-  // Si se especifica el número de casillas, calculamos el tamaño de cada celda
-  const effectiveGridSize =
-    imageSize.width && gridCells ? imageSize.width / gridCells : gridSize;
-
-  // Funciones de conversión de coordenadas
-  const pxToCell = (px, offset) =>
-    Math.round((px - offset) / effectiveGridSize);
-  const cellToPx = (cell, offset) => cell * effectiveGridSize + offset;
-  const snapCell = (px, offset) =>
-    Math.floor((px - offset) / effectiveGridSize);
-
-  useEffect(() => {
-    gridSizeRef.current = effectiveGridSize;
-  }, [effectiveGridSize]);
-
   // Función para mostrar animaciones de daño
   const triggerDamagePopup = useCallback(
     ({ tokenId, value, stat, type }) => {
@@ -2196,36 +2241,103 @@ const MapCanvas = ({
 
   // Función para calcular polígonos de visibilidad para tokens con luz
   const calculateLightPolygons = useCallback(() => {
+    const prevPolygons = lightPolygonsRef.current || {};
+    const prevStateMap = lightPolygonStateRef.current || new Map();
+    const nextStateMap = new Map();
+
+    const segmentsChanged = lastLightSegmentsRef.current !== visibilitySegments;
+    const gridSizeChanged = lastLightGridSizeRef.current !== effectiveGridSize;
+
+    if (segmentsChanged) {
+      lastLightSegmentsRef.current = visibilitySegments;
+    }
+    if (gridSizeChanged) {
+      lastLightGridSizeRef.current = effectiveGridSize;
+    }
+
+    const forceRecompute = segmentsChanged || gridSizeChanged;
     const newPolygons = {};
-    
+
     tokens.forEach(token => {
-      if (token.light && token.light.enabled) {
-        const maxRadius =
-          (token.light.radius || 0) + (token.light.dimRadius ?? 0);
-        if (maxRadius > 0) {
-          const origin = {
-            x: (token.x + token.w / 2) * effectiveGridSize,
-            y: (token.y + token.h / 2) * effectiveGridSize
-          };
+      const light = token.light;
+      const enabled = light?.enabled;
+      const radius = light?.radius || 0;
+      const dimRadius = light?.dimRadius ?? 0;
+      const maxRadius = radius + dimRadius;
 
-          // Aumentar significativamente el número de rayos para mayor precisión
-          // Especialmente importante para evitar "saltos" de luz
-          const polygon = computeVisibility(origin, walls, {
-            rays: 180, // Aumentado de 64 a 180 para mayor precisión
-            maxDistance: maxRadius * effectiveGridSize
-          });
+      if (!enabled || maxRadius <= 0) {
+        return;
+      }
 
-          newPolygons[token.id] = {
-            polygon,
-            color: token.light.color || '#ffff88',
-            opacity: token.light.opacity || 0.3
-          };
-        }
+      const originX = (token.x + token.w / 2) * effectiveGridSize;
+      const originY = (token.y + token.h / 2) * effectiveGridSize;
+      const maxDistance = maxRadius * effectiveGridSize;
+      const color = light?.color || '#ffff88';
+      const opacity = light?.opacity ?? 0.3;
+
+      const state = {
+        originX,
+        originY,
+        maxDistance,
+        radius,
+        dimRadius,
+        color,
+        opacity
+      };
+
+      nextStateMap.set(token.id, state);
+
+      const prevState = prevStateMap.get(token.id);
+      const prevEntry = prevPolygons[token.id];
+
+      const polygonNeedsUpdate =
+        forceRecompute ||
+        !prevState ||
+        prevState.originX !== state.originX ||
+        prevState.originY !== state.originY ||
+        prevState.maxDistance !== state.maxDistance;
+
+      const styleChanged =
+        !prevState ||
+        prevState.color !== state.color ||
+        prevState.opacity !== state.opacity;
+
+      let polygon = prevEntry?.polygon;
+
+      if (polygonNeedsUpdate || !polygon) {
+        polygon = computeVisibilityWithSegments(
+          { x: originX, y: originY },
+          visibilitySegments,
+          {
+            rays: 180,
+            maxDistance
+          }
+        );
+      }
+
+      if (polygonNeedsUpdate || styleChanged || !prevEntry) {
+        newPolygons[token.id] = {
+          polygon,
+          color,
+          opacity
+        };
+      } else {
+        newPolygons[token.id] = prevEntry;
       }
     });
 
+    const shouldUpdate = !shallowEqualObjects(prevPolygons, newPolygons);
+
+    lightPolygonStateRef.current = nextStateMap;
+
+    if (!shouldUpdate) {
+      lightPolygonsRef.current = prevPolygons;
+      return;
+    }
+
+    lightPolygonsRef.current = newPolygons;
     setLightPolygons(newPolygons);
-  }, [tokens, walls, effectiveGridSize]);
+  }, [tokens, visibilitySegments, effectiveGridSize]);
 
   // Recalcular polígonos cuando cambien tokens o muros
   useEffect(() => {
@@ -2234,42 +2346,104 @@ const MapCanvas = ({
 
   // Función para calcular polígonos de visión para todos los tokens
   const calculatePlayerVisionPolygons = useCallback(() => {
+    const prevPolygons = playerVisionPolygonsRef.current || {};
+    const prevStateMap = playerVisionStateRef.current || new Map();
+    const nextStateMap = new Map();
+
+    const segmentsChanged = lastVisionSegmentsRef.current !== visibilitySegments;
+    const gridSizeChanged = lastVisionGridSizeRef.current !== effectiveGridSize;
+
+    if (segmentsChanged) {
+      lastVisionSegmentsRef.current = visibilitySegments;
+    }
+    if (gridSizeChanged) {
+      lastVisionGridSizeRef.current = effectiveGridSize;
+    }
+
+    const forceRecompute = segmentsChanged || gridSizeChanged;
     const newPolygons = {};
 
-    // Calcular visión para todos los tokens que tienen visión habilitada
     tokens.forEach(token => {
-      // Verificar si el token tiene visión habilitada
-      const visionEnabled = token.vision?.enabled !== false; // Por defecto true
-      const visionRange = token.vision?.range || 10; // Rango por defecto de 10 casillas
+      const visionEnabled = token.vision?.enabled !== false;
+      const visionRange = token.vision?.range || 10;
 
-      if (visionEnabled && visionRange > 0) {
-        const origin = {
-          x: (token.x + token.w / 2) * effectiveGridSize,
-          y: (token.y + token.h / 2) * effectiveGridSize
-        };
+      if (!visionEnabled || visionRange <= 0) {
+        return;
+      }
 
-        // Calcular el polígono de visión usando ray casting
-        const polygon = computeVisibility(origin, walls, {
-          rays: 360, // Más rayos para mayor precisión en visión
-          maxDistance: visionRange * effectiveGridSize
-        });
+      const originX = (token.x + token.w / 2) * effectiveGridSize;
+      const originY = (token.y + token.h / 2) * effectiveGridSize;
+      const maxDistance = visionRange * effectiveGridSize;
+      const controlledBy = token.controlledBy;
 
+      const state = {
+        originX,
+        originY,
+        maxDistance,
+        visionRange,
+        controlledBy
+      };
+
+      nextStateMap.set(token.id, state);
+
+      const prevState = prevStateMap.get(token.id);
+      const prevEntry = prevPolygons[token.id];
+
+      const polygonNeedsUpdate =
+        forceRecompute ||
+        !prevState ||
+        prevState.originX !== state.originX ||
+        prevState.originY !== state.originY ||
+        prevState.maxDistance !== state.maxDistance;
+
+      const metadataChanged =
+        !prevState ||
+        prevState.visionRange !== state.visionRange ||
+        !deepEqual(prevState.controlledBy, state.controlledBy);
+
+      let polygon = prevEntry?.polygon;
+
+      if (polygonNeedsUpdate || !polygon) {
+        polygon = computeVisibilityWithSegments(
+          { x: originX, y: originY },
+          visibilitySegments,
+          {
+            rays: 360,
+            maxDistance
+          }
+        );
+      }
+
+      if (polygonNeedsUpdate || metadataChanged || !prevEntry) {
         newPolygons[token.id] = {
           polygon,
           tokenId: token.id,
-          controlledBy: token.controlledBy,
-          visionRange: visionRange
+          controlledBy,
+          visionRange
         };
+      } else {
+        newPolygons[token.id] = prevEntry;
       }
     });
 
+    const shouldUpdate = !shallowEqualObjects(prevPolygons, newPolygons);
+
+    playerVisionStateRef.current = nextStateMap;
+
+    if (!shouldUpdate) {
+      playerVisionPolygonsRef.current = prevPolygons;
+      return;
+    }
+
+    playerVisionPolygonsRef.current = newPolygons;
     setPlayerVisionPolygons(newPolygons);
 
-    // Combinar todos los polígonos de visión
-    const allPolygons = Object.values(newPolygons).map(data => data.polygon).filter(p => p && p.length >= 3);
+    const allPolygons = Object.values(newPolygons)
+      .map(data => data.polygon)
+      .filter(p => p && p.length >= 3);
     const combined = combineVisibilityPolygons(allPolygons);
     setCombinedPlayerVision(combined);
-  }, [tokens, walls, effectiveGridSize]);
+  }, [tokens, visibilitySegments, effectiveGridSize]);
 
   // Recalcular polígonos de visión cuando cambien las dependencias
   useEffect(() => {
