@@ -5336,7 +5336,7 @@ function App() {
           </button>
         </div>
         {/* Lista de enemigos */}
-        <div className="enemy-grid relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
+        <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
