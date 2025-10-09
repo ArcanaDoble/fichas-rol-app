@@ -3854,12 +3854,23 @@ const MapCanvas = ({
                  selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
         };
 
+        clipboardData.tokens = clipboardData.tokens.filter(Boolean);
+        clipboardData.lines = clipboardData.lines.filter(Boolean);
+        clipboardData.walls = clipboardData.walls.filter(Boolean);
+        clipboardData.texts = clipboardData.texts.filter(Boolean);
+
+        const clipboardTokens = clipboardData.tokens;
+        const clipboardLines = clipboardData.lines;
+        const clipboardWalls = clipboardData.walls;
+        const clipboardTexts = clipboardData.texts;
+
         // Incluir las sheets completas de los tokens para mantener todas las estadísticas
         const stored = localStorage.getItem('tokenSheets');
         if (stored) {
           const sheets = JSON.parse(stored);
           const tokenSheets = {};
-          clipboardData.tokens.forEach(tk => {
+          clipboardTokens.forEach(tk => {
+            if (!tk?.tokenSheetId) return;
             const sheet = sheets[tk.tokenSheetId];
             if (sheet) {
               tokenSheets[tk.tokenSheetId] = JSON.parse(JSON.stringify(sheet));
@@ -3869,8 +3880,8 @@ const MapCanvas = ({
         }
 
         // Solo copiar si hay elementos seleccionados
-        if (clipboardData.tokens.length > 0 || clipboardData.lines.length > 0 ||
-            clipboardData.walls.length > 0 || clipboardData.texts.length > 0) {
+        if (clipboardTokens.length > 0 || clipboardLines.length > 0 ||
+            clipboardWalls.length > 0 || clipboardTexts.length > 0) {
           setClipboard(clipboardData);
         }
         return;
@@ -3909,19 +3920,24 @@ const MapCanvas = ({
       if (e.ctrlKey && e.key.toLowerCase() === 'v' && clipboard) {
         e.preventDefault();
 
+        const clipboardTokens = (clipboard.tokens ?? []).filter(Boolean);
+        const clipboardLines = (clipboard.lines ?? []).filter(Boolean);
+        const clipboardWalls = (clipboard.walls ?? []).filter(Boolean);
+        const clipboardTexts = (clipboard.texts ?? []).filter(Boolean);
+
         // Obtener posición inteligente de pegado
         const pastePosition = getSmartPastePosition();
         const pasteGridPos = mapToGridCoordinates(pastePosition.x, pastePosition.y);
 
         // Calcular centros de cada tipo de elemento para posicionamiento relativo
-        const tokensCenter = calculateElementsCenter(clipboard.tokens, 'tokens');
-        const linesCenter = calculateElementsCenter(clipboard.lines, 'lines');
-        const wallsCenter = calculateElementsCenter(clipboard.walls, 'walls');
-        const textsCenter = calculateElementsCenter(clipboard.texts, 'texts');
+        const tokensCenter = calculateElementsCenter(clipboardTokens, 'tokens');
+        const linesCenter = calculateElementsCenter(clipboardLines, 'lines');
+        const wallsCenter = calculateElementsCenter(clipboardWalls, 'walls');
+        const textsCenter = calculateElementsCenter(clipboardTexts, 'texts');
 
         // Pegar tokens
-        if (clipboard.tokens.length > 0) {
-          const newTokens = clipboard.tokens.map(token => {
+        if (clipboardTokens.length > 0) {
+          const newTokens = clipboardTokens.map(token => {
             // Calcular offset relativo al centro del grupo
             const relativeX = token.x - tokensCenter.x;
             const relativeY = token.y - tokensCenter.y;
@@ -3940,14 +3956,15 @@ const MapCanvas = ({
               y: finalPos.y,
               layer: activeLayer,
             });
-            const sheet = clipboard.tokenSheets?.[token.tokenSheetId];
+            const originalSheetId = token.tokenSheetId;
+            const sheet = originalSheetId ? clipboard.tokenSheets?.[originalSheetId] : undefined;
             if (sheet) {
               const copy = JSON.parse(JSON.stringify(sheet));
               copy.id = newToken.tokenSheetId;
               updateLocalTokenSheet(copy);
               saveTokenSheet(copy);
-            } else {
-              cloneTokenSheet(token.tokenSheetId, newToken.tokenSheetId);
+            } else if (originalSheetId) {
+              cloneTokenSheet(originalSheetId, newToken.tokenSheetId);
             }
             return newToken;
           });
@@ -3955,8 +3972,8 @@ const MapCanvas = ({
         }
 
         // Pegar líneas
-        if (clipboard.lines.length > 0) {
-          const newLines = clipboard.lines.map(line => {
+        if (clipboardLines.length > 0) {
+          const newLines = clipboardLines.map(line => {
             // Calcular offset relativo al centro del grupo
             const relativeX = line.x - (linesCenter.x * effectiveGridSize);
             const relativeY = line.y - (linesCenter.y * effectiveGridSize);
@@ -3977,8 +3994,8 @@ const MapCanvas = ({
         }
 
         // Pegar muros
-        if (clipboard.walls.length > 0) {
-          const newWalls = clipboard.walls.map(wall => {
+        if (clipboardWalls.length > 0) {
+          const newWalls = clipboardWalls.map(wall => {
             // Calcular el centro real del muro original
             const [x1, y1, x2, y2] = wall.points;
             const wallCenterX = wall.x + (x1 + x2) / 2;
@@ -4008,8 +4025,8 @@ const MapCanvas = ({
         }
 
         // Pegar textos
-        if (clipboard.texts.length > 0) {
-          const newTexts = clipboard.texts.map(text => {
+        if (clipboardTexts.length > 0) {
+          const newTexts = clipboardTexts.map(text => {
             // Calcular offset relativo al centro del grupo
             const relativeX = text.x - (textsCenter.x * effectiveGridSize);
             const relativeY = text.y - (textsCenter.y * effectiveGridSize);
