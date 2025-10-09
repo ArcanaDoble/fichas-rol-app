@@ -1609,11 +1609,19 @@ function App() {
           return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
         });
         const filtered = tokensWithIds.filter((tk) => {
-          const pending = pendingTokenChangesRef.current.get(String(tk.id));
+          const tokenId = String(tk.id);
+          const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            if (deepEqual(pending, tk))
-              pendingTokenChangesRef.current.delete(String(tk.id));
-            return false;
+            if (deepEqual(pending, tk)) {
+              pendingTokenChangesRef.current.delete(tokenId);
+              return false;
+            }
+            console.warn(
+              'Conflicto de token detectado para jugador, aplicando actualización remota.',
+              { pending, remoto: tk }
+            );
+            pendingTokenChangesRef.current.delete(tokenId);
+            return true;
           }
           return true;
         });
@@ -1747,11 +1755,19 @@ function App() {
           return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
         });
         const filtered = tokensWithIds.filter((tk) => {
-          const pending = pendingTokenChangesRef.current.get(String(tk.id));
+          const tokenId = String(tk.id);
+          const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            if (deepEqual(pending, tk))
-              pendingTokenChangesRef.current.delete(String(tk.id));
-            return false;
+            if (deepEqual(pending, tk)) {
+              pendingTokenChangesRef.current.delete(tokenId);
+              return false;
+            }
+            console.warn(
+              'Conflicto de token detectado para máster, aplicando actualización remota.',
+              { pending, remoto: tk }
+            );
+            pendingTokenChangesRef.current.delete(tokenId);
+            return true;
           }
           return true;
         });
