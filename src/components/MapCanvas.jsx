@@ -1171,7 +1171,10 @@ const MapCanvas = ({
 
   useEffect(() => {
     if (!onGridSettingsChange) return;
-    onGridSettingsChange({ showGrid, gridColor, gridOpacity });
+    onGridSettingsChange(
+      { showGrid, gridColor, gridOpacity },
+      { source: 'map-canvas' }
+    );
   }, [showGrid, gridColor, gridOpacity, onGridSettingsChange]);
 
   // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
