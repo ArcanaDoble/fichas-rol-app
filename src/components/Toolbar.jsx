@@ -34,6 +34,20 @@ const snapOptions = [
   { id: 'free', label: 'Sin ajuste' },
 ];
 
+const measureRuleOptions = [
+  { id: 'chebyshev', label: 'Chebyshev (máximo)' },
+  { id: 'manhattan', label: 'Manhattan' },
+  { id: 'euclidean', label: 'Euclídea' },
+  { id: '5105', label: '5/10/5 (diagonales)' },
+];
+
+const unitLabelOptions = [
+  { id: 'ft', label: 'ft' },
+  { id: 'm', label: 'm' },
+  { id: 'millas', label: 'millas' },
+  { id: 'km', label: 'km' },
+];
+
 const fontOptions = [
   'Arial',
   'Helvetica',
@@ -59,6 +73,12 @@ const Toolbar = ({
   onMeasureSnapChange,
   measureVisible,
   onMeasureVisibleChange,
+  measureRule,
+  onMeasureRuleChange,
+  measureUnitValue,
+  onMeasureUnitValueChange,
+  measureUnitLabel,
+  onMeasureUnitLabelChange,
   textOptions,
   onTextOptionsChange,
   onResetTextOptions,
@@ -190,6 +210,20 @@ const Toolbar = ({
             </select>
           </div>
           <div>
+            <label className="block mb-1 text-xs">Regla de distancia</label>
+            <select
+              value={measureRule}
+              onChange={(e) => onMeasureRuleChange(e.target.value)}
+              className="bg-gray-700 w-full"
+            >
+              {measureRuleOptions.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block mb-1 text-xs">Cuadrícula</label>
             <select
               value={measureSnap}
@@ -202,6 +236,33 @@ const Toolbar = ({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block mb-1 text-xs">Conversión</label>
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                min={0.1}
+                step={0.5}
+                value={measureUnitValue}
+                onChange={(e) => onMeasureUnitValueChange(e.target.value)}
+                className="bg-gray-700 w-20 px-2 py-1 text-sm"
+              />
+              <select
+                value={measureUnitLabel}
+                onChange={(e) => onMeasureUnitLabelChange(e.target.value)}
+                className="bg-gray-700 flex-1"
+              >
+                {unitLabelOptions.map(({ id, label }) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-gray-300 mt-1">
+              1 casilla = {measureUnitValue} {measureUnitLabel}
+            </p>
           </div>
           <div className="flex items-center space-x-2">
             <input
@@ -378,6 +439,12 @@ Toolbar.propTypes = {
   onMeasureSnapChange: PropTypes.func,
   measureVisible: PropTypes.bool,
   onMeasureVisibleChange: PropTypes.func,
+  measureRule: PropTypes.string,
+  onMeasureRuleChange: PropTypes.func,
+  measureUnitValue: PropTypes.number,
+  onMeasureUnitValueChange: PropTypes.func,
+  measureUnitLabel: PropTypes.string,
+  onMeasureUnitLabelChange: PropTypes.func,
   textOptions: PropTypes.shape({
     fill: PropTypes.string,
     bgColor: PropTypes.string,
