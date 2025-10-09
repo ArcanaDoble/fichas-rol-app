@@ -1129,6 +1129,9 @@ const MapCanvas = ({
     if (Number.isNaN(numeric)) return 0.2;
     return Math.max(0, Math.min(1, numeric));
   });
+  const gridOpacitySliderRef = useRef(null);
+  const gridOpacityDraggingRef = useRef(false);
+  const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
   // Estado para simulación de vista de jugador
@@ -1170,12 +1173,82 @@ const MapCanvas = ({
   }, [propGridOpacity]);
 
   useEffect(() => {
-    if (!onGridSettingsChange) return;
-    onGridSettingsChange(
-      { showGrid, gridColor, gridOpacity },
-      { source: 'map-canvas' }
-    );
-  }, [showGrid, gridColor, gridOpacity, onGridSettingsChange]);
+    gridOpacityValueRef.current = gridOpacity;
+  }, [gridOpacity]);
+
+  const emitGridSettingsChange = useCallback(
+    (nextSettings, meta = {}) => {
+      if (!onGridSettingsChange) return;
+      onGridSettingsChange(nextSettings, { source: 'map-canvas', ...meta });
+    },
+    [onGridSettingsChange]
+  );
+
+  const handleGridVisibilityChange = useCallback(
+    (nextVisible) => {
+      setShowGrid(nextVisible);
+      emitGridSettingsChange({ showGrid: nextVisible }, { interaction: 'commit' });
+    },
+    [emitGridSettingsChange]
+  );
+
+  const handleGridColorChange = useCallback(
+    (value) => {
+      const sanitized =
+        typeof value === 'string' && value.trim() !== ''
+          ? value.trim().toLowerCase()
+          : '#ffffff';
+      setGridColor(sanitized);
+      emitGridSettingsChange({ gridColor: sanitized }, { interaction: 'commit' });
+    },
+    [emitGridSettingsChange]
+  );
+
+  const handleGridOpacityChange = useCallback(
+    (value, interaction) => {
+      const numeric = Math.max(0, Math.min(1, Number(value)));
+      if (Number.isNaN(numeric)) return;
+      setGridOpacity(numeric);
+      emitGridSettingsChange(
+        { gridOpacity: numeric },
+        {
+          interaction:
+            interaction || (gridOpacityDraggingRef.current ? 'dragging' : 'commit'),
+        }
+      );
+    },
+    [emitGridSettingsChange]
+  );
+
+  useEffect(() => {
+    const slider = gridOpacitySliderRef.current;
+    if (!slider) return undefined;
+
+    const handlePointerDown = () => {
+      gridOpacityDraggingRef.current = true;
+    };
+
+    const finishDrag = () => {
+      if (!gridOpacityDraggingRef.current) return;
+      gridOpacityDraggingRef.current = false;
+      emitGridSettingsChange(
+        { gridOpacity: gridOpacityValueRef.current },
+        { interaction: 'commit' }
+      );
+    };
+
+    slider.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', finishDrag);
+    slider.addEventListener('pointercancel', finishDrag);
+    slider.addEventListener('pointerleave', finishDrag);
+
+    return () => {
+      slider.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', finishDrag);
+      slider.removeEventListener('pointercancel', finishDrag);
+      slider.removeEventListener('pointerleave', finishDrag);
+    };
+  }, [emitGridSettingsChange]);
 
   // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
   const saveDelayRef = useRef(150);
@@ -5556,7 +5629,7 @@ const MapCanvas = ({
                   type="checkbox"
                   className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-400"
                   checked={showGrid}
-                  onChange={(e) => setShowGrid(e.target.checked)}
+                  onChange={(e) => handleGridVisibilityChange(e.target.checked)}
                 />
                 Cuadrícula
               </label>
@@ -5568,7 +5641,7 @@ const MapCanvas = ({
                 <input
                   type="color"
                   value={gridColor || '#ffffff'}
-                  onChange={(e) => setGridColor(e.target.value)}
+                  onChange={(e) => handleGridColorChange(e.target.value)}
                   className="h-8 w-10 cursor-pointer rounded border border-gray-600 bg-gray-800 p-0"
                 />
                 <span className="flex-1 text-right text-xs font-mono text-gray-400">
@@ -5580,16 +5653,13 @@ const MapCanvas = ({
                   Opacidad
                 </label>
                 <input
+                  ref={gridOpacitySliderRef}
                   type="range"
                   min="0"
                   max="1"
                   step="0.05"
                   value={gridOpacity}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    if (Number.isNaN(next)) return;
-                    setGridOpacity(Math.max(0, Math.min(1, next)));
-                  }}
+                  onChange={(e) => handleGridOpacityChange(e.target.value)}
                   className="w-full accent-indigo-500"
                 />
               </div>

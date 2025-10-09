@@ -1286,6 +1286,8 @@ function App() {
       }
 
       if (meta?.source === 'map-canvas') {
+        const interaction = meta?.interaction;
+
         pendingGridRef.current = {
           showGrid: typeof nextShowGrid === 'boolean' ? nextShowGrid : showGrid,
           gridColor:
@@ -1294,30 +1296,36 @@ function App() {
         };
         if (pendingGridTimeoutRef.current) {
           clearTimeout(pendingGridTimeoutRef.current);
-        }
-        pendingGridTimeoutRef.current = setTimeout(() => {
-          pendingGridRef.current = null;
           pendingGridTimeoutRef.current = null;
-          if (lastSkippedGridRef.current) {
-            const {
-              showGrid: pendingShow,
-              gridColor: pendingColor,
-              gridOpacity: pendingOpacity,
-            } = lastSkippedGridRef.current;
-            lastSkippedGridRef.current = null;
-            setShowGrid((prev) => (prev === pendingShow ? prev : pendingShow));
-            if (pendingColor) {
-              setGridColor((prev) =>
-                prev === pendingColor ? prev : pendingColor
-              );
+        }
+        if (interaction !== 'dragging') {
+          pendingGridTimeoutRef.current = setTimeout(() => {
+            pendingGridRef.current = null;
+            pendingGridTimeoutRef.current = null;
+            if (lastSkippedGridRef.current) {
+              const {
+                showGrid: pendingShow,
+                gridColor: pendingColor,
+                gridOpacity: pendingOpacity,
+              } = lastSkippedGridRef.current;
+              lastSkippedGridRef.current = null;
+              setShowGrid((prev) => (prev === pendingShow ? prev : pendingShow));
+              if (pendingColor) {
+                setGridColor((prev) =>
+                  prev === pendingColor ? prev : pendingColor
+                );
+              }
+              if (
+                typeof pendingOpacity === 'number' &&
+                !Number.isNaN(pendingOpacity)
+              ) {
+                setGridOpacity((prev) =>
+                  prev === pendingOpacity ? prev : pendingOpacity
+                );
+              }
             }
-            if (typeof pendingOpacity === 'number' && !Number.isNaN(pendingOpacity)) {
-              setGridOpacity((prev) =>
-                prev === pendingOpacity ? prev : pendingOpacity
-              );
-            }
-          }
-        }, 1500);
+          }, 1500);
+        }
       }
     },
     [showGrid, gridColor, gridOpacity]
