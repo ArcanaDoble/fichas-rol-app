@@ -12,6 +12,7 @@ import {
   onSnapshot,
   addDoc,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -139,6 +140,8 @@ const defaultResourcesList = defaultRecursos.map((name) => ({
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
 const dadoImgUrl = (dado) => `/dados/${dado}.png`;
+
+const CLOCK_SKEW_MS = 5000;
 
 const createImageElement = (url) =>
   new Promise((resolve, reject) => {
@@ -1263,6 +1266,7 @@ function App() {
     );
     const changed = [];
     const author = playerName || 'Master';
+    const changeTime = Timestamp.now().toMillis();
     next.forEach((tk) => {
       const id = String(tk.id);
       const old = prevMap.get(id);
@@ -1270,14 +1274,14 @@ function App() {
         changed.push({
           ...tk,
           id,
-          updatedAt: Date.now(),
+          updatedAt: changeTime,
           updatedBy: author,
         });
       } else if (!deepEqual(stripTokenMetadata(old), stripTokenMetadata(tk))) {
         changed.push({
           ...tk,
           id,
-          updatedAt: Date.now(),
+          updatedAt: changeTime,
           updatedBy: author,
         });
       }
@@ -1287,7 +1291,7 @@ function App() {
       changed.push({
         id: String(tk.id),
         _deleted: true,
-        updatedAt: Date.now(),
+        updatedAt: changeTime,
         updatedBy: author,
       });
     });
@@ -1676,19 +1680,23 @@ function App() {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt) ?? 0;
-            const pendingUpdatedAt =
-              normalizeTokenUpdatedAt(pending.updatedAt) ?? 0;
-            if (remoteUpdatedAt <= pendingUpdatedAt) {
-              if (
-                remoteUpdatedAt === pendingUpdatedAt &&
-                deepEqual(
-                  stripTokenMetadata(pending),
-                  stripTokenMetadata(tk)
-                )
-              ) {
-                pendingTokenChangesRef.current.delete(tokenId);
-              }
+            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+            const pendingUpdatedAt = normalizeTokenUpdatedAt(pending.updatedAt);
+            if (
+              deepEqual(
+                stripTokenMetadata(pending),
+                stripTokenMetadata(tk)
+              )
+            ) {
+              pendingTokenChangesRef.current.delete(tokenId);
+              return false;
+            }
+            if (
+              typeof remoteUpdatedAt === 'number' &&
+              typeof pendingUpdatedAt === 'number' &&
+              remoteUpdatedAt <= pendingUpdatedAt &&
+              pendingUpdatedAt - remoteUpdatedAt > CLOCK_SKEW_MS
+            ) {
               return false;
             }
             pendingTokenChangesRef.current.delete(tokenId);
@@ -1844,19 +1852,23 @@ function App() {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt) ?? 0;
-            const pendingUpdatedAt =
-              normalizeTokenUpdatedAt(pending.updatedAt) ?? 0;
-            if (remoteUpdatedAt <= pendingUpdatedAt) {
-              if (
-                remoteUpdatedAt === pendingUpdatedAt &&
-                deepEqual(
-                  stripTokenMetadata(pending),
-                  stripTokenMetadata(tk)
-                )
-              ) {
-                pendingTokenChangesRef.current.delete(tokenId);
-              }
+            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+            const pendingUpdatedAt = normalizeTokenUpdatedAt(pending.updatedAt);
+            if (
+              deepEqual(
+                stripTokenMetadata(pending),
+                stripTokenMetadata(tk)
+              )
+            ) {
+              pendingTokenChangesRef.current.delete(tokenId);
+              return false;
+            }
+            if (
+              typeof remoteUpdatedAt === 'number' &&
+              typeof pendingUpdatedAt === 'number' &&
+              remoteUpdatedAt <= pendingUpdatedAt &&
+              pendingUpdatedAt - remoteUpdatedAt > CLOCK_SKEW_MS
+            ) {
               return false;
             }
             pendingTokenChangesRef.current.delete(tokenId);
@@ -4483,11 +4495,15 @@ function App() {
                   typeof updater === 'function' ? updater(prev) : updater;
                 const changed = diffTokens(prev, next);
                 changed.forEach((tk) => {
-                  const normalizedUpdatedAt =
-                    normalizeTokenUpdatedAt(tk.updatedAt) ?? Date.now();
+                  const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+                  const resolvedUpdatedAt =
+                    normalizedUpdatedAt ??
+                    (typeof tk.updatedAt === 'number'
+                      ? tk.updatedAt
+                      : Timestamp.now().toMillis());
                   pendingTokenChangesRef.current.set(String(tk.id), {
                     ...tk,
-                    updatedAt: normalizedUpdatedAt,
+                    updatedAt: resolvedUpdatedAt,
                   });
                 });
                 updatedPages[effectivePageIndex].tokens = next;
@@ -6990,11 +7006,15 @@ function App() {
                     typeof updater === 'function' ? updater(prev) : updater;
                   const changed = diffTokens(prev, next);
                   changed.forEach((tk) => {
-                    const normalizedUpdatedAt =
-                      normalizeTokenUpdatedAt(tk.updatedAt) ?? Date.now();
+                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+                    const resolvedUpdatedAt =
+                      normalizedUpdatedAt ??
+                      (typeof tk.updatedAt === 'number'
+                        ? tk.updatedAt
+                        : Timestamp.now().toMillis());
                     pendingTokenChangesRef.current.set(String(tk.id), {
                       ...tk,
-                      updatedAt: normalizedUpdatedAt,
+                      updatedAt: resolvedUpdatedAt,
                     });
                   });
                   return next;
