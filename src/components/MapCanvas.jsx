@@ -952,6 +952,10 @@ const MapCanvas = ({
   // Nuevas props para sincronización bidireccional
   pageId = null,
   isPlayerView = false,
+  showGrid: propShowGrid = true,
+  gridColor: propGridColor = '#ffffff',
+  gridOpacity: propGridOpacity = 0.2,
+  onGridSettingsChange,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1118,6 +1122,16 @@ const MapCanvas = ({
     return 'ft';
   });
   const [texts, setTexts] = useState(propTexts);
+  const [showGrid, setShowGrid] = useState(Boolean(propShowGrid));
+  const [gridColor, setGridColor] = useState(propGridColor);
+  const [gridOpacity, setGridOpacity] = useState(() => {
+    const numeric = Number(propGridOpacity);
+    if (Number.isNaN(numeric)) return 0.2;
+    return Math.max(0, Math.min(1, numeric));
+  });
+  const gridOpacitySliderRef = useRef(null);
+  const gridOpacityDraggingRef = useRef(false);
+  const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
   // Estado para simulación de vista de jugador
@@ -1140,6 +1154,101 @@ const MapCanvas = ({
       localStorage.setItem('measureUnitLabel', measureUnitLabel);
     }
   }, [measureUnitLabel]);
+
+  useEffect(() => {
+    setShowGrid(Boolean(propShowGrid));
+  }, [propShowGrid]);
+
+  useEffect(() => {
+    if (typeof propGridColor === 'string' && propGridColor.trim() !== '') {
+      setGridColor(propGridColor);
+    }
+  }, [propGridColor]);
+
+  useEffect(() => {
+    if (propGridOpacity === undefined) return;
+    const numeric = Number(propGridOpacity);
+    if (Number.isNaN(numeric)) return;
+    setGridOpacity(Math.max(0, Math.min(1, numeric)));
+  }, [propGridOpacity]);
+
+  useEffect(() => {
+    gridOpacityValueRef.current = gridOpacity;
+  }, [gridOpacity]);
+
+  const emitGridSettingsChange = useCallback(
+    (nextSettings, meta = {}) => {
+      if (!onGridSettingsChange) return;
+      onGridSettingsChange(nextSettings, { source: 'map-canvas', ...meta });
+    },
+    [onGridSettingsChange]
+  );
+
+  const handleGridVisibilityChange = useCallback(
+    (nextVisible) => {
+      setShowGrid(nextVisible);
+      emitGridSettingsChange({ showGrid: nextVisible }, { interaction: 'commit' });
+    },
+    [emitGridSettingsChange]
+  );
+
+  const handleGridColorChange = useCallback(
+    (value) => {
+      const sanitized =
+        typeof value === 'string' && value.trim() !== ''
+          ? value.trim().toLowerCase()
+          : '#ffffff';
+      setGridColor(sanitized);
+      emitGridSettingsChange({ gridColor: sanitized }, { interaction: 'commit' });
+    },
+    [emitGridSettingsChange]
+  );
+
+  const handleGridOpacityChange = useCallback(
+    (value, interaction) => {
+      const numeric = Math.max(0, Math.min(1, Number(value)));
+      if (Number.isNaN(numeric)) return;
+      setGridOpacity(numeric);
+      emitGridSettingsChange(
+        { gridOpacity: numeric },
+        {
+          interaction:
+            interaction || (gridOpacityDraggingRef.current ? 'dragging' : 'commit'),
+        }
+      );
+    },
+    [emitGridSettingsChange]
+  );
+
+  useEffect(() => {
+    const slider = gridOpacitySliderRef.current;
+    if (!slider) return undefined;
+
+    const handlePointerDown = () => {
+      gridOpacityDraggingRef.current = true;
+    };
+
+    const finishDrag = () => {
+      if (!gridOpacityDraggingRef.current) return;
+      gridOpacityDraggingRef.current = false;
+      emitGridSettingsChange(
+        { gridOpacity: gridOpacityValueRef.current },
+        { interaction: 'commit' }
+      );
+    };
+
+    slider.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', finishDrag);
+    slider.addEventListener('pointercancel', finishDrag);
+    slider.addEventListener('pointerleave', finishDrag);
+
+    return () => {
+      slider.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', finishDrag);
+      slider.removeEventListener('pointercancel', finishDrag);
+      slider.removeEventListener('pointerleave', finishDrag);
+    };
+  }, [emitGridSettingsChange]);
 
   // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
   const saveDelayRef = useRef(150);
@@ -1433,6 +1542,8 @@ const MapCanvas = ({
   const [drawColor, setDrawColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState('medium');
   const [activeLayer, setActiveLayer] = useState(propActiveLayer);
+  const canEditGrid = userType === 'master' || !isPlayerView;
+  const gridOpacityPercent = Math.round(gridOpacity * 100);
 
   // Si se especifica el número de casillas, calculamos el tamaño de cada celda
   const effectiveGridSize =
@@ -2804,6 +2915,8 @@ const MapCanvas = ({
   }, [containerSize, imageSize, gridCells, gridSize, scaleMode]);
 
   const drawGrid = () => {
+    if (!showGrid || !effectiveGridSize) return null;
+    const strokeColor = hexToRgba(gridColor || '#ffffff', gridOpacity);
     const lines = [];
     // Líneas verticales
     for (let i = gridOffsetX; i < imageSize.width; i += effectiveGridSize) {
@@ -2811,7 +2924,7 @@ const MapCanvas = ({
         <Line
           key={`v${i}`}
           points={[i, 0, i, imageSize.height]}
-          stroke="rgba(255,255,255,0.2)"
+          stroke={strokeColor}
           listening={false}
         />
       );
@@ -2822,7 +2935,7 @@ const MapCanvas = ({
         <Line
           key={`h${i}`}
           points={[0, i, imageSize.width, i]}
-          stroke="rgba(255,255,255,0.2)"
+          stroke={strokeColor}
           listening={false}
         />
       );
@@ -5507,26 +5620,73 @@ const MapCanvas = ({
         </div>
       )}
 
-      {/* Contador de selección múltiple */}
-      {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
-        <div className="absolute top-4 right-4 bg-green-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">📋 Seleccionados:</span>
-            <span className="font-bold">
-              {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
-            </span>
-            <span className="text-xs opacity-75">
-              ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
-              {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
-              {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
-              {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
-            </span>
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-3 pointer-events-none z-50">
+        {canEditGrid && (
+          <div className="w-64 max-w-[90vw] rounded-lg border border-gray-700 bg-gray-900/90 px-3 py-2 shadow-lg backdrop-blur pointer-events-auto">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-100">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-400"
+                  checked={showGrid}
+                  onChange={(e) => handleGridVisibilityChange(e.target.checked)}
+                />
+                Cuadrícula
+              </label>
+              <span className="text-xs font-mono text-gray-400">{gridOpacityPercent}%</span>
+            </div>
+            <div className={`mt-2 space-y-2 ${showGrid ? '' : 'opacity-60'}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-gray-400">Color</span>
+                <input
+                  type="color"
+                  value={gridColor || '#ffffff'}
+                  onChange={(e) => handleGridColorChange(e.target.value)}
+                  className="h-8 w-10 cursor-pointer rounded border border-gray-600 bg-gray-800 p-0"
+                />
+                <span className="flex-1 text-right text-xs font-mono text-gray-400">
+                  {String(gridColor || '#ffffff').toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-gray-400">
+                  Opacidad
+                </label>
+                <input
+                  ref={gridOpacitySliderRef}
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={gridOpacity}
+                  onChange={(e) => handleGridOpacityChange(e.target.value)}
+                  className="w-full accent-indigo-500"
+                />
+              </div>
+            </div>
           </div>
-          <div className="text-xs opacity-75 mt-1">
-            Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+        )}
+
+        {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
+          <div className="rounded-lg bg-green-600 px-3 py-2 text-white shadow-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">📋 Seleccionados:</span>
+              <span className="font-bold">
+                {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
+              </span>
+              <span className="text-xs opacity-75">
+                ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
+                {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
+                {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
+                {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
+              </span>
+            </div>
+            <div className="mt-1 text-xs opacity-75">
+              Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Indicador de clipboard */}
       {clipboard && (
@@ -5620,6 +5780,10 @@ MapCanvas.propTypes = {
   showVisionPolygons: PropTypes.bool,
   pageId: PropTypes.string,
   isPlayerView: PropTypes.bool,
+  showGrid: PropTypes.bool,
+  gridColor: PropTypes.string,
+  gridOpacity: PropTypes.number,
+  onGridSettingsChange: PropTypes.func,
 };
 
 export default MapCanvas;
