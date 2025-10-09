@@ -11,6 +11,7 @@ import {
   getDocs,
   onSnapshot,
   addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -79,6 +80,25 @@ function pageDataEqual(a, b) {
   };
   return deepEqual(omit(a), omit(b));
 }
+const normalizeTokenUpdatedAt = (value) => {
+  if (!value && value !== 0) return null;
+  if (typeof value === 'number') return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value === 'object') {
+    const { seconds, nanoseconds } = value || {};
+    if (typeof seconds === 'number') {
+      return seconds * 1000 + Math.floor((nanoseconds || 0) / 1e6);
+    }
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+const stripTokenMetadata = (token) => {
+  if (!token) return token;
+  const { updatedAt, updatedBy, ...rest } = token;
+  return rest;
+};
 const MASTER_PASSWORD = '0904';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
@@ -1242,18 +1262,34 @@ function App() {
       })
     );
     const changed = [];
+    const author = playerName || 'Master';
     next.forEach((tk) => {
       const id = String(tk.id);
       const old = prevMap.get(id);
       if (!old) {
-        changed.push({ ...tk, id });
-      } else if (!deepEqual(old, tk)) {
-        changed.push({ ...tk, id });
+        changed.push({
+          ...tk,
+          id,
+          updatedAt: Date.now(),
+          updatedBy: author,
+        });
+      } else if (!deepEqual(stripTokenMetadata(old), stripTokenMetadata(tk))) {
+        changed.push({
+          ...tk,
+          id,
+          updatedAt: Date.now(),
+          updatedBy: author,
+        });
       }
       prevMap.delete(id);
     });
     prevMap.forEach((tk) => {
-      changed.push({ id: String(tk.id), _deleted: true });
+      changed.push({
+        id: String(tk.id),
+        _deleted: true,
+        updatedAt: Date.now(),
+        updatedBy: author,
+      });
     });
     return changed;
   };
@@ -1383,7 +1419,11 @@ function App() {
     }
 
     checkedPagesRef.current[pageId] = true;
-    return updated;
+    return updated.map((token) => {
+      const normalizedUpdatedAt = normalizeTokenUpdatedAt(token.updatedAt);
+      if (normalizedUpdatedAt === null) return token;
+      return { ...token, updatedAt: normalizedUpdatedAt };
+    });
   }, []);
 
   // Al cerrar el panel de Ajustes de Token, si hubo cambios mientras estaba abierto
@@ -1408,8 +1448,17 @@ function App() {
           const toDelete = (prevTokensRef.current || []).filter(
             (pt) => !tokens.some((t) => t.id === pt.id)
           );
+          const author = playerName || 'Master';
           await Promise.all([
-            ...tokens.map((t) => setDoc(doc(tokensRef, String(t.id)), t)),
+            ...tokens.map((t) => {
+              const tokenId = String(t.id);
+              const payload = {
+                ...t,
+                updatedAt: serverTimestamp(),
+                updatedBy: author,
+              };
+              return setDoc(doc(tokensRef, tokenId), payload);
+            }),
             ...toDelete.map((t) => deleteDoc(doc(tokensRef, String(t.id)))),
           ]);
         } catch (err) {
@@ -1606,20 +1655,42 @@ function App() {
         );
         const tokensWithIds = changes.map((t) => {
           const id = String(t.id);
-          return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
+          if (t._deleted) {
+            return {
+              ...t,
+              id,
+              updatedAt: normalizeTokenUpdatedAt(t.updatedAt) ?? null,
+            };
+          }
+          const ensuredToken = ensuredMap.get(id);
+          const baseToken = ensuredToken ? { ...ensuredToken } : { ...t, id };
+          const normalizedUpdatedAt =
+            normalizeTokenUpdatedAt(baseToken.updatedAt) ?? null;
+          return {
+            ...baseToken,
+            id,
+            updatedAt: normalizedUpdatedAt,
+          };
         });
         const filtered = tokensWithIds.filter((tk) => {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            if (deepEqual(pending, tk)) {
-              pendingTokenChangesRef.current.delete(tokenId);
+            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt) ?? 0;
+            const pendingUpdatedAt =
+              normalizeTokenUpdatedAt(pending.updatedAt) ?? 0;
+            if (remoteUpdatedAt <= pendingUpdatedAt) {
+              if (
+                remoteUpdatedAt === pendingUpdatedAt &&
+                deepEqual(
+                  stripTokenMetadata(pending),
+                  stripTokenMetadata(tk)
+                )
+              ) {
+                pendingTokenChangesRef.current.delete(tokenId);
+              }
               return false;
             }
-            console.warn(
-              'Conflicto de token detectado para jugador, aplicando actualización remota.',
-              { pending, remoto: tk }
-            );
             pendingTokenChangesRef.current.delete(tokenId);
             return true;
           }
@@ -1752,20 +1823,42 @@ function App() {
         );
         const tokensWithIds = changes.map((t) => {
           const id = String(t.id);
-          return t._deleted ? { ...t, id } : ensuredMap.get(id) || { ...t, id };
+          if (t._deleted) {
+            return {
+              ...t,
+              id,
+              updatedAt: normalizeTokenUpdatedAt(t.updatedAt) ?? null,
+            };
+          }
+          const ensuredToken = ensuredMap.get(id);
+          const baseToken = ensuredToken ? { ...ensuredToken } : { ...t, id };
+          const normalizedUpdatedAt =
+            normalizeTokenUpdatedAt(baseToken.updatedAt) ?? null;
+          return {
+            ...baseToken,
+            id,
+            updatedAt: normalizedUpdatedAt,
+          };
         });
         const filtered = tokensWithIds.filter((tk) => {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            if (deepEqual(pending, tk)) {
-              pendingTokenChangesRef.current.delete(tokenId);
+            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt) ?? 0;
+            const pendingUpdatedAt =
+              normalizeTokenUpdatedAt(pending.updatedAt) ?? 0;
+            if (remoteUpdatedAt <= pendingUpdatedAt) {
+              if (
+                remoteUpdatedAt === pendingUpdatedAt &&
+                deepEqual(
+                  stripTokenMetadata(pending),
+                  stripTokenMetadata(tk)
+                )
+              ) {
+                pendingTokenChangesRef.current.delete(tokenId);
+              }
               return false;
             }
-            console.warn(
-              'Conflicto de token detectado para máster, aplicando actualización remota.',
-              { pending, remoto: tk }
-            );
             pendingTokenChangesRef.current.delete(tokenId);
             return true;
           }
@@ -1997,8 +2090,17 @@ function App() {
           const toDelete = prevTokens.filter(
             (pt) => !tokens.some((t) => t.id === pt.id)
           );
+          const author = playerName || 'Master';
           await Promise.all([
-            ...tokens.map((t) => setDoc(doc(tokensRef, String(t.id)), t)),
+            ...tokens.map((t) => {
+              const tokenId = String(t.id);
+              const payload = {
+                ...t,
+                updatedAt: serverTimestamp(),
+                updatedBy: author,
+              };
+              return setDoc(doc(tokensRef, tokenId), payload);
+            }),
             ...toDelete.map((t) => deleteDoc(doc(tokensRef, String(t.id)))),
           ]);
           if (saveId !== saveVersionRef.current.tokens) {
@@ -2346,7 +2448,16 @@ function App() {
       if (Object.keys(rest).length) updateDoc(doc(db, 'pages', pageId), rest);
       if (tokens) {
         const tokensRef = collection(db, 'pages', pageId, 'tokens');
-        tokens.forEach((t) => setDoc(doc(tokensRef, String(t.id)), t));
+        const author = playerName || 'Master';
+        tokens.forEach((t) => {
+          const tokenId = String(t.id);
+          const payload = {
+            ...t,
+            updatedAt: serverTimestamp(),
+            updatedBy: author,
+          };
+          setDoc(doc(tokensRef, tokenId), payload);
+        });
       }
     }
     setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...sanitizedData } : p)));
@@ -4371,9 +4482,14 @@ function App() {
                 const next =
                   typeof updater === 'function' ? updater(prev) : updater;
                 const changed = diffTokens(prev, next);
-                changed.forEach((tk) =>
-                  pendingTokenChangesRef.current.set(String(tk.id), tk)
-                );
+                changed.forEach((tk) => {
+                  const normalizedUpdatedAt =
+                    normalizeTokenUpdatedAt(tk.updatedAt) ?? Date.now();
+                  pendingTokenChangesRef.current.set(String(tk.id), {
+                    ...tk,
+                    updatedAt: normalizedUpdatedAt,
+                  });
+                });
                 updatedPages[effectivePageIndex].tokens = next;
                 setPages(updatedPages);
               }
@@ -6873,9 +6989,14 @@ function App() {
                   const next =
                     typeof updater === 'function' ? updater(prev) : updater;
                   const changed = diffTokens(prev, next);
-                  changed.forEach((tk) =>
-                    pendingTokenChangesRef.current.set(String(tk.id), tk)
-                  );
+                  changed.forEach((tk) => {
+                    const normalizedUpdatedAt =
+                      normalizeTokenUpdatedAt(tk.updatedAt) ?? Date.now();
+                    pendingTokenChangesRef.current.set(String(tk.id), {
+                      ...tk,
+                      updatedAt: normalizedUpdatedAt,
+                    });
+                  });
                   return next;
                 });
                 isRemoteTokenUpdate.current = false;
