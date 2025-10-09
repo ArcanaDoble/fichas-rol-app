@@ -1089,11 +1089,57 @@ const MapCanvas = ({
   const [measureShape, setMeasureShape] = useState('line');
   const [measureSnap, setMeasureSnap] = useState('center');
   const [measureVisible, setMeasureVisible] = useState(true);
+  const [measureRule, setMeasureRule] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('measureRule');
+      const allowed = ['chebyshev', 'manhattan', 'euclidean', '5105'];
+      if (stored && allowed.includes(stored)) {
+        return stored;
+      }
+    }
+    return 'chebyshev';
+  });
+  const [measureUnitValue, setMeasureUnitValue] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('measureUnitValue');
+      const parsed = parseFloat(stored);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 5;
+  });
+  const [measureUnitLabel, setMeasureUnitLabel] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('measureUnitLabel');
+      const allowedLabels = ['ft', 'm', 'millas', 'km'];
+      if (stored && allowedLabels.includes(stored)) {
+        return stored;
+      }
+    }
+    return 'ft';
+  });
   const [texts, setTexts] = useState(propTexts);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('measureRule', measureRule);
+    }
+  }, [measureRule]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('measureUnitValue', String(measureUnitValue));
+    }
+  }, [measureUnitValue]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('measureUnitLabel', measureUnitLabel);
+    }
+  }, [measureUnitLabel]);
 
   // Tiempo de espera para guardar en Firebase (ajustable 150-300ms)
   const saveDelayRef = useRef(150);
@@ -2700,6 +2746,17 @@ const MapCanvas = ({
     [measureSnap, gridOffsetX, gridOffsetY, effectiveGridSize]
   );
 
+  const handleMeasureUnitValueChange = useCallback((value) => {
+    const parsed = parseFloat(value);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      setMeasureUnitValue(parsed);
+    }
+  }, []);
+
+  const handleMeasureUnitLabelChange = useCallback((label) => {
+    setMeasureUnitLabel(label || 'ft');
+  }, []);
+
   // Tamaño del contenedor para ajustar el stage al redimensionar la ventana
   useEffect(() => {
     const updateSize = () => {
@@ -3488,12 +3545,31 @@ const MapCanvas = ({
       const cellDy = Math.abs(
         snapCell(sy2, gridOffsetY) - snapCell(sy1, gridOffsetY)
       );
-      let distance = Math.max(cellDx, cellDy);
+      const diagonalSteps = Math.min(cellDx, cellDy);
+      const straightSteps = Math.abs(cellDx - cellDy);
+      let distanceCells = 0;
+      let distanceUnits = 0;
+      if (measureRule === 'manhattan') {
+        distanceCells = cellDx + cellDy;
+        distanceUnits = distanceCells * measureUnitValue;
+      } else if (measureRule === 'euclidean') {
+        distanceCells = Math.sqrt(cellDx * cellDx + cellDy * cellDy);
+        distanceUnits = distanceCells * measureUnitValue;
+      } else if (measureRule === '5105') {
+        distanceCells = diagonalSteps + straightSteps;
+        let diagonalUnits = 0;
+        for (let i = 0; i < diagonalSteps; i += 1) {
+          diagonalUnits += measureUnitValue * (i % 2 === 0 ? 1 : 2);
+        }
+        distanceUnits = diagonalUnits + straightSteps * measureUnitValue;
+      } else {
+        distanceCells = Math.max(cellDx, cellDy);
+        distanceUnits = distanceCells * measureUnitValue;
+      }
       const len = Math.hypot(sdx, sdy);
       const angle = Math.atan2(sdy, sdx);
       let shape;
       if (measureShape === 'square') {
-        distance = Math.max(cellDx, cellDy);
         shape = (
           <Rect
             x={Math.min(sx1, sx2)}
@@ -3506,7 +3582,6 @@ const MapCanvas = ({
           />
         );
       } else if (measureShape === 'circle') {
-        distance = Math.max(cellDx, cellDy);
         shape = (
           <Circle
             x={sx1}
@@ -3564,13 +3639,22 @@ const MapCanvas = ({
           />
         );
       }
+      const roundedCells =
+        distanceCells % 1 === 0
+          ? distanceCells
+          : Math.round(distanceCells * 100) / 100;
+      const roundedUnits =
+        distanceUnits % 1 === 0
+          ? distanceUnits
+          : Math.round(distanceUnits * 100) / 100;
+      const unitLabel = measureUnitLabel ? ` ${measureUnitLabel}` : '';
       return (
         <>
           {shape}
           <Text
             x={sx2 + 20}
             y={sy2 + 20}
-            text={`${Math.round(distance)} casillas`}
+            text={`${roundedCells} casillas (${roundedUnits}${unitLabel})`}
             fontSize={16}
             fill="#fff"
           />
@@ -5123,6 +5207,12 @@ const MapCanvas = ({
         onMeasureSnapChange={setMeasureSnap}
         measureVisible={measureVisible}
         onMeasureVisibleChange={setMeasureVisible}
+        measureRule={measureRule}
+        onMeasureRuleChange={setMeasureRule}
+        measureUnitValue={measureUnitValue}
+        onMeasureUnitValueChange={handleMeasureUnitValueChange}
+        measureUnitLabel={measureUnitLabel}
+        onMeasureUnitLabelChange={handleMeasureUnitLabelChange}
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
