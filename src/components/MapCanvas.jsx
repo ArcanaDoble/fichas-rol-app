@@ -138,6 +138,9 @@ const BRUSH_WIDTHS = {
   large: 6,
 };
 
+const ALLOWED_MEASURE_SHAPES = ['line', 'square', 'circle', 'cone', 'beam'];
+const ALLOWED_MEASURE_SNAPS = ['center', 'corner', 'free'];
+
 const DEFAULT_WALL_LENGTH = 50;
 
 const DOOR_PATHS = {
@@ -1090,8 +1093,24 @@ const MapCanvas = ({
   const [doorMenuWallId, setDoorMenuWallId] = useState(null);
   const [doorCheckWallId, setDoorCheckWallId] = useState(null);
   const [measureLine, setMeasureLine] = useState(null);
-  const [measureShape, setMeasureShape] = useState('line');
-  const [measureSnap, setMeasureSnap] = useState('center');
+  const [measureShape, setMeasureShape] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('measureShape');
+      if (stored && ALLOWED_MEASURE_SHAPES.includes(stored)) {
+        return stored;
+      }
+    }
+    return 'line';
+  });
+  const [measureSnap, setMeasureSnap] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('measureSnap');
+      if (stored && ALLOWED_MEASURE_SNAPS.includes(stored)) {
+        return stored;
+      }
+    }
+    return 'center';
+  });
   const [measureVisible, setMeasureVisible] = useState(true);
   const [measureRule, setMeasureRule] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1142,6 +1161,22 @@ const MapCanvas = ({
       localStorage.setItem('measureRule', measureRule);
     }
   }, [measureRule]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (ALLOWED_MEASURE_SHAPES.includes(measureShape)) {
+        localStorage.setItem('measureShape', measureShape);
+      }
+    }
+  }, [measureShape]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (ALLOWED_MEASURE_SNAPS.includes(measureSnap)) {
+        localStorage.setItem('measureSnap', measureSnap);
+      }
+    }
+  }, [measureSnap]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
