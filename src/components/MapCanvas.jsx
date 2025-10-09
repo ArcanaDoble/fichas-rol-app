@@ -1073,6 +1073,7 @@ const MapCanvas = ({
   const [damagePopups, setDamagePopups] = useState([]);
   const [damageEffects, setDamageEffects] = useState(new Map());
   const [dragShadow, setDragShadow] = useState(null);
+  const [pendingTokenPositions, setPendingTokenPositions] = useState({});
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [barsToken, setBarsToken] = useState(null);
@@ -1946,6 +1947,25 @@ const MapCanvas = ({
     () => [...textLayers.background, ...textLayers.visible],
     [textLayers.background, textLayers.visible]
   );
+
+  useEffect(() => {
+    setPendingTokenPositions((prev) => {
+      if (!prev || Object.keys(prev).length === 0) return prev;
+
+      let changed = false;
+      const next = { ...prev };
+
+      Object.entries(prev).forEach(([tokenId, position]) => {
+        const currentToken = tokens.find((t) => t.id === tokenId);
+        if (!currentToken || (currentToken.x === position.x && currentToken.y === position.y)) {
+          delete next[tokenId];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [tokens]);
 
   // Función para cambiar de capa
   const handleLayerChange = (newLayer) => {
@@ -3275,6 +3295,10 @@ const MapCanvas = ({
 
 
     if (token && (token.x !== col || token.y !== row)) {
+      setPendingTokenPositions((prev) => ({
+        ...prev,
+        [id]: { x: col, y: row },
+      }));
       const newTokens = tokens.map((t) =>
         t.id === id ? { ...t, x: col, y: row } : t
       );
@@ -4549,21 +4573,27 @@ const MapCanvas = ({
                     showAura={canSeeAura(dragShadow)}
                   />
                 )}
-                {filteredTokens.map((token) => (
-                  <TokenAura
-                    key={`aura-${token.id}`}
-                    x={cellToPx(token.x, gridOffsetX)}
-                    y={cellToPx(token.y, gridOffsetY)}
-                    width={token.w || 1}
-                    height={token.h || 1}
-                    gridSize={effectiveGridSize}
-                    auraRadius={token.auraRadius}
-                    auraShape={token.auraShape}
-                    auraColor={token.auraColor}
-                    auraOpacity={(token.auraOpacity || 0.25) * (token.crossLayerOpacity || 1)}
-                    showAura={canSeeAura(token)}
-                  />
-                ))}
+                {filteredTokens.map((token) => {
+                  const pendingPosition = pendingTokenPositions[token.id];
+                  const tokenX = pendingPosition ? pendingPosition.x : token.x;
+                  const tokenY = pendingPosition ? pendingPosition.y : token.y;
+
+                  return (
+                    <TokenAura
+                      key={`aura-${token.id}`}
+                      x={cellToPx(tokenX, gridOffsetX)}
+                      y={cellToPx(tokenY, gridOffsetY)}
+                      width={token.w || 1}
+                      height={token.h || 1}
+                      gridSize={effectiveGridSize}
+                      auraRadius={token.auraRadius}
+                      auraShape={token.auraShape}
+                      auraColor={token.auraColor}
+                      auraOpacity={(token.auraOpacity || 0.25) * (token.crossLayerOpacity || 1)}
+                      showAura={canSeeAura(token)}
+                    />
+                  );
+                })}
               </Group>
               {dragShadow && (
                 <Token
@@ -4598,82 +4628,88 @@ const MapCanvas = ({
                   auraOpacity={dragShadow.auraOpacity}
                 />
               )}
-              {filteredTokens.map((token) => (
-                <Token
-                  ref={(el) => {
-                    if (el) tokenRefs.current[token.id] = el;
-                  }}
-                  key={token.id}
-                  id={token.id}
-                  x={cellToPx(token.x, gridOffsetX)}
-                  y={cellToPx(token.y, gridOffsetY)}
-                  width={token.w || 1}
-                  height={token.h || 1}
-                  angle={token.angle || 0}
-                  gridSize={effectiveGridSize}
-                  cellSize={effectiveGridSize}
-                  zoom={zoom}
-                  maxZoom={maxZoom}
-                  groupScale={groupScale}
-                  gridOffsetX={gridOffsetX}
-                  gridOffsetY={gridOffsetY}
-                  image={token.url}
-                  color={token.color}
-                  name={token.name}
-                  customName={token.customName}
-                  showName={token.showName}
-                  opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
-                  tintColor={token.tintColor}
-                  tintOpacity={damageEffects.get(token.id) ?? token.tintOpacity}
-                  showAura={false}
-                  tokenSheetId={token.tokenSheetId}
-                  auraRadius={token.auraRadius}
-                  auraShape={token.auraShape}
-                  auraColor={token.auraColor}
-                  auraOpacity={token.auraOpacity}
-                  isAttacker={activeTool === 'target' && token.id === attackSourceId}
-                  isTarget={activeTool === 'target' && token.id === attackTargetId}
-                  selected={token.id === selectedId || selectedTokens.includes(token.id)}
-                  onDragEnd={handleDragEnd}
-                  onDragStart={handleDragStart}
-                  onClick={(e) => {
-                    if (activeTool === 'target') return; // Evitar selección durante la mirilla
+              {filteredTokens.map((token) => {
+                const pendingPosition = pendingTokenPositions[token.id];
+                const tokenX = pendingPosition ? pendingPosition.x : token.x;
+                const tokenY = pendingPosition ? pendingPosition.y : token.y;
 
-                    // Validar permisos de selección
-                    if (!canSelectElement(token, 'token')) {
-                      return; // Bloquear selección si no tiene permisos
-                    }
+                return (
+                  <Token
+                    ref={(el) => {
+                      if (el) tokenRefs.current[token.id] = el;
+                    }}
+                    key={token.id}
+                    id={token.id}
+                    x={cellToPx(tokenX, gridOffsetX)}
+                    y={cellToPx(tokenY, gridOffsetY)}
+                    width={token.w || 1}
+                    height={token.h || 1}
+                    angle={token.angle || 0}
+                    gridSize={effectiveGridSize}
+                    cellSize={effectiveGridSize}
+                    zoom={zoom}
+                    maxZoom={maxZoom}
+                    groupScale={groupScale}
+                    gridOffsetX={gridOffsetX}
+                    gridOffsetY={gridOffsetY}
+                    image={token.url}
+                    color={token.color}
+                    name={token.name}
+                    customName={token.customName}
+                    showName={token.showName}
+                    opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
+                    tintColor={token.tintColor}
+                    tintOpacity={damageEffects.get(token.id) ?? token.tintOpacity}
+                    showAura={false}
+                    tokenSheetId={token.tokenSheetId}
+                    auraRadius={token.auraRadius}
+                    auraShape={token.auraShape}
+                    auraColor={token.auraColor}
+                    auraOpacity={token.auraOpacity}
+                    isAttacker={activeTool === 'target' && token.id === attackSourceId}
+                    isTarget={activeTool === 'target' && token.id === attackTargetId}
+                    selected={token.id === selectedId || selectedTokens.includes(token.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragStart={handleDragStart}
+                    onClick={(e) => {
+                      if (activeTool === 'target') return; // Evitar selección durante la mirilla
 
-                    const isCtrlPressed = e?.evt?.ctrlKey || false;
-                    if (isCtrlPressed) {
-                      // Selección múltiple con Ctrl
-                      if (selectedTokens.includes(token.id)) {
-                        setSelectedTokens(prev => prev.filter(id => id !== token.id));
-                      } else {
-                        setSelectedTokens(prev => [...prev, token.id]);
+                      // Validar permisos de selección
+                      if (!canSelectElement(token, 'token')) {
+                        return; // Bloquear selección si no tiene permisos
                       }
-                    } else {
-                      // Selección individual
-                      setSelectedId(token.id);
-                      setSelectedLineId(null);
-                      setSelectedTextId(null);
-                      clearMultiSelection();
+
+                      const isCtrlPressed = e?.evt?.ctrlKey || false;
+                      if (isCtrlPressed) {
+                        // Selección múltiple con Ctrl
+                        if (selectedTokens.includes(token.id)) {
+                          setSelectedTokens(prev => prev.filter(id => id !== token.id));
+                        } else {
+                          setSelectedTokens(prev => [...prev, token.id]);
+                        }
+                      } else {
+                        // Selección individual
+                        setSelectedId(token.id);
+                        setSelectedLineId(null);
+                        setSelectedTextId(null);
+                        clearMultiSelection();
+                      }
+                    }}
+                    onSettings={handleOpenSettings}
+                    onStates={handleOpenEstados}
+                    onBars={handleOpenBars}
+                    onTransformEnd={handleSizeChange}
+                    onRotate={handleRotateChange}
+                    onHoverChange={(h) => setHoveredId(h ? token.id : null)}
+                    estados={token.estados || []}
+                    draggable={
+                      activeTool === 'select' && canSelectElement(token, 'token')
                     }
-                  }}
-                  onSettings={handleOpenSettings}
-                  onStates={handleOpenEstados}
-                  onBars={handleOpenBars}
-                  onTransformEnd={handleSizeChange}
-                  onRotate={handleRotateChange}
-                  onHoverChange={(h) => setHoveredId(h ? token.id : null)}
-                  estados={token.estados || []}
-                  draggable={
-                    activeTool === 'select' && canSelectElement(token, 'token')
-                  }
-                  listening={activeTool === 'select' || activeTool === 'target'}
-                  activeTool={activeTool}
-                />
-              ))}
+                    listening={activeTool === 'select' || activeTool === 'target'}
+                    activeTool={activeTool}
+                  />
+                );
+              })}
               {filteredLines.map((ln) => (
                 <Line
                   ref={(el) => {
@@ -4955,22 +4991,28 @@ const MapCanvas = ({
             </Group>
           </Layer>
           <Layer listening>
-            {filteredTokens.map((token) => (
-              <TokenBars
-                key={`bars-${token.id}`}
-                tokenRef={tokenRefs.current[token.id]}
-                stageRef={stageRef}
-                onStatClick={(key, e) =>
-                  tokenRefs.current[token.id]?.handleStatClick(key, e)
-                }
-                transformKey={`${groupPos.x},${groupPos.y},${groupScale},${token.x},${token.y},${token.w},${token.h},${token.angle}`}
-                visible={
-                  (activeTool === 'select' || activeTool === 'target') &&
-                  hoveredId === token.id &&
-                  canSeeBars(token)
-                }
-              />
-            ))}
+            {filteredTokens.map((token) => {
+              const pendingPosition = pendingTokenPositions[token.id];
+              const tokenX = pendingPosition ? pendingPosition.x : token.x;
+              const tokenY = pendingPosition ? pendingPosition.y : token.y;
+
+              return (
+                <TokenBars
+                  key={`bars-${token.id}`}
+                  tokenRef={tokenRefs.current[token.id]}
+                  stageRef={stageRef}
+                  onStatClick={(key, e) =>
+                    tokenRefs.current[token.id]?.handleStatClick(key, e)
+                  }
+                  transformKey={`${groupPos.x},${groupPos.y},${groupScale},${tokenX},${tokenY},${token.w},${token.h},${token.angle}`}
+                  visible={
+                    (activeTool === 'select' || activeTool === 'target') &&
+                    hoveredId === token.id &&
+                    canSeeBars(token)
+                  }
+                />
+              );
+            })}
           </Layer>
 
           {attackElement && (
