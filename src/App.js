@@ -1186,6 +1186,7 @@ function App() {
   const prevTextsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
+  const gridSaveTimeoutRef = useRef(null);
   const saveVersionRef = useRef({
     tokens: 0,
     lines: 0,
@@ -2076,30 +2077,46 @@ function App() {
     };
     if (deepEqual(newGrid, prevGridRef.current)) return;
 
-    console.log(
-      'Guardando grid en página:',
-      pageId,
-      'currentPage:',
-      currentPage
-    );
-    prevGridRef.current = newGrid;
     const saveId = ++saveVersionRef.current.grid;
-
-    updateDoc(doc(db, 'pages', pageId), newGrid)
-      .then(() => {
-        if (saveId !== saveVersionRef.current.grid) {
-          console.log(
-            'Resultado de guardado de grid ignorado por cambio de página'
+    const timeoutId = setTimeout(() => {
+      gridSaveTimeoutRef.current = null;
+      console.log('Guardando grid en página:', pageId);
+      updateDoc(doc(db, 'pages', pageId), newGrid)
+        .then(() => {
+          if (saveId !== saveVersionRef.current.grid) {
+            console.log(
+              'Resultado de guardado de grid ignorado por cambio de página'
+            );
+            return;
+          }
+          console.log('Grid guardado exitosamente en página:', pageId);
+          prevGridRef.current = newGrid;
+          setPages((ps) =>
+            ps.map((p) => (p.id === pageId ? { ...p, ...newGrid } : p))
           );
-          return;
-        }
-        console.log('Grid guardado exitosamente en página:', pageId);
-        setPages((ps) =>
-          ps.map((p, i) => (i === currentPage ? { ...p, ...newGrid } : p))
-        );
-      })
-      .catch((error) => console.error('Error guardando grid:', error));
+        })
+        .catch((error) => console.error('Error guardando grid:', error));
+    }, 300);
+
+    gridSaveTimeoutRef.current = timeoutId;
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (gridSaveTimeoutRef.current === timeoutId) {
+        gridSaveTimeoutRef.current = null;
+      }
+    };
   }, [gridSize, gridCells, gridOffsetX, gridOffsetY, showGrid, gridColor, gridOpacity, currentPage]);
+
+  useEffect(
+    () => () => {
+      if (gridSaveTimeoutRef.current) {
+        clearTimeout(gridSaveTimeoutRef.current);
+        gridSaveTimeoutRef.current = null;
+      }
+    },
+    []
+  );
 
   // Función para crear un canvas con fondo blanco y grid negro
   const createDefaultGridCanvas = (
