@@ -1186,6 +1186,7 @@ function App() {
   const prevTextsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
+  const gridSaveTimeoutRef = useRef(null);
   const saveVersionRef = useRef({
     tokens: 0,
     lines: 0,
@@ -1224,6 +1225,9 @@ function App() {
   const [gridCells, setGridCells] = useState(30);
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
+  const [showGrid, setShowGrid] = useState(true);
+  const [gridColor, setGridColor] = useState('#ffffff');
+  const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
 
@@ -1250,6 +1254,24 @@ function App() {
     });
     return changed;
   };
+
+  const handleGridSettingsChange = useCallback(
+    ({ showGrid: nextShowGrid, gridColor: nextColor, gridOpacity: nextOpacity }) => {
+      if (typeof nextShowGrid === 'boolean') {
+        setShowGrid((prev) => (prev === nextShowGrid ? prev : nextShowGrid));
+      }
+      if (typeof nextColor === 'string' && nextColor.trim() !== '') {
+        setGridColor((prev) => (prev === nextColor ? prev : nextColor));
+      }
+      if (nextOpacity !== undefined) {
+        const numeric = Math.max(0, Math.min(1, Number(nextOpacity)));
+        if (!Number.isNaN(numeric)) {
+          setGridOpacity((prev) => (prev === numeric ? prev : numeric));
+        }
+      }
+    },
+    []
+  );
 
   const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {
     if (!pageId || checkedPagesRef.current[pageId]) return tokens || [];
@@ -1399,6 +1421,9 @@ function App() {
           gridCells: 30,
           gridOffsetX: 0,
           gridOffsetY: 0,
+          showGrid: true,
+          gridColor: '#ffffff',
+          gridOpacity: 0.2,
           enableDarkness: true,
           darknessOpacity: 0.7,
           lines: [],
@@ -1477,6 +1502,18 @@ function App() {
                     ? pageData.enableDarkness
                     : updatedPages[pageIndex].enableDarkness,
                 darknessOpacity: opacity,
+                showGrid:
+                  pageData.showGrid !== undefined
+                    ? pageData.showGrid
+                    : updatedPages[pageIndex].showGrid ?? true,
+                gridColor:
+                  pageData.gridColor !== undefined
+                    ? pageData.gridColor
+                    : updatedPages[pageIndex].gridColor ?? '#ffffff',
+                gridOpacity:
+                  pageData.gridOpacity !== undefined
+                    ? Math.max(0, Math.min(1, pageData.gridOpacity))
+                    : updatedPages[pageIndex].gridOpacity ?? 0.2,
               };
               return updatedPages;
             }
@@ -1573,6 +1610,15 @@ function App() {
           setGridCells(pageData.gridCells || 1);
           setGridOffsetX(pageData.gridOffsetX || 0);
           setGridOffsetY(pageData.gridOffsetY || 0);
+          setShowGrid(
+            pageData.showGrid !== undefined ? pageData.showGrid : true
+          );
+          setGridColor(pageData.gridColor || '#ffffff');
+          setGridOpacity(
+            pageData.gridOpacity !== undefined
+              ? Math.max(0, Math.min(1, pageData.gridOpacity))
+              : 0.2
+          );
           setEnableDarkness(
             pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
           );
@@ -1728,6 +1774,13 @@ function App() {
         setGridCells(data.gridCells || 1);
         setGridOffsetX(data.gridOffsetX || 0);
         setGridOffsetY(data.gridOffsetY || 0);
+        setShowGrid(data.showGrid !== undefined ? data.showGrid : true);
+        setGridColor(data.gridColor || '#ffffff');
+        setGridOpacity(
+          data.gridOpacity !== undefined
+            ? Math.max(0, Math.min(1, data.gridOpacity))
+            : 0.2
+        );
         setEnableDarkness(
           data.enableDarkness !== undefined ? data.enableDarkness : true
         );
@@ -1743,6 +1796,12 @@ function App() {
           gridCells: data.gridCells || 1,
           gridOffsetX: data.gridOffsetX || 0,
           gridOffsetY: data.gridOffsetY || 0,
+          showGrid: data.showGrid !== undefined ? data.showGrid : true,
+          gridColor: data.gridColor || '#ffffff',
+          gridOpacity:
+            data.gridOpacity !== undefined
+              ? Math.max(0, Math.min(1, data.gridOpacity))
+              : 0.2,
         };
 
         // Actualizar metadatos de la página
@@ -2007,33 +2066,57 @@ function App() {
     if (userType !== 'master') return;
     const pageId = pages[currentPage]?.id;
     if (!pageId) return;
-    const newGrid = { gridSize, gridCells, gridOffsetX, gridOffsetY };
+    const newGrid = {
+      gridSize,
+      gridCells,
+      gridOffsetX,
+      gridOffsetY,
+      showGrid,
+      gridColor,
+      gridOpacity,
+    };
     if (deepEqual(newGrid, prevGridRef.current)) return;
 
-    console.log(
-      'Guardando grid en página:',
-      pageId,
-      'currentPage:',
-      currentPage
-    );
-    prevGridRef.current = newGrid;
     const saveId = ++saveVersionRef.current.grid;
-
-    updateDoc(doc(db, 'pages', pageId), newGrid)
-      .then(() => {
-        if (saveId !== saveVersionRef.current.grid) {
-          console.log(
-            'Resultado de guardado de grid ignorado por cambio de página'
+    const timeoutId = setTimeout(() => {
+      gridSaveTimeoutRef.current = null;
+      console.log('Guardando grid en página:', pageId);
+      updateDoc(doc(db, 'pages', pageId), newGrid)
+        .then(() => {
+          if (saveId !== saveVersionRef.current.grid) {
+            console.log(
+              'Resultado de guardado de grid ignorado por cambio de página'
+            );
+            return;
+          }
+          console.log('Grid guardado exitosamente en página:', pageId);
+          prevGridRef.current = newGrid;
+          setPages((ps) =>
+            ps.map((p) => (p.id === pageId ? { ...p, ...newGrid } : p))
           );
-          return;
-        }
-        console.log('Grid guardado exitosamente en página:', pageId);
-        setPages((ps) =>
-          ps.map((p, i) => (i === currentPage ? { ...p, ...newGrid } : p))
-        );
-      })
-      .catch((error) => console.error('Error guardando grid:', error));
-  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, currentPage]);
+        })
+        .catch((error) => console.error('Error guardando grid:', error));
+    }, 300);
+
+    gridSaveTimeoutRef.current = timeoutId;
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (gridSaveTimeoutRef.current === timeoutId) {
+        gridSaveTimeoutRef.current = null;
+      }
+    };
+  }, [gridSize, gridCells, gridOffsetX, gridOffsetY, showGrid, gridColor, gridOpacity, currentPage]);
+
+  useEffect(
+    () => () => {
+      if (gridSaveTimeoutRef.current) {
+        clearTimeout(gridSaveTimeoutRef.current);
+        gridSaveTimeoutRef.current = null;
+      }
+    },
+    []
+  );
 
   // Función para crear un canvas con fondo blanco y grid negro
   const createDefaultGridCanvas = (
@@ -2110,6 +2193,9 @@ function App() {
       gridCells: 30,
       gridOffsetX: 0,
       gridOffsetY: 0,
+      showGrid: true,
+      gridColor: '#ffffff',
+      gridOpacity: 0.2,
       enableDarkness: true,
       darknessOpacity: 0.7,
       lines: [],
@@ -2138,6 +2224,10 @@ function App() {
       if (data.gridCells !== undefined) setGridCells(data.gridCells);
       if (data.gridOffsetX !== undefined) setGridOffsetX(data.gridOffsetX);
       if (data.gridOffsetY !== undefined) setGridOffsetY(data.gridOffsetY);
+      if (data.showGrid !== undefined) setShowGrid(data.showGrid);
+      if (data.gridColor !== undefined) setGridColor(data.gridColor);
+      if (data.gridOpacity !== undefined)
+        setGridOpacity(Math.max(0, Math.min(1, data.gridOpacity)));
       if (data.enableDarkness !== undefined)
         setEnableDarkness(data.enableDarkness);
       if (data.background !== undefined) setCanvasBackground(data.background);
@@ -4185,6 +4275,17 @@ function App() {
             gridSize={effectivePage?.gridSize || 50}
             gridOffsetX={effectivePage?.gridOffsetX || 0}
             gridOffsetY={effectivePage?.gridOffsetY || 0}
+            showGrid={
+              effectivePage?.showGrid !== undefined
+                ? effectivePage.showGrid
+                : true
+            }
+            gridColor={effectivePage?.gridColor || '#ffffff'}
+            gridOpacity={
+              effectivePage?.gridOpacity !== undefined
+                ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
+                : 0.2
+            }
             enableDarkness={effectivePage?.enableDarkness || false}
             darknessOpacity={effectivePage?.darknessOpacity || 0.8}
             activeLayer="fichas"
@@ -6630,6 +6731,9 @@ function App() {
               gridCells={gridCells}
               gridOffsetX={gridOffsetX}
               gridOffsetY={gridOffsetY}
+              showGrid={showGrid}
+              gridColor={gridColor}
+              gridOpacity={gridOpacity}
               tokens={canvasTokens}
               onTokensChange={(updater) => {
                 setCanvasTokens((prev) => {
@@ -6665,6 +6769,7 @@ function App() {
               darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
               showVisionPolygons={showVisionRanges}
               pageId={pages[currentPage]?.id}
+              onGridSettingsChange={handleGridSettingsChange}
             />
           </div>
           <AssetSidebar isMaster={authenticated} playerName={playerName} />

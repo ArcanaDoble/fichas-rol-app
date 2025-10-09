@@ -26,6 +26,9 @@ const PageSelector = ({
       gridCells: p.gridCells,
       gridOffsetX: p.gridOffsetX,
       gridOffsetY: p.gridOffsetY,
+      showGrid: p.showGrid !== undefined ? p.showGrid : true,
+      gridColor: p.gridColor || '#ffffff',
+      gridOpacity: p.gridOpacity !== undefined ? p.gridOpacity : 0.2,
       enableDarkness: p.enableDarkness !== undefined ? p.enableDarkness : true,
       darknessOpacity: p.darknessOpacity !== undefined ? p.darknessOpacity : 0.7,
     });
@@ -35,12 +38,19 @@ const PageSelector = ({
   const closeEdit = () => setEditIndex(null);
 
   const handleSave = () => {
+    const parsedOpacity = parseFloat(pageData.gridOpacity);
+    const safeOpacity = Number.isNaN(parsedOpacity)
+      ? 0.2
+      : Math.max(0, Math.min(1, parsedOpacity));
     onUpdate(editIndex, {
       name: pageData.name,
       gridSize: parseInt(pageData.gridSize, 10) || 1,
       gridCells: parseInt(pageData.gridCells, 10) || 1,
       gridOffsetX: parseInt(pageData.gridOffsetX, 10) || 0,
       gridOffsetY: parseInt(pageData.gridOffsetY, 10) || 0,
+      showGrid: pageData.showGrid,
+      gridColor: pageData.gridColor || '#ffffff',
+      gridOpacity: safeOpacity,
       enableDarkness: pageData.enableDarkness,
       darknessOpacity: parseFloat(pageData.darknessOpacity) || 0.7,
     });
@@ -172,6 +182,47 @@ const PageSelector = ({
           <div className="flex items-center space-x-3">
             <input
               type="checkbox"
+              id="page-show-grid"
+              checked={pageData.showGrid ?? true}
+              onChange={e => setPageData({ ...pageData, showGrid: e.target.checked })}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <label htmlFor="page-show-grid" className="text-sm font-medium text-gray-300">
+              Mostrar cuadrícula en esta página
+            </label>
+          </div>
+
+          <div className="grid grid-cols-[auto,1fr] items-center gap-3">
+            <span className="text-sm font-medium text-gray-300">Color de la cuadrícula</span>
+            <input
+              type="color"
+              value={pageData.gridColor || '#ffffff'}
+              onChange={e => setPageData({ ...pageData, gridColor: e.target.value })}
+              className="h-9 w-16 rounded border border-gray-500 bg-gray-800"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-gray-300 flex justify-between">
+              <span>Opacidad de la cuadrícula</span>
+              <span>{Math.round(((pageData.gridOpacity ?? 0.2) * 100))}%</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={pageData.gridOpacity ?? 0.2}
+              onChange={e =>
+                setPageData({ ...pageData, gridOpacity: parseFloat(e.target.value) })
+              }
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
               id="enableDarkness"
               checked={pageData.enableDarkness || false}
               onChange={e => setPageData({ ...pageData, enableDarkness: e.target.checked })}
@@ -237,6 +288,9 @@ PageSelector.propTypes = {
       gridCells: PropTypes.number.isRequired,
       gridOffsetX: PropTypes.number.isRequired,
       gridOffsetY: PropTypes.number.isRequired,
+      showGrid: PropTypes.bool,
+      gridColor: PropTypes.string,
+      gridOpacity: PropTypes.number,
     })
   ).isRequired,
   current: PropTypes.number.isRequired,
