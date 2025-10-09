@@ -1303,19 +1303,69 @@ const MapCanvas = ({
       texts: null,
     };
     let pendingTokenChanges = [];
+    const normalizeUpdatedAt = (value) => {
+      if (!value && value !== 0) return null;
+      if (typeof value === 'number') return value;
+      if (value instanceof Date) return value.getTime();
+      if (typeof value?.toMillis === 'function') return value.toMillis();
+      if (typeof value === 'object') {
+        const { seconds, nanoseconds } = value;
+        if (typeof seconds === 'number') {
+          const millis = seconds * 1000 + Math.floor((nanoseconds || 0) / 1e6);
+          return millis;
+        }
+      }
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
     const mergeTokenChanges = (prev, next) => {
       const map = new Map(
         prev.map((t) => {
           const id = String(t.id);
-          return [id, { ...t, id }];
+          const updatedAt = normalizeUpdatedAt(t.updatedAt);
+          return [
+            id,
+            {
+              ...t,
+              id,
+              ...(updatedAt ? { updatedAt } : {}),
+            },
+          ];
         })
       );
       next.forEach((tk) => {
         const id = String(tk.id);
+        const existing = map.get(id);
+        const nextUpdatedAt = normalizeUpdatedAt(tk.updatedAt) ?? Date.now();
         if (tk._deleted) {
-          map.set(id, { id, _deleted: true });
+          if (existing) {
+            const existingUpdatedAt = normalizeUpdatedAt(existing.updatedAt) ?? 0;
+            if (existingUpdatedAt > nextUpdatedAt) {
+              return;
+            }
+          }
+          const updatedBy = tk.updatedBy ?? existing?.updatedBy;
+          map.set(id, {
+            id,
+            _deleted: true,
+            updatedAt: nextUpdatedAt,
+            ...(updatedBy ? { updatedBy } : {}),
+          });
         } else {
-          map.set(id, { ...(map.get(id) || {}), ...tk, id });
+          if (existing) {
+            const existingUpdatedAt = normalizeUpdatedAt(existing.updatedAt) ?? 0;
+            if (existingUpdatedAt > nextUpdatedAt) {
+              return;
+            }
+          }
+          const updatedBy = tk.updatedBy ?? existing?.updatedBy;
+          map.set(id, {
+            ...(existing || {}),
+            ...tk,
+            id,
+            updatedAt: nextUpdatedAt,
+            ...(updatedBy ? { updatedBy } : {}),
+          });
         }
       });
       return Array.from(map.values());
@@ -1343,11 +1393,18 @@ const MapCanvas = ({
         );
 
         await Promise.all(
-          filtered.map((tk) =>
-            tk._deleted
-              ? deleteDoc(doc(tokensRef, String(tk.id)))
-              : setDoc(doc(tokensRef, String(tk.id)), tk)
-          )
+          filtered.map((tk) => {
+            const tokenId = String(tk.id);
+            if (tk._deleted) {
+              return deleteDoc(doc(tokensRef, tokenId));
+            }
+            const payload = {
+              ...tk,
+              updatedAt: serverTimestamp(),
+              updatedBy: playerName,
+            };
+            return setDoc(doc(tokensRef, tokenId), payload);
+          })
         );
 
         console.log(
@@ -1620,29 +1677,50 @@ const MapCanvas = ({
   }, [playerVisionPolygons]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-  const diffTokens = (prev, next) => {
-    const prevMap = new Map(
-      prev.map((t) => {
-        const id = String(t.id);
-        return [id, { ...t, id }];
-      })
-    );
-    const changed = [];
-    next.forEach((tk) => {
-      const id = String(tk.id);
-      const old = prevMap.get(id);
-      if (!old) {
-        changed.push({ ...tk, id });
-      } else if (!deepEqual(old, tk)) {
-        changed.push({ ...tk, id });
-      }
-      prevMap.delete(id);
-    });
-    prevMap.forEach((tk) => {
-      changed.push({ id: String(tk.id), _deleted: true });
-    });
-    return changed;
-  };
+    const diffTokens = (prev, next) => {
+      const prevMap = new Map(
+        prev.map((t) => {
+          const id = String(t.id);
+          return [id, { ...t, id }];
+        })
+      );
+      const changed = [];
+      const stripMeta = (token) => {
+        if (!token) return token;
+        const { updatedAt, updatedBy, ...rest } = token;
+        return rest;
+      };
+      const author = playerName || 'unknown';
+      next.forEach((tk) => {
+        const id = String(tk.id);
+        const old = prevMap.get(id);
+        if (!old) {
+          changed.push({
+            ...tk,
+            id,
+            updatedAt: Date.now(),
+            updatedBy: author,
+          });
+        } else if (!deepEqual(stripMeta(old), stripMeta(tk))) {
+          changed.push({
+            ...tk,
+            id,
+            updatedAt: Date.now(),
+            updatedBy: author,
+          });
+        }
+        prevMap.delete(id);
+      });
+      prevMap.forEach((tk) => {
+        changed.push({
+          id: String(tk.id),
+          _deleted: true,
+          updatedAt: Date.now(),
+          updatedBy: author,
+        });
+      });
+      return changed;
+    };
 
   const handleTokensChange = useCallback(
     (newTokens, options = {}) => {

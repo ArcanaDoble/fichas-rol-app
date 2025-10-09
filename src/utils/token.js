@@ -3,32 +3,62 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import sanitize from './sanitize';
 
+const normalizeUpdatedAt = (value) => {
+  if (!value && value !== 0) return null;
+  if (typeof value === 'number') return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value === 'object') {
+    const { seconds, nanoseconds } = value;
+    if (typeof seconds === 'number') {
+      return seconds * 1000 + Math.floor((nanoseconds || 0) / 1e6);
+    }
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 export const mergeTokens = (prevTokens, changedTokens) => {
   const map = new Map();
 
   prevTokens.forEach((token) => {
     const id = String(token.id);
+    const updatedAt = normalizeUpdatedAt(token.updatedAt);
     if (typeof token.id === 'string' && token.id === id) {
-      map.set(id, token);
+      map.set(id, updatedAt ? { ...token, updatedAt } : token);
     } else {
-      map.set(id, { ...token, id });
+      map.set(
+        id,
+        updatedAt ? { ...token, id, updatedAt } : { ...token, id }
+      );
     }
   });
 
   changedTokens.forEach((tk) => {
     const id = String(tk.id);
+    const incomingUpdatedAt = normalizeUpdatedAt(tk.updatedAt) ?? Date.now();
 
     if (tk._deleted) {
+      const existing = map.get(id);
+      const existingUpdatedAt = normalizeUpdatedAt(existing?.updatedAt) ?? 0;
+      if (existing && existingUpdatedAt > incomingUpdatedAt) {
+        return;
+      }
       map.delete(id);
       return;
     }
 
     const prevToken = map.get(id);
     const { _deleted, ...tokenChanges } = tk;
+    const prevUpdatedAt = normalizeUpdatedAt(prevToken?.updatedAt) ?? 0;
+    if (prevToken && prevUpdatedAt > incomingUpdatedAt) {
+      return;
+    }
     const nextToken = {
       ...(prevToken || {}),
       ...tokenChanges,
       id,
+      updatedAt: incomingUpdatedAt,
     };
 
     map.set(id, nextToken);
