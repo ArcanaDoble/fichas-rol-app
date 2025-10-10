@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
+import TarjetaCard from './Tarjeta';
 import Boton from './Boton';
 import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
@@ -306,7 +307,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredWeapons?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredWeapons.map((weapon, index) => (
-                    <Tarjeta key={index} variant="weapon" className="text-xs p-3" interactive={false}>
+                    <TarjetaCard key={index} variant="weapon" className="text-xs p-3" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Espada.png"
@@ -335,7 +336,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                           <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
                         </p>
                       )}
-                    </Tarjeta>
+                    </TarjetaCard>
                   ))}
                 </div>
               ) : (
@@ -347,7 +348,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredArmors?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredArmors.map((armor, index) => (
-                    <Tarjeta key={index} variant="armor" className="text-xs p-3" interactive={false}>
+                    <TarjetaCard key={index} variant="armor" className="text-xs p-3" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Armadura.png"
@@ -370,7 +371,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                           <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
                         </p>
                       )}
-                    </Tarjeta>
+                    </TarjetaCard>
                   ))}
                 </div>
               ) : (
@@ -382,7 +383,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredPowers?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredPowers.map((power, index) => (
-                    <Tarjeta key={index} variant="power" className="text-xs p-3" interactive={false}>
+                    <TarjetaCard key={index} variant="power" className="text-xs p-3" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Músculo.png"
@@ -411,7 +412,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                           <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
                         </p>
                       )}
-                    </Tarjeta>
+                    </TarjetaCard>
                   ))}
                 </div>
               ) : (
