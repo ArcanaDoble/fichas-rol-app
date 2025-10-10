@@ -337,7 +337,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredWeapons?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredWeapons.map((weapon, index) => (
-                    <TarjetaCard key={index} variant="weapon" className="text-xs p-3" interactive={false}>
+                    <Tarjeta key={index} variant="weapon" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Espada.png"
@@ -378,7 +378,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredArmors?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredArmors.map((armor, index) => (
-                    <TarjetaCard key={index} variant="armor" className="text-xs p-3" interactive={false}>
+                    <Tarjeta key={index} variant="armor" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Armadura.png"
@@ -413,7 +413,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredPowers?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredPowers.map((power, index) => (
-                    <TarjetaCard key={index} variant="power" className="text-xs p-3" interactive={false}>
+                    <Tarjeta key={index} variant="power" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
                         <img
                           src="/marcas/Músculo.png"
