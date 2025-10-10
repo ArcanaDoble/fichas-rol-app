@@ -337,7 +337,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredWeapons?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredWeapons.map((weapon, index) => (
-                    <Tarjeta
+                    <TarjetaCard
                       key={index}
                       variant="weapon"
                       className="w-full flex flex-col items-center text-center"
@@ -375,7 +375,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredArmors?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredArmors.map((armor, index) => (
-                    <Tarjeta
+                    <TarjetaCard
                       key={index}
                       variant="armor"
                       className="w-full flex flex-col items-center text-center"
@@ -406,7 +406,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
               {filteredPowers?.length > 0 ? (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredPowers.map((power, index) => (
-                    <Tarjeta
+                    <TarjetaCard
                       key={index}
                       variant="power"
                       className="w-full flex flex-col items-center text-center"
