@@ -270,7 +270,7 @@ const TokenSheetEditor = ({
           </ul>
         )}
       </div>
-      <div className="space-y-2 mb-2">
+      <div className="space-y-2 mb-2 max-h-56 overflow-y-auto pr-1">
         {selectedItems.map((elemento, index) => (
           <div key={`${elemento?.nombre || 'item'}-${index}`} className="flex items-center gap-2 bg-gray-700 p-2 rounded">
             <span className="flex-1 text-sm">{elemento?.nombre || 'Elemento sin nombre'}</span>
