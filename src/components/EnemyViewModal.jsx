@@ -335,12 +335,17 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="weapons" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armas Equipadas</h3>
               {filteredWeapons?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredWeapons.map((weapon, index) => (
                     <TarjetaCard key={index} variant="weapon" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">⚔️</span>
-                        <p className="font-bold text-sm">{weapon.nombre}</p>
+                        <img
+                          src="/marcas/Espada.png"
+                          alt="Icono de arma"
+                          className="w-6 h-6 object-contain"
+                          loading="lazy"
+                        />
+                        <p className="font-bold text-sm text-white">{weapon.nombre}</p>
                       </div>
                       <p className="mb-1">
                         <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
@@ -371,12 +376,17 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="armors" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
               {filteredArmors?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredArmors.map((armor, index) => (
                     <TarjetaCard key={index} variant="armor" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">🛡️</span>
-                        <p className="font-bold text-sm">{armor.nombre}</p>
+                        <img
+                          src="/marcas/Armadura.png"
+                          alt="Icono de armadura"
+                          className="w-6 h-6 object-contain"
+                          loading="lazy"
+                        />
+                        <p className="font-bold text-sm text-white">{armor.nombre}</p>
                       </div>
                       <p className="mb-1">
                         <span className="font-medium">Defensa:</span> {armor.defensa}
@@ -401,12 +411,17 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="powers" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Poderes Equipados</h3>
               {filteredPowers?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredPowers.map((power, index) => (
                     <TarjetaCard key={index} variant="power" className="text-xs" interactive={false}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">💪</span>
-                        <p className="font-bold text-sm">{power.nombre}</p>
+                        <img
+                          src="/marcas/Músculo.png"
+                          alt="Icono de poder"
+                          className="w-6 h-6 object-contain"
+                          loading="lazy"
+                        />
+                        <p className="font-bold text-sm text-white">{power.nombre}</p>
                       </div>
                       <p className="mb-1">
                         <span className="font-medium">Daño:</span> {power.poder}
