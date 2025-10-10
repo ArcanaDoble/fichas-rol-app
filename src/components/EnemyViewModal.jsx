@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
-import Tarjeta from './Tarjeta';
 import Boton from './Boton';
 import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
