@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
@@ -37,15 +37,37 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
   const [dragging, setDragging] = useState(false);
   const offset = useRef({ x: 0, y: 0 });
 
+  const clampPosition = useCallback((nextPos) => {
+    if (!nextPos) return nextPos;
+    const EDGE_MARGIN = 16;
+    const HEADER_CLEARANCE = 112;
+    const rect = modalRef.current?.getBoundingClientRect();
+    const width = rect?.width ?? 0;
+    const height = rect?.height ?? 0;
+
+    const availableRight = window.innerWidth - width - EDGE_MARGIN;
+    const maxX = Math.max(EDGE_MARGIN, availableRight);
+    const safeX = Math.min(Math.max(nextPos.x, EDGE_MARGIN), maxX);
+
+    const availableBottom = window.innerHeight - height - EDGE_MARGIN;
+    const maxY = Math.max(EDGE_MARGIN, availableBottom);
+    const minY = availableBottom >= HEADER_CLEARANCE ? HEADER_CLEARANCE : EDGE_MARGIN;
+    const safeY = Math.min(Math.max(nextPos.y, minY), maxY);
+
+    return { x: safeX, y: safeY };
+  }, []);
+
   useEffect(() => {
     if (modalRef.current) {
       const rect = modalRef.current.getBoundingClientRect();
-      setPos({
-        x: window.innerWidth / 2 - rect.width / 2,
-        y: window.innerHeight / 2 - rect.height / 2,
-      });
+      setPos(
+        clampPosition({
+          x: window.innerWidth / 2 - rect.width / 2,
+          y: window.innerHeight / 2 - rect.height / 2,
+        }),
+      );
     }
-  }, [enemy?.id]);
+  }, [enemy?.id, clampPosition]);
 
   const handleMouseDown = (e) => {
     e.stopPropagation();
@@ -54,7 +76,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
   };
   const handleMouseMove = (e) => {
     if (!dragging) return;
-    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+    setPos(clampPosition({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y }));
   };
   const handleMouseUp = () => setDragging(false);
   useEffect(() => {
@@ -66,6 +88,14 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPos((prev) => clampPosition(prev));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [clampPosition]);
   if (!enemy) return null;
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -144,7 +174,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
     <div
       ref={modalRef}
       className="fixed bg-gray-800 rounded-xl w-full max-h-screen sm:w-[min(90vw,1100px)] sm:max-h-[75vh] overflow-y-auto p-4 sm:p-6 select-none pointer-events-auto"
-      style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
+      style={{ top: pos.y, left: pos.x, zIndex: 3000 }}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={(e) => e.stopPropagation()}
     >
