@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
@@ -24,21 +24,50 @@ const atributoColor = {
   voluntad: '#a78bfa',
 };
 
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatSigned = (value) => (value > 0 ? `+${value}` : `${value}`);
+
 const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, highlightText = (t) => t, floating = false }) => {
   const modalRef = useRef(null);
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 250 });
   const [dragging, setDragging] = useState(false);
   const offset = useRef({ x: 0, y: 0 });
 
+  const clampPosition = useCallback((nextPos) => {
+    if (!nextPos) return nextPos;
+    const EDGE_MARGIN = 16;
+    const HEADER_CLEARANCE = 112;
+    const rect = modalRef.current?.getBoundingClientRect();
+    const width = rect?.width ?? 0;
+    const height = rect?.height ?? 0;
+
+    const availableRight = window.innerWidth - width - EDGE_MARGIN;
+    const maxX = Math.max(EDGE_MARGIN, availableRight);
+    const safeX = Math.min(Math.max(nextPos.x, EDGE_MARGIN), maxX);
+
+    const availableBottom = window.innerHeight - height - EDGE_MARGIN;
+    const maxY = Math.max(EDGE_MARGIN, availableBottom);
+    const minY = availableBottom >= HEADER_CLEARANCE ? HEADER_CLEARANCE : EDGE_MARGIN;
+    const safeY = Math.min(Math.max(nextPos.y, minY), maxY);
+
+    return { x: safeX, y: safeY };
+  }, []);
+
   useEffect(() => {
     if (modalRef.current) {
       const rect = modalRef.current.getBoundingClientRect();
-      setPos({
-        x: window.innerWidth / 2 - rect.width / 2,
-        y: window.innerHeight / 2 - rect.height / 2,
-      });
+      setPos(
+        clampPosition({
+          x: window.innerWidth / 2 - rect.width / 2,
+          y: window.innerHeight / 2 - rect.height / 2,
+        }),
+      );
     }
-  }, [enemy?.id]);
+  }, [enemy?.id, clampPosition]);
 
   const handleMouseDown = (e) => {
     e.stopPropagation();
@@ -47,7 +76,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
   };
   const handleMouseMove = (e) => {
     if (!dragging) return;
-    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+    setPos(clampPosition({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y }));
   };
   const handleMouseUp = () => setDragging(false);
   useEffect(() => {
@@ -59,6 +88,14 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPos((prev) => clampPosition(prev));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [clampPosition]);
   if (!enemy) return null;
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -115,11 +152,29 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const orderedStats = useMemo(() => {
+    const stats = enemy.stats || {};
+    const entries = Object.entries(stats);
+    const prioritized = [];
+    defaultRecursos.forEach((key) => {
+      if (stats[key]) {
+        prioritized.push([key, stats[key]]);
+      }
+    });
+    const seen = new Set(prioritized.map(([key]) => key));
+    entries.forEach(([key, value]) => {
+      if (!seen.has(key)) {
+        prioritized.push([key, value]);
+      }
+    });
+    return prioritized;
+  }, [enemy.stats]);
+
   const windowBox = (
     <div
       ref={modalRef}
-      className="fixed bg-gray-800 rounded-xl w-full max-h-screen sm:w-auto sm:max-w-[80vw] sm:max-h-[70vh] overflow-y-auto p-4 sm:p-6 select-none pointer-events-auto"
-      style={{ top: pos.y, left: pos.x, zIndex: 1000 }}
+      className="fixed bg-gray-800 rounded-xl w-full max-h-screen sm:w-[min(90vw,1100px)] sm:max-h-[75vh] overflow-y-auto p-4 sm:p-6 select-none pointer-events-auto"
+      style={{ top: pos.y, left: pos.x, zIndex: 3000 }}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={(e) => e.stopPropagation()}
     >
@@ -231,25 +286,48 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             </div>
             <div className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Estadísticas</h3>
-              <div className="space-y-3 text-sm">
-                {defaultRecursos.map((recurso) => {
-                  const stat = enemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
-                  const color = recursoColor[recurso] || '#ffffff';
-                  return (
-                    <div key={recurso} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium capitalize" style={{ color }}>{recurso}</span>
-                        <div className="flex gap-2 text-xs">
-                          <span className="text-gray-400">Base: {stat.base}</span>
-                          <span className="text-green-400">+{stat.buff}</span>
-                          <span className="text-blue-400">= {stat.total}</span>
-                          <span className="text-yellow-400">({stat.actual})</span>
+              {orderedStats.length > 0 ? (
+                <div className="space-y-3 text-sm">
+                  {orderedStats.map(([key, rawStat]) => {
+                    const stat =
+                      rawStat && typeof rawStat === 'object'
+                        ? rawStat
+                        : { total: rawStat };
+                    const label = stat.label || key;
+                    const baseValue = toNumber(stat.base, toNumber(stat.total));
+                    const buffValue = toNumber(stat.buff, 0);
+                    const totalValue = toNumber(stat.total, baseValue + buffValue);
+                    const actualValue = toNumber(stat.actual, totalValue);
+                    const color = stat.color || recursoColor[key] || '#ffffff';
+
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium capitalize" style={{ color }}>
+                            {label}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+                            <span className="text-gray-300">Base {baseValue}</span>
+                            {buffValue !== 0 && (
+                              <span className="text-amber-300 font-semibold">+ ({formatSigned(buffValue)})</span>
+                            )}
+                            <span className="text-blue-300 font-semibold">= {baseValue + buffValue}</span>
+                            {totalValue !== baseValue + buffValue && (
+                              <span className="text-indigo-300">({totalValue})</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Actual</span>
+                          <span className="text-emerald-300 font-semibold">{actualValue}</span>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
+              )}
             </div>
           </div>
           {/* Columna 3 */}

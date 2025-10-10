@@ -309,25 +309,65 @@ const AssetSidebar = ({
     setFolders((fs) => addRec(removeRec(fs)));
   };
 
+  const positionPreview = useCallback(
+    (e) => {
+      if (isDragging) return;
+      const el = previewRef.current;
+      if (!el) return;
+
+      const padding = 10;
+      let top = e.clientY + padding;
+      let left = e.clientX + padding;
+
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+
+      const rect = el.getBoundingClientRect();
+      const maxTop = window.innerHeight - rect.height - padding;
+      const maxLeft = window.innerWidth - rect.width - padding;
+
+      if (rect.bottom > window.innerHeight) {
+        top = Math.max(padding, maxTop);
+      }
+      if (rect.right > window.innerWidth) {
+        left = Math.max(padding, maxLeft);
+      }
+      if (rect.top < padding) {
+        top = padding;
+      }
+      if (rect.left < padding) {
+        left = padding;
+      }
+
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+    },
+    [isDragging]
+  );
+
   // Show preview of asset under the pointer
   const showPreview = (asset, e) => {
     if (isDragging) return;
     const el = previewRef.current;
     if (el) {
       const img = el.firstChild;
-      if (img) img.src = asset.url;
-      el.style.top = `${e.clientY + 10}px`;
-      el.style.left = `${e.clientX + 10}px`;
+      if (img) {
+        const handleLoad = () => {
+          positionPreview(e);
+          img.removeEventListener('load', handleLoad);
+        };
+        img.addEventListener('load', handleLoad);
+        img.src = asset.url;
+        if (img.complete) {
+          img.removeEventListener('load', handleLoad);
+        }
+      }
       el.classList.remove('hidden');
+      positionPreview(e);
     }
   };
   const movePreview = (e) => {
-    if (isDragging) return;
-    const el = previewRef.current;
-    if (el) {
-      el.style.top = `${e.clientY + 10}px`;
-      el.style.left = `${e.clientX + 10}px`;
-    }
+    positionPreview(e);
   };
   const hidePreview = () => {
     if (!isDragging && previewRef.current) {
