@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
-import Tarjeta from './Tarjeta';
 import Boton from './Boton';
 import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
@@ -22,6 +21,67 @@ const atributoColor = {
   vigor: '#f87171',
   intelecto: '#60a5fa',
   voluntad: '#a78bfa',
+};
+
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatSigned = (value) => (value > 0 ? `+${value}` : `${value}`);
+
+const EquipmentCard = ({ icon, name, summary = [], details = [] }) => {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = details.length > 0;
+
+  return (
+    <div className="bg-gray-800/70 border border-gray-700/70 rounded-lg p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg leading-none">{icon}</span>
+          <p className="font-semibold text-sm text-gray-100">{name}</p>
+        </div>
+        {hasDetails && (
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="text-xs text-blue-300 hover:text-blue-200 transition-colors"
+          >
+            {expanded ? 'Ocultar' : 'Ver'} detalles
+          </button>
+        )}
+      </div>
+      <div className="mt-2 space-y-1 text-xs text-gray-200">
+        {summary.map((line, index) => (
+          <p key={index} className="leading-relaxed">
+            {line}
+          </p>
+        ))}
+      </div>
+      {hasDetails && (
+        <div
+          className={`transition-all duration-300 ease-in-out overflow-hidden ${
+            expanded ? 'max-h-64 opacity-100 mt-3' : 'max-h-0 opacity-0'
+          }`}
+        >
+          <div className="pt-3 border-t border-gray-700 space-y-1 text-xs text-gray-300">
+            {details.map((line, index) => (
+              <p key={index} className="leading-relaxed">
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+EquipmentCard.propTypes = {
+  icon: PropTypes.node,
+  name: PropTypes.oneOfType([PropTypes.string, PropTypes.node]).isRequired,
+  summary: PropTypes.arrayOf(PropTypes.node),
+  details: PropTypes.arrayOf(PropTypes.node),
 };
 
 const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, highlightText = (t) => t, floating = false }) => {
@@ -114,6 +174,24 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
     const el = modalRef.current.querySelector(`#${id}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  const orderedStats = useMemo(() => {
+    const stats = enemy.stats || {};
+    const entries = Object.entries(stats);
+    const prioritized = [];
+    defaultRecursos.forEach((key) => {
+      if (stats[key]) {
+        prioritized.push([key, stats[key]]);
+      }
+    });
+    const seen = new Set(prioritized.map(([key]) => key));
+    entries.forEach(([key, value]) => {
+      if (!seen.has(key)) {
+        prioritized.push([key, value]);
+      }
+    });
+    return prioritized;
+  }, [enemy.stats]);
 
   const windowBox = (
     <div
@@ -231,25 +309,48 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             </div>
             <div className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Estadísticas</h3>
-              <div className="space-y-3 text-sm">
-                {defaultRecursos.map((recurso) => {
-                  const stat = enemy.stats?.[recurso] || { base: 0, total: 0, actual: 0, buff: 0 };
-                  const color = recursoColor[recurso] || '#ffffff';
-                  return (
-                    <div key={recurso} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium capitalize" style={{ color }}>{recurso}</span>
-                        <div className="flex gap-2 text-xs">
-                          <span className="text-gray-400">Base: {stat.base}</span>
-                          <span className="text-green-400">+{stat.buff}</span>
-                          <span className="text-blue-400">= {stat.total}</span>
-                          <span className="text-yellow-400">({stat.actual})</span>
+              {orderedStats.length > 0 ? (
+                <div className="space-y-3 text-sm">
+                  {orderedStats.map(([key, rawStat]) => {
+                    const stat =
+                      rawStat && typeof rawStat === 'object'
+                        ? rawStat
+                        : { total: rawStat };
+                    const label = stat.label || key;
+                    const baseValue = toNumber(stat.base, toNumber(stat.total));
+                    const buffValue = toNumber(stat.buff, 0);
+                    const totalValue = toNumber(stat.total, baseValue + buffValue);
+                    const actualValue = toNumber(stat.actual, totalValue);
+                    const color = stat.color || recursoColor[key] || '#ffffff';
+
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium capitalize" style={{ color }}>
+                            {label}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+                            <span className="text-gray-300">Base {baseValue}</span>
+                            {buffValue !== 0 && (
+                              <span className="text-amber-300 font-semibold">+ ({formatSigned(buffValue)})</span>
+                            )}
+                            <span className="text-blue-300 font-semibold">= {baseValue + buffValue}</span>
+                            {totalValue !== baseValue + buffValue && (
+                              <span className="text-indigo-300">({totalValue})</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Actual</span>
+                          <span className="text-emerald-300 font-semibold">{actualValue}</span>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
+              )}
             </div>
           </div>
           {/* Columna 3 */}
@@ -257,33 +358,40 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="weapons" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armas Equipadas</h3>
               {filteredWeapons?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredWeapons.map((weapon, index) => (
-                    <Tarjeta key={index} variant="weapon" className="text-xs">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">⚔️</span>
-                        <p className="font-bold text-sm">{weapon.nombre}</p>
-                      </div>
-                      <p className="mb-1">
-                        <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano} {iconoDano(weapon.tipoDano)}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Alcance:</span> {weapon.alcance}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Consumo:</span> {weapon.consumo}
-                      </p>
-                      {weapon.rasgos && weapon.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {weapon.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
-                        </p>
-                      )}
-                    </Tarjeta>
+                    <EquipmentCard
+                      key={index}
+                      icon="⚔️"
+                      name={weapon.nombre}
+                      summary={[
+                        <>
+                          <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano}{' '}
+                          {iconoDano(weapon.tipoDano)}
+                        </>,
+                        <>
+                          <span className="font-medium">Alcance:</span> {weapon.alcance}
+                        </>,
+                        <>
+                          <span className="font-medium">Consumo:</span> {weapon.consumo}
+                        </>,
+                      ]}
+                      details={[
+                        weapon.rasgos && weapon.rasgos.length > 0 ? (
+                          <>
+                            <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+                          </>
+                        ) : null,
+                        weapon.descripcion
+                          ? (
+                              <span className="italic">
+                                <span className="font-medium not-italic">Descripción:</span>{' '}
+                                {highlightText(weapon.descripcion)}
+                              </span>
+                            )
+                          : null,
+                      ].filter(Boolean)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -293,27 +401,33 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="armors" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
               {filteredArmors?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredArmors.map((armor, index) => (
-                    <Tarjeta key={index} variant="armor" className="text-xs">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">🛡️</span>
-                        <p className="font-bold text-sm">{armor.nombre}</p>
-                      </div>
-                      <p className="mb-1">
-                        <span className="font-medium">Defensa:</span> {armor.defensa}
-                      </p>
-                      {armor.rasgos && armor.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {armor.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
-                        </p>
-                      )}
-                    </Tarjeta>
+                    <EquipmentCard
+                      key={index}
+                      icon="🛡️"
+                      name={armor.nombre}
+                      summary={[
+                        <>
+                          <span className="font-medium">Defensa:</span> {armor.defensa}
+                        </>,
+                      ]}
+                      details={[
+                        armor.rasgos && armor.rasgos.length > 0 ? (
+                          <>
+                            <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+                          </>
+                        ) : null,
+                        armor.descripcion
+                          ? (
+                              <span className="italic">
+                                <span className="font-medium not-italic">Descripción:</span>{' '}
+                                {highlightText(armor.descripcion)}
+                              </span>
+                            )
+                          : null,
+                      ].filter(Boolean)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -323,33 +437,39 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
             <div id="powers" className="bg-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Poderes Equipados</h3>
               {filteredPowers?.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                   {filteredPowers.map((power, index) => (
-                    <Tarjeta key={index} variant="power" className="text-xs">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">💪</span>
-                        <p className="font-bold text-sm">{power.nombre}</p>
-                      </div>
-                      <p className="mb-1">
-                        <span className="font-medium">Daño:</span> {power.poder}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Alcance:</span> {power.alcance}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Consumo:</span> {power.consumo}
-                      </p>
-                      {power.rasgos && power.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(power.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {power.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
-                        </p>
-                      )}
-                    </Tarjeta>
+                    <EquipmentCard
+                      key={index}
+                      icon="💪"
+                      name={power.nombre}
+                      summary={[
+                        <>
+                          <span className="font-medium">Daño:</span> {power.poder}
+                        </>,
+                        <>
+                          <span className="font-medium">Alcance:</span> {power.alcance}
+                        </>,
+                        <>
+                          <span className="font-medium">Consumo:</span> {power.consumo}
+                        </>,
+                      ]}
+                      details={[
+                        power.rasgos && power.rasgos.length > 0 ? (
+                          <>
+                            <span className="font-medium">Rasgos:</span> {highlightText(power.rasgos.join(', '))}
+                          </>
+                        ) : null,
+                        power.descripcion
+                          ? (
+                              <span className="italic">
+                                <span className="font-medium not-italic">Descripción:</span>{' '}
+                                {highlightText(power.descripcion)}
+                              </span>
+                            )
+                          : null,
+                      ].filter(Boolean)}
+                    />
                   ))}
                 </div>
               ) : (
