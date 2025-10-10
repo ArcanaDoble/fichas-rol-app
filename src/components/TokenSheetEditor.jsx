@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import Input from './Input';
@@ -13,6 +13,73 @@ const atributoColor = {
   voluntad: '#a78bfa',
 };
 const dadoImgUrl = (d) => `/dados/${d}.png`;
+
+const normalizeText = (value = '') =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const levenshteinDistance = (a = '', b = '') => {
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+  for (let i = 0; i < rows; i += 1) {
+    dp[i][0] = i;
+  }
+  for (let j = 0; j < cols; j += 1) {
+    dp[0][j] = j;
+  }
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]) + 1;
+      }
+    }
+  }
+
+  return dp[a.length][b.length];
+};
+
+const getRankedMatches = (items = [], query = '') => {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return [];
+
+  return items
+    .filter((item) => item && item.nombre)
+    .map((item) => {
+      const normalizedName = normalizeText(item.nombre);
+      const distance = levenshteinDistance(normalizedName, normalizedQuery);
+      const maxLength = Math.max(normalizedName.length, normalizedQuery.length, 1);
+      const similarity = 1 - distance / maxLength;
+      const startsWithScore = normalizedName.startsWith(normalizedQuery) ? 0.35 : 0;
+      const includesScore = normalizedName.includes(normalizedQuery) ? 0.25 : 0;
+      const wordStartScore = normalizedName
+        .split(/\s+|-/)
+        .some((word) => word.startsWith(normalizedQuery))
+        ? 0.25
+        : 0;
+
+      return {
+        item,
+        score: similarity + startsWithScore + includesScore + wordStartScore,
+      };
+    })
+    .sort((a, b) => {
+      if (b.score === a.score) {
+        return normalizeText(a.item.nombre).localeCompare(normalizeText(b.item.nombre));
+      }
+      return b.score - a.score;
+    });
+};
 
 const TokenSheetEditor = ({
   sheet,
@@ -88,44 +155,43 @@ const TokenSheetEditor = ({
     }));
   };
 
-  const addItem = (type) => {
+  const addItem = (type, selectedItem) => {
     const value =
       type === 'weapon'
         ? newWeapon.trim()
         : type === 'armor'
         ? newArmor.trim()
         : newPower.trim();
-    if (!value) return;
+    if (!value && !selectedItem) return;
     const list =
       type === 'weapon' ? armas : type === 'armor' ? armaduras : habilidades;
-    const found = list.find(
-      (i) => i && i.nombre && i.nombre.toLowerCase().includes(value.toLowerCase())
-    );
+
+    const matches = selectedItem ? [{ item: selectedItem }] : getRankedMatches(list, value);
+    const found = matches[0]?.item;
     if (!found) {
-      if (type === 'weapon') setWeaponError('Arma no encontrada');
-      if (type === 'armor') setArmorError('Armadura no encontrada');
-      if (type === 'power') setPowerError('Poder no encontrado');
+      if (type === 'weapon') setWeaponError('No se encontró un arma similar');
+      if (type === 'armor') setArmorError('No se encontró una armadura similar');
+      if (type === 'power') setPowerError('No se encontró un poder similar');
       return;
     }
-    setData((prev) => ({
-      ...prev,
-      [
-        type === 'weapon'
-          ? 'weapons'
-          : type === 'armor'
-          ? 'armaduras'
-          : 'poderes'
-      ]: [
-        ...(prev[
-          type === 'weapon'
-            ? 'weapons'
-            : type === 'armor'
-            ? 'armaduras'
-            : 'poderes'
-        ] || []),
-        found,
-      ],
-    }));
+    const collectionKey =
+      type === 'weapon' ? 'weapons' : type === 'armor' ? 'armaduras' : 'poderes';
+
+    setData((prev) => {
+      const current = prev[collectionKey] || [];
+      const alreadyEquipped = current.some(
+        (item) => normalizeText(item?.nombre) === normalizeText(found.nombre)
+      );
+
+      if (alreadyEquipped) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [collectionKey]: [...current, found],
+      };
+    });
     if (type === 'weapon') {
       setNewWeapon('');
       setWeaponError('');
@@ -143,31 +209,78 @@ const TokenSheetEditor = ({
   const removeItem = (type, index) => {
     setData(prev => ({
       ...prev,
-      [type]: prev[type].filter((_, i) => i !== index),
+      [type]: (prev[type] || []).filter((_, i) => i !== index),
     }));
   };
 
-  const weaponSuggestions = newWeapon
-    ? armas
-        .filter(
-          (a) => a && a.nombre && a.nombre.toLowerCase().includes(newWeapon.toLowerCase())
-        )
-        .slice(0, 5)
-    : [];
-  const armorSuggestions = newArmor
-    ? armaduras
-        .filter(
-          (a) => a && a.nombre && a.nombre.toLowerCase().includes(newArmor.toLowerCase())
-        )
-        .slice(0, 5)
-    : [];
-  const powerSuggestions = newPower
-    ? habilidades
-        .filter(
-          (h) => h && h.nombre && h.nombre.toLowerCase().includes(newPower.toLowerCase())
-        )
-        .slice(0, 5)
-    : [];
+  const weaponSuggestions = useMemo(
+    () => getRankedMatches(armas, newWeapon).slice(0, 5),
+    [armas, newWeapon]
+  );
+  const armorSuggestions = useMemo(
+    () => getRankedMatches(armaduras, newArmor).slice(0, 5),
+    [armaduras, newArmor]
+  );
+  const powerSuggestions = useMemo(
+    () => getRankedMatches(habilidades, newPower).slice(0, 5),
+    [habilidades, newPower]
+  );
+
+  const renderEquipSection = ({
+    title,
+    type,
+    placeholder,
+    selectedItems,
+    newValue,
+    setNewValue,
+    suggestions,
+    error,
+    removeKey,
+  }) => (
+    <div>
+      <h3 className="font-semibold mb-2">{title}</h3>
+      <div className="relative mb-3">
+        <div className="flex gap-2">
+          <Input
+            placeholder={placeholder}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addItem(type);
+              }
+            }}
+            className="flex-1 text-sm"
+          />
+          <Boton size="sm" onClick={() => addItem(type)}>Agregar</Boton>
+        </div>
+        {suggestions.length > 0 && (
+          <ul className="absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto z-10">
+            {suggestions.map(({ item }) => (
+              <li
+                key={item.nombre}
+                className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addItem(type, item)}
+              >
+                {item.nombre}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="space-y-2 mb-2 max-h-56 overflow-y-auto pr-1">
+        {selectedItems.map((elemento, index) => (
+          <div key={`${elemento?.nombre || 'item'}-${index}`} className="flex items-center gap-2 bg-gray-700 p-2 rounded">
+            <span className="flex-1 text-sm">{elemento?.nombre || 'Elemento sin nombre'}</span>
+            <Boton size="sm" color="red" onClick={() => removeItem(removeKey, index)}>✕</Boton>
+          </div>
+        ))}
+      </div>
+      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+    </div>
+  );
 
   const handleSave = () => {
     onSave?.(data);
@@ -306,122 +419,41 @@ const TokenSheetEditor = ({
             </div>
           )}
           {/* Weapons */}
-          <div>
-            <h3 className="font-semibold mb-2">Armas Equipadas</h3>
-            <div className="space-y-2 mb-2">
-              {(data.weapons || []).map((w, i) => (
-                <div key={i} className="flex items-center gap-2 bg-gray-700 p-2 rounded">
-                  <span className="flex-1 text-sm">{w.nombre}</span>
-                  <Boton size="sm" color="red" onClick={() => removeItem('weapons', i)}>✕</Boton>
-                </div>
-              ))}
-            </div>
-            <div className="relative flex gap-2">
-              <Input
-                placeholder="Nombre del arma"
-                value={newWeapon}
-                onChange={e => setNewWeapon(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addItem('weapon')}
-                className="flex-1 text-sm"
-              />
-              <Boton size="sm" onClick={() => addItem('weapon')}>Agregar</Boton>
-              {weaponSuggestions.length > 0 && (
-                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
-                  {weaponSuggestions.map((w) => (
-                    <li
-                      key={w.nombre}
-                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
-                      onClick={() => {
-                        setNewWeapon(w.nombre);
-                        addItem('weapon');
-                      }}
-                    >
-                      {w.nombre}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {weaponError && <p className="text-red-400 text-xs mt-1">{weaponError}</p>}
-          </div>
+          {renderEquipSection({
+            title: 'Armas Equipadas',
+            type: 'weapon',
+            placeholder: 'Nombre del arma',
+            selectedItems: data.weapons || [],
+            newValue: newWeapon,
+            setNewValue: setNewWeapon,
+            suggestions: weaponSuggestions,
+            error: weaponError,
+            removeKey: 'weapons',
+          })}
           {/* Armors */}
-          <div>
-            <h3 className="font-semibold mb-2">Armaduras Equipadas</h3>
-            <div className="space-y-2 mb-2">
-              {(data.armaduras || []).map((a, i) => (
-                <div key={i} className="flex items-center gap-2 bg-gray-700 p-2 rounded">
-                  <span className="flex-1 text-sm">{a.nombre}</span>
-                  <Boton size="sm" color="red" onClick={() => removeItem('armaduras', i)}>✕</Boton>
-                </div>
-              ))}
-            </div>
-            <div className="relative flex gap-2">
-              <Input
-                placeholder="Nombre de la armadura"
-                value={newArmor}
-                onChange={e => setNewArmor(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addItem('armor')}
-                className="flex-1 text-sm"
-              />
-              <Boton size="sm" onClick={() => addItem('armor')}>Agregar</Boton>
-              {armorSuggestions.length > 0 && (
-                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
-                  {armorSuggestions.map((a) => (
-                    <li
-                      key={a.nombre}
-                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
-                      onClick={() => {
-                        setNewArmor(a.nombre);
-                        addItem('armor');
-                      }}
-                    >
-                      {a.nombre}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {armorError && <p className="text-red-400 text-xs mt-1">{armorError}</p>}
-          </div>
+          {renderEquipSection({
+            title: 'Armaduras Equipadas',
+            type: 'armor',
+            placeholder: 'Nombre de la armadura',
+            selectedItems: data.armaduras || [],
+            newValue: newArmor,
+            setNewValue: setNewArmor,
+            suggestions: armorSuggestions,
+            error: armorError,
+            removeKey: 'armaduras',
+          })}
           {/* Powers */}
-          <div>
-            <h3 className="font-semibold mb-2">Poderes Equipados</h3>
-            <div className="space-y-2 mb-2">
-              {(data.poderes || []).map((p, i) => (
-                <div key={i} className="flex items-center gap-2 bg-gray-700 p-2 rounded">
-                  <span className="flex-1 text-sm">{p.nombre}</span>
-                  <Boton size="sm" color="red" onClick={() => removeItem('poderes', i)}>✕</Boton>
-                </div>
-              ))}
-            </div>
-            <div className="relative flex gap-2">
-              <Input
-                placeholder="Nombre del poder"
-                value={newPower}
-                onChange={e => setNewPower(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addItem('power')}
-                className="flex-1 text-sm"
-              />
-              <Boton size="sm" onClick={() => addItem('power')}>Agregar</Boton>
-              {powerSuggestions.length > 0 && (
-                <ul className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow max-h-48 overflow-y-auto w-full z-10">
-                  {powerSuggestions.map((p) => (
-                    <li
-                      key={p.nombre}
-                      className="px-4 py-1 cursor-pointer hover:bg-gray-700 text-sm"
-                      onClick={() => {
-                        setNewPower(p.nombre);
-                        addItem('power');
-                      }}
-                    >
-                      {p.nombre}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {powerError && <p className="text-red-400 text-xs mt-1">{powerError}</p>}
-          </div>
+          {renderEquipSection({
+            title: 'Poderes Equipados',
+            type: 'power',
+            placeholder: 'Nombre del poder',
+            selectedItems: data.poderes || [],
+            newValue: newPower,
+            setNewValue: setNewPower,
+            suggestions: powerSuggestions,
+            error: powerError,
+            removeKey: 'poderes',
+          })}
           <div className="flex gap-3 pt-4 border-t border-gray-600">
             <Boton onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white flex-1">Guardar</Boton>
             <Boton onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white flex-1">Cancelar</Boton>
