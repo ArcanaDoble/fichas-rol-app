@@ -113,6 +113,92 @@ const mixColors = (baseHex, tintHex, opacity) => {
   return `rgb(${r},${g},${b})`;
 };
 
+const buildRadialGradientStops = (color, intensity) => [
+  0,
+  hexToRgba(color, intensity),
+  1,
+  hexToRgba(color, 0),
+];
+
+const createRadialGradientShapes = ({
+  keyPrefix,
+  centerX,
+  centerY,
+  brightRadius,
+  outerRadius,
+  color,
+  brightIntensity,
+  dimIntensity,
+  polygonPoints,
+  compositeOperation,
+  listening = false,
+}) => {
+  if (outerRadius <= 0) {
+    return null;
+  }
+
+  const ShapeComponent = polygonPoints ? Line : Circle;
+  const baseProps = polygonPoints
+    ? {
+        points: polygonPoints,
+        closed: true,
+        fillRadialGradientStartPoint: { x: centerX, y: centerY },
+        fillRadialGradientEndPoint: { x: centerX, y: centerY },
+        perfectDrawEnabled: false,
+        listening,
+      }
+    : {
+        x: centerX,
+        y: centerY,
+        radius: outerRadius,
+        fillRadialGradientStartPoint: { x: 0, y: 0 },
+        fillRadialGradientEndPoint: { x: 0, y: 0 },
+        listening,
+      };
+
+  const compositeProps = compositeOperation
+    ? { globalCompositeOperation: compositeOperation }
+    : {};
+
+  const shapes = [];
+
+  if (brightRadius > 0) {
+    shapes.push(
+      <ShapeComponent
+        key={`${keyPrefix}-bright`}
+        {...baseProps}
+        fillRadialGradientStartRadius={0}
+        fillRadialGradientEndRadius={Math.max(brightRadius, 0)}
+        fillRadialGradientColorStops={buildRadialGradientStops(
+          color,
+          brightIntensity,
+        )}
+        {...compositeProps}
+      />,
+    );
+  }
+
+  const dimStartRadius = brightRadius > 0 ? brightRadius : 0;
+
+  if (outerRadius > dimStartRadius) {
+    shapes.push(
+      <ShapeComponent
+        key={`${keyPrefix}-dim`}
+        {...baseProps}
+        fillRadialGradientStartRadius={dimStartRadius}
+        fillRadialGradientEndRadius={outerRadius}
+        fillRadialGradientColorStops={buildRadialGradientStops(
+          color,
+          dimIntensity,
+        )}
+        {...compositeProps}
+      />,
+    );
+  }
+
+  return shapes.length > 0 ? shapes : null;
+};
+
 const shallowEqualObjects = (objA, objB) => {
   if (objA === objB) return true;
   if (!objA || !objB) return false;
@@ -5304,69 +5390,33 @@ const MapCanvas = ({
                 const color = token.light.color || '#ffa500';
                 const opacity = token.light.opacity ?? 0.4;
                 const brightIntensity = opacity;
-                const brightRatio = outerRadius > 0 ? brightRadius / outerRadius : 1;
                 const dimIntensity = opacity * 0.8;
-                const dimStart = Math.min(brightRatio + 0.001, 0.999);
-
-                const gradientStops =
-                  dimRadius > 0
-                    ? [
-                        0,
-                        hexToRgba(color, brightIntensity),
-                        brightRatio,
-                        hexToRgba(color, brightIntensity),
-                        dimStart,
-                        hexToRgba(color, dimIntensity),
-                        1,
-                        hexToRgba(color, 0),
-                      ]
-                    : [0, hexToRgba(color, brightIntensity), 1, hexToRgba(color, 0)];
                 
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];
-                const hasWallBlocking = lightData && lightData.polygon && lightData.polygon.length >= 3;
-                
-                if (hasWallBlocking) {
-                  // Si hay muros, usar el polígono de visibilidad
-                  const points = [];
-                  lightData.polygon.forEach(point => {
-                    points.push(point.x, point.y);
-                  });
+                const hasWallBlocking =
+                  lightData &&
+                  lightData.polygon &&
+                  lightData.polygon.length >= 3;
 
-                  return (
-                    <Group key={`wall-blocked-light-${token.id}`}>
-                      {/* Luz limitada por muros usando polígono de visibilidad */}
-                      <Line
-                        points={points}
-                        closed={true}
-                        fillRadialGradientStartPoint={{ x: centerX, y: centerY }}
-                        fillRadialGradientEndPoint={{ x: centerX, y: centerY }}
-                        fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={outerRadius}
-                        fillRadialGradientColorStops={gradientStops}
-                        listening={false}
-                        perfectDrawEnabled={false}
-                      />
-                    </Group>
-                  );
-                } else {
-                  // Si no hay muros o no se calculó el polígono, usar círculo simple
-                  return (
-                    <Group key={`simple-light-${token.id}`}>
-                      <Circle
-                        x={centerX}
-                        y={centerY}
-                        radius={outerRadius}
-                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-                        fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={outerRadius}
-                        fillRadialGradientColorStops={gradientStops}
-                        listening={false}
-                      />
-                    </Group>
-                  );
-                }
+                const polygonPoints = hasWallBlocking
+                  ? lightData.polygon.flatMap((point) => [point.x, point.y])
+                  : null;
+
+                const lightShapes = createRadialGradientShapes({
+                  keyPrefix: `light-${token.id}`,
+                  centerX,
+                  centerY,
+                  brightRadius,
+                  outerRadius,
+                  color,
+                  brightIntensity,
+                  dimIntensity,
+                  polygonPoints,
+                  listening: false,
+                });
+
+                return lightShapes;
               })}
             </Group>
           </Layer>
@@ -5408,70 +5458,31 @@ const MapCanvas = ({
                     const opacity = token.light.opacity ?? 0.4;
                     const brightIntensity = opacity;
                     const dimIntensity = opacity * 0.8;
-                    const brightRatio =
-                      outerRadius > 0 ? brightRadius / outerRadius : 1;
-                    const dimStart = Math.min(brightRatio + 0.001, 0.999);
                     const lightData = lightPolygons[token.id];
                     const hasWallBlocking =
                       lightData &&
                       lightData.polygon &&
                       lightData.polygon.length >= 3;
-                    const stops =
-                      dimRadius > 0
-                        ? [
-                            0,
-                            `rgba(0,0,0,${brightIntensity})`,
-                            brightRatio,
-                            `rgba(0,0,0,${brightIntensity})`,
-                            dimStart,
-                            `rgba(0,0,0,${dimIntensity})`,
-                            1,
-                            'rgba(0,0,0,0)'
-                          ]
-                        : [0, `rgba(0,0,0,${brightIntensity})`, 1, 'rgba(0,0,0,0)'];
 
-                    if (hasWallBlocking) {
-                      const points = [];
-                      lightData.polygon.forEach((point) => {
-                        points.push(point.x, point.y);
-                      });
-                      return (
-                        <Line
-                          key={`darkness-cut-${token.id}`}
-                          points={points}
-                          closed={true}
-                          fillRadialGradientStartPoint={{
-                            x: centerX,
-                            y: centerY,
-                          }}
-                          fillRadialGradientEndPoint={{
-                            x: centerX,
-                            y: centerY,
-                          }}
-                          fillRadialGradientStartRadius={0}
-                          fillRadialGradientEndRadius={outerRadius}
-                          fillRadialGradientColorStops={stops}
-                          globalCompositeOperation="destination-out"
-                          listening={false}
-                          perfectDrawEnabled={false}
-                        />
-                      );
-                    }
-                    return (
-                      <Circle
-                        key={`darkness-cut-${token.id}`}
-                        x={centerX}
-                        y={centerY}
-                        radius={outerRadius}
-                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-                        fillRadialGradientStartRadius={0}
-                        fillRadialGradientEndRadius={outerRadius}
-                        fillRadialGradientColorStops={stops}
-                        globalCompositeOperation="destination-out"
-                        listening={false}
-                      />
-                    );
+                    const polygonPoints = hasWallBlocking
+                      ? lightData.polygon.flatMap((point) => [point.x, point.y])
+                      : null;
+
+                    const darknessShapes = createRadialGradientShapes({
+                      keyPrefix: `darkness-cut-${token.id}`,
+                      centerX,
+                      centerY,
+                      brightRadius,
+                      outerRadius,
+                      color: '#000000',
+                      brightIntensity,
+                      dimIntensity,
+                      polygonPoints,
+                      compositeOperation: 'destination-out',
+                      listening: false,
+                    });
+
+                    return darknessShapes;
                   })}
               </Group>
             </Layer>
