@@ -40,6 +40,7 @@ const Tarjeta = ({
   className = '',
   variant,
   interactive = true,
+  hoverTransforms = true,
   loading = false,
   onClick,
   header,
@@ -71,17 +72,17 @@ const Tarjeta = ({
     border-2
   `;
 
-  const interactiveClasses = interactive
-    ? `
-    transform hover:-translate-y-1 hover:scale-[1.015]
-    cursor-pointer
-    ${style.glow} hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80
-  `
-    : '';
+  const cursorClass = interactive ? 'cursor-pointer' : 'cursor-default';
+  const hoverBackgroundClass = 'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
+  const transformClass = interactive && hoverTransforms ? 'transform hover:-translate-y-1 hover:scale-[1.015]' : '';
+  const glowClass = interactive ? style.glow : '';
 
   const cardClasses = `
     ${baseClasses}
-    ${interactiveClasses}
+    ${cursorClass}
+    ${hoverBackgroundClass}
+    ${transformClass}
+    ${glowClass}
     ${style.border}
     ${className}
     ${
@@ -236,6 +237,8 @@ Tarjeta.propTypes = {
   children: PropTypes.node,
   className: PropTypes.string,
   variant: PropTypes.string,
+  interactive: PropTypes.bool,
+  hoverTransforms: PropTypes.bool,
   style: PropTypes.object,
 };
 
