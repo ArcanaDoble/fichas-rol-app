@@ -4472,6 +4472,12 @@ const MapCanvas = ({
           handleTokensChange(tokens.filter((t) => t.id !== selectedId));
           setSelectedId(null);
         }
+        if (selectedTileId != null) {
+          updateTiles((prev) =>
+            prev.filter((tile) => String(tile.id) !== String(selectedTileId))
+          );
+          setSelectedTileId(null);
+        }
         return;
       }
 
@@ -4656,6 +4662,9 @@ const MapCanvas = ({
       clampToMapBounds,
       containerSize,
       mousePosition,
+      selectedTileId,
+      updateTiles,
+      tiles,
     ]
   );
 
