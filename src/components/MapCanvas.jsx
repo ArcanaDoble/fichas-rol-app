@@ -143,6 +143,72 @@ const ALLOWED_MEASURE_SNAPS = ['center', 'corner', 'free'];
 
 const DEFAULT_WALL_LENGTH = 50;
 
+const DEFAULT_EXPLORATION_STATE = {
+  players: {},
+  sharedWith: [],
+  revealed: false,
+};
+
+const sanitizePolygonPoints = (polygon = []) => {
+  if (!Array.isArray(polygon)) return [];
+  return polygon
+    .map((point) => {
+      if (Array.isArray(point)) {
+        const [x, y] = point;
+        const nx = Number(x);
+        const ny = Number(y);
+        if (Number.isFinite(nx) && Number.isFinite(ny)) {
+          return { x: nx, y: ny };
+        }
+        return null;
+      }
+      if (point && typeof point === 'object') {
+        const nx = Number(point.x);
+        const ny = Number(point.y);
+        if (Number.isFinite(nx) && Number.isFinite(ny)) {
+          return { x: nx, y: ny };
+        }
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
+const filterValidPolygons = (polygons = []) =>
+  polygons
+    .map((polygon) => sanitizePolygonPoints(polygon))
+    .filter((polygon) => polygon.length >= 3);
+
+const serializePolygons = (polygons = []) =>
+  filterValidPolygons(polygons).map((polygon) =>
+    polygon.map((point) => [Number(point.x) || 0, Number(point.y) || 0])
+  );
+
+const explorationPointKey = (point) =>
+  `${Math.round(point.x)}:${Math.round(point.y)}`;
+
+const hasNewExploration = (existingPolygons = [], newPolygons = []) => {
+  if (!Array.isArray(newPolygons) || newPolygons.length === 0) return false;
+  const existingKeys = new Set();
+  existingPolygons.forEach((polygon) => {
+    sanitizePolygonPoints(polygon).forEach((point) => {
+      existingKeys.add(explorationPointKey(point));
+    });
+  });
+
+  for (const polygon of newPolygons) {
+    const sanitized = sanitizePolygonPoints(polygon);
+    for (const point of sanitized) {
+      const key = explorationPointKey(point);
+      if (!existingKeys.has(key)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 const DOOR_PATHS = {
   closed: [
     'M2.99805 21V19H4.99805V4C4.99805 3.44772 5.44576 3 5.99805 3H17.998C18.5503 3 18.998 3.44772 18.998 4V19H20.998V21H2.99805ZM16.998 5H6.99805V19H16.998V5ZM14.998 11V13H12.998V11H14.998Z',
@@ -1658,7 +1724,9 @@ const MapCanvas = ({
   const [lightPolygons, setLightPolygons] = useState({});
   // Estados para el sistema de visión de jugadores
   const [playerVisionPolygons, setPlayerVisionPolygons] = useState({});
-  const [combinedPlayerVision, setCombinedPlayerVision] = useState([]);
+  const [combinedPlayerVision, setCombinedPlayerVision] = useState({});
+  const [explorationState, setExplorationState] = useState(DEFAULT_EXPLORATION_STATE);
+  const [explorationLoaded, setExplorationLoaded] = useState(false);
 
   const lightPolygonsRef = useRef(lightPolygons);
   const lightPolygonStateRef = useRef(new Map());
@@ -1669,6 +1737,9 @@ const MapCanvas = ({
   const playerVisionStateRef = useRef(new Map());
   const lastVisionSegmentsRef = useRef(visibilitySegments);
   const lastVisionGridSizeRef = useRef(effectiveGridSize);
+  const explorationStateRef = useRef(explorationState);
+  const explorationSaveQueue = useRef(null);
+  const explorationSaveTimeout = useRef(null);
 
   useEffect(() => {
     lightPolygonsRef.current = lightPolygons;
@@ -1677,6 +1748,140 @@ const MapCanvas = ({
   useEffect(() => {
     playerVisionPolygonsRef.current = playerVisionPolygons;
   }, [playerVisionPolygons]);
+
+  useEffect(() => {
+    if (!pageId) {
+      setExplorationState(DEFAULT_EXPLORATION_STATE);
+      setExplorationLoaded(false);
+      return;
+    }
+
+    let isMounted = true;
+    const pageRef = doc(db, 'pages', pageId);
+
+    const unsubscribe = onSnapshot(
+      pageRef,
+      (snapshot) => {
+        if (!isMounted) return;
+
+        if (!snapshot.exists()) {
+          setExplorationState(DEFAULT_EXPLORATION_STATE);
+          setExplorationLoaded(true);
+          return;
+        }
+
+        const data = snapshot.data();
+        const explorationData = data?.exploration;
+
+        if (explorationData) {
+          const parsedPlayers = {};
+
+          Object.entries(explorationData.players || {}).forEach(
+            ([playerId, playerData]) => {
+              const polygons = filterValidPolygons(playerData?.polygons);
+              if (polygons.length === 0) return;
+              parsedPlayers[playerId] = {
+                polygons,
+                updatedAt: playerData?.updatedAt || 0,
+              };
+            }
+          );
+
+          const parsedState = {
+            players: parsedPlayers,
+            sharedWith: Array.isArray(explorationData.sharedWith)
+              ? explorationData.sharedWith.filter(Boolean)
+              : [],
+            revealed: Boolean(explorationData.revealed),
+          };
+
+          setExplorationState((prev) =>
+            deepEqual(prev, parsedState) ? prev : parsedState
+          );
+        } else {
+          setExplorationState((prev) =>
+            deepEqual(prev, DEFAULT_EXPLORATION_STATE)
+              ? prev
+              : DEFAULT_EXPLORATION_STATE
+          );
+        }
+
+        setExplorationLoaded(true);
+      },
+      (error) => {
+        console.error('Error loading exploration data:', error);
+        setExplorationLoaded(true);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      setExplorationLoaded(false);
+      setExplorationState(DEFAULT_EXPLORATION_STATE);
+    };
+  }, [pageId]);
+
+  useEffect(() => {
+    explorationStateRef.current = explorationState;
+  }, [explorationState]);
+
+  useEffect(() => {
+    return () => {
+      if (explorationSaveTimeout.current) {
+        clearTimeout(explorationSaveTimeout.current);
+        explorationSaveTimeout.current = null;
+      }
+      explorationSaveQueue.current = null;
+    };
+  }, []);
+
+  const persistExplorationState = useCallback(
+    (nextState) => {
+      if (!pageId) return;
+
+      const serializedPlayers = {};
+
+      Object.entries(nextState.players || {}).forEach(([playerId, playerData]) => {
+        const serialized = serializePolygons(playerData?.polygons);
+        if (serialized.length === 0) return;
+
+        serializedPlayers[playerId] = {
+          polygons: serialized,
+          updatedAt: playerData?.updatedAt || Date.now(),
+        };
+      });
+
+      const payload = {
+        players: serializedPlayers,
+        sharedWith: Array.isArray(nextState.sharedWith)
+          ? nextState.sharedWith.filter(Boolean)
+          : [],
+        revealed: Boolean(nextState.revealed),
+      };
+
+      explorationSaveQueue.current = payload;
+
+      if (explorationSaveTimeout.current) return;
+
+      explorationSaveTimeout.current = setTimeout(async () => {
+        const latestPayload = explorationSaveQueue.current;
+        explorationSaveTimeout.current = null;
+        explorationSaveQueue.current = null;
+
+        try {
+          await setDoc(
+            doc(db, 'pages', pageId),
+            { exploration: latestPayload },
+            { merge: true }
+          );
+        } catch (error) {
+          console.error('Error saving exploration data:', error);
+        }
+      }, 400);
+    },
+    [pageId]
+  );
 
   // Función wrapper para manejar cambios de tokens con sincronización
     const diffTokens = (prev, next) => {
@@ -2548,6 +2753,7 @@ const MapCanvas = ({
 
     const forceRecompute = segmentsChanged || gridSizeChanged;
     const newPolygons = {};
+    const aggregatedVisionByController = {};
 
     tokens.forEach(token => {
       const light = token.light;
@@ -2653,6 +2859,7 @@ const MapCanvas = ({
 
     const forceRecompute = segmentsChanged || gridSizeChanged;
     const newPolygons = {};
+    const aggregatedVisionByController = {};
 
     tokens.forEach(token => {
       const visionEnabled = token.vision?.enabled !== false;
@@ -2705,15 +2912,32 @@ const MapCanvas = ({
         );
       }
 
+      const sanitizedPolygon = sanitizePolygonPoints(polygon);
+
       if (polygonNeedsUpdate || metadataChanged || !prevEntry) {
         newPolygons[token.id] = {
-          polygon,
+          polygon: sanitizedPolygon,
           tokenId: token.id,
           controlledBy,
           visionRange
         };
       } else {
         newPolygons[token.id] = prevEntry;
+      }
+
+      const controllerKey = controlledBy && controlledBy !== 'master' ? controlledBy : null;
+
+      if (controllerKey) {
+        const sourcePolygon = (polygonNeedsUpdate || metadataChanged || !prevEntry)
+          ? sanitizedPolygon
+          : prevEntry?.polygon || [];
+
+        if (sourcePolygon && sourcePolygon.length >= 3) {
+          if (!aggregatedVisionByController[controllerKey]) {
+            aggregatedVisionByController[controllerKey] = [];
+          }
+          aggregatedVisionByController[controllerKey].push(sourcePolygon);
+        }
       }
     });
 
@@ -2729,17 +2953,74 @@ const MapCanvas = ({
     playerVisionPolygonsRef.current = newPolygons;
     setPlayerVisionPolygons(newPolygons);
 
-    const allPolygons = Object.values(newPolygons)
-      .map(data => data.polygon)
-      .filter(p => p && p.length >= 3);
-    const combined = combineVisibilityPolygons(allPolygons);
-    setCombinedPlayerVision(combined);
+    const combinedVision = {};
+
+    Object.entries(aggregatedVisionByController).forEach(
+      ([controller, polygons]) => {
+        const validPolygons = filterValidPolygons(polygons);
+        if (validPolygons.length === 0) return;
+        combinedVision[controller] = validPolygons;
+      }
+    );
+
+    setCombinedPlayerVision((prev) =>
+      deepEqual(prev, combinedVision) ? prev : combinedVision
+    );
   }, [tokens, visibilitySegments, effectiveGridSize]);
 
   // Recalcular polígonos de visión cuando cambien las dependencias
   useEffect(() => {
     calculatePlayerVisionPolygons();
   }, [calculatePlayerVisionPolygons]);
+
+  useEffect(() => {
+    if (!pageId || !explorationLoaded) return;
+
+    const entries = Object.entries(combinedPlayerVision || {});
+    if (entries.length === 0) return;
+
+    const currentState = explorationStateRef.current;
+    let changed = false;
+    const nextPlayers = { ...currentState.players };
+
+    entries.forEach(([controller, polygons]) => {
+      if (!controller || controller === 'master') return;
+
+      const validPolygons = filterValidPolygons(polygons);
+      if (validPolygons.length === 0) return;
+
+      const existingEntry = nextPlayers[controller];
+      const existingPolygons = existingEntry?.polygons || [];
+
+      if (!hasNewExploration(existingPolygons, validPolygons)) {
+        return;
+      }
+
+      const merged = combineVisibilityPolygons([
+        ...existingPolygons,
+        ...validPolygons,
+      ]);
+
+      const mergedPolygons = filterValidPolygons([merged]);
+      if (mergedPolygons.length === 0) return;
+
+      nextPlayers[controller] = {
+        polygons: mergedPolygons,
+        updatedAt: Date.now(),
+      };
+      changed = true;
+    });
+
+    if (!changed) return;
+
+    const nextState = {
+      ...currentState,
+      players: nextPlayers,
+    };
+
+    setExplorationState(nextState);
+    persistExplorationState(nextState);
+  }, [combinedPlayerVision, explorationLoaded, pageId, persistExplorationState]);
 
   // Estructura memoizada con las celdas ocupadas por muros
   const blockedCells = useMemo(() => {
@@ -2776,6 +3057,198 @@ const MapCanvas = ({
   const isPositionBlocked = useCallback(
     (x, y) => blockedCells.has(`${x},${y}`),
     [blockedCells]
+  );
+
+  const handleClearExploration = useCallback(() => {
+    if (!pageId) return;
+
+    let shouldProceed = true;
+    if (typeof window !== 'undefined' && window.confirm) {
+      shouldProceed = window.confirm(
+        '¿Deseas limpiar toda la memoria de exploración?'
+      );
+    }
+
+    if (!shouldProceed) return;
+
+    const current = explorationStateRef.current;
+    const nextState = {
+      ...current,
+      players: {},
+    };
+
+    setExplorationState(nextState);
+    persistExplorationState(nextState);
+  }, [pageId, persistExplorationState]);
+
+  const handleToggleExplorationReveal = useCallback(() => {
+    if (!pageId) return;
+
+    const current = explorationStateRef.current;
+    const nextState = {
+      ...current,
+      revealed: !current.revealed,
+    };
+
+    setExplorationState(nextState);
+    persistExplorationState(nextState);
+  }, [pageId, persistExplorationState]);
+
+  const handleShareExploration = useCallback(
+    (player, share) => {
+      if (!pageId || !player) return;
+
+      const current = explorationStateRef.current;
+      const nextShared = new Set(current.sharedWith || []);
+
+      if (share) {
+        nextShared.add(player);
+      } else {
+        nextShared.delete(player);
+      }
+
+      const nextState = {
+        ...current,
+        sharedWith: Array.from(nextShared),
+      };
+
+      setExplorationState(nextState);
+      persistExplorationState(nextState);
+    },
+    [pageId, persistExplorationState]
+  );
+
+  const sharedExplorationSet = useMemo(
+    () => new Set((explorationState.sharedWith || []).filter(Boolean)),
+    [explorationState.sharedWith]
+  );
+
+  const allKnownPlayers = useMemo(() => {
+    const names = new Set();
+    (players || []).forEach((name) => {
+      if (name && name !== 'master') names.add(name);
+    });
+    Object.keys(explorationState.players || {}).forEach((name) => {
+      if (name && name !== 'master') names.add(name);
+    });
+    tokens.forEach((token) => {
+      if (token.controlledBy && token.controlledBy !== 'master') {
+        names.add(token.controlledBy);
+      }
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [players, explorationState.players, tokens]);
+
+  const exploredPolygons = useMemo(() => {
+    if (!enableDarkness) return [];
+
+    const polygons = [];
+    const pushPolygons = (polyList = []) => {
+      (polyList || []).forEach((polygon) => {
+        const sanitized = sanitizePolygonPoints(polygon);
+        if (sanitized.length >= 3) {
+          polygons.push(sanitized);
+        }
+      });
+    };
+
+    const state = explorationState;
+    if (!state || !state.players) return polygons;
+
+    const isMasterObserving = userType === 'master' && !playerViewMode;
+
+    if (isMasterObserving) {
+      Object.values(state.players).forEach((playerData) =>
+        pushPolygons(playerData?.polygons)
+      );
+      return polygons;
+    }
+
+    let viewer = null;
+    if (userType === 'player') {
+      viewer = playerName;
+    } else if (userType === 'master' && playerViewMode) {
+      viewer = simulatedPlayer;
+    } else if (isPlayerView && playerName) {
+      viewer = playerName;
+    }
+
+    if (!viewer) {
+      return polygons;
+    }
+
+    pushPolygons(state.players?.[viewer]?.polygons);
+
+    if (state.revealed || sharedExplorationSet.has(viewer)) {
+      Object.entries(state.players || {}).forEach(([name, playerData]) => {
+        if (name === viewer) return;
+        pushPolygons(playerData?.polygons);
+      });
+    }
+
+    return polygons;
+  }, [
+    enableDarkness,
+    explorationState,
+    sharedExplorationSet,
+    userType,
+    playerViewMode,
+    playerName,
+    simulatedPlayer,
+    isPlayerView,
+  ]);
+
+  const viewerVisionPolygons = useMemo(() => {
+    if (!enableDarkness) return [];
+
+    const resolveViewer = () => {
+      if (userType === 'player') return playerName;
+      if (userType === 'master' && playerViewMode) return simulatedPlayer;
+      if (isPlayerView && playerName) return playerName;
+      return null;
+    };
+
+    const viewer = resolveViewer();
+    if (!viewer) return [];
+
+    const aggregated = filterValidPolygons(combinedPlayerVision?.[viewer] || []);
+    if (aggregated.length > 0) {
+      return aggregated;
+    }
+
+    const fallback = [];
+    Object.values(playerVisionPolygons || {}).forEach((visionData) => {
+      if (
+        visionData?.controlledBy === viewer &&
+        Array.isArray(visionData?.polygon) &&
+        visionData.polygon.length >= 3
+      ) {
+        const sanitized = sanitizePolygonPoints(visionData.polygon);
+        if (sanitized.length >= 3) {
+          fallback.push(sanitized);
+        }
+      }
+    });
+
+    return fallback;
+  }, [
+    enableDarkness,
+    combinedPlayerVision,
+    playerViewMode,
+    playerName,
+    simulatedPlayer,
+    isPlayerView,
+    userType,
+    playerVisionPolygons,
+  ]);
+
+  const explorationPlayerCount = Object.keys(
+    explorationState.players || {}
+  ).length;
+  const isExplorationRevealed = explorationState.revealed;
+  const storedPolygonCount = Object.values(explorationState.players || {}).reduce(
+    (acc, playerData) => acc + ((playerData?.polygons || []).length || 0),
+    0
   );
 
   // Función para conectar automáticamente extremos de muros cercanos
@@ -5257,6 +5730,39 @@ const MapCanvas = ({
             </Layer>
           )}
 
+          {exploredPolygons.length > 0 && (
+            <Layer listening={false}>
+              <Group
+                x={groupPos.x}
+                y={groupPos.y}
+                scaleX={groupScale}
+                scaleY={groupScale}
+              >
+                {exploredPolygons.map((polygon, index) => (
+                  <Line
+                    key={`explored-${index}`}
+                    points={polygon.flatMap((point) => [point.x, point.y])}
+                    closed
+                    fill="rgba(0, 0, 0, 0.6)"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                ))}
+                {viewerVisionPolygons.map((polygon, index) => (
+                  <Line
+                    key={`explored-clear-${index}`}
+                    points={polygon.flatMap((point) => [point.x, point.y])}
+                    closed
+                    fill="rgba(0, 0, 0, 1)"
+                    globalCompositeOperation="destination-out"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                ))}
+              </Group>
+            </Layer>
+          )}
+
           {/* Capa de puertas interactivas - renderizada antes de las sombras para que sean ocluidas */}
           <Layer listening>
             <Group
@@ -5795,6 +6301,77 @@ const MapCanvas = ({
       )}
 
       <div className="absolute top-4 right-4 flex flex-col items-end gap-3 pointer-events-none z-50">
+        {userType === 'master' && (
+          <div className="w-64 max-w-[90vw] rounded-lg border border-indigo-700 bg-slate-900/90 px-3 py-2 shadow-lg backdrop-blur pointer-events-auto">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-indigo-100">Exploración</span>
+              <button
+                type="button"
+                className="rounded bg-indigo-600 px-2 py-1 text-xs font-semibold text-white shadow hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                onClick={handleClearExploration}
+                disabled={!explorationLoaded || explorationPlayerCount === 0}
+              >
+                Limpiar
+              </button>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs text-indigo-200">
+              <span>
+                {explorationLoaded
+                  ? `${explorationPlayerCount} jugador${explorationPlayerCount === 1 ? '' : 'es'}`
+                  : 'Cargando…'}
+              </span>
+              <span className={isExplorationRevealed ? 'font-semibold text-emerald-300' : 'text-indigo-100'}>
+                {isExplorationRevealed ? 'Revelado' : 'Memoria'}
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] text-indigo-200/80">
+              Polígonos almacenados: {storedPolygonCount}
+            </div>
+            <button
+              type="button"
+              className="mt-2 w-full rounded bg-indigo-500 px-2 py-1 text-xs font-semibold text-white shadow hover:bg-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
+              onClick={handleToggleExplorationReveal}
+              disabled={!explorationLoaded}
+            >
+              {isExplorationRevealed ? 'Ocultar a jugadores' : 'Revelar a todos'}
+            </button>
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-300">
+                Compartir con jugadores
+              </p>
+              {isExplorationRevealed && (
+                <p className="mt-1 text-[11px] text-emerald-200/80">
+                  La memoria es visible para todos los jugadores.
+                </p>
+              )}
+              {!isExplorationRevealed && (
+                <div className="mt-2 max-h-28 space-y-1 overflow-y-auto pr-1">
+                  {allKnownPlayers.length === 0 && (
+                    <p className="text-xs text-indigo-200/70">
+                      No hay jugadores registrados.
+                    </p>
+                  )}
+                  {allKnownPlayers.map((name) => (
+                    <label
+                      key={`exploration-share-${name}`}
+                      className="flex items-center gap-2 text-xs text-indigo-100"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-indigo-500 bg-indigo-800 text-indigo-300 focus:ring-indigo-400"
+                        checked={sharedExplorationSet.has(name)}
+                        disabled={!explorationLoaded}
+                        onChange={(e) => handleShareExploration(name, e.target.checked)}
+                      />
+                      <span className="truncate">{name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {canEditGrid && (
           <div className="w-64 max-w-[90vw] rounded-lg border border-gray-700 bg-gray-900/90 px-3 py-2 shadow-lg backdrop-blur pointer-events-auto">
             <div className="flex items-center justify-between gap-2">
