@@ -1226,6 +1226,7 @@ function App() {
   const prevWallsRef = useRef([]);
   const wallSaveTimeout = useRef(null);
   const prevTextsRef = useRef([]);
+  const prevTilesRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
   const gridSaveTimeoutRef = useRef(null);
@@ -1237,6 +1238,7 @@ function App() {
     lines: 0,
     walls: 0,
     texts: 0,
+    tiles: 0,
     background: 0,
     grid: 0,
   });
@@ -1259,6 +1261,7 @@ function App() {
   const [canvasLines, setCanvasLines] = useState([]);
   const [canvasWalls, setCanvasWalls] = useState([]);
   const [canvasTexts, setCanvasTexts] = useState([]);
+  const [canvasTiles, setCanvasTiles] = useState([]);
   const [activeLayer, setActiveLayer] = useState('fichas');
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
@@ -1535,7 +1538,7 @@ function App() {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
       const loaded = snap.docs.map((d) => {
-        const { lines, texts, walls, ...meta } = d.data();
+        const { lines, texts, walls, tiles, ...meta } = d.data();
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
@@ -1559,9 +1562,10 @@ function App() {
           lines: [],
           walls: [],
           texts: [],
+          tiles: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        const { lines, walls, texts, ...meta } = defaultPage;
+        const { lines, walls, texts, tiles, ...meta } = defaultPage;
         setPages([meta]);
         // Establecer la primera página como visible para jugadores por defecto
         setPlayerVisiblePageId(defaultPage.id);
@@ -1625,6 +1629,7 @@ function App() {
                 lines: pageData.lines || [],
                 walls: pageData.walls || [],
                 texts: pageData.texts || [],
+                tiles: pageData.tiles || [],
                 background: pageData.background,
                 backgroundHash: pageData.backgroundHash,
                 enableDarkness:
@@ -1652,6 +1657,7 @@ function App() {
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
+          setCanvasTiles(pageData.tiles || []);
         }
       },
       (error) => {
@@ -1769,7 +1775,9 @@ function App() {
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
+          setCanvasTiles(pageData.tiles || []);
           setCanvasBackground(pageData.background || null);
+          prevTilesRef.current = pageData.tiles || [];
           setGridSize(pageData.gridSize || 1);
           setGridCells(pageData.gridCells || 1);
           setGridOffsetX(pageData.gridOffsetX || 0);
@@ -1962,6 +1970,7 @@ function App() {
     saveVersionRef.current.lines++;
     saveVersionRef.current.walls++;
     saveVersionRef.current.texts++;
+    saveVersionRef.current.tiles++;
     saveVersionRef.current.background++;
     saveVersionRef.current.grid++;
     if (wallSaveTimeout.current) {
@@ -2005,6 +2014,7 @@ function App() {
         setCanvasLines(data.lines || []);
         setCanvasWalls(data.walls || []);
         setCanvasTexts(data.texts || []);
+        setCanvasTiles(data.tiles || []);
         setCanvasBackground(data.background || null);
         setGridSize(data.gridSize || 1);
         setGridCells(data.gridCells || 1);
@@ -2026,6 +2036,7 @@ function App() {
         prevLinesRef.current = data.lines || [];
         prevWallsRef.current = data.walls || [];
         prevTextsRef.current = data.texts || [];
+        prevTilesRef.current = data.tiles || [];
         prevBgRef.current = data.background || null;
         prevGridRef.current = {
           gridSize: data.gridSize || 1,
@@ -2053,6 +2064,7 @@ function App() {
             gridCells: data.gridCells || 1,
             gridOffsetX: data.gridOffsetX || 0,
             gridOffsetY: data.gridOffsetY || 0,
+            tiles: data.tiles || [],
           };
           if (pageDataEqual(existing, meta)) return ps;
           return ps.map((p, i) => (i === currentPage ? meta : p));
@@ -2216,6 +2228,36 @@ function App() {
       })
       .catch((error) => console.error('Error guardando líneas:', error));
   }, [canvasLines, currentPage]);
+
+  useEffect(() => {
+    if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+    if (deepEqual(canvasTiles, prevTilesRef.current)) return;
+
+    console.log(
+      'Guardando tiles en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
+    prevTilesRef.current = canvasTiles;
+
+    const saveId = ++saveVersionRef.current.tiles;
+
+    updateDoc(doc(db, 'pages', pageId), { tiles: canvasTiles })
+      .then(() => {
+        if (saveId !== saveVersionRef.current.tiles) {
+          console.log(
+            'Resultado de guardado de tiles ignorado por cambio de página'
+          );
+          return;
+        }
+        console.log('Tiles guardados exitosamente en página:', pageId);
+      })
+      .catch((error) => console.error('Error guardando tiles:', error));
+  }, [canvasTiles, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
@@ -2458,9 +2500,10 @@ function App() {
       lines: [],
       walls: [],
       texts: [],
+      tiles: [],
     };
     await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
-    const { lines, walls, texts, ...meta } = newPage;
+    const { lines, walls, texts, tiles, ...meta } = newPage;
     setPages((ps) => [...ps, meta]);
     setCurrentPage(pages.length);
   };
@@ -2513,6 +2556,7 @@ function App() {
       if (sanitizedData.lines !== undefined) setCanvasLines(sanitizedData.lines);
       if (sanitizedData.walls !== undefined) setCanvasWalls(sanitizedData.walls);
       if (sanitizedData.texts !== undefined) setCanvasTexts(sanitizedData.texts);
+      if (sanitizedData.tiles !== undefined) setCanvasTiles(sanitizedData.tiles);
     }
   };
 
@@ -4699,6 +4743,14 @@ function App() {
               const updatedPages = [...pages];
               if (updatedPages[effectivePageIndex]) {
                 updatedPages[effectivePageIndex].texts = newTexts;
+                setPages(updatedPages);
+              }
+            }}
+            tiles={effectivePage?.tiles || []}
+            onTilesChange={(newTiles) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].tiles = newTiles;
                 setPages(updatedPages);
               }
             }}
@@ -7217,6 +7269,8 @@ function App() {
               onLinesChange={setCanvasLines}
               walls={canvasWalls}
               onWallsChange={setCanvasWalls}
+              tiles={canvasTiles}
+              onTilesChange={setCanvasTiles}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
