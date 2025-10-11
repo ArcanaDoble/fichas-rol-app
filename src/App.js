@@ -4030,10 +4030,10 @@ function App() {
   };
 
   // Renderizar tooltips por separado para evitar errores de hidratación
-  const renderTooltips = () => {
+  const renderTooltips = useCallback(() => {
     const seen = new Set();
 
-    return glossary
+    return (glossary || [])
       .map((term) => {
         if (!term?.word) return null;
 
@@ -4053,7 +4053,19 @@ function App() {
         );
       })
       .filter(Boolean);
-  };
+  }, [glossary, isTouchDevice]);
+
+  const tooltipElements = useMemo(() => renderTooltips(), [renderTooltips]);
+
+  const withTooltips = useCallback(
+    (content) => (
+      <>
+        {content}
+        {tooltipElements}
+      </>
+    ),
+    [tooltipElements]
+  );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = (tipo) => {
@@ -4078,7 +4090,7 @@ function App() {
   // ───────────────────────────────────────────────────────────
   // MENÚ PRINCIPAL
   if (!userType) {
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
         {/* Partículas de fondo animadas */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -4163,7 +4175,7 @@ function App() {
   }
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
         {/* Partículas de fondo */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -4239,7 +4251,7 @@ function App() {
   }
   // SELECCIÓN JUGADOR
   if (userType === 'player' && !nameEntered) {
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
         {/* Partículas de fondo */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -4344,7 +4356,7 @@ function App() {
   }
   // CALCULADORA DE DADOS
   if (userType === 'player' && nameEntered && showDiceCalculator) {
-    return (
+    return withTooltips(
       <DiceCalculator
         playerName={playerName}
         onBack={() => setShowDiceCalculator(false)}
@@ -4353,7 +4365,7 @@ function App() {
   }
   // MINIJUEGO BARRA-REFLEJOS
   if (userType === 'player' && nameEntered && showBarraReflejos) {
-    return (
+    return withTooltips(
       <BarraReflejos
         playerName={playerName}
         onBack={() => setShowBarraReflejos(false)}
@@ -4362,7 +4374,7 @@ function App() {
   }
   // SISTEMA DE INICIATIVA
   if (userType === 'player' && nameEntered && showInitiativeTracker) {
-    return (
+    return withTooltips(
       <InitiativeTracker
         playerName={playerName}
         isMaster={authenticated}
@@ -4381,7 +4393,7 @@ function App() {
   }
   // MINIMAPA PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerMinimap) {
-    return (
+    return withTooltips(
       <React.Suspense
         fallback={
           <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
@@ -4426,7 +4438,7 @@ function App() {
 
     // Si no hay página visible configurada o no se encuentra, mostrar mensaje
     if (!effectivePage) {
-      return (
+      return withTooltips(
         <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
           <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
@@ -4454,7 +4466,7 @@ function App() {
 
     // Si el jugador no tiene tokens asignados, no puede ver el mapa
     if (!playerHasToken) {
-      return (
+      return withTooltips(
         <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
           <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
@@ -4479,7 +4491,7 @@ function App() {
       );
     }
 
-    return (
+    return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
@@ -4592,7 +4604,7 @@ function App() {
   }
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <h1 className="text-2xl font-bold text-center mb-2">
@@ -5482,16 +5494,17 @@ function App() {
             </div>
           )}
         </div>
-        {renderTooltips()}
       </div>
     );
   }
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
-    return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
+    return withTooltips(
+      <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />
+    );
   }
   if (userType === 'master' && authenticated && chosenView === 'initiative') {
-    return (
+    return withTooltips(
       <InitiativeTracker
         playerName="Master"
         isMaster={true}
@@ -5512,7 +5525,7 @@ function App() {
         : enemySort === 'level'
         ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
         : filteredEnemies;
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
           <div className="flex items-center justify-between mb-4">
@@ -6918,7 +6931,7 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'minimap') {
-    return (
+    return withTooltips(
       <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
         <MinimapBuilder
           mode="master"
@@ -6928,7 +6941,7 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
-    return (
+    return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
           <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
@@ -7073,7 +7086,7 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated) {
-    return (
+    return withTooltips(
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
           <h1 className="text-2xl font-bold mb-2">Modo Máster</h1>
@@ -7795,7 +7808,7 @@ function App() {
     );
   }
   // FALLBACK
-  return (
+  return withTooltips(
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
       <p>Algo salió mal. Vuelve al menú.</p>
       <Boton onClick={volverAlMenu}>Volver al menú</Boton>
