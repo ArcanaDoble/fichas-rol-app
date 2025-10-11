@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import {
   FiMousePointer,
@@ -96,11 +96,56 @@ const Toolbar = ({
   activeLayer = 'fichas',
   onLayerChange,
   isPlayerView = false,
+  ambientLights = [],
+  selectedAmbientLightId = null,
+  onSelectAmbientLight = () => {},
+  onCreateAmbientLight = () => {},
+  onUpdateAmbientLight = () => {},
+  onDeleteAmbientLight = () => {},
+  gridCellSize = 50,
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
     ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'target'].includes(tool.id))
     : tools;
+
+  const selectedAmbientLight = useMemo(
+    () => ambientLights.find((light) => light.id === selectedAmbientLightId) || null,
+    [ambientLights, selectedAmbientLightId]
+  );
+
+  const cellsFromPx = (value) => {
+    if (!gridCellSize) return Number.isFinite(value) ? value : 0;
+    return Number.isFinite(value) ? Number((value / gridCellSize).toFixed(2)) : 0;
+  };
+
+  const pxFromCells = (value) => {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return null;
+    return gridCellSize ? numeric * gridCellSize : numeric;
+  };
+
+  const handleAmbientFieldChange = (field, value) => {
+    if (!selectedAmbientLight) return;
+    if (field === 'color') {
+      onUpdateAmbientLight(selectedAmbientLight.id, { [field]: value });
+      return;
+    }
+    if (field === 'enabled') {
+      onUpdateAmbientLight(selectedAmbientLight.id, { enabled: Boolean(value) });
+      return;
+    }
+    if (field === 'opacity') {
+      const numeric = Number(value);
+      if (Number.isNaN(numeric)) return;
+      const clamped = Math.max(0, Math.min(1, numeric));
+      onUpdateAmbientLight(selectedAmbientLight.id, { opacity: clamped });
+      return;
+    }
+    const pxValue = pxFromCells(value);
+    if (pxValue === null) return;
+    onUpdateAmbientLight(selectedAmbientLight.id, { [field]: pxValue });
+  };
 
   return (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
@@ -439,6 +484,131 @@ const Toolbar = ({
           )}
         </motion.div>
       )}
+      {!isPlayerView && activeLayer === 'luz' && (
+        <motion.div
+          key="ambient-light-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 bottom-4 bg-gray-800 p-3 rounded shadow-lg space-y-3 text-white w-72 max-h-[28rem] overflow-y-auto"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Luces ambientales</h3>
+            <button
+              onClick={onCreateAmbientLight}
+              className="px-2 py-1 text-xs bg-green-600 hover:bg-green-500 rounded"
+            >
+              Nueva luz
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {ambientLights.length === 0 && (
+              <span className="text-xs text-gray-300">No hay luces creadas.</span>
+            )}
+            {ambientLights.map((light, index) => {
+              const label = light.name || `Luz ${index + 1}`;
+              const isSelected = light.id === selectedAmbientLightId;
+              return (
+                <button
+                  key={light.id}
+                  onClick={() => onSelectAmbientLight(light.id)}
+                  className={`px-2 py-1 text-xs rounded ${
+                    isSelected ? 'bg-yellow-600 text-gray-900 font-semibold' : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {selectedAmbientLight && (
+            <div className="space-y-2 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-gray-300">Posición X (celdas)</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={cellsFromPx(selectedAmbientLight.x)}
+                    onChange={(e) => handleAmbientFieldChange('x', e.target.value)}
+                    className="bg-gray-700 rounded px-2 py-1"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-gray-300">Posición Y (celdas)</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={cellsFromPx(selectedAmbientLight.y)}
+                    onChange={(e) => handleAmbientFieldChange('y', e.target.value)}
+                    className="bg-gray-700 rounded px-2 py-1"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-gray-300">Radio brillante (celdas)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={cellsFromPx(selectedAmbientLight.brightRadius || 0)}
+                    onChange={(e) => handleAmbientFieldChange('brightRadius', e.target.value)}
+                    className="bg-gray-700 rounded px-2 py-1"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-gray-300">Radio tenue (celdas)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={cellsFromPx(selectedAmbientLight.dimRadius || 0)}
+                    onChange={(e) => handleAmbientFieldChange('dimRadius', e.target.value)}
+                    className="bg-gray-700 rounded px-2 py-1"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-gray-300">Color</span>
+                <input
+                  type="color"
+                  value={selectedAmbientLight.color || '#ffa500'}
+                  onChange={(e) => handleAmbientFieldChange('color', e.target.value)}
+                  className="w-10 h-8 border-0"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-300">Opacidad</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={selectedAmbientLight.opacity ?? 0.5}
+                  onChange={(e) => handleAmbientFieldChange('opacity', e.target.value)}
+                />
+                <span className="text-right text-gray-300">
+                  {(selectedAmbientLight.opacity ?? 0.5).toFixed(2)}
+                </span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedAmbientLight.enabled !== false}
+                  onChange={(e) => handleAmbientFieldChange('enabled', e.target.checked)}
+                />
+                <span className="text-gray-300">Luz activa</span>
+              </label>
+              <button
+                onClick={() => onDeleteAmbientLight(selectedAmbientLight.id)}
+                className="w-full px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs"
+              >
+                Eliminar luz
+              </button>
+            </div>
+          )}
+        </motion.div>
+      )}
     </AnimatePresence>
   </div>
   );
@@ -492,6 +662,28 @@ Toolbar.propTypes = {
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
   isPlayerView: PropTypes.bool,
+  ambientLights: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      name: PropTypes.string,
+      x: PropTypes.number,
+      y: PropTypes.number,
+      brightRadius: PropTypes.number,
+      dimRadius: PropTypes.number,
+      color: PropTypes.string,
+      opacity: PropTypes.number,
+      enabled: PropTypes.bool,
+    })
+  ),
+  selectedAmbientLightId: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+  ]),
+  onSelectAmbientLight: PropTypes.func,
+  onCreateAmbientLight: PropTypes.func,
+  onUpdateAmbientLight: PropTypes.func,
+  onDeleteAmbientLight: PropTypes.func,
+  gridCellSize: PropTypes.number,
 };
 
 export default Toolbar;
