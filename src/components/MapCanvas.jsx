@@ -1048,6 +1048,8 @@ const MapCanvas = ({
   onWallsChange = () => {},
   texts: propTexts = [],
   onTextsChange = () => {},
+  ambientLights: propAmbientLights = [],
+  onAmbientLightsChange = () => {},
   activeLayer: propActiveLayer = 'fichas',
   onLayerChange = () => {},
   enableDarkness = true,
@@ -1245,6 +1247,12 @@ const MapCanvas = ({
   });
   const [texts, setTexts] = useState(propTexts);
   const [tiles, setTiles] = useState(propTiles);
+  const [ambientLights, setAmbientLights] = useState(() =>
+    (propAmbientLights || []).map((light) => ({
+      ...light,
+      layer: light.layer || 'luz',
+    }))
+  );
   const [showGrid, setShowGrid] = useState(Boolean(propShowGrid));
   const [gridColor, setGridColor] = useState(propGridColor);
   const [gridOpacity, setGridOpacity] = useState(() => {
@@ -1406,6 +1414,7 @@ const MapCanvas = ({
       walls: null,
       texts: null,
       tiles: null,
+      ambientLights: null,
     };
     let pendingTokenChanges = [];
     const normalizeUpdatedAt = (value) => {
@@ -1480,6 +1489,7 @@ const MapCanvas = ({
       walls: [],
       texts: [],
       tiles: [],
+      ambientLights: [],
     };
 
     const flushPendingTokens = async () => {
@@ -1661,6 +1671,8 @@ const MapCanvas = ({
   const [selectedLines, setSelectedLines] = useState([]);
   const [selectedWalls, setSelectedWalls] = useState([]);
   const [selectedTexts, setSelectedTexts] = useState([]);
+  const [selectedAmbientLightId, setSelectedAmbientLightId] = useState(null);
+  const [selectedAmbientLights, setSelectedAmbientLights] = useState([]);
 
   // Estados para cuadro de selección
   const [isSelecting, setIsSelecting] = useState(false);
@@ -1893,6 +1905,13 @@ const MapCanvas = ({
     onTilesChange(newTiles);
   }, [isPlayerView, syncManager, onTilesChange]);
 
+  const handleAmbientLightsChange = useCallback((newLights) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('ambientLights', newLights);
+    }
+    onAmbientLightsChange(newLights);
+  }, [isPlayerView, syncManager, onAmbientLightsChange]);
+
   const updateTiles = useCallback((updater) => {
     setTiles((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -1900,6 +1919,100 @@ const MapCanvas = ({
       return next;
     });
   }, [handleTilesChange]);
+
+  const updateAmbientLights = useCallback((updater) => {
+    setAmbientLights((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      handleAmbientLightsChange(next);
+      return next;
+    });
+  }, [handleAmbientLightsChange]);
+
+  const saveAmbientLights = useCallback((updater) => {
+    setAmbientLights((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      handleAmbientLightsChange(next);
+      return next;
+    });
+  }, [handleAmbientLightsChange]);
+
+  const handleCreateAmbientLight = useCallback(() => {
+    const center = screenToMapCoordinates(
+      containerSize.width / 2,
+      containerSize.height / 2
+    );
+    const defaultBright = (effectiveGridSize || 100) * 3;
+    const defaultDim = (effectiveGridSize || 100) * 2;
+    const creator = userType === 'player' ? playerName : 'Master';
+    const newLight = {
+      id: nanoid(),
+      name: '',
+      x: center.x,
+      y: center.y,
+      brightRadius: defaultBright,
+      dimRadius: defaultDim,
+      color: '#facc15',
+      opacity: 0.5,
+      enabled: true,
+      layer: 'luz',
+      createdBy: creator,
+    };
+    updateAmbientLights((prev) => [...prev, newLight]);
+    setSelectedAmbientLightId(newLight.id);
+    setSelectedAmbientLights([]);
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+    setSelectedTileId(null);
+  }, [
+    containerSize.width,
+    containerSize.height,
+    screenToMapCoordinates,
+    effectiveGridSize,
+    userType,
+    playerName,
+    updateAmbientLights,
+  ]);
+
+  const handleAmbientLightUpdate = useCallback(
+    (id, updates) => {
+      if (!id) return;
+      saveAmbientLights((lights) =>
+        lights.map((light) =>
+          light.id === id
+            ? {
+                ...light,
+                ...updates,
+              }
+            : light
+        )
+      );
+    },
+    [saveAmbientLights]
+  );
+
+  const handleAmbientLightDelete = useCallback(
+    (id) => {
+      if (!id) return;
+      saveAmbientLights((lights) => lights.filter((light) => light.id !== id));
+      setSelectedAmbientLightId((prev) => (prev === id ? null : prev));
+      setSelectedAmbientLights((prev) => prev.filter((lightId) => lightId !== id));
+    },
+    [saveAmbientLights]
+  );
+
+  const handleAmbientLightSelect = useCallback((id) => {
+    if (!id) return;
+    setSelectedAmbientLightId(id);
+    setSelectedAmbientLights([]);
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+    setSelectedTileId(null);
+    clearMultiSelection();
+  }, []);
 
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
@@ -2079,6 +2192,13 @@ const MapCanvas = ({
     () => getVisibleElements(tiles.map((tile) => ({ ...tile, layer: tile.layer || 'tiles' }))),
     [tiles, getVisibleElements]
   );
+  const ambientLightLayers = useMemo(
+    () =>
+      getVisibleElements(
+        ambientLights.map((light) => ({ ...light, layer: light.layer || 'luz' }))
+      ),
+    [ambientLights, getVisibleElements]
+  );
 
   // Combinar elementos principales y de fondo
   const filteredTokens = useMemo(
@@ -2162,6 +2282,7 @@ const MapCanvas = ({
     setSelectedWallId(null);
     setSelectedTextId(null);
     setSelectedTileId(null);
+    setSelectedAmbientLightId(null);
     clearMultiSelection();
   };
 
@@ -2180,6 +2301,8 @@ const MapCanvas = ({
         return element.createdBy === playerName || !element.createdBy; // Permitir textos sin creador por compatibilidad
       case 'tile':
         return element.createdBy === playerName || !element.createdBy;
+      case 'ambientLight':
+        return element.createdBy === playerName || !element.createdBy;
       default:
         return false;
     }
@@ -2192,6 +2315,7 @@ const MapCanvas = ({
     setSelectedWalls([]);
     setSelectedTexts([]);
     setSelectedTileId(null);
+    setSelectedAmbientLights([]);
   };
 
   const clearAllSelections = () => {
@@ -2199,6 +2323,7 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    setSelectedAmbientLightId(null);
     clearMultiSelection();
   };
 
@@ -2319,14 +2444,18 @@ const MapCanvas = ({
           totalX += centerX / effectiveGridSize; // Convertir a coordenadas de grid
           totalY += centerY / effectiveGridSize;
           break;
-        case 'texts':
-          totalX += element.x / effectiveGridSize;
-          totalY += element.y / effectiveGridSize;
-          break;
-        default:
-          break;
-      }
-    });
+      case 'texts':
+        totalX += element.x / effectiveGridSize;
+        totalY += element.y / effectiveGridSize;
+        break;
+      case 'ambientLights':
+        totalX += element.x / effectiveGridSize;
+        totalY += element.y / effectiveGridSize;
+        break;
+      default:
+        break;
+    }
+  });
 
     return {
       x: totalX / elements.length,
@@ -2415,6 +2544,22 @@ const MapCanvas = ({
         // Para textos, verificar si el punto está dentro del cuadro
         return isPointInRect({ x: element.x, y: element.y }, normalizedBox);
       }
+      case 'ambientLight': {
+        const outerRadius = Math.max(
+          0,
+          (element.brightRadius || 0) + (element.dimRadius || 0)
+        );
+        const minX = element.x - outerRadius;
+        const maxX = element.x + outerRadius;
+        const minY = element.y - outerRadius;
+        const maxY = element.y + outerRadius;
+        return (
+          maxX >= normalizedBox.x &&
+          minX <= normalizedBox.x + normalizedBox.width &&
+          maxY >= normalizedBox.y &&
+          minY <= normalizedBox.y + normalizedBox.height
+        );
+      }
       default:
         return false;
     }
@@ -2449,6 +2594,8 @@ const MapCanvas = ({
   const lineTrRef = useRef();
   const textRefs = useRef({});
   const textTrRef = useRef();
+  const ambientLightRefs = useRef({});
+  const ambientLightTrRef = useRef();
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const panStart = useRef({ x: 0, y: 0 });
@@ -2480,6 +2627,24 @@ const MapCanvas = ({
   useEffect(() => {
     setTiles(propTiles);
   }, [propTiles]);
+
+  useEffect(() => {
+    setAmbientLights(
+      (propAmbientLights || []).map((light) => ({
+        ...light,
+        layer: light.layer || 'luz',
+      }))
+    );
+  }, [propAmbientLights]);
+
+  useEffect(() => {
+    const ids = new Set(ambientLights.map((light) => String(light.id)));
+    Object.keys(ambientLightRefs.current).forEach((key) => {
+      if (!ids.has(key)) {
+        delete ambientLightRefs.current[key];
+      }
+    });
+  }, [ambientLights]);
 
   const prevBarsRef = useRef({});
   useEffect(() => {
@@ -3386,6 +3551,15 @@ const MapCanvas = ({
     saveWalls((ws) => ws.map((w) => (w.id === id ? { ...w, x, y } : w)));
   };
 
+  const handleAmbientLightDragEnd = (id, e) => {
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    saveAmbientLights((lights) =>
+      lights.map((light) => (light.id === id ? { ...light, x, y } : light))
+    );
+  };
+
   // Función para encontrar puntos de snap cercanos
   const findSnapPoint = (x, y, currentWallId, snapDistance = 15) => {
     for (const wall of walls) {
@@ -3459,6 +3633,24 @@ const MapCanvas = ({
     const y = node.y();
     saveLines((ls) =>
       ls.map((ln) => (ln.id === id ? { ...ln, x, y, points: newPoints } : ln))
+    );
+  };
+
+  const handleAmbientLightTransformEnd = (id) => {
+    const node = ambientLightRefs.current[id];
+    if (!node) return;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    const avgScale = (scaleX + scaleY) / 2;
+    saveAmbientLights((lights) =>
+      lights.map((light) => {
+        if (light.id !== id) return light;
+        const nextBright = Math.max(0, (light.brightRadius || 0) * avgScale);
+        const nextDim = Math.max(0, (light.dimRadius || 0) * avgScale);
+        return { ...light, brightRadius: nextBright, dimRadius: nextDim };
+      })
     );
   };
 
@@ -3946,6 +4138,9 @@ const MapCanvas = ({
       const filteredLines = lines.filter(line => line.layer === activeLayer);
       const filteredWalls = walls.filter(wall => wall.layer === activeLayer);
       const filteredTexts = texts.filter(text => text.layer === activeLayer);
+      const filteredAmbientLights = ambientLights.filter(light =>
+        (light.layer || 'luz') === activeLayer
+      );
 
       // Encontrar elementos dentro del cuadro de selección y validar permisos
       const selectedTokensInBox = filteredTokens.filter(token =>
@@ -3960,12 +4155,20 @@ const MapCanvas = ({
       const selectedTextsInBox = filteredTexts.filter(text =>
         isElementInSelectionBox(text, selectionBox, 'text') && canSelectElement(text, 'text')
       );
+      const selectedAmbientLightsInBox = filteredAmbientLights.filter(light =>
+        isElementInSelectionBox(light, selectionBox, 'ambientLight') &&
+        canSelectElement(light, 'ambientLight')
+      );
 
       // Actualizar selecciones múltiples
       setSelectedTokens(prev => [...prev, ...selectedTokensInBox.map(t => t.id)]);
       setSelectedLines(prev => [...prev, ...selectedLinesInBox.map(l => l.id)]);
       setSelectedWalls(prev => [...prev, ...selectedWallsInBox.map(w => w.id)]);
       setSelectedTexts(prev => [...prev, ...selectedTextsInBox.map(t => t.id)]);
+      setSelectedAmbientLights(prev => [
+        ...prev,
+        ...selectedAmbientLightsInBox.map((light) => light.id),
+      ]);
 
       setIsSelecting(false);
       setSelectionBox({ x: 0, y: 0, width: 0, height: 0 });
@@ -4024,6 +4227,7 @@ const MapCanvas = ({
         setSelectedWallId(null);
         setSelectedTextId(null);
         setSelectedTileId(null);
+        setSelectedAmbientLightId(null);
         clearMultiSelection();
       }
     }
@@ -4207,12 +4411,20 @@ const MapCanvas = ({
                  selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
           texts: selectedTexts.length > 0 ? texts.filter(t => selectedTexts.includes(t.id)) :
                  selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
+          ,
+          ambientLights:
+            selectedAmbientLights.length > 0
+              ? ambientLights.filter((light) => selectedAmbientLights.includes(light.id))
+              : selectedAmbientLightId
+              ? [ambientLights.find((light) => light.id === selectedAmbientLightId)]
+              : [],
         };
 
         clipboardData.tokens = clipboardData.tokens.filter(Boolean);
         clipboardData.lines = clipboardData.lines.filter(Boolean);
         clipboardData.walls = clipboardData.walls.filter(Boolean);
         clipboardData.texts = clipboardData.texts.filter(Boolean);
+        clipboardData.ambientLights = clipboardData.ambientLights.filter(Boolean);
 
         const clipboardTokens = clipboardData.tokens;
         const clipboardLines = clipboardData.lines;
@@ -4235,8 +4447,13 @@ const MapCanvas = ({
         }
 
         // Solo copiar si hay elementos seleccionados
-        if (clipboardTokens.length > 0 || clipboardLines.length > 0 ||
-            clipboardWalls.length > 0 || clipboardTexts.length > 0) {
+        if (
+          clipboardTokens.length > 0 ||
+          clipboardLines.length > 0 ||
+          clipboardWalls.length > 0 ||
+          clipboardTexts.length > 0 ||
+          clipboardData.ambientLights.length > 0
+        ) {
           setClipboard(clipboardData);
         }
         return;
@@ -4257,17 +4474,22 @@ const MapCanvas = ({
         const filteredTexts = texts.filter(text =>
           text.layer === activeLayer && canSelectElement(text, 'text')
         );
+        const filteredAmbient = ambientLights.filter(light =>
+          (light.layer || 'luz') === activeLayer && canSelectElement(light, 'ambientLight')
+        );
 
         setSelectedTokens(filteredTokens.map(t => t.id));
         setSelectedLines(filteredLines.map(l => l.id));
         setSelectedWalls(filteredWalls.map(w => w.id));
         setSelectedTexts(filteredTexts.map(t => t.id));
+        setSelectedAmbientLights(filteredAmbient.map((light) => light.id));
 
         // Limpiar selecciones individuales
         setSelectedId(null);
         setSelectedLineId(null);
         setSelectedWallId(null);
         setSelectedTextId(null);
+        setSelectedAmbientLightId(null);
         return;
       }
 
@@ -4279,6 +4501,7 @@ const MapCanvas = ({
         const clipboardLines = (clipboard.lines ?? []).filter(Boolean);
         const clipboardWalls = (clipboard.walls ?? []).filter(Boolean);
         const clipboardTexts = (clipboard.texts ?? []).filter(Boolean);
+        const clipboardAmbientLights = (clipboard.ambientLights ?? []).filter(Boolean);
 
         // Obtener posición inteligente de pegado
         const pastePosition = getSmartPastePosition();
@@ -4289,6 +4512,10 @@ const MapCanvas = ({
         const linesCenter = calculateElementsCenter(clipboardLines, 'lines');
         const wallsCenter = calculateElementsCenter(clipboardWalls, 'walls');
         const textsCenter = calculateElementsCenter(clipboardTexts, 'texts');
+        const ambientCenter = calculateElementsCenter(
+          clipboardAmbientLights,
+          'ambientLights'
+        );
 
         // Pegar tokens
         if (clipboardTokens.length > 0) {
@@ -4400,6 +4627,24 @@ const MapCanvas = ({
           });
           updateTexts([...texts, ...newTexts]);
         }
+        if (clipboardAmbientLights.length > 0) {
+          const creator = userType === 'player' ? playerName : 'Master';
+          const newLights = clipboardAmbientLights.map((light) => {
+            const relativeX = light.x - (ambientCenter.x * effectiveGridSize);
+            const relativeY = light.y - (ambientCenter.y * effectiveGridSize);
+            const finalX = pastePosition.x + relativeX;
+            const finalY = pastePosition.y + relativeY;
+            return {
+              ...light,
+              id: nanoid(),
+              x: finalX,
+              y: finalY,
+              layer: activeLayer,
+              createdBy: creator,
+            };
+          });
+          saveAmbientLights([...ambientLights, ...newLights]);
+        }
         return;
       }
 
@@ -4454,6 +4699,12 @@ const MapCanvas = ({
           updateTexts(texts.filter(t => !selectedTexts.includes(t.id)));
           setSelectedTexts([]);
         }
+        if (selectedAmbientLights.length > 0) {
+          saveAmbientLights(
+            ambientLights.filter((light) => !selectedAmbientLights.includes(light.id))
+          );
+          setSelectedAmbientLights([]);
+        }
 
         // Eliminar selección individual si no hay selección múltiple
         if (selectedLineId != null && selectedLines.length === 0) {
@@ -4471,6 +4722,12 @@ const MapCanvas = ({
         if (selectedId != null && selectedTokens.length === 0) {
           handleTokensChange(tokens.filter((t) => t.id !== selectedId));
           setSelectedId(null);
+        }
+        if (selectedAmbientLightId != null && selectedAmbientLights.length === 0) {
+          saveAmbientLights(
+            ambientLights.filter((light) => light.id !== selectedAmbientLightId)
+          );
+          setSelectedAmbientLightId(null);
         }
         if (selectedTileId != null) {
           updateTiles((prev) =>
@@ -4706,6 +4963,20 @@ const MapCanvas = ({
       tr.getLayer()?.batchDraw();
     }
   }, [selectedTextId, activeTool]);
+
+  useEffect(() => {
+    const tr = ambientLightTrRef.current;
+    const node = selectedAmbientLightId
+      ? ambientLightRefs.current[selectedAmbientLightId]
+      : null;
+    if (tr && node && activeTool === 'select' && activeLayer === 'luz') {
+      tr.nodes([node]);
+      tr.getLayer()?.batchDraw();
+    } else if (tr) {
+      tr.nodes([]);
+      tr.getLayer()?.batchDraw();
+    }
+  }, [selectedAmbientLightId, activeTool, activeLayer]);
 
   const groupScale = baseScale * zoom;
 
@@ -5167,6 +5438,119 @@ const MapCanvas = ({
               {activeTool === 'select' && (
                 <Transformer ref={textTrRef} rotateEnabled={false} />
               )}
+              {ambientLightLayers.background.map((light) => {
+                const brightRadius = Math.max(0, light.brightRadius || 0);
+                const dimRadius = Math.max(0, light.dimRadius || 0);
+                const outerRadius = Math.max(0, brightRadius + dimRadius);
+                if (brightRadius <= 0 && outerRadius <= 0) {
+                  return (
+                    <Group
+                      key={`ambient-bg-${light.id}`}
+                      x={light.x}
+                      y={light.y}
+                      opacity={light.crossLayerOpacity ?? 0.3}
+                      listening={false}
+                    >
+                      <Circle radius={8} fill="#6b7280" />
+                    </Group>
+                  );
+                }
+                return (
+                  <Group
+                    key={`ambient-bg-${light.id}`}
+                    x={light.x}
+                    y={light.y}
+                    opacity={light.crossLayerOpacity ?? 0.35}
+                    listening={false}
+                  >
+                    {outerRadius > 0 && (
+                      <Circle
+                        radius={outerRadius}
+                        stroke={light.color || '#facc15'}
+                        strokeWidth={1.5}
+                        dash={[6, 6]}
+                      />
+                    )}
+                    {brightRadius > 0 && (
+                      <Circle
+                        radius={brightRadius}
+                        stroke={mixColors(light.color || '#facc15', '#ffffff', 0.25)}
+                        strokeWidth={1.5}
+                      />
+                    )}
+                    <Circle radius={4} fill={light.color || '#facc15'} />
+                  </Group>
+                );
+              })}
+              {ambientLightLayers.visible.map((light) => {
+                const brightRadius = Math.max(0, light.brightRadius || 0);
+                const dimRadius = Math.max(0, light.dimRadius || 0);
+                const outerRadius = Math.max(0, brightRadius + dimRadius);
+                const isSelected =
+                  selectedAmbientLightId === light.id ||
+                  selectedAmbientLights.includes(light.id);
+                const baseColor = light.color || '#facc15';
+                const enabled = light.enabled !== false;
+                return (
+                  <Group
+                    key={`ambient-${light.id}`}
+                    ref={(node) => {
+                      if (node) ambientLightRefs.current[light.id] = node;
+                      else delete ambientLightRefs.current[light.id];
+                    }}
+                    x={light.x}
+                    y={light.y}
+                    draggable={activeLayer === 'luz' && activeTool === 'select'}
+                    onDragEnd={(e) => handleAmbientLightDragEnd(light.id, e)}
+                    onTransformEnd={() => handleAmbientLightTransformEnd(light.id)}
+                    listening={activeLayer === 'luz'}
+                    opacity={light.crossLayerOpacity ?? 1}
+                    onClick={(e) => {
+                      if (activeLayer !== 'luz') return;
+                      const isCtrlPressed = e?.evt?.ctrlKey || false;
+                      if (isCtrlPressed) {
+                        setSelectedAmbientLights((prev) =>
+                          prev.includes(light.id)
+                            ? prev.filter((id) => id !== light.id)
+                            : [...prev, light.id]
+                        );
+                      } else {
+                        handleAmbientLightSelect(light.id);
+                      }
+                    }}
+                    onTap={() => {
+                      if (activeLayer !== 'luz') return;
+                      handleAmbientLightSelect(light.id);
+                    }}
+                  >
+                    {outerRadius > 0 && (
+                      <Circle
+                        radius={outerRadius}
+                        stroke={isSelected ? '#fbbf24' : baseColor}
+                        strokeWidth={isSelected ? 3 : 1.5}
+                        dash={[8, 6]}
+                      />
+                    )}
+                    {brightRadius > 0 && (
+                      <Circle
+                        radius={brightRadius}
+                        stroke={isSelected ? '#fef3c7' : mixColors(baseColor, '#ffffff', 0.35)}
+                        strokeWidth={isSelected ? 3 : 2}
+                      />
+                    )}
+                    <Circle
+                      radius={8}
+                      fill={enabled ? baseColor : '#4b5563'}
+                      stroke={isSelected ? '#f59e0b' : '#1f2937'}
+                      strokeWidth={isSelected ? 2 : 1}
+                      opacity={enabled ? 1 : 0.6}
+                    />
+                  </Group>
+                );
+              })}
+              {activeTool === 'select' && activeLayer === 'luz' && (
+                <Transformer ref={ambientLightTrRef} rotateEnabled={false} />
+              )}
               {currentLine && (
                 <Line
                   points={currentLine.points}
@@ -5427,6 +5811,28 @@ const MapCanvas = ({
 
                 return lightShapes;
               })}
+              {ambientLights
+                .filter((light) => light.enabled !== false)
+                .map((light) => {
+                  const brightRadius = Math.max(0, light.brightRadius || 0);
+                  const dimRadius = Math.max(0, light.dimRadius || 0);
+                  const outerRadius = Math.max(0, brightRadius + dimRadius);
+                  if (brightRadius <= 0 && outerRadius <= 0) return null;
+                  const color = light.color || '#facc15';
+                  const opacity = light.opacity ?? 0.5;
+                  const lightShapes = createRadialGradientShapes({
+                    keyPrefix: `ambient-${light.id}`,
+                    centerX: light.x,
+                    centerY: light.y,
+                    brightRadius,
+                    outerRadius,
+                    color,
+                    brightIntensity: opacity,
+                    dimIntensity: opacity * 0.8,
+                    listening: false,
+                  });
+                  return lightShapes;
+                })}
             </Group>
           </Layer>
 
@@ -5491,6 +5897,28 @@ const MapCanvas = ({
                       listening: false,
                     });
 
+                    return darknessShapes;
+                  })}
+                {ambientLights
+                  .filter((light) => light.enabled !== false)
+                  .map((light) => {
+                    const brightRadius = Math.max(0, light.brightRadius || 0);
+                    const dimRadius = Math.max(0, light.dimRadius || 0);
+                    const outerRadius = Math.max(0, brightRadius + dimRadius);
+                    if (brightRadius <= 0 && outerRadius <= 0) return null;
+                    const opacity = light.opacity ?? 0.5;
+                    const darknessShapes = createRadialGradientShapes({
+                      keyPrefix: `ambient-dark-${light.id}`,
+                      centerX: light.x,
+                      centerY: light.y,
+                      brightRadius,
+                      outerRadius,
+                      color: '#000000',
+                      brightIntensity: opacity,
+                      dimIntensity: opacity * 0.8,
+                      compositeOperation: 'destination-out',
+                      listening: false,
+                    });
                     return darknessShapes;
                   })}
               </Group>
@@ -5782,6 +6210,13 @@ const MapCanvas = ({
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
         isPlayerView={isPlayerView}
+        ambientLights={ambientLights}
+        selectedAmbientLightId={selectedAmbientLightId}
+        onSelectAmbientLight={handleAmbientLightSelect}
+        onCreateAmbientLight={handleCreateAmbientLight}
+        onUpdateAmbientLight={handleAmbientLightUpdate}
+        onDeleteAmbientLight={handleAmbientLightDelete}
+        gridCellSize={effectiveGridSize}
       />
       {settingsTokenIds.map((id) => {
         const token = tokens.find((t) => t.id === id);
@@ -6114,18 +6549,27 @@ const MapCanvas = ({
           </div>
         )}
 
-        {(selectedTokens.length > 0 || selectedLines.length > 0 || selectedWalls.length > 0 || selectedTexts.length > 0) && (
+        {(selectedTokens.length > 0 ||
+          selectedLines.length > 0 ||
+          selectedWalls.length > 0 ||
+          selectedTexts.length > 0 ||
+          selectedAmbientLights.length > 0) && (
           <div className="rounded-lg bg-green-600 px-3 py-2 text-white shadow-lg">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">📋 Seleccionados:</span>
               <span className="font-bold">
-                {selectedTokens.length + selectedLines.length + selectedWalls.length + selectedTexts.length}
+                {selectedTokens.length +
+                  selectedLines.length +
+                  selectedWalls.length +
+                  selectedTexts.length +
+                  selectedAmbientLights.length}
               </span>
               <span className="text-xs opacity-75">
                 ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
                 {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
                 {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
-                {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`})
+                {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`}
+                {selectedAmbientLights.length > 0 && ` ${selectedAmbientLights.length} luces`})
               </span>
             </div>
             <div className="mt-1 text-xs opacity-75">
@@ -6141,8 +6585,11 @@ const MapCanvas = ({
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">📋 Clipboard:</span>
             <span className="font-bold">
-              {(clipboard.tokens?.length || 0) + (clipboard.lines?.length || 0) +
-               (clipboard.walls?.length || 0) + (clipboard.texts?.length || 0)} elementos
+              {(clipboard.tokens?.length || 0) +
+                (clipboard.lines?.length || 0) +
+                (clipboard.walls?.length || 0) +
+                (clipboard.texts?.length || 0) +
+                (clipboard.ambientLights?.length || 0)} elementos
             </span>
           </div>
           <div className="text-xs opacity-75">
@@ -6236,6 +6683,21 @@ MapCanvas.propTypes = {
   onWallsChange: PropTypes.func,
   texts: PropTypes.array,
   onTextsChange: PropTypes.func,
+  ambientLights: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      name: PropTypes.string,
+      x: PropTypes.number,
+      y: PropTypes.number,
+      brightRadius: PropTypes.number,
+      dimRadius: PropTypes.number,
+      color: PropTypes.string,
+      opacity: PropTypes.number,
+      enabled: PropTypes.bool,
+      layer: PropTypes.string,
+    })
+  ),
+  onAmbientLightsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
   enableDarkness: PropTypes.bool,

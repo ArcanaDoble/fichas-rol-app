@@ -41,6 +41,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Botones de estados y ajustes con sombra** - El engranaje y el acceso a estados lucen ahora una sombra negra más notoria para sobresalir
 - **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
 - **Grid ajustable** - Tamaño y desplazamiento de la cuadrícula configurables
+- **Luces ambientales configurables** - Añade focos persistentes con radios brillante y tenue, color, opacidad y activación sincronizados para todos los clientes
 - **Cuadrícula personalizable** - Alterna visibilidad y define color y opacidad con controles sincronizados entre sesiones
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
 - **Zoom interactivo** - Acerca y aleja el mapa con la rueda del ratón
