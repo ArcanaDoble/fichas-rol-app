@@ -146,6 +146,7 @@ const EnemyViewModal = ({
 
   // Buscar dentro de la ficha (equipo y poderes)
   const [query, setQuery] = useState('');
+  const [viewMode, setViewMode] = useState('general');
   const normalize = (t) => (t || '')
     .toString()
     .normalize('NFD')
@@ -185,6 +186,15 @@ const EnemyViewModal = ({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const ensureGeneralViewAndScroll = (id) => {
+    if (viewMode !== 'general') {
+      setViewMode('general');
+      setTimeout(() => scrollTo(id), 60);
+    } else {
+      scrollTo(id);
+    }
+  };
+
   const orderedStats = useMemo(() => {
     const stats = enemy.stats || {};
     const entries = Object.entries(stats);
@@ -203,6 +213,144 @@ const EnemyViewModal = ({
     return prioritized;
   }, [enemy.stats]);
 
+  const renderWeaponCard = (weapon, index) => (
+    <TarjetaCard
+      key={index}
+      variant="weapon"
+      interactive={false}
+      hoverTransforms={false}
+      hoverable
+      className="w-full flex flex-col items-start text-left text-sm"
+      rarityColor={getRarityColor(weapon.rareza)}
+    >
+      <p className="font-semibold text-base mb-2">{weapon.nombre}</p>
+      <p className="mb-1">
+        <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano}{' '}
+        {iconoDano(weapon.tipoDano)}
+      </p>
+      <p className="mb-1">
+        <span className="font-medium">Alcance:</span> {weapon.alcance}
+      </p>
+      <p className="mb-1">
+        <span className="font-medium">Consumo:</span> {weapon.consumo}
+      </p>
+      {weapon.rasgos && weapon.rasgos.length > 0 && (
+        <p className="mb-1">
+          <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
+        </p>
+      )}
+      {weapon.descripcion && (
+        <p className="text-gray-300 italic">
+          <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
+        </p>
+      )}
+    </TarjetaCard>
+  );
+
+  const renderArmorCard = (armor, index) => (
+    <TarjetaCard
+      key={index}
+      variant="armor"
+      interactive={false}
+      hoverTransforms={false}
+      hoverable
+      className="w-full flex flex-col items-start text-left text-sm"
+      rarityColor={getRarityColor(armor.rareza)}
+    >
+      <p className="font-semibold text-base mb-2">{armor.nombre}</p>
+      <p className="mb-1">
+        <span className="font-medium">Defensa:</span> {armor.defensa}
+      </p>
+      {armor.rasgos && armor.rasgos.length > 0 && (
+        <p className="mb-1">
+          <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
+        </p>
+      )}
+      {armor.descripcion && (
+        <p className="text-gray-300 italic">
+          <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
+        </p>
+      )}
+    </TarjetaCard>
+  );
+
+  const renderPowerCard = (power, index) => (
+    <TarjetaCard
+      key={index}
+      variant="power"
+      interactive={false}
+      hoverTransforms={false}
+      hoverable
+      className="w-full flex flex-col items-start text-left text-sm"
+      rarityColor={getRarityColor(power.rareza)}
+    >
+      <p className="font-semibold text-base mb-2">{power.nombre}</p>
+      <p className="mb-1">
+        <span className="font-medium">Daño:</span> {power.poder}
+      </p>
+      <p className="mb-1">
+        <span className="font-medium">Alcance:</span> {power.alcance}
+      </p>
+      <p className="mb-1">
+        <span className="font-medium">Consumo:</span> {power.consumo}
+      </p>
+      {power.rasgos && power.rasgos.length > 0 && (
+        <p className="mb-1">
+          <span className="font-medium">Rasgos:</span> {highlightText(power.rasgos.join(', '))}
+        </p>
+      )}
+      {power.descripcion && (
+        <p className="text-gray-300 italic">
+          <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
+        </p>
+      )}
+    </TarjetaCard>
+  );
+
+  const renderWeaponsSection = (
+    containerClass = '',
+    listClass = 'space-y-2 max-h-80 overflow-y-auto pr-1',
+  ) => (
+    <div className={`bg-gray-700 rounded-lg p-4 ${containerClass}`.trim()} id="weapons">
+      <h3 className="font-semibold mb-3">Armas Equipadas</h3>
+      {filteredWeapons?.length > 0 ? (
+        <div className={listClass}>{filteredWeapons.map(renderWeaponCard)}</div>
+      ) : (
+        <p className="text-gray-400 text-sm">Sin armas equipadas</p>
+      )}
+    </div>
+  );
+
+  const renderArmorsSection = (
+    containerClass = '',
+    listClass = 'space-y-2 max-h-80 overflow-y-auto pr-1',
+  ) => (
+    <div className={`bg-gray-700 rounded-lg p-4 ${containerClass}`.trim()} id="armors">
+      <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
+      {filteredArmors?.length > 0 ? (
+        <div className={listClass}>{filteredArmors.map(renderArmorCard)}</div>
+      ) : (
+        <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
+      )}
+    </div>
+  );
+
+  const renderPowersSection = (
+    containerClass = '',
+    listClass = 'space-y-2 max-h-80 overflow-y-auto pr-1',
+  ) => (
+    <div className={`bg-gray-700 rounded-lg p-4 ${containerClass}`.trim()} id="powers">
+      <h3 className="font-semibold mb-3">Poderes Equipados</h3>
+      {filteredPowers?.length > 0 ? (
+        <div className={listClass}>{filteredPowers.map(renderPowerCard)}</div>
+      ) : (
+        <p className="text-gray-400 text-sm">Sin poderes equipados</p>
+      )}
+    </div>
+  );
+
+  const navButtonBase =
+    'px-3 py-1 rounded-full border border-white/20 text-sm transition-colors';
   const windowBox = (
     <div
       ref={modalRef}
@@ -257,14 +405,29 @@ const EnemyViewModal = ({
       </div>
       {/* Tabs de navegación rápida */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('info')}>Resumen</button>
-        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('weapons')}>Armas</button>
-        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('armors')}>Armaduras</button>
-        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('powers')}>Poderes</button>
-        <button className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm" onClick={() => scrollTo('notes')}>Notas</button>
+        <button
+          className={`${navButtonBase} ${
+            viewMode === 'general'
+              ? 'bg-blue-600/80 text-white border-blue-400'
+              : 'bg-white/10 text-gray-200 hover:bg-white/20'
+          }`}
+          onClick={() => ensureGeneralViewAndScroll('info')}
+        >
+          General
+        </button>
+        <button
+          className={`${navButtonBase} ${
+            viewMode === 'equipamiento'
+              ? 'bg-violet-600/80 text-white border-violet-400'
+              : 'bg-white/10 text-gray-200 hover:bg-white/20'
+          }`}
+          onClick={() => setViewMode('equipamiento')}
+        >
+          Equipamiento
+        </button>
       </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Columna 1 */}
+      {viewMode === 'general' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,320px),1fr] gap-6">
           <div className="space-y-4">
             {enemy.portrait && (
               <div className="w-full aspect-square max-w-xs mx-auto rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
@@ -297,194 +460,90 @@ const EnemyViewModal = ({
               </div>
             )}
           </div>
-          {/* Columna 2 */}
           <div className="space-y-4">
-            <div className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Atributos</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {atributos.map((attr) => (
-                  <div key={attr} className="flex justify-between">
-                    <span
-                      className="font-medium capitalize"
-                      style={{ color: atributoColor[attr] }}
-                    >
-                      {attr}:
-                    </span>
-                    <span style={{ color: recursoColor.armadura }}>
-                      {enemy.atributos?.[attr] || 'D4'}
-                    </span>
-                  </div>
-                ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Atributos</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {atributos.map((attr) => (
+                    <div key={attr} className="flex justify-between">
+                      <span
+                        className="font-medium capitalize"
+                        style={{ color: atributoColor[attr] }}
+                      >
+                        {attr}:
+                      </span>
+                      <span style={{ color: recursoColor.armadura }}>
+                        {enemy.atributos?.[attr] || 'D4'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Estadísticas</h3>
-              {orderedStats.length > 0 ? (
-                <div className="space-y-3 text-sm">
-                  {orderedStats.map(([key, rawStat]) => {
-                    const stat =
-                      rawStat && typeof rawStat === 'object'
-                        ? rawStat
-                        : { total: rawStat };
-                    const label = stat.label || key;
-                    const baseValue = toNumber(stat.base, toNumber(stat.total));
-                    const buffValue = toNumber(stat.buff, 0);
-                    const totalValue = toNumber(stat.total, baseValue + buffValue);
-                    const actualValue = toNumber(stat.actual, totalValue);
-                    const color = stat.color || recursoColor[key] || '#ffffff';
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Estadísticas</h3>
+                {orderedStats.length > 0 ? (
+                  <div className="space-y-3 text-sm">
+                    {orderedStats.map(([key, rawStat]) => {
+                      const stat =
+                        rawStat && typeof rawStat === 'object'
+                          ? rawStat
+                          : { total: rawStat };
+                      const label = stat.label || key;
+                      const baseValue = toNumber(stat.base, toNumber(stat.total));
+                      const buffValue = toNumber(stat.buff, 0);
+                      const totalValue = toNumber(stat.total, baseValue + buffValue);
+                      const actualValue = toNumber(stat.actual, totalValue);
+                      const color = stat.color || recursoColor[key] || '#ffffff';
 
-                    return (
-                      <div key={key} className="space-y-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-medium capitalize" style={{ color }}>
-                            {label}
-                          </span>
-                          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-                            <span className="text-gray-300">Base {baseValue}</span>
-                            {buffValue !== 0 && (
-                              <span className="text-amber-300 font-semibold">+ ({formatSigned(buffValue)})</span>
-                            )}
-                            <span className="text-blue-300 font-semibold">= {baseValue + buffValue}</span>
-                            {totalValue !== baseValue + buffValue && (
-                              <span className="text-indigo-300">({totalValue})</span>
-                            )}
+                      return (
+                        <div key={key} className="space-y-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium capitalize" style={{ color }}>
+                              {label}
+                            </span>
+                            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+                              <span className="text-gray-300">Base {baseValue}</span>
+                              {buffValue !== 0 && (
+                                <span className="text-amber-300 font-semibold">+ ({formatSigned(buffValue)})</span>
+                              )}
+                              <span className="text-blue-300 font-semibold">= {baseValue + buffValue}</span>
+                              {totalValue !== baseValue + buffValue && (
+                                <span className="text-indigo-300">({totalValue})</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-400">Actual</span>
+                            <span className="font-semibold" style={{ color }}>
+                              {actualValue}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-400">Actual</span>
-                          <span className="text-emerald-300 font-semibold">{actualValue}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
-              )}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
+                )}
+              </div>
             </div>
-          </div>
-          {/* Columna 3 */}
-          <div className="space-y-4">
-            <div id="weapons" className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Armas Equipadas</h3>
-              {filteredWeapons?.length > 0 ? (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {filteredWeapons.map((weapon, index) => (
-                    <TarjetaCard
-                      key={index}
-                      variant="weapon"
-                      interactive={false}
-                      hoverTransforms={false}
-                      hoverable
-                      className="w-full flex flex-col items-start text-left text-sm"
-                      rarityColor={getRarityColor(weapon.rareza)}
-                    >
-                      <p className="font-semibold text-base mb-2">{weapon.nombre}</p>
-                      <p className="mb-1">
-                        <span className="font-medium">Daño:</span> {dadoIcono()} {weapon.dano}{' '}
-                        {iconoDano(weapon.tipoDano)}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Alcance:</span> {weapon.alcance}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Consumo:</span> {weapon.consumo}
-                      </p>
-                      {weapon.rasgos && weapon.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(weapon.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {weapon.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(weapon.descripcion)}
-                        </p>
-                      )}
-                    </TarjetaCard>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 text-sm">Sin armas equipadas</p>
-              )}
-            </div>
-            <div id="armors" className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Armaduras Equipadas</h3>
-              {filteredArmors?.length > 0 ? (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {filteredArmors.map((armor, index) => (
-                    <TarjetaCard
-                      key={index}
-                      variant="armor"
-                      interactive={false}
-                      hoverTransforms={false}
-                      hoverable
-                      className="w-full flex flex-col items-start text-left text-sm"
-                      rarityColor={getRarityColor(armor.rareza)}
-                    >
-                      <p className="font-semibold text-base mb-2">{armor.nombre}</p>
-                      <p className="mb-1">
-                        <span className="font-medium">Defensa:</span> {armor.defensa}
-                      </p>
-                      {armor.rasgos && armor.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(armor.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {armor.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(armor.descripcion)}
-                        </p>
-                      )}
-                    </TarjetaCard>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 text-sm">Sin armaduras equipadas</p>
-              )}
-            </div>
-            <div id="powers" className="bg-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Poderes Equipados</h3>
-              {filteredPowers?.length > 0 ? (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {filteredPowers.map((power, index) => (
-                    <TarjetaCard
-                      key={index}
-                      variant="power"
-                      interactive={false}
-                      hoverTransforms={false}
-                      hoverable
-                      className="w-full flex flex-col items-start text-left text-sm"
-                      rarityColor={getRarityColor(power.rareza)}
-                    >
-                      <p className="font-semibold text-base mb-2">{power.nombre}</p>
-                      <p className="mb-1">
-                        <span className="font-medium">Daño:</span> {power.poder}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Alcance:</span> {power.alcance}
-                      </p>
-                      <p className="mb-1">
-                        <span className="font-medium">Consumo:</span> {power.consumo}
-                      </p>
-                      {power.rasgos && power.rasgos.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-medium">Rasgos:</span> {highlightText(power.rasgos.join(', '))}
-                        </p>
-                      )}
-                      {power.descripcion && (
-                        <p className="text-gray-300 italic">
-                          <span className="font-medium">Descripción:</span> {highlightText(power.descripcion)}
-                        </p>
-                      )}
-                    </TarjetaCard>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 text-sm">Sin poderes equipados</p>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderWeaponsSection()}
+              {renderArmorsSection()}
+              {renderPowersSection('md:col-span-2')}
             </div>
           </div>
         </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {renderWeaponsSection('', 'space-y-2 max-h-[60vh] overflow-y-auto pr-1')}
+            {renderArmorsSection('', 'space-y-2 max-h-[60vh] overflow-y-auto pr-1')}
+            {renderPowersSection('md:col-span-2 xl:col-span-1', 'space-y-2 max-h-[60vh] overflow-y-auto pr-1')}
+          </div>
+        </div>
+      )}
         {/* Barra de acciones sticky para móvil */}
         <div className="md:hidden sticky bottom-0 left-0 right-0 bg-gray-900/95 border-t border-gray-700 mt-3 -mx-6 px-4 py-2">
           <div className="flex items-center justify-around gap-3">
