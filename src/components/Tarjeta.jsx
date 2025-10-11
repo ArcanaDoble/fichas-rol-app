@@ -74,6 +74,7 @@ const Tarjeta = ({
   variant,
   interactive = true,
   hoverTransforms = true,
+  hoverable,
   loading = false,
   onClick,
   header,
@@ -85,6 +86,11 @@ const Tarjeta = ({
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const style = variantStyles[variant] || variantStyles.default;
+
+  const canHover = useMemo(() => {
+    if (typeof hoverable === 'boolean') return hoverable;
+    return interactive;
+  }, [hoverable, interactive]);
 
   const rarityPalette = useMemo(() => {
     if (!rarityColor) return null;
@@ -128,7 +134,7 @@ const Tarjeta = ({
     ? ''
     : 'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
   const transformClass = interactive && hoverTransforms ? 'transform hover:-translate-y-1 hover:scale-[1.015]' : '';
-  const glowClass = interactive && !rarityPalette ? style.glow : '';
+  const glowClass = canHover && !rarityPalette ? style.glow : '';
 
   const cardClasses = `
     ${baseClasses}
@@ -172,11 +178,11 @@ const Tarjeta = ({
       };
 
   const handleMouseEnter = () => {
-    if (interactive) setIsHovered(true);
+    if (canHover) setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
-    if (interactive) setIsHovered(false);
+    if (canHover) setIsHovered(false);
   };
 
   const combinedStyle = { ...baseCardStyle, ...externalStyle };
@@ -318,6 +324,7 @@ Tarjeta.propTypes = {
   variant: PropTypes.string,
   interactive: PropTypes.bool,
   hoverTransforms: PropTypes.bool,
+  hoverable: PropTypes.bool,
   loading: PropTypes.bool,
   onClick: PropTypes.func,
   header: PropTypes.node,

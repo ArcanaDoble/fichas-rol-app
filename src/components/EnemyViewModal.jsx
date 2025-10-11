@@ -375,6 +375,7 @@ const EnemyViewModal = ({
                       variant="weapon"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
                       rarityColor={getRarityColor(weapon.rareza)}
                     >
@@ -416,6 +417,7 @@ const EnemyViewModal = ({
                       variant="armor"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
                       rarityColor={getRarityColor(armor.rareza)}
                     >
@@ -450,6 +452,7 @@ const EnemyViewModal = ({
                       variant="power"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
                       rarityColor={getRarityColor(power.rareza)}
                     >
