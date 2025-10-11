@@ -35,6 +35,39 @@ const variantStyles = {
   },
 };
 
+const expandHex = (hex) => {
+  if (!hex || typeof hex !== 'string') return null;
+  const normalized = hex.trim().toLowerCase();
+  if (/^#([0-9a-f]{6})$/.test(normalized)) return normalized;
+  if (/^#([0-9a-f]{3})$/.test(normalized)) {
+    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+  }
+  return null;
+};
+
+const hexToRgb = (hex) => {
+  const normalized = expandHex(hex);
+  if (!normalized) return null;
+  const int = parseInt(normalized.slice(1), 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255,
+  };
+};
+
+const mixWithWhite = (rgb, amount = 0.5) => {
+  const weight = Math.min(Math.max(amount, 0), 1);
+  return {
+    r: Math.round(rgb.r + (255 - rgb.r) * weight),
+    g: Math.round(rgb.g + (255 - rgb.g) * weight),
+    b: Math.round(rgb.b + (255 - rgb.b) * weight),
+  };
+};
+
+const rgbToRgbaString = (rgb, alpha) =>
+  `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${typeof alpha === 'number' ? alpha : 1})`;
+
 const Tarjeta = ({
   children,
   className = '',
@@ -46,11 +79,29 @@ const Tarjeta = ({
   header,
   footer,
   style: externalStyle = {},
+  rarityColor,
   ...props
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const style = variantStyles[variant] || variantStyles.default;
+
+  const rarityPalette = useMemo(() => {
+    if (!rarityColor) return null;
+    const rgb = hexToRgb(rarityColor);
+    if (!rgb) return null;
+    const lightRgb = mixWithWhite(rgb, 0.45);
+    const softRgb = mixWithWhite(rgb, 0.7);
+    return {
+      border: rgbToRgbaString(rgb, 0.55),
+      borderHover: rgbToRgbaString(rgb, 0.75),
+      shadowSoft: rgbToRgbaString(rgb, 0.28),
+      shadowStrong: rgbToRgbaString(rgb, 0.42),
+      overlayAccent: rgbToRgbaString(rgb, 0.38),
+      overlaySoft: rgbToRgbaString(lightRgb, 0.3),
+      overlayTint: rgbToRgbaString(softRgb, 0.2),
+    };
+  }, [rarityColor]);
 
   // Crear URL con cache busting para forzar recarga en móviles
   const cacheBust = useMemo(() => Date.now(), []);
@@ -73,9 +124,11 @@ const Tarjeta = ({
   `;
 
   const cursorClass = interactive ? 'cursor-pointer' : 'cursor-default';
-  const hoverBackgroundClass = 'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
+  const hoverBackgroundClass = rarityPalette
+    ? ''
+    : 'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
   const transformClass = interactive && hoverTransforms ? 'transform hover:-translate-y-1 hover:scale-[1.015]' : '';
-  const glowClass = interactive ? style.glow : '';
+  const glowClass = interactive && !rarityPalette ? style.glow : '';
 
   const cardClasses = `
     ${baseClasses}
@@ -83,7 +136,7 @@ const Tarjeta = ({
     ${hoverBackgroundClass}
     ${transformClass}
     ${glowClass}
-    ${style.border}
+    ${rarityPalette ? 'border-transparent' : style.border}
     ${className}
     ${
       variant === 'magic'
@@ -92,7 +145,7 @@ const Tarjeta = ({
     }
   `;
 
-  const cardStyle = variant === 'magic'
+  const baseCardStyle = variant === 'magic'
     ? {
         boxShadow: isHovered
           ? '0 22px 45px -18px rgba(250, 204, 21, 0.45), 0 14px 44px rgba(56, 189, 248, 0.25)'
@@ -126,7 +179,17 @@ const Tarjeta = ({
     if (interactive) setIsHovered(false);
   };
 
-  const combinedStyle = { ...cardStyle, ...externalStyle };
+  const combinedStyle = { ...baseCardStyle, ...externalStyle };
+
+  if (rarityPalette) {
+    combinedStyle.borderColor = isHovered
+      ? rarityPalette.borderHover
+      : rarityPalette.border;
+    combinedStyle.boxShadow = isHovered
+      ? `0 18px 36px ${rarityPalette.shadowStrong}`
+      : `0 12px 28px ${rarityPalette.shadowSoft}`;
+    combinedStyle.transition = 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease';
+  }
 
   return (
     <div
@@ -139,7 +202,23 @@ const Tarjeta = ({
       {...props}
     >
       {/* Gradient overlay */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} ${variant === 'magic' ? 'opacity-50' : 'opacity-20'} pointer-events-none`} />
+      <div
+        className={`absolute inset-0 pointer-events-none ${
+          rarityPalette
+            ? 'transition-opacity duration-300'
+            : `bg-gradient-to-br ${style.gradient} ${
+                variant === 'magic' ? 'opacity-50' : 'opacity-20'
+              }`
+        }`}
+        style={
+          rarityPalette
+            ? {
+                backgroundImage: `radial-gradient(circle at 18% 16%, ${rarityPalette.overlayAccent}, transparent 58%), radial-gradient(circle at 82% 30%, ${rarityPalette.overlaySoft}, transparent 62%), linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.35)), linear-gradient(180deg, ${rarityPalette.overlayTint}, transparent)`,
+                opacity: isHovered ? 0.65 : 0.4,
+              }
+            : undefined
+        }
+      />
 
       {/* Animated border glow */}
       {/* {isHovered && (
@@ -239,7 +318,12 @@ Tarjeta.propTypes = {
   variant: PropTypes.string,
   interactive: PropTypes.bool,
   hoverTransforms: PropTypes.bool,
+  loading: PropTypes.bool,
+  onClick: PropTypes.func,
+  header: PropTypes.node,
+  footer: PropTypes.node,
   style: PropTypes.object,
+  rarityColor: PropTypes.string,
 };
 
 export default Tarjeta;

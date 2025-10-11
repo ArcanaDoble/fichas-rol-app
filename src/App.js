@@ -929,6 +929,13 @@ function App() {
     (data, list) => savePlayer(data, list),
     playerData
   );
+  const [rarities, setRarities] = useState([]);
+  const [newRarityData, setNewRarityData] = useState({
+    nombre: '',
+    color: '#7c3aed',
+  });
+  const [editingRarity, setEditingRarity] = useState(null);
+  const [rarityError, setRarityError] = useState('');
   const [newWeaponData, setNewWeaponData] = useState({
     nombre: '',
     dano: '',
@@ -941,6 +948,7 @@ function App() {
     tipoDano: '',
     valor: '',
     tecnologia: '',
+    rareza: '',
   });
   const [editingWeapon, setEditingWeapon] = useState(null);
   const [newWeaponError, setNewWeaponError] = useState('');
@@ -953,6 +961,7 @@ function App() {
     descripcion: '',
     valor: '',
     tecnologia: '',
+    rareza: '',
   });
   const [editingArmor, setEditingArmor] = useState(null);
   const [newArmorError, setNewArmorError] = useState('');
@@ -965,6 +974,7 @@ function App() {
     poder: '',
     rasgos: '',
     descripcion: '',
+    rareza: '',
   });
   const [editingAbility, setEditingAbility] = useState(null);
   const [newAbilityError, setNewAbilityError] = useState('');
@@ -1027,6 +1037,15 @@ function App() {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
+
+  const rarityColorMap = useMemo(() => {
+    return rarities.reduce((acc, rarity) => {
+      if (rarity?.nombre) {
+        acc[rarity.nombre] = normalizeHexColor(rarity.color, '#7c3aed');
+      }
+      return acc;
+    }, {});
+  }, [rarities]);
 
   useEffect(() => {
     setEnemyThemeColorDraft(
@@ -2679,6 +2698,29 @@ function App() {
       });
   }, [userType]);
   // ───────────────────────────────────────────────────────────
+  // FETCH RAREZAS
+  // ───────────────────────────────────────────────────────────
+  const fetchRarities = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, 'rarities'));
+      const datos = snap.docs.map((d) => {
+        const data = d.data() || {};
+        const nombre = data.nombre || d.id;
+        return {
+          nombre,
+          color: normalizeHexColor(data.color, '#7c3aed'),
+        };
+      });
+      datos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+      setRarities(datos);
+    } catch (e) {
+      // Error cargando rarezas
+    }
+  }, []);
+  useEffect(() => {
+    fetchRarities();
+  }, [fetchRarities]);
+  // ───────────────────────────────────────────────────────────
   // FETCH ARMAS
   // ───────────────────────────────────────────────────────────
   const [fetchArmasError, setFetchArmasError] = useState(false);
@@ -2717,6 +2759,12 @@ function App() {
               tipoDano: obj.TIPO_DAÑO || obj['TIPO DAÑO'] || 'físico',
               valor: obj.VALOR || '',
               tecnologia: obj.TECNOLOGÍA || '',
+              rareza:
+                obj.RAREZA ||
+                obj['RAREZA'] ||
+                obj.Rareza ||
+                obj.rareza ||
+                '',
               fuente: 'sheet',
             };
           });
@@ -2729,10 +2777,19 @@ function App() {
       }
       try {
         const snap = await getDocs(collection(db, 'weapons'));
-        const custom = snap.docs.map((d) => ({ ...d.data(), fuente: 'custom' }));
+        const custom = snap.docs.map((d) => ({
+          ...d.data(),
+          rareza: (d.data().rareza || '').trim(),
+          fuente: 'custom',
+        }));
         datos = [...datos, ...custom];
       } catch (e) {}
-      setArmas(datos);
+      setArmas(
+        datos.map((item) => ({
+          ...item,
+          rareza: (item.rareza || '').trim(),
+        }))
+      );
     } finally {
       setLoading(false);
     }
@@ -2776,6 +2833,12 @@ function App() {
               descripcion: obj.DESCRIPCIÓN || '',
               valor: obj.VALOR || '',
               tecnologia: obj.TECNOLOGÍA || '',
+              rareza:
+                obj.RAREZA ||
+                obj['RAREZA'] ||
+                obj.Rareza ||
+                obj.rareza ||
+                '',
               fuente: 'sheet',
             };
           });
@@ -2788,10 +2851,19 @@ function App() {
       }
       try {
         const snap = await getDocs(collection(db, 'armors'));
-        const custom = snap.docs.map((d) => ({ ...d.data(), fuente: 'custom' }));
+        const custom = snap.docs.map((d) => ({
+          ...d.data(),
+          rareza: (d.data().rareza || '').trim(),
+          fuente: 'custom',
+        }));
         datos = [...datos, ...custom];
       } catch (e) {}
-      setArmaduras(datos);
+      setArmaduras(
+        datos.map((item) => ({
+          ...item,
+          rareza: (item.rareza || '').trim(),
+        }))
+      );
     } finally {
       setLoading(false);
     }
@@ -2806,7 +2878,13 @@ function App() {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'abilities'));
-      const datos = snap.docs.map((d) => d.data());
+      const datos = snap.docs.map((d) => {
+        const data = d.data() || {};
+        return {
+          ...data,
+          rareza: (data.rareza || '').trim(),
+        };
+      });
       setHabilidades(datos);
     } catch (e) {
       // Error cargando habilidades
@@ -2835,6 +2913,7 @@ function App() {
     fetchEnemies();
   }, [fetchEnemies]);
   const refreshCatalog = () => {
+    fetchRarities();
     fetchArmas();
     fetchArmaduras();
     fetchHabilidades();
@@ -3105,6 +3184,50 @@ function App() {
     setResourcesList(newList);
     savePlayer(playerData, newList);
   };
+  const agregarRareza = async () => {
+    const nombre = newRarityData.nombre.trim();
+    if (!nombre) {
+      setRarityError('Nombre requerido');
+      return;
+    }
+    const color = normalizeHexColor(newRarityData.color, '#7c3aed');
+    try {
+      if (editingRarity && editingRarity !== nombre) {
+        await deleteDoc(doc(db, 'rarities', editingRarity));
+      }
+      await setDoc(doc(db, 'rarities', nombre), {
+        nombre,
+        color,
+      });
+      setEditingRarity(null);
+      setNewRarityData({ nombre: '', color: '#7c3aed' });
+      setRarityError('');
+      fetchRarities();
+    } catch (e) {
+      setRarityError('Error al guardar');
+    }
+  };
+  const startEditRarity = (rarity) => {
+    if (!rarity) return;
+    setEditingRarity(rarity.nombre);
+    setNewRarityData({
+      nombre: rarity.nombre || '',
+      color: normalizeHexColor(rarity.color, '#7c3aed'),
+    });
+    setRarityError('');
+  };
+  const deleteRarity = async (name) => {
+    try {
+      await deleteDoc(doc(db, 'rarities', name));
+      if (editingRarity === name) {
+        setEditingRarity(null);
+        setNewRarityData({ nombre: '', color: '#7c3aed' });
+      }
+      fetchRarities();
+    } catch (e) {
+      // Error al eliminar rareza
+    }
+  };
   const agregarArma = async () => {
     const { nombre } = newWeaponData;
     if (!nombre.trim()) {
@@ -3117,6 +3240,7 @@ function App() {
       }
       const dataToSave = {
         ...newWeaponData,
+        rareza: (newWeaponData.rareza || '').trim(),
         rasgos: (newWeaponData.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -3136,6 +3260,7 @@ function App() {
         tipoDano: '',
         valor: '',
         tecnologia: '',
+        rareza: '',
       });
       setNewWeaponError('');
       fetchArmas();
@@ -3149,6 +3274,7 @@ function App() {
       rasgos: Array.isArray(weapon.rasgos)
         ? weapon.rasgos.join(', ')
         : weapon.rasgos || '',
+      rareza: weapon.rareza || '',
     });
     setEditingWeapon(weapon.nombre);
   };
@@ -3165,11 +3291,12 @@ function App() {
           cargaFisica: '',
           cargaMental: '',
           rasgos: '',
-          descripcion: '',
-          tipoDano: '',
-          valor: '',
-          tecnologia: '',
-        });
+        descripcion: '',
+        tipoDano: '',
+        valor: '',
+        tecnologia: '',
+        rareza: '',
+      });
       }
       fetchArmas();
     } catch (e) {}
@@ -3186,6 +3313,7 @@ function App() {
       }
       const dataToSave = {
         ...newArmorData,
+        rareza: (newArmorData.rareza || '').trim(),
         rasgos: (newArmorData.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -3202,6 +3330,7 @@ function App() {
         descripcion: '',
         valor: '',
         tecnologia: '',
+        rareza: '',
       });
       setNewArmorError('');
       fetchArmaduras();
@@ -3215,6 +3344,7 @@ function App() {
       rasgos: Array.isArray(armor.rasgos)
         ? armor.rasgos.join(', ')
         : armor.rasgos || '',
+      rareza: armor.rareza || '',
     });
     setEditingArmor(armor.nombre);
   };
@@ -3228,11 +3358,12 @@ function App() {
           defensa: '',
           cargaFisica: '',
           cargaMental: '',
-          rasgos: '',
-          descripcion: '',
-          valor: '',
-          tecnologia: '',
-        });
+        rasgos: '',
+        descripcion: '',
+        valor: '',
+        tecnologia: '',
+        rareza: '',
+      });
       }
       fetchArmaduras();
     } catch (e) {}
@@ -3249,6 +3380,7 @@ function App() {
       }
       const dataToSave = {
         ...newAbility,
+        rareza: (newAbility.rareza || '').trim(),
         rasgos: (newAbility.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -3265,6 +3397,7 @@ function App() {
         poder: '',
         rasgos: '',
         descripcion: '',
+        rareza: '',
       });
       setNewAbilityError('');
       fetchHabilidades();
@@ -3278,6 +3411,7 @@ function App() {
       rasgos: Array.isArray(ability.rasgos)
         ? ability.rasgos.join(', ')
         : ability.rasgos || '',
+      rareza: ability.rareza || '',
     });
     setEditingAbility(ability.nombre);
   };
@@ -3291,10 +3425,11 @@ function App() {
           alcance: '',
           consumo: '',
           cuerpo: '',
-          mente: '',
-          poder: '',
-          descripcion: '',
-        });
+        mente: '',
+        poder: '',
+        descripcion: '',
+        rareza: '',
+      });
       }
       fetchHabilidades();
     } catch (e) {}
@@ -5236,6 +5371,7 @@ function App() {
                       key={i}
                       variant="weapon"
                       className="w-full flex flex-col items-center text-center"
+                      rarityColor={rarityColorMap[a.rareza]}
                     >
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p>
@@ -5348,6 +5484,7 @@ function App() {
                       key={i}
                       variant="armor"
                       className="w-full flex flex-col items-center text-center"
+                      rarityColor={rarityColorMap[a.rareza]}
                     >
                       <p className="font-bold text-lg">{a.nombre}</p>
                       <p>
@@ -5455,6 +5592,7 @@ function App() {
                       key={i}
                       variant="power"
                       className="w-full flex flex-col items-center text-center"
+                      rarityColor={rarityColorMap[p.rareza]}
                     >
                       <p className="font-bold text-lg">{p.nombre}</p>
                       <p>
@@ -6580,7 +6718,12 @@ function App() {
                   <h4 className="font-medium mb-2">Armas Equipadas</h4>
                   <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.weapons.map((weapon, index) => (
-                      <Tarjeta key={index} variant="weapon" className="text-sm">
+                      <Tarjeta
+                        key={index}
+                        variant="weapon"
+                        className="text-sm"
+                        rarityColor={rarityColorMap[weapon.rareza]}
+                      >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -6664,7 +6807,12 @@ function App() {
                   <h4 className="font-medium mb-2">Armaduras Equipadas</h4>
                   <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.armaduras.map((armor, index) => (
-                      <Tarjeta key={index} variant="armor" className="text-sm">
+                      <Tarjeta
+                        key={index}
+                        variant="armor"
+                        className="text-sm"
+                        rarityColor={rarityColorMap[armor.rareza]}
+                      >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -6739,7 +6887,12 @@ function App() {
                   <h4 className="font-medium mb-2">Poderes Equipados</h4>
                   <div className="grid grid-cols-1 gap-2 mb-2">
                     {newEnemy.poderes.map((power, index) => (
-                      <Tarjeta key={index} variant="power" className="text-sm">
+                      <Tarjeta
+                        key={index}
+                        variant="power"
+                        className="text-sm"
+                        rarityColor={rarityColorMap[power.rareza]}
+                      >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -7198,6 +7351,129 @@ function App() {
         </Collapsible>
         <Collapsible
           title={
+            editingRarity
+              ? `Editar rareza: ${editingRarity}`
+              : 'Gestionar rarezas'
+          }
+          defaultOpen={false}
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  Nombre
+                </label>
+                <Input
+                  placeholder="Nombre"
+                  value={newRarityData.nombre}
+                  onChange={(e) =>
+                    setNewRarityData((data) => ({
+                      ...data,
+                      nombre: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  Color
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={normalizeHexColor(newRarityData.color, '#7c3aed')}
+                    onChange={(e) =>
+                      setNewRarityData((data) => ({
+                        ...data,
+                        color: e.target.value,
+                      }))
+                    }
+                    className="w-12 h-10 border-0 rounded cursor-pointer"
+                  />
+                  <Input
+                    value={newRarityData.color}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
+                        setNewRarityData((data) => ({ ...data, color: value }));
+                      }
+                    }}
+                    placeholder="#7c3aed"
+                  />
+                </div>
+              </div>
+            </div>
+            {rarityError && (
+              <p className="text-red-400 text-center text-sm">{rarityError}</p>
+            )}
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
+              {editingRarity && (
+                <Boton
+                  color="gray"
+                  onClick={() => {
+                    setEditingRarity(null);
+                    setNewRarityData({ nombre: '', color: '#7c3aed' });
+                    setRarityError('');
+                  }}
+                >
+                  Cancelar
+                </Boton>
+              )}
+              <Boton color="green" onClick={agregarRareza}>
+                {editingRarity ? 'Actualizar' : 'Guardar'} rareza
+              </Boton>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-gray-200 mb-2">
+                Rarezas creadas
+              </h4>
+              {rarities.length === 0 ? (
+                <p className="text-gray-400 text-sm">
+                  Aún no has definido rarezas personalizadas.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {rarities.map((rarity) => (
+                    <li
+                      key={`rarity-${rarity.nombre}`}
+                      className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="w-6 h-6 rounded-full border border-white/20 shadow"
+                          style={{ background: rarity.color }}
+                        />
+                        <span className="font-semibold text-white">
+                          {rarity.nombre}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Boton
+                          color="blue"
+                          size="sm"
+                          onClick={() => startEditRarity(rarity)}
+                          className="px-2 py-1 text-xs"
+                        >
+                          Editar
+                        </Boton>
+                        <Boton
+                          color="red"
+                          size="sm"
+                          onClick={() => deleteRarity(rarity.nombre)}
+                          className="px-2 py-1 text-xs"
+                        >
+                          Borrar
+                        </Boton>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </Collapsible>
+        <Collapsible
+          title={
             editingWeapon
               ? `Editar arma: ${editingWeapon}`
               : 'Crear nueva arma'
@@ -7275,6 +7551,25 @@ function App() {
                 setNewWeaponData((w) => ({ ...w, tecnologia: e.target.value }))
               }
             />
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-1">
+                Rareza
+              </label>
+              <select
+                value={newWeaponData.rareza}
+                onChange={(e) =>
+                  setNewWeaponData((w) => ({ ...w, rareza: e.target.value }))
+                }
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="">Sin rareza</option>
+                {rarities.map((rarity) => (
+                  <option key={`weapon-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                    {rarity.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
@@ -7376,6 +7671,25 @@ function App() {
                 setNewArmorData((a) => ({ ...a, tecnologia: e.target.value }))
               }
             />
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-1">
+                Rareza
+              </label>
+              <select
+                value={newArmorData.rareza}
+                onChange={(e) =>
+                  setNewArmorData((a) => ({ ...a, rareza: e.target.value }))
+                }
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="">Sin rareza</option>
+                {rarities.map((rarity) => (
+                  <option key={`armor-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                    {rarity.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
@@ -7474,6 +7788,25 @@ function App() {
                 setNewAbility((a) => ({ ...a, poder: e.target.value }))
               }
             />
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-1">
+                Rareza
+              </label>
+              <select
+                value={newAbility.rareza}
+                onChange={(e) =>
+                  setNewAbility((a) => ({ ...a, rareza: e.target.value }))
+                }
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="">Sin rareza</option>
+                {rarities.map((rarity) => (
+                  <option key={`power-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                    {rarity.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
@@ -7539,7 +7872,11 @@ function App() {
                         defaultOpen={true}
                       >
                         {armasFiltradas.map((a, i) => (
-                          <Tarjeta key={`arma-${i}`} variant="weapon">
+                          <Tarjeta
+                            key={`arma-${i}`}
+                            variant="weapon"
+                            rarityColor={rarityColorMap[a.rareza]}
+                          >
                             <p className="font-bold text-lg">{a.nombre}</p>
                             <p>
                               <strong>Daño:</strong> {dadoIcono()} {a.dano}{' '}
@@ -7629,7 +7966,11 @@ function App() {
                         defaultOpen={true}
                       >
                         {armadurasFiltradas.map((a, i) => (
-                          <Tarjeta key={`armadura-${i}`} variant="armor">
+                          <Tarjeta
+                            key={`armadura-${i}`}
+                            variant="armor"
+                            rarityColor={rarityColorMap[a.rareza]}
+                          >
                             <p className="font-bold text-lg">{a.nombre}</p>
                             <p>
                               <strong>Defensa:</strong> {a.defensa}
@@ -7712,7 +8053,11 @@ function App() {
                         defaultOpen={true}
                       >
                         {habilidadesFiltradas.map((h, i) => (
-                          <Tarjeta key={`hab-${i}`} variant="power">
+                          <Tarjeta
+                            key={`hab-${i}`}
+                            variant="power"
+                            rarityColor={rarityColorMap[h.rareza]}
+                          >
                             <p className="font-bold text-lg">{h.nombre}</p>
                             <p>
                               <strong>Alcance:</strong> {h.alcance}
