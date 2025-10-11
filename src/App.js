@@ -57,6 +57,7 @@ import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
+import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
@@ -786,7 +787,6 @@ function App() {
   const [playerName, setPlayerName] = useState('');
   const [nameEntered, setNameEntered] = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
-  const tooltipCounterRef = useRef(0);
   const [playerData, setPlayerData] = useState({
     weapons: [],
     armaduras: [],
@@ -3983,55 +3983,76 @@ function App() {
   // (ahora gestionados por el hook useGlossary)
 
   const highlightText = (text) => {
-    if (!text) return text;
+    if (!text || !glossary || glossary.length === 0) return text;
+
     let parts = [text];
+
     glossary.forEach((term) => {
-      const regex = new RegExp(`(${term.word})`, 'gi');
+      if (!term?.word) return;
+
+      const tooltipId = getGlossaryTooltipId(term.word);
+      const escapedWord = escapeGlossaryWord(term.word);
+
+      if (!escapedWord) return;
+
+      const regex = new RegExp(`(${escapedWord})`, 'gi');
+      let matchIndex = 0;
+
       parts = parts.flatMap((part) => {
         if (typeof part !== 'string') return [part];
-        return part.split(regex).map((p, i) => {
-          if (p.toLowerCase() === term.word.toLowerCase()) {
-            const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
+
+        return part.split(regex).map((segment) => {
+          if (
+            segment &&
+            segment.toLowerCase() === term.word.toLowerCase()
+          ) {
+            const key = `${tooltipId}-${matchIndex++}`;
+
             return (
-              <React.Fragment key={id}>
-                <span
-                  style={{ color: term.color }}
-                  className="font-bold cursor-help underline decoration-dotted"
-                  data-tooltip-id={id}
-                  data-tooltip-content={term.info}
-                >
-                  {p}
-                </span>
-                <Tooltip
-                  id={id}
-                  place="top"
-                  className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
-                  openOnClick={isTouchDevice}
-                />
-              </React.Fragment>
+              <span
+                key={key}
+                style={{ color: term.color }}
+                className="font-bold cursor-help underline decoration-dotted"
+                data-tooltip-id={tooltipId}
+                data-tooltip-content={term.info}
+              >
+                {segment}
+              </span>
             );
           }
-          return p;
+
+          return segment;
         });
       });
     });
+
     return parts;
   };
 
   // Renderizar tooltips por separado para evitar errores de hidratación
   const renderTooltips = () => {
-    return glossary.map((term) => {
-      const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
-      return (
-        <Tooltip
-          key={id}
-          id={id}
-          place="top"
-          className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
-          openOnClick={isTouchDevice}
-        />
-      );
-    });
+    const seen = new Set();
+
+    return glossary
+      .map((term) => {
+        if (!term?.word) return null;
+
+        const tooltipId = getGlossaryTooltipId(term.word);
+
+        if (seen.has(tooltipId)) return null;
+        seen.add(tooltipId);
+
+        return (
+          <Tooltip
+            key={tooltipId}
+            id={tooltipId}
+            place="top"
+            className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
+            openOnClick={isTouchDevice}
+          />
+        );
+      })
+      .filter(Boolean);
   };
 
   const dadoIcono = () => <BsDice6 className="inline" />;

@@ -340,6 +340,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                     <TarjetaCard
                       key={index}
                       variant="weapon"
+                      interactive={false}
                       className="w-full flex flex-col items-start text-left text-sm"
                     >
                       <p className="font-semibold text-base mb-2">{weapon.nombre}</p>
@@ -378,6 +379,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                     <TarjetaCard
                       key={index}
                       variant="armor"
+                      interactive={false}
                       className="w-full flex flex-col items-start text-left text-sm"
                     >
                       <p className="font-semibold text-base mb-2">{armor.nombre}</p>
@@ -409,6 +411,7 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                     <TarjetaCard
                       key={index}
                       variant="power"
+                      interactive={false}
                       className="w-full flex flex-col items-start text-left text-sm"
                     >
                       <p className="font-semibold text-base mb-2">{power.nombre}</p>

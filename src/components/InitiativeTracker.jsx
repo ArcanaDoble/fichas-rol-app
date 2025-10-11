@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
+import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 
 // Detectar dispositivo táctil
 const isTouchDevice = typeof window !== 'undefined' &&
@@ -112,7 +113,6 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
   const [isEditing, setIsEditing] = useState(false);
   const [enemyModifications, setEnemyModifications] = useState({});
   const [activeTooltip, setActiveTooltip] = useState(null);
-  const tooltipCounterRef = useRef(0);
 
   // Debug: Verificar que el glosario se recibe correctamente
   useEffect(() => {
@@ -364,41 +364,75 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
   // Función para destacar palabras del glosario
   const highlightText = (text) => {
     if (!text || !glossary || glossary.length === 0) return text;
-    
+
     let parts = [text];
-    glossary.forEach(term => {
-      const regex = new RegExp(`(${term.word})`, 'gi');
-      parts = parts.flatMap(part => {
+
+    glossary.forEach((term) => {
+      if (!term?.word) return;
+
+      const tooltipId = getGlossaryTooltipId(term.word);
+      const escapedWord = escapeGlossaryWord(term.word);
+
+      if (!escapedWord) return;
+
+      const regex = new RegExp(`(${escapedWord})`, 'gi');
+      let matchIndex = 0;
+
+      parts = parts.flatMap((part) => {
         if (typeof part !== 'string') return [part];
-        return part.split(regex).map((p, i) => {
-          if (p.toLowerCase() === term.word.toLowerCase()) {
-            const id = `gloss-${term.word}-${tooltipCounterRef.current++}`;
+
+        return part.split(regex).map((segment) => {
+          if (
+            segment &&
+            segment.toLowerCase() === term.word.toLowerCase()
+          ) {
+            const key = `${tooltipId}-${matchIndex++}`;
+
             return (
-              <React.Fragment key={id}>
-                <span
-                  style={{ color: term.color }}
-                  className="font-bold cursor-help underline decoration-dotted"
-                  data-tooltip-id={id}
-                  data-tooltip-content={term.info}
-                >
-                  {p}
-                </span>
-                <Tooltip
-                  id={id}
-                  place="top"
-                  className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
-                  openOnClick={isTouchDevice}
-                  delayShow={0}
-                  delayHide={0}
-                />
-              </React.Fragment>
+              <span
+                key={key}
+                style={{ color: term.color }}
+                className="font-bold cursor-help underline decoration-dotted"
+                data-tooltip-id={tooltipId}
+                data-tooltip-content={term.info}
+              >
+                {segment}
+              </span>
             );
           }
-          return p;
+
+          return segment;
         });
       });
     });
+
     return parts;
+  };
+
+  const renderGlossaryTooltips = () => {
+    const seen = new Set();
+
+    return glossary
+      .map((term) => {
+        if (!term?.word) return null;
+
+        const tooltipId = getGlossaryTooltipId(term.word);
+        if (seen.has(tooltipId)) return null;
+        seen.add(tooltipId);
+
+        return (
+          <Tooltip
+            key={tooltipId}
+            id={tooltipId}
+            place="top"
+            className="max-w-[90vw] sm:max-w-xs whitespace-pre-line"
+            openOnClick={isTouchDevice}
+            delayShow={0}
+            delayHide={0}
+          />
+        );
+      })
+      .filter(Boolean);
   };
 
   if (loading) {
@@ -1286,6 +1320,7 @@ const InitiativeTracker = ({ playerName, isMaster, enemies = [], glossary = [], 
           </div>
         )}
       </div>
+      {renderGlossaryTooltips()}
     </div>
   );
 };
