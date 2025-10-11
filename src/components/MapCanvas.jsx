@@ -2393,11 +2393,11 @@ const MapCanvas = ({
   );
 
   // Función para convertir posición de pantalla a coordenadas del mapa
-  const screenToMapCoordinates = (screenX, screenY) => {
+  function screenToMapCoordinates(screenX, screenY) {
     const relX = (screenX - groupPos.x) / (baseScale * zoom);
     const relY = (screenY - groupPos.y) / (baseScale * zoom);
     return { x: relX, y: relY };
-  };
+  }
 
   // Función para ajustar coordenadas a la grilla
   const snapToGrid = (x, y) => {
