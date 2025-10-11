@@ -1,6 +1,13 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { FiMousePointer, FiEdit2, FiType, FiUsers, FiShield } from 'react-icons/fi';
+import {
+  FiMousePointer,
+  FiEdit2,
+  FiType,
+  FiUsers,
+  FiShield,
+  FiImage,
+} from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
 import { GiBrickWall, GiCrosshair } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -120,6 +127,17 @@ const Toolbar = ({
       <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
         <div className="text-xs text-gray-300 font-medium">Capas</div>
         <div className="flex flex-col items-center space-y-1">
+          <button
+            onClick={() => onLayerChange && onLayerChange('tiles')}
+            className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${
+              activeLayer === 'tiles' ? 'bg-blue-600' : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+            title="Capa de Tiles"
+          >
+            <FiImage className="text-sm" />
+          </button>
+          <div className="text-xs text-gray-300">Tiles</div>
+
           <button
             onClick={() => onLayerChange && onLayerChange('fichas')}
             className={`w-10 h-10 flex flex-col items-center justify-center rounded transition-colors ${

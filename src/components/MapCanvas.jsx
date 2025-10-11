@@ -316,6 +316,18 @@ const EstadoImg = ({ src, ...props }) => {
 EstadoImg.propTypes = {
   src: PropTypes.string.isRequired,
 };
+
+const TileImage = forwardRef(({ url, ...props }, ref) => {
+  const [img] = useImage(url, 'anonymous');
+  if (!img) return null;
+  return <KonvaImage ref={ref} image={img} {...props} />;
+});
+
+TileImage.displayName = 'TileImage';
+
+TileImage.propTypes = {
+  url: PropTypes.string.isRequired,
+};
 const Token = forwardRef(
   (
     {
@@ -932,6 +944,8 @@ const MapCanvas = ({
   scaleMode = 'contain',
   tokens,
   onTokensChange,
+  tiles: propTiles = [],
+  onTilesChange = () => {},
   enemies = [],
   onEnemyUpdate,
   players = [],
@@ -1070,6 +1084,7 @@ const MapCanvas = ({
     migrateTokens();
   }, [pageId]);
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedTileId, setSelectedTileId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
   const [damageEffects, setDamageEffects] = useState(new Map());
@@ -1143,6 +1158,7 @@ const MapCanvas = ({
     return 'ft';
   });
   const [texts, setTexts] = useState(propTexts);
+  const [tiles, setTiles] = useState(propTiles);
   const [showGrid, setShowGrid] = useState(Boolean(propShowGrid));
   const [gridColor, setGridColor] = useState(propGridColor);
   const [gridOpacity, setGridOpacity] = useState(() => {
@@ -1303,6 +1319,7 @@ const MapCanvas = ({
       lines: null,
       walls: null,
       texts: null,
+      tiles: null,
     };
     let pendingTokenChanges = [];
     const normalizeUpdatedAt = (value) => {
@@ -1376,6 +1393,7 @@ const MapCanvas = ({
       lines: [],
       walls: [],
       texts: [],
+      tiles: [],
     };
 
     const flushPendingTokens = async () => {
@@ -1782,6 +1800,21 @@ const MapCanvas = ({
     onWallsChange(newWalls);
   }, [isPlayerView, syncManager, onWallsChange]);
 
+  const handleTilesChange = useCallback((newTiles) => {
+    if (isPlayerView && syncManager) {
+      syncManager.saveToFirebase('tiles', newTiles);
+    }
+    onTilesChange(newTiles);
+  }, [isPlayerView, syncManager, onTilesChange]);
+
+  const updateTiles = useCallback((updater) => {
+    setTiles((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      handleTilesChange(next);
+      return next;
+    });
+  }, [handleTilesChange]);
+
   const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
   const [tokenSwitcherPos, setTokenSwitcherPos] = useState(() => {
@@ -1898,24 +1931,50 @@ const MapCanvas = ({
         } else {
           // Elementos de otras capas - opacidad reducida según la capa actual
           let opacity = 1;
+          let shouldShow = false;
 
-          if (activeLayer === 'master') {
-            // Capa Master ve Fichas con opacidad reducida
+          if (elementLayer === 'tiles') {
+            opacity = activeLayer === 'tiles' ? 1 : 0.9;
+            shouldShow = true;
+          } else if (activeLayer === 'tiles') {
             if (elementLayer === 'fichas') {
-              opacity = 0.4; // Un poco más visible para mejor referencia
+              opacity = 0.4;
+              shouldShow = true;
+            } else if (elementLayer === 'master') {
+              opacity = 0.35;
+              shouldShow = true;
+            } else if (elementLayer === 'luz') {
+              opacity = 0.3;
+              shouldShow = true;
+            }
+          } else if (activeLayer === 'master') {
+            if (elementLayer === 'fichas') {
+              opacity = 0.4;
+              shouldShow = true;
+            } else if (elementLayer === 'tiles') {
+              opacity = 0.9;
+              shouldShow = true;
             }
           } else if (activeLayer === 'luz') {
-            // Capa Luz ve Master y Fichas con opacidad reducida
             if (elementLayer === 'master') {
-              opacity = 0.35; // Master un poco más visible que Fichas
+              opacity = 0.35;
+              shouldShow = true;
             } else if (elementLayer === 'fichas') {
-              opacity = 0.25; // Fichas más tenue
+              opacity = 0.25;
+              shouldShow = true;
+            } else if (elementLayer === 'tiles') {
+              opacity = 0.9;
+              shouldShow = true;
             }
+          } else if (elementLayer === 'tiles') {
+            opacity = 0.9;
+            shouldShow = true;
           }
 
-          // Solo agregar si debe ser visible (Fichas no ve otras capas)
-          if (activeLayer !== 'fichas' && opacity < 1) {
+          if (shouldShow && opacity < 1) {
             background.push({ ...element, crossLayerOpacity: opacity, isBackground: true });
+          } else if (shouldShow) {
+            visible.push({ ...element, crossLayerOpacity: opacity, isBackground: elementLayer !== activeLayer });
           }
         }
       });
@@ -1930,11 +1989,19 @@ const MapCanvas = ({
   const lineLayers = useMemo(() => getVisibleElements(lines), [lines, getVisibleElements]);
   const wallLayers = useMemo(() => getVisibleElements(walls), [walls, getVisibleElements]);
   const textLayers = useMemo(() => getVisibleElements(texts), [texts, getVisibleElements]);
+  const tileLayers = useMemo(
+    () => getVisibleElements(tiles.map((tile) => ({ ...tile, layer: tile.layer || 'tiles' }))),
+    [tiles, getVisibleElements]
+  );
 
   // Combinar elementos principales y de fondo
   const filteredTokens = useMemo(
     () => [...tokenLayers.background, ...tokenLayers.visible],
     [tokenLayers.background, tokenLayers.visible]
+  );
+  const filteredTiles = useMemo(
+    () => [...tileLayers.background, ...tileLayers.visible],
+    [tileLayers.background, tileLayers.visible]
   );
   const filteredLines = useMemo(
     () => [...lineLayers.background, ...lineLayers.visible],
@@ -1948,6 +2015,37 @@ const MapCanvas = ({
     () => [...textLayers.background, ...textLayers.visible],
     [textLayers.background, textLayers.visible]
   );
+
+  useEffect(() => {
+    const ids = new Set(tiles.map((tile) => String(tile.id)));
+    Object.keys(tileRefs.current).forEach((id) => {
+      if (!ids.has(id)) {
+        delete tileRefs.current[id];
+      }
+    });
+    if (selectedTileId != null && !ids.has(String(selectedTileId))) {
+      setSelectedTileId(null);
+    }
+  }, [tiles, selectedTileId]);
+
+  useEffect(() => {
+    const tr = tileTrRef.current;
+    if (!tr) return;
+    if (
+      selectedTileId != null &&
+      activeTool === 'select' &&
+      activeLayer === 'tiles'
+    ) {
+      const node = tileRefs.current[selectedTileId];
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
+    }
+    tr.nodes([]);
+    tr.getLayer()?.batchDraw();
+  }, [selectedTileId, activeLayer, activeTool, filteredTiles]);
 
   useEffect(() => {
     setPendingTokenPositions((prev) => {
@@ -1977,6 +2075,7 @@ const MapCanvas = ({
     setSelectedLineId(null);
     setSelectedWallId(null);
     setSelectedTextId(null);
+    setSelectedTileId(null);
     clearMultiSelection();
   };
 
@@ -1993,6 +2092,8 @@ const MapCanvas = ({
         return element.createdBy === playerName || !element.createdBy; // Permitir muros sin creador por compatibilidad
       case 'text':
         return element.createdBy === playerName || !element.createdBy; // Permitir textos sin creador por compatibilidad
+      case 'tile':
+        return element.createdBy === playerName || !element.createdBy;
       default:
         return false;
     }
@@ -2004,6 +2105,7 @@ const MapCanvas = ({
     setSelectedLines([]);
     setSelectedWalls([]);
     setSelectedTexts([]);
+    setSelectedTileId(null);
   };
 
   const clearAllSelections = () => {
@@ -2021,6 +2123,63 @@ const MapCanvas = ({
            point.y >= rect.y &&
            point.y <= rect.y + rect.height;
   };
+
+  const handleTileDragStart = useCallback((tileId) => {
+    setSelectedTileId(tileId);
+    setSelectedId(null);
+    setSelectedLineId(null);
+    setSelectedWallId(null);
+    setSelectedTextId(null);
+    setSelectedTokens([]);
+    setSelectedLines([]);
+    setSelectedWalls([]);
+    setSelectedTexts([]);
+  }, []);
+
+  const handleTileDragEnd = useCallback(
+    (tileId, node) => {
+      if (!node) return;
+      const nextX = (node.x() - gridOffsetX) / effectiveGridSize;
+      const nextY = (node.y() - gridOffsetY) / effectiveGridSize;
+      updateTiles((prev) =>
+        prev.map((tile) =>
+          String(tile.id) === String(tileId)
+            ? { ...tile, x: nextX, y: nextY }
+            : tile
+        )
+      );
+    },
+    [gridOffsetX, gridOffsetY, effectiveGridSize, updateTiles]
+  );
+
+  const handleTileTransformEnd = useCallback(
+    (tileId) => {
+      const node = tileRefs.current[String(tileId)];
+      if (!node) return;
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      const nextWidth = (node.width() * scaleX) / effectiveGridSize;
+      const nextHeight = (node.height() * scaleY) / effectiveGridSize;
+      node.scaleX(1);
+      node.scaleY(1);
+      const nextX = (node.x() - gridOffsetX) / effectiveGridSize;
+      const nextY = (node.y() - gridOffsetY) / effectiveGridSize;
+      updateTiles((prev) =>
+        prev.map((tile) =>
+          String(tile.id) === String(tileId)
+            ? {
+                ...tile,
+                x: nextX,
+                y: nextY,
+                width: nextWidth,
+                height: nextHeight,
+              }
+            : tile
+        )
+      );
+    },
+    [effectiveGridSize, gridOffsetX, gridOffsetY, updateTiles]
+  );
 
   // Función para convertir posición de pantalla a coordenadas del mapa
   const screenToMapCoordinates = (screenX, screenY) => {
@@ -2196,6 +2355,8 @@ const MapCanvas = ({
   }, [walls, activeLayer, handleWallsChange]);
 
 
+  const tileRefs = useRef({});
+  const tileTrRef = useRef();
   const tokenRefs = useRef({});
   const lineRefs = useRef({});
   const wallRefs = useRef({});
@@ -2229,6 +2390,10 @@ const MapCanvas = ({
   useEffect(() => {
     setTexts(propTexts);
   }, [propTexts]);
+
+  useEffect(() => {
+    setTiles(propTiles);
+  }, [propTiles]);
 
   const prevBarsRef = useRef({});
   useEffect(() => {
@@ -3772,6 +3937,7 @@ const MapCanvas = ({
         setSelectedLineId(null);
         setSelectedWallId(null);
         setSelectedTextId(null);
+        setSelectedTileId(null);
         clearMultiSelection();
       }
     }
@@ -4460,7 +4626,27 @@ const MapCanvas = ({
         const cellY = pxToCell(relY, gridOffsetY);
         const x = Math.max(0, Math.min(mapWidth - 1, cellX));
         const y = Math.max(0, Math.min(mapHeight - 1, cellY));
-        
+
+        if (activeLayer === 'tiles') {
+          const creator = playerName || (userType === 'master' ? 'master' : '');
+          const newTile = {
+            id: nanoid(),
+            x,
+            y,
+            width: item.widthCells ?? 1,
+            height: item.heightCells ?? 1,
+            url: item.url,
+            name: item.name || '',
+            rotation: 0,
+            opacity: 1,
+            layer: 'tiles',
+            ...(creator ? { createdBy: creator } : {}),
+          };
+          updateTiles((prev) => [...prev, newTile]);
+          setSelectedTileId(newTile.id);
+          return;
+        }
+
         // Verificar colisiones con muros antes de crear el token
         if (isPositionBlocked(x, y)) {
           // Si la posición está bloqueada, no crear el token
@@ -4508,6 +4694,9 @@ const MapCanvas = ({
       gridOffsetY,
       activeLayer,
       isPositionBlocked,
+      updateTiles,
+      playerName,
+      userType,
     ]
   );
 
@@ -4558,6 +4747,70 @@ const MapCanvas = ({
                   listening={false}
                 />
               )}
+              {filteredTiles.map((tile) => {
+                if (!tile?.url) return null;
+                const widthCells = tile.width ?? tile.w ?? 1;
+                const heightCells = tile.height ?? tile.h ?? 1;
+                const tileX = cellToPx(tile.x ?? 0, gridOffsetX);
+                const tileY = cellToPx(tile.y ?? 0, gridOffsetY);
+                const isEditable =
+                  !tile.isBackground &&
+                  activeLayer === 'tiles' &&
+                  canSelectElement(tile, 'tile');
+                const opacity = (tile.opacity ?? 1) * (tile.crossLayerOpacity ?? 1);
+                return (
+                  <TileImage
+                    key={`tile-${tile.id}`}
+                    ref={(node) => {
+                      if (tile.isBackground) return;
+                      if (node) {
+                        tileRefs.current[String(tile.id)] = node;
+                      } else {
+                        delete tileRefs.current[String(tile.id)];
+                      }
+                    }}
+                    url={tile.url}
+                    x={tileX}
+                    y={tileY}
+                    width={Math.max(widthCells, 0.1) * effectiveGridSize}
+                    height={Math.max(heightCells, 0.1) * effectiveGridSize}
+                    opacity={opacity}
+                    rotation={tile.rotation || 0}
+                    draggable={isEditable}
+                    listening
+                    onClick={(e) => {
+                      e.cancelBubble = true;
+                      if (!isEditable) return;
+                      handleTileDragStart(tile.id);
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true;
+                      if (!isEditable) return;
+                      handleTileDragStart(tile.id);
+                    }}
+                    onDragStart={(e) => {
+                      if (!isEditable) return;
+                      e.cancelBubble = true;
+                      handleTileDragStart(tile.id);
+                    }}
+                    onDragEnd={(e) => {
+                      if (!isEditable) return;
+                      e.cancelBubble = true;
+                      handleTileDragEnd(tile.id, e.target);
+                    }}
+                    onTransformEnd={() => {
+                      if (!isEditable) return;
+                      handleTileTransformEnd(tile.id);
+                    }}
+                  />
+                );
+              })}
+              <Transformer
+                ref={tileTrRef}
+                rotateEnabled={false}
+                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                listening={false}
+              />
               {drawGrid()}
               <Group listening={false}>
                 {dragShadow && (
@@ -5920,6 +6173,21 @@ MapCanvas.propTypes = {
     })
   ).isRequired,
   onTokensChange: PropTypes.func.isRequired,
+  tiles: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      x: PropTypes.number.isRequired,
+      y: PropTypes.number.isRequired,
+      width: PropTypes.number,
+      height: PropTypes.number,
+      url: PropTypes.string.isRequired,
+      rotation: PropTypes.number,
+      opacity: PropTypes.number,
+      layer: PropTypes.string,
+      createdBy: PropTypes.string,
+    })
+  ),
+  onTilesChange: PropTypes.func,
   enemies: PropTypes.array,
   onEnemyUpdate: PropTypes.func,
   players: PropTypes.array,
