@@ -4728,6 +4728,7 @@ function App() {
             armaduras={armaduras}
             habilidades={habilidades}
             highlightText={highlightText}
+            rarityColorMap={rarityColorMap}
             isPlayerView={true}
             pageId={playerVisiblePageId}
           />
@@ -7078,6 +7079,7 @@ function App() {
             onDuplicate={duplicateEnemy}
             onSendToMap={sendEnemyToMap}
             highlightText={highlightText}
+            rarityColorMap={rarityColorMap}
           />
         )}
       </div>
@@ -7222,6 +7224,7 @@ function App() {
               armaduras={armaduras}
               habilidades={habilidades}
               highlightText={highlightText}
+              rarityColorMap={rarityColorMap}
               userType={userType}
               playerName={playerName}
               activeLayer={activeLayer}
