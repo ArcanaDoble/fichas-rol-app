@@ -2859,6 +2859,7 @@ const MapCanvas = ({
 
     const forceRecompute = segmentsChanged || gridSizeChanged;
     const newPolygons = {};
+    const aggregatedVisionByController = {};
 
     tokens.forEach(token => {
       const visionEnabled = token.vision?.enabled !== false;
