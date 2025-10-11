@@ -12,6 +12,7 @@ const TokenSheetModal = ({
   habilidades = [],
   onClose,
   highlightText,
+  rarityColorMap = {},
 }) => {
   const sheetId = token?.tokenSheetId;
   const [data, setData] = useState(null);
@@ -73,6 +74,7 @@ const TokenSheetModal = ({
         onClose={onClose}
         onEdit={() => setEditing(true)}
         highlightText={highlightText}
+        rarityColorMap={rarityColorMap}
         floating
       />
       {editing && (
@@ -97,6 +99,7 @@ TokenSheetModal.propTypes = {
   habilidades: PropTypes.array,
   onClose: PropTypes.func.isRequired,
   highlightText: PropTypes.func,
+  rarityColorMap: PropTypes.object,
 };
 
 export default TokenSheetModal;
