@@ -939,6 +939,7 @@ const MapCanvas = ({
   armaduras = [],
   habilidades = [],
   highlightText,
+  rarityColorMap = {},
   userType = 'master',
   playerName = '',
   lines: propLines = [],
@@ -5576,6 +5577,7 @@ const MapCanvas = ({
           habilidades={habilidades}
           onClose={() => handleCloseSheet(tk.tokenSheetId)}
           highlightText={highlightText}
+          rarityColorMap={rarityColorMap}
         />
       ))}
       {doorMenuWallId != null && (
@@ -5925,6 +5927,7 @@ MapCanvas.propTypes = {
   armaduras: PropTypes.array,
   habilidades: PropTypes.array,
   highlightText: PropTypes.func,
+  rarityColorMap: PropTypes.object,
   userType: PropTypes.oneOf(['master', 'player']),
   playerName: PropTypes.string,
   lines: PropTypes.array,

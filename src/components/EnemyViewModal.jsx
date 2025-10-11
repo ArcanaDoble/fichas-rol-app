@@ -31,7 +31,16 @@ const toNumber = (value, fallback = 0) => {
 
 const formatSigned = (value) => (value > 0 ? `+${value}` : `${value}`);
 
-const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, highlightText = (t) => t, floating = false }) => {
+const EnemyViewModal = ({
+  enemy,
+  onClose,
+  onEdit,
+  onDuplicate,
+  onSendToMap,
+  highlightText = (t) => t,
+  floating = false,
+  rarityColorMap = {},
+}) => {
   const modalRef = useRef(null);
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 250 });
   const [dragging, setDragging] = useState(false);
@@ -97,6 +106,30 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
     return () => window.removeEventListener('resize', handleResize);
   }, [clampPosition]);
   if (!enemy) return null;
+
+  const normalizedRarityColors = useMemo(() => {
+    if (!rarityColorMap || typeof rarityColorMap !== 'object') return {};
+    return Object.entries(rarityColorMap).reduce((acc, [key, value]) => {
+      if (typeof key !== 'string') return acc;
+      const trimmed = key.trim();
+      if (!trimmed) return acc;
+      acc[trimmed] = value;
+      acc[trimmed.toLowerCase()] = value;
+      return acc;
+    }, {});
+  }, [rarityColorMap]);
+
+  const getRarityColor = useCallback(
+    (rareza) => {
+      if (!rareza || typeof rareza !== 'string') return undefined;
+      const trimmed = rareza.trim();
+      if (!trimmed) return undefined;
+      return (
+        normalizedRarityColors[trimmed] || normalizedRarityColors[trimmed.toLowerCase()]
+      );
+    },
+    [normalizedRarityColors]
+  );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
   const iconoDano = (tipo) => {
@@ -342,7 +375,9 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                       variant="weapon"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
+                      rarityColor={getRarityColor(weapon.rareza)}
                     >
                       <p className="font-semibold text-base mb-2">{weapon.nombre}</p>
                       <p className="mb-1">
@@ -382,7 +417,9 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                       variant="armor"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
+                      rarityColor={getRarityColor(armor.rareza)}
                     >
                       <p className="font-semibold text-base mb-2">{armor.nombre}</p>
                       <p className="mb-1">
@@ -415,7 +452,9 @@ const EnemyViewModal = ({ enemy, onClose, onEdit, onDuplicate, onSendToMap, high
                       variant="power"
                       interactive={false}
                       hoverTransforms={false}
+                      hoverable
                       className="w-full flex flex-col items-start text-left text-sm"
+                      rarityColor={getRarityColor(power.rareza)}
                     >
                       <p className="font-semibold text-base mb-2">{power.nombre}</p>
                       <p className="mb-1">
@@ -516,6 +555,7 @@ EnemyViewModal.propTypes = {
   onSendToMap: PropTypes.func,
   highlightText: PropTypes.func,
   floating: PropTypes.bool,
+  rarityColorMap: PropTypes.object,
 };
 
 export default EnemyViewModal;
