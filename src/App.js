@@ -1227,6 +1227,7 @@ function App() {
   const wallSaveTimeout = useRef(null);
   const prevTextsRef = useRef([]);
   const prevTilesRef = useRef([]);
+  const prevAmbientLightsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
   const gridSaveTimeoutRef = useRef(null);
@@ -1239,6 +1240,7 @@ function App() {
     walls: 0,
     texts: 0,
     tiles: 0,
+    ambientLights: 0,
     background: 0,
     grid: 0,
   });
@@ -1262,6 +1264,7 @@ function App() {
   const [canvasWalls, setCanvasWalls] = useState([]);
   const [canvasTexts, setCanvasTexts] = useState([]);
   const [canvasTiles, setCanvasTiles] = useState([]);
+  const [canvasAmbientLights, setCanvasAmbientLights] = useState([]);
   const [activeLayer, setActiveLayer] = useState('fichas');
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
@@ -1538,7 +1541,7 @@ function App() {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
       const loaded = snap.docs.map((d) => {
-        const { lines, texts, walls, tiles, ...meta } = d.data();
+        const { lines, texts, walls, tiles, ambientLights, ...meta } = d.data();
         return { id: d.id, ...meta };
       });
       if (loaded.length === 0) {
@@ -1563,9 +1566,10 @@ function App() {
           walls: [],
           texts: [],
           tiles: [],
+          ambientLights: [],
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
-        const { lines, walls, texts, tiles, ...meta } = defaultPage;
+        const { lines, walls, texts, tiles, ambientLights, ...meta } = defaultPage;
         setPages([meta]);
         // Establecer la primera página como visible para jugadores por defecto
         setPlayerVisiblePageId(defaultPage.id);
@@ -1630,6 +1634,7 @@ function App() {
                 walls: pageData.walls || [],
                 texts: pageData.texts || [],
                 tiles: pageData.tiles || [],
+                ambientLights: pageData.ambientLights || [],
                 background: pageData.background,
                 backgroundHash: pageData.backgroundHash,
                 enableDarkness:
@@ -1658,6 +1663,7 @@ function App() {
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
           setCanvasTiles(pageData.tiles || []);
+          setCanvasAmbientLights(pageData.ambientLights || []);
         }
       },
       (error) => {
@@ -2015,6 +2021,7 @@ function App() {
         setCanvasWalls(data.walls || []);
         setCanvasTexts(data.texts || []);
         setCanvasTiles(data.tiles || []);
+        setCanvasAmbientLights(data.ambientLights || []);
         setCanvasBackground(data.background || null);
         setGridSize(data.gridSize || 1);
         setGridCells(data.gridCells || 1);
@@ -2037,18 +2044,19 @@ function App() {
         prevWallsRef.current = data.walls || [];
         prevTextsRef.current = data.texts || [];
         prevTilesRef.current = data.tiles || [];
+        prevAmbientLightsRef.current = data.ambientLights || [];
         prevBgRef.current = data.background || null;
         prevGridRef.current = {
           gridSize: data.gridSize || 1,
           gridCells: data.gridCells || 1,
-          gridOffsetX: data.gridOffsetX || 0,
-          gridOffsetY: data.gridOffsetY || 0,
-          showGrid: data.showGrid !== undefined ? data.showGrid : true,
-          gridColor: (data.gridColor || '#ffffff').toLowerCase(),
-          gridOpacity:
-            data.gridOpacity !== undefined
-              ? Math.max(0, Math.min(1, data.gridOpacity))
-              : 0.2,
+            gridOffsetX: data.gridOffsetX || 0,
+            gridOffsetY: data.gridOffsetY || 0,
+            showGrid: data.showGrid !== undefined ? data.showGrid : true,
+            gridColor: (data.gridColor || '#ffffff').toLowerCase(),
+            gridOpacity:
+              data.gridOpacity !== undefined
+                ? Math.max(0, Math.min(1, data.gridOpacity))
+                : 0.2,
         };
 
         // Actualizar metadatos de la página
@@ -2065,6 +2073,7 @@ function App() {
             gridOffsetX: data.gridOffsetX || 0,
             gridOffsetY: data.gridOffsetY || 0,
             tiles: data.tiles || [],
+            ambientLights: data.ambientLights || [],
           };
           if (pageDataEqual(existing, meta)) return ps;
           return ps.map((p, i) => (i === currentPage ? meta : p));
@@ -2258,6 +2267,38 @@ function App() {
       })
       .catch((error) => console.error('Error guardando tiles:', error));
   }, [canvasTiles, currentPage]);
+
+  useEffect(() => {
+    if (!pagesLoadedRef.current) return;
+    if (userType !== 'master') return;
+    const pageId = pages[currentPage]?.id;
+    if (!pageId) return;
+    if (deepEqual(canvasAmbientLights, prevAmbientLightsRef.current)) return;
+
+    console.log(
+      'Guardando luces ambientales en página:',
+      pageId,
+      'currentPage:',
+      currentPage
+    );
+    prevAmbientLightsRef.current = canvasAmbientLights;
+
+    const saveId = ++saveVersionRef.current.ambientLights;
+
+    updateDoc(doc(db, 'pages', pageId), { ambientLights: canvasAmbientLights })
+      .then(() => {
+        if (saveId !== saveVersionRef.current.ambientLights) {
+          console.log(
+            'Resultado de guardado de luces ambientales ignorado por cambio de página'
+          );
+          return;
+        }
+        console.log('Luces ambientales guardadas exitosamente en página:', pageId);
+      })
+      .catch((error) =>
+        console.error('Error guardando luces ambientales:', error)
+      );
+  }, [canvasAmbientLights, currentPage]);
 
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
@@ -2557,6 +2598,8 @@ function App() {
       if (sanitizedData.walls !== undefined) setCanvasWalls(sanitizedData.walls);
       if (sanitizedData.texts !== undefined) setCanvasTexts(sanitizedData.texts);
       if (sanitizedData.tiles !== undefined) setCanvasTiles(sanitizedData.tiles);
+      if (sanitizedData.ambientLights !== undefined)
+        setCanvasAmbientLights(sanitizedData.ambientLights);
     }
   };
 
@@ -4751,6 +4794,14 @@ function App() {
               const updatedPages = [...pages];
               if (updatedPages[effectivePageIndex]) {
                 updatedPages[effectivePageIndex].tiles = newTiles;
+                setPages(updatedPages);
+              }
+            }}
+            ambientLights={effectivePage?.ambientLights || []}
+            onAmbientLightsChange={(newLights) => {
+              const updatedPages = [...pages];
+              if (updatedPages[effectivePageIndex]) {
+                updatedPages[effectivePageIndex].ambientLights = newLights;
                 setPages(updatedPages);
               }
             }}
@@ -7271,6 +7322,8 @@ function App() {
               onWallsChange={setCanvasWalls}
               tiles={canvasTiles}
               onTilesChange={setCanvasTiles}
+              ambientLights={canvasAmbientLights}
+              onAmbientLightsChange={setCanvasAmbientLights}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
