@@ -425,24 +425,6 @@ const EnemyViewModal = ({
         >
           Equipamiento
         </button>
-        <button
-          className={`${navButtonBase} bg-white/10 text-gray-200 hover:bg-white/20`}
-          onClick={() => ensureGeneralViewAndScroll('weapons')}
-        >
-          Armas
-        </button>
-        <button
-          className={`${navButtonBase} bg-white/10 text-gray-200 hover:bg-white/20`}
-          onClick={() => ensureGeneralViewAndScroll('armors')}
-        >
-          Armaduras
-        </button>
-        <button
-          className={`${navButtonBase} bg-white/10 text-gray-200 hover:bg-white/20`}
-          onClick={() => ensureGeneralViewAndScroll('powers')}
-        >
-          Poderes
-        </button>
       </div>
       {viewMode === 'general' ? (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,320px),1fr] gap-6">
@@ -533,7 +515,9 @@ const EnemyViewModal = ({
                           </div>
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-400">Actual</span>
-                            <span className="text-emerald-300 font-semibold">{actualValue}</span>
+                            <span className="font-semibold" style={{ color }}>
+                              {actualValue}
+                            </span>
                           </div>
                         </div>
                       );
