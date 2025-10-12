@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import { ensureSheetDefaults, saveTokenSheet } from '../utils/token';
+import { KARMA_KEY } from '../utils/karma';
 
 const TokenBarMenu = ({ token, onClose, onUpdate }) => {
   const [sheet, setSheet] = useState(null);
@@ -65,29 +66,31 @@ const TokenBarMenu = ({ token, onClose, onUpdate }) => {
           </button>
         </div>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {Object.entries(sheet.stats).map(([key, stat]) => (
-            <div key={key} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={!!stat.showOnToken}
-                onChange={() => toggleShow(key)}
-              />
-              <span className="flex-1">{stat.label || key}</span>
-              <button
-                className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
-                onClick={() => adjustStat(key, -1)}
-              >
-                −
-              </button>
-              <span className="w-8 text-center">{stat.actual ?? 0}</span>
-              <button
-                className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
-                onClick={() => adjustStat(key, 1)}
-              >
-                +
-              </button>
-            </div>
-          ))}
+          {Object.entries(sheet.stats)
+            .filter(([key, stat]) => key !== KARMA_KEY && stat?.type !== 'karma')
+            .map(([key, stat]) => (
+              <div key={key} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!stat.showOnToken}
+                  onChange={() => toggleShow(key)}
+                />
+                <span className="flex-1">{stat.label || key}</span>
+                <button
+                  className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                  onClick={() => adjustStat(key, -1)}
+                >
+                  −
+                </button>
+                <span className="w-8 text-center">{stat.actual ?? 0}</span>
+                <button
+                  className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                  onClick={() => adjustStat(key, 1)}
+                >
+                  +
+                </button>
+              </div>
+            ))}
         </div>
       </div>
     </div>
