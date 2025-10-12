@@ -4,6 +4,17 @@ import { createPortal } from 'react-dom';
 import Input from './Input';
 import Boton from './Boton';
 import AtributoCard from './AtributoCard';
+import KarmaBar from './KarmaBar';
+import {
+  ensureKarmaStat,
+  isYuuzuName,
+  KARMA_KEY,
+  KARMA_MIN,
+  KARMA_MAX,
+  clampKarma,
+  formatKarmaValue,
+  getKarmaStatus,
+} from '../utils/karma';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
@@ -98,14 +109,36 @@ const TokenSheetEditor = ({
   const [powerError, setPowerError] = useState('');
 
   useEffect(() => {
-    setData(sheet || null);
+    if (!sheet) {
+      setData(null);
+      return;
+    }
+    const normalized = {
+      ...sheet,
+      stats: ensureKarmaStat(sheet.stats, sheet.name),
+    };
+    setData(normalized);
   }, [sheet]);
 
   if (!sheet || !data) return null;
 
+  const isYuuzu = isYuuzuName(data?.name || sheet?.name);
+
   const updateStat = (stat, field, value) => {
     setData(prev => {
       const updated = { ...prev.stats[stat] };
+      if (isYuuzu && stat === KARMA_KEY) {
+        if (field === 'actual') {
+          updated.actual = clampKarma(value);
+        }
+        return {
+          ...prev,
+          stats: ensureKarmaStat({
+            ...prev.stats,
+            [stat]: updated,
+          }, prev.name || sheet?.name),
+        };
+      }
       if (field === 'showOnToken') {
         updated.showOnToken = value;
       } else if (field === 'color') {
@@ -125,23 +158,70 @@ const TokenSheetEditor = ({
       }
       return {
         ...prev,
-        stats: {
+        stats: ensureKarmaStat({
           ...prev.stats,
           [stat]: updated,
-        },
+        }, prev.name || sheet?.name),
       };
     });
   };
 
   const removeStat = stat => {
     setData(prev => {
+      if (isYuuzu && stat === KARMA_KEY) {
+        return prev;
+      }
       const copy = { ...prev.stats };
       delete copy[stat];
       let list = prev.resourcesList;
       if (Array.isArray(list)) {
         list = list.filter(r => r.id !== stat);
       }
-      return { ...prev, stats: copy, resourcesList: list };
+      return {
+        ...prev,
+        stats: ensureKarmaStat(copy, prev.name || sheet?.name),
+        resourcesList: list,
+      };
+    });
+  };
+
+  const adjustKarma = (delta) => {
+    if (!isYuuzu) return;
+    setData((prev) => {
+      const current = clampKarma(prev.stats?.[KARMA_KEY]?.actual ?? 0);
+      const next = clampKarma(current + delta);
+      if (next === current) return prev;
+      const stats = ensureKarmaStat(
+        {
+          ...prev.stats,
+          [KARMA_KEY]: {
+            ...(prev.stats?.[KARMA_KEY] || {}),
+            actual: next,
+          },
+        },
+        prev.name || sheet?.name,
+      );
+      return { ...prev, stats };
+    });
+  };
+
+  const setKarmaValue = (value) => {
+    if (!isYuuzu) return;
+    setData((prev) => {
+      const next = clampKarma(value);
+      const current = clampKarma(prev.stats?.[KARMA_KEY]?.actual ?? 0);
+      if (next === current) return prev;
+      const stats = ensureKarmaStat(
+        {
+          ...prev.stats,
+          [KARMA_KEY]: {
+            ...(prev.stats?.[KARMA_KEY] || {}),
+            actual: next,
+          },
+        },
+        prev.name || sheet?.name,
+      );
+      return { ...prev, stats };
     });
   };
 
@@ -351,13 +431,74 @@ const TokenSheetEditor = ({
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Estadísticas</label>
               <div className="space-y-3">
-                {Object.entries(data.stats).map(([stat, value]) => (
-                  <div key={stat} className="bg-gray-700 p-3 rounded-lg space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <Input
-                        type="text"
-                        value={value.label || stat}
-                        onChange={e => updateStat(stat, 'label', e.target.value)}
+                {Object.entries(data.stats).map(([stat, value]) => {
+                  const isKarma = isYuuzu && (stat === KARMA_KEY || value?.type === 'karma');
+                  if (isKarma) {
+                    const karmaValue = clampKarma(value?.actual ?? 0);
+                    return (
+                      <div key={stat} className="bg-gray-800 p-4 rounded-lg space-y-3 border border-gray-600/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-semibold tracking-wide">Karma</span>
+                          <span
+                            className={`px-2 py-1 text-xs font-bold rounded-full ${
+                              karmaValue === 0
+                                ? 'border border-gray-500 text-gray-300'
+                                : karmaValue > 0
+                                  ? 'bg-white text-gray-900'
+                                  : 'bg-black text-gray-100'
+                            }`}
+                          >
+                            {getKarmaStatus(karmaValue)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Boton
+                            color="gray"
+                            className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                            onClick={() => adjustKarma(-1)}
+                            disabled={karmaValue <= KARMA_MIN}
+                          >
+                            –
+                          </Boton>
+                          <div className="flex-1">
+                            <KarmaBar value={karmaValue} />
+                          </div>
+                          <Boton
+                            color="green"
+                            className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                            onClick={() => adjustKarma(1)}
+                            disabled={karmaValue >= KARMA_MAX}
+                          >
+                            +
+                          </Boton>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 text-sm text-gray-200">
+                          <span className="text-2xl font-black tracking-tight">
+                            {formatKarmaValue(karmaValue)}
+                          </span>
+                          <Input
+                            type="number"
+                            min={KARMA_MIN}
+                            max={KARMA_MAX}
+                            placeholder="0"
+                            value={karmaValue === 0 ? '' : karmaValue}
+                            onChange={(e) => setKarmaValue(e.target.value)}
+                            className="w-16 text-center bg-gray-700 border-gray-600 text-white text-sm"
+                          />
+                        </div>
+                        <p className="text-xs text-gray-400 text-center">
+                          Ajusta el karma de Yuuzu entre {KARMA_MIN} y {KARMA_MAX}.
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={stat} className="bg-gray-700 p-3 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Input
+                          type="text"
+                          value={value.label || stat}
+                          onChange={e => updateStat(stat, 'label', e.target.value)}
                         className="flex-1 text-sm bg-gray-600 border-gray-500 text-white"
                       />
                       <Boton size="sm" color="red" onClick={() => removeStat(stat)}>✕</Boton>
@@ -413,8 +554,9 @@ const TokenSheetEditor = ({
                         className="w-8 h-5 p-0 border-none bg-transparent"
                       />
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

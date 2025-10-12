@@ -10,6 +10,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - [Mejoras de rendimiento pendientes en el Mapa de Batalla](docs/MapaBatallaRendimiento.md)
 
+### ⚖️ Karma exclusivo de Yuuzu
+
+- Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).
+
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
 - **Línea de sucesos en tiempo real** - Seguimiento visual del orden de actuación

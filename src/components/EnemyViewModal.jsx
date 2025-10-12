@@ -6,6 +6,14 @@ import { GiFist } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
 import TarjetaCard from './Tarjeta';
 import Boton from './Boton';
+import KarmaBar from './KarmaBar';
+import {
+  clampKarma,
+  formatKarmaValue,
+  getKarmaStatus,
+  isYuuzuName,
+  KARMA_KEY,
+} from '../utils/karma';
 import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
@@ -195,9 +203,13 @@ const EnemyViewModal = ({
     }
   };
 
+  const isYuuzu = useMemo(() => isYuuzuName(enemy?.name), [enemy?.name]);
+
   const orderedStats = useMemo(() => {
     const stats = enemy.stats || {};
-    const entries = Object.entries(stats);
+    const entries = Object.entries(stats).filter(
+      ([key, value]) => key !== KARMA_KEY && value?.type !== 'karma',
+    );
     const prioritized = [];
     defaultRecursos.forEach((key) => {
       if (stats[key]) {
@@ -482,14 +494,14 @@ const EnemyViewModal = ({
               </div>
               <div className="bg-gray-700 rounded-lg p-4">
                 <h3 className="font-semibold mb-3">Estadísticas</h3>
-                {orderedStats.length > 0 ? (
-                  <div className="space-y-3 text-sm">
-                    {orderedStats.map(([key, rawStat]) => {
-                      const stat =
-                        rawStat && typeof rawStat === 'object'
-                          ? rawStat
-                          : { total: rawStat };
-                      const label = stat.label || key;
+              {orderedStats.length > 0 ? (
+                <div className="space-y-3 text-sm">
+                  {orderedStats.map(([key, rawStat]) => {
+                    const stat =
+                      rawStat && typeof rawStat === 'object'
+                        ? rawStat
+                        : { total: rawStat };
+                    const label = stat.label || key;
                       const baseValue = toNumber(stat.base, toNumber(stat.total));
                       const buffValue = toNumber(stat.buff, 0);
                       const totalValue = toNumber(stat.total, baseValue + buffValue);
@@ -522,12 +534,43 @@ const EnemyViewModal = ({
                         </div>
                       );
                     })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
-                )}
-              </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">Sin estadísticas registradas</p>
+              )}
+              {isYuuzu && enemy.stats?.[KARMA_KEY] && (
+                <div className="mt-4 rounded-lg border border-gray-600/60 bg-gray-800/80 p-4">
+                  {(() => {
+                    const karmaValue = clampKarma(enemy.stats[KARMA_KEY]?.actual ?? 0);
+                    return (
+                      <>
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="text-base font-semibold tracking-wide">Karma</span>
+                          <span
+                            className={`px-2 py-1 text-xs font-bold rounded-full ${
+                              karmaValue === 0
+                                ? 'border border-gray-500 text-gray-300'
+                                : karmaValue > 0
+                                  ? 'bg-white text-gray-900'
+                                  : 'bg-black text-gray-100'
+                            }`}
+                          >
+                            {getKarmaStatus(karmaValue)}
+                          </span>
+                        </div>
+                        <KarmaBar value={karmaValue} />
+                        <div className="mt-3 text-center">
+                          <span className="text-2xl font-black">
+                            {formatKarmaValue(karmaValue)}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
+          </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {renderWeaponsSection()}
               {renderArmorsSection()}
