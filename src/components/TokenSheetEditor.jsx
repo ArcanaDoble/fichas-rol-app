@@ -480,7 +480,8 @@ const TokenSheetEditor = ({
                             type="number"
                             min={KARMA_MIN}
                             max={KARMA_MAX}
-                            value={karmaValue}
+                            placeholder="0"
+                            value={karmaValue === 0 ? '' : karmaValue}
                             onChange={(e) => setKarmaValue(e.target.value)}
                             className="w-16 text-center bg-gray-700 border-gray-600 text-white text-sm"
                           />
