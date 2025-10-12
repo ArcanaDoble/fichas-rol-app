@@ -43,6 +43,7 @@ import Input from './components/Input';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard, { DADOS } from './components/AtributoCard';
+import KarmaBar from './components/KarmaBar';
 import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
@@ -62,6 +63,16 @@ import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
 import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
+import {
+  ensureKarmaStat,
+  clampKarma,
+  formatKarmaValue,
+  getKarmaStatus,
+  isYuuzuName,
+  KARMA_KEY,
+  KARMA_MIN,
+  KARMA_MAX,
+} from './utils/karma';
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
@@ -805,6 +816,18 @@ function App() {
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
   const [playerInputPoder, setPlayerInputPoder] = useState('');
   const [playerPoderError, setPlayerPoderError] = useState('');
+
+  const attachKarma = useCallback(
+    (sheet) => {
+      if (!sheet) return sheet;
+      const targetName = sheet.name || playerName;
+      return {
+        ...sheet,
+        stats: ensureKarmaStat(sheet.stats, targetName),
+      };
+    },
+    [playerName],
+  );
 
   // Google Sheets ID
   const sheetId =
@@ -3025,10 +3048,11 @@ function App() {
           armaduras,
           playerName
         );
-        setPlayerData(recalculated);
-        setResourcesList(recalculated.resourcesList || []);
-        setClaves(recalculated.claves || []);
-        setEstados(recalculated.estados || []);
+        const withKarma = attachKarma(recalculated);
+        setPlayerData(withKarma);
+        setResourcesList(withKarma.resourcesList || []);
+        setClaves(withKarma.claves || []);
+        setEstados(withKarma.estados || []);
       } else {
         const defaultData = {
           weapons: [],
@@ -3051,8 +3075,9 @@ function App() {
           resourcesList: defaultResourcesList,
           updatedAt: new Date(),
         };
-        setPlayerData(defaultData);
-        setResourcesList(defaultResourcesList);
+        const withKarma = attachKarma(defaultData);
+        setPlayerData(withKarma);
+        setResourcesList(withKarma.resourcesList || defaultResourcesList);
         setClaves([]);
         setEstados([]);
       }
@@ -3079,12 +3104,13 @@ function App() {
         resourcesList: defaultResourcesList,
         updatedAt: new Date(),
       };
-      setPlayerData(defaultData);
-      setResourcesList(defaultResourcesList);
+      const withKarma = attachKarma(defaultData);
+      setPlayerData(withKarma);
+      setResourcesList(withKarma.resourcesList || defaultResourcesList);
       setClaves([]);
       setEstados([]);
     }
-  }, [playerName, armas, armaduras, setResourcesList]);
+  }, [playerName, armas, armaduras, setResourcesList, attachKarma]);
 
   // useEffect que llama a loadPlayer una vez que se ingresó el nombre
   useEffect(() => {
@@ -3095,10 +3121,12 @@ function App() {
 
   useEffect(() => {
     const updateFromSheet = (sheet) => {
-      setPlayerData(sheet);
-      setResourcesList(sheet.resourcesList || []);
-      setClaves(sheet.claves || []);
-      setEstados(sheet.estados || []);
+      if (!sheet) return;
+      const normalized = attachKarma(sheet);
+      setPlayerData(normalized);
+      setResourcesList(normalized.resourcesList || []);
+      setClaves(normalized.claves || []);
+      setEstados(normalized.estados || []);
     };
 
     const handler = (e) => {
@@ -3123,7 +3151,7 @@ function App() {
       window.removeEventListener('playerSheetSaved', handler);
       window.removeEventListener('storage', storageHandler);
     };
-  }, [playerName]);
+  }, [playerName, attachKarma]);
 
   // Debug: Monitorear cambios en playerData
   useEffect(() => {
@@ -3146,14 +3174,16 @@ function App() {
     clavesParaGuardar = claves,
     estadosParaGuardar = estados
   ) => {
+    const sanitizedInput = attachKarma(data);
     const recalculated = applyCargaPenalties(
-      data,
+      sanitizedInput,
       armas,
       armaduras,
       playerName
     );
+    const withKarma = attachKarma(recalculated);
     const fullData = {
-      ...recalculated,
+      ...withKarma,
       resourcesList: listaParaGuardar,
       claves: clavesParaGuardar,
       estados: estadosParaGuardar,
@@ -3176,6 +3206,39 @@ function App() {
     } catch (e) {
       console.error(e);
     }
+  };
+  const hasKarma = isYuuzuName(playerName || playerData?.name);
+  const karmaValue = hasKarma
+    ? clampKarma(playerData.stats?.[KARMA_KEY]?.actual ?? 0)
+    : 0;
+
+  const persistKarma = (nextValue) => {
+    if (!hasKarma) return;
+    const stats = ensureKarmaStat(
+      {
+        ...playerData.stats,
+        [KARMA_KEY]: {
+          ...(playerData.stats?.[KARMA_KEY] || {}),
+          actual: nextValue,
+        },
+      },
+      playerName || playerData?.name,
+    );
+    savePlayer({ ...playerData, stats });
+  };
+
+  const handleKarmaAdjust = (delta) => {
+    if (!hasKarma) return;
+    const next = clampKarma(karmaValue + delta);
+    if (next === karmaValue) return;
+    persistKarma(next);
+  };
+
+  const handleKarmaInput = (value) => {
+    if (!hasKarma) return;
+    const next = clampKarma(value);
+    if (next === karmaValue) return;
+    persistKarma(next);
   };
   // 3) HANDLERS para atributos, stats, buff, nerf, eliminar y añadir recurso
   const handleAtributoChange = (k, v) => {
@@ -5179,6 +5242,71 @@ function App() {
                 </motion.div>
               );
             })}
+            {hasKarma && (
+              <motion.div
+                key="karma"
+                layout="position"
+                transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                className="bg-gray-900/80 rounded-xl p-4 shadow w-full border border-white/10"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-semibold uppercase tracking-[0.35em] text-gray-200">
+                    Karma
+                  </span>
+                  <span
+                    className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      karmaValue === 0
+                        ? 'border border-gray-500 text-gray-300'
+                        : karmaValue > 0
+                          ? 'bg-white text-gray-900'
+                          : 'bg-black text-gray-100'
+                    }`}
+                  >
+                    {getKarmaStatus(karmaValue)}
+                  </span>
+                </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <Boton
+                    color="gray"
+                    className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                    onClick={() => handleKarmaAdjust(-1)}
+                    disabled={karmaValue <= KARMA_MIN}
+                  >
+                    –
+                  </Boton>
+                  <div className="flex-1">
+                    <KarmaBar value={karmaValue} />
+                  </div>
+                  <Boton
+                    color="green"
+                    className="w-8 h-8 p-0 flex items-center justify-center font-extrabold rounded"
+                    onClick={() => handleKarmaAdjust(1)}
+                    disabled={karmaValue >= KARMA_MAX}
+                  >
+                    +
+                  </Boton>
+                </div>
+                <div className="mt-4 flex flex-col items-center gap-1">
+                  <span className="text-3xl font-black tracking-tight">
+                    {formatKarmaValue(karmaValue)}
+                  </span>
+                  <span className="text-xs text-gray-400">{getKarmaStatus(karmaValue)}</span>
+                </div>
+                <div className="mt-3 flex flex-col items-center gap-2 text-xs text-gray-500 sm:flex-row sm:justify-center">
+                  <Input
+                    type="number"
+                    min={KARMA_MIN}
+                    max={KARMA_MAX}
+                    value={karmaValue}
+                    onChange={(e) => handleKarmaInput(e.target.value)}
+                    className="w-20 text-center"
+                  />
+                  <span className="text-center sm:text-left">
+                    Ajusta el equilibrio entre {KARMA_MIN} y {KARMA_MAX}.
+                  </span>
+                </div>
+              </motion.div>
+            )}
           </div>
           {!playerData.stats['postura'] && (
             <div className="text-center text-sm text-gray-400 mb-2">

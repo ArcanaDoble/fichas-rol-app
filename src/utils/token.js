@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import sanitize from './sanitize';
+import { ensureKarmaStat } from './karma';
 
 const normalizeUpdatedAt = (value) => {
   if (!value && value !== 0) return null;
@@ -156,5 +157,6 @@ export const ensureSheetDefaults = (sheet) => {
       sheet.stats[id] = ensure(sheet.stats[id], idx, id);
     });
   }
+  sheet.stats = ensureKarmaStat(sheet.stats, sheet.name);
   return sheet;
 };
