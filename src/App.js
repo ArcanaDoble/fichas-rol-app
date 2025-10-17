@@ -40,6 +40,7 @@ import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
 import Input from './components/Input';
+import TraitsInput from './components/TraitsInput';
 import Tarjeta from './components/Tarjeta';
 import ResourceBar from './components/ResourceBar';
 import AtributoCard, { DADOS } from './components/AtributoCard';
@@ -59,6 +60,7 @@ import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
+import { applyIconConversions } from './utils/iconConversions';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 import { nanoid } from 'nanoid';
@@ -3388,9 +3390,13 @@ function App() {
       if (editingWeapon && editingWeapon !== nombre) {
         await deleteDoc(doc(db, 'weapons', editingWeapon));
       }
-      const dataToSave = {
+      const iconReady = applyIconConversions({
         ...newWeaponData,
         rareza: (newWeaponData.rareza || '').trim(),
+      });
+
+      const dataToSave = {
+        ...iconReady,
         rasgos: (newWeaponData.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -3461,9 +3467,13 @@ function App() {
       if (editingArmor && editingArmor !== nombre) {
         await deleteDoc(doc(db, 'armors', editingArmor));
       }
-      const dataToSave = {
+      const iconReady = applyIconConversions({
         ...newArmorData,
         rareza: (newArmorData.rareza || '').trim(),
+      });
+
+      const dataToSave = {
+        ...iconReady,
         rasgos: (newArmorData.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -3528,9 +3538,13 @@ function App() {
       if (editingAbility && editingAbility !== nombre) {
         await deleteDoc(doc(db, 'abilities', editingAbility));
       }
-      const dataToSave = {
+      const iconReady = applyIconConversions({
         ...newAbility,
         rareza: (newAbility.rareza || '').trim(),
+      });
+
+      const dataToSave = {
+        ...iconReady,
         rasgos: (newAbility.rasgos || '')
           .split(',')
           .map((r) => r.trim())
@@ -7761,11 +7775,12 @@ function App() {
                 setNewWeaponData((w) => ({ ...w, cargaMental: e.target.value }))
               }
             />
-            <Input
+            <TraitsInput
               placeholder="Rasgos (separados por comas)"
               value={newWeaponData.rasgos}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, rasgos: e.target.value }))
+              glossary={glossary}
+              onChange={(value) =>
+                setNewWeaponData((w) => ({ ...w, rasgos: value }))
               }
             />
             <Input
@@ -7888,11 +7903,12 @@ function App() {
                 setNewArmorData((a) => ({ ...a, cargaMental: e.target.value }))
               }
             />
-            <Input
+            <TraitsInput
               placeholder="Rasgos (separados por comas)"
               value={newArmorData.rasgos}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, rasgos: e.target.value }))
+              glossary={glossary}
+              onChange={(value) =>
+                setNewArmorData((a) => ({ ...a, rasgos: value }))
               }
             />
             <Input
@@ -8012,11 +8028,12 @@ function App() {
                 setNewAbility((a) => ({ ...a, mente: e.target.value }))
               }
             />
-            <Input
+            <TraitsInput
               placeholder="Rasgos (separados por comas)"
               value={newAbility.rasgos}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, rasgos: e.target.value }))
+              glossary={glossary}
+              onChange={(value) =>
+                setNewAbility((a) => ({ ...a, rasgos: value }))
               }
             />
             <Input
