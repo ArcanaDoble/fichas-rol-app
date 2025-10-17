@@ -98,14 +98,15 @@ const Tarjeta = ({
     if (!rgb) return null;
     const lightRgb = mixWithWhite(rgb, 0.45);
     const softRgb = mixWithWhite(rgb, 0.7);
+
     return {
       border: rgbToRgbaString(rgb, 0.55),
       borderHover: rgbToRgbaString(rgb, 0.75),
       shadowSoft: rgbToRgbaString(rgb, 0.28),
       shadowStrong: rgbToRgbaString(rgb, 0.42),
-      overlayAccent: rgbToRgbaString(rgb, 0.38),
-      overlaySoft: rgbToRgbaString(lightRgb, 0.3),
-      overlayTint: rgbToRgbaString(softRgb, 0.2),
+      gradientFrom: rgbToRgbaString(rgb, 0.32),
+      gradientVia: rgbToRgbaString(lightRgb, 0.26),
+      gradientTo: rgbToRgbaString(softRgb, 0.18),
     };
   }, [rarityColor]);
 
@@ -130,9 +131,8 @@ const Tarjeta = ({
   `;
 
   const cursorClass = interactive ? 'cursor-pointer' : 'cursor-default';
-  const hoverBackgroundClass = rarityPalette
-    ? ''
-    : 'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
+  const hoverBackgroundClass =
+    'hover:bg-gradient-to-br hover:from-amber-100/10 hover:via-purple-900/20 hover:to-gray-900/80';
   const transformClass = interactive && hoverTransforms ? 'transform hover:-translate-y-1 hover:scale-[1.015]' : '';
   const glowClass = canHover && !rarityPalette ? style.glow : '';
 
@@ -142,7 +142,7 @@ const Tarjeta = ({
     ${hoverBackgroundClass}
     ${transformClass}
     ${glowClass}
-    ${rarityPalette ? 'border-transparent' : style.border}
+    ${style.border}
     ${className}
     ${
       variant === 'magic'
@@ -195,6 +195,9 @@ const Tarjeta = ({
       ? `0 18px 36px ${rarityPalette.shadowStrong}`
       : `0 12px 28px ${rarityPalette.shadowSoft}`;
     combinedStyle.transition = 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease';
+    combinedStyle['--tw-gradient-from'] = rarityPalette.gradientFrom;
+    combinedStyle['--tw-gradient-stops'] = `var(--tw-gradient-from), ${rarityPalette.gradientVia}, ${rarityPalette.gradientTo}`;
+    combinedStyle['--tw-gradient-to'] = rarityPalette.gradientTo;
   }
 
   return (
@@ -209,18 +212,22 @@ const Tarjeta = ({
     >
       {/* Gradient overlay */}
       <div
-        className={`absolute inset-0 pointer-events-none ${
-          rarityPalette
-            ? 'transition-opacity duration-300'
-            : `bg-gradient-to-br ${style.gradient} ${
-                variant === 'magic' ? 'opacity-50' : 'opacity-20'
-              }`
-        }`}
+        className={`absolute inset-0 pointer-events-none bg-gradient-to-br ${style.gradient} ${
+          rarityPalette ? 'transition-opacity duration-300' : ''
+        } ${variant === 'magic' ? 'opacity-50' : 'opacity-20'}`}
         style={
           rarityPalette
             ? {
-                backgroundImage: `radial-gradient(circle at 18% 16%, ${rarityPalette.overlayAccent}, transparent 58%), radial-gradient(circle at 82% 30%, ${rarityPalette.overlaySoft}, transparent 62%), linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.35)), linear-gradient(180deg, ${rarityPalette.overlayTint}, transparent)`,
-                opacity: isHovered ? 0.65 : 0.4,
+                '--tw-gradient-from': rarityPalette.gradientFrom,
+                '--tw-gradient-stops': `var(--tw-gradient-from), ${rarityPalette.gradientVia}, ${rarityPalette.gradientTo}`,
+                '--tw-gradient-to': rarityPalette.gradientTo,
+                opacity: isHovered
+                  ? variant === 'magic'
+                    ? 0.75
+                    : 0.55
+                  : variant === 'magic'
+                    ? 0.55
+                    : 0.35,
               }
             : undefined
         }
