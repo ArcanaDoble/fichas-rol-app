@@ -9,7 +9,7 @@ import {
   FiImage,
 } from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
-import { GiBrickWall, GiCrosshair, GiMoneyBag } from 'react-icons/gi';
+import { GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 import ShopMenu from './ShopMenu';
 
@@ -19,7 +19,7 @@ const tools = [
   { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
-  { id: 'shop', icon: GiMoneyBag },
+  { id: 'shop', icon: GiShoppingBag },
   { id: 'target', icon: GiCrosshair },
 ];
 
