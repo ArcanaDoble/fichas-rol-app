@@ -1185,6 +1185,7 @@ const MapCanvas = ({
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
+  const [shopGold, setShopGold] = useState(0);
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
@@ -1264,6 +1265,12 @@ const MapCanvas = ({
   const gridOpacityDraggingRef = useRef(false);
   const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
+
+  const handleShopGoldChange = useCallback((value) => {
+    const numeric = Number(value);
+    const safeValue = Number.isNaN(numeric) ? 0 : numeric;
+    setShopGold(Math.max(0, Math.min(9999, safeValue)));
+  }, []);
 
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
@@ -6203,6 +6210,8 @@ const MapCanvas = ({
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
+        shopGold={shopGold}
+        onShopGoldChange={handleShopGoldChange}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
