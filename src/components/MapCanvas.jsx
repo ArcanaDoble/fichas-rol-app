@@ -1601,7 +1601,7 @@ const MapCanvas = ({
           }
         );
 
-        onShopConfigChange(nextConfig);
+        onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
         return { success: true, remaining };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {

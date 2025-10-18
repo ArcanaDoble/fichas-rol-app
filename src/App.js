@@ -2021,14 +2021,14 @@ function App() {
   };
 
   const handleShopConfigChange = useCallback(
-    (nextConfig) => {
+    (nextConfig, options = {}) => {
       const normalized = normalizeShopConfig(nextConfig);
       setCanvasShopConfig(normalized);
       const pageId = pages[currentPage]?.id;
       setPages((ps) =>
         ps.map((p, index) => (index === currentPage ? { ...p, shopConfig: normalized } : p))
       );
-      if (!pageId) return;
+      if (!pageId || options?.skipRemoteUpdate) return;
       updateDoc(doc(db, 'pages', pageId), { shopConfig: sanitize(normalized) }).catch((error) => {
         console.error('Error actualizando configuración de tienda:', error);
       });
