@@ -1,37 +1,74 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Inventory from './Inventory';
 
-jest.mock('./Slot', () => (props) => <div title="Doble clic para borrar" data-testid={`slot-${props.id}`}></div>);
-jest.mock('./ItemToken', () => ({ type }) => <div>{type === 'comida' ? '🍖' : '?'}</div>);
+jest.mock('../../firebase', () => ({
+  db: {},
+}));
+
+jest.mock('firebase/firestore', () => ({
+  doc: jest.fn(),
+  getDoc: jest.fn(),
+  setDoc: jest.fn(),
+}));
+
+const mockFirestore = require('firebase/firestore');
+
 jest.mock('./ItemGenerator', () => ({ onGenerate }) => (
   <div>
-    <input placeholder="Buscar objeto" data-testid="gen-input" />
-    <button onClick={() => onGenerate('comida')}>Generar</button>
+    <button onClick={() => onGenerate('weapon')} type="button">
+      Generar arma
+    </button>
   </div>
 ));
 
-jest.mock('react-dnd', () => ({ useDrag: () => [{}, () => {}], useDrop: () => [{ isOver: false }, () => {}] }));
+describe('Inventory', () => {
+  beforeEach(() => {
+    mockFirestore.doc.mockReturnValue({});
+    mockFirestore.getDoc.mockResolvedValue({ exists: () => false });
+    mockFirestore.setDoc.mockResolvedValue();
+  });
 
-afterEach(() => {
-  jest.clearAllMocks();
-});
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-test('adds a new slot when clicking + button', async () => {
-  const { container } = render(<Inventory />);
-  const initialSlots = container.querySelectorAll('div[title="Doble clic para borrar"]');
-  expect(initialSlots).toHaveLength(4);
-  const addBtn = screen.getByRole('button', { name: '+' });
-  await userEvent.click(addBtn);
-  const updatedSlots = container.querySelectorAll('div[title="Doble clic para borrar"]');
-  expect(updatedSlots).toHaveLength(5);
-});
+  test('muestra las secciones base del inventario', async () => {
+    render(<Inventory playerName="Jugador" />);
 
-test('generates an item token', async () => {
-  render(<Inventory />);
-  const input = screen.getByPlaceholderText(/buscar objeto/i);
-  await userEvent.type(input, 'comida');
-  const genBtn = screen.getByRole('button', { name: /generar/i });
-  await userEvent.click(genBtn);
-  expect(screen.getByText('🍖')).toBeInTheDocument();
+    await waitFor(() => expect(mockFirestore.getDoc).toHaveBeenCalled());
+
+    expect(screen.getByText('Armas')).toBeInTheDocument();
+    expect(screen.getByText('Armaduras')).toBeInTheDocument();
+    expect(screen.getByText('Habilidades')).toBeInTheDocument();
+    expect(screen.getByText('Objetos adicionales')).toBeInTheDocument();
+  });
+
+  test('permite agregar y equipar un arma manualmente', async () => {
+    render(<Inventory playerName="Jugador" />);
+    await waitFor(() => expect(mockFirestore.getDoc).toHaveBeenCalled());
+
+    const [addButton] = screen.getAllByRole('button', { name: /^agregar arma$/i });
+    await userEvent.click(addButton);
+
+    const [nameInput] = await screen.findAllByPlaceholderText('Nombre del objeto');
+    await userEvent.type(nameInput, 'Espada corta');
+
+    const statusButton = screen.getByRole('button', { name: /disponible/i });
+    await userEvent.click(statusButton);
+
+    expect(screen.getByRole('button', { name: /equipado/i })).toBeInTheDocument();
+    expect(mockFirestore.setDoc).toHaveBeenCalled();
+  });
+
+  test('agrega un objeto desde la biblioteca y lo clasifica', async () => {
+    render(<Inventory playerName="Jugador" />);
+    await waitFor(() => expect(mockFirestore.getDoc).toHaveBeenCalled());
+
+    const generateButton = screen.getByRole('button', { name: /generar arma/i });
+    await userEvent.click(generateButton);
+
+    const generatedInput = await screen.findByDisplayValue('Weapon');
+    expect(generatedInput).toBeInTheDocument();
+  });
 });
