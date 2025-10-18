@@ -13,6 +13,7 @@ import { GiBackpack, GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons
 import { motion, AnimatePresence } from 'framer-motion';
 import ShopMenu from './ShopMenu';
 import InventoryMenu from './InventoryMenu';
+import PurchaseAnimation from './PurchaseAnimation';
 
 const primaryTools = [
   { id: 'select', icon: FiMousePointer },
@@ -108,6 +109,7 @@ const Toolbar = ({
   onInventoryAddItem,
   onInventoryRemoveItem,
   canManageInventory = false,
+  purchaseAnimation = null,
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -173,7 +175,7 @@ const Toolbar = ({
   };
 
   return (
-    <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
+    <div className="relative z-50 flex h-full w-12 flex-col items-center gap-1 bg-gray-900/95 py-3 text-gray-100 shadow-xl ring-1 ring-slate-700/70">
       <div className="flex flex-col items-center space-y-2 flex-1">
         <div className="flex flex-col items-center space-y-2">
           {availableTools.map(({ id, icon: Icon }) => (
@@ -192,7 +194,7 @@ const Toolbar = ({
             </button>
           ))}
         </div>
-        <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
+        <div className="relative w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
           {commerceButtons.map(({ id, icon: Icon }) => (
             <button
               key={id}
@@ -208,6 +210,7 @@ const Toolbar = ({
               <Icon />
             </button>
           ))}
+          <PurchaseAnimation event={isPlayerView ? purchaseAnimation : null} />
         </div>
       </div>
 
@@ -774,6 +777,13 @@ Toolbar.propTypes = {
   onInventoryAddItem: PropTypes.func,
   onInventoryRemoveItem: PropTypes.func,
   canManageInventory: PropTypes.bool,
+  purchaseAnimation: PropTypes.shape({
+    key: PropTypes.string.isRequired,
+    itemName: PropTypes.string,
+    typeLabel: PropTypes.string,
+    rarity: PropTypes.string,
+    playerName: PropTypes.string,
+  }),
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,

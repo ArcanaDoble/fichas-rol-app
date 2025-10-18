@@ -57,6 +57,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Barra de herramientas vertical** - Modos de selección, dibujo, medición y texto independientes del zoom
 - **Herramienta de mirilla** - Selecciona atacante y objetivo mostrando una línea roja
 - **Tienda táctica contextual** - El máster gestiona una tienda compartida desde el icono de bolsa: puede fijar oro individual para cada jugador activo (0‑9999), elegir hasta cuatro objetos sugeridos del catálogo completo y sincronizar los cambios con el botón “Actualizar tienda”. Los jugadores consultan esas recomendaciones con filtros, colores de rareza y vista previa detallada, y cuando compran un objeto su saldo y el del máster se actualizan en tiempo real
+- **Animación compra → inventario (NUEVO)** - Tras completar una compra en la tienda, el jugador ve una animación que muestra cómo el objeto viaja visualmente hacia la herramienta de inventario, confirmando que quedó almacenado automáticamente
 - **Inventario sincronizado** - El nuevo icono de mochila separa la tienda del resto de herramientas y centraliza los objetos comprados: los jugadores consultan su inventario con la misma estética de la tienda, mientras que el máster puede revisar el de todos, añadir recompensas manuales o retirar elementos al instante
 - **Mapa desplazado** - El mapa se ajusta para que la barra de herramientas no oculte la cabecera ni los controles
 - **Ajustes de dibujo** - Selector de color y tamaño de pincel con menú ajustado al contenido
@@ -1791,6 +1792,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 ## 🐛 Correcciones
 
+- Se reposicionó la barra de herramientas del mapa de batalla para que siempre permanezca visible junto a la tienda e inventario, evitando que quede oculta tras los cambios de animación recientes.
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
 - Se blindó la tienda contra compras simultáneas restando el oro dentro de una transacción de Firestore, evitando que varios jugadores gasten el mismo saldo.
 - Se evitó que tras una compra transaccional se enviara una escritura adicional con una configuración obsoleta de la tienda, conservando las deducciones de oro realizadas en paralelo.

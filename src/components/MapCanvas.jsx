@@ -1518,6 +1518,7 @@ const MapCanvas = ({
 
   const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
   const [shopInventories, setShopInventories] = useState({});
+  const [inventoryPurchaseAnimation, setInventoryPurchaseAnimation] = useState(null);
 
   useEffect(() => {
     if (!pageId) {
@@ -1618,7 +1619,12 @@ const MapCanvas = ({
 
       const pageRef = doc(db, 'pages', pageId);
       try {
-        const { config: nextConfig, remaining, inventories: nextInventories } = await runTransaction(
+        const {
+          config: nextConfig,
+          remaining,
+          inventories: nextInventories,
+          inventoryEntry,
+        } = await runTransaction(
           db,
           async (transaction) => {
             const snap = await transaction.get(pageRef);
@@ -1677,13 +1683,21 @@ const MapCanvas = ({
               config: updatedConfig,
               remaining: nextWallet,
               inventories: updatedInventories,
+              inventoryEntry,
             };
           }
         );
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
         setShopInventories(nextInventories);
-        return { success: true, remaining };
+        if (inventoryEntry) {
+          setInventoryPurchaseAnimation({
+            ...inventoryEntry,
+            playerName: effectivePlayerName,
+            key: `${inventoryEntry.entryId}-${Date.now()}`,
+          });
+        }
+        return { success: true, remaining, inventoryEntry };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
           return { success: false, reason: 'insufficient-gold' };
@@ -1790,6 +1804,14 @@ const MapCanvas = ({
     },
     [canManageInventory, pageId]
   );
+
+  useEffect(() => {
+    if (!inventoryPurchaseAnimation) {
+      return undefined;
+    }
+    const timeout = setTimeout(() => setInventoryPurchaseAnimation(null), 4200);
+    return () => clearTimeout(timeout);
+  }, [inventoryPurchaseAnimation]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -5589,17 +5611,72 @@ const MapCanvas = ({
   );
 
   return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden relative">
-      {isBgLoading && (
-        <LoadingSpinner overlay color="white" text="Cargando mapa..." />
-      )}
-      {isBgError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-800/75 text-white z-10">
-          Error al cargar el mapa
-        </div>
-      )}
-      <div ref={drop}>
-        <Stage
+    <div className="w-full h-full overflow-hidden flex">
+      <div className="flex-shrink-0 h-full relative z-40">
+        <Toolbar
+          activeTool={activeTool}
+          onSelect={setActiveTool}
+          drawColor={drawColor}
+          onColorChange={setDrawColor}
+          brushSize={brushSize}
+          onBrushSizeChange={setBrushSize}
+          measureShape={measureShape}
+          onMeasureShapeChange={setMeasureShape}
+          measureSnap={measureSnap}
+          onMeasureSnapChange={setMeasureSnap}
+          measureVisible={measureVisible}
+          onMeasureVisibleChange={setMeasureVisible}
+          measureRule={measureRule}
+          onMeasureRuleChange={setMeasureRule}
+          measureUnitValue={measureUnitValue}
+          onMeasureUnitValueChange={handleMeasureUnitValueChange}
+          measureUnitLabel={measureUnitLabel}
+          onMeasureUnitLabelChange={handleMeasureUnitLabelChange}
+          textOptions={textOptions}
+          onTextOptionsChange={applyTextOptions}
+          onResetTextOptions={resetTextOptions}
+          shopConfig={shopUiConfig}
+          onShopConfigChange={handleShopDraftChange}
+          onShopApply={isMasterShopEditor ? handleShopApply : undefined}
+          shopActivePlayers={activeShopPlayers}
+          shopAvailableItems={shopAvailableItems}
+          onShopPurchase={handleShopPurchase}
+          shopHasPendingChanges={shopHasPendingChanges}
+          inventoryData={shopInventories}
+          inventoryPlayers={inventoryPlayers}
+          onInventoryAddItem={handleInventoryAddItem}
+          onInventoryRemoveItem={handleInventoryRemoveItem}
+          canManageInventory={canManageInventory}
+          purchaseAnimation={inventoryPurchaseAnimation}
+          stylePresets={savedTextPresets}
+          onSaveStylePreset={saveCurrentTextPreset}
+          onApplyStylePreset={applyTextPreset}
+          showTextMenu={textMenuVisible}
+          activeLayer={activeLayer}
+          onLayerChange={handleLayerChange}
+          isPlayerView={isPlayerPerspective}
+          playerName={effectivePlayerName}
+          rarityColorMap={rarityColorMap}
+          ambientLights={ambientLights}
+          selectedAmbientLightId={selectedAmbientLightId}
+          onSelectAmbientLight={handleAmbientLightSelect}
+          onCreateAmbientLight={handleCreateAmbientLight}
+          onUpdateAmbientLight={handleAmbientLightUpdate}
+          onDeleteAmbientLight={handleAmbientLightDelete}
+          gridCellSize={effectiveGridSize}
+        />
+      </div>
+      <div ref={containerRef} className="relative flex-1 overflow-hidden">
+        {isBgLoading && (
+          <LoadingSpinner overlay color="white" text="Cargando mapa..." />
+        )}
+        {isBgError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-800/75 text-white z-10">
+            Error al cargar el mapa
+          </div>
+        )}
+        <div ref={drop}>
+          <Stage
           ref={stageRef}
           width={containerSize.width}
           height={containerSize.height}
@@ -6703,57 +6780,7 @@ const MapCanvas = ({
           }).filter(Boolean); // Filtrar elementos null
         })()}
       </div>
-      <Toolbar
-        activeTool={activeTool}
-        onSelect={setActiveTool}
-        drawColor={drawColor}
-        onColorChange={setDrawColor}
-        brushSize={brushSize}
-        onBrushSizeChange={setBrushSize}
-        measureShape={measureShape}
-        onMeasureShapeChange={setMeasureShape}
-        measureSnap={measureSnap}
-        onMeasureSnapChange={setMeasureSnap}
-        measureVisible={measureVisible}
-        onMeasureVisibleChange={setMeasureVisible}
-        measureRule={measureRule}
-        onMeasureRuleChange={setMeasureRule}
-        measureUnitValue={measureUnitValue}
-        onMeasureUnitValueChange={handleMeasureUnitValueChange}
-        measureUnitLabel={measureUnitLabel}
-        onMeasureUnitLabelChange={handleMeasureUnitLabelChange}
-        textOptions={textOptions}
-        onTextOptionsChange={applyTextOptions}
-        onResetTextOptions={resetTextOptions}
-        shopConfig={shopUiConfig}
-        onShopConfigChange={handleShopDraftChange}
-        onShopApply={isMasterShopEditor ? handleShopApply : undefined}
-        shopActivePlayers={activeShopPlayers}
-        shopAvailableItems={shopAvailableItems}
-        onShopPurchase={handleShopPurchase}
-        shopHasPendingChanges={shopHasPendingChanges}
-        inventoryData={shopInventories}
-        inventoryPlayers={inventoryPlayers}
-        onInventoryAddItem={handleInventoryAddItem}
-        onInventoryRemoveItem={handleInventoryRemoveItem}
-        canManageInventory={canManageInventory}
-        stylePresets={savedTextPresets}
-        onSaveStylePreset={saveCurrentTextPreset}
-        onApplyStylePreset={applyTextPreset}
-        showTextMenu={textMenuVisible}
-        activeLayer={activeLayer}
-        onLayerChange={handleLayerChange}
-        isPlayerView={isPlayerPerspective}
-        playerName={effectivePlayerName}
-        rarityColorMap={rarityColorMap}
-        ambientLights={ambientLights}
-        selectedAmbientLightId={selectedAmbientLightId}
-        onSelectAmbientLight={handleAmbientLightSelect}
-        onCreateAmbientLight={handleCreateAmbientLight}
-        onUpdateAmbientLight={handleAmbientLightUpdate}
-        onDeleteAmbientLight={handleAmbientLightDelete}
-        gridCellSize={effectiveGridSize}
-      />
+      </div>
       {settingsTokenIds.map((id) => {
         const token = tokens.find((t) => t.id === id);
         if (!token) {
