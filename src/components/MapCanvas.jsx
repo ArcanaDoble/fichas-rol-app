@@ -58,6 +58,7 @@ import {
 } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
+import { clampShopGold, normalizeShopConfig } from '../utils/shop';
 import {
   doc,
   updateDoc,
@@ -197,6 +198,189 @@ const createRadialGradientShapes = ({
   }
 
   return shapes.length > 0 ? shapes : null;
+};
+
+const SHOP_TYPE_LABELS = {
+  weapon: 'Arma',
+  armor: 'Armadura',
+  ability: 'Habilidad',
+};
+const SHOP_TYPE_ORDER = {
+  weapon: 0,
+  armor: 1,
+  ability: 2,
+};
+
+const slugify = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
+const extractNumericValue = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value === 'string') {
+    const digits = value.replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    return Number(digits);
+  }
+  return null;
+};
+
+const ensureUniqueShopId = (type, baseSlug, idCounts) => {
+  const base = `${type}-${baseSlug || 'item'}`;
+  const count = idCounts.get(base) || 0;
+  idCounts.set(base, count + 1);
+  return count === 0 ? base : `${base}-${count + 1}`;
+};
+
+const buildShopItem = (type, raw, idCounts, index) => {
+  if (!raw) return null;
+
+  const explicitName = raw.nombre || raw.name || raw.titulo || raw.title;
+  const fallbackName = String(explicitName || '').trim() || `${SHOP_TYPE_LABELS[type] || 'Objeto'} ${index + 1}`;
+
+  const slugSource =
+    raw.id ||
+    raw.uuid ||
+    raw.type ||
+    raw.tipo ||
+    explicitName ||
+    fallbackName ||
+    `${type}-${index}`;
+  const baseSlug = slugify(slugSource) || slugify(`${fallbackName}-${index}`) || `${type}-${index}`;
+  const id = ensureUniqueShopId(type, baseSlug, idCounts);
+
+  const rarity = (raw.rareza || raw.rarity || '').toString().trim();
+
+  const tags = new Set();
+  const pushTag = (value) => {
+    if (value === undefined || value === null) return;
+    const text = String(value).trim();
+    if (!text) return;
+    tags.add(text);
+  };
+
+  const summary = [];
+  const pushSummary = (label, value) => {
+    if (value === undefined || value === null) return;
+    const text = String(value).trim();
+    if (!text) return;
+    summary.push({ label, value: text });
+  };
+
+  if (type === 'weapon') {
+    pushSummary('Daño', raw.dano || raw.daño || raw.damage);
+    pushSummary('Alcance', raw.alcance);
+    pushSummary('Consumo', raw.consumo);
+    pushSummary('Carga', raw.carga ?? raw.cargaFisica ?? raw.carga_fisica);
+    pushTag(raw.tipoDano || raw['tipo daño'] || raw.tipo);
+    pushTag(raw.tecnologia);
+    pushTag(rarity);
+    if (Array.isArray(raw.rasgos)) raw.rasgos.forEach(pushTag);
+  } else if (type === 'armor') {
+    pushSummary('Defensa', raw.defensa || raw.armadura);
+    pushSummary('Carga Física', raw.cargaFisica ?? raw.carga_fisica ?? raw.carga);
+    pushSummary('Carga Mental', raw.cargaMental ?? raw.carga_mental);
+    pushTag(raw.tipo);
+    pushTag(raw.tecnologia);
+    pushTag(rarity);
+    if (Array.isArray(raw.rasgos)) raw.rasgos.forEach(pushTag);
+  } else if (type === 'ability') {
+    pushSummary('Coste', raw.coste ?? raw.costo ?? raw.cost ?? raw.precio);
+    pushSummary('Duración', raw.duracion ?? raw['duración']);
+    pushSummary('Cooldown', raw.cooldown ?? raw.reutilizacion ?? raw['reutilización']);
+    pushTag(raw.tipo);
+    pushTag(raw.categoria);
+    pushTag(raw.elemento || raw.elemental);
+    pushTag(rarity);
+    if (Array.isArray(raw.tags)) raw.tags.forEach(pushTag);
+    if (typeof raw.tags === 'string') {
+      raw.tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .forEach(pushTag);
+    }
+  }
+
+  const description =
+    (raw.descripcion ||
+      raw.description ||
+      raw.detalles ||
+      raw.notas ||
+      raw.notes ||
+      raw.efecto ||
+      '')
+      .toString()
+      .trim() || '';
+
+  const costSource =
+    raw.valor ?? raw.cost ?? raw.coste ?? raw.costo ?? raw.precio ?? raw.price ?? raw.gold;
+  const numericCost = extractNumericValue(costSource);
+  const clampedCost = numericCost != null ? clampShopGold(numericCost) : 0;
+  const costLabel =
+    numericCost != null
+      ? numericCost.toLocaleString('es-ES')
+      : typeof costSource === 'string' && costSource.trim()
+      ? costSource.trim()
+      : '';
+
+  const searchText = [
+    fallbackName,
+    rarity,
+    ...Array.from(tags),
+    ...summary.map((entry) => entry.value),
+    description,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return {
+    id,
+    type,
+    typeLabel: SHOP_TYPE_LABELS[type] || 'Objeto',
+    name: fallbackName,
+    cost: clampedCost,
+    costLabel: costLabel || clampedCost.toLocaleString('es-ES'),
+    tags: Array.from(tags),
+    summary,
+    description,
+    rarity,
+    searchText,
+  };
+};
+
+const buildShopCatalog = (armas = [], armaduras = [], habilidades = []) => {
+  const idCounts = new Map();
+  const items = [];
+
+  armas.forEach((weapon, index) => {
+    const item = buildShopItem('weapon', weapon, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  armaduras.forEach((armor, index) => {
+    const item = buildShopItem('armor', armor, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  habilidades.forEach((ability, index) => {
+    const item = buildShopItem('ability', ability, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  return items.sort((a, b) => {
+    const typeDiff = (SHOP_TYPE_ORDER[a.type] ?? 99) - (SHOP_TYPE_ORDER[b.type] ?? 99);
+    if (typeDiff !== 0) return typeDiff;
+    return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+  });
 };
 
 const shallowEqualObjects = (objA, objB) => {
@@ -1062,6 +1246,8 @@ const MapCanvas = ({
   gridColor: propGridColor = '#ffffff',
   gridOpacity: propGridOpacity = 0.2,
   onGridSettingsChange,
+  shopConfig: propShopConfig = null,
+  onShopConfigChange,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1266,11 +1452,41 @@ const MapCanvas = ({
   const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
-  const handleShopGoldChange = useCallback((value) => {
-    const numeric = Number(value);
-    const safeValue = Number.isNaN(numeric) ? 0 : numeric;
-    setShopGold(Math.max(0, Math.min(9999, safeValue)));
-  }, []);
+  const resolvedShopConfig = useMemo(
+    () => normalizeShopConfig(propShopConfig),
+    [propShopConfig]
+  );
+
+  const shopAvailableItems = useMemo(
+    () => buildShopCatalog(armas || [], armaduras || [], habilidades || []),
+    [armas, armaduras, habilidades]
+  );
+
+  const handleShopGoldChange = useCallback(
+    (value) => {
+      if (typeof onShopConfigChange !== 'function') return;
+      const nextConfig = normalizeShopConfig({
+        ...resolvedShopConfig,
+        gold: clampShopGold(value),
+      });
+      onShopConfigChange(nextConfig);
+    },
+    [onShopConfigChange, resolvedShopConfig]
+  );
+
+  const handleShopSuggestedItemsChange = useCallback(
+    (itemIds) => {
+      if (typeof onShopConfigChange !== 'function') return;
+      const nextConfig = normalizeShopConfig({
+        ...resolvedShopConfig,
+        suggestedItemIds: Array.isArray(itemIds)
+          ? itemIds.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
+          : [],
+      });
+      onShopConfigChange(nextConfig);
+    },
+    [onShopConfigChange, resolvedShopConfig]
+  );
 
   // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
@@ -6210,8 +6426,11 @@ const MapCanvas = ({
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
-        shopGold={shopGold}
+        shopGold={resolvedShopConfig.gold}
         onShopGoldChange={handleShopGoldChange}
+        shopSuggestedItemIds={resolvedShopConfig.suggestedItemIds}
+        onShopSuggestedItemsChange={handleShopSuggestedItemsChange}
+        shopAvailableItems={shopAvailableItems}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
@@ -6718,6 +6937,11 @@ MapCanvas.propTypes = {
   gridColor: PropTypes.string,
   gridOpacity: PropTypes.number,
   onGridSettingsChange: PropTypes.func,
+  shopConfig: PropTypes.shape({
+    gold: PropTypes.number,
+    suggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+  }),
+  onShopConfigChange: PropTypes.func,
 };
 
 export default MapCanvas;

@@ -93,6 +93,9 @@ const Toolbar = ({
   onResetTextOptions,
   shopGold = 0,
   onShopGoldChange = () => {},
+  shopSuggestedItemIds = [],
+  onShopSuggestedItemsChange = () => {},
+  shopAvailableItems = [],
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -359,6 +362,9 @@ const Toolbar = ({
             gold={shopGold}
             onGoldChange={onShopGoldChange}
             readOnly={isPlayerView}
+            suggestedItemIds={shopSuggestedItemIds}
+            onSuggestedItemsChange={onShopSuggestedItemsChange}
+            availableItems={shopAvailableItems}
           />
         </motion.div>
       )}
@@ -668,6 +674,23 @@ Toolbar.propTypes = {
   onResetTextOptions: PropTypes.func,
   shopGold: PropTypes.number,
   onShopGoldChange: PropTypes.func,
+  shopSuggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+  onShopSuggestedItemsChange: PropTypes.func,
+  shopAvailableItems: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+      type: PropTypes.string.isRequired,
+      typeLabel: PropTypes.string.isRequired,
+      cost: PropTypes.number,
+      costLabel: PropTypes.string,
+      tags: PropTypes.arrayOf(PropTypes.string),
+      summary: PropTypes.array,
+      description: PropTypes.string,
+      rarity: PropTypes.string,
+      searchText: PropTypes.string,
+    })
+  ),
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,
