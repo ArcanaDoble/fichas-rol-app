@@ -58,6 +58,7 @@ import {
 } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
+import { DEFAULT_SHOP_CONFIG, clampShopGold, normalizeShopConfig } from '../utils/shop';
 import {
   doc,
   updateDoc,
@@ -199,6 +200,189 @@ const createRadialGradientShapes = ({
   return shapes.length > 0 ? shapes : null;
 };
 
+const SHOP_TYPE_LABELS = {
+  weapon: 'Arma',
+  armor: 'Armadura',
+  ability: 'Habilidad',
+};
+const SHOP_TYPE_ORDER = {
+  weapon: 0,
+  armor: 1,
+  ability: 2,
+};
+
+const slugify = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
+const extractNumericValue = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value === 'string') {
+    const digits = value.replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    return Number(digits);
+  }
+  return null;
+};
+
+const ensureUniqueShopId = (type, baseSlug, idCounts) => {
+  const base = `${type}-${baseSlug || 'item'}`;
+  const count = idCounts.get(base) || 0;
+  idCounts.set(base, count + 1);
+  return count === 0 ? base : `${base}-${count + 1}`;
+};
+
+const buildShopItem = (type, raw, idCounts, index) => {
+  if (!raw) return null;
+
+  const explicitName = raw.nombre || raw.name || raw.titulo || raw.title;
+  const fallbackName = String(explicitName || '').trim() || `${SHOP_TYPE_LABELS[type] || 'Objeto'} ${index + 1}`;
+
+  const slugSource =
+    raw.id ||
+    raw.uuid ||
+    raw.type ||
+    raw.tipo ||
+    explicitName ||
+    fallbackName ||
+    `${type}-${index}`;
+  const baseSlug = slugify(slugSource) || slugify(`${fallbackName}-${index}`) || `${type}-${index}`;
+  const id = ensureUniqueShopId(type, baseSlug, idCounts);
+
+  const rarity = (raw.rareza || raw.rarity || '').toString().trim();
+
+  const tags = new Set();
+  const pushTag = (value) => {
+    if (value === undefined || value === null) return;
+    const text = String(value).trim();
+    if (!text) return;
+    tags.add(text);
+  };
+
+  const summary = [];
+  const pushSummary = (label, value) => {
+    if (value === undefined || value === null) return;
+    const text = String(value).trim();
+    if (!text) return;
+    summary.push({ label, value: text });
+  };
+
+  if (type === 'weapon') {
+    pushSummary('Daño', raw.dano || raw.daño || raw.damage);
+    pushSummary('Alcance', raw.alcance);
+    pushSummary('Consumo', raw.consumo);
+    pushSummary('Carga', raw.carga ?? raw.cargaFisica ?? raw.carga_fisica);
+    pushTag(raw.tipoDano || raw['tipo daño'] || raw.tipo);
+    pushTag(raw.tecnologia);
+    pushTag(rarity);
+    if (Array.isArray(raw.rasgos)) raw.rasgos.forEach(pushTag);
+  } else if (type === 'armor') {
+    pushSummary('Defensa', raw.defensa || raw.armadura);
+    pushSummary('Carga Física', raw.cargaFisica ?? raw.carga_fisica ?? raw.carga);
+    pushSummary('Carga Mental', raw.cargaMental ?? raw.carga_mental);
+    pushTag(raw.tipo);
+    pushTag(raw.tecnologia);
+    pushTag(rarity);
+    if (Array.isArray(raw.rasgos)) raw.rasgos.forEach(pushTag);
+  } else if (type === 'ability') {
+    pushSummary('Coste', raw.coste ?? raw.costo ?? raw.cost ?? raw.precio);
+    pushSummary('Duración', raw.duracion ?? raw['duración']);
+    pushSummary('Cooldown', raw.cooldown ?? raw.reutilizacion ?? raw['reutilización']);
+    pushTag(raw.tipo);
+    pushTag(raw.categoria);
+    pushTag(raw.elemento || raw.elemental);
+    pushTag(rarity);
+    if (Array.isArray(raw.tags)) raw.tags.forEach(pushTag);
+    if (typeof raw.tags === 'string') {
+      raw.tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .forEach(pushTag);
+    }
+  }
+
+  const description =
+    (raw.descripcion ||
+      raw.description ||
+      raw.detalles ||
+      raw.notas ||
+      raw.notes ||
+      raw.efecto ||
+      '')
+      .toString()
+      .trim() || '';
+
+  const costSource =
+    raw.valor ?? raw.cost ?? raw.coste ?? raw.costo ?? raw.precio ?? raw.price ?? raw.gold;
+  const numericCost = extractNumericValue(costSource);
+  const clampedCost = numericCost != null ? clampShopGold(numericCost) : 0;
+  const costLabel =
+    numericCost != null
+      ? numericCost.toLocaleString('es-ES')
+      : typeof costSource === 'string' && costSource.trim()
+      ? costSource.trim()
+      : '';
+
+  const searchText = [
+    fallbackName,
+    rarity,
+    ...Array.from(tags),
+    ...summary.map((entry) => entry.value),
+    description,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return {
+    id,
+    type,
+    typeLabel: SHOP_TYPE_LABELS[type] || 'Objeto',
+    name: fallbackName,
+    cost: clampedCost,
+    costLabel: costLabel || clampedCost.toLocaleString('es-ES'),
+    tags: Array.from(tags),
+    summary,
+    description,
+    rarity,
+    searchText,
+  };
+};
+
+const buildShopCatalog = (armas = [], armaduras = [], habilidades = []) => {
+  const idCounts = new Map();
+  const items = [];
+
+  armas.forEach((weapon, index) => {
+    const item = buildShopItem('weapon', weapon, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  armaduras.forEach((armor, index) => {
+    const item = buildShopItem('armor', armor, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  habilidades.forEach((ability, index) => {
+    const item = buildShopItem('ability', ability, idCounts, index);
+    if (item) items.push(item);
+  });
+
+  return items.sort((a, b) => {
+    const typeDiff = (SHOP_TYPE_ORDER[a.type] ?? 99) - (SHOP_TYPE_ORDER[b.type] ?? 99);
+    if (typeDiff !== 0) return typeDiff;
+    return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+  });
+};
+
 const shallowEqualObjects = (objA, objB) => {
   if (objA === objB) return true;
   if (!objA || !objB) return false;
@@ -213,6 +397,36 @@ const shallowEqualObjects = (objA, objB) => {
     if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
       return false;
     }
+  }
+
+  return true;
+};
+
+const shopConfigsEqual = (configA = DEFAULT_SHOP_CONFIG, configB = DEFAULT_SHOP_CONFIG) => {
+  if (configA === configB) return true;
+  if (!configA || !configB) return false;
+
+  if (configA.gold !== configB.gold) return false;
+
+  const idsA = Array.isArray(configA.suggestedItemIds) ? configA.suggestedItemIds : [];
+  const idsB = Array.isArray(configB.suggestedItemIds) ? configB.suggestedItemIds : [];
+
+  if (idsA.length !== idsB.length) return false;
+  for (let index = 0; index < idsA.length; index += 1) {
+    if (idsA[index] !== idsB[index]) return false;
+  }
+
+  const walletsA = configA.playerWallets || {};
+  const walletsB = configB.playerWallets || {};
+  const keysA = Object.keys(walletsA).sort();
+  const keysB = Object.keys(walletsB).sort();
+
+  if (keysA.length !== keysB.length) return false;
+
+  for (let index = 0; index < keysA.length; index += 1) {
+    const key = keysA[index];
+    if (key !== keysB[index]) return false;
+    if (walletsA[key] !== walletsB[key]) return false;
   }
 
   return true;
@@ -1062,6 +1276,8 @@ const MapCanvas = ({
   gridColor: propGridColor = '#ffffff',
   gridOpacity: propGridOpacity = 0.2,
   onGridSettingsChange,
+  shopConfig: propShopConfig = null,
+  onShopConfigChange,
 }) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1264,9 +1480,104 @@ const MapCanvas = ({
   const gridOpacityDraggingRef = useRef(false);
   const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
-
-  // Estado para simulación de vista de jugador
   const [playerViewMode, setPlayerViewMode] = useState(false);
+  const [simulatedPlayer, setSimulatedPlayer] = useState('');
+
+  const resolvedShopConfig = useMemo(
+    () => normalizeShopConfig(propShopConfig),
+    [propShopConfig]
+  );
+
+  const shopAvailableItems = useMemo(
+    () => buildShopCatalog(armas || [], armaduras || [], habilidades || []),
+    [armas, armaduras, habilidades]
+  );
+
+  const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
+
+  useEffect(() => {
+    setShopDraftConfig((prev) => {
+      if (shopConfigsEqual(prev, resolvedShopConfig)) return prev;
+      return resolvedShopConfig;
+    });
+  }, [resolvedShopConfig]);
+
+  const activeShopPlayers = useMemo(() => {
+    const owners = new Set();
+    (tokens || []).forEach((token) => {
+      const owner = (token?.controlledBy || '').trim();
+      if (!owner) return;
+      if (owner.toLowerCase() === 'master') return;
+      owners.add(owner);
+    });
+    return Array.from(owners).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [tokens]);
+
+  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
+  const effectivePlayerName = isPlayerPerspective
+    ? userType === 'player'
+      ? playerName
+      : simulatedPlayer
+    : '';
+
+  const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
+
+  const shopUiConfig = isMasterShopEditor ? shopDraftConfig : resolvedShopConfig;
+
+  const shopHasPendingChanges =
+    isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
+
+  const handleShopDraftChange = useCallback(
+    (updater) => {
+      if (!isMasterShopEditor) return;
+      setShopDraftConfig((prev) => {
+        const current = prev || DEFAULT_SHOP_CONFIG;
+        const next =
+          typeof updater === 'function'
+            ? updater(current)
+            : { ...current, ...updater };
+        return normalizeShopConfig(next);
+      });
+    },
+    [isMasterShopEditor]
+  );
+
+  const handleShopApply = useCallback(() => {
+    if (!isMasterShopEditor || typeof onShopConfigChange !== 'function') return;
+    onShopConfigChange(shopDraftConfig);
+  }, [isMasterShopEditor, onShopConfigChange, shopDraftConfig]);
+
+  const handleShopPurchase = useCallback(
+    (item) => {
+      if (!isPlayerPerspective || !effectivePlayerName || typeof onShopConfigChange !== 'function') {
+        return { success: false, reason: 'not-allowed' };
+      }
+      if (!item || typeof item.cost !== 'number') {
+        return { success: false, reason: 'missing-cost' };
+      }
+      const currentWallet =
+        resolvedShopConfig.playerWallets[effectivePlayerName] ?? resolvedShopConfig.gold;
+      if (item.cost > currentWallet) {
+        return { success: false, reason: 'insufficient-gold' };
+      }
+      const nextWallet = clampShopGold(currentWallet - item.cost);
+      const nextConfig = normalizeShopConfig({
+        ...resolvedShopConfig,
+        playerWallets: {
+          ...resolvedShopConfig.playerWallets,
+          [effectivePlayerName]: nextWallet,
+        },
+      });
+      onShopConfigChange(nextConfig);
+      return { success: true, remaining: nextWallet };
+    },
+    [
+      effectivePlayerName,
+      isPlayerPerspective,
+      onShopConfigChange,
+      resolvedShopConfig,
+    ]
+  );
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2014,7 +2325,6 @@ const MapCanvas = ({
     clearMultiSelection();
   }, []);
 
-  const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
   const [tokenSwitcherPos, setTokenSwitcherPos] = useState(() => {
     try {
@@ -6203,13 +6513,22 @@ const MapCanvas = ({
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
+        shopConfig={shopUiConfig}
+        onShopConfigChange={handleShopDraftChange}
+        onShopApply={isMasterShopEditor ? handleShopApply : undefined}
+        shopActivePlayers={activeShopPlayers}
+        shopAvailableItems={shopAvailableItems}
+        onShopPurchase={handleShopPurchase}
+        shopHasPendingChanges={shopHasPendingChanges}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
         showTextMenu={textMenuVisible}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
-        isPlayerView={isPlayerView}
+        isPlayerView={isPlayerPerspective}
+        playerName={effectivePlayerName}
+        rarityColorMap={rarityColorMap}
         ambientLights={ambientLights}
         selectedAmbientLightId={selectedAmbientLightId}
         onSelectAmbientLight={handleAmbientLightSelect}
@@ -6709,6 +7028,12 @@ MapCanvas.propTypes = {
   gridColor: PropTypes.string,
   gridOpacity: PropTypes.number,
   onGridSettingsChange: PropTypes.func,
+  shopConfig: PropTypes.shape({
+    gold: PropTypes.number,
+    suggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+    playerWallets: PropTypes.objectOf(PropTypes.number),
+  }),
+  onShopConfigChange: PropTypes.func,
 };
 
 export default MapCanvas;

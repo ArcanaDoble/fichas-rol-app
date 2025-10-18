@@ -59,6 +59,7 @@ import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
+import { DEFAULT_SHOP_CONFIG, normalizeShopConfig } from './utils/shop';
 import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
 import { applyIconConversions } from './utils/iconConversions';
 import PageSelector from './components/PageSelector';
@@ -1290,6 +1291,9 @@ function App() {
   const [canvasTexts, setCanvasTexts] = useState([]);
   const [canvasTiles, setCanvasTiles] = useState([]);
   const [canvasAmbientLights, setCanvasAmbientLights] = useState([]);
+  const [canvasShopConfig, setCanvasShopConfig] = useState(() =>
+    normalizeShopConfig(DEFAULT_SHOP_CONFIG)
+  );
   const [activeLayer, setActiveLayer] = useState('fichas');
   const [tokenSheets, setTokenSheets] = useState(() => {
     const stored = localStorage.getItem('tokenSheets');
@@ -1566,8 +1570,13 @@ function App() {
     const loadPages = async () => {
       const snap = await getDocs(collection(db, 'pages'));
       const loaded = snap.docs.map((d) => {
-        const { lines, texts, walls, tiles, ambientLights, ...meta } = d.data();
-        return { id: d.id, ...meta };
+        const data = d.data();
+        const { lines, texts, walls, tiles, ambientLights, ...meta } = data;
+        return {
+          id: d.id,
+          ...meta,
+          shopConfig: normalizeShopConfig(data.shopConfig),
+        };
       });
       if (loaded.length === 0) {
         // Crear canvas con fondo blanco y grid negro para la página por defecto
@@ -1592,10 +1601,12 @@ function App() {
           texts: [],
           tiles: [],
           ambientLights: [],
+          shopConfig: normalizeShopConfig(DEFAULT_SHOP_CONFIG),
         };
         await setDoc(doc(db, 'pages', defaultPage.id), sanitize(defaultPage));
         const { lines, walls, texts, tiles, ambientLights, ...meta } = defaultPage;
         setPages([meta]);
+        setCanvasShopConfig(normalizeShopConfig(defaultPage.shopConfig));
         // Establecer la primera página como visible para jugadores por defecto
         setPlayerVisiblePageId(defaultPage.id);
         await setDoc(doc(db, 'gameSettings', 'playerVisibility'), {
@@ -1603,6 +1614,9 @@ function App() {
         });
       } else {
         setPages(loaded);
+        if (loaded[0]) {
+          setCanvasShopConfig(normalizeShopConfig(loaded[0].shopConfig));
+        }
       }
       pagesLoadedRef.current = true;
     };
@@ -1642,6 +1656,7 @@ function App() {
         if (docSnap.metadata.hasPendingWrites) return;
         if (docSnap.exists()) {
           const pageData = docSnap.data();
+          const normalizedShopConfig = normalizeShopConfig(pageData.shopConfig);
           setEnableDarkness(
             pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
           );
@@ -1679,6 +1694,7 @@ function App() {
                   pageData.gridOpacity !== undefined
                     ? Math.max(0, Math.min(1, pageData.gridOpacity))
                     : updatedPages[pageIndex].gridOpacity ?? 0.2,
+                shopConfig: normalizedShopConfig,
               };
               return updatedPages;
             }
@@ -1689,6 +1705,7 @@ function App() {
           setCanvasTexts(pageData.texts || []);
           setCanvasTiles(pageData.tiles || []);
           setCanvasAmbientLights(pageData.ambientLights || []);
+          setCanvasShopConfig(normalizedShopConfig);
         }
       },
       (error) => {
@@ -1803,6 +1820,13 @@ function App() {
       (docSnap) => {
         if (docSnap.exists()) {
           const pageData = docSnap.data();
+          const normalizedShopConfig = normalizeShopConfig(pageData.shopConfig);
+          setCanvasShopConfig(normalizedShopConfig);
+          setPages((prev) =>
+            prev.map((p, index) =>
+              index === currentPage ? { ...p, shopConfig: normalizedShopConfig } : p
+            )
+          );
           setCanvasLines(pageData.lines || []);
           setCanvasWalls(pageData.walls || []);
           setCanvasTexts(pageData.texts || []);
@@ -1996,6 +2020,22 @@ function App() {
     }
   };
 
+  const handleShopConfigChange = useCallback(
+    (nextConfig) => {
+      const normalized = normalizeShopConfig(nextConfig);
+      setCanvasShopConfig(normalized);
+      const pageId = pages[currentPage]?.id;
+      setPages((ps) =>
+        ps.map((p, index) => (index === currentPage ? { ...p, shopConfig: normalized } : p))
+      );
+      if (!pageId) return;
+      updateDoc(doc(db, 'pages', pageId), { shopConfig: sanitize(normalized) }).catch((error) => {
+        console.error('Error actualizando configuración de tienda:', error);
+      });
+    },
+    [currentPage, pages]
+  );
+
   useEffect(() => {
     saveVersionRef.current.tokens++;
     saveVersionRef.current.lines++;
@@ -2033,6 +2073,7 @@ function App() {
         if (!snap.exists()) return;
 
         const data = snap.data();
+        const normalizedShopConfig = normalizeShopConfig(data.shopConfig);
         const tokenSnap = await getDocs(collection(db, 'pages', page.id, 'tokens'));
         const tokens = tokenSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const tokensWithIds = await ensureTokenSheetIds(page.id, tokens);
@@ -2047,6 +2088,7 @@ function App() {
         setCanvasTexts(data.texts || []);
         setCanvasTiles(data.tiles || []);
         setCanvasAmbientLights(data.ambientLights || []);
+        setCanvasShopConfig(normalizedShopConfig);
         setCanvasBackground(data.background || null);
         setGridSize(data.gridSize || 1);
         setGridCells(data.gridCells || 1);
@@ -2099,6 +2141,7 @@ function App() {
             gridOffsetY: data.gridOffsetY || 0,
             tiles: data.tiles || [],
             ambientLights: data.ambientLights || [],
+            shopConfig: normalizedShopConfig,
           };
           if (pageDataEqual(existing, meta)) return ps;
           return ps.map((p, i) => (i === currentPage ? meta : p));
@@ -2567,10 +2610,12 @@ function App() {
       walls: [],
       texts: [],
       tiles: [],
+      shopConfig: normalizeShopConfig(DEFAULT_SHOP_CONFIG),
     };
     await setDoc(doc(db, 'pages', newPage.id), sanitize(newPage));
     const { lines, walls, texts, tiles, ...meta } = newPage;
     setPages((ps) => [...ps, meta]);
+    setCanvasShopConfig(normalizeShopConfig(newPage.shopConfig));
     setCurrentPage(pages.length);
   };
 
@@ -2582,6 +2627,9 @@ function App() {
       typeof sanitizedData.gridColor === 'string'
     ) {
       sanitizedData.gridColor = sanitizedData.gridColor.toLowerCase();
+    }
+    if (sanitizedData.shopConfig !== undefined) {
+      sanitizedData.shopConfig = normalizeShopConfig(sanitizedData.shopConfig);
     }
     if (pageId) {
       const { tokens, ...rest } = sanitizedData;
@@ -2625,6 +2673,8 @@ function App() {
       if (sanitizedData.tiles !== undefined) setCanvasTiles(sanitizedData.tiles);
       if (sanitizedData.ambientLights !== undefined)
         setCanvasAmbientLights(sanitizedData.ambientLights);
+      if (sanitizedData.shopConfig !== undefined)
+        setCanvasShopConfig(sanitizedData.shopConfig);
     }
   };
 
@@ -4790,6 +4840,25 @@ function App() {
       );
     }
 
+    const handlePlayerShopConfigChange = (nextConfig) => {
+      const normalized = normalizeShopConfig(nextConfig);
+      const pageId = effectivePage?.id;
+      setPages((prev) => {
+        if (effectivePageIndex < 0 || effectivePageIndex >= prev.length) return prev;
+        const updated = [...prev];
+        updated[effectivePageIndex] = {
+          ...updated[effectivePageIndex],
+          shopConfig: normalized,
+        };
+        return updated;
+      });
+      if (pageId) {
+        updateDoc(doc(db, 'pages', pageId), { shopConfig: sanitize(normalized) }).catch((error) => {
+          console.error('Error actualizando tienda del jugador:', error);
+        });
+      }
+    };
+
     return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
@@ -4901,6 +4970,8 @@ function App() {
             }
             enableDarkness={effectivePage?.enableDarkness || false}
             darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+            shopConfig={effectivePage?.shopConfig}
+            onShopConfigChange={handlePlayerShopConfigChange}
             activeLayer="fichas"
             enemies={enemies}
             players={[playerName]}
@@ -7433,6 +7504,7 @@ function App() {
               showGrid={showGrid}
               gridColor={gridColor}
               gridOpacity={gridOpacity}
+              shopConfig={canvasShopConfig}
               tokens={canvasTokens}
               onTokensChange={(updater) => {
                 setCanvasTokens((prev) => {
@@ -7466,6 +7538,7 @@ function App() {
               onTilesChange={setCanvasTiles}
               ambientLights={canvasAmbientLights}
               onAmbientLightsChange={setCanvasAmbientLights}
+              onShopConfigChange={handleShopConfigChange}
               enemies={enemies}
               onEnemyUpdate={updateEnemyFromToken}
               players={existingPlayers}
