@@ -210,7 +210,7 @@ const ShopMenu = ({
       highlightTimeoutRef.current = setTimeout(() => {
         setHighlightPulse((current) => (current?.id === id ? null : current));
         highlightTimeoutRef.current = null;
-      }, 900);
+      }, 1400);
     },
     [clearHighlightTimeout]
   );
@@ -432,6 +432,7 @@ const ShopMenu = ({
   const activeItem =
     activeEntry?.item || (activeItemId ? catalogMap.get(activeItemId) : null);
   const activeVisuals = activeItem ? buildItemVisuals(activeItem, rarityColorMap) : null;
+  const activeItemSold = !readOnly && lastPurchase?.itemId === activeItemId;
 
   const handleBaseGoldChange = (event) => {
     if (!isEditable || !onConfigChange) return;
@@ -846,6 +847,8 @@ const ShopMenu = ({
                         const isHighlighted = highlightPulse?.id === id;
                         const highlightTone =
                           highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
+                        const wasSoldByPlayer =
+                          !readOnly && lastPurchase?.itemId === id;
                         return (
                           <motion.button
                             key={id}
@@ -873,9 +876,17 @@ const ShopMenu = ({
                                     ? 'border-amber-400/70'
                                     : 'border-emerald-400/60'
                                 }`}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: [0.25, 0.6, 0], scale: [1, 1.06, 1.12] }}
-                                transition={{ duration: 0.85, ease: 'easeOut' }}
+                                initial={{ opacity: 0, scale: 0.94 }}
+                                animate={{
+                                  opacity: [0.15, 0.7, 0.6, 0],
+                                  scale: [1, 1.04, 1.08, 1.12],
+                                }}
+                                transition={{
+                                  duration: 1.25,
+                                  ease: 'easeInOut',
+                                  times: [0, 0.35, 0.75, 1],
+                                }}
+                                style={{ willChange: 'transform, opacity', zIndex: 30 }}
                               />
                             )}
                             <div className="flex items-start justify-between text-[0.65rem] uppercase tracking-[0.35em] text-slate-300">
@@ -911,9 +922,29 @@ const ShopMenu = ({
                                     : 'bg-emerald-400/10'
                                 }`}
                                 initial={{ opacity: 0 }}
-                                animate={{ opacity: [0.3, 0.15, 0] }}
-                                transition={{ duration: 0.9, ease: 'easeOut' }}
+                                animate={{ opacity: [0.35, 0.25, 0.15, 0] }}
+                                transition={{
+                                  duration: 1.3,
+                                  ease: 'easeInOut',
+                                  times: [0, 0.45, 0.75, 1],
+                                }}
+                                style={{ willChange: 'opacity', zIndex: 20 }}
                               />
+                            )}
+                            {wasSoldByPlayer && (
+                              <div
+                                className="pointer-events-none absolute inset-0 rounded-[18px] border-2 border-amber-400/70 bg-amber-500/5"
+                                style={{ zIndex: 15 }}
+                              />
+                            )}
+                            {wasSoldByPlayer && (
+                              <div
+                                className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-amber-100 shadow-sm"
+                                style={{ zIndex: 25 }}
+                              >
+                                <FiShoppingBag className="text-xs" />
+                                Vendido
+                              </div>
                             )}
                             {isEditable && (
                               <button
@@ -989,6 +1020,11 @@ const ShopMenu = ({
                   <div className="mt-2 text-lg font-semibold text-slate-100 leading-snug">
                     {activeItem.name}
                   </div>
+                  {activeItemSold && (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/70 bg-amber-500/20 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100">
+                      <FiShoppingBag className="text-sm" /> Vendido
+                    </div>
+                  )}
                   {activeItem.tags?.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {activeItem.tags.slice(0, 6).map((tag) => (
