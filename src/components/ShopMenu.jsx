@@ -561,12 +561,14 @@ const ShopMenu = ({
       const result = await Promise.resolve(onPurchase(activeItem));
       if (result && result.success) {
         const remaining = typeof result.remaining === 'number' ? result.remaining : null;
+        const baseMessage = `¡Has comprado ${activeItem.name}!`;
+        const inventoryMessage = ' El objeto se ha guardado en tu inventario.';
         setPurchaseStatus({
           type: 'success',
           message:
             remaining !== null
-              ? `¡Has comprado ${activeItem.name}! Oro restante: ${remaining}.`
-              : `¡Has comprado ${activeItem.name}!`,
+              ? `${baseMessage} Oro restante: ${remaining}.${inventoryMessage}`
+              : `${baseMessage}${inventoryMessage}`,
         });
         triggerHighlight(activeEntry?.id || activeItem.id, 'purchase');
       } else {
