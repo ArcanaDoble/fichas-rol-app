@@ -949,7 +949,7 @@ const ShopMenu = ({
                             )}
                             {wasLastPurchase && (
                               <div
-                                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                                className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
                                 style={{ zIndex: 25 }}
                               >
                                 <span className="flex items-center gap-2 px-6 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[200%] justify-center">
@@ -1033,7 +1033,7 @@ const ShopMenu = ({
                   </div>
                   {activeItemSold && (
                     <div
-                      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                      className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
                       style={{ zIndex: 35 }}
                     >
                       <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
