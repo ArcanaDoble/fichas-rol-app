@@ -9,18 +9,24 @@ import {
   FiImage,
 } from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
-import { GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons/gi';
+import { GiBrickWall, GiCrosshair, GiShoppingBag, GiBackpack } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 import ShopMenu from './ShopMenu';
+import Inventory from './inventory/Inventory';
+import InventoryManager from './inventory/InventoryManager';
 
-const tools = [
+const primaryTools = [
   { id: 'select', icon: FiMousePointer },
   { id: 'draw', icon: FiEdit2 },
   { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
-  { id: 'shop', icon: GiShoppingBag },
   { id: 'target', icon: GiCrosshair },
+];
+
+const specialTools = [
+  { id: 'shop', icon: GiShoppingBag },
+  { id: 'inventory', icon: GiBackpack },
 ];
 
 const brushOptions = [
@@ -114,11 +120,33 @@ const Toolbar = ({
   onUpdateAmbientLight = () => {},
   onDeleteAmbientLight = () => {},
   gridCellSize = 50,
+  inventoryPlayers = [],
+  isMaster = false,
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
-    ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'shop', 'target'].includes(tool.id))
-    : tools;
+    ? primaryTools.filter(tool => ['select', 'draw', 'measure', 'text', 'target'].includes(tool.id))
+    : primaryTools;
+
+  const renderToolButton = ({ id, icon: Icon }) => (
+    <button
+      key={id}
+      onClick={() => onSelect(id)}
+      className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+        activeTool === id
+          ? id === 'target'
+            ? 'bg-red-700'
+            : id === 'shop'
+            ? 'bg-amber-600'
+            : id === 'inventory'
+            ? 'bg-emerald-600'
+            : 'bg-gray-700'
+          : 'bg-gray-800 hover:bg-gray-700'
+      }`}
+    >
+      <Icon />
+    </button>
+  );
 
   const selectedAmbientLight = useMemo(
     () => ambientLights.find((light) => light.id === selectedAmbientLightId) || null,
@@ -160,26 +188,17 @@ const Toolbar = ({
 
   return (
   <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
-    <div className="flex flex-col items-center space-y-2 flex-1">
-      {availableTools.map(({ id, icon: Icon }) => (
-        <button
-          key={id}
-          onClick={() => onSelect(id)}
-          className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-            activeTool === id
-              ? id === 'target'
-                ? 'bg-red-700'
-                : id === 'shop'
-                ? 'bg-amber-600'
-                : 'bg-gray-700'
-              : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          <Icon />
-        </button>
-      ))}
+    <div className="flex flex-col items-center flex-1 w-full">
+      <div className="flex flex-col items-center space-y-2">
+        {availableTools.map(renderToolButton)}
+      </div>
+      <div className="w-full border-t border-gray-700 mt-4 pt-3 flex flex-col items-center space-y-2">
+        {specialTools
+          .filter((tool) => (isPlayerView ? ['shop', 'inventory'].includes(tool.id) : true))
+          .map(renderToolButton)}
+      </div>
     </div>
-    
+
     {/* Sección de Capas - ocultar para jugadores */}
     {!isPlayerView && (
       <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
@@ -374,6 +393,42 @@ const Toolbar = ({
             rarityColorMap={rarityColorMap}
             hasPendingChanges={shopHasPendingChanges}
           />
+        </motion.div>
+      )}
+      {activeTool === 'inventory' && (
+        <motion.div
+          key="inventory-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 top-2"
+        >
+          {isPlayerView ? (
+            <div className="bg-slate-900/95 text-white p-4 sm:p-6 rounded-2xl shadow-2xl w-[20rem] sm:w-[26rem] max-h-[90vh] overflow-y-auto space-y-4 border border-slate-700/60">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold tracking-wide">Inventario personal</h2>
+                <p className="text-sm text-slate-300">
+                  Gestiona los objetos que has comprado o generado en la partida.
+                </p>
+              </div>
+              {playerName ? (
+                <Inventory playerName={playerName} />
+              ) : (
+                <p className="text-sm text-slate-300">
+                  Inicia sesión como jugador para vincular un inventario.
+                </p>
+              )}
+            </div>
+          ) : isMaster ? (
+            <InventoryManager players={inventoryPlayers} />
+          ) : (
+            <div className="bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl w-[20rem] border border-slate-700/60">
+              <p className="text-sm text-slate-300">
+                Solo el máster o los jugadores pueden gestionar inventarios.
+              </p>
+            </div>
+          )}
         </motion.div>
       )}
       {showTextMenu && (
@@ -747,6 +802,8 @@ Toolbar.propTypes = {
   onUpdateAmbientLight: PropTypes.func,
   onDeleteAmbientLight: PropTypes.func,
   gridCellSize: PropTypes.number,
+  inventoryPlayers: PropTypes.arrayOf(PropTypes.string),
+  isMaster: PropTypes.bool,
 };
 
 export default Toolbar;

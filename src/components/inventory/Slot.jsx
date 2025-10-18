@@ -10,6 +10,9 @@ const borderColors = {
   chatarra: 'border-yellow-400',
   comida: 'border-green-400',
   polvora: 'border-gray-500',
+  weapon: 'border-rose-500',
+  armor: 'border-slate-500',
+  ability: 'border-violet-500',
 };
 
 const ringColors = {
@@ -17,6 +20,9 @@ const ringColors = {
   chatarra: 'ring-yellow-400',
   comida: 'ring-green-400',
   polvora: 'ring-gray-500',
+  weapon: 'ring-rose-400',
+  armor: 'ring-slate-400',
+  ability: 'ring-violet-400',
 };
 
 const Slot = ({ id, item, onDrop, onDelete }) => {
@@ -87,7 +93,18 @@ const Slot = ({ id, item, onDrop, onDelete }) => {
           transition={{ duration: isMobile ? 0.2 : 0.4, type: 'spring', bounce: 0.5 }}
           onAnimationComplete={() => setAnimateDrop(false)}
         >
-          <ItemToken type={item.type} count={item.count} fromSlot={id} />
+          <ItemToken
+            type={item.type}
+            count={item.count}
+            fromSlot={id}
+            name={item.name}
+            itemId={item.itemId}
+            rarity={item.rarity}
+            description={item.description}
+            typeLabel={item.typeLabel}
+            cost={item.cost}
+            costLabel={item.costLabel}
+          />
         </motion.div>
       )}
     </div>
