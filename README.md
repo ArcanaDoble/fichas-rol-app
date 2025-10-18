@@ -38,6 +38,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Nombre escalable** - La fuente del nombre aumenta si el token ocupa varias casillas
 - **Mini-barras en tokens** - Cada stat se muestra sobre el token mediante cápsulas interactivas y puedes elegir su posición
 - **Barras compactas** - Las barras de recursos son más pequeñas y están más cerca del token
+
+### 🛒 Inventario enlazado con la tienda (NUEVO)
+
+- **Atajos independientes para tienda e inventario** - La barra de herramientas ahora separa la tienda del resto de utilidades y ofrece un acceso directo dedicado al inventario.
+- **Inventario persistente por jugador** - Cada compra desde la tienda se almacena automáticamente en el inventario personal del jugador para consultarla y organizarla con drag & drop.
+- **Panel maestro para todos los inventarios** - El máster puede revisar, crear o modificar los inventarios de cualquier jugador desde un panel centralizado.
 - **Corrección de miniaturas** - Vista previa sin parpadeos al pasar el ratón sobre las imágenes del sidebar
 - **Ajustes al hacer doble clic** - Haz doble clic en un token para abrir su menú de configuración
 - **Iconos de control de tamaño fijo** - Engranaje, círculo de rotación y barras mantienen un tamaño constante al hacer zoom

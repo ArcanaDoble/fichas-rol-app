@@ -79,6 +79,11 @@ import {
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import useAttackRequests from '../hooks/useAttackRequests';
+import {
+  createDefaultInventoryState,
+  ensureInventoryState,
+  createInventoryTokenFromShopItem,
+} from './inventory/inventoryState';
 
 
 
@@ -1529,6 +1534,26 @@ const MapCanvas = ({
     return Array.from(owners).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [tokens]);
 
+  const inventoryPlayers = useMemo(() => {
+    const map = new Map();
+    activeShopPlayers.forEach((name) => {
+      if (!name) return;
+      const trimmed = name.trim();
+      map.set(trimmed.toLowerCase(), trimmed);
+    });
+    const walletEntries = Object.keys(shopUiConfig?.playerWallets || {});
+    walletEntries.forEach((name) => {
+      if (typeof name !== 'string') return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, trimmed);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [activeShopPlayers, shopUiConfig]);
+
   const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
   const effectivePlayerName = isPlayerPerspective
     ? userType === 'player'
@@ -1540,6 +1565,35 @@ const MapCanvas = ({
 
   const shopHasPendingChanges =
     isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
+
+  const persistItemInInventory = useCallback(
+    async (player, item) => {
+      if (!player || !item) return;
+      const inventoryRef = doc(db, 'inventory', player);
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(inventoryRef);
+          const baseState = snap.exists()
+            ? ensureInventoryState(snap.data())
+            : createDefaultInventoryState();
+          const nextToken = createInventoryTokenFromShopItem(item);
+          const slots = baseState.slots.map((slot) => ({
+            ...slot,
+            item: slot.item ? { ...slot.item } : null,
+          }));
+          const tokens = baseState.tokens.map((token) => ({ ...token }));
+          transaction.set(inventoryRef, {
+            slots,
+            tokens: [...tokens, nextToken],
+            nextId: baseState.nextId,
+          });
+        });
+      } catch (error) {
+        console.error('Error agregando objeto al inventario:', error);
+      }
+    },
+    []
+  );
 
   const handleShopDraftChange = useCallback(
     (updater) => {
@@ -1627,6 +1681,9 @@ const MapCanvas = ({
         );
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
+        if (effectivePlayerName) {
+          await persistItemInInventory(effectivePlayerName, item);
+        }
         return { success: true, remaining };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
@@ -1645,6 +1702,7 @@ const MapCanvas = ({
       isPlayerPerspective,
       onShopConfigChange,
       pageId,
+      persistItemInInventory,
     ]
   );
 
@@ -6605,6 +6663,8 @@ const MapCanvas = ({
         onUpdateAmbientLight={handleAmbientLightUpdate}
         onDeleteAmbientLight={handleAmbientLightDelete}
         gridCellSize={effectiveGridSize}
+        inventoryPlayers={inventoryPlayers}
+        isMaster={userType === 'master'}
       />
       {settingsTokenIds.map((id) => {
         const token = tokens.find((t) => t.id === id);
