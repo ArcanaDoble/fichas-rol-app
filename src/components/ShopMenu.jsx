@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { FaCoins } from 'react-icons/fa';
 import {
@@ -8,8 +8,10 @@ import {
   FiPlus,
   FiRefreshCw,
   FiSearch,
+  FiShoppingBag,
   FiX,
 } from 'react-icons/fi';
+import { AnimatePresence, motion } from 'framer-motion';
 import { clampShopGold, normalizeShopConfig, SHOP_GOLD_BOUNDS } from '../utils/shop';
 
 const navigationTabs = [
@@ -135,9 +137,20 @@ const ShopMenu = ({
   const [activeItemId, setActiveItemId] = useState(null);
   const [purchaseStatus, setPurchaseStatus] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [highlightPulse, setHighlightPulse] = useState(null);
+  const highlightTimeoutRef = useRef(null);
+  const lastPurchaseRef = useRef(null);
+  const [masterPurchaseNotice, setMasterPurchaseNotice] = useState(null);
   const normalizedConfig = useMemo(() => normalizeShopConfig(config), [config]);
 
-  const { gold: baseGold, suggestedItemIds = [], playerWallets = {} } = normalizedConfig;
+  const {
+    gold: baseGold,
+    suggestedItemIds = [],
+    playerWallets = {},
+    lastPurchase,
+  } = normalizedConfig;
+
+  const previousSuggestionsRef = useRef([...(suggestedItemIds || [])]);
 
   const normalizedSearch = search.trim().toLowerCase();
 
@@ -181,6 +194,68 @@ const ShopMenu = ({
     const filtered = pool.filter((item) => !suggestedItemIds.includes(item.id));
     return filtered.slice(0, normalizedSearch ? MAX_RESULTS : Math.min(MAX_RESULTS, 8));
   }, [availableItems, normalizedSearch, readOnly, suggestedItemIds]);
+
+  const clearHighlightTimeout = useCallback(() => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+  }, []);
+
+  const triggerHighlight = useCallback(
+    (id, reason = 'added') => {
+      if (!id) return;
+      setHighlightPulse({ id, reason, key: `${id}-${Date.now()}-${reason}` });
+      clearHighlightTimeout();
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightPulse((current) => (current?.id === id ? null : current));
+        highlightTimeoutRef.current = null;
+      }, 1400);
+    },
+    [clearHighlightTimeout]
+  );
+
+  useEffect(() => () => clearHighlightTimeout(), [clearHighlightTimeout]);
+
+  useEffect(() => {
+    const previous = previousSuggestionsRef.current || [];
+    const added = suggestedItemIds.find((id) => id && !previous.includes(id));
+    if (added) {
+      triggerHighlight(added, 'added');
+    }
+    previousSuggestionsRef.current = [...suggestedItemIds];
+  }, [suggestedItemIds, triggerHighlight]);
+
+  useEffect(() => {
+    if (!lastPurchase || !lastPurchase.itemId) return;
+    const previous = lastPurchaseRef.current;
+    const hasChanged =
+      !previous ||
+      previous.itemId !== lastPurchase.itemId ||
+      previous.timestamp !== lastPurchase.timestamp;
+    if (hasChanged) {
+      triggerHighlight(lastPurchase.itemId, 'purchase');
+      if (!readOnly) {
+        const noticeKey = `${lastPurchase.itemId}-${lastPurchase.timestamp || Date.now()}`;
+        setMasterPurchaseNotice({ ...lastPurchase, key: noticeKey });
+      }
+    }
+    lastPurchaseRef.current = lastPurchase;
+  }, [lastPurchase, readOnly, triggerHighlight]);
+
+  useEffect(() => {
+    if (readOnly) {
+      setMasterPurchaseNotice(null);
+    }
+  }, [readOnly]);
+
+  useEffect(() => {
+    if (!masterPurchaseNotice) return undefined;
+    const timeout = setTimeout(() => {
+      setMasterPurchaseNotice(null);
+    }, 6000);
+    return () => clearTimeout(timeout);
+  }, [masterPurchaseNotice]);
 
   useEffect(() => {
     if (
@@ -357,6 +432,7 @@ const ShopMenu = ({
   const activeItem =
     activeEntry?.item || (activeItemId ? catalogMap.get(activeItemId) : null);
   const activeVisuals = activeItem ? buildItemVisuals(activeItem, rarityColorMap) : null;
+  const activeItemSold = !readOnly && lastPurchase?.itemId === activeItemId;
 
   const handleBaseGoldChange = (event) => {
     if (!isEditable || !onConfigChange) return;
@@ -452,6 +528,23 @@ const ShopMenu = ({
     typeof activeItem.cost === 'number' &&
     activeItem.cost > currentPlayerGold;
 
+  const masterNoticeCostLabel =
+    masterPurchaseNotice && typeof masterPurchaseNotice.cost === 'number'
+      ? masterPurchaseNotice.cost.toLocaleString('es-ES')
+      : null;
+
+  const masterNoticeDetails = useMemo(() => {
+    if (!masterPurchaseNotice) return [];
+    const details = [];
+    if (masterPurchaseNotice.typeLabel) {
+      details.push(masterPurchaseNotice.typeLabel);
+    }
+    if (masterNoticeCostLabel) {
+      details.push(`Costo: ${masterNoticeCostLabel} de oro`);
+    }
+    return details;
+  }, [masterNoticeCostLabel, masterPurchaseNotice]);
+
   const handlePurchase = async () => {
     if (!canPurchase || !onPurchase || !activeItem) return;
     setIsPurchasing(true);
@@ -466,6 +559,7 @@ const ShopMenu = ({
               ? `¡Has comprado ${activeItem.name}! Oro restante: ${remaining}.`
               : `¡Has comprado ${activeItem.name}!`,
         });
+        triggerHighlight(activeEntry?.id || activeItem.id, 'purchase');
       } else {
         let message = result?.message;
         if (!message) {
@@ -603,6 +697,39 @@ const ShopMenu = ({
           </div>
         </div>
         <div className="px-5 py-4 space-y-5">
+          <AnimatePresence>
+            {!readOnly && masterPurchaseNotice ? (
+              <motion.div
+                key={masterPurchaseNotice.key}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 shadow-lg"
+              >
+                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-amber-400/60 bg-amber-500/20 text-lg">
+                  <FiShoppingBag />
+                </span>
+                <div className="flex-1">
+                  <div className="font-semibold leading-tight">
+                    {masterPurchaseNotice.buyer}{' '}
+                    <span className="font-normal text-amber-200/90">compró</span>{' '}
+                    <span className="font-semibold text-amber-100">
+                      {masterPurchaseNotice.itemName || 'un objeto'}
+                    </span>
+                  </div>
+                  {masterNoticeDetails.length > 0 && (
+                    <div className="mt-1 text-xs uppercase tracking-[0.25em] text-amber-200/80">
+                      {masterNoticeDetails.join(' • ')}
+                    </div>
+                  )}
+                  <div className="mt-2 text-[0.7rem] text-amber-200/70">
+                    La tienda se sincronizó con esta compra.
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
           {isEditable && (
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl px-4 py-4 shadow-inner">
               <div className="flex items-center justify-between">
@@ -710,61 +837,129 @@ const ShopMenu = ({
                   </div>
                 ) : (
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    {filteredSuggestions.map(({ id, item, missing }) => {
-                      const visuals = buildItemVisuals(item, rarityColorMap);
-                      const buttonStyle =
-                        activeItemId === id
-                          ? { ...visuals.cardStyle, ...visuals.activeStyle }
-                          : visuals.cardStyle;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => handleSelectSuggestion(id)}
-                          className={`relative rounded-xl border bg-slate-900/70 p-3 shadow-lg transition-all duration-200 text-left ${
-                            activeItemId === id
-                              ? 'ring-2 ring-amber-400/0'
-                              : 'hover:shadow-amber-500/20'
-                          } ${missing ? 'opacity-80' : ''}`}
-                          style={buttonStyle}
-                        >
-                          <div className="flex items-start justify-between text-[0.65rem] uppercase tracking-[0.35em] text-slate-300">
-                            <span>{item.typeLabel}</span>
-                            <span className="text-amber-300">{formatCostLabel(item)}</span>
-                          </div>
-                          <div className="mt-2 text-base font-semibold text-slate-100 leading-tight line-clamp-2">
-                            {item.name}
-                          </div>
-                          {item.tags?.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2 text-[0.65rem] uppercase tracking-[0.25em] text-slate-300">
-                              {item.tags.slice(0, 4).map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="px-2 py-1 rounded-full border bg-slate-900/70"
-                                  style={visuals.badgeStyle}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
+                    <AnimatePresence initial={false}>
+                      {filteredSuggestions.map(({ id, item, missing }) => {
+                        const visuals = buildItemVisuals(item, rarityColorMap);
+                        const buttonStyle =
+                          activeItemId === id
+                            ? { ...visuals.cardStyle, ...visuals.activeStyle }
+                            : visuals.cardStyle;
+                        const isHighlighted = highlightPulse?.id === id;
+                        const highlightTone =
+                          highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
+                        const wasSoldByPlayer =
+                          !readOnly && lastPurchase?.itemId === id;
+                        return (
+                          <motion.button
+                            key={id}
+                            type="button"
+                            layout
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: -12 }}
+                            transition={{ duration: 0.22, ease: 'easeOut' }}
+                            onClick={() => handleSelectSuggestion(id)}
+                            className={`relative rounded-xl border bg-slate-900/70 p-3 shadow-lg transition-all duration-200 text-left ${
+                              activeItemId === id
+                                ? 'ring-2 ring-amber-400/0'
+                                : 'hover:shadow-amber-500/20'
+                            } ${missing ? 'opacity-80' : ''}`}
+                            style={buttonStyle}
+                            whileTap={{ scale: 0.97 }}
+                            whileHover={{ translateY: -2 }}
+                          >
+                            {isHighlighted && (
+                              <motion.span
+                                key={highlightPulse.key}
+                                className={`pointer-events-none absolute -inset-[3px] rounded-[18px] border ${
+                                  highlightTone === 'purchase'
+                                    ? 'border-amber-400/70'
+                                    : 'border-emerald-400/60'
+                                }`}
+                                initial={{ opacity: 0, scale: 0.94 }}
+                                animate={{
+                                  opacity: [0.15, 0.7, 0.6, 0],
+                                  scale: [1, 1.04, 1.08, 1.12],
+                                }}
+                                transition={{
+                                  duration: 1.25,
+                                  ease: 'easeInOut',
+                                  times: [0, 0.35, 0.75, 1],
+                                }}
+                                style={{ willChange: 'transform, opacity', zIndex: 30 }}
+                              />
+                            )}
+                            <div className="flex items-start justify-between text-[0.65rem] uppercase tracking-[0.35em] text-slate-300">
+                              <span>{item.typeLabel}</span>
+                              <span className="text-amber-300">{formatCostLabel(item)}</span>
                             </div>
-                          )}
-                          <div className="mt-4 flex items-center justify-between text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
-                            <span>{missing ? 'Sin datos' : 'Ver detalles'}</span>
-                            <FiChevronRight className="text-slate-500" />
-                          </div>
-                          {isEditable && (
-                            <button
-                              type="button"
-                              onClick={(event) => handleRemoveSuggestion(id, event)}
-                              className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white"
-                              aria-label="Eliminar sugerencia"
-                            >
-                              <FiX />
-                            </button>
-                          )}
-                        </button>
-                      );
-                    })}
+                            <div className="mt-2 text-base font-semibold text-slate-100 leading-tight line-clamp-2">
+                              {item.name}
+                            </div>
+                            {item.tags?.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-2 text-[0.65rem] uppercase tracking-[0.25em] text-slate-300">
+                                {item.tags.slice(0, 4).map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="px-2 py-1 rounded-full border bg-slate-900/70"
+                                    style={visuals.badgeStyle}
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="mt-4 flex items-center justify-between text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
+                              <span>{missing ? 'Sin datos' : 'Ver detalles'}</span>
+                              <FiChevronRight className="text-slate-500" />
+                            </div>
+                            {isHighlighted && (
+                              <motion.div
+                                key={`${highlightPulse.key}-glow`}
+                                className={`pointer-events-none absolute inset-0 rounded-[18px] ${
+                                  highlightTone === 'purchase'
+                                    ? 'bg-amber-400/10'
+                                    : 'bg-emerald-400/10'
+                                }`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: [0.35, 0.25, 0.15, 0] }}
+                                transition={{
+                                  duration: 1.3,
+                                  ease: 'easeInOut',
+                                  times: [0, 0.45, 0.75, 1],
+                                }}
+                                style={{ willChange: 'opacity', zIndex: 20 }}
+                              />
+                            )}
+                            {wasSoldByPlayer && (
+                              <div
+                                className="pointer-events-none absolute inset-0 rounded-[18px] border-2 border-amber-400/70 bg-amber-500/5"
+                                style={{ zIndex: 15 }}
+                              />
+                            )}
+                            {wasSoldByPlayer && (
+                              <div
+                                className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-amber-100 shadow-sm"
+                                style={{ zIndex: 25 }}
+                              >
+                                <FiShoppingBag className="text-xs" />
+                                Vendido
+                              </div>
+                            )}
+                            {isEditable && (
+                              <button
+                                type="button"
+                                onClick={(event) => handleRemoveSuggestion(id, event)}
+                                className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white"
+                                aria-label="Eliminar sugerencia"
+                              >
+                                <FiX />
+                              </button>
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
@@ -825,6 +1020,11 @@ const ShopMenu = ({
                   <div className="mt-2 text-lg font-semibold text-slate-100 leading-snug">
                     {activeItem.name}
                   </div>
+                  {activeItemSold && (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/70 bg-amber-500/20 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100">
+                      <FiShoppingBag className="text-sm" /> Vendido
+                    </div>
+                  )}
                   {activeItem.tags?.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {activeItem.tags.slice(0, 6).map((tag) => (
@@ -912,6 +1112,14 @@ ShopMenu.propTypes = {
     gold: PropTypes.number,
     suggestedItemIds: PropTypes.arrayOf(PropTypes.string),
     playerWallets: PropTypes.objectOf(PropTypes.number),
+    lastPurchase: PropTypes.shape({
+      itemId: PropTypes.string.isRequired,
+      itemName: PropTypes.string,
+      buyer: PropTypes.string.isRequired,
+      typeLabel: PropTypes.string,
+      cost: PropTypes.number,
+      timestamp: PropTypes.number,
+    }),
   }),
   onConfigChange: PropTypes.func,
   onApply: PropTypes.func,
