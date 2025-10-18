@@ -1788,6 +1788,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 ## 🐛 Correcciones
 
 - Se corrigió un fallo en el constructor de minimapas donde `selectedCell` no estaba definido al aplicar presets o eliminar celdas.
+- Se blindó la tienda contra compras simultáneas restando el oro dentro de una transacción de Firestore, evitando que varios jugadores gasten el mismo saldo.
 - Se corrigió la sincronización de cuadrantes del minimapa para que todos los dispositivos y navegadores compartan siempre la misma lista guardada a través de Firestore.
 - Se compactó el guardado de cuadrantes del minimapa en Firestore para centralizar los datos y que se carguen iguales en cualquier navegador o dispositivo.
 - Se solucionó que el aviso de cambios sin guardar del minimapa siguiera apareciendo después de guardar cuadrantes o ajustar la flecha de origen.
