@@ -2,8 +2,9 @@ import { nanoid } from 'nanoid';
 import { clampShopGold } from './shop';
 
 const sanitizeText = (value) => {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
+  if (value == null) return '';
+  const stringValue = typeof value === 'string' ? value : String(value);
+  const trimmed = stringValue.trim();
   return trimmed || '';
 };
 
@@ -11,6 +12,35 @@ const sanitizeItemId = (value) => {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   return trimmed || '';
+};
+
+const sanitizeTagList = (tags) => {
+  if (!Array.isArray(tags)) return [];
+  const unique = [];
+  tags.forEach((tag) => {
+    const sanitized = sanitizeText(tag);
+    if (!sanitized) return;
+    if (!unique.includes(sanitized)) {
+      unique.push(sanitized);
+    }
+  });
+  return unique.slice(0, 10);
+};
+
+const sanitizeSummaryEntry = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  const label = sanitizeText(entry.label);
+  const value = sanitizeText(entry.value);
+  if (!label && !value) return null;
+  return { label, value };
+};
+
+const sanitizeSummaryList = (summary) => {
+  if (!Array.isArray(summary)) return [];
+  return summary
+    .map((entry) => sanitizeSummaryEntry(entry))
+    .filter(Boolean)
+    .slice(0, 8);
 };
 
 export const sanitizeInventoryPlayerName = (value) => sanitizeText(value);
@@ -28,6 +58,9 @@ const normalizeInventoryEntry = (entry, index = 0) => {
   const rawCost = Number(entry.cost);
   const cost = Number.isFinite(rawCost) ? clampShopGold(rawCost) : null;
 
+  const tags = sanitizeTagList(entry.tags);
+  const summary = sanitizeSummaryList(entry.summary);
+
   const existingId = sanitizeText(entry.entryId);
   const fallbackIdComponents = [itemId, index]
     .filter((part) => part !== null && part !== undefined && part !== '')
@@ -41,6 +74,8 @@ const normalizeInventoryEntry = (entry, index = 0) => {
     typeLabel,
     rarity,
     cost,
+    tags,
+    summary,
   };
 };
 
@@ -77,6 +112,8 @@ export const buildInventoryEntry = (item, buyer) => {
       typeLabel: sanitizeText(item.typeLabel || item.type || ''),
       rarity: sanitizeText(item.rarity || ''),
       cost: Number.isFinite(Number(item.cost)) ? clampShopGold(item.cost) : null,
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      summary: Array.isArray(item.summary) ? item.summary : [],
     },
     0
   );

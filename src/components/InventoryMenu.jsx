@@ -130,7 +130,15 @@ const InventoryMenu = ({
     const list = (inventories && selectedPlayer && inventories[selectedPlayer]) || [];
     if (!normalizedSearch) return list;
     return list.filter((entry) => {
-      const haystack = [entry.itemName, entry.typeLabel, entry.rarity]
+      const haystack = [
+        entry.itemName,
+        entry.typeLabel,
+        entry.rarity,
+        ...(Array.isArray(entry.tags) ? entry.tags : []),
+        ...(Array.isArray(entry.summary)
+          ? entry.summary.flatMap((detail) => [detail?.label, detail?.value])
+          : []),
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -288,6 +296,8 @@ const InventoryMenu = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {entries.map((entry) => {
           const visuals = buildEntryVisuals(entry.rarity, rarityColorMap);
+          const safeTags = Array.isArray(entry.tags) ? entry.tags.slice(0, 4) : [];
+          const safeSummary = Array.isArray(entry.summary) ? entry.summary.slice(0, 4) : [];
           return (
             <div
               key={entry.entryId}
@@ -312,21 +322,46 @@ const InventoryMenu = ({
                 <span>{entry.typeLabel || 'Objeto'}</span>
                 <span className="text-amber-300">{formatCost(entry.cost)}</span>
               </div>
-              <div className="mt-3 flex items-start justify-between gap-3">
+              <div className="mt-3 flex items-start gap-3">
                 <h3 className="text-base font-semibold text-slate-100 leading-snug flex-1">
                   {entry.itemName}
                 </h3>
-                <span
-                  className="text-[0.6rem] uppercase tracking-[0.3em] px-3 py-1 rounded-full border"
-                  style={visuals.badgeStyle}
-                >
-                  {entry.rarity || 'Común'}
-                </span>
+                {entry.rarity && (
+                  <span
+                    className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full border"
+                    style={{
+                      borderColor: visuals.badgeStyle?.borderColor,
+                      backgroundColor: visuals.badgeStyle?.backgroundColor,
+                      boxShadow: visuals.accent ? `0 0 0 3px ${visuals.accent}` : undefined,
+                    }}
+                    title={entry.rarity}
+                    aria-label={`Rareza ${entry.rarity}`}
+                  />
+                )}
               </div>
-              <div className="mt-4 flex items-center justify-between text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
-                <span>Inventario</span>
-                <span className="text-slate-500">Guardado</span>
-              </div>
+              {safeTags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2 text-[0.65rem] uppercase tracking-[0.25em] text-slate-300">
+                  {safeTags.map((tag) => (
+                    <span
+                      key={`${entry.entryId}-${tag}`}
+                      className="px-2 py-1 rounded-full border bg-slate-900/70"
+                      style={visuals.badgeStyle}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {safeSummary.length > 0 && (
+                <ul className="mt-4 space-y-1 text-xs text-slate-200">
+                  {safeSummary.map((detail, index) => (
+                    <li key={`${entry.entryId}-detail-${index}`} className="flex justify-between gap-2">
+                      <span className="text-slate-400">{detail.label || '—'}</span>
+                      <span className="text-slate-200 text-right">{detail.value || '—'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           );
         })}
@@ -486,6 +521,13 @@ InventoryMenu.propTypes = {
         typeLabel: PropTypes.string,
         rarity: PropTypes.string,
         cost: PropTypes.number,
+        tags: PropTypes.arrayOf(PropTypes.string),
+        summary: PropTypes.arrayOf(
+          PropTypes.shape({
+            label: PropTypes.string,
+            value: PropTypes.string,
+          })
+        ),
       })
     )
   ),
@@ -500,6 +542,13 @@ InventoryMenu.propTypes = {
       rarity: PropTypes.string,
       searchText: PropTypes.string,
       cost: PropTypes.number,
+      tags: PropTypes.arrayOf(PropTypes.string),
+      summary: PropTypes.arrayOf(
+        PropTypes.shape({
+          label: PropTypes.string,
+          value: PropTypes.string,
+        })
+      ),
     })
   ),
   rarityColorMap: PropTypes.object,
