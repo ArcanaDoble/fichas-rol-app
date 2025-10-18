@@ -9,8 +9,9 @@ import {
   FiImage,
 } from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
-import { GiBrickWall, GiCrosshair } from 'react-icons/gi';
+import { GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
+import ShopMenu from './ShopMenu';
 
 const tools = [
   { id: 'select', icon: FiMousePointer },
@@ -18,6 +19,7 @@ const tools = [
   { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
+  { id: 'shop', icon: GiShoppingBag },
   { id: 'target', icon: GiCrosshair },
 ];
 
@@ -89,6 +91,11 @@ const Toolbar = ({
   textOptions,
   onTextOptionsChange,
   onResetTextOptions,
+  shopGold = 0,
+  onShopGoldChange = () => {},
+  shopSuggestedItemIds = [],
+  onShopSuggestedItemsChange = () => {},
+  shopAvailableItems = [],
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -106,7 +113,7 @@ const Toolbar = ({
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
-    ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'target'].includes(tool.id))
+    ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'shop', 'target'].includes(tool.id))
     : tools;
 
   const selectedAmbientLight = useMemo(
@@ -158,6 +165,8 @@ const Toolbar = ({
             activeTool === id
               ? id === 'target'
                 ? 'bg-red-700'
+                : id === 'shop'
+                ? 'bg-amber-600'
                 : 'bg-gray-700'
               : 'bg-gray-800 hover:bg-gray-700'
           }`}
@@ -338,6 +347,25 @@ const Toolbar = ({
               Visible para todos
             </label>
           </div>
+        </motion.div>
+      )}
+      {activeTool === 'shop' && (
+        <motion.div
+          key="shop-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-12 top-2"
+        >
+          <ShopMenu
+            gold={shopGold}
+            onGoldChange={onShopGoldChange}
+            readOnly={isPlayerView}
+            suggestedItemIds={shopSuggestedItemIds}
+            onSuggestedItemsChange={onShopSuggestedItemsChange}
+            availableItems={shopAvailableItems}
+          />
         </motion.div>
       )}
       {showTextMenu && (
@@ -644,6 +672,25 @@ Toolbar.propTypes = {
   }),
   onTextOptionsChange: PropTypes.func,
   onResetTextOptions: PropTypes.func,
+  shopGold: PropTypes.number,
+  onShopGoldChange: PropTypes.func,
+  shopSuggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+  onShopSuggestedItemsChange: PropTypes.func,
+  shopAvailableItems: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+      type: PropTypes.string.isRequired,
+      typeLabel: PropTypes.string.isRequired,
+      cost: PropTypes.number,
+      costLabel: PropTypes.string,
+      tags: PropTypes.arrayOf(PropTypes.string),
+      summary: PropTypes.array,
+      description: PropTypes.string,
+      rarity: PropTypes.string,
+      searchText: PropTypes.string,
+    })
+  ),
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,
