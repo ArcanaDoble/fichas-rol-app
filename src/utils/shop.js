@@ -2,16 +2,53 @@ const SHOP_ITEM_LIMIT = 4;
 const SHOP_GOLD_MIN = 0;
 const SHOP_GOLD_MAX = 9999;
 
+const sanitizeText = (value) => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed ? trimmed : '';
+};
+
 const sanitizeItemId = (value) => {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   return trimmed ? trimmed : '';
 };
 
-const sanitizePlayerName = (value) => {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  return trimmed ? trimmed : '';
+const sanitizePlayerName = sanitizeText;
+
+const normalizePurchaseEntry = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  const itemId = sanitizeItemId(entry.itemId);
+  if (!itemId) return null;
+
+  const itemName = sanitizeText(entry.itemName);
+  const buyer = sanitizePlayerName(entry.buyer);
+  if (!buyer) return null;
+
+  const typeLabel = sanitizeText(entry.typeLabel);
+  const rawTimestamp = entry.timestamp;
+  let timestamp = null;
+  if (typeof rawTimestamp === 'number' && Number.isFinite(rawTimestamp)) {
+    timestamp = rawTimestamp;
+  } else if (rawTimestamp && typeof rawTimestamp.toMillis === 'function') {
+    timestamp = rawTimestamp.toMillis();
+  } else if (rawTimestamp instanceof Date && !Number.isNaN(rawTimestamp.getTime())) {
+    timestamp = rawTimestamp.getTime();
+  }
+
+  const numericCost = Number(entry.cost);
+  const cost = Number.isFinite(numericCost) ? clampShopGold(numericCost) : null;
+
+  const payload = {
+    itemId,
+    itemName,
+    buyer,
+    typeLabel,
+    cost,
+    timestamp,
+  };
+
+  return payload;
 };
 
 export const clampShopGold = (value) => {
@@ -31,6 +68,7 @@ export const normalizeShopConfig = (config) => {
       gold: SHOP_GOLD_MIN,
       suggestedItemIds: [],
       playerWallets: {},
+      lastPurchase: null,
     };
   }
 
@@ -51,10 +89,13 @@ export const normalizeShopConfig = (config) => {
     });
   }
 
+  const lastPurchase = normalizePurchaseEntry(config.lastPurchase);
+
   return {
     gold,
     suggestedItemIds,
     playerWallets,
+    lastPurchase,
   };
 };
 

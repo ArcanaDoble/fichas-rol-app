@@ -1587,12 +1587,21 @@ const MapCanvas = ({
             }
 
             const nextWallet = clampShopGold(currentWallet - item.cost);
+            const purchaseEntry = {
+              itemId: item.id,
+              itemName: item.name,
+              buyer: effectivePlayerName,
+              typeLabel: item.typeLabel || item.type || '',
+              cost: item.cost,
+              timestamp: Date.now(),
+            };
             const updatedConfig = normalizeShopConfig({
               ...remoteConfig,
               playerWallets: {
                 ...remoteConfig.playerWallets,
                 [effectivePlayerName]: nextWallet,
               },
+              lastPurchase: purchaseEntry,
             });
 
             transaction.update(pageRef, { shopConfig: sanitize(updatedConfig) });
