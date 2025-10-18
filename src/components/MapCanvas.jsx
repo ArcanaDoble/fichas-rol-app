@@ -1518,6 +1518,7 @@ const MapCanvas = ({
 
   const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
   const [shopInventories, setShopInventories] = useState({});
+  const [inventoryPurchaseAnimation, setInventoryPurchaseAnimation] = useState(null);
 
   useEffect(() => {
     if (!pageId) {
@@ -1618,7 +1619,12 @@ const MapCanvas = ({
 
       const pageRef = doc(db, 'pages', pageId);
       try {
-        const { config: nextConfig, remaining, inventories: nextInventories } = await runTransaction(
+        const {
+          config: nextConfig,
+          remaining,
+          inventories: nextInventories,
+          inventoryEntry,
+        } = await runTransaction(
           db,
           async (transaction) => {
             const snap = await transaction.get(pageRef);
@@ -1677,13 +1683,21 @@ const MapCanvas = ({
               config: updatedConfig,
               remaining: nextWallet,
               inventories: updatedInventories,
+              inventoryEntry,
             };
           }
         );
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
         setShopInventories(nextInventories);
-        return { success: true, remaining };
+        if (inventoryEntry) {
+          setInventoryPurchaseAnimation({
+            ...inventoryEntry,
+            playerName: effectivePlayerName,
+            key: `${inventoryEntry.entryId}-${Date.now()}`,
+          });
+        }
+        return { success: true, remaining, inventoryEntry };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
           return { success: false, reason: 'insufficient-gold' };
@@ -1790,6 +1804,14 @@ const MapCanvas = ({
     },
     [canManageInventory, pageId]
   );
+
+  useEffect(() => {
+    if (!inventoryPurchaseAnimation) {
+      return undefined;
+    }
+    const timeout = setTimeout(() => setInventoryPurchaseAnimation(null), 4200);
+    return () => clearTimeout(timeout);
+  }, [inventoryPurchaseAnimation]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -6737,6 +6759,7 @@ const MapCanvas = ({
         onInventoryAddItem={handleInventoryAddItem}
         onInventoryRemoveItem={handleInventoryRemoveItem}
         canManageInventory={canManageInventory}
+        purchaseAnimation={inventoryPurchaseAnimation}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}

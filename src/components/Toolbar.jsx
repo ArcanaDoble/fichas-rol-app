@@ -13,6 +13,7 @@ import { GiBackpack, GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons
 import { motion, AnimatePresence } from 'framer-motion';
 import ShopMenu from './ShopMenu';
 import InventoryMenu from './InventoryMenu';
+import PurchaseAnimation from './PurchaseAnimation';
 
 const primaryTools = [
   { id: 'select', icon: FiMousePointer },
@@ -108,6 +109,7 @@ const Toolbar = ({
   onInventoryAddItem,
   onInventoryRemoveItem,
   canManageInventory = false,
+  purchaseAnimation = null,
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -192,7 +194,7 @@ const Toolbar = ({
             </button>
           ))}
         </div>
-        <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
+        <div className="relative w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
           {commerceButtons.map(({ id, icon: Icon }) => (
             <button
               key={id}
@@ -208,6 +210,7 @@ const Toolbar = ({
               <Icon />
             </button>
           ))}
+          <PurchaseAnimation event={isPlayerView ? purchaseAnimation : null} />
         </div>
       </div>
 
@@ -774,6 +777,13 @@ Toolbar.propTypes = {
   onInventoryAddItem: PropTypes.func,
   onInventoryRemoveItem: PropTypes.func,
   canManageInventory: PropTypes.bool,
+  purchaseAnimation: PropTypes.shape({
+    key: PropTypes.string.isRequired,
+    itemName: PropTypes.string,
+    typeLabel: PropTypes.string,
+    rarity: PropTypes.string,
+    playerName: PropTypes.string,
+  }),
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,
