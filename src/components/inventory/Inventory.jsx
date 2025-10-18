@@ -6,13 +6,16 @@ import { db } from '../../firebase';
 import Slot from './Slot';
 import ItemToken, { ItemTypes } from './ItemToken';
 import ItemGenerator from './ItemGenerator';
-
-const initialSlots = Array.from({ length: 4 }, (_, i) => ({ id: i, item: null }));
+import {
+  createDefaultInventoryState,
+  ensureInventoryState,
+} from './inventoryState';
 
 const Inventory = ({ playerName, isMaster = false }) => {
-  const [slots, setSlots] = useState(initialSlots);
-  const [nextId, setNextId] = useState(initialSlots.length);
-  const [tokens, setTokens] = useState([]);
+  const defaultState = useMemo(() => createDefaultInventoryState(), []);
+  const [slots, setSlots] = useState(defaultState.slots);
+  const [nextId, setNextId] = useState(defaultState.nextId);
+  const [tokens, setTokens] = useState(defaultState.tokens);
   const [loaded, setLoaded] = useState(false);
   const docRef = useMemo(() => (playerName ? doc(db, 'inventory', playerName) : null), [playerName]);
 
@@ -21,15 +24,19 @@ const Inventory = ({ playerName, isMaster = false }) => {
     const fetchState = async () => {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
-        const data = snap.data();
-        setSlots(data.slots || initialSlots);
-        setTokens(data.tokens || []);
-        setNextId(data.nextId || initialSlots.length);
+        const state = ensureInventoryState(snap.data());
+        setSlots(state.slots);
+        setTokens(state.tokens);
+        setNextId(state.nextId);
+      } else {
+        setSlots(defaultState.slots);
+        setTokens(defaultState.tokens);
+        setNextId(defaultState.nextId);
       }
       setLoaded(true);
     };
     fetchState();
-  }, [docRef]);
+  }, [defaultState, docRef]);
 
   useEffect(() => {
     if (loaded && docRef) {
@@ -51,8 +58,25 @@ const Inventory = ({ playerName, isMaster = false }) => {
   const handleDrop = (index, dragged) => {
     setSlots(s => s.map((slot, i) => {
       if (i !== index) return slot;
-      if (!slot.item) return { ...slot, item: { type: dragged.type, count: 1 } };
-      return { ...slot, item: { ...slot.item, count: Math.min(slot.item.count + 1, MAX_STACK) } };
+      const itemData = {
+        type: dragged.type,
+        name: dragged.name || slot.item?.name || '',
+        itemId: dragged.itemId || slot.item?.itemId || '',
+        rarity: dragged.rarity || slot.item?.rarity || '',
+        description: dragged.description || slot.item?.description || '',
+        typeLabel: dragged.typeLabel || slot.item?.typeLabel || '',
+        cost: typeof dragged.cost === 'number' ? dragged.cost : slot.item?.cost,
+        costLabel: dragged.costLabel || slot.item?.costLabel || '',
+      };
+      if (!slot.item) return { ...slot, item: { ...itemData, count: 1 } };
+      return {
+        ...slot,
+        item: {
+          ...slot.item,
+          ...itemData,
+          count: Math.min((slot.item.count || 0) + 1, MAX_STACK),
+        },
+      };
     }));
   };
 
@@ -100,7 +124,19 @@ const Inventory = ({ playerName, isMaster = false }) => {
         <ItemGenerator onGenerate={generateItem} allowCustom={isMaster} />
         <div className="flex flex-wrap justify-center gap-2">
           {tokens.map(token => (
-            <ItemToken key={token.id} id={token.id} type={token.type} />
+            <ItemToken
+              key={token.id}
+              id={token.id}
+              type={token.type}
+              count={token.count}
+              name={token.name}
+              itemId={token.itemId}
+              rarity={token.rarity}
+              description={token.description}
+              typeLabel={token.typeLabel}
+              cost={token.cost}
+              costLabel={token.costLabel}
+            />
           ))}
         </div>
       </div>
