@@ -56,7 +56,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Auras siempre debajo** - El aura de un token nunca se superpone sobre los demás, incluso al cambiar su capa
 - **Barra de herramientas vertical** - Modos de selección, dibujo, medición y texto independientes del zoom
 - **Herramienta de mirilla** - Selecciona atacante y objetivo mostrando una línea roja
-- **Tienda táctica contextual** - El máster gestiona una tienda compartida desde el icono de bolsa: puede ajustar el oro global (0‑9999), elegir hasta cuatro objetos sugeridos del catálogo completo y mostrar una vista previa con detalles; los jugadores consultan esas recomendaciones con filtros y descripciones sin poder modificarlas
+- **Tienda táctica contextual** - El máster gestiona una tienda compartida desde el icono de bolsa: puede fijar oro individual para cada jugador activo (0‑9999), elegir hasta cuatro objetos sugeridos del catálogo completo y sincronizar los cambios con el botón “Actualizar tienda”. Los jugadores consultan esas recomendaciones con filtros, colores de rareza y vista previa detallada, y cuando compran un objeto su saldo y el del máster se actualizan en tiempo real
 - **Mapa desplazado** - El mapa se ajusta para que la barra de herramientas no oculte la cabecera ni los controles
 - **Ajustes de dibujo** - Selector de color y tamaño de pincel con menú ajustado al contenido
 - **Ajustes de regla** - Formas (línea, cuadrado, círculo, cono, haz), reglas de distancia (Chebyshev, Manhattan, Euclídea, 5/10/5), conversión de unidades personalizable, opciones de cuadrícula, visibilidad para todos y menú más amplio

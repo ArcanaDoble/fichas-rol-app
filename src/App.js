@@ -4840,6 +4840,25 @@ function App() {
       );
     }
 
+    const handlePlayerShopConfigChange = (nextConfig) => {
+      const normalized = normalizeShopConfig(nextConfig);
+      const pageId = effectivePage?.id;
+      setPages((prev) => {
+        if (effectivePageIndex < 0 || effectivePageIndex >= prev.length) return prev;
+        const updated = [...prev];
+        updated[effectivePageIndex] = {
+          ...updated[effectivePageIndex],
+          shopConfig: normalized,
+        };
+        return updated;
+      });
+      if (pageId) {
+        updateDoc(doc(db, 'pages', pageId), { shopConfig: sanitize(normalized) }).catch((error) => {
+          console.error('Error actualizando tienda del jugador:', error);
+        });
+      }
+    };
+
     return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
@@ -4952,6 +4971,7 @@ function App() {
             enableDarkness={effectivePage?.enableDarkness || false}
             darknessOpacity={effectivePage?.darknessOpacity || 0.8}
             shopConfig={effectivePage?.shopConfig}
+            onShopConfigChange={handlePlayerShopConfigChange}
             activeLayer="fichas"
             enemies={enemies}
             players={[playerName]}

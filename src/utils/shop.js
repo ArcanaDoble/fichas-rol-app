@@ -8,6 +8,12 @@ const sanitizeItemId = (value) => {
   return trimmed ? trimmed : '';
 };
 
+const sanitizePlayerName = (value) => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed ? trimmed : '';
+};
+
 export const clampShopGold = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -24,6 +30,7 @@ export const normalizeShopConfig = (config) => {
     return {
       gold: SHOP_GOLD_MIN,
       suggestedItemIds: [],
+      playerWallets: {},
     };
   }
 
@@ -35,9 +42,19 @@ export const normalizeShopConfig = (config) => {
         .slice(0, SHOP_ITEM_LIMIT)
     : [];
 
+  const playerWallets = {};
+  if (config.playerWallets && typeof config.playerWallets === 'object') {
+    Object.entries(config.playerWallets).forEach(([name, amount]) => {
+      const sanitizedName = sanitizePlayerName(name);
+      if (!sanitizedName) return;
+      playerWallets[sanitizedName] = clampShopGold(amount);
+    });
+  }
+
   return {
     gold,
     suggestedItemIds,
+    playerWallets,
   };
 };
 

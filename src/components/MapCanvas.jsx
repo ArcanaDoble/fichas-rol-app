@@ -58,7 +58,7 @@ import {
 } from '../utils/visibility';
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
-import { clampShopGold, normalizeShopConfig } from '../utils/shop';
+import { DEFAULT_SHOP_CONFIG, clampShopGold, normalizeShopConfig } from '../utils/shop';
 import {
   doc,
   updateDoc,
@@ -397,6 +397,36 @@ const shallowEqualObjects = (objA, objB) => {
     if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
       return false;
     }
+  }
+
+  return true;
+};
+
+const shopConfigsEqual = (configA = DEFAULT_SHOP_CONFIG, configB = DEFAULT_SHOP_CONFIG) => {
+  if (configA === configB) return true;
+  if (!configA || !configB) return false;
+
+  if (configA.gold !== configB.gold) return false;
+
+  const idsA = Array.isArray(configA.suggestedItemIds) ? configA.suggestedItemIds : [];
+  const idsB = Array.isArray(configB.suggestedItemIds) ? configB.suggestedItemIds : [];
+
+  if (idsA.length !== idsB.length) return false;
+  for (let index = 0; index < idsA.length; index += 1) {
+    if (idsA[index] !== idsB[index]) return false;
+  }
+
+  const walletsA = configA.playerWallets || {};
+  const walletsB = configB.playerWallets || {};
+  const keysA = Object.keys(walletsA).sort();
+  const keysB = Object.keys(walletsB).sort();
+
+  if (keysA.length !== keysB.length) return false;
+
+  for (let index = 0; index < keysA.length; index += 1) {
+    const key = keysA[index];
+    if (key !== keysB[index]) return false;
+    if (walletsA[key] !== walletsB[key]) return false;
   }
 
   return true;
@@ -1451,6 +1481,8 @@ const MapCanvas = ({
   const gridOpacityDraggingRef = useRef(false);
   const gridOpacityValueRef = useRef(gridOpacity);
   const [selectedTextId, setSelectedTextId] = useState(null);
+  const [playerViewMode, setPlayerViewMode] = useState(false);
+  const [simulatedPlayer, setSimulatedPlayer] = useState('');
 
   const resolvedShopConfig = useMemo(
     () => normalizeShopConfig(propShopConfig),
@@ -1462,34 +1494,91 @@ const MapCanvas = ({
     [armas, armaduras, habilidades]
   );
 
-  const handleShopGoldChange = useCallback(
-    (value) => {
-      if (typeof onShopConfigChange !== 'function') return;
-      const nextConfig = normalizeShopConfig({
-        ...resolvedShopConfig,
-        gold: clampShopGold(value),
+  const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
+
+  useEffect(() => {
+    setShopDraftConfig((prev) => {
+      if (shopConfigsEqual(prev, resolvedShopConfig)) return prev;
+      return resolvedShopConfig;
+    });
+  }, [resolvedShopConfig]);
+
+  const activeShopPlayers = useMemo(() => {
+    const owners = new Set();
+    (tokens || []).forEach((token) => {
+      const owner = (token?.controlledBy || '').trim();
+      if (!owner) return;
+      if (owner.toLowerCase() === 'master') return;
+      owners.add(owner);
+    });
+    return Array.from(owners).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [tokens]);
+
+  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
+  const effectivePlayerName = isPlayerPerspective
+    ? userType === 'player'
+      ? playerName
+      : simulatedPlayer
+    : '';
+
+  const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
+
+  const shopUiConfig = isMasterShopEditor ? shopDraftConfig : resolvedShopConfig;
+
+  const shopHasPendingChanges =
+    isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
+
+  const handleShopDraftChange = useCallback(
+    (updater) => {
+      if (!isMasterShopEditor) return;
+      setShopDraftConfig((prev) => {
+        const current = prev || DEFAULT_SHOP_CONFIG;
+        const next =
+          typeof updater === 'function'
+            ? updater(current)
+            : { ...current, ...updater };
+        return normalizeShopConfig(next);
       });
-      onShopConfigChange(nextConfig);
     },
-    [onShopConfigChange, resolvedShopConfig]
+    [isMasterShopEditor]
   );
 
-  const handleShopSuggestedItemsChange = useCallback(
-    (itemIds) => {
-      if (typeof onShopConfigChange !== 'function') return;
+  const handleShopApply = useCallback(() => {
+    if (!isMasterShopEditor || typeof onShopConfigChange !== 'function') return;
+    onShopConfigChange(shopDraftConfig);
+  }, [isMasterShopEditor, onShopConfigChange, shopDraftConfig]);
+
+  const handleShopPurchase = useCallback(
+    (item) => {
+      if (!isPlayerPerspective || !effectivePlayerName || typeof onShopConfigChange !== 'function') {
+        return { success: false, reason: 'not-allowed' };
+      }
+      if (!item || typeof item.cost !== 'number') {
+        return { success: false, reason: 'missing-cost' };
+      }
+      const currentWallet =
+        resolvedShopConfig.playerWallets[effectivePlayerName] ?? resolvedShopConfig.gold;
+      if (item.cost > currentWallet) {
+        return { success: false, reason: 'insufficient-gold' };
+      }
+      const nextWallet = clampShopGold(currentWallet - item.cost);
       const nextConfig = normalizeShopConfig({
         ...resolvedShopConfig,
-        suggestedItemIds: Array.isArray(itemIds)
-          ? itemIds.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
-          : [],
+        playerWallets: {
+          ...resolvedShopConfig.playerWallets,
+          [effectivePlayerName]: nextWallet,
+        },
       });
       onShopConfigChange(nextConfig);
+      return { success: true, remaining: nextWallet };
     },
-    [onShopConfigChange, resolvedShopConfig]
+    [
+      effectivePlayerName,
+      isPlayerPerspective,
+      onShopConfigChange,
+      resolvedShopConfig,
+    ]
   );
-
-  // Estado para simulación de vista de jugador
-  const [playerViewMode, setPlayerViewMode] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2237,7 +2326,6 @@ const MapCanvas = ({
     clearMultiSelection();
   }, []);
 
-  const [simulatedPlayer, setSimulatedPlayer] = useState('');
   const [activeTokenId, setActiveTokenId] = useState(null);
   const [tokenSwitcherPos, setTokenSwitcherPos] = useState(() => {
     try {
@@ -6426,18 +6514,22 @@ const MapCanvas = ({
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
-        shopGold={resolvedShopConfig.gold}
-        onShopGoldChange={handleShopGoldChange}
-        shopSuggestedItemIds={resolvedShopConfig.suggestedItemIds}
-        onShopSuggestedItemsChange={handleShopSuggestedItemsChange}
+        shopConfig={shopUiConfig}
+        onShopConfigChange={handleShopDraftChange}
+        onShopApply={isMasterShopEditor ? handleShopApply : undefined}
+        shopActivePlayers={activeShopPlayers}
         shopAvailableItems={shopAvailableItems}
+        onShopPurchase={handleShopPurchase}
+        shopHasPendingChanges={shopHasPendingChanges}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
         showTextMenu={textMenuVisible}
         activeLayer={activeLayer}
         onLayerChange={handleLayerChange}
-        isPlayerView={isPlayerView}
+        isPlayerView={isPlayerPerspective}
+        playerName={effectivePlayerName}
+        rarityColorMap={rarityColorMap}
         ambientLights={ambientLights}
         selectedAmbientLightId={selectedAmbientLightId}
         onSelectAmbientLight={handleAmbientLightSelect}
@@ -6940,6 +7032,7 @@ MapCanvas.propTypes = {
   shopConfig: PropTypes.shape({
     gold: PropTypes.number,
     suggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+    playerWallets: PropTypes.objectOf(PropTypes.number),
   }),
   onShopConfigChange: PropTypes.func,
 };

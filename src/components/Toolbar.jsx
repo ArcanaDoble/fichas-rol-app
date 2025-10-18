@@ -91,11 +91,13 @@ const Toolbar = ({
   textOptions,
   onTextOptionsChange,
   onResetTextOptions,
-  shopGold = 0,
-  onShopGoldChange = () => {},
-  shopSuggestedItemIds = [],
-  onShopSuggestedItemsChange = () => {},
+  shopConfig = {},
+  onShopConfigChange,
+  onShopApply,
+  shopActivePlayers = [],
   shopAvailableItems = [],
+  onShopPurchase,
+  shopHasPendingChanges = false,
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -103,6 +105,8 @@ const Toolbar = ({
   activeLayer = 'fichas',
   onLayerChange,
   isPlayerView = false,
+  playerName = '',
+  rarityColorMap = {},
   ambientLights = [],
   selectedAmbientLightId = null,
   onSelectAmbientLight = () => {},
@@ -359,12 +363,16 @@ const Toolbar = ({
           className="absolute left-12 top-2"
         >
           <ShopMenu
-            gold={shopGold}
-            onGoldChange={onShopGoldChange}
+            config={shopConfig}
+            onConfigChange={onShopConfigChange}
+            onApply={onShopApply}
             readOnly={isPlayerView}
-            suggestedItemIds={shopSuggestedItemIds}
-            onSuggestedItemsChange={onShopSuggestedItemsChange}
+            activePlayers={shopActivePlayers}
             availableItems={shopAvailableItems}
+            currentPlayerName={playerName}
+            onPurchase={onShopPurchase}
+            rarityColorMap={rarityColorMap}
+            hasPendingChanges={shopHasPendingChanges}
           />
         </motion.div>
       )}
@@ -672,10 +680,14 @@ Toolbar.propTypes = {
   }),
   onTextOptionsChange: PropTypes.func,
   onResetTextOptions: PropTypes.func,
-  shopGold: PropTypes.number,
-  onShopGoldChange: PropTypes.func,
-  shopSuggestedItemIds: PropTypes.arrayOf(PropTypes.string),
-  onShopSuggestedItemsChange: PropTypes.func,
+  shopConfig: PropTypes.shape({
+    gold: PropTypes.number,
+    suggestedItemIds: PropTypes.arrayOf(PropTypes.string),
+    playerWallets: PropTypes.objectOf(PropTypes.number),
+  }),
+  onShopConfigChange: PropTypes.func,
+  onShopApply: PropTypes.func,
+  shopActivePlayers: PropTypes.arrayOf(PropTypes.string),
   shopAvailableItems: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.string.isRequired,
@@ -691,6 +703,8 @@ Toolbar.propTypes = {
       searchText: PropTypes.string,
     })
   ),
+  onShopPurchase: PropTypes.func,
+  shopHasPendingChanges: PropTypes.bool,
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,
@@ -709,6 +723,8 @@ Toolbar.propTypes = {
   activeLayer: PropTypes.string,
   onLayerChange: PropTypes.func,
   isPlayerView: PropTypes.bool,
+  playerName: PropTypes.string,
+  rarityColorMap: PropTypes.objectOf(PropTypes.string),
   ambientLights: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
