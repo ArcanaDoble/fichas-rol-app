@@ -702,6 +702,7 @@ const Toolbar = ({
         </motion.div>
       )}
     </AnimatePresence>
+    <PurchaseAnimation event={isPlayerView ? purchaseAnimation : null} />
   </div>
   );
 };
