@@ -1538,7 +1538,10 @@ const MapCanvas = ({
 
   const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
 
-  const shopUiConfig = isMasterShopEditor ? shopDraftConfig : resolvedShopConfig;
+  const shopUiConfig = useMemo(
+    () => (isMasterShopEditor ? shopDraftConfig : resolvedShopConfig),
+    [isMasterShopEditor, resolvedShopConfig, shopDraftConfig]
+  );
 
   const shopHasPendingChanges =
     isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
