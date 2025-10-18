@@ -1534,6 +1534,20 @@ const MapCanvas = ({
     return Array.from(owners).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [tokens]);
 
+  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
+  const effectivePlayerName = isPlayerPerspective
+    ? userType === 'player'
+      ? playerName
+      : simulatedPlayer
+    : '';
+
+  const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
+
+  const shopUiConfig = useMemo(
+    () => (isMasterShopEditor ? shopDraftConfig : resolvedShopConfig),
+    [isMasterShopEditor, resolvedShopConfig, shopDraftConfig]
+  );
+
   const inventoryPlayers = useMemo(() => {
     const map = new Map();
     activeShopPlayers.forEach((name) => {
@@ -1553,20 +1567,6 @@ const MapCanvas = ({
     });
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [activeShopPlayers, shopUiConfig]);
-
-  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
-  const effectivePlayerName = isPlayerPerspective
-    ? userType === 'player'
-      ? playerName
-      : simulatedPlayer
-    : '';
-
-  const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
-
-  const shopUiConfig = useMemo(
-    () => (isMasterShopEditor ? shopDraftConfig : resolvedShopConfig),
-    [isMasterShopEditor, resolvedShopConfig, shopDraftConfig]
-  );
 
   const shopHasPendingChanges =
     isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
