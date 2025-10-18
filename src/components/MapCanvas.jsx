@@ -1423,6 +1423,7 @@ const MapCanvas = ({
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
+  const [inventoryFeedback, setInventoryFeedback] = useState(null);
   const [shopGold, setShopGold] = useState(0);
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
@@ -1683,6 +1684,10 @@ const MapCanvas = ({
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `purchase-${Date.now()}`,
+          delta: 1,
+        });
         return { success: true, remaining };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
@@ -1741,6 +1746,10 @@ const MapCanvas = ({
           return { inventories: updatedInventories };
         });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `manual-add-${Date.now()}`,
+          delta: 1,
+        });
         return { success: true };
       } catch (error) {
         console.error('Error agregando objeto al inventario:', error);
@@ -1782,6 +1791,10 @@ const MapCanvas = ({
           return { inventories: updatedInventories };
         });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `manual-remove-${Date.now()}`,
+          delta: -1,
+        });
         return { success: true };
       } catch (error) {
         console.error('Error eliminando objeto del inventario:', error);
@@ -6746,6 +6759,7 @@ const MapCanvas = ({
         isPlayerView={isPlayerPerspective}
         playerName={effectivePlayerName}
         rarityColorMap={rarityColorMap}
+        inventoryFeedback={inventoryFeedback}
         ambientLights={ambientLights}
         selectedAmbientLightId={selectedAmbientLightId}
         onSelectAmbientLight={handleAmbientLightSelect}
