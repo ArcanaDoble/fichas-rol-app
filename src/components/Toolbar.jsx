@@ -194,7 +194,7 @@ const Toolbar = ({
             </button>
           ))}
         </div>
-        <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
+        <div className="relative w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
           {commerceButtons.map(({ id, icon: Icon }) => (
             <button
               key={id}
@@ -210,6 +210,7 @@ const Toolbar = ({
               <Icon />
             </button>
           ))}
+          <PurchaseAnimation event={isPlayerView ? purchaseAnimation : null} />
         </div>
       </div>
 
