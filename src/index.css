@@ -145,6 +145,80 @@ html {
   animation: sparkle 1.4s ease-out infinite;
 }
 
+@keyframes goldFlashUp {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    background-color: rgba(15, 23, 42, 0.6);
+  }
+  35% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.28);
+    background-color: rgba(22, 101, 52, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    background-color: rgba(15, 23, 42, 0.6);
+  }
+}
+
+@keyframes goldFlashDown {
+  0% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    background-color: rgba(15, 23, 42, 0.6);
+  }
+  35% {
+    box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.28);
+    background-color: rgba(127, 29, 29, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    background-color: rgba(15, 23, 42, 0.6);
+  }
+}
+
+@keyframes goldDeltaUp {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.95);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px) scale(1.05);
+  }
+}
+
+@keyframes goldDeltaDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.95);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(14px) scale(1.05);
+  }
+}
+
+.gold-flash-up {
+  animation: goldFlashUp 1.2s ease-out;
+}
+
+.gold-flash-down {
+  animation: goldFlashDown 1.2s ease-out;
+}
+
+.gold-delta-up {
+  animation: goldDeltaUp 0.95s ease-out forwards;
+}
+
+.gold-delta-down {
+  animation: goldDeltaDown 0.95s ease-out forwards;
+}
+
 /* Clases de utilidad para animaciones */
 .animate-in {
   animation: fadeIn 0.5s ease-out;
