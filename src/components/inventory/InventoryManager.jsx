@@ -110,12 +110,12 @@ const InventoryManager = ({ players = [] }) => {
 
       {selectedPlayer ? (
         <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-3">
-          <div className="mb-3">
+          <div className="mb-3 space-y-1">
             <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest">
               Inventario de {selectedPlayer}
             </h3>
             <p className="text-xs text-slate-400">
-              Agrega, elimina o reordena objetos arrastrándolos entre ranuras.
+              Equipa armas, armaduras y habilidades o registra objetos adicionales desde un panel organizado por categorías.
             </p>
           </div>
           <Inventory key={selectedPlayer} playerName={selectedPlayer} isMaster />
