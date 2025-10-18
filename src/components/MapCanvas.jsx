@@ -431,6 +431,19 @@ const shopConfigsEqual = (configA = DEFAULT_SHOP_CONFIG, configB = DEFAULT_SHOP_
     if (walletsA[key] !== walletsB[key]) return false;
   }
 
+  const purchaseA = configA.lastPurchase || null;
+  const purchaseB = configB.lastPurchase || null;
+
+  if (!purchaseA && purchaseB) return false;
+  if (purchaseA && !purchaseB) return false;
+
+  if (purchaseA && purchaseB) {
+    if (purchaseA.itemId !== purchaseB.itemId) return false;
+    if (purchaseA.timestamp !== purchaseB.timestamp) return false;
+    if (purchaseA.buyer !== purchaseB.buyer) return false;
+    if (purchaseA.cost !== purchaseB.cost) return false;
+  }
+
   return true;
 };
 
@@ -1577,6 +1590,11 @@ const MapCanvas = ({
             }
 
             const remoteConfig = normalizeShopConfig(snap.data()?.shopConfig);
+            if (remoteConfig.lastPurchase?.itemId === item.id) {
+              const error = new Error('item-sold');
+              error.code = 'item-sold';
+              throw error;
+            }
             const currentWallet =
               remoteConfig.playerWallets[effectivePlayerName] ?? remoteConfig.gold;
 
@@ -1615,6 +1633,9 @@ const MapCanvas = ({
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
           return { success: false, reason: 'insufficient-gold' };
+        }
+        if (error?.code === 'item-sold') {
+          return { success: false, reason: 'item-sold' };
         }
 
         console.error('Error completando la compra en tienda:', error);

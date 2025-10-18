@@ -432,7 +432,7 @@ const ShopMenu = ({
   const activeItem =
     activeEntry?.item || (activeItemId ? catalogMap.get(activeItemId) : null);
   const activeVisuals = activeItem ? buildItemVisuals(activeItem, rarityColorMap) : null;
-  const activeItemSold = !readOnly && lastPurchase?.itemId === activeItemId;
+  const activeItemSold = lastPurchase?.itemId === activeItemId;
 
   const handleBaseGoldChange = (event) => {
     if (!isEditable || !onConfigChange) return;
@@ -483,10 +483,17 @@ const ShopMenu = ({
   const handleRemoveSuggestion = (id, event) => {
     event?.stopPropagation();
     if (!isEditable || !onConfigChange) return;
-    onConfigChange((prev) => ({
-      ...prev,
-      suggestedItemIds: (prev.suggestedItemIds || []).filter((itemId) => itemId !== id),
-    }));
+    onConfigChange((prev) => {
+      const nextSuggestions = (prev.suggestedItemIds || []).filter((itemId) => itemId !== id);
+      const nextConfig = {
+        ...prev,
+        suggestedItemIds: nextSuggestions,
+      };
+      if (prev?.lastPurchase?.itemId === id) {
+        nextConfig.lastPurchase = null;
+      }
+      return nextConfig;
+    });
     if (activeItemId === id) {
       const fallback = filteredSuggestions.find((entry) => entry.id !== id);
       setActiveItemId(fallback ? fallback.id : null);
@@ -520,13 +527,15 @@ const ShopMenu = ({
     !activeEntry?.missing &&
     typeof activeItem.cost === 'number' &&
     activeItem.cost <= currentPlayerGold &&
+    !activeItemSold &&
     !isPurchasing;
 
   const insufficientGold =
     !isEditable &&
     activeItem &&
     typeof activeItem.cost === 'number' &&
-    activeItem.cost > currentPlayerGold;
+    activeItem.cost > currentPlayerGold &&
+    !activeItemSold;
 
   const masterNoticeCostLabel =
     masterPurchaseNotice && typeof masterPurchaseNotice.cost === 'number'
@@ -566,6 +575,8 @@ const ShopMenu = ({
           message =
             result?.reason === 'insufficient-gold'
               ? 'No tienes suficiente oro para comprar este objeto.'
+              : result?.reason === 'item-sold'
+                ? 'Este objeto ya fue vendido.'
               : 'No se pudo completar la compra.';
         }
         setPurchaseStatus({ type: 'error', message });
@@ -847,8 +858,7 @@ const ShopMenu = ({
                         const isHighlighted = highlightPulse?.id === id;
                         const highlightTone =
                           highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
-                        const wasSoldByPlayer =
-                          !readOnly && lastPurchase?.itemId === id;
+                        const wasLastPurchase = lastPurchase?.itemId === id;
                         return (
                           <motion.button
                             key={id}
@@ -931,13 +941,13 @@ const ShopMenu = ({
                                 style={{ willChange: 'opacity', zIndex: 20 }}
                               />
                             )}
-                            {wasSoldByPlayer && (
+                            {wasLastPurchase && (
                               <div
                                 className="pointer-events-none absolute inset-0 rounded-[18px] border-2 border-amber-400/70 bg-amber-500/5"
                                 style={{ zIndex: 15 }}
                               />
                             )}
-                            {wasSoldByPlayer && (
+                            {wasLastPurchase && (
                               <div
                                 className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-amber-100 shadow-sm"
                                 style={{ zIndex: 25 }}
@@ -1072,7 +1082,11 @@ const ShopMenu = ({
                         canPurchase ? '' : 'cursor-not-allowed opacity-60 hover:bg-amber-500/80'
                       }`}
                     >
-                      {isPurchasing ? 'Procesando...' : `Comprar por ${formatCostLabel(activeItem)}`}
+                      {isPurchasing
+                        ? 'Procesando...'
+                        : activeItemSold
+                          ? 'Vendido'
+                          : `Comprar por ${formatCostLabel(activeItem)}`}
                     </button>
                     {insufficientGold && (
                       <div className="flex items-center gap-2 text-xs text-rose-300">
