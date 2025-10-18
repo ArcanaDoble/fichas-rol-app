@@ -89,6 +89,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.4.69:**
 
+- Animaciones de sincronización en la tienda táctica: los lotes sugeridos parpadean al añadir o comprar objetos y el máster recibe un aviso con los detalles de la compra en tiempo real.
 - Vista de ficha con pestaña **General** como layout predeterminado y nueva vista **Equipamiento** centrada en armas, armaduras y poderes.
 - Distribución responsive optimizada que aprovecha los espacios laterales para mostrar estadísticas y equipo sin alargar la ficha.
 - Campos de rasgos con autocompletado inteligente basado en el glosario al crear o editar armas, armaduras y habilidades.
