@@ -61,6 +61,13 @@ import { applyDamage, parseDieValue } from '../utils/damage';
 import { DEFAULT_SHOP_CONFIG, clampShopGold, normalizeShopConfig } from '../utils/shop';
 import sanitize from '../utils/sanitize';
 import {
+  normalizeShopInventories,
+  buildInventoryEntry,
+  appendInventoryEntry,
+  removeInventoryEntry,
+  sanitizeInventoryPlayerName,
+} from '../utils/shopInventory';
+import {
   doc,
   updateDoc,
   getDoc,
@@ -1510,6 +1517,20 @@ const MapCanvas = ({
   );
 
   const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
+  const [shopInventories, setShopInventories] = useState({});
+
+  useEffect(() => {
+    if (!pageId) {
+      setShopInventories({});
+      return undefined;
+    }
+    const pageRef = doc(db, 'pages', pageId);
+    const unsubscribe = onSnapshot(pageRef, (snap) => {
+      const data = snap.data() || {};
+      setShopInventories(normalizeShopInventories(data.shopInventories));
+    });
+    return () => unsubscribe();
+  }, [pageId]);
 
   useEffect(() => {
     setShopDraftConfig((prev) => {
@@ -1537,11 +1558,29 @@ const MapCanvas = ({
     : '';
 
   const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
+  const canManageInventory = !isPlayerPerspective && userType === 'master';
 
   const shopUiConfig = isMasterShopEditor ? shopDraftConfig : resolvedShopConfig;
 
   const shopHasPendingChanges =
     isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
+
+  const inventoryPlayers = useMemo(() => {
+    const names = new Set();
+    (activeShopPlayers || []).forEach((name) => {
+      const trimmed = (name || '').trim();
+      if (trimmed) names.add(trimmed);
+    });
+    Object.keys(shopInventories || {}).forEach((name) => {
+      const trimmed = (name || '').trim();
+      if (trimmed) names.add(trimmed);
+    });
+    if (playerName) {
+      const trimmed = playerName.trim();
+      if (trimmed) names.add(trimmed);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [activeShopPlayers, shopInventories, playerName]);
 
   const handleShopDraftChange = useCallback(
     (updater) => {
@@ -1579,7 +1618,7 @@ const MapCanvas = ({
 
       const pageRef = doc(db, 'pages', pageId);
       try {
-        const { config: nextConfig, remaining } = await runTransaction(
+        const { config: nextConfig, remaining, inventories: nextInventories } = await runTransaction(
           db,
           async (transaction) => {
             const snap = await transaction.get(pageRef);
@@ -1590,6 +1629,9 @@ const MapCanvas = ({
             }
 
             const remoteConfig = normalizeShopConfig(snap.data()?.shopConfig);
+            const remoteInventories = normalizeShopInventories(
+              snap.data()?.shopInventories
+            );
             if (remoteConfig.lastPurchase?.itemId === item.id) {
               const error = new Error('item-sold');
               error.code = 'item-sold';
@@ -1613,6 +1655,10 @@ const MapCanvas = ({
               cost: item.cost,
               timestamp: Date.now(),
             };
+            const inventoryEntry = buildInventoryEntry({ ...item }, effectivePlayerName);
+            const updatedInventories = inventoryEntry
+              ? appendInventoryEntry(remoteInventories, effectivePlayerName, inventoryEntry)
+              : remoteInventories;
             const updatedConfig = normalizeShopConfig({
               ...remoteConfig,
               playerWallets: {
@@ -1622,13 +1668,21 @@ const MapCanvas = ({
               lastPurchase: purchaseEntry,
             });
 
-            transaction.update(pageRef, { shopConfig: sanitize(updatedConfig) });
+            transaction.update(pageRef, {
+              shopConfig: sanitize(updatedConfig),
+              shopInventories: sanitize(updatedInventories),
+            });
 
-            return { config: updatedConfig, remaining: nextWallet };
+            return {
+              config: updatedConfig,
+              remaining: nextWallet,
+              inventories: updatedInventories,
+            };
           }
         );
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
+        setShopInventories(nextInventories);
         return { success: true, remaining };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
@@ -1648,6 +1702,93 @@ const MapCanvas = ({
       onShopConfigChange,
       pageId,
     ]
+  );
+
+  const handleInventoryAddItem = useCallback(
+    async (targetPlayerName, itemData) => {
+      if (!canManageInventory || !pageId) {
+        return { success: false, reason: 'not-allowed' };
+      }
+      const sanitizedPlayer = sanitizeInventoryPlayerName(targetPlayerName);
+      if (!sanitizedPlayer || !itemData) {
+        return { success: false, reason: 'invalid-params' };
+      }
+
+      const pageRef = doc(db, 'pages', pageId);
+      try {
+        const { inventories: nextInventories } = await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(pageRef);
+          if (!snap.exists()) {
+            const error = new Error('page-not-found');
+            error.code = 'page-not-found';
+            throw error;
+          }
+          const remoteInventories = normalizeShopInventories(snap.data()?.shopInventories);
+          const entry = buildInventoryEntry({ ...itemData }, sanitizedPlayer);
+          if (!entry) {
+            const error = new Error('invalid-entry');
+            error.code = 'invalid-entry';
+            throw error;
+          }
+          const updatedInventories = appendInventoryEntry(
+            remoteInventories,
+            sanitizedPlayer,
+            entry
+          );
+          transaction.update(pageRef, {
+            shopInventories: sanitize(updatedInventories),
+          });
+          return { inventories: updatedInventories };
+        });
+        setShopInventories(nextInventories);
+        return { success: true };
+      } catch (error) {
+        console.error('Error agregando objeto al inventario:', error);
+        return { success: false, reason: error?.code || 'transaction-failed' };
+      }
+    },
+    [canManageInventory, pageId]
+  );
+
+  const handleInventoryRemoveItem = useCallback(
+    async (targetPlayerName, entryId) => {
+      if (!canManageInventory || !pageId) {
+        return { success: false, reason: 'not-allowed' };
+      }
+      const sanitizedPlayer = sanitizeInventoryPlayerName(targetPlayerName);
+      const sanitizedEntryId = typeof entryId === 'string' ? entryId.trim() : '';
+      if (!sanitizedPlayer || !sanitizedEntryId) {
+        return { success: false, reason: 'invalid-params' };
+      }
+
+      const pageRef = doc(db, 'pages', pageId);
+      try {
+        const { inventories: nextInventories } = await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(pageRef);
+          if (!snap.exists()) {
+            const error = new Error('page-not-found');
+            error.code = 'page-not-found';
+            throw error;
+          }
+          const remoteInventories = normalizeShopInventories(snap.data()?.shopInventories);
+          const updatedInventories = removeInventoryEntry(
+            remoteInventories,
+            sanitizedPlayer,
+            sanitizedEntryId
+          );
+          transaction.update(pageRef, {
+            shopInventories: sanitize(updatedInventories),
+          });
+          return { inventories: updatedInventories };
+        });
+        setShopInventories(nextInventories);
+        return { success: true };
+      } catch (error) {
+        console.error('Error eliminando objeto del inventario:', error);
+        return { success: false, reason: error?.code || 'transaction-failed' };
+      }
+    },
+    [canManageInventory, pageId]
   );
 
   useEffect(() => {
@@ -6591,6 +6732,11 @@ const MapCanvas = ({
         shopAvailableItems={shopAvailableItems}
         onShopPurchase={handleShopPurchase}
         shopHasPendingChanges={shopHasPendingChanges}
+        inventoryData={shopInventories}
+        inventoryPlayers={inventoryPlayers}
+        onInventoryAddItem={handleInventoryAddItem}
+        onInventoryRemoveItem={handleInventoryRemoveItem}
+        canManageInventory={canManageInventory}
         stylePresets={savedTextPresets}
         onSaveStylePreset={saveCurrentTextPreset}
         onApplyStylePreset={applyTextPreset}
