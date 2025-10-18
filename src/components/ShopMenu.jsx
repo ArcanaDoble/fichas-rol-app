@@ -4,7 +4,6 @@ import { FaCoins } from 'react-icons/fa';
 import {
   FiAlertTriangle,
   FiCheckCircle,
-  FiChevronRight,
   FiPlus,
   FiRefreshCw,
   FiSearch,
@@ -13,6 +12,7 @@ import {
 } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import { clampShopGold, normalizeShopConfig, SHOP_GOLD_BOUNDS } from '../utils/shop';
+import Tarjeta from './Tarjeta';
 
 const navigationTabs = [
   { id: 'recommended', label: 'Recomendados', active: true },
@@ -22,6 +22,36 @@ const navigationTabs = [
 
 const MAX_RESULTS = 18;
 const DEFAULT_RARITY_COLOR = '#94a3b8';
+
+const EQUIPMENT_SLOTS = [
+  {
+    type: 'weapon',
+    label: 'Arma destacada',
+    helper: 'Resalta el arma principal disponible en la tienda.',
+    emptyTitle: 'Sin arma asignada',
+    emptyDescription: 'Usa la búsqueda para elegir un arma del catálogo.',
+    variant: 'weapon',
+    emptyEmoji: '⚔️',
+  },
+  {
+    type: 'armor',
+    label: 'Armadura destacada',
+    helper: 'Selecciona la mejor protección para el grupo.',
+    emptyTitle: 'Sin armadura asignada',
+    emptyDescription: 'Añade una armadura para que los jugadores puedan equiparla.',
+    variant: 'armor',
+    emptyEmoji: '🛡️',
+  },
+  {
+    type: 'ability',
+    label: 'Habilidad destacada',
+    helper: 'Ofrece un poder o habilidad especial dentro de la tienda.',
+    emptyTitle: 'Sin habilidad asignada',
+    emptyDescription: 'Elige una habilidad o poder para completar el set.',
+    variant: 'power',
+    emptyEmoji: '✨',
+  },
+];
 
 const normalizeKey = (value = '') =>
   String(value)
@@ -184,6 +214,11 @@ const ShopMenu = ({
     });
   }, [normalizedSearch, suggestionEntries]);
 
+  const filteredSuggestionIds = useMemo(
+    () => new Set(filteredSuggestions.map((entry) => entry.id)),
+    [filteredSuggestions]
+  );
+
   const searchResults = useMemo(() => {
     if (readOnly) return [];
     if (suggestedItemIds.length >= 4 && !normalizedSearch) return [];
@@ -194,6 +229,58 @@ const ShopMenu = ({
     const filtered = pool.filter((item) => !suggestedItemIds.includes(item.id));
     return filtered.slice(0, normalizedSearch ? MAX_RESULTS : Math.min(MAX_RESULTS, 8));
   }, [availableItems, normalizedSearch, readOnly, suggestedItemIds]);
+
+  const equipmentSuggestions = useMemo(() => {
+    const slots = EQUIPMENT_SLOTS.map((slot) => ({ ...slot, entry: null, isFilteredOut: false }));
+    const extras = [];
+
+    const assignToSlot = (entry) => {
+      if (!entry) return false;
+      const entryType = entry.item?.type;
+      const targetSlot = slots.find((slot) => slot.type === entryType && !slot.entry);
+      if (targetSlot) {
+        targetSlot.entry = entry;
+        return true;
+      }
+      return false;
+    };
+
+    suggestionEntries.forEach((entry) => {
+      if (!assignToSlot(entry)) {
+        extras.push(entry);
+      }
+    });
+
+    const visibleExtras = normalizedSearch
+      ? extras.filter((entry) => filteredSuggestionIds.has(entry.id))
+      : extras;
+
+    const decoratedSlots = slots.map((slot) => ({
+      ...slot,
+      isFilteredOut:
+        normalizedSearch && slot.entry ? !filteredSuggestionIds.has(slot.entry.id) : false,
+    }));
+
+    return { slots: decoratedSlots, extras: visibleExtras };
+  }, [filteredSuggestionIds, normalizedSearch, suggestionEntries]);
+
+  const filledSlotCount = useMemo(
+    () => equipmentSuggestions.slots.filter((slot) => Boolean(slot.entry)).length,
+    [equipmentSuggestions.slots]
+  );
+
+  const hasVisibleSuggestions = useMemo(() => {
+    if (normalizedSearch) {
+      const slotHasMatch = equipmentSuggestions.slots.some(
+        (slot) => slot.entry && !slot.isFilteredOut
+      );
+      return slotHasMatch || equipmentSuggestions.extras.length > 0;
+    }
+    return (
+      equipmentSuggestions.slots.some((slot) => Boolean(slot.entry)) ||
+      equipmentSuggestions.extras.length > 0
+    );
+  }, [equipmentSuggestions, normalizedSearch]);
 
   const clearHighlightTimeout = useCallback(() => {
     if (highlightTimeoutRef.current) {
@@ -495,7 +582,7 @@ const ShopMenu = ({
       return nextConfig;
     });
     if (activeItemId === id) {
-      const fallback = filteredSuggestions.find((entry) => entry.id !== id);
+      const fallback = suggestionEntries.find((entry) => entry.id !== id);
       setActiveItemId(fallback ? fallback.id : null);
     }
   };
@@ -506,10 +593,29 @@ const ShopMenu = ({
       setActiveItemId(id);
       return;
     }
-    if (suggestedItemIds.length >= 4) return;
+    const nextItem = catalogMap.get(id);
+    if (!nextItem) {
+      return;
+    }
     onConfigChange((prev) => ({
       ...prev,
-      suggestedItemIds: [...(prev.suggestedItemIds || []), id],
+      suggestedItemIds: (() => {
+        const prevIds = Array.isArray(prev.suggestedItemIds)
+          ? [...prev.suggestedItemIds]
+          : [];
+        const replaceIndex = prevIds.findIndex((itemId) => {
+          const entry = catalogMap.get(itemId);
+          return entry?.type === nextItem.type;
+        });
+        if (replaceIndex !== -1) {
+          prevIds.splice(replaceIndex, 1, id);
+          return prevIds;
+        }
+        if (prevIds.length >= 4) {
+          return [...prevIds.slice(1), id];
+        }
+        return [...prevIds, id];
+      })(),
     }));
     setActiveItemId(id);
     setSearch('');
@@ -593,8 +699,8 @@ const ShopMenu = ({
   };
 
   const emptyStateText = readOnly
-    ? 'El máster aún no ha configurado objetos sugeridos.'
-    : 'Aún no has seleccionado objetos. Usa la búsqueda para añadir hasta 4 sugerencias.';
+    ? 'El máster aún no ha destacado equipamiento para la tienda.'
+    : 'Destaca un arma, una armadura y una habilidad usando la búsqueda del catálogo.';
 
   const headerGoldLabel = isEditable ? 'Oro base' : 'Tu oro';
   const currentGoldNumeric = Number.isFinite(currentPlayerGold)
@@ -834,50 +940,227 @@ const ShopMenu = ({
               <div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Sugeridos
+                    Equipamiento destacado
                   </div>
                   {!readOnly && (
                     <div className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">
-                      {suggestedItemIds.length}/4 seleccionados
+                      {filledSlotCount}/{EQUIPMENT_SLOTS.length} equipados
+                      {equipmentSuggestions.extras.length > 0
+                        ? ` • ${equipmentSuggestions.extras.length} en reserva`
+                        : ''}
                     </div>
                   )}
                 </div>
-                {filteredSuggestions.length === 0 ? (
-                  <div className="mt-3 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-6 text-sm text-slate-400">
-                    {emptyStateText}
-                  </div>
-                ) : (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {equipmentSuggestions.slots.map((slot) => {
+                    const entry = slot.entry;
+                    const item = entry?.item || (entry?.missing ? buildPlaceholderItem(entry.id) : null);
+                    const isHighlighted = entry && highlightPulse?.id === entry.id;
+                    const highlightTone = highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
+                    const wasLastPurchase = entry && lastPurchase?.itemId === entry.id;
+                    const isActive = entry && activeItemId === entry.id;
+                    const filteredOut = slot.isFilteredOut;
+                    const costLabel = item ? formatCostLabel(item) : null;
+                    const cardRarityColor =
+                      entry && !entry.missing && item?.rarity
+                        ? rarityColorMap[item.rarity] || resolveRarityColor(item.rarity, rarityColorMap)
+                        : undefined;
+                    return (
+                      <div key={slot.type} className="relative">
+                        <Tarjeta
+                          variant={slot.variant}
+                          interactive={Boolean(entry) && !filteredOut}
+                          hoverTransforms
+                          onClick={entry && !filteredOut ? () => handleSelectSuggestion(entry.id) : undefined}
+                          className={`min-h-[220px] transition-opacity ${
+                            filteredOut ? 'opacity-40 pointer-events-none' : 'opacity-100'
+                          } ${isActive ? 'ring-2 ring-amber-400/60' : ''}`}
+                          rarityColor={cardRarityColor}
+                        >
+                          <div className="flex flex-col h-full gap-3">
+                            <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.3em] text-slate-300">
+                              <span>{slot.label}</span>
+                              {entry && costLabel && !entry.missing ? (
+                                <span className="flex items-center gap-1 text-amber-200 font-semibold">
+                                  <FaCoins className="text-xs" />
+                                  {costLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                            {entry ? (
+                              <div className="flex-1 flex flex-col gap-2">
+                                <div className="text-base font-semibold text-slate-100 leading-tight">
+                                  {item?.name}
+                                </div>
+                                <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-400">
+                                  {item?.typeLabel || 'Equipamiento'}
+                                </div>
+                                <p
+                                  className={`text-sm leading-relaxed ${
+                                    entry.missing ? 'text-rose-200' : 'text-slate-200'
+                                  } line-clamp-3`}
+                                >
+                                  {item?.description || 'No hay descripción disponible para este objeto.'}
+                                </p>
+                                {item?.summary?.length > 0 && !entry.missing && (
+                                  <div className="flex flex-wrap gap-2 text-[0.6rem] uppercase tracking-[0.25em] text-slate-300">
+                                    {item.summary.slice(0, 3).map((summaryEntry) => (
+                                      <span
+                                        key={`${item.id}-${summaryEntry.label}`}
+                                        className="px-2 py-1 rounded-full border border-slate-700/70 bg-slate-900/70"
+                                      >
+                                        {summaryEntry.label}: {summaryEntry.value}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {entry.missing ? (
+                                  <span className="text-xs text-amber-200">
+                                    {item?.description ||
+                                      'Este objeto ya no está disponible en el catálogo. Selecciona una alternativa.'}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">{slot.helper}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center text-sm text-slate-300">
+                                <div className="text-3xl" aria-hidden="true">
+                                  {slot.emptyEmoji}
+                                </div>
+                                <div className="font-semibold text-slate-100">{slot.emptyTitle}</div>
+                                <p className="text-xs text-slate-500">
+                                  {readOnly
+                                    ? 'Aún no hay recomendaciones en esta categoría.'
+                                    : slot.emptyDescription}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </Tarjeta>
+                        {entry && isHighlighted && (
+                          <motion.span
+                            key={highlightPulse.key}
+                            className={`pointer-events-none absolute -inset-2 rounded-2xl border ${
+                              highlightTone === 'purchase'
+                                ? 'border-amber-400/70'
+                                : 'border-emerald-400/60'
+                            }`}
+                            initial={{ opacity: 0, scale: 0.94 }}
+                            animate={{
+                              opacity: [0.15, 0.7, 0.6, 0],
+                              scale: [1, 1.04, 1.08, 1.12],
+                            }}
+                            transition={{
+                              duration: 1.25,
+                              ease: 'easeInOut',
+                              times: [0, 0.35, 0.75, 1],
+                            }}
+                            style={{ willChange: 'transform, opacity', zIndex: 30 }}
+                          />
+                        )}
+                        {entry && isHighlighted && (
+                          <motion.div
+                            key={`${highlightPulse.key}-glow`}
+                            className={`pointer-events-none absolute inset-0 rounded-2xl ${
+                              highlightTone === 'purchase'
+                                ? 'bg-amber-400/10'
+                                : 'bg-emerald-400/10'
+                            }`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: [0.35, 0.25, 0.15, 0] }}
+                            transition={{
+                              duration: 1.3,
+                              ease: 'easeInOut',
+                              times: [0, 0.45, 0.75, 1],
+                            }}
+                            style={{ willChange: 'opacity', zIndex: 20 }}
+                          />
+                        )}
+                        {entry && wasLastPurchase && (
+                          <div
+                            className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-400/70 bg-amber-500/5"
+                            style={{ zIndex: 15 }}
+                          />
+                        )}
+                        {entry && wasLastPurchase && (
+                          <div
+                            className="pointer-events-none absolute inset-0 overflow-hidden"
+                            style={{ zIndex: 25, borderRadius: '1rem' }}
+                          >
+                            <div className="absolute -inset-[2px] flex items-center justify-center">
+                              <span className="flex items-center gap-2 px-6 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[200%] justify-center">
+                                <FiShoppingBag className="text-sm" /> Vendido
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {isEditable && entry && (
+                          <button
+                            type="button"
+                            onClick={(event) => handleRemoveSuggestion(entry.id, event)}
+                            className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white"
+                            aria-label="Eliminar sugerencia"
+                          >
+                            <FiX />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {equipmentSuggestions.extras.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <div className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">
+                      Equipamiento en reserva
+                    </div>
                     <AnimatePresence initial={false}>
-                      {filteredSuggestions.map(({ id, item, missing }) => {
+                      {equipmentSuggestions.extras.map(({ id, item, missing }) => {
                         const visuals = buildItemVisuals(item, rarityColorMap);
-                        const buttonStyle =
-                          activeItemId === id
-                            ? { ...visuals.cardStyle, ...visuals.activeStyle }
-                            : visuals.cardStyle;
                         const isHighlighted = highlightPulse?.id === id;
                         const highlightTone =
                           highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
                         const wasLastPurchase = lastPurchase?.itemId === id;
+                        const isActive = activeItemId === id;
                         return (
                           <motion.button
                             key={id}
                             type="button"
                             layout
-                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: -12 }}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
                             transition={{ duration: 0.22, ease: 'easeOut' }}
                             onClick={() => handleSelectSuggestion(id)}
-                          className={`relative rounded-xl border bg-slate-900/70 p-3 shadow-lg transition-all duration-200 text-left ${
-                              activeItemId === id
-                                ? 'ring-2 ring-amber-400/0'
-                                : 'hover:shadow-amber-500/20'
+                            className={`relative w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition-all ${
+                              isActive
+                                ? 'border-amber-400/60 bg-slate-900/80 shadow-lg'
+                                : 'border-slate-800 bg-slate-900/60 hover:border-amber-400/60'
                             } ${missing ? 'opacity-80' : ''}`}
-                            style={buttonStyle}
-                            whileTap={{ scale: 0.97 }}
-                            whileHover={{ translateY: -2 }}
+                            style={visuals.cardStyle}
+                            whileTap={{ scale: 0.98 }}
                           >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-slate-100 leading-tight">
+                                {item.name}
+                              </div>
+                              <div className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+                                {item.typeLabel}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-amber-300 text-sm font-semibold">
+                              {formatCostLabel(item)}
+                            </div>
+                            {isEditable && (
+                              <button
+                                type="button"
+                                onClick={(event) => handleRemoveSuggestion(id, event)}
+                                className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white"
+                                aria-label="Eliminar sugerencia"
+                              >
+                                <FiX />
+                              </button>
+                            )}
                             {isHighlighted && (
                               <motion.span
                                 key={highlightPulse.key}
@@ -899,33 +1182,9 @@ const ShopMenu = ({
                                 style={{ willChange: 'transform, opacity', zIndex: 30 }}
                               />
                             )}
-                            <div className="flex items-start justify-between text-[0.65rem] uppercase tracking-[0.35em] text-slate-300">
-                              <span>{item.typeLabel}</span>
-                              <span className="text-amber-300">{formatCostLabel(item)}</span>
-                            </div>
-                            <div className="mt-2 text-base font-semibold text-slate-100 leading-tight line-clamp-2">
-                              {item.name}
-                            </div>
-                            {item.tags?.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-2 text-[0.65rem] uppercase tracking-[0.25em] text-slate-300">
-                                {item.tags.slice(0, 4).map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className="px-2 py-1 rounded-full border bg-slate-900/70"
-                                    style={visuals.badgeStyle}
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            <div className="mt-4 flex items-center justify-between text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
-                              <span>{missing ? 'Sin datos' : 'Ver detalles'}</span>
-                              <FiChevronRight className="text-slate-500" />
-                            </div>
                             {isHighlighted && (
                               <motion.div
-                                key={`${highlightPulse.key}-glow`}
+                                key={`${highlightPulse.key}-glow-reserve`}
                                 className={`pointer-events-none absolute inset-0 rounded-[18px] ${
                                   highlightTone === 'purchase'
                                     ? 'bg-amber-400/10'
@@ -947,32 +1206,17 @@ const ShopMenu = ({
                                 style={{ zIndex: 15 }}
                               />
                             )}
-                            {wasLastPurchase && (
-                              <div
-                                className="pointer-events-none absolute inset-0 overflow-hidden"
-                                style={{ zIndex: 25, borderRadius: 'inherit' }}
-                              >
-                                <div className="absolute -inset-[2px] flex items-center justify-center">
-                                  <span className="flex items-center gap-2 px-6 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[200%] justify-center">
-                                    <FiShoppingBag className="text-sm" /> Vendido
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            {isEditable && (
-                              <button
-                                type="button"
-                                onClick={(event) => handleRemoveSuggestion(id, event)}
-                                className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white"
-                                aria-label="Eliminar sugerencia"
-                              >
-                                <FiX />
-                              </button>
-                            )}
                           </motion.button>
                         );
                       })}
                     </AnimatePresence>
+                  </div>
+                )}
+                {!hasVisibleSuggestions && (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-6 text-sm text-slate-400 text-center">
+                    {normalizedSearch
+                      ? 'No hay equipamiento destacado que coincida con tu búsqueda.'
+                      : emptyStateText}
                   </div>
                 )}
               </div>
