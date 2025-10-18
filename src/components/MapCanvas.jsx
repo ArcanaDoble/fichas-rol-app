@@ -1655,11 +1655,7 @@ const MapCanvas = ({
               cost: item.cost,
               timestamp: Date.now(),
             };
-            const inventoryEntry = buildInventoryEntry(
-              { ...item },
-              effectivePlayerName,
-              { source: 'shop' }
-            );
+            const inventoryEntry = buildInventoryEntry({ ...item }, effectivePlayerName);
             const updatedInventories = inventoryEntry
               ? appendInventoryEntry(remoteInventories, effectivePlayerName, inventoryEntry)
               : remoteInventories;
@@ -1728,11 +1724,7 @@ const MapCanvas = ({
             throw error;
           }
           const remoteInventories = normalizeShopInventories(snap.data()?.shopInventories);
-          const entry = buildInventoryEntry(
-            { ...itemData },
-            sanitizedPlayer,
-            { source: itemData?.source === 'shop' ? 'shop' : 'manual' }
-          );
+          const entry = buildInventoryEntry({ ...itemData }, sanitizedPlayer);
           if (!entry) {
             const error = new Error('invalid-entry');
             error.code = 'invalid-entry';

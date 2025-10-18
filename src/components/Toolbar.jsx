@@ -173,43 +173,43 @@ const Toolbar = ({
   };
 
   return (
-  <div className="fixed left-0 top-0 bottom-0 w-14 bg-gray-900 z-50 flex flex-col items-center py-3 space-y-4">
-    <div className="flex flex-col items-center space-y-2 flex-1">
-      <div className="flex flex-col items-center space-y-2">
-        {availableTools.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => onSelect(id)}
-            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors border ${
-              activeTool === id
-                ? id === 'target'
-                  ? 'bg-red-700/90 border-red-500 text-white shadow'
-                  : 'bg-slate-700 border-slate-500 text-white shadow'
-                : 'bg-slate-900 border-slate-700 text-gray-200 hover:bg-slate-800'
-            }`}
-          >
-            <Icon />
-          </button>
-        ))}
+    <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
+      <div className="flex flex-col items-center space-y-2 flex-1">
+        <div className="flex flex-col items-center space-y-2">
+          {availableTools.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => onSelect(id)}
+              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                activeTool === id
+                  ? id === 'target'
+                    ? 'bg-red-700 text-white'
+                    : 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
+        </div>
+        <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
+          {commerceButtons.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => onSelect(id)}
+              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                activeTool === id
+                  ? id === 'shop'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-emerald-600 text-white'
+                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="w-9 border-t border-slate-700 pt-3 flex flex-col items-center space-y-2">
-        {commerceButtons.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => onSelect(id)}
-            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors border ${
-              activeTool === id
-                ? id === 'shop'
-                  ? 'bg-amber-600 border-amber-400 text-white shadow'
-                  : 'bg-emerald-600 border-emerald-400 text-white shadow'
-                : 'bg-slate-900 border-slate-700 text-gray-200 hover:bg-slate-800'
-            }`}
-          >
-            <Icon />
-          </button>
-        ))}
-      </div>
-    </div>
 
     {/* Sección de Capas - ocultar para jugadores */}
     {!isPlayerView && (
@@ -767,8 +767,6 @@ Toolbar.propTypes = {
         typeLabel: PropTypes.string,
         rarity: PropTypes.string,
         cost: PropTypes.number,
-        timestamp: PropTypes.number,
-        source: PropTypes.string,
       })
     )
   ),

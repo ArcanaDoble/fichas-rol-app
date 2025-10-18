@@ -28,17 +28,8 @@ const normalizeInventoryEntry = (entry, index = 0) => {
   const rawCost = Number(entry.cost);
   const cost = Number.isFinite(rawCost) ? clampShopGold(rawCost) : null;
 
-  let timestamp = null;
-  if (typeof entry.timestamp === 'number' && Number.isFinite(entry.timestamp)) {
-    timestamp = entry.timestamp;
-  } else if (entry.timestamp && typeof entry.timestamp.toMillis === 'function') {
-    timestamp = entry.timestamp.toMillis();
-  }
-
-  const source = sanitizeText(entry.source) || 'manual';
-
   const existingId = sanitizeText(entry.entryId);
-  const fallbackIdComponents = [itemId, timestamp, index]
+  const fallbackIdComponents = [itemId, index]
     .filter((part) => part !== null && part !== undefined && part !== '')
     .map((part) => String(part));
   const fallbackId = fallbackIdComponents.length > 0 ? fallbackIdComponents.join('_') : nanoid();
@@ -50,8 +41,6 @@ const normalizeInventoryEntry = (entry, index = 0) => {
     typeLabel,
     rarity,
     cost,
-    timestamp,
-    source,
   };
 };
 
@@ -76,7 +65,7 @@ export const normalizeShopInventories = (inventories) => {
   return result;
 };
 
-export const buildInventoryEntry = (item, buyer, { source = 'manual' } = {}) => {
+export const buildInventoryEntry = (item, buyer) => {
   const playerName = sanitizeInventoryPlayerName(buyer);
   if (!playerName || !item) return null;
 
@@ -88,8 +77,6 @@ export const buildInventoryEntry = (item, buyer, { source = 'manual' } = {}) => 
       typeLabel: sanitizeText(item.typeLabel || item.type || ''),
       rarity: sanitizeText(item.rarity || ''),
       cost: Number.isFinite(Number(item.cost)) ? clampShopGold(item.cost) : null,
-      timestamp: Date.now(),
-      source,
     },
     0
   );

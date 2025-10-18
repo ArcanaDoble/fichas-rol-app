@@ -8,15 +8,6 @@ const formatCost = (cost) => {
   return cost.toLocaleString('es-ES');
 };
 
-const formatTimestamp = (timestamp) => {
-  if (!timestamp) return '';
-  try {
-    return new Date(timestamp).toLocaleString('es-ES');
-  } catch (error) {
-    return '';
-  }
-};
-
 const defaultRarityColor = '#64748b';
 
 const resolveRarityColor = (rarity, palette = {}) => {
@@ -35,6 +26,58 @@ const resolveRarityColor = (rarity, palette = {}) => {
     return normalizedKey === normalized;
   });
   return match ? match[1] : defaultRarityColor;
+};
+
+const parseHexToRgb = (hex) => {
+  if (typeof hex !== 'string') return null;
+  const sanitized = hex.trim().replace('#', '');
+  if (![3, 6].includes(sanitized.length)) return null;
+  const expanded =
+    sanitized.length === 3
+      ? sanitized
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : sanitized;
+  const numeric = Number.parseInt(expanded, 16);
+  if (Number.isNaN(numeric)) return null;
+  return {
+    r: (numeric >> 16) & 255,
+    g: (numeric >> 8) & 255,
+    b: numeric & 255,
+  };
+};
+
+const buildRgba = (rgb, alpha) =>
+  `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.max(0, Math.min(1, alpha))})`;
+
+const buildEntryVisuals = (rarity, palette) => {
+  const resolved = resolveRarityColor(rarity, palette);
+  const rgb = parseHexToRgb(resolved);
+  if (!rgb) {
+    return {
+      accent: resolved,
+      cardStyle: {},
+      badgeStyle: {
+        color: resolved,
+        borderColor: resolved,
+        backgroundColor: `${resolved}22`,
+      },
+    };
+  }
+  const accent = buildRgba(rgb, 0.7);
+  return {
+    accent,
+    cardStyle: {
+      backgroundImage: `linear-gradient(135deg, ${buildRgba(rgb, 0.28)} 0%, rgba(15,23,42,0.94) 58%, rgba(9,13,23,0.96) 100%)`,
+      borderColor: buildRgba(rgb, 0.45),
+    },
+    badgeStyle: {
+      backgroundColor: buildRgba(rgb, 0.18),
+      borderColor: buildRgba(rgb, 0.38),
+      color: resolved,
+    },
+  };
 };
 
 const InventoryMenu = ({
@@ -244,43 +287,46 @@ const InventoryMenu = ({
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {entries.map((entry) => {
-          const accent = resolveRarityColor(entry.rarity, rarityColorMap);
+          const visuals = buildEntryVisuals(entry.rarity, rarityColorMap);
           return (
             <div
               key={entry.entryId}
-              className="relative rounded-lg border border-gray-700 bg-slate-900/90 p-4 shadow-lg"
-              style={{ boxShadow: `0 18px 35px -28px ${accent}AA` }}
+              className="relative overflow-hidden rounded-xl border bg-slate-900/70 p-4 shadow-lg transition-transform duration-200 hover:-translate-y-1"
+              style={{
+                ...visuals.cardStyle,
+                boxShadow: visuals.accent
+                  ? `0 22px 40px -30px ${visuals.accent}`
+                  : undefined,
+              }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-white tracking-wide">{entry.itemName}</h3>
-                  <p className="text-xs text-gray-300 mt-1">{entry.typeLabel || 'Objeto'}</p>
-                </div>
-                <span
-                  className="text-xs font-semibold px-2 py-1 rounded-full border"
-                  style={{
-                    borderColor: accent,
-                    color: accent,
-                    backgroundColor: `${accent}22`,
-                  }}
-                >
-                  {entry.rarity || 'Común'}
-                </span>
-              </div>
-              <div className="mt-3 text-xs text-gray-300 flex items-center justify-between">
-                <span>Costo: {formatCost(entry.cost)}</span>
-                <span>{formatTimestamp(entry.timestamp)}</span>
-              </div>
-              <div className="mt-2 text-[11px] text-gray-500">Origen: {entry.source === 'shop' ? 'Tienda' : 'Manual'}</div>
               {canManageInventory && (
                 <button
                   onClick={() => handleRemoveItem(entry.entryId)}
-                  className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center shadow hover:bg-red-500"
+                  className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-200 hover:text-white"
                   title="Eliminar objeto"
                 >
                   <FiTrash2 />
                 </button>
               )}
+              <div className="flex items-start justify-between text-[0.65rem] uppercase tracking-[0.35em] text-slate-300">
+                <span>{entry.typeLabel || 'Objeto'}</span>
+                <span className="text-amber-300">{formatCost(entry.cost)}</span>
+              </div>
+              <div className="mt-3 flex items-start justify-between gap-3">
+                <h3 className="text-base font-semibold text-slate-100 leading-snug flex-1">
+                  {entry.itemName}
+                </h3>
+                <span
+                  className="text-[0.6rem] uppercase tracking-[0.3em] px-3 py-1 rounded-full border"
+                  style={visuals.badgeStyle}
+                >
+                  {entry.rarity || 'Común'}
+                </span>
+              </div>
+              <div className="mt-4 flex items-center justify-between text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
+                <span>Inventario</span>
+                <span className="text-slate-500">Guardado</span>
+              </div>
             </div>
           );
         })}
@@ -440,8 +486,6 @@ InventoryMenu.propTypes = {
         typeLabel: PropTypes.string,
         rarity: PropTypes.string,
         cost: PropTypes.number,
-        timestamp: PropTypes.number,
-        source: PropTypes.string,
       })
     )
   ),
