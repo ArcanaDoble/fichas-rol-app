@@ -1563,8 +1563,6 @@ const MapCanvas = ({
 
   const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
 
-  const shopUiConfig = isMasterShopEditor ? shopDraftConfig : resolvedShopConfig;
-
   const shopHasPendingChanges =
     isMasterShopEditor && !shopConfigsEqual(shopDraftConfig, resolvedShopConfig);
 
@@ -6642,7 +6640,7 @@ const MapCanvas = ({
         textOptions={textOptions}
         onTextOptionsChange={applyTextOptions}
         onResetTextOptions={resetTextOptions}
-        shopConfig={shopUiConfig}
+        shopConfig={isMasterShopEditor ? shopDraftConfig : resolvedShopConfig}
         onShopConfigChange={handleShopDraftChange}
         onShopApply={isMasterShopEditor ? handleShopApply : undefined}
         shopActivePlayers={activeShopPlayers}

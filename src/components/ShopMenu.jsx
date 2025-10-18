@@ -869,7 +869,7 @@ const ShopMenu = ({
                             exit={{ opacity: 0, scale: 0.9, y: -12 }}
                             transition={{ duration: 0.22, ease: 'easeOut' }}
                             onClick={() => handleSelectSuggestion(id)}
-                          className={`relative overflow-hidden rounded-xl border bg-slate-900/70 p-3 shadow-lg transition-all duration-200 text-left ${
+                          className={`relative rounded-xl border bg-slate-900/70 p-3 shadow-lg transition-all duration-200 text-left ${
                               activeItemId === id
                                 ? 'ring-2 ring-amber-400/0'
                                 : 'hover:shadow-amber-500/20'
@@ -949,12 +949,14 @@ const ShopMenu = ({
                             )}
                             {wasLastPurchase && (
                               <div
-                                className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
-                                style={{ zIndex: 25 }}
+                                className="pointer-events-none absolute inset-0 overflow-hidden"
+                                style={{ zIndex: 25, borderRadius: 'inherit' }}
                               >
-                                <span className="flex items-center gap-2 px-6 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[200%] justify-center">
-                                  <FiShoppingBag className="text-sm" /> Vendido
-                                </span>
+                                <div className="absolute -inset-[2px] flex items-center justify-center">
+                                  <span className="flex items-center gap-2 px-6 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[200%] justify-center">
+                                    <FiShoppingBag className="text-sm" /> Vendido
+                                  </span>
+                                </div>
                               </div>
                             )}
                             {isEditable && (
@@ -1033,12 +1035,14 @@ const ShopMenu = ({
                   </div>
                   {activeItemSold && (
                     <div
-                      className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
-                      style={{ zIndex: 35 }}
+                      className="pointer-events-none absolute inset-0 overflow-hidden"
+                      style={{ zIndex: 35, borderRadius: 'inherit' }}
                     >
-                      <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
-                        <FiShoppingBag className="text-base" /> Vendido
-                      </span>
+                      <div className="absolute -inset-[2px] flex items-center justify-center">
+                        <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
+                          <FiShoppingBag className="text-base" /> Vendido
+                        </span>
+                      </div>
                     </div>
                   )}
                   {activeItem.tags?.length > 0 && (
