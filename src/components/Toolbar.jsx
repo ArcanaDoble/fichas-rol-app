@@ -9,18 +9,23 @@ import {
   FiImage,
 } from 'react-icons/fi';
 import { FaRuler, FaSun } from 'react-icons/fa';
-import { GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons/gi';
+import { GiBackpack, GiBrickWall, GiCrosshair, GiShoppingBag } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
 import ShopMenu from './ShopMenu';
+import InventoryMenu from './InventoryMenu';
 
-const tools = [
+const primaryTools = [
   { id: 'select', icon: FiMousePointer },
   { id: 'draw', icon: FiEdit2 },
   { id: 'wall', icon: GiBrickWall },
   { id: 'measure', icon: FaRuler },
   { id: 'text', icon: FiType },
-  { id: 'shop', icon: GiShoppingBag },
   { id: 'target', icon: GiCrosshair },
+];
+
+const commerceTools = [
+  { id: 'shop', icon: GiShoppingBag },
+  { id: 'inventory', icon: GiBackpack },
 ];
 
 const brushOptions = [
@@ -98,6 +103,11 @@ const Toolbar = ({
   shopAvailableItems = [],
   onShopPurchase,
   shopHasPendingChanges = false,
+  inventoryData = {},
+  inventoryPlayers = [],
+  onInventoryAddItem,
+  onInventoryRemoveItem,
+  canManageInventory = false,
   stylePresets = [],
   onSaveStylePreset,
   onApplyStylePreset,
@@ -117,8 +127,12 @@ const Toolbar = ({
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
-    ? tools.filter(tool => ['select', 'draw', 'measure', 'text', 'shop', 'target'].includes(tool.id))
-    : tools;
+    ? primaryTools.filter((tool) => ['select', 'draw', 'measure', 'text', 'target'].includes(tool.id))
+    : primaryTools;
+
+  const commerceButtons = isPlayerView
+    ? commerceTools
+    : commerceTools;
 
   const selectedAmbientLight = useMemo(
     () => ambientLights.find((light) => light.id === selectedAmbientLightId) || null,
@@ -159,27 +173,44 @@ const Toolbar = ({
   };
 
   return (
-  <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
-    <div className="flex flex-col items-center space-y-2 flex-1">
-      {availableTools.map(({ id, icon: Icon }) => (
-        <button
-          key={id}
-          onClick={() => onSelect(id)}
-          className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-            activeTool === id
-              ? id === 'target'
-                ? 'bg-red-700'
-                : id === 'shop'
-                ? 'bg-amber-600'
-                : 'bg-gray-700'
-              : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          <Icon />
-        </button>
-      ))}
-    </div>
-    
+    <div className="fixed left-0 top-0 bottom-0 w-12 bg-gray-800 z-50 flex flex-col items-center py-2">
+      <div className="flex flex-col items-center space-y-2 flex-1">
+        <div className="flex flex-col items-center space-y-2">
+          {availableTools.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => onSelect(id)}
+              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                activeTool === id
+                  ? id === 'target'
+                    ? 'bg-red-700 text-white'
+                    : 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
+        </div>
+        <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
+          {commerceButtons.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => onSelect(id)}
+              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                activeTool === id
+                  ? id === 'shop'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-emerald-600 text-white'
+                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
+        </div>
+      </div>
+
     {/* Sección de Capas - ocultar para jugadores */}
     {!isPlayerView && (
       <div className="flex flex-col items-center space-y-2 border-t border-gray-600 pt-2">
@@ -373,6 +404,28 @@ const Toolbar = ({
             onPurchase={onShopPurchase}
             rarityColorMap={rarityColorMap}
             hasPendingChanges={shopHasPendingChanges}
+          />
+        </motion.div>
+      )}
+      {activeTool === 'inventory' && (
+        <motion.div
+          key="inventory-menu"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute left-14 top-2"
+        >
+          <InventoryMenu
+            inventories={inventoryData}
+            availablePlayers={inventoryPlayers}
+            isPlayerView={isPlayerView}
+            currentPlayerName={playerName}
+            availableItems={shopAvailableItems}
+            rarityColorMap={rarityColorMap}
+            onAddItem={onInventoryAddItem}
+            onRemoveItem={onInventoryRemoveItem}
+            canManageInventory={canManageInventory}
           />
         </motion.div>
       )}
@@ -705,6 +758,22 @@ Toolbar.propTypes = {
   ),
   onShopPurchase: PropTypes.func,
   shopHasPendingChanges: PropTypes.bool,
+  inventoryData: PropTypes.objectOf(
+    PropTypes.arrayOf(
+      PropTypes.shape({
+        entryId: PropTypes.string.isRequired,
+        itemId: PropTypes.string,
+        itemName: PropTypes.string.isRequired,
+        typeLabel: PropTypes.string,
+        rarity: PropTypes.string,
+        cost: PropTypes.number,
+      })
+    )
+  ),
+  inventoryPlayers: PropTypes.arrayOf(PropTypes.string),
+  onInventoryAddItem: PropTypes.func,
+  onInventoryRemoveItem: PropTypes.func,
+  canManageInventory: PropTypes.bool,
   stylePresets: PropTypes.arrayOf(
     PropTypes.shape({
       text: PropTypes.string,
