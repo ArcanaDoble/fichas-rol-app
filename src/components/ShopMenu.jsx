@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { FaCoins } from 'react-icons/fa';
 import {
@@ -19,7 +19,7 @@ const navigationTabs = [
 ];
 
 const MAX_RESULTS = 18;
-const DEFAULT_RARITY_COLOR = '#f59e0b';
+const DEFAULT_RARITY_COLOR = '#94a3b8';
 
 const normalizeKey = (value = '') =>
   String(value)
@@ -86,6 +86,7 @@ const buildItemVisuals = (item, rarityColorMap) => {
     previewStyle: {
       borderColor: buildRgba(rgb, 0.45),
       boxShadow: `0 28px 55px -36px ${buildRgba(rgb, 0.85)}`,
+      background: `linear-gradient(150deg, ${buildRgba(rgb, 0.18)} 0%, rgba(15,23,42,0.9) 58%, rgba(9,13,23,0.94) 100%)`,
     },
     badgeStyle: {
       backgroundColor: buildRgba(rgb, 0.18),
@@ -134,7 +135,6 @@ const ShopMenu = ({
   const [activeItemId, setActiveItemId] = useState(null);
   const [purchaseStatus, setPurchaseStatus] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
-
   const normalizedConfig = useMemo(() => normalizeShopConfig(config), [config]);
 
   const { gold: baseGold, suggestedItemIds = [], playerWallets = {} } = normalizedConfig;
@@ -247,6 +247,111 @@ const ShopMenu = ({
     () => getPlayerGold(currentPlayerName),
     [currentPlayerName, baseGold, playerWallets]
   );
+
+  const [displayGold, setDisplayGold] = useState(() =>
+    Number.isFinite(currentPlayerGold) ? currentPlayerGold : 0
+  );
+  const [goldTrend, setGoldTrend] = useState(null);
+  const [goldDelta, setGoldDelta] = useState(0);
+  const [goldPulseKey, setGoldPulseKey] = useState(0);
+  const previousGoldRef = useRef(
+    Number.isFinite(currentPlayerGold) ? currentPlayerGold : 0
+  );
+  const goldAnimationFrameRef = useRef(null);
+  const goldTrendTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    const numericCurrentGold = Number.isFinite(currentPlayerGold)
+      ? currentPlayerGold
+      : 0;
+    if (typeof window === 'undefined') {
+      setDisplayGold(numericCurrentGold);
+      previousGoldRef.current = numericCurrentGold;
+      return undefined;
+    }
+
+    const cancelOngoingAnimation = () => {
+      if (goldAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(goldAnimationFrameRef.current);
+        goldAnimationFrameRef.current = null;
+      }
+      if (goldTrendTimeoutRef.current) {
+        clearTimeout(goldTrendTimeoutRef.current);
+        goldTrendTimeoutRef.current = null;
+      }
+    };
+
+    if (isEditable) {
+      cancelOngoingAnimation();
+      setDisplayGold(numericCurrentGold);
+      setGoldTrend(null);
+      setGoldDelta(0);
+      previousGoldRef.current = numericCurrentGold;
+      return undefined;
+    }
+
+    const previousGold =
+      typeof previousGoldRef.current === 'number'
+        ? previousGoldRef.current
+        : numericCurrentGold;
+
+    if (previousGold === numericCurrentGold) {
+      setDisplayGold(numericCurrentGold);
+      previousGoldRef.current = numericCurrentGold;
+      return undefined;
+    }
+
+    cancelOngoingAnimation();
+
+    const delta = numericCurrentGold - previousGold;
+    const duration = Math.min(1600, Math.max(600, Math.abs(delta) * 35));
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+    setGoldDelta(delta);
+    setGoldTrend(delta > 0 ? 'up' : 'down');
+    setGoldPulseKey((key) => key + 1);
+
+    let startTime = null;
+
+    const step = (timestamp) => {
+      if (startTime === null) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = easeOutCubic(progress);
+      const nextValue = Math.round(previousGold + delta * eased);
+      setDisplayGold(nextValue);
+
+      if (progress < 1) {
+        goldAnimationFrameRef.current = window.requestAnimationFrame(step);
+      } else {
+        setDisplayGold(numericCurrentGold);
+        goldAnimationFrameRef.current = null;
+      }
+    };
+
+    goldAnimationFrameRef.current = window.requestAnimationFrame(step);
+
+    goldTrendTimeoutRef.current = setTimeout(() => {
+      setGoldTrend(null);
+      setGoldDelta(0);
+      goldTrendTimeoutRef.current = null;
+    }, duration + 500);
+
+    previousGoldRef.current = numericCurrentGold;
+
+    return () => {
+      cancelOngoingAnimation();
+    };
+  }, [currentPlayerGold, isEditable]);
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined' && goldAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(goldAnimationFrameRef.current);
+    }
+    if (goldTrendTimeoutRef.current) {
+      clearTimeout(goldTrendTimeoutRef.current);
+    }
+  }, []);
 
   const activeEntry = suggestionEntries.find((entry) => entry.id === activeItemId);
   const activeItem =
@@ -387,6 +492,38 @@ const ShopMenu = ({
     : 'Aún no has seleccionado objetos. Usa la búsqueda para añadir hasta 4 sugerencias.';
 
   const headerGoldLabel = isEditable ? 'Oro base' : 'Tu oro';
+  const currentGoldNumeric = Number.isFinite(currentPlayerGold)
+    ? currentPlayerGold
+    : 0;
+  const safeDisplayGold = Number.isFinite(displayGold)
+    ? Math.round(displayGold)
+    : Math.round(currentGoldNumeric);
+  const formattedDisplayGold = safeDisplayGold.toLocaleString('es-ES');
+  const roundedDelta = Math.round(Math.abs(goldDelta));
+  const formattedGoldDelta =
+    goldTrend && roundedDelta > 0
+      ? `${goldDelta > 0 ? '+' : '−'}${roundedDelta.toLocaleString('es-ES')}`
+      : '';
+  const goldContainerTrendClass =
+    !isEditable && goldTrend === 'up'
+      ? 'gold-flash-up'
+      : !isEditable && goldTrend === 'down'
+        ? 'gold-flash-down'
+        : '';
+  const goldTextTrendClass = !isEditable
+    ? goldTrend === 'up'
+      ? 'text-emerald-200'
+      : goldTrend === 'down'
+        ? 'text-rose-200'
+        : 'text-amber-200'
+    : 'text-amber-200';
+  const goldIconTrendClass = !isEditable
+    ? goldTrend === 'up'
+      ? 'text-emerald-300'
+      : goldTrend === 'down'
+        ? 'text-rose-300'
+        : 'text-amber-200'
+    : 'text-amber-300';
   return (
     <div className="w-[640px] text-white z-40">
       <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden">
@@ -410,13 +547,13 @@ const ShopMenu = ({
               {headerGoldLabel}
             </span>
             <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+              className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${
                 isEditable
                   ? 'border-amber-500/40 bg-slate-900/80 shadow-inner'
-                  : 'border-slate-700/60 bg-slate-900/60'
+                  : `border-slate-700/60 bg-slate-900/60 ${goldContainerTrendClass}`
               }`}
             >
-              <FaCoins className={isEditable ? 'text-amber-300' : 'text-amber-200'} />
+              <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
               {isEditable ? (
                 <input
                   type="number"
@@ -427,9 +564,25 @@ const ShopMenu = ({
                   className="bg-transparent w-20 text-right text-sm font-semibold focus:outline-none text-amber-200"
                 />
               ) : (
-                <span className="text-sm font-semibold text-amber-200">
-                  {currentPlayerGold.toLocaleString('es-ES')}
-                </span>
+                <div className="relative">
+                  <span
+                    className={`text-sm font-semibold tabular-nums transition-colors duration-300 ${goldTextTrendClass}`}
+                  >
+                    {formattedDisplayGold}
+                  </span>
+                  {formattedGoldDelta && (
+                    <span
+                      key={goldPulseKey}
+                      className={`pointer-events-none absolute right-0 -top-4 text-[0.65rem] font-semibold tabular-nums tracking-[0.25em] ${
+                        goldTrend === 'up'
+                          ? 'text-emerald-300 gold-delta-up'
+                          : 'text-rose-300 gold-delta-down'
+                      }`}
+                    >
+                      {formattedGoldDelta}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             {canApply && (
