@@ -59,6 +59,7 @@ import {
 import { isTokenVisible, isDoorVisible } from '../utils/playerVisibility';
 import { applyDamage, parseDieValue } from '../utils/damage';
 import { DEFAULT_SHOP_CONFIG, clampShopGold, normalizeShopConfig } from '../utils/shop';
+import sanitize from '../utils/sanitize';
 import {
   doc,
   updateDoc,
@@ -73,6 +74,7 @@ import {
   addDoc,
   serverTimestamp,
   deleteField,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
@@ -1549,34 +1551,72 @@ const MapCanvas = ({
   }, [isMasterShopEditor, onShopConfigChange, shopDraftConfig]);
 
   const handleShopPurchase = useCallback(
-    (item) => {
-      if (!isPlayerPerspective || !effectivePlayerName || typeof onShopConfigChange !== 'function') {
+    async (item) => {
+      if (
+        !isPlayerPerspective ||
+        !effectivePlayerName ||
+        typeof onShopConfigChange !== 'function' ||
+        !pageId
+      ) {
         return { success: false, reason: 'not-allowed' };
       }
       if (!item || typeof item.cost !== 'number') {
         return { success: false, reason: 'missing-cost' };
       }
-      const currentWallet =
-        resolvedShopConfig.playerWallets[effectivePlayerName] ?? resolvedShopConfig.gold;
-      if (item.cost > currentWallet) {
-        return { success: false, reason: 'insufficient-gold' };
+
+      const pageRef = doc(db, 'pages', pageId);
+      try {
+        const { config: nextConfig, remaining } = await runTransaction(
+          db,
+          async (transaction) => {
+            const snap = await transaction.get(pageRef);
+            if (!snap.exists()) {
+              const error = new Error('page-not-found');
+              error.code = 'page-not-found';
+              throw error;
+            }
+
+            const remoteConfig = normalizeShopConfig(snap.data()?.shopConfig);
+            const currentWallet =
+              remoteConfig.playerWallets[effectivePlayerName] ?? remoteConfig.gold;
+
+            if (item.cost > currentWallet) {
+              const error = new Error('insufficient-gold');
+              error.code = 'insufficient-gold';
+              throw error;
+            }
+
+            const nextWallet = clampShopGold(currentWallet - item.cost);
+            const updatedConfig = normalizeShopConfig({
+              ...remoteConfig,
+              playerWallets: {
+                ...remoteConfig.playerWallets,
+                [effectivePlayerName]: nextWallet,
+              },
+            });
+
+            transaction.update(pageRef, { shopConfig: sanitize(updatedConfig) });
+
+            return { config: updatedConfig, remaining: nextWallet };
+          }
+        );
+
+        onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
+        return { success: true, remaining };
+      } catch (error) {
+        if (error?.code === 'insufficient-gold') {
+          return { success: false, reason: 'insufficient-gold' };
+        }
+
+        console.error('Error completando la compra en tienda:', error);
+        return { success: false, reason: 'transaction-failed' };
       }
-      const nextWallet = clampShopGold(currentWallet - item.cost);
-      const nextConfig = normalizeShopConfig({
-        ...resolvedShopConfig,
-        playerWallets: {
-          ...resolvedShopConfig.playerWallets,
-          [effectivePlayerName]: nextWallet,
-        },
-      });
-      onShopConfigChange(nextConfig);
-      return { success: true, remaining: nextWallet };
     },
     [
       effectivePlayerName,
       isPlayerPerspective,
       onShopConfigChange,
-      resolvedShopConfig,
+      pageId,
     ]
   );
 
