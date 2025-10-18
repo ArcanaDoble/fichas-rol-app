@@ -42,8 +42,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 ### 🛒 Inventario enlazado con la tienda (NUEVO)
 
 - **Atajos independientes para tienda e inventario** - La barra de herramientas ahora separa la tienda del resto de utilidades y ofrece un acceso directo dedicado al inventario.
-- **Inventario persistente por jugador** - Cada compra desde la tienda se almacena automáticamente en el inventario personal del jugador para consultarla y organizarla por categorías (armas, armaduras, habilidades y objetos adicionales).
-- **Equipamiento listo para usarse** - El panel de inventario permite marcar rápidamente qué armas, armaduras o habilidades están equipadas y dejar notas sobre cada objeto sin necesidad de arrastrar fichas.
+- **Inventario persistente por jugador** - Cada compra desde la tienda se almacena automáticamente en el inventario personal del jugador para consultarla y organizarla por categorías (armas, armaduras, poderes y objetos adicionales).
+- **Biblioteca de compras por categorías** - El panel de inventario replica el estilo de equipamiento de las fichas para revisar armas, armaduras y poderes comprados, añadir notas, marcar equipamiento y buscar rápidamente cualquier compra.
 - **Panel maestro para todos los inventarios** - El máster puede revisar, crear o modificar los inventarios de cualquier jugador desde un panel centralizado.
 - **Corrección de miniaturas** - Vista previa sin parpadeos al pasar el ratón sobre las imágenes del sidebar
 - **Ajustes al hacer doble clic** - Haz doble clic en un token para abrir su menú de configuración
