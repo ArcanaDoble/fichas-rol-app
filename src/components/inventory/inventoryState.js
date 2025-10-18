@@ -6,6 +6,53 @@ const createSlotId = (index) => index;
 
 const createTokenId = () => nanoid();
 
+const normalizeText = (value) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+export const CATEGORY_WEAPON = 'weapon';
+export const CATEGORY_ARMOR = 'armor';
+export const CATEGORY_ABILITY = 'ability';
+export const CATEGORY_OTHER = 'other';
+
+export const INVENTORY_CATEGORY_LABELS = {
+  [CATEGORY_WEAPON]: 'Armas',
+  [CATEGORY_ARMOR]: 'Armaduras',
+  [CATEGORY_ABILITY]: 'Habilidades',
+  [CATEGORY_OTHER]: 'Otros',
+};
+
+const CATEGORY_MATCHERS = [
+  {
+    key: CATEGORY_WEAPON,
+    matches: ['weapon', 'arma', 'armas', 'weapons'],
+  },
+  {
+    key: CATEGORY_ARMOR,
+    matches: ['armor', 'armadura', 'armaduras', 'armors'],
+  },
+  {
+    key: CATEGORY_ABILITY,
+    matches: ['ability', 'habilidad', 'habilidades', 'poder', 'poderes', 'power', 'powers'],
+  },
+];
+
+export const inferInventoryCategory = (source = {}) => {
+  const candidates = [
+    normalizeText(source.category),
+    normalizeText(source.type),
+    normalizeText(source.typeLabel),
+    normalizeText(source.group),
+  ].filter(Boolean);
+
+  for (const { key, matches } of CATEGORY_MATCHERS) {
+    if (candidates.some((value) => matches.includes(value))) {
+      return key;
+    }
+  }
+
+  return CATEGORY_OTHER;
+};
+
 const sanitizeSlotItem = (item) => {
   if (!item) return null;
 
@@ -21,6 +68,8 @@ const sanitizeSlotItem = (item) => {
     typeLabel: typeof item.typeLabel === 'string' ? item.typeLabel : '',
     cost: Number.isFinite(item.cost) ? item.cost : null,
     costLabel: typeof item.costLabel === 'string' ? item.costLabel : '',
+    category: inferInventoryCategory(item),
+    equipped: Boolean(item.equipped),
   };
 };
 
@@ -47,6 +96,8 @@ const sanitizeToken = (token = {}) => ({
   cost: Number.isFinite(token.cost) ? token.cost : null,
   costLabel: typeof token.costLabel === 'string' ? token.costLabel : '',
   fromSlot: token.fromSlot ?? null,
+  category: inferInventoryCategory(token),
+  equipped: Boolean(token.equipped),
 });
 
 export const createDefaultSlots = () =>
@@ -95,6 +146,8 @@ export const createInventoryTokenFromShopItem = (item = {}) =>
     cost: Number.isFinite(item.cost) ? item.cost : null,
     costLabel: typeof item.costLabel === 'string' ? item.costLabel : '',
     count: 1,
+    category: inferInventoryCategory(item),
+    equipped: false,
   });
 
 export const appendInventoryToken = (state, token) => {
