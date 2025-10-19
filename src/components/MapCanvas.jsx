@@ -2338,6 +2338,7 @@ const MapCanvas = ({
     tokens,
     playerName,
     userType,
+    pageId,
     onAttack: ({ id, attackerId, targetId, result, deleted }) => {
       if (deleted) {
         if (attackRequestId === id) {

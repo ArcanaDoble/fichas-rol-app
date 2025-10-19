@@ -1007,6 +1007,24 @@ npm run build      # Genera build de producción
 firebase deploy    # Despliega a Firebase Hosting
 ```
 
+#### ✅ Pruebas con Firestore Emulator
+
+Las pruebas de filtrado en tiempo real del hook `useAttackRequests` dependen del emulador de Firestore.
+
+1. Inicia el emulador en una terminal:
+
+   ```bash
+   firebase emulators:start --only firestore --project demo-test --host 127.0.0.1
+   ```
+
+2. En otra terminal, ejecuta únicamente la suite relevante especificando el host del emulador:
+
+   ```bash
+   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm test -- useAttackRequests
+   ```
+
+Esto valida que solo los clientes con fichas controladas reciban los snapshots de ataques en la página activa.
+
 ## 📋 Arquitectura del proyecto
 
 ```
