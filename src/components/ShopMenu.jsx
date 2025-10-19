@@ -132,6 +132,7 @@ const ShopMenu = ({
   onPurchase,
   rarityColorMap = {},
   hasPendingChanges = false,
+  soldItemIds = [],
 }) => {
   const [search, setSearch] = useState('');
   const [activeItemId, setActiveItemId] = useState(null);
@@ -142,6 +143,15 @@ const ShopMenu = ({
   const lastPurchaseRef = useRef(null);
   const [masterPurchaseNotice, setMasterPurchaseNotice] = useState(null);
   const normalizedConfig = useMemo(() => normalizeShopConfig(config), [config]);
+  const soldItemIdSet = useMemo(
+    () =>
+      new Set(
+        (soldItemIds || [])
+          .map((value) => (typeof value === 'string' ? value.trim() : ''))
+          .filter(Boolean)
+      ),
+    [soldItemIds]
+  );
 
   const {
     gold: baseGold,
@@ -432,7 +442,7 @@ const ShopMenu = ({
   const activeItem =
     activeEntry?.item || (activeItemId ? catalogMap.get(activeItemId) : null);
   const activeVisuals = activeItem ? buildItemVisuals(activeItem, rarityColorMap) : null;
-  const activeItemSold = lastPurchase?.itemId === activeItemId;
+  const activeItemSold = activeItemId ? soldItemIdSet.has(activeItemId) : false;
 
   const handleBaseGoldChange = (event) => {
     if (!isEditable || !onConfigChange) return;
@@ -881,7 +891,7 @@ const ShopMenu = ({
                         const isHighlighted = highlightPulse?.id === id;
                         const highlightTone =
                           highlightPulse?.reason === 'purchase' ? 'purchase' : 'added';
-                        const wasLastPurchase = lastPurchase?.itemId === id;
+                        const itemWasSold = soldItemIdSet.has(id);
                         return (
                           <motion.button
                             key={id}
@@ -964,13 +974,13 @@ const ShopMenu = ({
                                 style={{ willChange: 'opacity', zIndex: 20 }}
                               />
                             )}
-                            {wasLastPurchase && (
+                            {itemWasSold && (
                               <div
                                 className="pointer-events-none absolute inset-0 rounded-[18px] border-2 border-amber-400/70 bg-amber-500/5"
                                 style={{ zIndex: 15 }}
                               />
                             )}
-                            {wasLastPurchase && (
+                            {itemWasSold && (
                               <div
                                 className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
                                 style={{ zIndex: 25 }}
@@ -1193,6 +1203,7 @@ ShopMenu.propTypes = {
   onPurchase: PropTypes.func,
   rarityColorMap: PropTypes.objectOf(PropTypes.string),
   hasPendingChanges: PropTypes.bool,
+  soldItemIds: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default ShopMenu;

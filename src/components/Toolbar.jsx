@@ -103,6 +103,7 @@ const Toolbar = ({
   shopAvailableItems = [],
   onShopPurchase,
   shopHasPendingChanges = false,
+  shopSoldItemIds = [],
   inventoryData = {},
   inventoryPlayers = [],
   onInventoryAddItem,
@@ -483,6 +484,7 @@ const Toolbar = ({
             onPurchase={onShopPurchase}
             rarityColorMap={rarityColorMap}
             hasPendingChanges={shopHasPendingChanges}
+            soldItemIds={shopSoldItemIds}
           />
         </motion.div>
       )}
@@ -837,6 +839,7 @@ Toolbar.propTypes = {
   ),
   onShopPurchase: PropTypes.func,
   shopHasPendingChanges: PropTypes.bool,
+  shopSoldItemIds: PropTypes.arrayOf(PropTypes.string),
   inventoryData: PropTypes.objectOf(
     PropTypes.arrayOf(
       PropTypes.shape({
