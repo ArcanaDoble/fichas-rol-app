@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   FiMousePointer,
@@ -103,6 +103,7 @@ const Toolbar = ({
   shopAvailableItems = [],
   onShopPurchase,
   shopHasPendingChanges = false,
+  shopSoldItemIds = [],
   inventoryData = {},
   inventoryPlayers = [],
   onInventoryAddItem,
@@ -124,6 +125,7 @@ const Toolbar = ({
   onUpdateAmbientLight = () => {},
   onDeleteAmbientLight = () => {},
   gridCellSize = 50,
+  inventoryFeedback = null,
 }) => {
   // Filtrar herramientas para jugadores
   const availableTools = isPlayerView
@@ -138,6 +140,28 @@ const Toolbar = ({
     () => ambientLights.find((light) => light.id === selectedAmbientLightId) || null,
     [ambientLights, selectedAmbientLightId]
   );
+
+  const [inventoryPulse, setInventoryPulse] = useState(null);
+
+  useEffect(() => {
+    if (!inventoryFeedback) {
+      return undefined;
+    }
+    setInventoryPulse(inventoryFeedback);
+    const timeout = setTimeout(() => {
+      setInventoryPulse(null);
+    }, 1800);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [inventoryFeedback]);
+
+  const inventoryDeltaLabel = inventoryPulse
+    ? inventoryPulse.delta > 0
+      ? `+${inventoryPulse.delta}`
+      : `${inventoryPulse.delta}`
+    : '';
 
   const cellsFromPx = (value) => {
     if (!gridCellSize) return Number.isFinite(value) ? value : 0;
@@ -193,21 +217,77 @@ const Toolbar = ({
           ))}
         </div>
         <div className="w-9 border-t border-gray-700 pt-2 flex flex-col items-center space-y-2">
-          {commerceButtons.map(({ id, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => onSelect(id)}
-              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                activeTool === id
-                  ? id === 'shop'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-emerald-600 text-white'
-                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
-              }`}
-            >
-              <Icon />
-            </button>
-          ))}
+          {commerceButtons.map(({ id, icon: Icon }) => {
+            const isInventory = id === 'inventory';
+            const buttonClasses = `w-10 h-10 flex items-center justify-center rounded transition-colors ${
+              activeTool === id
+                ? id === 'shop'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-emerald-600 text-white'
+                : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+            }`;
+
+            return (
+              <div key={id} className="relative">
+                {isInventory ? (
+                  <motion.button
+                    onClick={() => onSelect(id)}
+                    className={buttonClasses}
+                    animate={
+                      inventoryPulse
+                        ? {
+                            scale: [1, 1.12, 0.96, 1.04, 1],
+                            rotate: [0, -10, 7, -4, 2, 0],
+                          }
+                        : { scale: 1, rotate: 0 }
+                    }
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                  >
+                    <Icon />
+                  </motion.button>
+                ) : (
+                  <button onClick={() => onSelect(id)} className={buttonClasses}>
+                    <Icon />
+                  </button>
+                )}
+
+                {isInventory && (
+                  <>
+                    <AnimatePresence>
+                      {inventoryPulse && (
+                        <motion.span
+                          key={`inventory-glow-${inventoryPulse.id}`}
+                          className="pointer-events-none absolute inset-0 rounded-full bg-emerald-400/15"
+                          initial={{ opacity: 0, scale: 0.6 }}
+                          animate={{ opacity: 1, scale: 1.3 }}
+                          exit={{ opacity: 0, scale: 0.4 }}
+                          transition={{ duration: 0.45, ease: 'easeOut' }}
+                        />
+                      )}
+                    </AnimatePresence>
+                    <AnimatePresence>
+                      {inventoryPulse && (
+                        <motion.span
+                          key={`inventory-counter-${inventoryPulse.id}`}
+                          initial={{ opacity: 0, y: 14, scale: 0.85 }}
+                          animate={{ opacity: 1, y: -26, scale: 1 }}
+                          exit={{ opacity: 0, y: -48, scale: 0.95 }}
+                          transition={{ duration: 1.1, ease: 'easeOut' }}
+                          className={`absolute -top-2 right-0 translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs font-semibold shadow-lg shadow-black/40 pointer-events-none ${
+                            inventoryPulse.delta >= 0
+                              ? 'bg-emerald-500/90 text-white'
+                              : 'bg-rose-500/90 text-white'
+                          }`}
+                        >
+                          {inventoryDeltaLabel}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -404,6 +484,7 @@ const Toolbar = ({
             onPurchase={onShopPurchase}
             rarityColorMap={rarityColorMap}
             hasPendingChanges={shopHasPendingChanges}
+            soldItemIds={shopSoldItemIds}
           />
         </motion.div>
       )}
@@ -758,6 +839,7 @@ Toolbar.propTypes = {
   ),
   onShopPurchase: PropTypes.func,
   shopHasPendingChanges: PropTypes.bool,
+  shopSoldItemIds: PropTypes.arrayOf(PropTypes.string),
   inventoryData: PropTypes.objectOf(
     PropTypes.arrayOf(
       PropTypes.shape({
@@ -816,6 +898,10 @@ Toolbar.propTypes = {
   onUpdateAmbientLight: PropTypes.func,
   onDeleteAmbientLight: PropTypes.func,
   gridCellSize: PropTypes.number,
+  inventoryFeedback: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    delta: PropTypes.number,
+  }),
 };
 
 export default Toolbar;
