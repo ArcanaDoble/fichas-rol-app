@@ -647,8 +647,12 @@ const ShopMenu = ({
               </span>
             ))}
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+          <div
+            className={`flex flex-col gap-2 ${
+              isEditable ? 'items-stretch min-w-[230px]' : 'items-end'
+            }`}
+          >
+            <span className="self-end text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
               {headerGoldLabel}
             </span>
             <div
@@ -656,7 +660,7 @@ const ShopMenu = ({
                 isEditable
                   ? 'border-amber-500/40 bg-slate-900/80 shadow-inner'
                   : `border-slate-700/60 bg-slate-900/60 ${goldContainerTrendClass}`
-              }`}
+              } ${isEditable ? 'w-full justify-between' : ''}`}
             >
               <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
               {isEditable ? (
@@ -699,7 +703,7 @@ const ShopMenu = ({
                   hasPendingChanges
                     ? 'border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10'
                     : 'border-slate-700 text-slate-500 cursor-not-allowed opacity-70'
-                }`}
+                } ${isEditable ? 'w-full justify-center' : ''}`}
               >
                 <FiRefreshCw className="text-sm" />
                 Actualizar tienda
