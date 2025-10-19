@@ -6,44 +6,44 @@ const VARIANT_DURATION = 1.2; // seconds
 
 const FRAME_TRANSITION = {
   duration: VARIANT_DURATION,
-  times: [0, 0.33, 0.66, 1],
-  ease: 'steps(4, end)',
+  ease: 'linear',
+  times: [0, 0.24, 0.25, 0.49, 0.5, 0.74, 0.75, 1],
 };
 
 const VARIANTS = {
   damage: {
     hidden: { opacity: 0, scale: 0.75, y: 0 },
     visible: {
-      opacity: [0, 1, 1, 0],
-      scale: [0.75, 1, 1.1, 1],
-      y: [0, -10, -20, -26],
+      opacity: [0, 0, 1, 1, 1, 1, 0, 0],
+      scale: [0.75, 0.75, 1, 1, 1.1, 1.1, 1, 1],
+      y: [0, 0, -10, -10, -20, -20, -26, -26],
       transition: FRAME_TRANSITION,
     },
   },
   counter: {
     hidden: { opacity: 0, scale: 0.7, y: 0 },
     visible: {
-      opacity: [0, 1, 1, 0],
-      scale: [0.7, 1.15, 1.05, 0.95],
-      y: [0, -8, -18, -22],
+      opacity: [0, 0, 1, 1, 1, 1, 0, 0],
+      scale: [0.7, 0.7, 1.15, 1.15, 1.05, 1.05, 0.95, 0.95],
+      y: [0, 0, -8, -8, -18, -18, -22, -22],
       transition: FRAME_TRANSITION,
     },
   },
   perfect: {
     hidden: { opacity: 0, scale: 0.8, y: 0 },
     visible: {
-      opacity: [0, 1, 1, 0],
-      scale: [0.8, 1.2, 1.05, 1],
-      y: [0, -12, -24, -30],
+      opacity: [0, 0, 1, 1, 1, 1, 0, 0],
+      scale: [0.8, 0.8, 1.2, 1.2, 1.05, 1.05, 1, 1],
+      y: [0, 0, -12, -12, -24, -24, -30, -30],
       transition: FRAME_TRANSITION,
     },
   },
   resist: {
     hidden: { opacity: 0, scale: 0.85, y: 0 },
     visible: {
-      opacity: [0, 1, 1, 0],
-      scale: [0.85, 1, 0.95, 0.9],
-      y: [0, -6, -16, -20],
+      opacity: [0, 0, 1, 1, 1, 1, 0, 0],
+      scale: [0.85, 0.85, 1, 1, 0.95, 0.95, 0.9, 0.9],
+      y: [0, 0, -6, -6, -16, -16, -20, -20],
       transition: FRAME_TRANSITION,
     },
   },
