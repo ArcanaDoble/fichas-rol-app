@@ -1423,6 +1423,7 @@ const MapCanvas = ({
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
+  const [inventoryFeedback, setInventoryFeedback] = useState(null);
   const [shopGold, setShopGold] = useState(0);
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
@@ -1518,6 +1519,7 @@ const MapCanvas = ({
 
   const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
   const [shopInventories, setShopInventories] = useState({});
+  const playerInventorySnapshotRef = useRef({ playerName: '', entryIds: new Set() });
 
   useEffect(() => {
     if (!pageId) {
@@ -1531,6 +1533,53 @@ const MapCanvas = ({
     });
     return () => unsubscribe();
   }, [pageId]);
+
+  useEffect(() => {
+    if (!isPlayerPerspective) {
+      playerInventorySnapshotRef.current = { playerName: '', entryIds: new Set() };
+      return;
+    }
+
+    const name = typeof effectivePlayerName === 'string' ? effectivePlayerName.trim() : '';
+    if (!name) {
+      playerInventorySnapshotRef.current = { playerName: '', entryIds: new Set() };
+      return;
+    }
+
+    const entries = Array.isArray(shopInventories?.[name]) ? shopInventories[name] : [];
+    const currentIds = new Set(entries.map((entry) => entry.entryId).filter(Boolean));
+    const previousSnapshot = playerInventorySnapshotRef.current;
+
+    if (previousSnapshot.playerName !== name) {
+      playerInventorySnapshotRef.current = { playerName: name, entryIds: currentIds };
+      return;
+    }
+
+    let additions = 0;
+    let removals = 0;
+
+    currentIds.forEach((id) => {
+      if (!previousSnapshot.entryIds.has(id)) {
+        additions += 1;
+      }
+    });
+
+    previousSnapshot.entryIds.forEach((id) => {
+      if (!currentIds.has(id)) {
+        removals += 1;
+      }
+    });
+
+    const netDelta = additions - removals;
+    if (netDelta < 0) {
+      setInventoryFeedback({
+        id: `player-inventory-loss-${Date.now()}`,
+        delta: netDelta,
+      });
+    }
+
+    playerInventorySnapshotRef.current = { playerName: name, entryIds: currentIds };
+  }, [effectivePlayerName, isPlayerPerspective, shopInventories]);
 
   useEffect(() => {
     setShopDraftConfig((prev) => {
@@ -1683,6 +1732,10 @@ const MapCanvas = ({
 
         onShopConfigChange(nextConfig, { skipRemoteUpdate: true });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `purchase-${Date.now()}`,
+          delta: 1,
+        });
         return { success: true, remaining };
       } catch (error) {
         if (error?.code === 'insufficient-gold') {
@@ -1741,6 +1794,10 @@ const MapCanvas = ({
           return { inventories: updatedInventories };
         });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `manual-add-${Date.now()}`,
+          delta: 1,
+        });
         return { success: true };
       } catch (error) {
         console.error('Error agregando objeto al inventario:', error);
@@ -1782,6 +1839,10 @@ const MapCanvas = ({
           return { inventories: updatedInventories };
         });
         setShopInventories(nextInventories);
+        setInventoryFeedback({
+          id: `manual-remove-${Date.now()}`,
+          delta: -1,
+        });
         return { success: true };
       } catch (error) {
         console.error('Error eliminando objeto del inventario:', error);
@@ -6746,6 +6807,7 @@ const MapCanvas = ({
         isPlayerView={isPlayerPerspective}
         playerName={effectivePlayerName}
         rarityColorMap={rarityColorMap}
+        inventoryFeedback={inventoryFeedback}
         ambientLights={ambientLights}
         selectedAmbientLightId={selectedAmbientLightId}
         onSelectAmbientLight={handleAmbientLightSelect}
