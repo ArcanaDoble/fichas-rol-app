@@ -1521,6 +1521,13 @@ const MapCanvas = ({
   const [shopInventories, setShopInventories] = useState({});
   const playerInventorySnapshotRef = useRef({ playerName: '', entryIds: new Set() });
 
+  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
+  const effectivePlayerName = isPlayerPerspective
+    ? userType === 'player'
+      ? playerName
+      : simulatedPlayer
+    : '';
+
   useEffect(() => {
     if (!pageId) {
       setShopInventories({});
@@ -1598,13 +1605,6 @@ const MapCanvas = ({
     });
     return Array.from(owners).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [tokens]);
-
-  const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
-  const effectivePlayerName = isPlayerPerspective
-    ? userType === 'player'
-      ? playerName
-      : simulatedPlayer
-    : '';
 
   const isMasterShopEditor = !isPlayerPerspective && userType === 'master';
   const canManageInventory = !isPlayerPerspective && userType === 'master';
