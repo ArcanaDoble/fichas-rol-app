@@ -1033,10 +1033,11 @@ const ShopMenu = ({
                   </div>
                   {activeItemSold && (
                     <div
-                      className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-[inherit]"
                       style={{ zIndex: 35 }}
                     >
-                      <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
+                      <div className="absolute inset-0 rounded-[inherit] border border-amber-400/60" />
+                      <span className="relative flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 shadow-[0_12px_32px_-20px_rgba(251,191,36,0.85)] -rotate-45 w-[220%] justify-center">
                         <FiShoppingBag className="text-base" /> Vendido
                       </span>
                     </div>
