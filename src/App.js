@@ -1426,58 +1426,11 @@ function App() {
   );
 
   const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {
-    if (!pageId || checkedPagesRef.current[pageId]) return tokens || [];
-    const updated = tokens ? [...tokens] : [];
-    let modified = false;
-    const tasks = [];
-    const updates = [];
-    updated.forEach((tk) => {
-      if (!tk.tokenSheetId) {
-        const newId = nanoid();
-        tk.tokenSheetId = newId;
-        modified = true;
-        updates.push({ id: tk.id, tokenSheetId: newId });
-        if (tk.enemyId) {
-          tasks.push(
-            getDoc(doc(db, 'enemies', tk.enemyId))
-              .then((snap) => {
-                if (snap.exists()) {
-                  return saveTokenSheet({ id: newId, ...snap.data() });
-                }
-                return setDoc(doc(db, 'tokenSheets', newId), { stats: {} });
-              })
-              .catch((err) => console.error('clone enemy sheet', err))
-          );
-        } else {
-          tasks.push(
-            setDoc(doc(db, 'tokenSheets', newId), { stats: {} }).catch((err) =>
-              console.error('create token sheet', err)
-            )
-          );
-        }
-      }
-    });
-
-    if (modified) {
-      try {
-        await Promise.all(tasks);
-        await Promise.all(
-          updates.map((u) =>
-            updateDoc(doc(db, 'pages', pageId, 'tokens', String(u.id)), {
-              tokenSheetId: u.tokenSheetId,
-            })
-          )
-        );
-      } catch (err) {
-        console.error('update tokens', err);
-        // Revert to original tokens on failure to avoid losing data
-        checkedPagesRef.current[pageId] = true;
-        return tokens || [];
-      }
+    if (pageId) {
+      checkedPagesRef.current[pageId] = true;
     }
 
-    checkedPagesRef.current[pageId] = true;
-    return updated.map((token) => {
+    return (tokens || []).map((token) => {
       const normalizedUpdatedAt = normalizeTokenUpdatedAt(token.updatedAt);
       if (normalizedUpdatedAt === null) return token;
       return { ...token, updatedAt: normalizedUpdatedAt };
