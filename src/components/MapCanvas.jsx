@@ -1334,6 +1334,29 @@ const MapCanvas = ({
   const pointersRef = useRef(new Map());
   const pinchDistRef = useRef(0);
 
+  const { refWidth, refHeight } = useMemo(() => {
+    const fallbackWidth = containerSize.width || 1;
+    const fallbackHeight = containerSize.height || 1;
+    const width =
+      imageSize.width ||
+      (gridCells ? gridCells * gridSize : fallbackWidth);
+    const height =
+      imageSize.height ||
+      (gridCells ? gridCells * gridSize : fallbackHeight);
+
+    return {
+      refWidth: width || 1,
+      refHeight: height || 1,
+    };
+  }, [
+    imageSize.width,
+    imageSize.height,
+    gridCells,
+    gridSize,
+    containerSize.width,
+    containerSize.height,
+  ]);
+
   // Refs para acceder a valores actuales sin dependencias
   const zoomRef = useRef(zoom);
   const groupPosRef = useRef(groupPos);
@@ -4083,16 +4106,21 @@ const MapCanvas = ({
 
   // Calcula la escala base según el modo seleccionado y centra el mapa
   useEffect(() => {
-    const refWidth =
-      imageSize.width || gridCells * gridSize || containerSize.width;
-    const refHeight =
-      imageSize.height || gridCells * gridSize || containerSize.height;
+    if (!refWidth || !refHeight || !containerSize.width || !containerSize.height) {
+      return;
+    }
+
     const scaleX = containerSize.width / refWidth;
     const scaleY = containerSize.height / refHeight;
-    const scale =
+    let scale =
       scaleMode === 'cover'
         ? Math.max(scaleX, scaleY)
         : Math.min(scaleX, scaleY);
+
+    if (!Number.isFinite(scale) || scale <= 0) {
+      scale = 1;
+    }
+
     setBaseScale(scale);
     const displayWidth = refWidth * scale;
     const displayHeight = refHeight * scale;
@@ -4100,7 +4128,13 @@ const MapCanvas = ({
       x: (containerSize.width - displayWidth) / 2,
       y: (containerSize.height - displayHeight) / 2,
     });
-  }, [containerSize, imageSize, gridCells, gridSize, scaleMode]);
+  }, [
+    containerSize.height,
+    containerSize.width,
+    refWidth,
+    refHeight,
+    scaleMode,
+  ]);
 
   const drawGrid = () => {
     if (!showGrid || !effectiveGridSize) return null;
@@ -4481,19 +4515,20 @@ const MapCanvas = ({
     if (!stageRef.current) return;
     const stage = stageRef.current;
     const pointer = stage.getPointerPosition();
+    if (!pointer) return;
     const scaleBy = e.evt.deltaY > 0 ? 1 / 1.2 : 1.2;
     const newZoom = Math.min(maxZoom, Math.max(minZoom, zoom * scaleBy));
     if (newZoom === zoom) return;
-    const oldScale = baseScale * zoom;
     const mousePoint = {
-      x: (pointer.x - groupPos.x) / oldScale,
-      y: (pointer.y - groupPos.y) / oldScale,
+      x: (pointer.x - stageGroupX) / zoom,
+      y: (pointer.y - stageGroupY) / zoom,
     };
-    const newScale = baseScale * newZoom;
+    const newStageGroupX = pointer.x - mousePoint.x * newZoom;
+    const newStageGroupY = pointer.y - mousePoint.y * newZoom;
     setZoom(newZoom);
     setGroupPos({
-      x: pointer.x - mousePoint.x * newScale,
-      y: pointer.y - mousePoint.y * newScale,
+      x: newStageGroupX * baseScale,
+      y: newStageGroupY * baseScale,
     });
   };
 
@@ -4582,11 +4617,12 @@ const MapCanvas = ({
 
   // Iniciar acciones según la herramienta seleccionada
   const handleMouseDown = (e) => {
-    if (activeTool === 'target' && e.evt.button === 0) {
+    const pointer = stageRef.current?.getPointerPosition?.();
+    const { x: pointerMapX, y: pointerMapY } = mapPointerFromStage(pointer);
 
-      const pointer = stageRef.current.getPointerPosition();
-      let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+    if (activeTool === 'target' && e.evt.button === 0) {
+      const relX = pointerMapX;
+      const relY = pointerMapY;
       const cellX = Math.floor((relX - gridOffsetX) / effectiveGridSize);
       const cellY = Math.floor((relY - gridOffsetY) / effectiveGridSize);
       const clicked = tokens.find(t =>
@@ -4650,9 +4686,8 @@ const MapCanvas = ({
 
     // Iniciar selección múltiple con botón izquierdo en herramienta select
     if (activeTool === 'select' && e.evt.button === 0 && e.target === stageRef.current) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const relX = pointerMapX;
+      const relY = pointerMapY;
 
       // Si no se mantiene Ctrl, limpiar selección anterior
       const isCtrlPressed = e?.evt?.ctrlKey || false;
@@ -4665,9 +4700,8 @@ const MapCanvas = ({
       setSelectionBox({ x: relX, y: relY, width: 0, height: 0 });
     }
     if (activeTool === 'draw' && e.evt.button === 0) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const relX = pointerMapX;
+      const relY = pointerMapY;
       setSelectedLineId(null);
       setCurrentLine({
         points: [relX, relY],
@@ -4678,9 +4712,8 @@ const MapCanvas = ({
       });
     }
     if (activeTool === 'wall' && e.evt.button === 0) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const relX = pointerMapX;
+      const relY = pointerMapY;
       setSelectedWallId(null);
       setCurrentWall({
         x: relX,
@@ -4696,15 +4729,13 @@ const MapCanvas = ({
       });
     }
     if (activeTool === 'measure' && e.evt.button === 0) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const relX = pointerMapX;
+      const relY = pointerMapY;
       setMeasureLine([relX, relY, relX, relY]);
     }
     if (activeTool === 'text' && e.evt.button === 0) {
-      const pointer = stageRef.current.getPointerPosition();
-      const relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-      const relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+      const relX = pointerMapX;
+      const relY = pointerMapY;
       const id = nanoid();
       const bgColor = textOptions.bgColor || 'rgba(0,0,0,0)';
       const content = prompt('Texto:', '');
@@ -4720,9 +4751,8 @@ const MapCanvas = ({
 
   // Actualiza la acción activa según la herramienta
   const handleMouseMove = (e) => {
-    const pointer = stageRef.current.getPointerPosition();
-    let relX = (pointer.x - groupPos.x) / (baseScale * zoom);
-    let relY = (pointer.y - groupPos.y) / (baseScale * zoom);
+    const pointer = stageRef.current?.getPointerPosition?.();
+    let { x: relX, y: relY } = mapPointerFromStage(pointer);
 
     // Actualizar posición global del mouse para el sistema de pegado
     if (e?.evt) {
@@ -5617,6 +5647,47 @@ const MapCanvas = ({
   }, [selectedAmbientLightId, activeTool, activeLayer]);
 
   const groupScale = baseScale * zoom;
+  const safeBaseScale = baseScale || 1;
+  const { stageWidth, stageHeight } = useMemo(() => {
+    if (!safeBaseScale) {
+      return { stageWidth: refWidth, stageHeight: refHeight };
+    }
+
+    const widthFromContainer = containerSize.width
+      ? containerSize.width / safeBaseScale
+      : refWidth;
+    const heightFromContainer = containerSize.height
+      ? containerSize.height / safeBaseScale
+      : refHeight;
+
+    return {
+      stageWidth: Math.max(refWidth, widthFromContainer || 0),
+      stageHeight: Math.max(refHeight, heightFromContainer || 0),
+    };
+  }, [
+    containerSize.height,
+    containerSize.width,
+    refWidth,
+    refHeight,
+    safeBaseScale,
+  ]);
+  const stageGroupX = groupPos.x / safeBaseScale;
+  const stageGroupY = groupPos.y / safeBaseScale;
+  const stageScale = zoom;
+
+  const mapPointerFromStage = useCallback(
+    (pointer) => {
+      if (!pointer) {
+        return { x: 0, y: 0 };
+      }
+
+      return {
+        x: (pointer.x - stageGroupX) / stageScale,
+        y: (pointer.y - stageGroupY) / stageScale,
+      };
+    },
+    [stageGroupX, stageGroupY, stageScale]
+  );
 
   const [, drop] = useDrop(
     () => ({
@@ -5624,8 +5695,7 @@ const MapCanvas = ({
       drop: (item) => {
         if (!stageRef.current) return;
         const pointer = stageRef.current.getPointerPosition();
-        const relX = (pointer.x - groupPos.x) / groupScale;
-        const relY = (pointer.y - groupPos.y) / groupScale;
+        const { x: relX, y: relY } = mapPointerFromStage(pointer);
         const cellX = pxToCell(relX, gridOffsetX);
         const cellY = pxToCell(relY, gridOffsetY);
         const x = Math.max(0, Math.min(mapWidth - 1, cellX));
@@ -5690,8 +5760,7 @@ const MapCanvas = ({
     }),
     [
       tokens,
-      groupPos,
-      groupScale,
+      mapPointerFromStage,
       mapWidth,
       mapHeight,
       gridOffsetX,
@@ -5714,11 +5783,22 @@ const MapCanvas = ({
           Error al cargar el mapa
         </div>
       )}
-      <div ref={drop}>
+      <div
+        ref={drop}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: stageWidth,
+          height: stageHeight,
+          transformOrigin: 'top left',
+          transform: `scale(${baseScale})`,
+        }}
+      >
         <Stage
           ref={stageRef}
-          width={containerSize.width}
-          height={containerSize.height}
+          width={stageWidth}
+          height={stageHeight}
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -5738,10 +5818,10 @@ const MapCanvas = ({
         >
           <Layer>
             <Group
-              x={groupPos.x}
-              y={groupPos.y}
-              scaleX={groupScale}
-              scaleY={groupScale}
+              x={stageGroupX}
+              y={stageGroupY}
+              scaleX={stageScale}
+              scaleY={stageScale}
             >
               {bg && (
                 <KonvaImage
@@ -6212,10 +6292,10 @@ const MapCanvas = ({
           </Layer>
           <Layer>
             <Group
-              x={groupPos.x}
-              y={groupPos.y}
-              scaleX={groupScale}
-              scaleY={groupScale}
+              x={stageGroupX}
+              y={stageGroupY}
+              scaleX={stageScale}
+              scaleY={stageScale}
             >
               {filteredWalls.map((wl) => (
                 <React.Fragment key={wl.id}>
@@ -6389,10 +6469,10 @@ const MapCanvas = ({
           {attackElement && (
             <Layer listening>
               <Group
-                x={groupPos.x}
-                y={groupPos.y}
-                scaleX={groupScale}
-                scaleY={groupScale}
+                x={stageGroupX}
+                y={stageGroupY}
+                scaleX={stageScale}
+                scaleY={stageScale}
               >
                 {attackElement}
               </Group>
@@ -6402,10 +6482,10 @@ const MapCanvas = ({
           {/* Capa de iluminación */}
           <Layer listening={false}>
             <Group
-              x={groupPos.x}
-              y={groupPos.y}
-              scaleX={groupScale}
-              scaleY={groupScale}
+              x={stageGroupX}
+              y={stageGroupY}
+              scaleX={stageScale}
+              scaleY={stageScale}
             >
               {/* Renderizar luz básica para todos los tokens con luz */}
               {tokens.filter(token =>
@@ -6478,10 +6558,10 @@ const MapCanvas = ({
           {enableDarkness && (
             <Layer listening={false}>
               <Group
-                x={groupPos.x}
-                y={groupPos.y}
-                scaleX={groupScale}
-                scaleY={groupScale}
+                x={stageGroupX}
+                y={stageGroupY}
+                scaleX={stageScale}
+                scaleY={stageScale}
               >
                 {/* Rectángulo negro que cubre todo el mapa */}
                 <Rect
@@ -6567,10 +6647,10 @@ const MapCanvas = ({
           {showVisionPolygons && !playerViewMode && userType === 'master' && (
             <Layer listening={false}>
               <Group
-                x={groupPos.x}
-                y={groupPos.y}
-                scaleX={groupScale}
-                scaleY={groupScale}
+                x={stageGroupX}
+                y={stageGroupY}
+                scaleX={stageScale}
+                scaleY={stageScale}
               >
                 {/* Renderizar polígonos de visión para tokens con visión habilitada */}
                 {Object.values(playerVisionPolygons).map(visionData => {
@@ -6599,10 +6679,10 @@ const MapCanvas = ({
           {/* Capa de puertas interactivas - renderizada antes de las sombras para que sean ocluidas */}
           <Layer listening>
             <Group
-              x={groupPos.x}
-              y={groupPos.y}
-              scaleX={groupScale}
-              scaleY={groupScale}
+              x={stageGroupX}
+              y={stageGroupY}
+              scaleX={stageScale}
+              scaleY={stageScale}
             >
               {getInteractiveDoors().map((wall) => (
                 <InteractiveDoor
@@ -6633,10 +6713,10 @@ const MapCanvas = ({
               return (
                 <Layer listening={false}>
                   <Group
-                    x={groupPos.x}
-                    y={groupPos.y}
-                    scaleX={groupScale}
-                    scaleY={groupScale}
+                    x={stageGroupX}
+                    y={stageGroupY}
+                    scaleX={stageScale}
+                    scaleY={stageScale}
                   >
                     {/* Oscuridad completa si no tiene visión */}
                     <Rect
@@ -6661,10 +6741,10 @@ const MapCanvas = ({
             return (
               <Layer listening={false}>
                 <Group
-                  x={groupPos.x}
-                  y={groupPos.y}
-                  scaleX={groupScale}
-                  scaleY={groupScale}
+                  x={stageGroupX}
+                  y={stageGroupY}
+                  scaleX={stageScale}
+                  scaleY={stageScale}
                 >
                   {/* Rectángulo negro que cubre todo el mapa - opacidad completa para oclusión total */}
                   <Rect
@@ -6698,10 +6778,10 @@ const MapCanvas = ({
           {isSelecting && (
             <Layer listening={false}>
               <Group
-                x={groupPos.x}
-                y={groupPos.y}
-                scaleX={groupScale}
-                scaleY={groupScale}
+                x={stageGroupX}
+                y={stageGroupY}
+                scaleX={stageScale}
+                scaleY={stageScale}
               >
                 <Rect
                   x={selectionBox.x}
