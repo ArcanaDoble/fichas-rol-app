@@ -5648,6 +5648,29 @@ const MapCanvas = ({
 
   const groupScale = baseScale * zoom;
   const safeBaseScale = baseScale || 1;
+  const { stageWidth, stageHeight } = useMemo(() => {
+    if (!safeBaseScale) {
+      return { stageWidth: refWidth, stageHeight: refHeight };
+    }
+
+    const widthFromContainer = containerSize.width
+      ? containerSize.width / safeBaseScale
+      : refWidth;
+    const heightFromContainer = containerSize.height
+      ? containerSize.height / safeBaseScale
+      : refHeight;
+
+    return {
+      stageWidth: Math.max(refWidth, widthFromContainer || 0),
+      stageHeight: Math.max(refHeight, heightFromContainer || 0),
+    };
+  }, [
+    containerSize.height,
+    containerSize.width,
+    refWidth,
+    refHeight,
+    safeBaseScale,
+  ]);
   const stageGroupX = groupPos.x / safeBaseScale;
   const stageGroupY = groupPos.y / safeBaseScale;
   const stageScale = zoom;
@@ -5766,16 +5789,16 @@ const MapCanvas = ({
           position: 'absolute',
           left: 0,
           top: 0,
-          width: refWidth,
-          height: refHeight,
+          width: stageWidth,
+          height: stageHeight,
           transformOrigin: 'top left',
           transform: `scale(${baseScale})`,
         }}
       >
         <Stage
           ref={stageRef}
-          width={refWidth}
-          height={refHeight}
+          width={stageWidth}
+          height={stageHeight}
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
