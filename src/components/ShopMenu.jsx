@@ -648,12 +648,14 @@ const ShopMenu = ({
             ))}
           </div>
           <div
-            className={`flex flex-col items-end gap-2 ${isEditable ? 'min-w-[230px]' : ''}`}>
+            className={`flex flex-col gap-2 ${
+              isEditable ? 'w-full items-stretch min-w-[230px]' : 'items-end'
+            }`}>
             <span className="self-end text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
               {headerGoldLabel}
             </span>
             {isEditable ? (
-              <div className="flex w-full items-stretch gap-2">
+              <div className="flex w-full items-center gap-2">
                 {canApply && (
                   <button
                     type="button"
@@ -670,9 +672,7 @@ const ShopMenu = ({
                   </button>
                 )}
                 <div
-                  className={`relative flex items-center gap-2 rounded-full border border-amber-500/40 bg-slate-900/80 px-3 py-1.5 shadow-inner transition-all duration-300 ${
-                    canApply ? 'ml-auto' : ''
-                  }`}
+                  className="relative ml-auto flex items-center gap-2 rounded-full border border-amber-500/40 bg-slate-900/80 px-3 py-1.5 shadow-inner transition-all duration-300"
                 >
                   <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
                   <input
