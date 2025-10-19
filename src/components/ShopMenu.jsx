@@ -647,8 +647,12 @@ const ShopMenu = ({
               </span>
             ))}
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+          <div
+            className={`flex flex-col gap-2 ${
+              isEditable ? 'items-stretch min-w-[230px]' : 'items-end'
+            }`}
+          >
+            <span className="self-end text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
               {headerGoldLabel}
             </span>
             <div
@@ -656,7 +660,7 @@ const ShopMenu = ({
                 isEditable
                   ? 'border-amber-500/40 bg-slate-900/80 shadow-inner'
                   : `border-slate-700/60 bg-slate-900/60 ${goldContainerTrendClass}`
-              }`}
+              } ${isEditable ? 'w-full justify-between' : ''}`}
             >
               <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
               {isEditable ? (
@@ -699,7 +703,7 @@ const ShopMenu = ({
                   hasPendingChanges
                     ? 'border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10'
                     : 'border-slate-700 text-slate-500 cursor-not-allowed opacity-70'
-                }`}
+                } ${isEditable ? 'w-full justify-center' : ''}`}
               >
                 <FiRefreshCw className="text-sm" />
                 Actualizar tienda
@@ -1033,10 +1037,11 @@ const ShopMenu = ({
                   </div>
                   {activeItemSold && (
                     <div
-                      className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-[inherit]"
                       style={{ zIndex: 35 }}
                     >
-                      <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
+                      <div className="absolute inset-0 rounded-[inherit] border border-amber-400/60" />
+                      <span className="relative flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 shadow-[0_12px_32px_-20px_rgba(251,191,36,0.85)] -rotate-45 w-[220%] justify-center">
                         <FiShoppingBag className="text-base" /> Vendido
                       </span>
                     </div>
