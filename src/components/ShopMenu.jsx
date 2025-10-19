@@ -647,63 +647,86 @@ const ShopMenu = ({
               </span>
             ))}
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+          <div
+            className={`flex flex-col gap-2 ${
+              isEditable ? 'w-full items-stretch min-w-[230px]' : 'items-end'
+            }`}>
+            <span className="self-end text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
               {headerGoldLabel}
             </span>
-            <div
-              className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${
-                isEditable
-                  ? 'border-amber-500/40 bg-slate-900/80 shadow-inner'
-                  : `border-slate-700/60 bg-slate-900/60 ${goldContainerTrendClass}`
-              }`}
-            >
-              <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
-              {isEditable ? (
-                <input
-                  type="number"
-                  min={SHOP_GOLD_BOUNDS.min}
-                  max={SHOP_GOLD_BOUNDS.max}
-                  value={baseGold}
-                  onChange={handleBaseGoldChange}
-                  className="bg-transparent w-20 text-right text-sm font-semibold focus:outline-none text-amber-200"
-                />
-              ) : (
-                <div className="relative">
-                  <span
-                    className={`text-sm font-semibold tabular-nums transition-colors duration-300 ${goldTextTrendClass}`}
+            {isEditable ? (
+              <div className="flex w-full items-center gap-2">
+                {canApply && (
+                  <button
+                    type="button"
+                    onClick={handleApply}
+                    disabled={!hasPendingChanges}
+                    className={`inline-flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.3em] px-3 py-1.5 rounded-full border transition ${
+                      hasPendingChanges
+                        ? 'border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10'
+                        : 'border-slate-700 text-slate-500 cursor-not-allowed opacity-70'
+                    }`}
                   >
-                    {formattedDisplayGold}
-                  </span>
-                  {formattedGoldDelta && (
-                    <span
-                      key={goldPulseKey}
-                      className={`pointer-events-none absolute right-0 -top-4 text-[0.65rem] font-semibold tabular-nums tracking-[0.25em] ${
-                        goldTrend === 'up'
-                          ? 'text-emerald-300 gold-delta-up'
-                          : 'text-rose-300 gold-delta-down'
-                      }`}
-                    >
-                      {formattedGoldDelta}
-                    </span>
-                  )}
+                    <FiRefreshCw className="text-sm" />
+                    Actualizar tienda
+                  </button>
+                )}
+                <div
+                  className="relative ml-auto flex items-center gap-2 rounded-full border border-amber-500/40 bg-slate-900/80 px-3 py-1.5 shadow-inner transition-all duration-300"
+                >
+                  <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
+                  <input
+                    type="number"
+                    min={SHOP_GOLD_BOUNDS.min}
+                    max={SHOP_GOLD_BOUNDS.max}
+                    value={baseGold}
+                    onChange={handleBaseGoldChange}
+                    className="bg-transparent w-20 text-right text-sm font-semibold focus:outline-none text-amber-200"
+                  />
                 </div>
-              )}
-            </div>
-            {canApply && (
-              <button
-                type="button"
-                onClick={handleApply}
-                disabled={!hasPendingChanges}
-                className={`inline-flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.3em] px-3 py-1.5 rounded-full border transition ${
-                  hasPendingChanges
-                    ? 'border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10'
-                    : 'border-slate-700 text-slate-500 cursor-not-allowed opacity-70'
-                }`}
-              >
-                <FiRefreshCw className="text-sm" />
-                Actualizar tienda
-              </button>
+              </div>
+            ) : (
+              <>
+                <div
+                  className={`relative flex items-center gap-2 rounded-full border px-3 py-1.5 transition-all duration-300 border-slate-700/60 bg-slate-900/60 ${goldContainerTrendClass}`}
+                >
+                  <FaCoins className={`transition-colors ${goldIconTrendClass}`} />
+                  <div className="relative">
+                    <span
+                      className={`text-sm font-semibold tabular-nums transition-colors duration-300 ${goldTextTrendClass}`}
+                    >
+                      {formattedDisplayGold}
+                    </span>
+                    {formattedGoldDelta && (
+                      <span
+                        key={goldPulseKey}
+                        className={`pointer-events-none absolute right-0 -top-4 text-[0.65rem] font-semibold tabular-nums tracking-[0.25em] ${
+                          goldTrend === 'up'
+                            ? 'text-emerald-300 gold-delta-up'
+                            : 'text-rose-300 gold-delta-down'
+                        }`}
+                      >
+                        {formattedGoldDelta}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {canApply && (
+                  <button
+                    type="button"
+                    onClick={handleApply}
+                    disabled={!hasPendingChanges}
+                    className={`inline-flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.3em] px-3 py-1.5 rounded-full border transition ${
+                      hasPendingChanges
+                        ? 'border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10'
+                        : 'border-slate-700 text-slate-500 cursor-not-allowed opacity-70'
+                    }`}
+                  >
+                    <FiRefreshCw className="text-sm" />
+                    Actualizar tienda
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1033,10 +1056,11 @@ const ShopMenu = ({
                   </div>
                   {activeItemSold && (
                     <div
-                      className="pointer-events-none absolute -inset-[2px] flex items-center justify-center"
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-[inherit]"
                       style={{ zIndex: 35 }}
                     >
-                      <span className="flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 border border-amber-400/60 shadow-lg -rotate-45 w-[220%] justify-center">
+                      <div className="absolute inset-0 rounded-[inherit] border border-amber-400/60" />
+                      <span className="relative flex items-center gap-2 px-8 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100 bg-amber-500/25 shadow-[0_12px_32px_-20px_rgba(251,191,36,0.85)] -rotate-45 w-[220%] justify-center">
                         <FiShoppingBag className="text-base" /> Vendido
                       </span>
                     </div>
