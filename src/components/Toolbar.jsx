@@ -901,6 +901,8 @@ Toolbar.propTypes = {
   inventoryFeedback: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     delta: PropTypes.number,
+    reason: PropTypes.string,
+    timestamp: PropTypes.number,
   }),
 };
 

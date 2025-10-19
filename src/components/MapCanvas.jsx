@@ -1520,7 +1520,7 @@ const MapCanvas = ({
   const [shopDraftConfig, setShopDraftConfig] = useState(resolvedShopConfig);
   const [shopInventories, setShopInventories] = useState({});
   const playerInventorySnapshotRef = useRef({ playerName: '', entryIds: new Set() });
-  const manualInventoryFeedbackRef = useRef({ delta: 0, timestamp: 0 });
+  const manualInventoryFeedbackRef = useRef({ delta: 0, timestamp: 0, reason: null });
 
   const isPlayerPerspective = isPlayerView || (userType === 'master' && playerViewMode);
   const effectivePlayerName = isPlayerPerspective
@@ -1545,15 +1545,16 @@ const MapCanvas = ({
   const emitInventoryFeedback = useCallback(
     (delta, reason, trackManual = false) => {
       if (!delta) return;
-      setInventoryFeedback({
-        id: `${reason}-${Date.now()}`,
+      const timestamp = Date.now();
+      const feedback = {
+        id: `${reason}-${timestamp}`,
         delta,
-      });
+        reason,
+        timestamp,
+      };
+      setInventoryFeedback(feedback);
       if (trackManual) {
-        manualInventoryFeedbackRef.current = {
-          delta,
-          timestamp: Date.now(),
-        };
+        manualInventoryFeedbackRef.current = feedback;
       }
     },
     [setInventoryFeedback]
@@ -1653,14 +1654,20 @@ const MapCanvas = ({
 
     const netDelta = additions - removals;
     if (netDelta < 0) {
-      setInventoryFeedback({
-        id: `player-inventory-loss-${Date.now()}`,
-        delta: netDelta,
-      });
+      const manualRecord = manualInventoryFeedbackRef.current || {};
+      const manualGainRecent =
+        manualRecord &&
+        manualRecord.timestamp &&
+        manualRecord.delta > 0 &&
+        Date.now() - manualRecord.timestamp < 1000;
+
+      if (!manualGainRecent) {
+        emitInventoryFeedback(netDelta, 'player-inventory-loss');
+      }
     }
 
     playerInventorySnapshotRef.current = { playerName: name, entryIds: currentIds };
-  }, [effectivePlayerName, isPlayerPerspective, shopInventories]);
+  }, [effectivePlayerName, emitInventoryFeedback, isPlayerPerspective, shopInventories]);
 
   useEffect(() => {
     setShopDraftConfig((prev) => {
