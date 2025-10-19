@@ -15,6 +15,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Cloud Function que asigna automáticamente `tokenSheetId` y clona la ficha del enemigo correspondiente al crear tokens sin hoja asociada.
 - Pruebas de integración con Firebase Emulator Suite que validan la creación de hojas y su vinculación en tiempo real.
 
+### 👥 Vista agregada para jugadores
+
+- Cloud Functions que mantienen un documento cacheado `playerViews/{sessionId}` con los datos de la página visible y sus tokens para todas las sesiones activas.
+- El cliente de jugador ahora consume una única suscripción a `playerViews/{sessionId}`, reduciendo listeners a `pages` y subcolecciones.
+- Prueba end-to-end `playerViews.emulator.test.js` sobre Firebase Emulator Suite que valida la actualización del documento agregado frente a cambios de visibilidad y tokens.
+
 ### ⚖️ Karma exclusivo de Yuuzu
 
 - Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).

@@ -82,6 +82,7 @@ import useGlossary from './hooks/useGlossary';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
+import getClientSessionId from './utils/session';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -836,6 +837,8 @@ function App() {
   const sheetId =
     process.env.REACT_APP_GOOGLE_SHEETS_ID ||
     '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+
+  const clientSessionId = useMemo(() => getClientSessionId(), []);
 
   // Datos de prueba temporales mientras arreglamos Google Sheets
   const datosPruebaArmas = React.useMemo(
@@ -1596,166 +1599,186 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Cargar datos completos de la página visible para jugadores con listener en tiempo real
+  // Vista agregada para jugadores desde playerViews/{sessionId}
   useEffect(() => {
-    if (!playerVisiblePageId || userType !== 'player') return;
+    if (!userType || userType === 'master') return undefined;
+    if (!clientSessionId) return undefined;
 
-    const pageRef = doc(db, 'pages', playerVisiblePageId);
-    const tokensRef = collection(pageRef, 'tokens');
+    const sessionRef = doc(db, 'playerSessions', clientSessionId);
 
-    const unsubscribePage = onSnapshot(
-      pageRef,
-      (docSnap) => {
-        if (docSnap.metadata.hasPendingWrites) return;
-        if (docSnap.exists()) {
-          const pageData = docSnap.data();
-          const normalizedShopConfig = normalizeShopConfig(pageData.shopConfig);
-          setEnableDarkness(
-            pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
-          );
-          const opacity =
-            pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
-          setPages((prevPages) => {
-            const pageIndex = prevPages.findIndex(
-              (p) => p.id === playerVisiblePageId
-            );
-            if (pageIndex !== -1) {
-              const updatedPages = [...prevPages];
-              updatedPages[pageIndex] = {
-                ...updatedPages[pageIndex],
-                lines: pageData.lines || [],
-                walls: pageData.walls || [],
-                texts: pageData.texts || [],
-                tiles: pageData.tiles || [],
-                ambientLights: pageData.ambientLights || [],
-                background: pageData.background,
-                backgroundHash: pageData.backgroundHash,
-                enableDarkness:
-                  pageData.enableDarkness !== undefined
-                    ? pageData.enableDarkness
-                    : updatedPages[pageIndex].enableDarkness,
-                darknessOpacity: opacity,
-                showGrid:
-                  pageData.showGrid !== undefined
-                    ? pageData.showGrid
-                    : updatedPages[pageIndex].showGrid ?? true,
-                gridColor:
-                  pageData.gridColor !== undefined
-                    ? String(pageData.gridColor || '#ffffff').toLowerCase()
-                    : (updatedPages[pageIndex].gridColor ?? '#ffffff').toLowerCase(),
-                gridOpacity:
-                  pageData.gridOpacity !== undefined
-                    ? Math.max(0, Math.min(1, pageData.gridOpacity))
-                    : updatedPages[pageIndex].gridOpacity ?? 0.2,
-                shopConfig: normalizedShopConfig,
-              };
-              return updatedPages;
-            }
-            return prevPages;
-          });
-          setCanvasLines(pageData.lines || []);
-          setCanvasWalls(pageData.walls || []);
-          setCanvasTexts(pageData.texts || []);
-          setCanvasTiles(pageData.tiles || []);
-          setCanvasAmbientLights(pageData.ambientLights || []);
-          setCanvasShopConfig(normalizedShopConfig);
-        }
-      },
-      (error) => {
-        console.error('Error en listener de página para jugador:', error);
+    const registerSession = async () => {
+      try {
+        await setDoc(
+          sessionRef,
+          {
+            sessionId: clientSessionId,
+            createdAt: serverTimestamp(),
+            lastSeen: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error('Error registrando sesión de jugador:', error);
       }
-    );
+    };
 
-    const unsubscribeTokens = onSnapshot(
-      tokensRef,
-      async (snap) => {
-        const changes = snap.docChanges().map((ch) =>
-          ch.type === 'removed'
-            ? { id: ch.doc.id, _deleted: true }
-            : { id: ch.doc.id, ...ch.doc.data() }
-        );
-        if (changes.length === 0) return;
-        const toEnsure = changes.filter((tk) => !tk._deleted);
-        const ensured = await ensureTokenSheetIds(playerVisiblePageId, toEnsure);
-        const ensuredMap = new Map(
-          ensured.map((t) => {
-            const id = String(t.id);
-            return [id, { ...t, id }];
-          })
-        );
-        const tokensWithIds = changes.map((t) => {
-          const id = String(t.id);
-          if (t._deleted) {
-            return {
-              ...t,
-              id,
-              updatedAt: normalizeTokenUpdatedAt(t.updatedAt) ?? null,
-            };
-          }
-          const ensuredToken = ensuredMap.get(id);
-          const baseToken = ensuredToken ? { ...ensuredToken } : { ...t, id };
-          const normalizedUpdatedAt =
-            normalizeTokenUpdatedAt(baseToken.updatedAt) ?? null;
+    registerSession();
+
+    const heartbeat = setInterval(() => {
+      setDoc(
+        sessionRef,
+        {
+          lastSeen: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch((error) => {
+        console.error('Error actualizando heartbeat de sesión:', error);
+      });
+    }, 60000);
+
+    const viewRef = doc(db, 'playerViews', clientSessionId);
+
+    const unsubscribe = onSnapshot(
+      viewRef,
+      (snap) => {
+        if (!snap.exists()) {
+          return;
+        }
+        const data = snap.data() || {};
+        const { pageId, page: pageData, tokens: rawTokens = [] } = data;
+
+        setPlayerVisiblePageId(pageId || null);
+
+        if (!pageId || !pageData) {
+          prevTokensRef.current = [];
+          prevLinesRef.current = [];
+          prevWallsRef.current = [];
+          prevTextsRef.current = [];
+          prevTilesRef.current = [];
+          prevAmbientLightsRef.current = [];
+          prevBgRef.current = null;
+          prevGridRef.current = {};
+          setCanvasTokens([]);
+          setCanvasLines([]);
+          setCanvasWalls([]);
+          setCanvasTexts([]);
+          setCanvasTiles([]);
+          setCanvasAmbientLights([]);
+          setCanvasBackground(null);
+          setCanvasShopConfig(normalizeShopConfig(null));
+          setEnableDarkness(true);
+          return;
+        }
+
+        const normalizedShopConfig = normalizeShopConfig(pageData.shopConfig);
+        const normalizedTokens = rawTokens.map((token) => {
+          const id = String(token.id || '');
+          const normalizedUpdatedAt = normalizeTokenUpdatedAt(token.updatedAt);
           return {
-            ...baseToken,
+            ...token,
             id,
             updatedAt: normalizedUpdatedAt,
           };
         });
-        const filtered = tokensWithIds.filter((tk) => {
-          const tokenId = String(tk.id);
-          const pending = pendingTokenChangesRef.current.get(tokenId);
-          if (pending) {
-            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-            const pendingUpdatedAt = normalizeTokenUpdatedAt(pending.updatedAt);
-            if (
-              deepEqual(
-                stripTokenMetadata(pending),
-                stripTokenMetadata(tk)
-              )
-            ) {
-              pendingTokenChangesRef.current.delete(tokenId);
-              return false;
-            }
-            if (
-              typeof remoteUpdatedAt === 'number' &&
-              typeof pendingUpdatedAt === 'number' &&
-              remoteUpdatedAt <= pendingUpdatedAt &&
-              pendingUpdatedAt - remoteUpdatedAt > CLOCK_SKEW_MS
-            ) {
-              return false;
-            }
-            pendingTokenChangesRef.current.delete(tokenId);
-            return true;
-          }
-          return true;
-        });
-        if (filtered.length === 0) return;
+
+        prevTokensRef.current = normalizedTokens;
+        prevLinesRef.current = pageData.lines || [];
+        prevWallsRef.current = pageData.walls || [];
+        prevTextsRef.current = pageData.texts || [];
+        prevTilesRef.current = pageData.tiles || [];
+        prevAmbientLightsRef.current = pageData.ambientLights || [];
+        prevBgRef.current = pageData.background || null;
+        prevGridRef.current = {
+          gridSize: pageData.gridSize || 1,
+          gridCells: pageData.gridCells || 1,
+          gridOffsetX: pageData.gridOffsetX || 0,
+          gridOffsetY: pageData.gridOffsetY || 0,
+          showGrid: pageData.showGrid !== undefined ? pageData.showGrid : true,
+          gridColor: (pageData.gridColor || '#ffffff').toLowerCase(),
+          gridOpacity:
+            pageData.gridOpacity !== undefined
+              ? Math.max(0, Math.min(1, pageData.gridOpacity))
+              : 0.2,
+        };
+
+        setCanvasTokens(normalizedTokens);
+        setCanvasLines(pageData.lines || []);
+        setCanvasWalls(pageData.walls || []);
+        setCanvasTexts(pageData.texts || []);
+        setCanvasTiles(pageData.tiles || []);
+        setCanvasAmbientLights(pageData.ambientLights || []);
+        setCanvasBackground(pageData.background || null);
+        setCanvasShopConfig(normalizedShopConfig);
+        setEnableDarkness(
+          pageData.enableDarkness !== undefined ? pageData.enableDarkness : true
+        );
+        const opacity =
+          pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
+        setGridSize(pageData.gridSize || 1);
+        setGridCells(pageData.gridCells || 1);
+        setGridOffsetX(pageData.gridOffsetX || 0);
+        setGridOffsetY(pageData.gridOffsetY || 0);
+        setShowGrid(pageData.showGrid !== undefined ? pageData.showGrid : true);
+        setGridColor((pageData.gridColor || '#ffffff').toLowerCase());
+        setGridOpacity(
+          pageData.gridOpacity !== undefined
+            ? Math.max(0, Math.min(1, pageData.gridOpacity))
+            : 0.2
+        );
+
         setPages((prevPages) => {
-          const pageIndex = prevPages.findIndex((p) => p.id === playerVisiblePageId);
+          const pageIndex = prevPages.findIndex((p) => p.id === pageId);
+          const basePage = {
+            id: pageId,
+            name: pageData.name || '',
+            background: pageData.background || null,
+            backgroundHash: pageData.backgroundHash || null,
+            enableDarkness:
+              pageData.enableDarkness !== undefined ? pageData.enableDarkness : true,
+            darknessOpacity: opacity,
+            showGrid:
+              pageData.showGrid !== undefined ? pageData.showGrid : true,
+            gridColor: (pageData.gridColor || '#ffffff').toLowerCase(),
+            gridOpacity:
+              pageData.gridOpacity !== undefined
+                ? Math.max(0, Math.min(1, pageData.gridOpacity))
+                : 0.2,
+            gridSize: pageData.gridSize || 1,
+            gridCells: pageData.gridCells || 1,
+            gridOffsetX: pageData.gridOffsetX || 0,
+            gridOffsetY: pageData.gridOffsetY || 0,
+            lines: pageData.lines || [],
+            walls: pageData.walls || [],
+            texts: pageData.texts || [],
+            tiles: pageData.tiles || [],
+            ambientLights: pageData.ambientLights || [],
+            shopConfig: normalizedShopConfig,
+            tokens: normalizedTokens,
+          };
           if (pageIndex !== -1) {
             const updatedPages = [...prevPages];
-            const prevTokens = updatedPages[pageIndex].tokens || [];
             updatedPages[pageIndex] = {
               ...updatedPages[pageIndex],
-              tokens: mergeTokens(prevTokens, filtered),
+              ...basePage,
             };
             return updatedPages;
           }
-          return prevPages;
+          return [...prevPages, basePage];
         });
-        setCanvasTokens((prev) => mergeTokens(prev, filtered));
       },
       (error) => {
-        console.error('Error en listener de tokens para jugador:', error);
+        console.error('Error en listener de vista de jugador:', error);
       }
     );
 
     return () => {
-      unsubscribePage();
-      unsubscribeTokens();
+      clearInterval(heartbeat);
+      unsubscribe();
+      deleteDoc(sessionRef).catch((error) => {
+        console.error('Error eliminando sesión de jugador:', error);
+      });
     };
-  }, [playerVisiblePageId, userType]);
+  }, [userType, clientSessionId]);
 
   // Listener en tiempo real para la página actual en modo máster
   useEffect(() => {
