@@ -28,13 +28,13 @@ jest.mock('../../utils/initiative', () => ({ addSpeedForToken: jest.fn() }));
 const { addDoc, onSnapshot, updateDoc, getDoc } = require('firebase/firestore');
 const { addSpeedForToken } = require('../../utils/initiative');
 
-function ListenerDemo({ playerName = 'p2', userType = 'player' }) {
+function ListenerDemo({ playerName = 'p2', userType = 'player', pageId = 'page-1' }) {
   const [req, setReq] = React.useState(null);
   const tokens = [
     { id: 'a', controlledBy: 'p1', x: 0, y: 0 },
     { id: 'b', controlledBy: 'p2', x: 1, y: 1 },
   ];
-  useAttackRequests({ tokens, playerName, userType, onAttack: setReq });
+  useAttackRequests({ tokens, playerName, userType, pageId, onAttack: setReq });
   return req ? (
     <DefenseModal
       isOpen
@@ -63,8 +63,9 @@ describe('Attack flow', () => {
       <AttackModal
         isOpen
         attacker={{ id: 'a', name: 'A', tokenSheetId: '1' }}
-        target={{ id: 'b', name: 'B', tokenSheetId: '2' }}
+        target={{ id: 'b', name: 'B', tokenSheetId: '2', controlledBy: 'p2' }}
         distance={1}
+        pageId="page-123"
         armas={[]}
         poderesCatalog={[]}
         onClose={() => {}}
@@ -72,6 +73,15 @@ describe('Attack flow', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
     await waitFor(() => expect(addDoc).toHaveBeenCalled());
+    const payload = addDoc.mock.calls[0][1];
+    expect(payload).toMatchObject({
+      attackerId: 'a',
+      targetId: 'b',
+      pageId: 'page-123',
+      targetControlledIds: ['p2'],
+      completed: false,
+    });
+    expect(typeof payload.sessionId).toBe('string');
     expect(addSpeedForToken).toHaveBeenCalled();
   });
 

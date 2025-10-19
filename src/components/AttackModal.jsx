@@ -20,6 +20,7 @@ import {
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
+import getClientSessionId from '../utils/session';
 import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
 
 const AUTO_RESOLVE_MS = 20000;
@@ -43,6 +44,24 @@ const parseAttrBonuses = (rasgos = []) => {
     }
   });
   return result;
+};
+
+const normalizeControlledBy = (value) => {
+  if (!value && value !== 0) return [];
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+          .filter(Boolean)
+      )
+    );
+  }
+  const parts = String(value)
+    .split(/[,;\n]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts));
 };
 
 const AttackModal = ({
@@ -286,6 +305,9 @@ const AttackModal = ({
         result,
         timestamp: serverTimestamp(),
         completed: false,
+        pageId: pageId ?? null,
+        sessionId: getClientSessionId(),
+        targetControlledIds: normalizeControlledBy(target?.controlledBy),
       });
       let updatedSheet = null;
       setTimeout(async () => {
