@@ -121,4 +121,28 @@ describeIfEmulator('ensureTokenSheetIds Cloud Function', () => {
     });
     expect(sheetData.habilidades).toEqual(enemySheet.habilidades);
   });
+
+  test('ensureTokenSheetIds skips sheet creation when token is deleted before processing', async () => {
+    const existingSheetsSnap = await firestore.collection('tokenSheets').get();
+    const existingSheetIds = new Set(existingSheetsSnap.docs.map((doc) => doc.id));
+
+    const pageId = `test-page-${Date.now()}-deleted`;
+    const tokenId = `token-${Date.now()}-deleted`;
+    const tokenRef = firestore.doc(`pages/${pageId}/tokens/${tokenId}`);
+
+    await tokenRef.set({ name: 'Token efímero' });
+    await tokenRef.delete();
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const tokenSnap = await tokenRef.get();
+    expect(tokenSnap.exists).toBe(false);
+
+    const sheetsAfterSnap = await firestore.collection('tokenSheets').get();
+    const newSheetIds = sheetsAfterSnap.docs
+      .map((doc) => doc.id)
+      .filter((id) => !existingSheetIds.has(id));
+
+    expect(newSheetIds).toHaveLength(0);
+  });
 });

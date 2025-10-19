@@ -41,8 +41,27 @@ exports.onTokenCreate = functions.firestore
       sheetData.stats = {};
     }
 
-    await db.doc(`tokenSheets/${tokenSheetId}`).set(sheetData);
-    await snap.ref.update({ tokenSheetId });
+    const sheetRef = db.doc(`tokenSheets/${tokenSheetId}`);
+    const pageId = snap.ref.parent?.parent?.id;
+
+    await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(snap.ref);
+
+      if (!currentSnap.exists) {
+        functions.logger.info('Token deleted before assigning sheet; skipping.', {
+          tokenId: snap.id,
+          pageId,
+        });
+        return;
+      }
+
+      if (currentSnap.get('tokenSheetId')) {
+        return;
+      }
+
+      transaction.set(sheetRef, sheetData);
+      transaction.update(snap.ref, { tokenSheetId });
+    });
 
     return null;
   });
