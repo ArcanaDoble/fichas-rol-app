@@ -1,13 +1,7 @@
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  addDoc,
-  collection,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { saveTokenSheet } from './token';
+import { publishDamageEvent, resolveDamageEventPageIds } from './damageEvents';
 
 export const addSpeedForToken = async (token, speed) => {
   if (!token || !token.id || speed <= 0) return;
@@ -69,24 +63,17 @@ export const consumeStatForToken = async (token, stat, amount, pageId) => {
     saveTokenSheet(sheet);
 
     if (pageId) {
-      let effectivePageId = pageId;
       try {
-        const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-        if (visibilityDoc.exists()) {
-          effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-        }
-      } catch (err) {
-        console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-      }
-      try {
-        await addDoc(collection(db, 'damageEvents'), {
-          tokenId: token.id,
-          value: amount,
-          stat,
-          ts: Date.now(),
-          pageId: effectivePageId,
-          timestamp: serverTimestamp(),
-        });
+        const targets = await resolveDamageEventPageIds(pageId);
+        await publishDamageEvent(
+          {
+            tokenId: token.id,
+            value: amount,
+            stat,
+            ts: Date.now(),
+          },
+          targets
+        );
       } catch (err) {
         console.error('Error registrando consumo de stat:', err);
       }
