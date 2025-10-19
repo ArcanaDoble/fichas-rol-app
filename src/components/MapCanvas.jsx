@@ -5105,70 +5105,407 @@ const MapCanvas = ({
       );
     })();
 
+  const containerSizeRef = useRef(containerSize);
+  const mousePositionRef = useRef(mousePosition);
+  const selectedIdRef = useRef(selectedId);
+  const selectedTokensRef = useRef(selectedTokens);
+  const selectedLinesRef = useRef(selectedLines);
+  const selectedLineIdRef = useRef(selectedLineId);
+  const selectedWallsRef = useRef(selectedWalls);
+  const selectedWallIdRef = useRef(selectedWallId);
+  const selectedTextsRef = useRef(selectedTexts);
+  const selectedTextIdRef = useRef(selectedTextId);
+  const selectedAmbientLightsRef = useRef(selectedAmbientLights);
+  const selectedAmbientLightIdRef = useRef(selectedAmbientLightId);
+  const selectedTileIdRef = useRef(selectedTileId);
+  const linesRef = useRef(lines);
+  const wallsRef = useRef(walls);
+  const textsRef = useRef(texts);
+  const ambientLightsRef = useRef(ambientLights);
+  const clipboardRef = useRef(clipboard);
+  const activeLayerRef = useRef(activeLayer);
+  const activeToolRef = useRef(activeTool);
+  const mapWidthRef = useRef(mapWidth);
+  const mapHeightRef = useRef(mapHeight);
+  const isPlayerViewRef = useRef(isPlayerView);
+  const userTypeRef = useRef(userType);
+  const playerNameRef = useRef(playerName);
+  const effectiveGridSizeRef = useRef(effectiveGridSize);
+  const canSelectElementRef = useRef(canSelectElement);
+  const isPositionBlockedRef = useRef(isPositionBlocked);
+  const handleTokensChangeRef = useRef(handleTokensChange);
+  const saveLinesRef = useRef(saveLines);
+  const saveWallsRef = useRef(saveWalls);
+  const updateTextsRef = useRef(updateTexts);
+  const saveAmbientLightsRef = useRef(saveAmbientLights);
+  const updateTilesRef = useRef(updateTiles);
+  const undoLinesRef = useRef(undoLines);
+  const redoLinesRef = useRef(redoLines);
+
+  useEffect(() => {
+    containerSizeRef.current = containerSize;
+  }, [containerSize]);
+  useEffect(() => {
+    mousePositionRef.current = mousePosition;
+  }, [mousePosition]);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+  useEffect(() => {
+    selectedTokensRef.current = selectedTokens;
+  }, [selectedTokens]);
+  useEffect(() => {
+    selectedLinesRef.current = selectedLines;
+  }, [selectedLines]);
+  useEffect(() => {
+    selectedLineIdRef.current = selectedLineId;
+  }, [selectedLineId]);
+  useEffect(() => {
+    selectedWallsRef.current = selectedWalls;
+  }, [selectedWalls]);
+  useEffect(() => {
+    selectedWallIdRef.current = selectedWallId;
+  }, [selectedWallId]);
+  useEffect(() => {
+    selectedTextsRef.current = selectedTexts;
+  }, [selectedTexts]);
+  useEffect(() => {
+    selectedTextIdRef.current = selectedTextId;
+  }, [selectedTextId]);
+  useEffect(() => {
+    selectedAmbientLightsRef.current = selectedAmbientLights;
+  }, [selectedAmbientLights]);
+  useEffect(() => {
+    selectedAmbientLightIdRef.current = selectedAmbientLightId;
+  }, [selectedAmbientLightId]);
+  useEffect(() => {
+    selectedTileIdRef.current = selectedTileId;
+  }, [selectedTileId]);
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
+  useEffect(() => {
+    wallsRef.current = walls;
+  }, [walls]);
+  useEffect(() => {
+    textsRef.current = texts;
+  }, [texts]);
+  useEffect(() => {
+    ambientLightsRef.current = ambientLights;
+  }, [ambientLights]);
+  useEffect(() => {
+    clipboardRef.current = clipboard;
+  }, [clipboard]);
+  useEffect(() => {
+    activeLayerRef.current = activeLayer;
+  }, [activeLayer]);
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
+  useEffect(() => {
+    mapWidthRef.current = mapWidth;
+  }, [mapWidth]);
+  useEffect(() => {
+    mapHeightRef.current = mapHeight;
+  }, [mapHeight]);
+  useEffect(() => {
+    isPlayerViewRef.current = isPlayerView;
+  }, [isPlayerView]);
+  useEffect(() => {
+    userTypeRef.current = userType;
+  }, [userType]);
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
+  useEffect(() => {
+    effectiveGridSizeRef.current = effectiveGridSize;
+  }, [effectiveGridSize]);
+  useEffect(() => {
+    canSelectElementRef.current = canSelectElement;
+  }, [canSelectElement]);
+  useEffect(() => {
+    isPositionBlockedRef.current = isPositionBlocked;
+  }, [isPositionBlocked]);
+  useEffect(() => {
+    handleTokensChangeRef.current = handleTokensChange;
+  }, [handleTokensChange]);
+  useEffect(() => {
+    saveLinesRef.current = saveLines;
+  }, [saveLines]);
+  useEffect(() => {
+    saveWallsRef.current = saveWalls;
+  }, [saveWalls]);
+  useEffect(() => {
+    updateTextsRef.current = updateTexts;
+  }, [updateTexts]);
+  useEffect(() => {
+    saveAmbientLightsRef.current = saveAmbientLights;
+  }, [saveAmbientLights]);
+  useEffect(() => {
+    updateTilesRef.current = updateTiles;
+  }, [updateTiles]);
+  useEffect(() => {
+    undoLinesRef.current = undoLines;
+  }, [undoLines]);
+  useEffect(() => {
+    redoLinesRef.current = redoLines;
+  }, [redoLines]);
+
   const handleKeyDown = useCallback(
     (e) => {
-      // Avoid moving the token when typing inside inputs or editable fields
       const target = e.target;
+      const tagName = target?.tagName;
       if (
-        target.isContentEditable ||
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+        target?.isContentEditable ||
+        (typeof tagName === 'string' &&
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName))
       ) {
         return;
       }
 
-      // Copiar elementos seleccionados
-      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        const clipboardData = {
-          tokens: selectedTokens.length > 0 ? tokens.filter(t => selectedTokens.includes(t.id)) :
-                  selectedId ? [tokens.find(t => t.id === selectedId)] : [],
-          lines: selectedLines.length > 0 ? lines.filter(l => selectedLines.includes(l.id)) :
-                 selectedLineId ? [lines.find(l => l.id === selectedLineId)] : [],
-          walls: selectedWalls.length > 0 ? walls.filter(w => selectedWalls.includes(w.id)) :
-                 selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
-          texts: selectedTexts.length > 0 ? texts.filter(t => selectedTexts.includes(t.id)) :
-                 selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
-          ,
-          ambientLights:
-            selectedAmbientLights.length > 0
-              ? ambientLights.filter((light) => selectedAmbientLights.includes(light.id))
-              : selectedAmbientLightId
-              ? [ambientLights.find((light) => light.id === selectedAmbientLightId)]
-              : [],
+      const tokensSnapshot = tokensRef.current ?? [];
+      const selectedTokensSnapshot = selectedTokensRef.current ?? [];
+      const selectedIdSnapshot = selectedIdRef.current;
+      const linesSnapshot = linesRef.current ?? [];
+      const selectedLinesSnapshot = selectedLinesRef.current ?? [];
+      const selectedLineIdSnapshot = selectedLineIdRef.current;
+      const wallsSnapshot = wallsRef.current ?? [];
+      const selectedWallsSnapshot = selectedWallsRef.current ?? [];
+      const selectedWallIdSnapshot = selectedWallIdRef.current;
+      const textsSnapshot = textsRef.current ?? [];
+      const selectedTextsSnapshot = selectedTextsRef.current ?? [];
+      const selectedTextIdSnapshot = selectedTextIdRef.current;
+      const ambientLightsSnapshot = ambientLightsRef.current ?? [];
+      const selectedAmbientLightsSnapshot =
+        selectedAmbientLightsRef.current ?? [];
+      const selectedAmbientLightIdSnapshot =
+        selectedAmbientLightIdRef.current;
+      const selectedTileIdSnapshot = selectedTileIdRef.current;
+      const clipboardSnapshot = clipboardRef.current;
+      const activeLayerSnapshot = activeLayerRef.current;
+      const activeToolSnapshot = activeToolRef.current;
+      const mapWidthSnapshot = mapWidthRef.current ?? 0;
+      const mapHeightSnapshot = mapHeightRef.current ?? 0;
+      const isPlayerViewSnapshot = isPlayerViewRef.current;
+      const userTypeSnapshot = userTypeRef.current;
+      const playerNameSnapshot = playerNameRef.current;
+      const effectiveGridSizeSnapshot = effectiveGridSizeRef.current || 1;
+      const baseScaleSnapshot = baseScaleRef.current || 1;
+      const zoomSnapshot = zoomRef.current || 1;
+      const groupPosSnapshot = groupPosRef.current || { x: 0, y: 0 };
+      const containerSizeSnapshot = containerSizeRef.current || {
+        width: 0,
+        height: 0,
+      };
+      const mousePositionSnapshot = mousePositionRef.current || {
+        x: 0,
+        y: 0,
+      };
+      const canSelectElementSnapshot = canSelectElementRef.current;
+      const isPositionBlockedSnapshot = isPositionBlockedRef.current;
+      const handleTokensChangeFn = handleTokensChangeRef.current;
+      const saveLinesFn = saveLinesRef.current;
+      const saveWallsFn = saveWallsRef.current;
+      const updateTextsFn = updateTextsRef.current;
+      const saveAmbientLightsFn = saveAmbientLightsRef.current;
+      const updateTilesFn = updateTilesRef.current;
+      const undoLinesFn = undoLinesRef.current;
+      const redoLinesFn = redoLinesRef.current;
+      const attackSourceIdSnapshot = attackSourceIdRef.current;
+      const attackTargetIdSnapshot = attackTargetIdRef.current;
+
+      const lowerKey = e.key?.toLowerCase?.() ?? '';
+
+      const clampToBounds = (x, y) => {
+        const width = Math.max(1, mapWidthSnapshot || 1);
+        const height = Math.max(1, mapHeightSnapshot || 1);
+        return {
+          x: Math.max(0, Math.min(width - 1, x)),
+          y: Math.max(0, Math.min(height - 1, y)),
         };
+      };
 
-        clipboardData.tokens = clipboardData.tokens.filter(Boolean);
-        clipboardData.lines = clipboardData.lines.filter(Boolean);
-        clipboardData.walls = clipboardData.walls.filter(Boolean);
-        clipboardData.texts = clipboardData.texts.filter(Boolean);
-        clipboardData.ambientLights = clipboardData.ambientLights.filter(Boolean);
+      const screenToMapCoordinatesSnapshot = (screenX, screenY) => {
+        const scale = baseScaleSnapshot * (zoomSnapshot || 1);
+        return {
+          x: (screenX - groupPosSnapshot.x) / scale,
+          y: (screenY - groupPosSnapshot.y) / scale,
+        };
+      };
 
-        const clipboardTokens = clipboardData.tokens;
-        const clipboardLines = clipboardData.lines;
-        const clipboardWalls = clipboardData.walls;
-        const clipboardTexts = clipboardData.texts;
+      const mapToGridCoordinatesSnapshot = (mapX, mapY) => {
+        const size = effectiveGridSizeSnapshot || 1;
+        return {
+          x: Math.round(mapX / size),
+          y: Math.round(mapY / size),
+        };
+      };
 
-        // Incluir las sheets completas de los tokens para mantener todas las estadísticas
-        const stored = localStorage.getItem('tokenSheets');
-        if (stored) {
-          const sheets = JSON.parse(stored);
-          const tokenSheets = {};
-          clipboardTokens.forEach(tk => {
-            if (!tk?.tokenSheetId) return;
-            const sheet = sheets[tk.tokenSheetId];
-            if (sheet) {
-              tokenSheets[tk.tokenSheetId] = JSON.parse(JSON.stringify(sheet));
-            }
-          });
-          if (Object.keys(tokenSheets).length > 0) clipboardData.tokenSheets = tokenSheets;
+      const calculateElementsCenterSnapshot = (elements, elementType) => {
+        if (!elements || elements.length === 0) {
+          return { x: 0, y: 0 };
         }
 
-        // Solo copiar si hay elementos seleccionados
+        let totalX = 0;
+        let totalY = 0;
+
+        elements.forEach((element) => {
+          switch (elementType) {
+            case 'tokens':
+            case 'lines':
+              totalX += element.x ?? 0;
+              totalY += element.y ?? 0;
+              break;
+            case 'walls': {
+              const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = element.points || [];
+              const centerX = (element.x ?? 0) + (x1 + x2) / 2;
+              const centerY = (element.y ?? 0) + (y1 + y2) / 2;
+              totalX += centerX / effectiveGridSizeSnapshot;
+              totalY += centerY / effectiveGridSizeSnapshot;
+              break;
+            }
+            case 'texts':
+            case 'ambientLights':
+              totalX += (element.x ?? 0) / effectiveGridSizeSnapshot;
+              totalY += (element.y ?? 0) / effectiveGridSizeSnapshot;
+              break;
+            default:
+              break;
+          }
+        });
+
+        return {
+          x: totalX / elements.length,
+          y: totalY / elements.length,
+        };
+      };
+
+      const getSmartPastePositionSnapshot = () => {
+        const stageContainer = stageRef.current?.container();
+        const stageRect = stageContainer?.getBoundingClientRect();
+        if (!stageRect) {
+          const centerX = containerSizeSnapshot.width / 2;
+          const centerY = containerSizeSnapshot.height / 2;
+          return screenToMapCoordinatesSnapshot(centerX, centerY);
+        }
+
+        const { x: mouseX, y: mouseY } = mousePositionSnapshot;
+        const isMouseInside =
+          mouseX >= stageRect.left &&
+          mouseX <= stageRect.right &&
+          mouseY >= stageRect.top &&
+          mouseY <= stageRect.bottom;
+
+        if (isMouseInside) {
+          const relativeX = mouseX - stageRect.left;
+          const relativeY = mouseY - stageRect.top;
+          return screenToMapCoordinatesSnapshot(relativeX, relativeY);
+        }
+
+        const centerX = containerSizeSnapshot.width / 2;
+        const centerY = containerSizeSnapshot.height / 2;
+        return screenToMapCoordinatesSnapshot(centerX, centerY);
+      };
+
+      if (e.ctrlKey && lowerKey === 'c') {
+        e.preventDefault();
+
+        const tokensToCopy =
+          selectedTokensSnapshot.length > 0
+            ? tokensSnapshot.filter((token) =>
+                selectedTokensSnapshot.includes(token.id)
+              )
+            : selectedIdSnapshot != null
+            ? [
+                tokensSnapshot.find(
+                  (token) => token?.id === selectedIdSnapshot
+                ),
+              ]
+            : [];
+        const linesToCopy =
+          selectedLinesSnapshot.length > 0
+            ? linesSnapshot.filter((line) =>
+                selectedLinesSnapshot.includes(line.id)
+              )
+            : selectedLineIdSnapshot != null
+            ? [
+                linesSnapshot.find(
+                  (line) => line?.id === selectedLineIdSnapshot
+                ),
+              ]
+            : [];
+        const wallsToCopy =
+          selectedWallsSnapshot.length > 0
+            ? wallsSnapshot.filter((wall) =>
+                selectedWallsSnapshot.includes(wall.id)
+              )
+            : selectedWallIdSnapshot != null
+            ? [
+                wallsSnapshot.find(
+                  (wall) => wall?.id === selectedWallIdSnapshot
+                ),
+              ]
+            : [];
+        const textsToCopy =
+          selectedTextsSnapshot.length > 0
+            ? textsSnapshot.filter((text) =>
+                selectedTextsSnapshot.includes(text.id)
+              )
+            : selectedTextIdSnapshot != null
+            ? [
+                textsSnapshot.find(
+                  (text) => text?.id === selectedTextIdSnapshot
+                ),
+              ]
+            : [];
+        const ambientLightsToCopy =
+          selectedAmbientLightsSnapshot.length > 0
+            ? ambientLightsSnapshot.filter((light) =>
+                selectedAmbientLightsSnapshot.includes(light.id)
+              )
+            : selectedAmbientLightIdSnapshot != null
+            ? [
+                ambientLightsSnapshot.find(
+                  (light) => light?.id === selectedAmbientLightIdSnapshot
+                ),
+              ]
+            : [];
+
+        const clipboardData = {
+          tokens: tokensToCopy.filter(Boolean),
+          lines: linesToCopy.filter(Boolean),
+          walls: wallsToCopy.filter(Boolean),
+          texts: textsToCopy.filter(Boolean),
+          ambientLights: ambientLightsToCopy.filter(Boolean),
+        };
+
+        const storedSheets = localStorage.getItem('tokenSheets');
+        if (storedSheets && clipboardData.tokens.length > 0) {
+          try {
+            const sheets = JSON.parse(storedSheets);
+            const tokenSheets = {};
+            clipboardData.tokens.forEach((tk) => {
+              if (!tk?.tokenSheetId) return;
+              const sheet = sheets[tk.tokenSheetId];
+              if (sheet) {
+                tokenSheets[tk.tokenSheetId] = JSON.parse(
+                  JSON.stringify(sheet)
+                );
+              }
+            });
+            if (Object.keys(tokenSheets).length > 0) {
+              clipboardData.tokenSheets = tokenSheets;
+            }
+          } catch (error) {
+            console.error('Error parsing token sheets from localStorage', error);
+          }
+        }
+
         if (
-          clipboardTokens.length > 0 ||
-          clipboardLines.length > 0 ||
-          clipboardWalls.length > 0 ||
-          clipboardTexts.length > 0 ||
+          clipboardData.tokens.length > 0 ||
+          clipboardData.lines.length > 0 ||
+          clipboardData.walls.length > 0 ||
+          clipboardData.texts.length > 0 ||
           clipboardData.ambientLights.length > 0
         ) {
           setClipboard(clipboardData);
@@ -5176,32 +5513,40 @@ const MapCanvas = ({
         return;
       }
 
-      // Seleccionar todos los elementos de la capa actual (con validación de permisos)
-      if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+      if (e.ctrlKey && lowerKey === 'a') {
         e.preventDefault();
-        const filteredTokens = tokens.filter(token =>
-          token.layer === activeLayer && canSelectElement(token, 'token')
-        );
-        const filteredLines = lines.filter(line =>
-          line.layer === activeLayer && canSelectElement(line, 'line')
-        );
-        const filteredWalls = walls.filter(wall =>
-          wall.layer === activeLayer && canSelectElement(wall, 'wall')
-        );
-        const filteredTexts = texts.filter(text =>
-          text.layer === activeLayer && canSelectElement(text, 'text')
-        );
-        const filteredAmbient = ambientLights.filter(light =>
-          (light.layer || 'luz') === activeLayer && canSelectElement(light, 'ambientLight')
-        );
+        const canSelect =
+          typeof canSelectElementSnapshot === 'function'
+            ? canSelectElementSnapshot
+            : () => true;
 
-        setSelectedTokens(filteredTokens.map(t => t.id));
-        setSelectedLines(filteredLines.map(l => l.id));
-        setSelectedWalls(filteredWalls.map(w => w.id));
-        setSelectedTexts(filteredTexts.map(t => t.id));
+        const filteredTokens = tokensSnapshot.filter(
+          (token) =>
+            token.layer === activeLayerSnapshot && canSelect(token, 'token')
+        );
+        const filteredLines = linesSnapshot.filter(
+          (line) =>
+            line.layer === activeLayerSnapshot && canSelect(line, 'line')
+        );
+        const filteredWalls = wallsSnapshot.filter(
+          (wall) =>
+            wall.layer === activeLayerSnapshot && canSelect(wall, 'wall')
+        );
+        const filteredTexts = textsSnapshot.filter(
+          (text) =>
+            text.layer === activeLayerSnapshot && canSelect(text, 'text')
+        );
+        const filteredAmbient = ambientLightsSnapshot.filter((light) => {
+          if ((light.layer || 'luz') !== activeLayerSnapshot) return false;
+          return canSelect(light, 'ambientLight');
+        });
+
+        setSelectedTokens(filteredTokens.map((token) => token.id));
+        setSelectedLines(filteredLines.map((line) => line.id));
+        setSelectedWalls(filteredWalls.map((wall) => wall.id));
+        setSelectedTexts(filteredTexts.map((text) => text.id));
         setSelectedAmbientLights(filteredAmbient.map((light) => light.id));
 
-        // Limpiar selecciones individuales
         setSelectedId(null);
         setSelectedLineId(null);
         setSelectedWallId(null);
@@ -5210,55 +5555,69 @@ const MapCanvas = ({
         return;
       }
 
-      // Pegar elementos del clipboard
-      if (e.ctrlKey && e.key.toLowerCase() === 'v' && clipboard) {
+      if (e.ctrlKey && lowerKey === 'v' && clipboardSnapshot) {
         e.preventDefault();
 
-        const clipboardTokens = (clipboard.tokens ?? []).filter(Boolean);
-        const clipboardLines = (clipboard.lines ?? []).filter(Boolean);
-        const clipboardWalls = (clipboard.walls ?? []).filter(Boolean);
-        const clipboardTexts = (clipboard.texts ?? []).filter(Boolean);
-        const clipboardAmbientLights = (clipboard.ambientLights ?? []).filter(Boolean);
+        const clipboardTokens = (clipboardSnapshot.tokens ?? []).filter(
+          Boolean
+        );
+        const clipboardLines = (clipboardSnapshot.lines ?? []).filter(Boolean);
+        const clipboardWalls = (clipboardSnapshot.walls ?? []).filter(Boolean);
+        const clipboardTexts = (clipboardSnapshot.texts ?? []).filter(Boolean);
+        const clipboardAmbientLights = (
+          clipboardSnapshot.ambientLights ?? []
+        ).filter(Boolean);
 
-        // Obtener posición inteligente de pegado
-        const pastePosition = getSmartPastePosition();
-        const pasteGridPos = mapToGridCoordinates(pastePosition.x, pastePosition.y);
+        const pastePosition = getSmartPastePositionSnapshot();
+        const pasteGridPos = mapToGridCoordinatesSnapshot(
+          pastePosition.x,
+          pastePosition.y
+        );
 
-        // Calcular centros de cada tipo de elemento para posicionamiento relativo
-        const tokensCenter = calculateElementsCenter(clipboardTokens, 'tokens');
-        const linesCenter = calculateElementsCenter(clipboardLines, 'lines');
-        const wallsCenter = calculateElementsCenter(clipboardWalls, 'walls');
-        const textsCenter = calculateElementsCenter(clipboardTexts, 'texts');
-        const ambientCenter = calculateElementsCenter(
+        const tokensCenter = calculateElementsCenterSnapshot(
+          clipboardTokens,
+          'tokens'
+        );
+        const linesCenter = calculateElementsCenterSnapshot(
+          clipboardLines,
+          'lines'
+        );
+        const wallsCenter = calculateElementsCenterSnapshot(
+          clipboardWalls,
+          'walls'
+        );
+        const textsCenter = calculateElementsCenterSnapshot(
+          clipboardTexts,
+          'texts'
+        );
+        const ambientCenter = calculateElementsCenterSnapshot(
           clipboardAmbientLights,
           'ambientLights'
         );
 
-        // Pegar tokens
-        if (clipboardTokens.length > 0) {
-          const newTokens = clipboardTokens.map(token => {
-            // Calcular offset relativo al centro del grupo
+        if (clipboardTokens.length > 0 && handleTokensChangeFn) {
+          const newTokens = clipboardTokens.map((token) => {
             const relativeX = token.x - tokensCenter.x;
             const relativeY = token.y - tokensCenter.y;
-
-            // Aplicar offset al punto de pegado y asegurar límites
-            const finalPos = clampToMapBounds(
+            const bounded = clampToBounds(
               pasteGridPos.x + relativeX,
               pasteGridPos.y + relativeY
             );
-
             const data = JSON.parse(JSON.stringify(token));
             const newToken = createToken({
               ...data,
               id: nanoid(),
-              x: finalPos.x,
-              y: finalPos.y,
-              layer: activeLayer,
+              x: bounded.x,
+              y: bounded.y,
+              layer: activeLayerSnapshot,
             });
             const originalSheetId = token.tokenSheetId;
-            const sheet = originalSheetId ? clipboard.tokenSheets?.[originalSheetId] : undefined;
-            if (sheet) {
-              const copy = JSON.parse(JSON.stringify(sheet));
+            const sheetFromClipboard =
+              originalSheetId && clipboardSnapshot.tokenSheets
+                ? clipboardSnapshot.tokenSheets[originalSheetId]
+                : undefined;
+            if (sheetFromClipboard) {
+              const copy = JSON.parse(JSON.stringify(sheetFromClipboard));
               copy.id = newToken.tokenSheetId;
               updateLocalTokenSheet(copy);
               saveTokenSheet(copy);
@@ -5267,113 +5626,98 @@ const MapCanvas = ({
             }
             return newToken;
           });
-          handleTokensChange([...tokens, ...newTokens]);
+          handleTokensChangeFn([...tokensSnapshot, ...newTokens]);
         }
 
-        // Pegar líneas
-        if (clipboardLines.length > 0) {
-          const newLines = clipboardLines.map(line => {
-            // Calcular offset relativo al centro del grupo
-            const relativeX = line.x - (linesCenter.x * effectiveGridSize);
-            const relativeY = line.y - (linesCenter.y * effectiveGridSize);
-
-            // Aplicar offset al punto de pegado
-            const finalX = pastePosition.x + relativeX;
-            const finalY = pastePosition.y + relativeY;
-
+        if (clipboardLines.length > 0 && saveLinesFn) {
+          const newLines = clipboardLines.map((line) => {
+            const relativeX =
+              line.x - linesCenter.x * effectiveGridSizeSnapshot;
+            const relativeY =
+              line.y - linesCenter.y * effectiveGridSizeSnapshot;
             return {
               ...line,
               id: Date.now() + Math.random(),
-              x: finalX,
-              y: finalY,
-              layer: activeLayer
+              x: pastePosition.x + relativeX,
+              y: pastePosition.y + relativeY,
+              layer: activeLayerSnapshot,
             };
           });
-          saveLines([...lines, ...newLines]);
+          saveLinesFn([...linesSnapshot, ...newLines]);
         }
 
-        // Pegar muros
-        if (clipboardWalls.length > 0) {
-          const newWalls = clipboardWalls.map(wall => {
-            // Calcular el centro real del muro original
-            const [x1, y1, x2, y2] = wall.points;
-            const wallCenterX = wall.x + (x1 + x2) / 2;
-            const wallCenterY = wall.y + (y1 + y2) / 2;
-
-            // Calcular offset relativo al centro del grupo (wallsCenter ya está en pixels)
-            const relativeX = wallCenterX - (wallsCenter.x * effectiveGridSize);
-            const relativeY = wallCenterY - (wallsCenter.y * effectiveGridSize);
-
-            // Calcular la nueva posición del centro
+        if (clipboardWalls.length > 0 && saveWallsFn) {
+          const newWalls = clipboardWalls.map((wall) => {
+            const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = wall.points || [];
+            const wallCenterX = (wall.x ?? 0) + (x1 + x2) / 2;
+            const wallCenterY = (wall.y ?? 0) + (y1 + y2) / 2;
+            const relativeX =
+              wallCenterX - wallsCenter.x * effectiveGridSizeSnapshot;
+            const relativeY =
+              wallCenterY - wallsCenter.y * effectiveGridSizeSnapshot;
             const newCenterX = pastePosition.x + relativeX;
             const newCenterY = pastePosition.y + relativeY;
-
-            // Calcular la nueva posición base del muro
-            const finalX = newCenterX - (x1 + x2) / 2;
-            const finalY = newCenterY - (y1 + y2) / 2;
-
             return {
               ...wall,
               id: Date.now() + Math.random(),
-              x: finalX,
-              y: finalY,
-              layer: activeLayer
+              x: newCenterX - (x1 + x2) / 2,
+              y: newCenterY - (y1 + y2) / 2,
+              layer: activeLayerSnapshot,
             };
           });
-          saveWalls([...walls, ...newWalls]);
+          saveWallsFn([...wallsSnapshot, ...newWalls]);
         }
 
-        // Pegar textos
-        if (clipboardTexts.length > 0) {
-          const newTexts = clipboardTexts.map(text => {
-            // Calcular offset relativo al centro del grupo
-            const relativeX = text.x - (textsCenter.x * effectiveGridSize);
-            const relativeY = text.y - (textsCenter.y * effectiveGridSize);
-
-            // Aplicar offset al punto de pegado
-            const finalX = pastePosition.x + relativeX;
-            const finalY = pastePosition.y + relativeY;
-
+        if (clipboardTexts.length > 0 && updateTextsFn) {
+          const newTexts = clipboardTexts.map((text) => {
+            const relativeX =
+              text.x - textsCenter.x * effectiveGridSizeSnapshot;
+            const relativeY =
+              text.y - textsCenter.y * effectiveGridSizeSnapshot;
             return {
               ...text,
               id: Date.now() + Math.random(),
-              x: finalX,
-              y: finalY,
-              layer: activeLayer
+              x: pastePosition.x + relativeX,
+              y: pastePosition.y + relativeY,
+              layer: activeLayerSnapshot,
             };
           });
-          updateTexts([...texts, ...newTexts]);
+          updateTextsFn([...textsSnapshot, ...newTexts]);
         }
-        if (clipboardAmbientLights.length > 0) {
-          const creator = userType === 'player' ? playerName : 'Master';
+
+        if (clipboardAmbientLights.length > 0 && saveAmbientLightsFn) {
+          const creator =
+            userTypeSnapshot === 'player' ? playerNameSnapshot : 'Master';
           const newLights = clipboardAmbientLights.map((light) => {
-            const relativeX = light.x - (ambientCenter.x * effectiveGridSize);
-            const relativeY = light.y - (ambientCenter.y * effectiveGridSize);
-            const finalX = pastePosition.x + relativeX;
-            const finalY = pastePosition.y + relativeY;
+            const relativeX =
+              light.x - ambientCenter.x * effectiveGridSizeSnapshot;
+            const relativeY =
+              light.y - ambientCenter.y * effectiveGridSizeSnapshot;
             return {
               ...light,
               id: nanoid(),
-              x: finalX,
-              y: finalY,
-              layer: activeLayer,
+              x: pastePosition.x + relativeX,
+              y: pastePosition.y + relativeY,
+              layer: activeLayerSnapshot,
               createdBy: creator,
             };
           });
-          saveAmbientLights([...ambientLights, ...newLights]);
+          saveAmbientLightsFn([...ambientLightsSnapshot, ...newLights]);
         }
         return;
       }
 
-      // Cancelar mirilla o deseleccionar con Escape
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (activeTool === 'target' && (attackSourceId || attackTargetId)) {
+        if (
+          activeToolSnapshot === 'target' &&
+          (attackSourceIdSnapshot || attackTargetIdSnapshot)
+        ) {
           setAttackTargetId(null);
           setAttackLine(null);
           setAttackResult(null);
           setAttackReady(false);
-        } else if (attackSourceId || attackTargetId) {
+        } else if (attackSourceIdSnapshot || attackTargetIdSnapshot) {
           setAttackSourceId(null);
           setAttackTargetId(null);
           setAttackLine(null);
@@ -5384,82 +5728,138 @@ const MapCanvas = ({
         return;
       }
 
-      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+      if (e.ctrlKey && lowerKey === 'z') {
         e.preventDefault();
-        undoLines();
-        return;
-      }
-      if (e.ctrlKey && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        redoLines();
+        undoLinesFn?.();
         return;
       }
 
-      // Eliminar elementos seleccionados (múltiples o individuales)
-      if (e.key.toLowerCase() === 'delete') {
+      if (e.ctrlKey && lowerKey === 'y') {
+        e.preventDefault();
+        redoLinesFn?.();
+        return;
+      }
+
+      if (lowerKey === 'delete') {
         e.preventDefault();
 
-        // Eliminar selección múltiple
-        if (selectedTokens.length > 0) {
-          handleTokensChange(tokens.filter(t => !selectedTokens.includes(t.id)));
+        if (
+          selectedTokensSnapshot.length > 0 &&
+          handleTokensChangeFn
+        ) {
+          handleTokensChangeFn(
+            tokensSnapshot.filter(
+              (token) => !selectedTokensSnapshot.includes(token.id)
+            )
+          );
           setSelectedTokens([]);
         }
-        if (selectedLines.length > 0) {
-          saveLines(lines.filter(l => !selectedLines.includes(l.id)));
+        if (selectedLinesSnapshot.length > 0 && saveLinesFn) {
+          saveLinesFn(
+            linesSnapshot.filter(
+              (line) => !selectedLinesSnapshot.includes(line.id)
+            )
+          );
           setSelectedLines([]);
         }
-        if (selectedWalls.length > 0) {
-          saveWalls(walls.filter(w => !selectedWalls.includes(w.id)));
+        if (selectedWallsSnapshot.length > 0 && saveWallsFn) {
+          saveWallsFn(
+            wallsSnapshot.filter(
+              (wall) => !selectedWallsSnapshot.includes(wall.id)
+            )
+          );
           setSelectedWalls([]);
         }
-        if (selectedTexts.length > 0) {
-          updateTexts(texts.filter(t => !selectedTexts.includes(t.id)));
+        if (selectedTextsSnapshot.length > 0 && updateTextsFn) {
+          updateTextsFn(
+            textsSnapshot.filter(
+              (text) => !selectedTextsSnapshot.includes(text.id)
+            )
+          );
           setSelectedTexts([]);
         }
-        if (selectedAmbientLights.length > 0) {
-          saveAmbientLights(
-            ambientLights.filter((light) => !selectedAmbientLights.includes(light.id))
+        if (
+          selectedAmbientLightsSnapshot.length > 0 &&
+          saveAmbientLightsFn
+        ) {
+          saveAmbientLightsFn(
+            ambientLightsSnapshot.filter(
+              (light) => !selectedAmbientLightsSnapshot.includes(light.id)
+            )
           );
           setSelectedAmbientLights([]);
         }
 
-        // Eliminar selección individual si no hay selección múltiple
-        if (selectedLineId != null && selectedLines.length === 0) {
-          saveLines(lines.filter((ln) => ln.id !== selectedLineId));
+        if (
+          selectedLineIdSnapshot != null &&
+          selectedLinesSnapshot.length === 0 &&
+          saveLinesFn
+        ) {
+          saveLinesFn(
+            linesSnapshot.filter((line) => line.id !== selectedLineIdSnapshot)
+          );
           setSelectedLineId(null);
         }
-        if (selectedWallId != null && selectedWalls.length === 0) {
-          saveWalls(walls.filter((w) => w.id !== selectedWallId));
+        if (
+          selectedWallIdSnapshot != null &&
+          selectedWallsSnapshot.length === 0 &&
+          saveWallsFn
+        ) {
+          saveWallsFn(
+            wallsSnapshot.filter((wall) => wall.id !== selectedWallIdSnapshot)
+          );
           setSelectedWallId(null);
         }
-        if (selectedTextId != null && selectedTexts.length === 0) {
-          updateTexts(texts.filter((t) => t.id !== selectedTextId));
+        if (
+          selectedTextIdSnapshot != null &&
+          selectedTextsSnapshot.length === 0 &&
+          updateTextsFn
+        ) {
+          updateTextsFn(
+            textsSnapshot.filter((text) => text.id !== selectedTextIdSnapshot)
+          );
           setSelectedTextId(null);
         }
-        if (selectedId != null && selectedTokens.length === 0) {
-          handleTokensChange(tokens.filter((t) => t.id !== selectedId));
+        if (
+          selectedIdSnapshot != null &&
+          selectedTokensSnapshot.length === 0 &&
+          handleTokensChangeFn
+        ) {
+          handleTokensChangeFn(
+            tokensSnapshot.filter((token) => token.id !== selectedIdSnapshot)
+          );
           setSelectedId(null);
         }
-        if (selectedAmbientLightId != null && selectedAmbientLights.length === 0) {
-          saveAmbientLights(
-            ambientLights.filter((light) => light.id !== selectedAmbientLightId)
+        if (
+          selectedAmbientLightIdSnapshot != null &&
+          selectedAmbientLightsSnapshot.length === 0 &&
+          saveAmbientLightsFn
+        ) {
+          saveAmbientLightsFn(
+            ambientLightsSnapshot.filter(
+              (light) => light.id !== selectedAmbientLightIdSnapshot
+            )
           );
           setSelectedAmbientLightId(null);
         }
-        if (selectedTileId != null) {
-          updateTiles((prev) =>
-            prev.filter((tile) => String(tile.id) !== String(selectedTileId))
+        if (selectedTileIdSnapshot != null && updateTilesFn) {
+          updateTilesFn((prev) =>
+            prev.filter(
+              (tile) => String(tile.id) !== String(selectedTileIdSnapshot)
+            )
           );
           setSelectedTileId(null);
         }
         return;
       }
 
-      if (selectedTextId != null) {
-        const idx = texts.findIndex((t) => t.id === selectedTextId);
-        if (idx !== -1) {
-          let { x, y } = texts[idx];
-          switch (e.key.toLowerCase()) {
+      if (selectedTextIdSnapshot != null) {
+        const selectedText = textsSnapshot.find(
+          (text) => text.id === selectedTextIdSnapshot
+        );
+        if (selectedText) {
+          let { x, y } = selectedText;
+          switch (lowerKey) {
             case 'w':
               y -= 5;
               break;
@@ -5473,24 +5873,28 @@ const MapCanvas = ({
               x += 5;
               break;
             case 'delete':
-              updateTexts(texts.filter((t) => t.id !== selectedTextId));
+              updateTextsFn?.((prev) =>
+                prev.filter((text) => text.id !== selectedTextIdSnapshot)
+              );
               setSelectedTextId(null);
               return;
             default:
               break;
           }
-          updateTexts((ts) =>
-            ts.map((t) => (t.id === selectedTextId ? { ...t, x, y } : t))
+          updateTextsFn?.((prev) =>
+            prev.map((text) =>
+              text.id === selectedTextIdSnapshot ? { ...text, x, y } : text
+            )
           );
           return;
         }
       }
 
-      // Mover múltiples tokens seleccionados
-      if (selectedTokens.length > 0) {
-        let deltaX = 0, deltaY = 0;
+      if (selectedTokensSnapshot.length > 0) {
+        let deltaX = 0;
+        let deltaY = 0;
 
-        switch (e.key.toLowerCase()) {
+        switch (lowerKey) {
           case 'w':
             deltaY = -1;
             break;
@@ -5505,18 +5909,21 @@ const MapCanvas = ({
             break;
           case 'r': {
             const delta = e.shiftKey ? -90 : 90;
-            const rotated = tokens.map((t) => {
-              if (selectedTokens.includes(t.id)) {
-                // Validación de permisos para jugadores
-                if (isPlayerView && t.controlledBy !== playerName) {
-                  return t; // No permitir rotación si no controla el token
-                }
-                const updatedAngle = ((t.angle || 0) + delta + 360) % 360;
-                return { ...t, angle: updatedAngle };
+            const rotated = tokensSnapshot.map((token) => {
+              if (!selectedTokensSnapshot.includes(token.id)) {
+                return token;
               }
-              return t;
+              if (
+                isPlayerViewSnapshot &&
+                token.controlledBy !== playerNameSnapshot
+              ) {
+                return token;
+              }
+              const updatedAngle =
+                ((token.angle || 0) + delta + 360) % 360;
+              return { ...token, angle: updatedAngle };
             });
-            handleTokensChange(rotated);
+            handleTokensChangeFn?.(rotated);
             return;
           }
           default:
@@ -5524,123 +5931,102 @@ const MapCanvas = ({
         }
 
         if (deltaX !== 0 || deltaY !== 0) {
-          const updated = tokens.map((t) => {
-            if (selectedTokens.includes(t.id)) {
-              // Validación de permisos para jugadores
-              if (isPlayerView && t.controlledBy !== playerName) {
-                return t; // No permitir movimiento si no controla el token
-              }
-
-              const newX = Math.max(0, Math.min(mapWidth - 1, t.x + deltaX));
-              const newY = Math.max(0, Math.min(mapHeight - 1, t.y + deltaY));
-
-              // Verificar colisiones con muros
-              if (!isPositionBlocked(newX, newY)) {
-                return { ...t, x: newX, y: newY };
-              }
+          const updated = tokensSnapshot.map((token) => {
+            if (!selectedTokensSnapshot.includes(token.id)) {
+              return token;
             }
-            return t;
+            if (
+              isPlayerViewSnapshot &&
+              token.controlledBy !== playerNameSnapshot
+            ) {
+              return token;
+            }
+            const bounded = clampToBounds(
+              token.x + deltaX,
+              token.y + deltaY
+            );
+            if (
+              !isPositionBlockedSnapshot ||
+              !isPositionBlockedSnapshot(bounded.x, bounded.y)
+            ) {
+              return { ...token, x: bounded.x, y: bounded.y };
+            }
+            return token;
           });
-          handleTokensChange(updated);
+          handleTokensChangeFn?.(updated);
         }
         return;
       }
 
-      // Mover token individual seleccionado
-      if (selectedId == null) return;
-      const index = tokens.findIndex((t) => t.id === selectedId);
-      if (index === -1) return;
-
-      // Validación de permisos para jugadores
-      if (isPlayerView && tokens[index].controlledBy !== playerName) {
-        return; // No permitir movimiento si no controla el token
+      if (selectedIdSnapshot == null) {
+        return;
       }
 
-      let { x, y } = tokens[index];
-      let newX = x;
-      let newY = y;
+      const currentToken = tokensSnapshot.find(
+        (token) => token.id === selectedIdSnapshot
+      );
+      if (!currentToken) {
+        return;
+      }
 
-      switch (e.key.toLowerCase()) {
+      if (
+        isPlayerViewSnapshot &&
+        currentToken.controlledBy !== playerNameSnapshot
+      ) {
+        return;
+      }
+
+      let nextX = currentToken.x;
+      let nextY = currentToken.y;
+
+      switch (lowerKey) {
         case 'w':
-          newY = y - 1;
+          nextY -= 1;
           break;
         case 's':
-          newY = y + 1;
+          nextY += 1;
           break;
         case 'a':
-          newX = x - 1;
+          nextX -= 1;
           break;
         case 'd':
-          newX = x + 1;
+          nextX += 1;
           break;
         case 'r': {
-          // Validación de permisos para jugadores ya hecha arriba
           const delta = e.shiftKey ? -90 : 90;
-          const updatedAngle = ((tokens[index].angle || 0) + delta + 360) % 360;
-          const rotated = tokens.map((t) =>
-            t.id === selectedId ? { ...t, angle: updatedAngle } : t
+          const rotated = tokensSnapshot.map((token) =>
+            token.id === selectedIdSnapshot
+              ? {
+                  ...token,
+                  angle: ((token.angle || 0) + delta + 360) % 360,
+                }
+              : token
           );
-          handleTokensChange(rotated);
+          handleTokensChangeFn?.(rotated);
           return;
         }
         default:
           return;
       }
 
-      // Aplicar límites del mapa
-      newX = Math.max(0, Math.min(mapWidth - 1, newX));
-      newY = Math.max(0, Math.min(mapHeight - 1, newY));
-
-      // Verificar colisiones con muros (independiente de la capa)
-      if (isPositionBlocked(newX, newY)) {
-        // Si la posición está bloqueada, no mover el token
+      const bounded = clampToBounds(nextX, nextY);
+      if (
+        isPositionBlockedSnapshot &&
+        isPositionBlockedSnapshot(bounded.x, bounded.y)
+      ) {
         return;
       }
 
-      const updated = tokens.map((t) =>
-        t.id === selectedId ? { ...t, x: newX, y: newY } : t
+      const updated = tokensSnapshot.map((token) =>
+        token.id === selectedIdSnapshot
+          ? { ...token, x: bounded.x, y: bounded.y }
+          : token
       );
-      handleTokensChange(updated);
+      handleTokensChangeFn?.(updated);
     },
-    [
-      selectedId,
-      tokens,
-      handleTokensChange,
-      mapWidth,
-      mapHeight,
-      selectedLineId,
-      lines,
-      walls,
-      selectedTextId,
-      selectedWallId,
-      texts,
-      isPositionBlocked,
-      selectedTokens,
-      selectedLines,
-      selectedWalls,
-      selectedTexts,
-      clipboard,
-      groupPos,
-      baseScale,
-      zoom,
-      effectiveGridSize,
-      activeLayer,
-      saveLines,
-      saveWalls,
-      updateTexts,
-      undoLines,
-      redoLines,
-      getSmartPastePosition,
-      mapToGridCoordinates,
-      calculateElementsCenter,
-      clampToMapBounds,
-      containerSize,
-      mousePosition,
-      selectedTileId,
-      updateTiles,
-      tiles,
-    ]
+    []
   );
+
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
