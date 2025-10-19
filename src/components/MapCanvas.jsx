@@ -87,6 +87,7 @@ import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import useAttackRequests from '../hooks/useAttackRequests';
 import DamagePopup from './animations/DamagePopup';
+import { publishDamageEvent, resolveDamageEventPageIds } from '../utils/damageEvents';
 
 
 
@@ -478,7 +479,7 @@ const DOOR_PATHS = {
   ],
 };
 
-const DAMAGE_ANIMATION_MS = 1200;
+const DAMAGE_ANIMATION_MS = 5000;
 
 const normalizeWallRotation = (x1, y1, x2, y2) => {
   let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
@@ -7142,46 +7143,29 @@ const MapCanvas = ({
                           }
                         }
                       }
+                      let damageEventPageIds;
+                      const ensureDamageEventTargets = async () => {
+                        if (!damageEventPageIds) {
+                          damageEventPageIds = await resolveDamageEventPageIds(pageId);
+                        }
+                        return damageEventPageIds;
+                      };
                       for (const stat of ['postura', 'armadura', 'vida']) {
                         if (lost[stat] > 0) {
                           const anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
                           try {
-                            let effectivePageId = pageId;
-                            try {
-                              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                              if (visibilityDoc.exists()) {
-                                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                              }
-                            } catch (err) {
-                              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-                          }
-                          await addDoc(collection(db, 'damageEvents'), {
-                            ...anim,
-                            pageId: effectivePageId,
-                            timestamp: serverTimestamp(),
-                          });
-                        } catch {}
-                      }
+                            const targets = await ensureDamageEventTargets();
+                            await publishDamageEvent(anim, targets);
+                          } catch (err) {}
+                        }
                       }
                       const totalLost = lost.armadura + lost.postura + lost.vida;
                       if (totalLost === 0) {
                         const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
                         try {
-                          let effectivePageId = pageId;
-                          try {
-                            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                            if (visibilityDoc.exists()) {
-                              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                            }
-                          } catch (err) {
-                            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-                          }
-                          await addDoc(collection(db, 'damageEvents'), {
-                            ...anim,
-                            pageId: effectivePageId,
-                            timestamp: serverTimestamp(),
-                          });
-                        } catch {}
+                          const targets = await ensureDamageEventTargets();
+                          await publishDamageEvent(anim, targets);
+                        } catch (err) {}
                       }
                       let msgs = [];
                       try {

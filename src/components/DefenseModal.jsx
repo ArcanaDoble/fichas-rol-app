@@ -8,11 +8,12 @@ import {
   rollExpressionCritical,
 } from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
-import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
 import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
+import { publishDamageEvent, resolveDamageEventPageIds } from '../utils/damageEvents';
 
 const atributoColor = {
   destreza: '#34d399',
@@ -309,47 +310,27 @@ const DefenseModal = ({
       }
 
       let totalLost = 0;
+      let damageEventPageIds;
+      const ensureDamageEventTargets = async () => {
+        if (!damageEventPageIds) {
+          damageEventPageIds = await resolveDamageEventPageIds(pageId);
+        }
+        return damageEventPageIds;
+      };
       if (diff === 0) {
         const anim = { tokenId: target.id, type: 'perfect', ts: Date.now() };
-        // Solo guardar en Firebase para sincronización entre navegadores
-        // No disparar eventos locales para evitar duplicación
         try {
-          // Obtener el pageId visible para jugadores para asegurar sincronización
-          let effectivePageId = pageId;
-          try {
-            const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-            if (visibilityDoc.exists()) {
-              effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-            }
-          } catch (err) {
-            console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-          }
-          addDoc(collection(db, 'damageEvents'), {
-            ...anim,
-            pageId: effectivePageId,
-            timestamp: serverTimestamp(),
-          }).catch(() => {});
-        } catch {}
+          const targets = await ensureDamageEventTargets();
+          await publishDamageEvent(anim, targets);
+        } catch (err) {}
       } else {
         const id = diff < 0 ? target.id : attacker.id;
         if (diff > 0) {
           const anim = { tokenId: attacker.id, type: 'counter', ts: Date.now() };
           try {
-            let effectivePageId = pageId;
-            try {
-              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-              if (visibilityDoc.exists()) {
-                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-              }
-            } catch (err) {
-              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-            }
-            addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
-            }).catch(() => {});
-          } catch {}
+            const targets = await ensureDamageEventTargets();
+            await publishDamageEvent(anim, targets);
+          } catch (err) {}
         }
         for (const stat of ['postura', 'armadura', 'vida']) {
           if (lost[stat] > 0) {
@@ -359,46 +340,19 @@ const DefenseModal = ({
               stat,
               ts: Date.now(),
             };
-            // Solo guardar en Firebase para sincronización entre navegadores
-            // No disparar eventos locales para evitar duplicación
             try {
-              // Obtener el pageId visible para jugadores para asegurar sincronización
-              let effectivePageId = pageId;
-              try {
-                const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                if (visibilityDoc.exists()) {
-                  effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                }
-              } catch (err) {
-                console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-              }
-              addDoc(collection(db, 'damageEvents'), {
-                ...anim,
-                pageId: effectivePageId,
-                timestamp: serverTimestamp(),
-              }).catch(() => {});
-            } catch {}
+              const targets = await ensureDamageEventTargets();
+              await publishDamageEvent(anim, targets);
+            } catch (err) {}
           }
         }
         totalLost = lost.armadura + lost.postura + lost.vida;
         if (diff < 0 && totalLost === 0) {
           const anim = { tokenId: id, type: 'resist', ts: Date.now() };
           try {
-            let effectivePageId = pageId;
-            try {
-              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-              if (visibilityDoc.exists()) {
-                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-              }
-            } catch (err) {
-              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-            }
-            addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
-            }).catch(() => {});
-          } catch {}
+            const targets = await ensureDamageEventTargets();
+            await publishDamageEvent(anim, targets);
+          } catch (err) {}
         }
       }
 

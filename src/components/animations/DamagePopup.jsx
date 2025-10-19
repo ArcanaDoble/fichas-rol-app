@@ -2,7 +2,13 @@ import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
 
-const VARIANT_DURATION = 1.2; // seconds
+const VARIANT_DURATION = 5; // seconds
+
+const FRAME_TRANSITION = {
+  duration: VARIANT_DURATION,
+  ease: 'linear',
+  times: [0, 0.24, 0.25, 0.49, 0.5, 0.74, 0.75, 1],
+};
 
 const FRAME_TRANSITION = {
   duration: VARIANT_DURATION,
