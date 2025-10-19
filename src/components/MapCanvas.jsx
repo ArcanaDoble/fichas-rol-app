@@ -716,6 +716,8 @@ const Token = forwardRef(
     const textRef = useRef();
     const textGroupRef = useRef();
     const lastCachedPixelRatioRef = useRef(null);
+    const isDraggingRef = useRef(false);
+    const pendingTintRecacheRef = useRef(null);
     const HANDLE_OFFSET = 12;
     const iconSize = cellSize * 0.15;
     const buttonSize = cellSize * 0.3;
@@ -744,9 +746,28 @@ const Token = forwardRef(
       .map((id) => ESTADOS.find((e) => e.id === id))
       .filter(Boolean);
 
-    useEffect(() => {
+    const clearTintCache = useCallback((removeFilters = false) => {
+      const node = shapeRef.current;
+      if (!node) return;
+      if (removeFilters) {
+        node.filters([]);
+      }
+      if (node.hasCachedCanvas?.()) {
+        node.clearCache();
+      }
+      lastCachedPixelRatioRef.current = null;
+      node.getLayer()?.batchDraw();
+    }, []);
+
+    const applyTintCache = useCallback(() => {
       const node = shapeRef.current;
       if (!node || !img) return;
+
+      if (isDraggingRef.current) {
+        clearTintCache(true);
+        return;
+      }
+
       const { r, g, b } = hexToRgb(tintColor);
       const pixelRatio = Math.min(
         window.devicePixelRatio * groupScale,
@@ -754,19 +775,12 @@ const Token = forwardRef(
       );
 
       if (tintOpacity <= 0) {
-        node.filters([]);
-        if (node.hasCachedCanvas?.()) {
-          node.clearCache();
-        }
-        lastCachedPixelRatioRef.current = null;
-        node.getLayer()?.batchDraw();
+        clearTintCache(true);
         return;
       }
 
       if (lastCachedPixelRatioRef.current !== pixelRatio) {
-        if (node.hasCachedCanvas?.()) {
-          node.clearCache();
-        }
+        clearTintCache();
         node.cache({
           pixelRatio,
         });
@@ -779,7 +793,27 @@ const Token = forwardRef(
       node.blue(b);
       node.alpha(tintOpacity);
       node.getLayer()?.batchDraw();
-    }, [tintColor, tintOpacity, img, groupScale]);
+    }, [clearTintCache, tintColor, tintOpacity, img, groupScale]);
+
+    const scheduleTintCache = useCallback(() => {
+      if (pendingTintRecacheRef.current) {
+        cancelAnimationFrame(pendingTintRecacheRef.current);
+      }
+      pendingTintRecacheRef.current = requestAnimationFrame(() => {
+        pendingTintRecacheRef.current = null;
+        applyTintCache();
+      });
+    }, [applyTintCache]);
+
+    useEffect(() => {
+      scheduleTintCache();
+      return () => {
+        if (pendingTintRecacheRef.current) {
+          cancelAnimationFrame(pendingTintRecacheRef.current);
+          pendingTintRecacheRef.current = null;
+        }
+      };
+    }, [scheduleTintCache]);
 
     useEffect(() => {
       if (!tokenSheetId) return;
@@ -1018,17 +1052,31 @@ const Token = forwardRef(
       rotation: angle,
     };
 
+    const handleDragStart = () => {
+      isDraggingRef.current = true;
+      if (pendingTintRecacheRef.current) {
+        cancelAnimationFrame(pendingTintRecacheRef.current);
+        pendingTintRecacheRef.current = null;
+      }
+      clearTintCache(true);
+      onDragStart?.(id);
+    };
+
+    const handleDragEnd = (e) => {
+      isDraggingRef.current = false;
+      onDragEnd(id, e);
+      updateHandle();
+      scheduleTintCache();
+    };
+
     const common = {
       ...geometry,
       draggable,
       listening,
       opacity,
-      onDragStart: () => onDragStart?.(id),
+      onDragStart: handleDragStart,
       onDragMove: updateHandle,
-      onDragEnd: (e) => {
-        onDragEnd(id, e);
-        updateHandle();
-      },
+      onDragEnd: handleDragEnd,
       onClick: () => onClick?.(id),
     };
 
