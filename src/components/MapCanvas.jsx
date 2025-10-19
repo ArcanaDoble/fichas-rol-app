@@ -650,6 +650,9 @@ TileImage.displayName = 'TileImage';
 TileImage.propTypes = {
   url: PropTypes.string.isRequired,
 };
+
+const MAX_PIXEL_RATIO = 3;
+
 const Token = forwardRef(
   (
     {
@@ -712,6 +715,7 @@ const Token = forwardRef(
     const estadosRef = useRef();
     const textRef = useRef();
     const textGroupRef = useRef();
+    const lastCachedPixelRatioRef = useRef(null);
     const HANDLE_OFFSET = 12;
     const iconSize = cellSize * 0.15;
     const buttonSize = cellSize * 0.3;
@@ -744,21 +748,36 @@ const Token = forwardRef(
       const node = shapeRef.current;
       if (!node || !img) return;
       const { r, g, b } = hexToRgb(tintColor);
+      const pixelRatio = Math.min(
+        window.devicePixelRatio * groupScale,
+        MAX_PIXEL_RATIO,
+      );
 
-      if (tintOpacity > 0) {
-        const pixelRatio = window.devicePixelRatio * groupScale;
+      if (tintOpacity <= 0) {
+        node.filters([]);
+        if (node.hasCachedCanvas?.()) {
+          node.clearCache();
+        }
+        lastCachedPixelRatioRef.current = null;
+        node.getLayer()?.batchDraw();
+        return;
+      }
+
+      if (lastCachedPixelRatioRef.current !== pixelRatio) {
+        if (node.hasCachedCanvas?.()) {
+          node.clearCache();
+        }
         node.cache({
           pixelRatio,
         });
-        node.filters([Konva.Filters.RGBA]);
-        node.red(r);
-        node.green(g);
-        node.blue(b);
-        node.alpha(tintOpacity);
-      } else {
-        node.filters([]);
-        node.clearCache();
+        lastCachedPixelRatioRef.current = pixelRatio;
       }
+
+      node.filters([Konva.Filters.RGBA]);
+      node.red(r);
+      node.green(g);
+      node.blue(b);
+      node.alpha(tintOpacity);
       node.getLayer()?.batchDraw();
     }, [tintColor, tintOpacity, img, groupScale]);
 
