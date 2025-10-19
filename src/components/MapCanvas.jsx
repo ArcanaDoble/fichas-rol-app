@@ -1598,71 +1598,19 @@ const MapCanvas = ({
 
     const netDelta = additions - removals;
     if (netDelta !== 0) {
-      const record = manualInventoryFeedbackRef.current || {};
-      const recentManual =
-        record &&
-        record.timestamp &&
-        record.delta === netDelta &&
-        Date.now() - record.timestamp < 800;
+      const record = manualInventoryFeedbackRef.current;
+      const timestamp = record?.timestamp;
+      const now = Date.now();
+      const matchesManualDelta =
+        timestamp && record?.delta === netDelta && now - timestamp < 800;
+      const manualRecentPositive =
+        netDelta < 0 && timestamp && record?.delta > 0 && now - timestamp < 1000;
 
-      if (!recentManual) {
+      if (!matchesManualDelta && !manualRecentPositive) {
         emitInventoryFeedback(
           netDelta,
           netDelta > 0 ? 'player-inventory-gain' : 'player-inventory-loss'
         );
-      }
-    }
-
-    playerInventorySnapshotRef.current = { playerName: name, entryIds: currentIds };
-  }, [effectivePlayerName, emitInventoryFeedback, isPlayerPerspective, shopInventories]);
-
-  useEffect(() => {
-    if (!isPlayerPerspective) {
-      playerInventorySnapshotRef.current = { playerName: '', entryIds: new Set() };
-      return;
-    }
-
-    const name = typeof effectivePlayerName === 'string' ? effectivePlayerName.trim() : '';
-    if (!name) {
-      playerInventorySnapshotRef.current = { playerName: '', entryIds: new Set() };
-      return;
-    }
-
-    const entries = Array.isArray(shopInventories?.[name]) ? shopInventories[name] : [];
-    const currentIds = new Set(entries.map((entry) => entry.entryId).filter(Boolean));
-    const previousSnapshot = playerInventorySnapshotRef.current;
-
-    if (previousSnapshot.playerName !== name) {
-      playerInventorySnapshotRef.current = { playerName: name, entryIds: currentIds };
-      return;
-    }
-
-    let additions = 0;
-    let removals = 0;
-
-    currentIds.forEach((id) => {
-      if (!previousSnapshot.entryIds.has(id)) {
-        additions += 1;
-      }
-    });
-
-    previousSnapshot.entryIds.forEach((id) => {
-      if (!currentIds.has(id)) {
-        removals += 1;
-      }
-    });
-
-    const netDelta = additions - removals;
-    if (netDelta < 0) {
-      const manualRecord = manualInventoryFeedbackRef.current || {};
-      const manualGainRecent =
-        manualRecord &&
-        manualRecord.timestamp &&
-        manualRecord.delta > 0 &&
-        Date.now() - manualRecord.timestamp < 1000;
-
-      if (!manualGainRecent) {
-        emitInventoryFeedback(netDelta, 'player-inventory-loss');
       }
     }
 
