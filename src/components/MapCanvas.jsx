@@ -32,7 +32,7 @@ import TokenBarMenu from './TokenBarMenu';
 import TokenSheetModal from './TokenSheetModal';
 import { ESTADOS } from './EstadoSelector';
 import { nanoid } from 'nanoid';
-import { motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import {
   createToken,
   cloneTokenSheet,
@@ -86,6 +86,7 @@ import {
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import useAttackRequests from '../hooks/useAttackRequests';
+import DamagePopup from './animations/DamagePopup';
 
 
 
@@ -477,7 +478,7 @@ const DOOR_PATHS = {
   ],
 };
 
-const DAMAGE_ANIMATION_MS = 8000;
+const DAMAGE_ANIMATION_MS = 1200;
 
 const normalizeWallRotation = (x1, y1, x2, y2) => {
   let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
@@ -1503,6 +1504,9 @@ const MapCanvas = ({
   const [selectedTileId, setSelectedTileId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
+  const removeDamagePopup = useCallback((id) => {
+    setDamagePopups((prev) => prev.filter((popup) => popup.id !== id));
+  }, []);
   const [damageEffects, setDamageEffects] = useState(new Map());
   const [dragShadow, setDragShadow] = useState(null);
   const [pendingTokenPositions, setPendingTokenPositions] = useState({});
@@ -3553,10 +3557,6 @@ const MapCanvas = ({
         const id = nanoid();
         // No guardar coordenadas fijas, solo el tokenId para calcular posición en tiempo real
         setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type }]);
-
-        setTimeout(() => {
-          setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-        }, DAMAGE_ANIMATION_MS);
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
       }
@@ -6863,7 +6863,7 @@ const MapCanvas = ({
             acc[p.tokenId].push(p);
             return acc;
           }, {});
-          return damagePopups.map((p) => {
+          const elements = damagePopups.map((p) => {
             // Calcular posición en tiempo real basándose en la posición actual del token
             const token = tokens.find(t => t.id === p.tokenId);
             if (!token || !stageRef.current || !containerRef.current) {
@@ -6898,53 +6898,29 @@ const MapCanvas = ({
               const x = screenX + stageRect.left - containerRect.left;
               const y = screenY + stageRect.top - containerRect.top;
 
-              const colors = {
-                postura: '#34d399',
-                vida: '#f87171',
-                armadura: '#9ca3af',
-                ingenio: '#60a5fa',
-                counter: '#facc15',
-                perfect: '#60a5fa',
-                resist: '#60a5fa',
-              };
-              const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
-              const text =
-                p.type === 'resist'
-                  ? 'Resiste el daño'
-                  : p.type === 'counter'
-                  ? '¡Contraataque!'
-                  : p.type === 'perfect'
-                  ? '¡Bloqueo perfecto!'
-                  : `-${p.value}`;
               const group = groups[p.tokenId] || [];
               const index = group.findIndex((g) => g.id === p.id);
               const offset = (index - (group.length - 1) / 2) * 30;
 
               return (
-                <motion.div
+                <DamagePopup
                   key={p.id}
-                  initial={{ opacity: 1, y: 0 }}
-                  animate={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 10 }}
-                  style={{
-                    position: 'absolute',
-                    left: x + offset,
-                    top: y,
-                    transform: 'translate(-50%, -100%)',
-                    color,
-                    fontSize: 30,
-                    fontWeight: 'bold',
-                    textShadow: '0 0 2px #000',
-                  }}
-                >
-                  {text}
-                </motion.div>
+                  x={x}
+                  y={y}
+                  offset={offset}
+                  stat={p.stat}
+                  type={p.type}
+                  value={p.value}
+                  onExit={() => removeDamagePopup(p.id)}
+                />
               );
             } catch (error) {
               console.error('Error renderizando animación de daño:', error);
               return null;
             }
-          }).filter(Boolean); // Filtrar elementos null
+          }).filter(Boolean);
+
+          return <AnimatePresence>{elements}</AnimatePresence>;
         })()}
       </div>
       <Toolbar
