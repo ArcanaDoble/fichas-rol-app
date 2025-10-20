@@ -8,6 +8,7 @@ import {
   Sprite,
   Texture,
 } from 'pixi.js';
+import { Viewport } from 'pixi-viewport';
 
 const DEFAULTS = {
   cellSize: 70,
@@ -19,15 +20,6 @@ const DEFAULTS = {
 
 const SELECTION_COLOR = 0xffcc00;
 const MIN_WORLD_SIZE = 200;
-
-let viewportModulePromise;
-
-async function loadViewportModule() {
-  if (!viewportModulePromise) {
-    viewportModulePromise = import('pixi-viewport').then((mod) => mod.default || mod);
-  }
-  return viewportModulePromise;
-}
 
 function normalizeColor(value, fallback = DEFAULTS.gridColor) {
   try {
@@ -74,50 +66,60 @@ export default class PixiBattleMap {
     this.destroyed = false;
     this.cleanupDone = false;
     this.destroyPromise = null;
+    this.canvas = null;
+    this.viewport = null;
 
     this.app = new Application();
-    this.readyPromise = this.app
-      .init({
-        antialias: true,
-        backgroundColor: DEFAULTS.backgroundColor,
-      })
-      .then(() => this.setup())
-      .catch((error) => {
-        console.error('[PixiBattleMap] Error inicializando Pixi:', error);
-        throw error;
-      });
+    this.readyPromise = this.init().catch((error) => {
+      console.error('[PixiBattleMap] Error inicializando Pixi:', error);
+      throw error;
+    });
   }
 
   get ready() {
     return this.readyPromise;
   }
 
-  async setup() {
+  async init() {
     if (this.destroyed) {
       return;
     }
 
-    this.container.appendChild(this.app.canvas);
-    this.app.canvas.style.display = 'block';
-    this.app.canvas.style.width = '100%';
-    this.app.canvas.style.height = '100%';
+    await this.app.init({
+      antialias: true,
+      backgroundAlpha: 0,
+      autoDensity: true,
+      resolution: window.devicePixelRatio || 1,
+      resizeTo: this.container,
+      backgroundColor: DEFAULTS.backgroundColor,
+    });
+
+    if (this.destroyed) {
+      try {
+        await this.app.destroy();
+      } catch (error) {
+        console.warn('[PixiBattleMap] Error destruyendo aplicación tras cancelación.', error);
+      }
+      return;
+    }
+
+    this.canvas = this.app.canvas;
+    this.container.appendChild(this.canvas);
+    this.canvas.style.display = 'block';
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
 
     const screenWidth = this.container.clientWidth || MIN_WORLD_SIZE;
     const screenHeight = this.container.clientHeight || MIN_WORLD_SIZE;
 
-    const viewportModule = await loadViewportModule();
-    const ViewportClass = viewportModule?.Viewport;
-    if (!ViewportClass) {
-      throw new Error('pixi-viewport no está disponible');
-    }
-
-    this.viewport = new ViewportClass({
+    this.viewport = new Viewport({
       screenWidth,
       screenHeight,
       worldWidth: this.state.worldWidth,
       worldHeight: this.state.worldHeight,
       ticker: this.app.ticker,
       events: this.app.renderer.events,
+      disableOnContextMenu: true,
     });
 
     this.viewport.drag().pinch().wheel().decelerate();
@@ -323,14 +325,20 @@ export default class PixiBattleMap {
   }
 
   resize() {
-    if (this.destroyed || !this.viewport) {
+    if (this.destroyed || !this.viewport || !this.app) {
+      return;
+    }
+    const renderer = this.app.renderer;
+    if (!renderer) {
       return;
     }
     const width = this.container.clientWidth || MIN_WORLD_SIZE;
     const height = this.container.clientHeight || MIN_WORLD_SIZE;
 
     const currentCenter = this.viewport.center;
-    this.app.renderer.resize({ width, height });
+    if (typeof renderer.resize === 'function') {
+      renderer.resize({ width, height });
+    }
     this.viewport.resize(width, height, this.state.worldWidth, this.state.worldHeight);
     this.viewport.clamp({
       direction: 'all',
@@ -534,10 +542,11 @@ export default class PixiBattleMap {
         this.tokensLayer.destroy({ children: true });
         this.tokensLayer = null;
       }
-      const canvas = this.app?.canvas;
+      const canvas = this.canvas;
       if (canvas?.parentNode === this.container) {
         this.container.removeChild(canvas);
       }
+      this.canvas = null;
       if (this.app?.destroy) {
         try {
           this.app.destroy();
