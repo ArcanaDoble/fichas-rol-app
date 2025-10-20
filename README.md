@@ -30,7 +30,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Mapa de Batalla integrado** - VTT sencillo con grid y tokens arrastrables
-- **Variante Pixi del Mapa de Batalla** - Implementada con Pixi.js y `pixi-viewport` mediante un adaptador dedicado, mantiene las herramientas del canvas clásico y añade renderizado acelerado accesible desde el menú del máster
+- **Variante Pixi del Mapa de Batalla** - Implementada con Pixi.js 8 y `pixi-viewport` 6 mediante un adaptador dedicado, mantiene las herramientas del canvas clásico y añade renderizado acelerado accesible desde el menú del máster
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con todos los valores (base, total y modificados), colores y visibilidad de estadísticas manteniendo IDs independientes en los mapas del máster y del jugador
 - **Tokens almacenados individualmente** - Cada ficha se guarda como documento en `pages/{pageId}/tokens/{tokenId}`
@@ -976,9 +976,9 @@ cd fichas-rol-app
 # 2. Instala las dependencias
 npm install
 
-# Esta instalación ejecuta automáticamente `patch-package` para aplicar un
-# parche de compatibilidad a `@pixi/react`, necesario para que Webpack 5
-# resuelva correctamente `react-reconciler/constants.js`.
+# La instalación respeta la configuración de `.npmrc`, que habilita el modo
+# `legacy-peer-deps` para combinar `pixi.js@^7` con `pixi-viewport@^6` sin
+# conflictos de dependencias.
 
 # 3. Configura Firebase (opcional)
 # Edita src/firebase.js con tus credenciales

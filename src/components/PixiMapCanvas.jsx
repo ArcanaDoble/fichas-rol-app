@@ -41,17 +41,27 @@ const PixiMapCanvas = forwardRef(
 
       let cancelled = false;
 
-      map.ready().then(() => {
+      const initializeGrid = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando a PixiBattleMap.ready:', error);
+          return;
+        }
+
         if (cancelled || unmountedRef.current || mapRef.current !== map) {
           return;
         }
-        map.setGrid({
+
+        await map.setGrid({
           cellSize: gridSize,
           color: gridColor,
           opacity: gridOpacity,
           visible: showGrid,
         });
-      });
+      };
+
+      initializeGrid();
 
       return () => {
         cancelled = true;
@@ -76,7 +86,12 @@ const PixiMapCanvas = forwardRef(
       let cancelled = false;
 
       const loadBackground = async () => {
-        await map.ready();
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready antes de loadMap:', error);
+          return;
+        }
         if (cancelled || unmountedRef.current || mapRef.current !== map) {
           return;
         }
@@ -130,17 +145,25 @@ const PixiMapCanvas = forwardRef(
       }
       let cancelled = false;
 
-      map.ready().then(() => {
+      const applyGrid = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al actualizar cuadrícula:', error);
+          return;
+        }
         if (cancelled || unmountedRef.current || mapRef.current !== map) {
           return;
         }
-        map.setGrid({
+        await map.setGrid({
           cellSize: gridSize,
           color: gridColor,
           opacity: gridOpacity,
           visible: showGrid,
         });
-      });
+      };
+
+      applyGrid();
 
       return () => {
         cancelled = true;
@@ -156,7 +179,12 @@ const PixiMapCanvas = forwardRef(
       let cancelled = false;
 
       const syncTokens = async () => {
-        await map.ready();
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al sincronizar tokens:', error);
+          return;
+        }
         if (cancelled || unmountedRef.current || mapRef.current !== map) {
           return;
         }
@@ -260,7 +288,7 @@ const PixiMapCanvas = forwardRef(
           if (!map) {
             return;
           }
-          await map.ready();
+          await map.ready;
           await map.loadMap(url, width, height);
         },
         async setGrid(options) {
@@ -268,7 +296,7 @@ const PixiMapCanvas = forwardRef(
           if (!map) {
             return;
           }
-          await map.ready();
+          await map.ready;
           await map.setGrid(options);
         },
         async addToken(options) {
@@ -276,15 +304,16 @@ const PixiMapCanvas = forwardRef(
           if (!map) {
             return null;
           }
-          await map.ready();
+          await map.ready;
           return map.addToken(options);
         },
-        centerOn(x, y, scale) {
+        async centerOn(x, y, scale) {
           const map = mapRef.current;
           if (!map) {
-            return Promise.resolve();
+            return;
           }
-          return map.centerOn(x, y, scale);
+          await map.ready;
+          await map.centerOn(x, y, scale);
         },
         destroy() {
           const map = mapRef.current;
