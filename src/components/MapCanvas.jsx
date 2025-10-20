@@ -5952,6 +5952,19 @@ const MapCanvas = ({
         }
       }
 
+      const commitKeyboardMove = (movedPositions, updatedTokens) => {
+        if (!Object.keys(movedPositions).length) {
+          return;
+        }
+
+        setPendingTokenPositions((prev) => ({
+          ...prev,
+          ...movedPositions,
+        }));
+
+        handleTokensChangeFn?.(updatedTokens, { flushNow: true });
+      };
+
       if (selectedTokensSnapshot.length > 0) {
         let deltaX = 0;
         let deltaY = 0;
@@ -6026,11 +6039,7 @@ const MapCanvas = ({
             return token;
           });
           if (hasChanges) {
-            setPendingTokenPositions((prev) => ({
-              ...prev,
-              ...movedTokenPositions,
-            }));
-            handleTokensChangeFn?.(updated);
+            commitKeyboardMove(movedTokenPositions, updated);
           }
         }
         return;
@@ -6106,13 +6115,7 @@ const MapCanvas = ({
         movedTokenPositions[token.id] = { x: bounded.x, y: bounded.y };
         return { ...token, x: bounded.x, y: bounded.y };
       });
-      if (Object.keys(movedTokenPositions).length > 0) {
-        setPendingTokenPositions((prev) => ({
-          ...prev,
-          ...movedTokenPositions,
-        }));
-        handleTokensChangeFn?.(updated);
-      }
+      commitKeyboardMove(movedTokenPositions, updated);
     },
     []
   );
