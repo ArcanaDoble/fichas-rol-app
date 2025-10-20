@@ -1,0 +1,20 @@
+diff --git a/node_modules/@pixi/react/lib/helpers/resolveUpdatePriority.mjs b/node_modules/@pixi/react/lib/helpers/resolveUpdatePriority.mjs
+index d728912..6ab5956 100644
+--- a/node_modules/@pixi/react/lib/helpers/resolveUpdatePriority.mjs
++++ b/node_modules/@pixi/react/lib/helpers/resolveUpdatePriority.mjs
+@@ -1,4 +1,4 @@
+-import { DefaultEventPriority, ContinuousEventPriority, DiscreteEventPriority } from 'react-reconciler/constants';
++import { DefaultEventPriority, ContinuousEventPriority, DiscreteEventPriority } from 'react-reconciler/constants.js';
+ import { store } from '../store.mjs';
+ import { log } from './log.mjs';
+ 
+diff --git a/node_modules/@pixi/react/lib/store.mjs b/node_modules/@pixi/react/lib/store.mjs
+index c086900..f09c663 100644
+--- a/node_modules/@pixi/react/lib/store.mjs
++++ b/node_modules/@pixi/react/lib/store.mjs
+@@ -1,4 +1,4 @@
+-import { DefaultEventPriority } from 'react-reconciler/constants';
++import { DefaultEventPriority } from 'react-reconciler/constants.js';
+ 
+ "use strict";
+ const store = {
