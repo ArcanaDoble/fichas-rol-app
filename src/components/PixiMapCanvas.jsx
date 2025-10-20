@@ -223,6 +223,20 @@ const PixiMapCanvas = forwardRef(
             x: Number.isFinite(parsedX) ? parsedX : 0,
             y: Number.isFinite(parsedY) ? parsedY : 0,
             size: pixelSize,
+            layer: token.layer || token.capa || token.layerId,
+            rotation: Number(token.angle ?? token.rotation ?? 0),
+            opacity: token.opacity,
+            zIndex: token.zIndex,
+            tintColor: token.tintColor ?? token.tint,
+            vision: token.vision,
+            metadata: {
+              name: token.name,
+              customName: token.customName,
+              enemyId: token.enemyId,
+              tokenSheetId: token.tokenSheetId,
+              controlledBy: token.controlledBy,
+              barsVisibility: token.barsVisibility,
+            },
           });
 
           const existingListener = listenersRef.current.get(id);
@@ -234,7 +248,7 @@ const PixiMapCanvas = forwardRef(
             continue;
           }
 
-          const handler = ({ x, y }) => {
+          const handler = ({ x, y, data }) => {
             if (!onTokensChange) {
               return;
             }
@@ -251,7 +265,8 @@ const PixiMapCanvas = forwardRef(
                   return entry;
                 }
                 changed = true;
-                return { ...entry, x, y };
+                const payload = data && typeof data === 'object' ? data : null;
+                return payload ? { ...entry, ...payload, x, y } : { ...entry, x, y };
               });
               return changed ? next : prev;
             });
@@ -280,6 +295,30 @@ const PixiMapCanvas = forwardRef(
       };
     }, [tokens, gridSize, onTokensChange]);
 
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+      const unsubscribe = map.on('token:remove', ({ id }) => {
+        if (!id) {
+          return;
+        }
+        const key = String(id);
+        const listener = listenersRef.current.get(key);
+        if (!listener) {
+          return;
+        }
+        listener.sprite.off('battlemap:tokenDrop', listener.handler);
+        listenersRef.current.delete(key);
+      });
+      return () => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
+    }, []);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -307,6 +346,14 @@ const PixiMapCanvas = forwardRef(
           await map.ready;
           return map.addToken(options);
         },
+        async updateToken(id, patch) {
+          const map = mapRef.current;
+          if (!map) {
+            return null;
+          }
+          await map.ready;
+          return map.updateToken(id, patch);
+        },
         async centerOn(x, y, scale) {
           const map = mapRef.current;
           if (!map) {
@@ -314,6 +361,111 @@ const PixiMapCanvas = forwardRef(
           }
           await map.ready;
           await map.centerOn(x, y, scale);
+        },
+        async deleteSelection() {
+          const map = mapRef.current;
+          if (!map) {
+            return [];
+          }
+          return map.deleteSelection();
+        },
+        copySelection() {
+          const map = mapRef.current;
+          if (!map) {
+            return { tokens: [] };
+          }
+          return map.copySelection();
+        },
+        async pasteAt(x, y) {
+          const map = mapRef.current;
+          if (!map) {
+            return [];
+          }
+          return map.pasteAt(x, y);
+        },
+        setTool(toolId) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.setTool(toolId);
+        },
+        createLayer(options) {
+          const map = mapRef.current;
+          if (!map) {
+            return null;
+          }
+          return map.createLayer(options);
+        },
+        setLayerVisibility(layerId, visible) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.setLayerVisibility(layerId, visible);
+        },
+        lockLayer(layerId, locked) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.lockLayer(layerId, locked);
+        },
+        async addLight(options) {
+          const map = mapRef.current;
+          if (!map) {
+            return null;
+          }
+          return map.addLight(options);
+        },
+        async removeLight(id) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          await map.removeLight(id);
+        },
+        async setTokenVision(id, vision) {
+          const map = mapRef.current;
+          if (!map) {
+            return null;
+          }
+          return map.setTokenVision(id, vision);
+        },
+        toggleFog(enabled, options) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.toggleFog(enabled, options);
+        },
+        getSelection() {
+          const map = mapRef.current;
+          if (!map) {
+            return [];
+          }
+          return map.getSelection();
+        },
+        setSelection(ids) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.setSelection(ids);
+        },
+        on(eventName, handler) {
+          const map = mapRef.current;
+          if (!map) {
+            return () => {};
+          }
+          return map.on(eventName, handler);
+        },
+        off(eventName, handler) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          map.off(eventName, handler);
         },
         destroy() {
           const map = mapRef.current;
