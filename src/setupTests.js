@@ -32,30 +32,43 @@ jest.mock('@pixi/react', () => {
 
   return {
     __esModule: true,
-    Stage: make('pixi-stage'),
-    Container: make('pixi-container'),
-    Graphics: make('pixi-graphics'),
-    Sprite: make('pixi-sprite'),
-    Text: make('pixi-text'),
-    useApp: () => ({
+    Application: make('canvas'),
+    extend: jest.fn(),
+    useApplication: () => ({
       renderer: {
         background: { color: 0x000000 },
       },
     }),
+    useTick: jest.fn(),
   };
 });
 
-jest.mock('pixi.js', () => ({
-  __esModule: true,
-  Texture: {
+jest.mock('pixi.js', () => {
+  const createMockClass = (name) => {
+    const Mock = function MockPixiClass() {
+      this.__mockName = name;
+    };
+    return Mock;
+  };
+
+  const Texture = {
     WHITE: {},
     from: () => ({}),
-  },
-  utils: {
-    string2hex: () => 0,
-  },
-  TextStyle: function () {},
-}));
+  };
+
+  return {
+    __esModule: true,
+    Container: createMockClass('Container'),
+    Graphics: createMockClass('Graphics'),
+    Sprite: createMockClass('Sprite'),
+    Text: createMockClass('Text'),
+    Texture,
+    TextStyle: function () {},
+    utils: {
+      string2hex: () => 0,
+    },
+  };
+});
 
 jest.mock('@tiptap/react', () => {
   const React = require('react');

@@ -9,8 +9,9 @@ import React, {
   useState,
 } from 'react';
 import PropTypes from 'prop-types';
-import { Stage, Container, Graphics, Sprite, Text as PixiText, useApp } from '@pixi/react';
-import * as PIXI from 'pixi.js';
+import { Application, extend, useApplication } from '@pixi/react';
+import { Container, Graphics, Sprite, Text, Texture, TextStyle, utils as PixiUtils } from 'pixi.js';
+extend({ Container, Graphics, Sprite, Text });
 import Toolbar from './Toolbar';
 import TokenSettings from './TokenSettings';
 import TokenEstadoMenu from './TokenEstadoMenu';
@@ -31,7 +32,7 @@ const DEFAULT_STAGE_BACKGROUND = '#1f2937';
 
 const createTexture = (url) => {
   if (!url) return null;
-  return PIXI.Texture.from(url, {
+  return Texture.from(url, {
     resourceOptions: {
       crossOrigin: 'anonymous',
     },
@@ -74,12 +75,12 @@ const StageViewport = ({
   onPointerUp,
   onPointerLeave,
 }) => {
-  const app = useApp();
+  const app = useApplication();
 
   useEffect(() => {
     if (!app?.renderer) return;
     const current = app.renderer.background.color;
-    const normalized = PIXI.utils.string2hex(backgroundColor || DEFAULT_STAGE_BACKGROUND);
+    const normalized = PixiUtils.string2hex(backgroundColor || DEFAULT_STAGE_BACKGROUND);
     if (current !== normalized) {
       app.renderer.background.color = normalized;
     }
@@ -133,7 +134,7 @@ const GridLayer = ({
       if (!visible) {
         return;
       }
-      g.lineStyle(1, PIXI.utils.string2hex(color || '#ffffff'), opacity ?? 0.25);
+      g.lineStyle(1, PixiUtils.string2hex(color || '#ffffff'), opacity ?? 0.25);
       const startX = -((offsetX % cellSize) + cellSize);
       const startY = -((offsetY % cellSize) + cellSize);
       for (let x = startX; x < width + cellSize; x += cellSize) {
@@ -163,7 +164,7 @@ GridLayer.propTypes = {
 };
 
 const TileSprite = ({ tile }) => {
-  const texture = useMemo(() => (tile.url ? createTexture(tile.url) : PIXI.Texture.WHITE), [
+  const texture = useMemo(() => (tile.url ? createTexture(tile.url) : Texture.WHITE), [
     tile.url,
   ]);
   return (
@@ -200,7 +201,7 @@ TileSprite.propTypes = {
 const TokenSprite = ({ token, gridSize, onPointerDown, selected, alpha, showName }) => {
   const width = (token.w || 1) * gridSize;
   const height = (token.h || 1) * gridSize;
-  const texture = useMemo(() => (token.url ? createTexture(token.url) : PIXI.Texture.WHITE), [
+  const texture = useMemo(() => (token.url ? createTexture(token.url) : Texture.WHITE), [
     token.url,
   ]);
   return (
@@ -217,7 +218,7 @@ const TokenSprite = ({ token, gridSize, onPointerDown, selected, alpha, showName
         width={width}
         height={height}
         anchor={0.5}
-        tint={token.tintColor ? PIXI.utils.string2hex(token.tintColor) : 0xffffff}
+        tint={token.tintColor ? PixiUtils.string2hex(token.tintColor) : 0xffffff}
         alpha={alpha}
       />
       {selected && (
@@ -230,11 +231,11 @@ const TokenSprite = ({ token, gridSize, onPointerDown, selected, alpha, showName
         />
       )}
       {showName && (
-        <PixiText
+        <Text
           text={token.customName || token.name || 'Token'}
           anchor={{ x: 0.5, y: 0 }}
           y={height / 2 + 6}
-          style={new PIXI.TextStyle({
+          style={new TextStyle({
             fill: '#fff',
             fontSize: Math.round(gridSize * 0.4),
             stroke: '#000',
@@ -571,16 +572,14 @@ const PixiMapCanvas = forwardRef((props, ref) => {
           <LoadingSpinner />
         </div>
       )}
-      <Stage
+      <Application
         ref={stageRef}
         width={stageSize.width || 1}
         height={stageSize.height || 1}
-        options={{
-          resolution: window.devicePixelRatio,
-          antialias: true,
-          autoDensity: true,
-          background: DEFAULT_STAGE_BACKGROUND,
-        }}
+        resolution={window.devicePixelRatio}
+        antialias
+        autoDensity
+        background={DEFAULT_STAGE_BACKGROUND}
       >
         <StageViewport
           width={stageSize.width}
@@ -624,13 +623,13 @@ const PixiMapCanvas = forwardRef((props, ref) => {
             <Container sortableChildren>{renderTokens}</Container>
             <Container sortableChildren>
               {texts.map((text) => (
-                <PixiText
+                <Text
                   key={text.id}
                   text={text.text}
                   x={text.x}
                   y={text.y}
                   anchor={{ x: 0.5, y: 0.5 }}
-                  style={new PIXI.TextStyle({
+                  style={new TextStyle({
                     fill: text.fill || '#ffffff',
                     fontFamily: text.fontFamily || 'Roboto',
                     fontSize: (text.fontSize || 18) * zoom,
@@ -647,7 +646,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
                   key={wall.id}
                   draw={(g) => {
                     g.clear();
-                    g.lineStyle(wall.width || 4, PIXI.utils.string2hex(wall.color || '#e5e7eb'), 1);
+                    g.lineStyle(wall.width || 4, PixiUtils.string2hex(wall.color || '#e5e7eb'), 1);
                     const points = wall.points || [];
                     if (points.length >= 2) {
                       g.moveTo(points[0], points[1]);
@@ -665,7 +664,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
                   key={line.id}
                   draw={(g) => {
                     g.clear();
-                    g.lineStyle(line.strokeWidth || 3, PIXI.utils.string2hex(line.color || '#f87171'), line.opacity || 1);
+                    g.lineStyle(line.strokeWidth || 3, PixiUtils.string2hex(line.color || '#f87171'), line.opacity || 1);
                     const points = line.points || [];
                     if (points.length >= 2) {
                       g.moveTo(points[0], points[1]);
@@ -686,7 +685,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
             />
           </Container>
         </StageViewport>
-      </Stage>
+      </Application>
 
       <Toolbar
         activeTool={activeTool}
