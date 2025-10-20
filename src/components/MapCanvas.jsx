@@ -3887,28 +3887,74 @@ const MapCanvas = ({
   const blockedCells = useMemo(() => {
     const cells = new Set();
 
+    const traceWallCells = (startX, startY, endX, endY) => {
+      const startGridX = startX / effectiveGridSize;
+      const startGridY = startY / effectiveGridSize;
+      const endGridX = endX / effectiveGridSize;
+      const endGridY = endY / effectiveGridSize;
+
+      let currentCellX = Math.floor(startGridX);
+      let currentCellY = Math.floor(startGridY);
+      const targetCellX = Math.floor(endGridX);
+      const targetCellY = Math.floor(endGridY);
+
+      const deltaX = endGridX - startGridX;
+      const deltaY = endGridY - startGridY;
+
+      const stepX = deltaX > 0 ? 1 : deltaX < 0 ? -1 : 0;
+      const stepY = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
+
+      const invDeltaX = deltaX === 0 ? Infinity : Math.abs(1 / deltaX);
+      const invDeltaY = deltaY === 0 ? Infinity : Math.abs(1 / deltaY);
+
+      const nextBoundaryX =
+        stepX > 0 ? currentCellX + 1 : currentCellX;
+      const nextBoundaryY =
+        stepY > 0 ? currentCellY + 1 : currentCellY;
+
+      let tMaxX =
+        deltaX === 0
+          ? Infinity
+          : Math.abs((nextBoundaryX - startGridX) / deltaX);
+      let tMaxY =
+        deltaY === 0
+          ? Infinity
+          : Math.abs((nextBoundaryY - startGridY) / deltaY);
+
+      const advanceCell = (x, y) => {
+        cells.add(`${x},${y}`);
+      };
+
+      advanceCell(currentCellX, currentCellY);
+
+      while (currentCellX !== targetCellX || currentCellY !== targetCellY) {
+        if (tMaxX < tMaxY) {
+          currentCellX += stepX;
+          tMaxX += invDeltaX;
+        } else if (tMaxY < tMaxX) {
+          currentCellY += stepY;
+          tMaxY += invDeltaY;
+        } else {
+          currentCellX += stepX;
+          currentCellY += stepY;
+          tMaxX += invDeltaX;
+          tMaxY += invDeltaY;
+        }
+
+        advanceCell(currentCellX, currentCellY);
+      }
+    };
+
     walls.forEach(wall => {
       if (wall.door !== 'closed' && wall.door !== 'secret') return;
 
       const [x1, y1, x2, y2] = wall.points;
-      const wallX = wall.x;
-      const wallY = wall.y;
+      const startX = wall.x + x1;
+      const startY = wall.y + y1;
+      const endX = wall.x + x2;
+      const endY = wall.y + y2;
 
-      const minX = wallX + Math.min(x1, x2);
-      const maxX = wallX + Math.max(x1, x2);
-      const minY = wallY + Math.min(y1, y2);
-      const maxY = wallY + Math.max(y1, y2);
-
-      const wallCellMinX = Math.floor(minX / effectiveGridSize);
-      const wallCellMaxX = Math.floor(maxX / effectiveGridSize);
-      const wallCellMinY = Math.floor(minY / effectiveGridSize);
-      const wallCellMaxY = Math.floor(maxY / effectiveGridSize);
-
-      for (let cx = wallCellMinX; cx <= wallCellMaxX; cx++) {
-        for (let cy = wallCellMinY; cy <= wallCellMaxY; cy++) {
-          cells.add(`${cx},${cy}`);
-        }
-      }
+      traceWallCells(startX, startY, endX, endY);
     });
 
     return cells;
