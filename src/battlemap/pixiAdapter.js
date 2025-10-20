@@ -20,6 +20,13 @@ const DEFAULTS = {
 
 const SELECTION_COLOR = 0xffcc00;
 const MIN_WORLD_SIZE = 200;
+const TOKEN_SELECTION_Z_OFFSET = 10000;
+const DEFAULT_LAYER_START_Z_INDEX = 20;
+const FOG_DEFAULTS = {
+  color: 0x000000,
+  opacity: 0.65,
+  visible: false,
+};
 
 function normalizeColor(value, fallback = DEFAULTS.gridColor) {
   try {
@@ -70,7 +77,14 @@ export default class PixiBattleMap {
 
     this.tokens = new Map();
     this.textureCache = new Map();
-    this.selectedToken = null;
+    this.layers = new Map();
+    this.selectedTokens = new Set();
+    this.clipboard = null;
+    this.activeTool = 'select';
+    this.lights = new Map();
+    this.events = new Map();
+    this.fogState = { ...FOG_DEFAULTS };
+    this.nextLayerIndex = DEFAULT_LAYER_START_Z_INDEX;
     this.resizeObserver = null;
     this.destroyed = false;
     this.cleanupDone = false;
@@ -87,6 +101,154 @@ export default class PixiBattleMap {
 
   get ready() {
     return this.readyPromise;
+  }
+
+  on(eventName, handler) {
+    if (typeof handler !== 'function') {
+      return () => {};
+    }
+    if (!this.events.has(eventName)) {
+      this.events.set(eventName, new Set());
+    }
+    const handlers = this.events.get(eventName);
+    handlers.add(handler);
+    return () => this.off(eventName, handler);
+  }
+
+  off(eventName, handler) {
+    const handlers = this.events.get(eventName);
+    if (!handlers) {
+      return;
+    }
+    handlers.delete(handler);
+    if (handlers.size === 0) {
+      this.events.delete(eventName);
+    }
+  }
+
+  emit(eventName, payload) {
+    if (this.destroyed) {
+      return;
+    }
+    const handlers = this.events.get(eventName);
+    if (!handlers || handlers.size === 0) {
+      return;
+    }
+    handlers.forEach((handler) => {
+      try {
+        handler(payload);
+      } catch (error) {
+        console.error(`[PixiBattleMap] Error en handler de evento "${eventName}":`, error);
+      }
+    });
+  }
+
+  registerLayer(id, container, options = {}) {
+    if (!container) {
+      return null;
+    }
+    const layerId = String(id);
+    const viewport = this.viewport;
+    if (this.layers.has(layerId)) {
+      const meta = this.layers.get(layerId);
+      meta.container = container;
+      if (viewport && !viewport.children.includes(container)) {
+        viewport.addChild(container);
+      }
+      this.setLayerVisibility(layerId, meta.visible);
+      return meta;
+    }
+
+    const meta = {
+      id: layerId,
+      container,
+      locked: Boolean(options.locked),
+      visible: options.visible !== undefined ? Boolean(options.visible) : true,
+      type: options.type || 'custom',
+      zIndex:
+        Number.isFinite(options.zIndex) && !Number.isNaN(options.zIndex)
+          ? Number(options.zIndex)
+          : this.nextLayerIndex++,
+    };
+
+    container.zIndex = meta.zIndex;
+    container.sortableChildren = Boolean(options.sortableChildren);
+    container.eventMode = options.eventMode || 'static';
+    container.cursor = options.cursor || 'default';
+    container.visible = meta.visible;
+
+    this.layers.set(layerId, meta);
+    if (viewport && !viewport.children.includes(container)) {
+      viewport.addChild(container);
+    }
+    if (viewport?.sortChildren) {
+      viewport.sortChildren();
+    }
+    return meta;
+  }
+
+  ensureLayer(id, options = {}) {
+    const layerId = String(id);
+    const existing = this.layers.get(layerId);
+    if (existing) {
+      return existing;
+    }
+    const container = new Container();
+    return this.registerLayer(layerId, container, options);
+  }
+
+  getLayer(layerId) {
+    if (layerId === undefined || layerId === null) {
+      return null;
+    }
+    return this.layers.get(String(layerId)) || null;
+  }
+
+  getLayerContainer(layerId, fallbackId = 'tokens') {
+    const meta = this.getLayer(layerId);
+    if (meta?.container) {
+      return meta.container;
+    }
+    const fallback = this.getLayer(fallbackId);
+    return fallback?.container || this.tokensLayer || null;
+  }
+
+  isLayerLocked(layerId) {
+    const meta = this.getLayer(layerId);
+    return Boolean(meta?.locked);
+  }
+
+  setLayerVisibility(layerId, visible) {
+    const meta = this.getLayer(layerId);
+    if (!meta?.container) {
+      return;
+    }
+    const nextVisible = Boolean(visible);
+    meta.visible = nextVisible;
+    meta.container.visible = nextVisible;
+  }
+
+  lockLayer(layerId, locked) {
+    const meta = this.getLayer(layerId);
+    if (!meta) {
+      return;
+    }
+    meta.locked = Boolean(locked);
+  }
+
+  setLayerZIndex(layerId, zIndex) {
+    const meta = this.getLayer(layerId);
+    if (!meta?.container) {
+      return;
+    }
+    if (!Number.isFinite(zIndex)) {
+      return;
+    }
+    meta.zIndex = Number(zIndex);
+    meta.container.zIndex = meta.zIndex;
+    if (this.viewport?.sortChildren) {
+      this.viewport.sortChildren();
+    }
   }
 
   async init() {
@@ -137,19 +299,77 @@ export default class PixiBattleMap {
     this.viewport.eventMode = 'static';
 
     this.backgroundLayer = new Container();
-    this.backgroundLayer.zIndex = 0;
-    this.backgroundLayer.eventMode = 'none';
-
     this.gridLayer = new Graphics();
-    this.gridLayer.zIndex = 1;
-    this.gridLayer.eventMode = 'static';
-    this.gridLayer.cursor = 'default';
-
     this.tokensLayer = new Container();
-    this.tokensLayer.zIndex = 2;
     this.tokensLayer.sortableChildren = true;
+    this.tokensLayer.eventMode = 'static';
+    this.tokensLayer.cursor = 'pointer';
 
-    this.viewport.addChild(this.backgroundLayer, this.gridLayer, this.tokensLayer);
+    this.lightsLayer = new Container();
+    this.lightsLayer.sortableChildren = true;
+    this.lightsLayer.eventMode = 'none';
+
+    this.overlayLayer = new Container();
+    this.overlayLayer.sortableChildren = true;
+    this.overlayLayer.eventMode = 'none';
+
+    this.fogLayer = new Graphics();
+    this.fogLayer.eventMode = 'none';
+    this.fogLayer.visible = false;
+
+    this.registerLayer('background', this.backgroundLayer, {
+      type: 'background',
+      locked: true,
+      eventMode: 'none',
+      zIndex: 0,
+    });
+    this.registerLayer('grid', this.gridLayer, {
+      type: 'grid',
+      locked: true,
+      eventMode: 'static',
+      zIndex: 5,
+    });
+    this.registerLayer('tokens', this.tokensLayer, {
+      type: 'tokens',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 20,
+      cursor: 'pointer',
+    });
+    this.registerLayer('lights', this.lightsLayer, {
+      type: 'lights',
+      locked: false,
+      eventMode: 'none',
+      zIndex: 40,
+    });
+    this.registerLayer('overlay', this.overlayLayer, {
+      type: 'overlay',
+      locked: true,
+      eventMode: 'none',
+      zIndex: 60,
+    });
+    this.registerLayer('fog', this.fogLayer, {
+      type: 'fog',
+      locked: true,
+      eventMode: 'none',
+      zIndex: 80,
+      visible: false,
+    });
+
+    this.layers.forEach((meta) => {
+      if (!meta?.container) {
+        return;
+      }
+      if (!this.viewport.children.includes(meta.container)) {
+        this.viewport.addChild(meta.container);
+      }
+      if (meta.zIndex !== undefined) {
+        meta.container.zIndex = meta.zIndex;
+      }
+      meta.container.visible = meta.visible !== false;
+    });
+
     this.app.stage.addChild(this.viewport);
 
     this.placeholderGraphic = null;
@@ -210,6 +430,7 @@ export default class PixiBattleMap {
     this.state.worldWidth = targetWidth;
     this.state.worldHeight = targetHeight;
     this.updateViewportHitArea();
+    this.refreshFog();
     this.drawGrid();
     this.resize();
     this.updatePlaceholderPosition();
@@ -255,7 +476,146 @@ export default class PixiBattleMap {
     this.tokens.forEach((token) => this.updateSelectionGraphic(token));
   }
 
-  async addToken({ id, textureUrl, x = 0, y = 0, size }) {
+  applyTokenOptions(token, options = {}) {
+    if (!token) {
+      return null;
+    }
+
+    const current = token.battlemapData || { id: token.battlemapId };
+    const next = { ...current };
+
+    const assignNumber = (key, value, { clampMin, clampMax } = {}) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return;
+      }
+      let resolved = numeric;
+      if (Number.isFinite(clampMin)) {
+        resolved = Math.max(clampMin, resolved);
+      }
+      if (Number.isFinite(clampMax)) {
+        resolved = Math.min(clampMax, resolved);
+      }
+      next[key] = resolved;
+    };
+
+    if (options.id !== undefined) {
+      next.id = String(options.id);
+    } else if (!next.id) {
+      next.id = token.battlemapId;
+    }
+
+    assignNumber('x', options.x ?? options.position?.x, {});
+    assignNumber('y', options.y ?? options.position?.y, {});
+    assignNumber('size', options.size ?? options.width ?? options.height, {
+      clampMin: 1,
+    });
+    assignNumber('rotation', options.rotation ?? options.angle, {});
+    assignNumber('opacity', options.opacity ?? options.alpha, {
+      clampMin: 0,
+      clampMax: 1,
+    });
+    assignNumber('zIndex', options.zIndex, {});
+
+    if (options.layer !== undefined) {
+      next.layer = String(options.layer);
+    } else if (!next.layer) {
+      next.layer = 'tokens';
+    }
+
+    if (options.textureUrl !== undefined) {
+      next.textureUrl = options.textureUrl;
+    }
+    if (options.tint !== undefined || options.tintColor !== undefined) {
+      next.tint = options.tintColor ?? options.tint;
+    }
+    if (options.metadata) {
+      next.metadata = { ...(next.metadata || {}), ...options.metadata };
+    }
+    if (options.vision !== undefined) {
+      next.vision = options.vision;
+    }
+    if (options.name !== undefined) {
+      next.name = options.name;
+    }
+
+    if (next.x === undefined) next.x = 0;
+    if (next.y === undefined) next.y = 0;
+    if (!Number.isFinite(next.size) || next.size <= 0) {
+      next.size = this.state.cellSize;
+    }
+    if (!Number.isFinite(next.rotation)) {
+      next.rotation = 0;
+    }
+    if (!Number.isFinite(next.opacity)) {
+      next.opacity = 1;
+    }
+    if (!Number.isFinite(next.zIndex)) {
+      next.zIndex = token.baseZIndex ?? this.tokensLayer.children.length + 1;
+    }
+
+    token.battlemapData = next;
+    token.position.set(next.x, next.y);
+
+    const resolvedSize = Math.max(1, Number(next.size));
+    token.width = resolvedSize;
+    token.height = resolvedSize;
+    token.hitArea = new Rectangle(-resolvedSize / 2, -resolvedSize / 2, resolvedSize, resolvedSize);
+
+    const rotationRadians = (Number(next.rotation) * Math.PI) / 180;
+    token.rotation = rotationRadians;
+    token.alpha = Math.min(Math.max(Number(next.opacity), 0), 1);
+
+    if (next.tint !== undefined && next.tint !== null) {
+      token.tint = normalizeColor(next.tint, 0xffffff);
+    } else {
+      token.tint = 0xffffff;
+    }
+
+    token.baseZIndex = Number(next.zIndex) || 0;
+    token.zIndex = this.selectedTokens.has(token)
+      ? token.baseZIndex + TOKEN_SELECTION_Z_OFFSET
+      : token.baseZIndex;
+
+    const targetLayerId = next.layer || 'tokens';
+    if (!this.getLayer(targetLayerId) && targetLayerId !== 'tokens') {
+      this.ensureLayer(targetLayerId, {
+        type: 'tokens',
+        sortableChildren: true,
+        eventMode: 'static',
+        cursor: 'pointer',
+      });
+    }
+    const targetLayer = this.getLayerContainer(targetLayerId, 'tokens');
+    if (targetLayer && token.parent !== targetLayer) {
+      targetLayer.addChild(token);
+    }
+    token.battlemapLayerId = targetLayerId;
+
+    if (next.textureUrl && next.textureUrl !== token.__textureUrl) {
+      token.__textureUrl = next.textureUrl;
+      this.loadTexture(next.textureUrl)
+        .then((texture) => {
+          if (this.tokens.get(token.battlemapId) === token && !this.destroyed) {
+            token.texture = texture;
+          }
+        })
+        .catch((error) => {
+          console.warn('[PixiBattleMap] No se pudo cargar la textura del token.', error);
+        });
+    } else if (!next.textureUrl) {
+      token.__textureUrl = null;
+      token.texture = Texture.WHITE;
+    }
+
+    this.updateSelectionGraphic(token);
+    return next;
+  }
+
+  async addToken({ id, textureUrl, x = 0, y = 0, size, ...rest }) {
     await this.ready;
     if (this.destroyed) {
       return null;
@@ -266,52 +626,294 @@ export default class PixiBattleMap {
 
     const tokenId = String(id);
     let token = this.tokens.get(tokenId);
+    const created = !token;
     if (!token) {
       token = new Sprite(Texture.WHITE);
       token.anchor.set(0.5);
       token.eventMode = 'dynamic';
       token.cursor = 'pointer';
       token.sortableChildren = false;
-      token.baseZIndex = this.tokensLayer.children.length + 1;
-      token.zIndex = token.baseZIndex;
       token.selectionGraphic = new Graphics();
       token.selectionGraphic.visible = false;
       token.addChild(token.selectionGraphic);
       token.battlemapId = tokenId;
       this.attachTokenInteraction(token);
-      this.tokensLayer.addChild(token);
       this.tokens.set(tokenId, token);
     }
 
-    const resolvedSize = Number(size) > 0 ? Number(size) : this.state.cellSize;
-    token.width = resolvedSize;
-    token.height = resolvedSize;
-    token.hitArea = new Rectangle(
-      -resolvedSize / 2,
-      -resolvedSize / 2,
-      resolvedSize,
-      resolvedSize
-    );
-    token.position.set(x, y);
+    const data = this.applyTokenOptions(token, {
+      id: tokenId,
+      textureUrl: textureUrl ?? rest.textureUrl,
+      x,
+      y,
+      size,
+      ...rest,
+    });
 
-    if (textureUrl && textureUrl !== token.__textureUrl) {
-      token.__textureUrl = textureUrl;
-      this.loadTexture(textureUrl)
-        .then((texture) => {
-          if (this.tokens.get(tokenId) === token && !this.destroyed) {
-            token.texture = texture;
-          }
-        })
-        .catch((error) => {
-          console.warn('[PixiBattleMap] No se pudo cargar la textura del token.', error);
-        });
-    } else if (!textureUrl) {
-      token.__textureUrl = null;
-      token.texture = Texture.WHITE;
+    const eventName = created ? 'token:create' : 'token:update';
+    this.emit(eventName, { id: tokenId, data: { ...data } });
+    return token;
+  }
+
+  async updateToken(id, patch = {}) {
+    await this.ready;
+    const tokenId = String(id);
+    const token = this.tokens.get(tokenId);
+    if (!token) {
+      return null;
+    }
+    const data = this.applyTokenOptions(token, patch);
+    this.emit('token:update', { id: tokenId, data: { ...data } });
+    return token;
+  }
+
+  async deleteSelection() {
+    await this.ready;
+    const ids = this.getSelection();
+    if (!ids.length) {
+      return [];
+    }
+    const removed = [];
+    for (const id of ids) {
+      const token = this.tokens.get(id);
+      if (!token) {
+        continue;
+      }
+      if (this.isLayerLocked(token.battlemapLayerId)) {
+        continue;
+      }
+      await this.removeToken(id);
+      removed.push(id);
+    }
+    return removed;
+  }
+
+  copySelection() {
+    if (!this.selectedTokens || this.selectedTokens.size === 0) {
+      this.clipboard = null;
+      return { tokens: [] };
+    }
+    const tokens = Array.from(this.selectedTokens).map((token) => ({
+      ...(token.battlemapData || {}),
+    }));
+    this.clipboard = { tokens };
+    return { tokens: tokens.map((tokenData) => ({ ...tokenData })) };
+  }
+
+  async pasteAt(x, y) {
+    await this.ready;
+    if (!this.clipboard?.tokens || this.clipboard.tokens.length === 0) {
+      return [];
+    }
+    let targetX = x;
+    let targetY = y;
+    if (typeof x === 'object' && x !== null) {
+      targetX = x.x;
+      targetY = x.y;
+    }
+    const clipboardTokens = this.clipboard.tokens.filter(Boolean);
+    if (!clipboardTokens.length) {
+      return [];
     }
 
-    this.updateSelectionGraphic(token);
-    return token;
+    const validTokens = clipboardTokens.filter((token) => Number.isFinite(token?.x) && Number.isFinite(token?.y));
+    const sourceTokens = validTokens.length > 0 ? validTokens : clipboardTokens;
+    const count = sourceTokens.length;
+    let centerX = 0;
+    let centerY = 0;
+    sourceTokens.forEach((token) => {
+      centerX += Number(token.x) || 0;
+      centerY += Number(token.y) || 0;
+    });
+    centerX /= count;
+    centerY /= count;
+
+    const offsetX = Number.isFinite(targetX) ? Number(targetX) - centerX : this.state.cellSize;
+    const offsetY = Number.isFinite(targetY) ? Number(targetY) - centerY : this.state.cellSize;
+
+    const created = [];
+    const timestamp = Date.now();
+    clipboardTokens.forEach((tokenData, index) => {
+      if (!tokenData) {
+        return;
+      }
+      const baseId = tokenData.id || `token-${timestamp}`;
+      const newId = `${baseId}-copy-${timestamp}-${index}`;
+      const data = {
+        ...tokenData,
+        id: newId,
+        x: (Number(tokenData.x) || 0) + offsetX,
+        y: (Number(tokenData.y) || 0) + offsetY,
+      };
+      this.addToken(data);
+      created.push({ ...data });
+    });
+
+    this.setSelection(created.map((token) => token.id));
+    this.emit('token:paste', { tokens: created.map((token) => ({ ...token })) });
+    return created;
+  }
+
+  setTool(toolId) {
+    this.activeTool = typeof toolId === 'string' && toolId.trim() !== '' ? toolId : 'select';
+    const cursor = this.activeTool === 'select' ? 'pointer' : 'default';
+    if (this.viewport) {
+      this.viewport.cursor = this.activeTool === 'draw' ? 'crosshair' : 'default';
+    }
+    this.tokens.forEach((token) => {
+      token.cursor = cursor;
+    });
+  }
+
+  createLayer(options = {}) {
+    const { id, type = 'custom', zIndex, visible = true, locked = false } = options;
+    if (!id && id !== 0) {
+      throw new Error('createLayer requiere un id');
+    }
+    const layerId = String(id);
+    const meta = this.ensureLayer(layerId, {
+      type,
+      zIndex,
+      visible,
+      locked,
+      sortableChildren: options.sortableChildren,
+      eventMode: options.eventMode || 'static',
+    });
+    meta.locked = Boolean(locked);
+    meta.visible = Boolean(visible);
+    if (Number.isFinite(zIndex)) {
+      this.setLayerZIndex(layerId, zIndex);
+    }
+    this.setLayerVisibility(layerId, meta.visible);
+    return {
+      id: meta.id,
+      type: meta.type,
+      zIndex: meta.zIndex,
+      visible: meta.visible,
+      locked: meta.locked,
+    };
+  }
+
+  async addLight(light = {}) {
+    await this.ready;
+    if (light.id === undefined || light.id === null) {
+      throw new Error('Las luces necesitan un id');
+    }
+    const lightId = String(light.id);
+    let graphic = this.lights.get(lightId);
+    if (!graphic) {
+      graphic = new Graphics();
+      graphic.eventMode = 'none';
+      this.lights.set(lightId, graphic);
+    }
+    const layerId = light.layer || 'lights';
+    if (!this.getLayer(layerId)) {
+      this.ensureLayer(layerId, { type: 'lights', eventMode: 'none', sortableChildren: true });
+    }
+    const container = this.getLayerContainer(layerId, 'lights');
+    if (container && graphic.parent !== container) {
+      container.addChild(graphic);
+    }
+
+    const colorValue = normalizeColor(light.color, 0xffffaa);
+    const opacity = Math.min(Math.max(Number(light.opacity ?? 0.6), 0), 1);
+    const brightRadius = Math.max(0, Number(light.brightRadius ?? light.radius ?? 0));
+    const dimRadius = Math.max(brightRadius, Number(light.dimRadius ?? brightRadius));
+
+    graphic.clear();
+    if (dimRadius > 0) {
+      graphic.beginFill(colorValue, opacity * 0.35);
+      graphic.drawCircle(0, 0, dimRadius);
+      graphic.endFill();
+    }
+    if (brightRadius > 0) {
+      graphic.beginFill(colorValue, opacity);
+      graphic.drawCircle(0, 0, brightRadius);
+      graphic.endFill();
+    }
+    graphic.position.set(Number(light.x) || 0, Number(light.y) || 0);
+    graphic.alpha = 1;
+    graphic.battlemapLightId = lightId;
+    graphic.battlemapData = {
+      id: lightId,
+      x: Number(light.x) || 0,
+      y: Number(light.y) || 0,
+      brightRadius,
+      dimRadius,
+      color: light.color,
+      opacity,
+      layer: layerId,
+    };
+    this.emit('light:update', { id: lightId, data: { ...graphic.battlemapData } });
+    return graphic;
+  }
+
+  async removeLight(id) {
+    await this.ready;
+    const lightId = String(id);
+    const graphic = this.lights.get(lightId);
+    if (!graphic) {
+      return;
+    }
+    graphic.removeFromParent();
+    graphic.destroy();
+    this.lights.delete(lightId);
+    this.emit('light:remove', { id: lightId });
+  }
+
+  async setTokenVision(id, vision = {}) {
+    await this.ready;
+    const token = this.tokens.get(String(id));
+    if (!token) {
+      return null;
+    }
+    const data = token.battlemapData || { id: token.battlemapId };
+    data.vision = { ...(data.vision || {}), ...vision };
+    token.battlemapData = data;
+    this.emit('token:vision', { id: token.battlemapId, data: { ...data.vision } });
+    return data.vision;
+  }
+
+  toggleFog(enabled, options = {}) {
+    const visible = Boolean(enabled ?? options.visible ?? options.enabled);
+    const colorOption = options.color !== undefined ? options.color : this.fogState.color;
+    const opacityOption = options.opacity ?? options.alpha ?? this.fogState.opacity;
+    this.fogState = {
+      color: colorOption,
+      opacity: opacityOption,
+      visible,
+    };
+    this.refreshFog();
+  }
+
+  refreshFog() {
+    if (!this.fogLayer) {
+      return;
+    }
+    const visible = Boolean(this.fogState?.visible);
+    if (!visible) {
+      this.fogLayer.visible = false;
+      this.fogLayer.clear();
+      return;
+    }
+    const colorValue = normalizeColor(
+      this.fogState?.color,
+      FOG_DEFAULTS.color
+    );
+    const opacity = Math.min(
+      Math.max(Number(this.fogState?.opacity ?? FOG_DEFAULTS.opacity), 0),
+      1
+    );
+    this.fogLayer.visible = true;
+    this.fogLayer.clear();
+    this.fogLayer.beginFill(colorValue, opacity);
+    this.fogLayer.drawRect(
+      0,
+      0,
+      Math.max(this.state.worldWidth, MIN_WORLD_SIZE),
+      Math.max(this.state.worldHeight, MIN_WORLD_SIZE)
+    );
+    this.fogLayer.endFill();
   }
 
   async removeToken(id) {
@@ -321,12 +923,19 @@ export default class PixiBattleMap {
     if (!token) {
       return;
     }
-    if (this.selectedToken === token) {
-      this.selectedToken = null;
+    const wasSelected = this.selectedTokens.has(token);
+    if (wasSelected) {
+      this.deselectToken(token);
+      this.emit('selection:change', this.getSelection());
     }
+    const payload = {
+      id: tokenId,
+      data: token.battlemapData ? { ...token.battlemapData } : undefined,
+    };
     token.removeFromParent();
     token.destroy({ children: true });
     this.tokens.delete(tokenId);
+    this.emit('token:remove', payload);
   }
 
   getToken(id) {
@@ -386,36 +995,95 @@ export default class PixiBattleMap {
   }
 
   clearSelection() {
-    if (!this.selectedToken) {
+    if (!this.selectedTokens || this.selectedTokens.size === 0) {
       return;
     }
-    this.selectedToken.selectionGraphic.visible = false;
-    this.selectedToken.zIndex = this.selectedToken.baseZIndex;
-    this.selectedToken = null;
+    const previous = Array.from(this.selectedTokens);
+    previous.forEach((sprite) => this.deselectToken(sprite));
+    this.emit('selection:change', []);
   }
 
-  selectToken(token) {
-    if (this.selectedToken === token) {
+  deselectToken(token) {
+    if (!token || !this.selectedTokens.has(token)) {
       return;
     }
-    if (this.selectedToken) {
-      this.selectedToken.selectionGraphic.visible = false;
-      this.selectedToken.zIndex = this.selectedToken.baseZIndex;
+    this.selectedTokens.delete(token);
+    if (token.selectionGraphic) {
+      token.selectionGraphic.visible = false;
     }
-    this.selectedToken = token;
-    if (token) {
-      token.zIndex = 9999;
-      this.updateSelectionGraphic(token);
+    if (Number.isFinite(token.baseZIndex)) {
+      token.zIndex = token.baseZIndex;
     }
+  }
+
+  selectToken(token, options = {}) {
+    if (!token) {
+      return;
+    }
+    const additive = Boolean(options.additive);
+    const toggle = Boolean(options.toggle);
+    const alreadySelected = this.selectedTokens.has(token);
+
+    if (!additive && !toggle) {
+      this.clearSelection();
+    }
+
+    if (toggle && alreadySelected) {
+      this.deselectToken(token);
+      this.emit('selection:change', this.getSelection());
+      return;
+    }
+
+    if (alreadySelected) {
+      return;
+    }
+
+    this.selectedTokens.add(token);
+    if (Number.isFinite(token.baseZIndex)) {
+      token.zIndex = token.baseZIndex + TOKEN_SELECTION_Z_OFFSET;
+    }
+    this.updateSelectionGraphic(token);
+    this.emit('selection:change', this.getSelection());
+  }
+
+  getSelection() {
+    if (!this.selectedTokens || this.selectedTokens.size === 0) {
+      return [];
+    }
+    return Array.from(this.selectedTokens).map((token) => token.battlemapId);
+  }
+
+  setSelection(ids = []) {
+    const set = new Set((ids || []).map((value) => String(value)));
+    this.clearSelection();
+    set.forEach((id) => {
+      const token = this.tokens.get(id);
+      if (token) {
+        this.selectToken(token, { additive: true });
+      }
+    });
   }
 
   attachTokenInteraction(token) {
     token.on('pointerdown', (event) => {
       event.stopPropagation();
-      this.viewport.plugins.pause('drag');
+      const originalEvent = event.data?.originalEvent || event.data?.nativeEvent;
+      const additive = Boolean(
+        originalEvent?.shiftKey || originalEvent?.ctrlKey || originalEvent?.metaKey
+      );
+      const toggle = Boolean(originalEvent?.ctrlKey || originalEvent?.metaKey);
+      this.selectToken(token, { additive, toggle });
+
+      if (this.isLayerLocked(token.battlemapLayerId) || this.activeTool !== 'select') {
+        return;
+      }
+
+      if (this.viewport?.plugins) {
+        this.viewport.plugins.pause('drag');
+      }
       token.dragging = true;
       token.dragPointerId = event.pointerId;
-      this.selectToken(token);
+      token.__dragStart = { x: token.x, y: token.y };
     });
 
     const handlePointerUp = (event) => {
@@ -425,12 +1093,19 @@ export default class PixiBattleMap {
       token.dragging = false;
       token.dragPointerId = null;
       this.snapToken(token);
-      this.viewport.plugins.resume('drag');
-      token.emit('battlemap:tokenDrop', {
+      if (this.viewport?.plugins) {
+        this.viewport.plugins.resume('drag');
+      }
+      const payload = {
         id: token.battlemapId,
         x: token.x,
         y: token.y,
-      });
+        data: token.battlemapData
+          ? { ...token.battlemapData, x: token.x, y: token.y }
+          : undefined,
+      };
+      token.emit('battlemap:tokenDrop', payload);
+      this.emit('token:move', payload);
     };
 
     token.on('pointerup', handlePointerUp);
@@ -440,8 +1115,10 @@ export default class PixiBattleMap {
       if (!token.dragging || token.dragPointerId !== event.pointerId) {
         return;
       }
-      const nextPosition = this.tokensLayer.toLocal(event.global);
+      const parentLayer = token.parent || this.tokensLayer;
+      const nextPosition = parentLayer.toLocal(event.global);
       token.position.set(nextPosition.x, nextPosition.y);
+      this.updateSelectionGraphic(token);
     });
   }
 
@@ -453,7 +1130,7 @@ export default class PixiBattleMap {
     token.selectionGraphic.clear();
     token.selectionGraphic.lineStyle({ width: 3, color: SELECTION_COLOR, alpha: 0.9 });
     token.selectionGraphic.drawCircle(0, 0, radius);
-    token.selectionGraphic.visible = this.selectedToken === token;
+    token.selectionGraphic.visible = this.selectedTokens.has(token);
   }
 
   snapToken(token) {
@@ -599,6 +1276,16 @@ export default class PixiBattleMap {
         token.destroy({ children: true });
       });
       this.tokens.clear();
+      this.selectedTokens.clear();
+      this.clipboard = null;
+      this.events.clear();
+      this.lights.forEach((graphic) => {
+        if (graphic) {
+          graphic.removeFromParent();
+          graphic.destroy();
+        }
+      });
+      this.lights.clear();
       this.textureCache.clear();
       if (this.viewport) {
         this.viewport.destroy({ children: true });
@@ -617,6 +1304,19 @@ export default class PixiBattleMap {
         this.tokensLayer.destroy({ children: true });
         this.tokensLayer = null;
       }
+      if (this.lightsLayer) {
+        this.lightsLayer.destroy({ children: true });
+        this.lightsLayer = null;
+      }
+      if (this.overlayLayer) {
+        this.overlayLayer.destroy({ children: true });
+        this.overlayLayer = null;
+      }
+      if (this.fogLayer) {
+        this.fogLayer.destroy();
+        this.fogLayer = null;
+      }
+      this.layers.clear();
       const canvas = this.canvas;
       if (canvas?.parentNode === this.container) {
         this.container.removeChild(canvas);
