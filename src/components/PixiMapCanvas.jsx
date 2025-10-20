@@ -331,7 +331,7 @@ const PixiMapCanvas = forwardRef(
         <div
           id="pixi-stage"
           ref={stageRef}
-          className="absolute inset-0 rounded-xl bg-gray-900 overflow-hidden"
+          className="absolute inset-0 rounded-xl bg-black overflow-hidden"
           style={{ minHeight: '400px' }}
         />
       </div>

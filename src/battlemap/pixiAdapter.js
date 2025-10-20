@@ -15,7 +15,7 @@ const DEFAULTS = {
   gridOpacity: 0.2,
   gridColor: 0xffffff,
   gridVisible: true,
-  backgroundColor: 0x1b1b1b,
+  backgroundColor: 0x000000,
 };
 
 const SELECTION_COLOR = 0xffcc00;
@@ -96,7 +96,6 @@ export default class PixiBattleMap {
 
     await this.app.init({
       antialias: true,
-      backgroundAlpha: 0,
       autoDensity: true,
       resolution: window.devicePixelRatio || 1,
       resizeTo: this.container,
@@ -117,6 +116,7 @@ export default class PixiBattleMap {
     this.canvas.style.display = 'block';
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
+    this.canvas.style.backgroundColor = '#000';
 
     const screenWidth = this.container.clientWidth || MIN_WORLD_SIZE;
     const screenHeight = this.container.clientHeight || MIN_WORLD_SIZE;
