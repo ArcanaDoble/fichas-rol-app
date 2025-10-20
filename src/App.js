@@ -55,6 +55,7 @@ import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
+import PixiMapCanvas from './components/PixiMapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
@@ -7411,11 +7412,19 @@ function App() {
       </React.Suspense>
     );
   }
-  if (userType === 'master' && authenticated && chosenView === 'canvas') {
+  if (
+    userType === 'master' &&
+    authenticated &&
+    (chosenView === 'canvas' || chosenView === 'pixiCanvas')
+  ) {
+    const isPixiView = chosenView === 'pixiCanvas';
+    const CanvasComponent = isPixiView ? PixiMapCanvas : MapCanvas;
     return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
-          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
+          <h1 className="text-2xl font-bold">
+            {isPixiView ? '🗺️ Mapa de Batalla (Pixi)' : '🗺️ Mapa de Batalla'}
+          </h1>
           <div className="flex flex-wrap gap-2">
             <Boton
               size="sm"
@@ -7493,7 +7502,7 @@ function App() {
         </div>
         <div className="relative pt-14 flex-1 overflow-hidden">
           <div className="h-full mr-80">
-            <MapCanvas
+            <CanvasComponent
               backgroundImage={
                 canvasBackground || 'https://via.placeholder.com/800x600'
               }
