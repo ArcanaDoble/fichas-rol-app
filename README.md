@@ -9,6 +9,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 ### 📚 Documentación adicional
 
 - [Mejoras de rendimiento pendientes en el Mapa de Batalla](docs/MapaBatallaRendimiento.md)
+- [Demo de mapa de batalla con Pixi.js + pixi-viewport](public/pixi-battlemap.html)
 
 ### ⚖️ Karma exclusivo de Yuuzu
 
