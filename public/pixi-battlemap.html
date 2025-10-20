@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapa de batalla Pixi + Viewport</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #0f0f0f;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #ffffff;
+      }
+
+      #battlemap-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      #cell-coordinates {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        background-color: rgba(0, 0, 0, 0.6);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        letter-spacing: 0.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="battlemap-container">
+      <div id="cell-coordinates">--</div>
+    </div>
+
+    <script src="https://unpkg.com/pixi.js@8.1.5/dist/pixi.min.js"></script>
+    <script src="https://unpkg.com/pixi-viewport@6.0.4/dist/pixi-viewport.min.js"></script>
+    <script src="./pixi-battlemap.js"></script>
+    <script>
+      (async () => {
+        const battleMap = await window.createBattleMap({
+          containerId: 'battlemap-container',
+          coordinatesId: 'cell-coordinates',
+          backgroundColor: 0x0f0f0f,
+        });
+
+        await battleMap.loadMap('https://pixijs.com/assets/bg_scene.jpg', 5000, 3500);
+        battleMap.setGrid({ cellSize: 70, opacity: 0.2, color: '#ffffff', visible: true });
+
+        await battleMap.addToken({
+          id: 'token-1',
+          textureUrl: 'https://pixijs.com/assets/eggHead.png',
+          x: 350,
+          y: 350,
+          size: 60,
+        });
+
+        battleMap.centerOn(2500, 1750, 0.5);
+      })();
+    </script>
+  </body>
+</html>
