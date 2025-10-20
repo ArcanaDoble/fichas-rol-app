@@ -409,6 +409,20 @@ const PixiMapCanvas = forwardRef((props, ref) => {
 
   const backgroundTexture = useTexture(backgroundImage);
 
+  useEffect(() => {
+    const application = stageRef.current?.getApplication?.();
+    if (!application) return;
+    const { width, height } = stageSize;
+    if (!width || !height) return;
+
+    application.renderer?.resize(width, height);
+    const canvas = stageRef.current?.getCanvas?.();
+    if (canvas) {
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+    }
+  }, [stageSize]);
+
   useLayoutEffect(() => {
     if (!containerRef.current) return;
     const resize = () => {
@@ -579,12 +593,13 @@ const PixiMapCanvas = forwardRef((props, ref) => {
       )}
       <Application
         ref={stageRef}
-        width={stageSize.width || 1}
-        height={stageSize.height || 1}
+        width={stageSize.width}
+        height={stageSize.height}
         resolution={window.devicePixelRatio}
         antialias
         autoDensity
         background={DEFAULT_STAGE_BACKGROUND}
+        resizeTo={containerRef}
       >
         <StageViewport
           width={stageSize.width}
