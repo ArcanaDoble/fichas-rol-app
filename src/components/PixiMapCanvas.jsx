@@ -430,14 +430,41 @@ const PixiMapCanvas = forwardRef((props, ref) => {
   }, []);
 
   useLayoutEffect(() => {
-    if (!containerElement) return;
-    const resize = () => {
-      const bounds = containerElement.getBoundingClientRect();
-      setStageSize({ width: bounds.width, height: bounds.height });
+    const node = containerElement;
+    if (!node) return undefined;
+
+    const updateSize = () => {
+      const bounds = node.getBoundingClientRect();
+      const { width, height } = bounds;
+      setStageSize((prev) => {
+        if (prev.width === width && prev.height === height) {
+          return prev;
+        }
+        return { width, height };
+      });
     };
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        setStageSize((prev) => {
+          if (prev.width === width && prev.height === height) {
+            return prev;
+          }
+          return { width, height };
+        });
+      });
+
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
   }, [containerElement]);
 
   useEffect(() => {
