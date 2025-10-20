@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import PropTypes from 'prop-types';
 import { Application, extend, useApplication } from '@pixi/react';
-import { Container, Graphics, Sprite, Text, Texture, TextStyle, utils as PixiUtils } from 'pixi.js';
+import { Color, Container, Graphics, Sprite, Text, Texture, TextStyle } from 'pixi.js';
 extend({ Container, Graphics, Sprite, Text });
 import Toolbar from './Toolbar';
 import TokenSettings from './TokenSettings';
@@ -29,6 +29,11 @@ import { computeVisibilityWithSegments, createVisibilitySegments } from '../util
 import LoadingSpinner from './LoadingSpinner';
 
 const DEFAULT_STAGE_BACKGROUND = '#1f2937';
+
+const colorToHex = (value, fallback = '#ffffff') => {
+  const resolved = value ?? fallback;
+  return Color.shared.setValue(resolved).toNumber();
+};
 
 const createTexture = (url) => {
   if (!url) return null;
@@ -80,7 +85,7 @@ const StageViewport = ({
   useEffect(() => {
     if (!app?.renderer) return;
     const current = app.renderer.background.color;
-    const normalized = PixiUtils.string2hex(backgroundColor || DEFAULT_STAGE_BACKGROUND);
+    const normalized = colorToHex(backgroundColor, DEFAULT_STAGE_BACKGROUND);
     if (current !== normalized) {
       app.renderer.background.color = normalized;
     }
@@ -134,7 +139,7 @@ const GridLayer = ({
       if (!visible) {
         return;
       }
-      g.lineStyle(1, PixiUtils.string2hex(color || '#ffffff'), opacity ?? 0.25);
+      g.lineStyle(1, colorToHex(color), opacity ?? 0.25);
       const startX = -((offsetX % cellSize) + cellSize);
       const startY = -((offsetY % cellSize) + cellSize);
       for (let x = startX; x < width + cellSize; x += cellSize) {
@@ -218,7 +223,7 @@ const TokenSprite = ({ token, gridSize, onPointerDown, selected, alpha, showName
         width={width}
         height={height}
         anchor={0.5}
-        tint={token.tintColor ? PixiUtils.string2hex(token.tintColor) : 0xffffff}
+        tint={token.tintColor ? colorToHex(token.tintColor) : 0xffffff}
         alpha={alpha}
       />
       {selected && (
@@ -646,7 +651,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
                   key={wall.id}
                   draw={(g) => {
                     g.clear();
-                    g.lineStyle(wall.width || 4, PixiUtils.string2hex(wall.color || '#e5e7eb'), 1);
+                    g.lineStyle(wall.width || 4, colorToHex(wall.color, '#e5e7eb'), 1);
                     const points = wall.points || [];
                     if (points.length >= 2) {
                       g.moveTo(points[0], points[1]);
@@ -664,7 +669,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
                   key={line.id}
                   draw={(g) => {
                     g.clear();
-                    g.lineStyle(line.strokeWidth || 3, PixiUtils.string2hex(line.color || '#f87171'), line.opacity || 1);
+                    g.lineStyle(line.strokeWidth || 3, colorToHex(line.color, '#f87171'), line.opacity || 1);
                     const points = line.points || [];
                     if (points.length >= 2) {
                       g.moveTo(points[0], points[1]);
