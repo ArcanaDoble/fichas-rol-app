@@ -36,9 +36,9 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "craco start",
+    "build": "craco build",
+    "test": "craco test",
     "format": "prettier --write \"src/**/*.{js,jsx}\"",
     "eject": "react-scripts eject",
     "postinstall": "patch-package"
@@ -56,10 +56,14 @@
     ]
   },
   "devDependencies": {
+    "@craco/craco": "^7.1.0",
     "autoprefixer": "^10.4.21",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.3",
     "prettier": "^3.2.5",
     "tailwindcss": "^3.4.17"
+  },
+  "overrides": {
+    "react-reconciler": "0.32.0"
   }
 }
