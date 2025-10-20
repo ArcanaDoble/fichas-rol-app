@@ -40,7 +40,8 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "format": "prettier --write \"src/**/*.{js,jsx}\"",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "postinstall": "patch-package"
   },
   "browserslist": {
     "production": [
@@ -56,6 +57,7 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
+    "patch-package": "^8.0.1",
     "postcss": "^8.5.3",
     "prettier": "^3.2.5",
     "tailwindcss": "^3.4.17"

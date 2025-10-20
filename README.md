@@ -975,6 +975,10 @@ cd fichas-rol-app
 # 2. Instala las dependencias
 npm install
 
+# Esta instalación ejecuta automáticamente `patch-package` para aplicar un
+# parche de compatibilidad a `@pixi/react`, necesario para que Webpack 5
+# resuelva correctamente `react-reconciler/constants.js`.
+
 # 3. Configura Firebase (opcional)
 # Edita src/firebase.js con tus credenciales
 
