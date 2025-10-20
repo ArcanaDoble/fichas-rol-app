@@ -5993,6 +5993,8 @@ const MapCanvas = ({
         }
 
         if (deltaX !== 0 || deltaY !== 0) {
+          let hasChanges = false;
+          const movedTokenPositions = {};
           const updated = tokensSnapshot.map((token) => {
             if (!selectedTokensSnapshot.includes(token.id)) {
               return token;
@@ -6011,11 +6013,25 @@ const MapCanvas = ({
               !isPositionBlockedSnapshot ||
               !isPositionBlockedSnapshot(bounded.x, bounded.y)
             ) {
-              return { ...token, x: bounded.x, y: bounded.y };
+              if (token.x !== bounded.x || token.y !== bounded.y) {
+                hasChanges = true;
+                movedTokenPositions[token.id] = {
+                  x: bounded.x,
+                  y: bounded.y,
+                };
+                return { ...token, x: bounded.x, y: bounded.y };
+              }
+              return token;
             }
             return token;
           });
-          handleTokensChangeFn?.(updated);
+          if (hasChanges) {
+            setPendingTokenPositions((prev) => ({
+              ...prev,
+              ...movedTokenPositions,
+            }));
+            handleTokensChangeFn?.(updated);
+          }
         }
         return;
       }
@@ -6079,12 +6095,24 @@ const MapCanvas = ({
         return;
       }
 
-      const updated = tokensSnapshot.map((token) =>
-        token.id === selectedIdSnapshot
-          ? { ...token, x: bounded.x, y: bounded.y }
-          : token
-      );
-      handleTokensChangeFn?.(updated);
+      const movedTokenPositions = {};
+      const updated = tokensSnapshot.map((token) => {
+        if (token.id !== selectedIdSnapshot) {
+          return token;
+        }
+        if (token.x === bounded.x && token.y === bounded.y) {
+          return token;
+        }
+        movedTokenPositions[token.id] = { x: bounded.x, y: bounded.y };
+        return { ...token, x: bounded.x, y: bounded.y };
+      });
+      if (Object.keys(movedTokenPositions).length > 0) {
+        setPendingTokenPositions((prev) => ({
+          ...prev,
+          ...movedTokenPositions,
+        }));
+        handleTokensChangeFn?.(updated);
+      }
     },
     []
   );
