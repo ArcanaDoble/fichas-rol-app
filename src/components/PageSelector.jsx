@@ -4,6 +4,12 @@ import { FiMoreVertical, FiPlus } from 'react-icons/fi';
 import Modal from './Modal';
 import Input from './Input';
 import Boton from './Boton';
+import {
+  DEFAULT_GRID_SIZE,
+  DEFAULT_GRID_CELLS,
+  resolveGridSize,
+  resolveGridCells,
+} from '../utils/grid';
 
 const PageSelector = ({
   pages,
@@ -22,8 +28,8 @@ const PageSelector = ({
     const p = pages[index];
     setPageData({
       name: p.name,
-      gridSize: p.gridSize,
-      gridCells: p.gridCells,
+      gridSize: p.gridSize ?? DEFAULT_GRID_SIZE,
+      gridCells: p.gridCells ?? DEFAULT_GRID_CELLS,
       gridOffsetX: p.gridOffsetX,
       gridOffsetY: p.gridOffsetY,
       showGrid: p.showGrid !== undefined ? p.showGrid : true,
@@ -42,10 +48,20 @@ const PageSelector = ({
     const safeOpacity = Number.isNaN(parsedOpacity)
       ? 0.2
       : Math.max(0, Math.min(1, parsedOpacity));
+    const rawGridSize = pageData.gridSize;
+    const rawGridCells = pageData.gridCells;
+    const safeGridSize = resolveGridSize(
+      rawGridSize === '' || rawGridSize === null ? undefined : rawGridSize,
+      pages[editIndex]?.gridSize ?? DEFAULT_GRID_SIZE
+    );
+    const safeGridCells = resolveGridCells(
+      rawGridCells === '' || rawGridCells === null ? undefined : rawGridCells,
+      pages[editIndex]?.gridCells ?? DEFAULT_GRID_CELLS
+    );
     onUpdate(editIndex, {
       name: pageData.name,
-      gridSize: parseInt(pageData.gridSize, 10) || 1,
-      gridCells: parseInt(pageData.gridCells, 10) || 1,
+      gridSize: safeGridSize,
+      gridCells: safeGridCells,
       gridOffsetX: parseInt(pageData.gridOffsetX, 10) || 0,
       gridOffsetY: parseInt(pageData.gridOffsetY, 10) || 0,
       showGrid: pageData.showGrid,
@@ -157,13 +173,13 @@ const PageSelector = ({
           <Input
             type="number"
             label="Tamaño de celda"
-            value={pageData.gridSize || 1}
+            value={pageData.gridSize ?? ''}
             onChange={e => setPageData({ ...pageData, gridSize: e.target.value })}
           />
           <Input
             type="number"
             label="Nº casillas"
-            value={pageData.gridCells || 1}
+            value={pageData.gridCells ?? ''}
             onChange={e => setPageData({ ...pageData, gridCells: e.target.value })}
           />
           <Input

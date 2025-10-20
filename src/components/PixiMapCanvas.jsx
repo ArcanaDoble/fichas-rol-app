@@ -27,6 +27,7 @@ import { normalizeShopInventories } from '../utils/shopInventory';
 import { applyDoorCheck } from '../utils/door';
 import { computeVisibilityWithSegments, createVisibilitySegments } from '../utils/visibility';
 import LoadingSpinner from './LoadingSpinner';
+import { DEFAULT_GRID_SIZE, DEFAULT_GRID_CELLS } from '../utils/grid';
 
 const DEFAULT_STAGE_BACKGROUND = '#1f2937';
 
@@ -314,8 +315,8 @@ LightMask.propTypes = {
 const PixiMapCanvas = forwardRef((props, ref) => {
   const {
     backgroundImage,
-    gridSize = 64,
-    gridCells = 30,
+    gridSize = DEFAULT_GRID_SIZE,
+    gridCells = DEFAULT_GRID_CELLS,
     gridOffsetX = 0,
     gridOffsetY = 0,
     minZoom = 0.5,

@@ -61,6 +61,12 @@ import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import { DEFAULT_SHOP_CONFIG, normalizeShopConfig } from './utils/shop';
+import {
+  DEFAULT_GRID_SIZE,
+  DEFAULT_GRID_CELLS,
+  resolveGridSize,
+  resolveGridCells,
+} from './utils/grid';
 import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
 import { applyIconConversions } from './utils/iconConversions';
 import PageSelector from './components/PageSelector';
@@ -1257,6 +1263,10 @@ function App() {
   const prevAmbientLightsRef = useRef([]);
   const prevBgRef = useRef(null);
   const prevGridRef = useRef({});
+  const gridStateRef = useRef({
+    size: DEFAULT_GRID_SIZE,
+    cells: DEFAULT_GRID_CELLS,
+  });
   const gridSaveTimeoutRef = useRef(null);
   const pendingGridRef = useRef(null);
   const pendingGridTimeoutRef = useRef(null);
@@ -1302,8 +1312,8 @@ function App() {
   });
   const [canvasBackground, setCanvasBackground] = useState(null);
   // Configuración de la cuadrícula del mapa de batalla
-  const [gridSize, setGridSize] = useState(100);
-  const [gridCells, setGridCells] = useState(30);
+  const [gridSize, setGridSize] = useState(DEFAULT_GRID_SIZE);
+  const [gridCells, setGridCells] = useState(DEFAULT_GRID_CELLS);
   const [gridOffsetX, setGridOffsetX] = useState(0);
   const [gridOffsetY, setGridOffsetY] = useState(0);
   const [showGrid, setShowGrid] = useState(true);
@@ -1311,6 +1321,10 @@ function App() {
   const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
+
+  useEffect(() => {
+    gridStateRef.current = { size: gridSize, cells: gridCells };
+  }, [gridSize, gridCells]);
 
   const diffTokens = (prev, next) => {
     const prevMap = new Map(
@@ -1581,15 +1595,19 @@ function App() {
       });
       if (loaded.length === 0) {
         // Crear canvas con fondo blanco y grid negro para la página por defecto
-        const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
+        const defaultBackground = createDefaultGridCanvas(
+          1500,
+          1000,
+          DEFAULT_GRID_SIZE
+        );
 
         const defaultPage = {
           id: nanoid(),
           name: 'Página 1',
           background: defaultBackground, // Usar directamente el data URL
           backgroundHash: null,
-          gridSize: 50,
-          gridCells: 30,
+          gridSize: DEFAULT_GRID_SIZE,
+          gridCells: DEFAULT_GRID_CELLS,
           gridOffsetX: 0,
           gridOffsetY: 0,
           showGrid: true,
@@ -1663,6 +1681,14 @@ function App() {
           );
           const opacity =
             pageData.darknessOpacity !== undefined ? pageData.darknessOpacity : 0.7;
+          const nextGridSize = resolveGridSize(
+            pageData.gridSize,
+            gridStateRef.current.size
+          );
+          const nextGridCells = resolveGridCells(
+            pageData.gridCells,
+            gridStateRef.current.cells
+          );
           setPages((prevPages) => {
             const pageIndex = prevPages.findIndex(
               (p) => p.id === playerVisiblePageId
@@ -1678,6 +1704,10 @@ function App() {
                 ambientLights: pageData.ambientLights || [],
                 background: pageData.background,
                 backgroundHash: pageData.backgroundHash,
+                gridSize: nextGridSize,
+                gridCells: nextGridCells,
+                gridOffsetX: pageData.gridOffsetX || 0,
+                gridOffsetY: pageData.gridOffsetY || 0,
                 enableDarkness:
                   pageData.enableDarkness !== undefined
                     ? pageData.enableDarkness
@@ -1707,6 +1737,10 @@ function App() {
           setCanvasTiles(pageData.tiles || []);
           setCanvasAmbientLights(pageData.ambientLights || []);
           setCanvasShopConfig(normalizedShopConfig);
+          setGridSize(nextGridSize);
+          setGridCells(nextGridCells);
+          setGridOffsetX(pageData.gridOffsetX || 0);
+          setGridOffsetY(pageData.gridOffsetY || 0);
         }
       },
       (error) => {
@@ -1834,8 +1868,16 @@ function App() {
           setCanvasTiles(pageData.tiles || []);
           setCanvasBackground(pageData.background || null);
           prevTilesRef.current = pageData.tiles || [];
-          setGridSize(pageData.gridSize || 1);
-          setGridCells(pageData.gridCells || 1);
+          const nextGridSize = resolveGridSize(
+            pageData.gridSize,
+            gridStateRef.current.size
+          );
+          const nextGridCells = resolveGridCells(
+            pageData.gridCells,
+            gridStateRef.current.cells
+          );
+          setGridSize(nextGridSize);
+          setGridCells(nextGridCells);
           setGridOffsetX(pageData.gridOffsetX || 0);
           setGridOffsetY(pageData.gridOffsetY || 0);
 
@@ -2091,8 +2133,16 @@ function App() {
         setCanvasAmbientLights(data.ambientLights || []);
         setCanvasShopConfig(normalizedShopConfig);
         setCanvasBackground(data.background || null);
-        setGridSize(data.gridSize || 1);
-        setGridCells(data.gridCells || 1);
+        const nextGridSize = resolveGridSize(
+          data.gridSize,
+          gridStateRef.current.size
+        );
+        const nextGridCells = resolveGridCells(
+          data.gridCells,
+          gridStateRef.current.cells
+        );
+        setGridSize(nextGridSize);
+        setGridCells(nextGridCells);
         setGridOffsetX(data.gridOffsetX || 0);
         setGridOffsetY(data.gridOffsetY || 0);
         setShowGrid(data.showGrid !== undefined ? data.showGrid : true);
@@ -2115,16 +2165,16 @@ function App() {
         prevAmbientLightsRef.current = data.ambientLights || [];
         prevBgRef.current = data.background || null;
         prevGridRef.current = {
-          gridSize: data.gridSize || 1,
-          gridCells: data.gridCells || 1,
-            gridOffsetX: data.gridOffsetX || 0,
-            gridOffsetY: data.gridOffsetY || 0,
-            showGrid: data.showGrid !== undefined ? data.showGrid : true,
-            gridColor: (data.gridColor || '#ffffff').toLowerCase(),
-            gridOpacity:
-              data.gridOpacity !== undefined
-                ? Math.max(0, Math.min(1, data.gridOpacity))
-                : 0.2,
+          gridSize: nextGridSize,
+          gridCells: nextGridCells,
+          gridOffsetX: data.gridOffsetX || 0,
+          gridOffsetY: data.gridOffsetY || 0,
+          showGrid: data.showGrid !== undefined ? data.showGrid : true,
+          gridColor: (data.gridColor || '#ffffff').toLowerCase(),
+          gridOpacity:
+            data.gridOpacity !== undefined
+              ? Math.max(0, Math.min(1, data.gridOpacity))
+              : 0.2,
         };
 
         // Actualizar metadatos de la página
@@ -2136,8 +2186,8 @@ function App() {
             name: data.name || existing?.name,
             background: data.background || null,
             backgroundHash: data.backgroundHash || null,
-            gridSize: data.gridSize || 1,
-            gridCells: data.gridCells || 1,
+            gridSize: nextGridSize,
+            gridCells: nextGridCells,
             gridOffsetX: data.gridOffsetX || 0,
             gridOffsetY: data.gridOffsetY || 0,
             tiles: data.tiles || [],
@@ -2531,7 +2581,7 @@ function App() {
   const createDefaultGridCanvas = (
     width = 1500,
     height = 1000,
-    cellSize = 50
+    cellSize = DEFAULT_GRID_SIZE
   ) => {
     try {
       const canvas = document.createElement('canvas');
@@ -2591,15 +2641,19 @@ function App() {
 
   const addPage = async () => {
     // Crear canvas con fondo blanco y grid negro
-    const defaultBackground = createDefaultGridCanvas(1500, 1000, 50);
+    const defaultBackground = createDefaultGridCanvas(
+      1500,
+      1000,
+      DEFAULT_GRID_SIZE
+    );
 
     const newPage = {
       id: nanoid(),
       name: `Página ${pages.length + 1}`,
       background: defaultBackground, // Usar directamente el data URL
       backgroundHash: null,
-      gridSize: 50,
-      gridCells: 30,
+      gridSize: DEFAULT_GRID_SIZE,
+      gridCells: DEFAULT_GRID_CELLS,
       gridOffsetX: 0,
       gridOffsetY: 0,
       showGrid: true,
@@ -2623,6 +2677,7 @@ function App() {
   const updatePage = (index, data) => {
     const pageId = pages[index]?.id;
     const sanitizedData = { ...data };
+    const targetPage = pages[index];
     if (
       sanitizedData.gridColor !== undefined &&
       typeof sanitizedData.gridColor === 'string'
@@ -2632,6 +2687,19 @@ function App() {
     if (sanitizedData.shopConfig !== undefined) {
       sanitizedData.shopConfig = normalizeShopConfig(sanitizedData.shopConfig);
     }
+    if (sanitizedData.gridSize !== undefined) {
+      sanitizedData.gridSize = resolveGridSize(
+        sanitizedData.gridSize,
+        targetPage?.gridSize ?? DEFAULT_GRID_SIZE
+      );
+    }
+    if (sanitizedData.gridCells !== undefined) {
+      sanitizedData.gridCells = resolveGridCells(
+        sanitizedData.gridCells,
+        targetPage?.gridCells ?? DEFAULT_GRID_CELLS
+      );
+    }
+
     if (pageId) {
       const { tokens, ...rest } = sanitizedData;
       if (Object.keys(rest).length) updateDoc(doc(db, 'pages', pageId), rest);
@@ -2649,10 +2717,13 @@ function App() {
         });
       }
     }
+
     setPages((ps) => ps.map((p, i) => (i === index ? { ...p, ...sanitizedData } : p)));
     if (index === currentPage) {
-      if (sanitizedData.gridSize !== undefined) setGridSize(sanitizedData.gridSize);
-      if (sanitizedData.gridCells !== undefined) setGridCells(sanitizedData.gridCells);
+      if (sanitizedData.gridSize !== undefined)
+        setGridSize(sanitizedData.gridSize);
+      if (sanitizedData.gridCells !== undefined)
+        setGridCells(sanitizedData.gridCells);
       if (sanitizedData.gridOffsetX !== undefined) setGridOffsetX(sanitizedData.gridOffsetX);
       if (sanitizedData.gridOffsetY !== undefined) setGridOffsetY(sanitizedData.gridOffsetY);
       if (sanitizedData.showGrid !== undefined) setShowGrid(sanitizedData.showGrid);
