@@ -2506,50 +2506,50 @@ const MapCanvas = ({
   }, [playerVisionPolygons]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-    const diffTokens = (prev, next) => {
-      const prevMap = new Map(
-        prev.map((t) => {
-          const id = String(t.id);
-          return [id, { ...t, id }];
-        })
-      );
-      const changed = [];
-      const stripMeta = (token) => {
-        if (!token) return token;
-        const { updatedAt, updatedBy, ...rest } = token;
-        return rest;
-      };
-      const author = playerName || 'unknown';
-      next.forEach((tk) => {
-        const id = String(tk.id);
-        const old = prevMap.get(id);
-        if (!old) {
-          changed.push({
-            ...tk,
-            id,
-            updatedAt: Date.now(),
-            updatedBy: author,
-          });
-        } else if (!deepEqual(stripMeta(old), stripMeta(tk))) {
-          changed.push({
-            ...tk,
-            id,
-            updatedAt: Date.now(),
-            updatedBy: author,
-          });
-        }
-        prevMap.delete(id);
-      });
-      prevMap.forEach((tk) => {
+  const diffTokens = (prev, next) => {
+    const prevMap = new Map(
+      prev.map((t) => {
+        const id = String(t.id);
+        return [id, { ...t, id }];
+      })
+    );
+    const changed = [];
+    const stripMeta = (token) => {
+      if (!token) return token;
+      const { updatedAt, updatedBy, ...rest } = token;
+      return rest;
+    };
+    const author = playerName || 'unknown';
+    next.forEach((tk) => {
+      const id = String(tk.id);
+      const old = prevMap.get(id);
+      if (!old) {
         changed.push({
-          id: String(tk.id),
-          _deleted: true,
+          ...tk,
+          id,
           updatedAt: Date.now(),
           updatedBy: author,
         });
+      } else if (!deepEqual(stripMeta(old), stripMeta(tk))) {
+        changed.push({
+          ...tk,
+          id,
+          updatedAt: Date.now(),
+          updatedBy: author,
+        });
+      }
+      prevMap.delete(id);
+    });
+    prevMap.forEach((tk) => {
+      changed.push({
+        id: String(tk.id),
+        _deleted: true,
+        updatedAt: Date.now(),
+        updatedBy: author,
       });
-      return changed;
-    };
+    });
+    return changed;
+  };
 
   const handleTokensChange = useCallback(
     (newTokens, options = {}) => {
@@ -2557,9 +2557,18 @@ const MapCanvas = ({
       const changedTokens = diffTokens(prev, newTokens);
       if (changedTokens.length === 0) return;
 
+      const applyChanges = (changes) => {
+        if (!changes?.length) return;
+        onTokensChange((prevTokens) => {
+          const nextTokens = mergeTokens(prevTokens, changes);
+          tokensRef.current = nextTokens;
+          return nextTokens;
+        });
+      };
+
       if (options.localOnly) {
         console.log('[tokens] cambios locales', new Date().toISOString(), changedTokens);
-        onTokensChange((prevTokens) => mergeTokens(prevTokens, changedTokens));
+        applyChanges(changedTokens);
         return;
       }
 
@@ -2567,7 +2576,9 @@ const MapCanvas = ({
         const allowed = changedTokens.filter((tk) => {
           const original = prev.find((pt) => pt.id === tk.id);
           const owner = tk.controlledBy || original?.controlledBy;
-          return tk._deleted ? original?.controlledBy === playerName : owner === playerName;
+          return tk._deleted
+            ? original?.controlledBy === playerName
+            : owner === playerName;
         });
         if (allowed.length === 0) return;
         console.log('[tokens] cambios permitidos', new Date().toISOString(), allowed);
@@ -2583,10 +2594,10 @@ const MapCanvas = ({
               });
           }
         }
-        onTokensChange((prevTokens) => mergeTokens(prevTokens, allowed));
+        applyChanges(allowed);
       } else {
         console.log('[tokens] cambios', new Date().toISOString(), changedTokens);
-        onTokensChange((prevTokens) => mergeTokens(prevTokens, changedTokens));
+        applyChanges(changedTokens);
       }
     },
     [isPlayerView, playerName, onTokensChange, syncManager]
