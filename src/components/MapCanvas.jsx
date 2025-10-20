@@ -2557,18 +2557,18 @@ const MapCanvas = ({
       const changedTokens = diffTokens(prev, newTokens);
       if (changedTokens.length === 0) return;
 
-      const applyChanges = (changes) => {
-        if (!changes?.length) return;
-        onTokensChange((prevTokens) => {
-          const nextTokens = mergeTokens(prevTokens, changes);
-          tokensRef.current = nextTokens;
-          return nextTokens;
-        });
+      const optimisticNext = mergeTokens(tokensRef.current, changedTokens);
+      tokensRef.current = optimisticNext;
+
+      const applyChanges = (changes, nextTokens) => {
+        if (!changes?.length || !nextTokens) return;
+        tokensRef.current = nextTokens;
+        onTokensChange(() => nextTokens);
       };
 
       if (options.localOnly) {
         console.log('[tokens] cambios locales', new Date().toISOString(), changedTokens);
-        applyChanges(changedTokens);
+        applyChanges(changedTokens, optimisticNext);
         return;
       }
 
@@ -2581,6 +2581,11 @@ const MapCanvas = ({
             : owner === playerName;
         });
         if (allowed.length === 0) return;
+        const allowedNext =
+          allowed.length === changedTokens.length
+            ? optimisticNext
+            : mergeTokens(prev, allowed);
+        tokensRef.current = allowedNext;
         console.log('[tokens] cambios permitidos', new Date().toISOString(), allowed);
         if (syncManager) {
           const savePromise = syncManager.saveToFirebase('tokens', allowed, options);
@@ -2594,10 +2599,10 @@ const MapCanvas = ({
               });
           }
         }
-        applyChanges(allowed);
+        applyChanges(allowed, allowedNext);
       } else {
         console.log('[tokens] cambios', new Date().toISOString(), changedTokens);
-        applyChanges(changedTokens);
+        applyChanges(changedTokens, optimisticNext);
       }
     },
     [isPlayerView, playerName, onTokensChange, syncManager]
