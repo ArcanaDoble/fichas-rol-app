@@ -352,12 +352,24 @@ export default class PixiBattleMap {
     if (!renderer) {
       return;
     }
-    const width = this.container.clientWidth || MIN_WORLD_SIZE;
-    const height = this.container.clientHeight || MIN_WORLD_SIZE;
+    const rawWidth = Number(this.container.clientWidth);
+    const rawHeight = Number(this.container.clientHeight);
+
+    if (
+      !Number.isFinite(rawWidth) ||
+      !Number.isFinite(rawHeight) ||
+      rawWidth <= 0 ||
+      rawHeight <= 0
+    ) {
+      return;
+    }
+
+    const width = Math.max(rawWidth, MIN_WORLD_SIZE);
+    const height = Math.max(rawHeight, MIN_WORLD_SIZE);
 
     const currentCenter = this.viewport.center;
     if (typeof renderer.resize === 'function') {
-      renderer.resize({ width, height });
+      renderer.resize(width, height);
     }
     this.viewport.resize(width, height, this.state.worldWidth, this.state.worldHeight);
     this.viewport.clamp({
