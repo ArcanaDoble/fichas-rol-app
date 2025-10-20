@@ -360,6 +360,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
   } = props;
 
   const containerRef = useRef(null);
+  const [containerElement, setContainerElement] = useState(null);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(initialZoom);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
@@ -409,16 +410,35 @@ const PixiMapCanvas = forwardRef((props, ref) => {
 
   const backgroundTexture = useTexture(backgroundImage);
 
+  useEffect(() => {
+    const application = stageRef.current?.getApplication?.();
+    if (!application) return;
+    const { width, height } = stageSize;
+    if (!width || !height) return;
+
+    application.renderer?.resize(width, height);
+    const canvas = stageRef.current?.getCanvas?.();
+    if (canvas) {
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+    }
+  }, [stageSize]);
+
+  const handleContainerRef = useCallback((node) => {
+    containerRef.current = node;
+    setContainerElement(node);
+  }, []);
+
   useLayoutEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerElement) return;
     const resize = () => {
-      const bounds = containerRef.current.getBoundingClientRect();
+      const bounds = containerElement.getBoundingClientRect();
       setStageSize({ width: bounds.width, height: bounds.height });
     };
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, []);
+  }, [containerElement]);
 
   useEffect(() => {
     setShopDraft(normalizeShopConfig(shopConfig || DEFAULT_SHOP_CONFIG));
@@ -571,7 +591,7 @@ const PixiMapCanvas = forwardRef((props, ref) => {
   );
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
+    <div ref={handleContainerRef} className="relative h-full w-full overflow-hidden">
       {isLoading && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40">
           <LoadingSpinner />
@@ -579,12 +599,13 @@ const PixiMapCanvas = forwardRef((props, ref) => {
       )}
       <Application
         ref={stageRef}
-        width={stageSize.width || 1}
-        height={stageSize.height || 1}
+        width={stageSize.width}
+        height={stageSize.height}
         resolution={window.devicePixelRatio}
         antialias
         autoDensity
         background={DEFAULT_STAGE_BACKGROUND}
+        resizeTo={containerElement ?? undefined}
       >
         <StageViewport
           width={stageSize.width}
