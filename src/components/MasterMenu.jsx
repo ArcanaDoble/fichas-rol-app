@@ -49,6 +49,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: false,
     },
     {
+      id: 'pixiCanvas',
+      title: 'Mapa de Batalla (Pixi)',
+      description: 'Variante optimizada con renderizado Pixi y controles avanzados',
+      color: 'cyan',
+      features: ['Mapa', 'Pixi', 'Tokens', 'Rendimiento'],
+      isNew: true,
+    },
+    {
       id: 'minimap',
       title: 'Minimapa',
       description: 'Constructor de minimapas con vista PC y Movil',
