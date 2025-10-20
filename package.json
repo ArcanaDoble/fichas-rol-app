@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@pixi/react": "^8.0.3",
+    "@pixi/react": "^7.1.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -20,6 +20,7 @@
     "konva": "^9.3.20",
     "lucide-react": "^0.539.0",
     "nanoid": "^3.3.8",
+    "pixi-viewport": "^6.0.3",
     "pixi.js": "^8.14.0",
     "react": "^19.1.0",
     "react-dnd": "^16.0.1",
