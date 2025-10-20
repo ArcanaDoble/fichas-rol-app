@@ -2560,10 +2560,10 @@ const MapCanvas = ({
       const optimisticNext = mergeTokens(tokensRef.current, changedTokens);
       tokensRef.current = optimisticNext;
 
-      const applyChanges = (changes, nextTokens) => {
+      const applyChanges = (changes, nextTokens = optimisticNext) => {
         if (!changes?.length || !nextTokens) return;
         tokensRef.current = nextTokens;
-        onTokensChange(() => nextTokens);
+        onTokensChange(nextTokens);
       };
 
       if (options.localOnly) {
