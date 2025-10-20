@@ -49,6 +49,15 @@ export default class PixiBattleMap {
     this.container = containerEl;
     this.container.style.position = this.container.style.position || 'relative';
     this.container.style.overflow = 'hidden';
+    if (!this.container.style.width) {
+      this.container.style.width = '100%';
+    }
+    if (!this.container.style.height) {
+      this.container.style.height = '100%';
+    }
+    if (!this.container.style.minHeight) {
+      this.container.style.minHeight = '400px';
+    }
 
     this.state = {
       cellSize: clampNumber(opts.cellSize, 8, 512, DEFAULTS.cellSize),
@@ -143,6 +152,10 @@ export default class PixiBattleMap {
     this.viewport.addChild(this.backgroundLayer, this.gridLayer, this.tokensLayer);
     this.app.stage.addChild(this.viewport);
 
+    this.placeholderGraphic = null;
+    this.ensurePlaceholder();
+    this.updatePlaceholderPosition();
+
     this.viewport.on('pointerdown', (event) => {
       if (event.target === this.viewport) {
         this.clearSelection();
@@ -171,6 +184,7 @@ export default class PixiBattleMap {
       return;
     }
 
+    this.hidePlaceholder();
     this.backgroundLayer.removeChildren();
 
     if (url) {
@@ -183,9 +197,14 @@ export default class PixiBattleMap {
         background.height = targetHeight;
         background.eventMode = 'none';
         this.backgroundLayer.addChild(background);
+        this.hidePlaceholder();
       } catch (error) {
         console.error('[PixiBattleMap] No se pudo cargar el mapa:', error);
+        this.ensurePlaceholder();
       }
+    }
+    if (!url) {
+      this.ensurePlaceholder();
     }
 
     this.state.worldWidth = targetWidth;
@@ -193,6 +212,7 @@ export default class PixiBattleMap {
     this.updateViewportHitArea();
     this.drawGrid();
     this.resize();
+    this.updatePlaceholderPosition();
     this.viewport.clamp({
       direction: 'all',
       top: 0,
@@ -350,6 +370,7 @@ export default class PixiBattleMap {
     if (currentCenter) {
       this.viewport.moveCenter(currentCenter.x, currentCenter.y);
     }
+    this.updatePlaceholderPosition();
   }
 
   clearSelection() {
@@ -463,6 +484,47 @@ export default class PixiBattleMap {
     }
   }
 
+  ensurePlaceholder() {
+    if (this.destroyed || !this.backgroundLayer) {
+      return;
+    }
+    if (this.placeholderGraphic) {
+      return;
+    }
+    const graphic = new Graphics();
+    graphic.alpha = 0.6;
+    graphic.lineStyle({ width: 3, color: 0x555555, alpha: 0.8 });
+    graphic.beginFill(0x2d2d2d, 0.9);
+    graphic.drawRoundedRect(-100, -60, 200, 120, 16);
+    graphic.endFill();
+    graphic.moveTo(-100, 0);
+    graphic.lineTo(100, 0);
+    graphic.moveTo(0, -60);
+    graphic.lineTo(0, 60);
+    graphic.eventMode = 'none';
+    this.placeholderGraphic = graphic;
+    this.backgroundLayer.addChild(graphic);
+    this.updatePlaceholderPosition();
+  }
+
+  hidePlaceholder() {
+    if (!this.placeholderGraphic) {
+      return;
+    }
+    this.placeholderGraphic.removeFromParent();
+    this.placeholderGraphic.destroy();
+    this.placeholderGraphic = null;
+  }
+
+  updatePlaceholderPosition() {
+    if (!this.placeholderGraphic) {
+      return;
+    }
+    const centerX = (this.state.worldWidth || MIN_WORLD_SIZE) / 2;
+    const centerY = (this.state.worldHeight || MIN_WORLD_SIZE) / 2;
+    this.placeholderGraphic.position.set(centerX, centerY);
+  }
+
   updateViewportHitArea() {
     if (!this.viewport) {
       return;
@@ -531,6 +593,7 @@ export default class PixiBattleMap {
         this.viewport = null;
       }
       if (this.backgroundLayer) {
+        this.hidePlaceholder();
         this.backgroundLayer.destroy({ children: true });
         this.backgroundLayer = null;
       }
@@ -547,6 +610,7 @@ export default class PixiBattleMap {
         this.container.removeChild(canvas);
       }
       this.canvas = null;
+      this.placeholderGraphic = null;
       if (this.app?.destroy) {
         try {
           this.app.destroy();

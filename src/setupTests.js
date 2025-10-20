@@ -185,7 +185,9 @@ jest.mock('pixi.js', () => {
   };
 });
 
-jest.mock('pixi-viewport', () => {
+jest.mock(
+  'pixi-viewport',
+  () => {
   class MockViewport {
     constructor() {
       this.plugins = {
@@ -256,7 +258,9 @@ jest.mock('pixi-viewport', () => {
     __esModule: true,
     Viewport: MockViewport,
   };
-});
+  },
+  { virtual: true }
+);
 
 jest.mock('@tiptap/react', () => {
   const React = require('react');

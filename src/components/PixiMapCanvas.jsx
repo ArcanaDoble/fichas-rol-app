@@ -327,11 +327,12 @@ const PixiMapCanvas = forwardRef(
     );
 
     return (
-      <div className="relative w-full h-full">
+      <div className="relative w-full h-full min-h-[400px]">
         <div
           id="pixi-stage"
           ref={stageRef}
           className="absolute inset-0 rounded-xl bg-gray-900 overflow-hidden"
+          style={{ minHeight: '400px' }}
         />
       </div>
     );
