@@ -19,6 +19,9 @@ const PixiMapCanvas = forwardRef(
       gridColor = '#ffffff',
       gridOpacity = 0.2,
       showGrid = true,
+      gridCells = null,
+      gridOffsetX = 0,
+      gridOffsetY = 0,
       tokens = [],
       onTokensChange,
       ...rest
@@ -40,7 +43,12 @@ const PixiMapCanvas = forwardRef(
       }
 
       unmountedRef.current = false;
-      const map = new PixiBattleMap(container, { cellSize: gridSize });
+      const map = new PixiBattleMap(container, {
+        cellSize: gridSize,
+        gridCells,
+        offsetX: gridOffsetX,
+        offsetY: gridOffsetY,
+      });
       mapRef.current = map;
 
       let cancelled = false;
@@ -62,6 +70,9 @@ const PixiMapCanvas = forwardRef(
           color: gridColor,
           opacity: gridOpacity,
           visible: showGrid,
+          gridCells,
+          offsetX: gridOffsetX,
+          offsetY: gridOffsetY,
         });
       };
 
@@ -101,14 +112,36 @@ const PixiMapCanvas = forwardRef(
           return;
         }
 
-        const fallbackWidth =
+        const resolveGridCellsValue = () => {
+          if (typeof gridCells === 'object' && gridCells !== null) {
+            const config = gridCells;
+            return Number(
+              config.columns ??
+                config.cols ??
+                config.x ??
+                config.rows ??
+                config.row ??
+                config.y ??
+                config.count ??
+                config.value
+            );
+          }
+          return Number(gridCells);
+        };
+
+        const numericGridCells = resolveGridCellsValue();
+        const hasGridCells =
+          Number.isFinite(numericGridCells) && numericGridCells > 0;
+        const safeGridSize =
           Number.isFinite(gridSize) && gridSize > 0
-            ? gridSize * 20
-            : DEFAULT_FALLBACK_WIDTH;
-        const fallbackHeight =
-          Number.isFinite(gridSize) && gridSize > 0
-            ? gridSize * 15
-            : DEFAULT_FALLBACK_HEIGHT;
+            ? gridSize
+            : DEFAULT_GRID_SIZE;
+        const fallbackWidth = hasGridCells
+          ? numericGridCells * safeGridSize
+          : Math.max(safeGridSize * 20, DEFAULT_FALLBACK_WIDTH);
+        const fallbackHeight = hasGridCells
+          ? numericGridCells * safeGridSize
+          : Math.max(safeGridSize * 15, DEFAULT_FALLBACK_HEIGHT);
 
         if (!backgroundImage) {
           await map.loadMap(null, fallbackWidth, fallbackHeight);
@@ -141,7 +174,7 @@ const PixiMapCanvas = forwardRef(
       return () => {
         cancelled = true;
       };
-    }, [backgroundImage, gridSize]);
+    }, [backgroundImage, gridSize, gridCells]);
 
     useEffect(() => {
       const map = mapRef.current;
@@ -165,6 +198,9 @@ const PixiMapCanvas = forwardRef(
           color: gridColor,
           opacity: gridOpacity,
           visible: showGrid,
+          gridCells,
+          offsetX: gridOffsetX,
+          offsetY: gridOffsetY,
         });
       };
 
@@ -173,7 +209,15 @@ const PixiMapCanvas = forwardRef(
       return () => {
         cancelled = true;
       };
-    }, [gridSize, gridColor, gridOpacity, showGrid]);
+    }, [
+      gridSize,
+      gridColor,
+      gridOpacity,
+      showGrid,
+      gridCells,
+      gridOffsetX,
+      gridOffsetY,
+    ]);
 
     useEffect(() => {
       const map = mapRef.current;
@@ -545,6 +589,15 @@ PixiMapCanvas.propTypes = {
   gridColor: PropTypes.string,
   gridOpacity: PropTypes.number,
   showGrid: PropTypes.bool,
+  gridCells: PropTypes.oneOfType([
+    PropTypes.number,
+    PropTypes.shape({
+      columns: PropTypes.number,
+      rows: PropTypes.number,
+    }),
+  ]),
+  gridOffsetX: PropTypes.number,
+  gridOffsetY: PropTypes.number,
   tokens: PropTypes.arrayOf(PropTypes.object),
   onTokensChange: PropTypes.func,
   activeLayer: PropTypes.string,

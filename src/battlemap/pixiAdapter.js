@@ -71,6 +71,15 @@ export default class PixiBattleMap {
       gridOpacity: DEFAULTS.gridOpacity,
       gridColor: DEFAULTS.gridColor,
       gridVisible: DEFAULTS.gridVisible,
+      gridOffsetX: Number.isFinite(Number(opts.offsetX))
+        ? Number(opts.offsetX)
+        : 0,
+      gridOffsetY: Number.isFinite(Number(opts.offsetY))
+        ? Number(opts.offsetY)
+        : 0,
+      gridCells: null,
+      gridColumns: null,
+      gridRows: null,
       worldWidth: MIN_WORLD_SIZE,
       worldHeight: MIN_WORLD_SIZE,
     };
@@ -470,6 +479,96 @@ export default class PixiBattleMap {
     }
     if (opts.visible !== undefined) {
       this.state.gridVisible = Boolean(opts.visible);
+    }
+
+    if (opts.offsetX !== undefined) {
+      const numeric = Number(opts.offsetX);
+      if (Number.isFinite(numeric)) {
+        this.state.gridOffsetX = numeric;
+      }
+    }
+    if (opts.offsetY !== undefined) {
+      const numeric = Number(opts.offsetY);
+      if (Number.isFinite(numeric)) {
+        this.state.gridOffsetY = numeric;
+      }
+    }
+
+    const parsePositive = (value) => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+    };
+
+    let resolvedColumns = null;
+    let resolvedRows = null;
+    let resolvedCells = null;
+
+    if (opts.gridCells !== undefined) {
+      if (typeof opts.gridCells === 'object' && opts.gridCells !== null) {
+        const config = opts.gridCells;
+        resolvedColumns =
+          parsePositive(config.columns ?? config.cols ?? config.x) ?? null;
+        resolvedRows =
+          parsePositive(config.rows ?? config.row ?? config.y) ?? null;
+        resolvedCells = parsePositive(config.count ?? config.value);
+      } else {
+        const numeric = parsePositive(opts.gridCells);
+        if (numeric !== null) {
+          resolvedColumns = numeric;
+          resolvedRows = numeric;
+          resolvedCells = numeric;
+        }
+      }
+    }
+
+    const extraColumns =
+      parsePositive(opts.columns ?? opts.gridColumns ?? opts.cols) ?? null;
+    const extraRows =
+      parsePositive(opts.rows ?? opts.gridRows ?? opts.row) ?? null;
+
+    if (extraColumns !== null) {
+      resolvedColumns = extraColumns;
+    }
+    if (extraRows !== null) {
+      resolvedRows = extraRows;
+    }
+
+    if (resolvedColumns !== null || resolvedRows !== null) {
+      const fallback =
+        resolvedColumns !== null
+          ? resolvedColumns
+          : resolvedRows !== null
+          ? resolvedRows
+          : null;
+      if (resolvedColumns === null && fallback !== null) {
+        resolvedColumns = fallback;
+      }
+      if (resolvedRows === null && fallback !== null) {
+        resolvedRows = fallback;
+      }
+      if (resolvedColumns !== null) {
+        this.state.gridColumns = Math.max(1, Math.floor(resolvedColumns));
+      }
+      if (resolvedRows !== null) {
+        this.state.gridRows = Math.max(1, Math.floor(resolvedRows));
+      }
+      if (resolvedCells !== null) {
+        this.state.gridCells = Math.max(1, Math.floor(resolvedCells));
+      } else if (resolvedColumns !== null && resolvedRows !== null) {
+        this.state.gridCells =
+          resolvedColumns === resolvedRows
+            ? Math.max(1, Math.floor(resolvedColumns))
+            : null;
+      } else if (resolvedColumns !== null) {
+        this.state.gridCells = Math.max(1, Math.floor(resolvedColumns));
+      } else if (resolvedRows !== null) {
+        this.state.gridCells = Math.max(1, Math.floor(resolvedRows));
+      }
+    }
+
+    const effectiveCellSize = this.getEffectiveCellSize();
+    if (Number.isFinite(effectiveCellSize) && effectiveCellSize > 0) {
+      this.state.cellSize = effectiveCellSize;
     }
 
     this.drawGrid();
@@ -1443,6 +1542,48 @@ export default class PixiBattleMap {
     };
   }
 
+  getGridDimensions() {
+    const columns = Number.isFinite(this.state.gridColumns)
+      ? Math.max(1, Math.floor(this.state.gridColumns))
+      : null;
+    const rows = Number.isFinite(this.state.gridRows)
+      ? Math.max(1, Math.floor(this.state.gridRows))
+      : null;
+    if (columns !== null && rows !== null) {
+      return { columns, rows };
+    }
+    if (columns !== null) {
+      return { columns, rows: columns };
+    }
+    if (rows !== null) {
+      return { columns: rows, rows };
+    }
+    const cells = Number.isFinite(this.state.gridCells)
+      ? Math.max(1, Math.floor(this.state.gridCells))
+      : null;
+    if (cells !== null) {
+      return { columns: cells, rows: cells };
+    }
+    return { columns: null, rows: null };
+  }
+
+  getEffectiveCellSize() {
+    const { columns, rows } = this.getGridDimensions();
+    const worldWidth = Number.isFinite(this.state.worldWidth)
+      ? this.state.worldWidth
+      : 0;
+    const worldHeight = Number.isFinite(this.state.worldHeight)
+      ? this.state.worldHeight
+      : 0;
+    if (columns && worldWidth > 0) {
+      return worldWidth / columns;
+    }
+    if (rows && worldHeight > 0) {
+      return worldHeight / rows;
+    }
+    return this.state.cellSize || DEFAULTS.cellSize;
+  }
+
   drawGrid() {
     if (!this.gridLayer) {
       return;
@@ -1452,20 +1593,48 @@ export default class PixiBattleMap {
       return;
     }
 
+    const cellSize = this.getEffectiveCellSize();
+    if (!Number.isFinite(cellSize) || cellSize <= 0) {
+      return;
+    }
+
+    this.state.cellSize = cellSize;
+
+    const offsetX = Number.isFinite(this.state.gridOffsetX)
+      ? this.state.gridOffsetX
+      : 0;
+    const offsetY = Number.isFinite(this.state.gridOffsetY)
+      ? this.state.gridOffsetY
+      : 0;
+    const { columns, rows } = this.getGridDimensions();
+    const worldWidth = Number.isFinite(this.state.worldWidth)
+      ? this.state.worldWidth
+      : 0;
+    const worldHeight = Number.isFinite(this.state.worldHeight)
+      ? this.state.worldHeight
+      : 0;
+
+    const verticalLimit =
+      columns && cellSize > 0
+        ? offsetX + columns * cellSize
+        : worldWidth;
+    const horizontalLimit =
+      rows && cellSize > 0 ? offsetY + rows * cellSize : worldHeight;
+    const epsilon = cellSize * 0.0001;
+
     this.gridLayer.lineStyle({
       width: 1,
       color: this.state.gridColor,
       alpha: this.state.gridOpacity,
     });
 
-    // Aquí se dibuja la cuadrícula que se superpone al mapa de batalla.
-    for (let x = 0; x <= this.state.worldWidth; x += this.state.cellSize) {
+    for (let x = offsetX; x < verticalLimit + epsilon; x += cellSize) {
       this.gridLayer.moveTo(x, 0);
-      this.gridLayer.lineTo(x, this.state.worldHeight);
+      this.gridLayer.lineTo(x, worldHeight);
     }
-    for (let y = 0; y <= this.state.worldHeight; y += this.state.cellSize) {
+    for (let y = offsetY; y < horizontalLimit + epsilon; y += cellSize) {
       this.gridLayer.moveTo(0, y);
-      this.gridLayer.lineTo(this.state.worldWidth, y);
+      this.gridLayer.lineTo(worldWidth, y);
     }
   }
 
