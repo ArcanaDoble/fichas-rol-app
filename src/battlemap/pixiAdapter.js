@@ -1260,11 +1260,12 @@ export default class PixiBattleMap {
     }
     const additive = Boolean(options.additive);
     const toggle = Boolean(options.toggle);
-    const alreadySelected = this.selectedTokens.has(token);
 
     if (!additive && !toggle) {
       this.clearSelection();
     }
+
+    let alreadySelected = this.selectedTokens.has(token);
 
     if (toggle && alreadySelected) {
       this.deselectToken(token);
@@ -1272,11 +1273,9 @@ export default class PixiBattleMap {
       return;
     }
 
-    if (alreadySelected) {
-      return;
+    if (!alreadySelected) {
+      this.selectedTokens.add(token);
     }
-
-    this.selectedTokens.add(token);
     if (Number.isFinite(token.baseZIndex)) {
       token.zIndex = token.baseZIndex + TOKEN_SELECTION_Z_OFFSET;
     }
