@@ -8,6 +8,7 @@ import {
   Point,
   Sprite,
   Texture,
+  Text,
 } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 
@@ -23,6 +24,9 @@ const SELECTION_COLOR = 0xffcc00;
 const MIN_WORLD_SIZE = 200;
 const TOKEN_SELECTION_Z_OFFSET = 10000;
 const DEFAULT_LAYER_START_Z_INDEX = 20;
+const MIN_TOKEN_CELLS = 0.25;
+const MAX_TOKEN_CELLS = 10;
+const TOKEN_CYCLE_SIZES = [1, 2, 3];
 const FOG_DEFAULTS = {
   color: 0x000000,
   opacity: 0.65,
@@ -681,6 +685,9 @@ export default class PixiBattleMap {
 
     const current = token.battlemapData || { id: token.battlemapId };
     const next = { ...current };
+    const cellSize = this.getCellSize();
+    const minPixelSize = cellSize * MIN_TOKEN_CELLS;
+    const maxPixelSize = cellSize * MAX_TOKEN_CELLS;
 
     const assignNumber = (key, value, { clampMin, clampMax } = {}) => {
       if (value === undefined || value === null) {
@@ -709,7 +716,12 @@ export default class PixiBattleMap {
     assignNumber('x', options.x ?? options.position?.x, {});
     assignNumber('y', options.y ?? options.position?.y, {});
     assignNumber('size', options.size ?? options.width ?? options.height, {
-      clampMin: 1,
+      clampMin: minPixelSize,
+      clampMax: maxPixelSize,
+    });
+    assignNumber('pixelSize', options.pixelSize, {
+      clampMin: minPixelSize,
+      clampMax: maxPixelSize,
     });
     assignNumber('rotation', options.rotation ?? options.angle, {});
     assignNumber('opacity', options.opacity ?? options.alpha, {
@@ -748,11 +760,29 @@ export default class PixiBattleMap {
       next.name = options.name;
     }
 
+    if (options.sizeCells !== undefined || options.cells !== undefined || options.gridSize !== undefined) {
+      const cellsCandidate =
+        options.sizeCells ?? options.cells ?? options.gridSize;
+      next.sizeCells = this.clampSizeCells(cellsCandidate);
+    }
+
     if (next.x === undefined) next.x = 0;
     if (next.y === undefined) next.y = 0;
-    if (!Number.isFinite(next.size) || next.size <= 0) {
-      next.size = this.state.cellSize;
+
+    let resolvedCells = Number(next.sizeCells);
+    if (!Number.isFinite(resolvedCells) || resolvedCells <= 0) {
+      const pixelCandidate = Number(next.pixelSize ?? next.size);
+      if (Number.isFinite(pixelCandidate) && pixelCandidate > 0) {
+        resolvedCells = pixelCandidate / cellSize;
+      } else {
+        resolvedCells = this.clampSizeCells(current.sizeCells ?? 1);
+      }
     }
+    resolvedCells = this.clampSizeCells(resolvedCells);
+    const resolvedPixels = resolvedCells * cellSize;
+    next.sizeCells = resolvedCells;
+    next.pixelSize = resolvedPixels;
+    next.size = resolvedPixels;
     if (!Number.isFinite(next.rotation)) {
       next.rotation = 0;
     }
@@ -774,10 +804,11 @@ export default class PixiBattleMap {
     token.battlemapData = next;
     token.position.set(next.x, next.y);
 
-    const resolvedSize = Math.max(1, Number(next.size));
-    token.width = resolvedSize;
-    token.height = resolvedSize;
-    updateSpriteHitArea(token);
+    this.applyTokenSize(token, next.sizeCells, {
+      isCells: true,
+      updateData: next,
+      force: true,
+    });
 
     const rotationRadians = (Number(next.rotation) * Math.PI) / 180;
     token.rotation = rotationRadians;
@@ -817,8 +848,9 @@ export default class PixiBattleMap {
         .then((texture) => {
           if (this.tokens.get(token.battlemapId) === token && !this.destroyed) {
             token.texture = texture;
-            this.applyTokenSize(token, resolvedSize);
-            updateSpriteHitArea(token);
+            this.applyTokenSize(token, token.battlemapData?.sizeCells, {
+              isCells: true,
+            });
             this.updateSelectionGraphic(token);
           }
         })
@@ -1349,6 +1381,18 @@ export default class PixiBattleMap {
         overlay.addChild(handle);
         return handle;
       });
+
+      const sizeLabel = new Text('', {
+        fontFamily: 'sans-serif',
+        fontSize: 14,
+        fill: 0xffffff,
+        align: 'center',
+      });
+      sizeLabel.anchor.set(0.5, 1);
+      sizeLabel.eventMode = 'none';
+      sizeLabel.visible = false;
+      overlay.addChild(sizeLabel);
+      overlay.sizeLabel = sizeLabel;
     }
 
     overlay.followToken = token;
@@ -1473,6 +1517,14 @@ export default class PixiBattleMap {
         handle.visible = true;
       });
     }
+
+    if (overlay.sizeLabel) {
+      const sizeCells = this.getTokenSizeCells(token);
+      overlay.sizeLabel.visible = true;
+      overlay.sizeLabel.text = this.getSizeLabel(sizeCells);
+      overlay.sizeLabel.position.set(0, -height / 2 - baseSize * 0.8);
+      overlay.sizeLabel.alpha = 0.95;
+    }
   }
 
   detachResizeHandles(token, options = {}) {
@@ -1491,6 +1543,10 @@ export default class PixiBattleMap {
         handle.visible = false;
       }
     });
+
+    if (hideHandles && overlay.sizeLabel) {
+      overlay.sizeLabel.visible = false;
+    }
 
     if (token?.__resizeState) {
       const stage = this.app?.stage;
@@ -1517,10 +1573,43 @@ export default class PixiBattleMap {
     this.detachResizeHandles(token, { hideHandles: false });
 
     overlay.handles.forEach((handle) => {
-      const pointerDown = (event) => this.startTokenResize(token, handle, event);
+      const pointerDown = (event) => {
+        const detail =
+          event?.data?.originalEvent?.detail ?? event?.data?.nativeEvent?.detail;
+        if (detail >= 2) {
+          event.stopPropagation();
+          if (typeof event.preventDefault === 'function') {
+            event.preventDefault();
+          }
+          this.cycleTokenSize(token);
+          return;
+        }
+        this.startTokenResize(token, handle, event);
+      };
       handle.__pointerdownHandler = pointerDown;
       handle.on('pointerdown', pointerDown);
     });
+  }
+
+  cycleTokenSize(token) {
+    if (!token) {
+      return;
+    }
+    const currentCells = this.getTokenSizeCells(token);
+    const currentIndex = TOKEN_CYCLE_SIZES.findIndex(
+      (size) => Math.abs(size - currentCells) < 0.01
+    );
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % TOKEN_CYCLE_SIZES.length;
+    const nextCells = TOKEN_CYCLE_SIZES[nextIndex];
+    const changed = this.applyTokenSize(token, nextCells, {
+      isCells: true,
+      force: true,
+    });
+    if (changed) {
+      this.emitTokenResize(token);
+    }
+    this.snapToken(token);
+    this.refreshSelectionOverlay(token);
   }
 
   startTokenResize(token, handle, event) {
@@ -1537,10 +1626,18 @@ export default class PixiBattleMap {
       return;
     }
 
+    if (this.viewport?.plugins) {
+      this.viewport.plugins.pause('drag');
+    }
+
     const pointerId =
       event.pointerId ?? event.data?.pointerId ?? event.data?.identifier ?? 0;
 
-    const initialSize = Number(token.battlemapData?.size ?? token.width);
+    const cellSize = this.getCellSize();
+    const initialSizeCells = this.getTokenSizeCells(token);
+    const initialSnappedCells = this.snapSizeCells(initialSizeCells);
+    const initialSnappedSize = initialSnappedCells * cellSize;
+    const initialPixelSize = initialSizeCells * cellSize;
 
     const globalPoint =
       event.global ?? event.data?.global ?? event.data ?? new Point(0, 0);
@@ -1573,12 +1670,6 @@ export default class PixiBattleMap {
       y: parentLocal.y - token.y,
     };
 
-    const initialHalf = Math.max(
-      Math.abs(localOffset.x) || 0,
-      Math.abs(localOffset.y) || 0
-    );
-    const initialSnappedSize = this.snapSizeValue(initialSize);
-
     const handleResizeMove = (moveEvent) => {
       const movePointerId =
         moveEvent.pointerId ?? moveEvent.data?.pointerId ?? moveEvent.data?.identifier ?? 0;
@@ -1599,13 +1690,17 @@ export default class PixiBattleMap {
       stage.off('pointerupoutside', stopResize);
       const state = token.__resizeState;
       token.__resizeState = null;
+      this.snapToken(token);
       this.attachResizeHandles(token);
-      const currentSize = Number(token.battlemapData?.size ?? token.width);
-      const snappedCurrent = this.snapSizeValue(currentSize);
-      const initialSnapped = state?.initialSnappedSize ?? this.snapSizeValue(initialSize);
+      if (this.viewport?.plugins) {
+        this.viewport.plugins.resume('drag');
+      }
+      const currentCells = this.getTokenSizeCells(token);
+      const snappedCurrent = this.snapSizeCells(currentCells);
+      const initialSnapped = state?.initialSnappedCells ?? this.snapSizeCells(state?.initialSizeCells ?? currentCells);
       if (
         !Number.isFinite(initialSnapped) ||
-        Math.abs((state?.lastSnappedSize ?? snappedCurrent) - initialSnapped) > 0.01
+        Math.abs((state?.lastSnappedCells ?? snappedCurrent) - initialSnapped) > 0.01
       ) {
         this.emitTokenResize(token);
       }
@@ -1619,13 +1714,15 @@ export default class PixiBattleMap {
       pointerId,
       moveHandler: handleResizeMove,
       upHandler: stopResize,
-      initialSize,
+      initialSize: initialPixelSize,
+      initialSizeCells,
       initialSnappedSize,
+      initialSnappedCells,
       initialWorld: resolvedWorld,
       initialParentLocal: parentLocal,
       initialLocal: localOffset,
-      initialHalf,
       lastSnappedSize: initialSnappedSize,
+      lastSnappedCells: initialSnappedCells,
       handleDirection: handle?.__resizeMeta ?? null,
     };
 
@@ -1683,53 +1780,169 @@ export default class PixiBattleMap {
     };
 
     const direction = state.handleDirection || { sx: 0, sy: 0 };
-    const projectedDeltaX = direction.sx
-      ? (delta.x || 0) * direction.sx
-      : Math.abs(delta.x || 0);
-    const projectedDeltaY = direction.sy
-      ? (delta.y || 0) * direction.sy
-      : Math.abs(delta.y || 0);
-    const projectedDelta = Math.max(projectedDeltaX, projectedDeltaY, 0);
+    const components = [];
+    if (direction.sx) {
+      components.push((delta.x || 0) * direction.sx);
+    }
+    if (direction.sy) {
+      components.push((delta.y || 0) * direction.sy);
+    }
+    if (components.length === 0) {
+      components.push(delta.x || 0, delta.y || 0);
+    }
+    let projectedDelta = components[0] || 0;
+    for (let i = 1; i < components.length; i += 1) {
+      const value = components[i];
+      if (Math.abs(value) > Math.abs(projectedDelta)) {
+        projectedDelta = value;
+      }
+    }
 
-    const initialSnappedHalf = Math.max(
-      (Number(state.initialSnappedSize) || this.state.cellSize || 1) / 2,
-      (this.state.cellSize || 1) / 2
-    );
-    const nextHalf = Math.max(initialSnappedHalf + projectedDelta, (this.state.cellSize || 1) / 2);
-    const nextSize = Math.max(nextHalf * 2, this.state.cellSize || 1);
-    const snappedSize = this.snapSizeValue(nextSize);
+    const cellSize = this.getCellSize();
+    const initialHalf = Number(state.initialSnappedSize) / 2;
+    const safeInitialHalf = Number.isFinite(initialHalf) && initialHalf > 0 ? initialHalf : cellSize / 2;
+    const minHalf = (MIN_TOKEN_CELLS * cellSize) / 2;
+    const maxHalf = (MAX_TOKEN_CELLS * cellSize) / 2;
+    let nextHalf = safeInitialHalf + projectedDelta;
+    nextHalf = Math.min(Math.max(nextHalf, minHalf), maxHalf);
+    const nextCellsRaw = (nextHalf * 2) / cellSize;
 
-    if (this.applyTokenSize(token, snappedSize)) {
-      state.lastSnappedSize = snappedSize;
+    const originalEvent = event?.data?.originalEvent || event?.data?.nativeEvent || event;
+    const disableSnap = Boolean(originalEvent?.altKey);
+    const shiftKey = Boolean(originalEvent?.shiftKey);
+
+    let snappedCells = this.snapSizeCells(nextCellsRaw, { disableSnap });
+    if (shiftKey && !disableSnap) {
+      const lastCells = state.lastSnappedCells ?? state.initialSnappedCells ?? snappedCells;
+      const epsilon = 0.0001;
+      if (nextCellsRaw > lastCells + epsilon) {
+        const stepUp = this.getSizeStep(lastCells);
+        const nextUp = this.clampSizeCells(lastCells + stepUp);
+        snappedCells = Math.min(snappedCells, nextUp);
+      } else if (nextCellsRaw < lastCells - epsilon) {
+        const stepDown = this.getSizeStep(lastCells - epsilon);
+        const nextDown = this.clampSizeCells(lastCells - stepDown);
+        snappedCells = Math.max(snappedCells, nextDown);
+      } else {
+        snappedCells = lastCells;
+      }
+    }
+
+    const snappedSize = snappedCells * cellSize;
+    const applied = this.applyTokenSize(token, snappedCells, { isCells: true });
+    state.lastSnappedCells = snappedCells;
+    state.lastSnappedSize = snappedSize;
+    if (applied) {
       this.refreshSelectionOverlay(token);
     }
   }
 
-  snapSizeValue(value) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= 0) {
-      return Math.max(this.state.cellSize, 1);
-    }
-    const cellSize = Math.max(this.state.cellSize || DEFAULTS.cellSize, 1);
-    const snapped = Math.round(numeric / cellSize) * cellSize;
-    return Math.max(cellSize, snapped);
+  getCellSize() {
+    return Math.max(this.state.cellSize || DEFAULTS.cellSize, 1);
   }
 
-  applyTokenSize(token, size) {
-    const resolved = Math.max(this.state.cellSize || 1, Number(size) || 0);
-    const current = Number(token.width) || 0;
-    if (Math.abs(resolved - current) < 0.01) {
+  clampSizeCells(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return MIN_TOKEN_CELLS;
+    }
+    return Math.min(Math.max(numeric, MIN_TOKEN_CELLS), MAX_TOKEN_CELLS);
+  }
+
+  getTokenSizeCells(token) {
+    if (!token) {
+      return this.clampSizeCells(1);
+    }
+    const cellSize = this.getCellSize();
+    const data = token.battlemapData || {};
+    const storedCells = Number(data.sizeCells);
+    if (Number.isFinite(storedCells) && storedCells > 0) {
+      return this.clampSizeCells(storedCells);
+    }
+    const pixelSize = Number(data.pixelSize ?? data.size ?? token.width);
+    if (!Number.isFinite(pixelSize) || pixelSize <= 0) {
+      return this.clampSizeCells(token.width / cellSize || 1);
+    }
+    return this.clampSizeCells(pixelSize / cellSize);
+  }
+
+  getSizeStep(cells) {
+    const clamped = this.clampSizeCells(cells);
+    return clamped < 1 ? 0.25 : 1;
+  }
+
+  snapSizeCells(cells, options = {}) {
+    const disableSnap = Boolean(options.disableSnap);
+    let target = this.clampSizeCells(cells);
+    if (disableSnap) {
+      return target;
+    }
+    const step = this.getSizeStep(target);
+    const snapped = Math.round(target / step) * step;
+    return this.clampSizeCells(snapped);
+  }
+
+  snapSizeValue(value, options = {}) {
+    const numeric = Number(value);
+    const cellSize = this.getCellSize();
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return this.clampSizeCells(1) * cellSize;
+    }
+    const snappedCells = this.snapSizeCells(numeric / cellSize, options);
+    return snappedCells * cellSize;
+  }
+
+  formatCellsValue(cells) {
+    const clamped = this.clampSizeCells(cells);
+    return clamped
+      .toFixed(2)
+      .replace(/\.00$/, '')
+      .replace(/(\.\d)0$/, '$1');
+  }
+
+  getSizeLabel(cells) {
+    const formatted = this.formatCellsValue(cells);
+    return `${formatted}×${formatted}`;
+  }
+
+  applyTokenSize(token, size, options = {}) {
+    if (!token) {
       return false;
     }
 
-    token.width = resolved;
-    token.height = resolved;
+    const { isCells = false, disableClamp = false, force = false, updateData } = options;
+    const cellSize = this.getCellSize();
+    let targetCells = isCells ? Number(size) : Number(size) / cellSize;
+    if (!Number.isFinite(targetCells)) {
+      targetCells = MIN_TOKEN_CELLS;
+    }
+    if (!disableClamp) {
+      targetCells = this.clampSizeCells(targetCells);
+    }
+    const targetPixels = targetCells * cellSize;
+    const currentCells = this.getTokenSizeCells(token);
+    if (!force && Math.abs(targetCells - currentCells) < 0.001) {
+      const data = updateData || token.battlemapData || { id: token.battlemapId };
+      data.sizeCells = this.clampSizeCells(currentCells);
+      data.pixelSize = data.sizeCells * cellSize;
+      data.size = data.pixelSize;
+      if (!updateData) {
+        token.battlemapData = data;
+      }
+      return false;
+    }
+
+    token.width = targetPixels;
+    token.height = targetPixels;
     updateSpriteHitArea(token);
 
-    if (!token.battlemapData) {
-      token.battlemapData = { id: token.battlemapId };
+    const data = updateData || token.battlemapData || { id: token.battlemapId };
+    data.sizeCells = targetCells;
+    data.pixelSize = targetPixels;
+    data.size = targetPixels;
+    if (!updateData) {
+      token.battlemapData = data;
     }
-    token.battlemapData.size = resolved;
     return true;
   }
 
@@ -1899,17 +2112,65 @@ export default class PixiBattleMap {
   }
 
   snapToken(token) {
-    const snappedX = this.snapValue(token.x, this.state.worldWidth);
-    const snappedY = this.snapValue(token.y, this.state.worldHeight);
-    // Aquí se realiza el snap del token al centro de la celda más cercana.
-    token.position.set(snappedX, snappedY);
+    if (!token) {
+      return;
+    }
+    const cellSize = this.getCellSize();
+    const sizeCells = this.getTokenSizeCells(token);
+    const sizePixels = sizeCells * cellSize;
+    const halfSize = sizePixels / 2;
+
+    const topLeftX = this.snapCoordinateToGrid(token.x - halfSize, 'x', sizePixels);
+    const topLeftY = this.snapCoordinateToGrid(token.y - halfSize, 'y', sizePixels);
+    const snappedCenterX = topLeftX + halfSize;
+    const snappedCenterY = topLeftY + halfSize;
+
+    token.position.set(snappedCenterX, snappedCenterY);
+    if (token.battlemapData) {
+      token.battlemapData.x = snappedCenterX;
+      token.battlemapData.y = snappedCenterY;
+    }
     this.updateSelectionGraphic(token);
   }
 
-  snapValue(value, worldLimit) {
-    const half = this.state.cellSize / 2;
-    const snapped = Math.round((value - half) / this.state.cellSize) * this.state.cellSize + half;
-    return Math.min(Math.max(snapped, half), Math.max(worldLimit - half, half));
+  snapCoordinateToGrid(value, axis = 'x', sizePixels = 0) {
+    const cellSize = this.getCellSize();
+    const resolvedCell = Math.max(cellSize, 1);
+    const offset =
+      axis === 'x'
+        ? (Number.isFinite(this.state.gridOffsetX) ? this.state.gridOffsetX : 0)
+        : (Number.isFinite(this.state.gridOffsetY) ? this.state.gridOffsetY : 0);
+    const worldLimit =
+      axis === 'x'
+        ? Number.isFinite(this.state.worldWidth)
+          ? this.state.worldWidth
+          : resolvedCell
+        : Number.isFinite(this.state.worldHeight)
+          ? this.state.worldHeight
+          : resolvedCell;
+
+    const size = Math.max(sizePixels, resolvedCell);
+    const min = offset;
+    const max = Math.max(worldLimit - size, min);
+    const index = Math.round((value - offset) / resolvedCell);
+    const snapped = offset + index * resolvedCell;
+    return Math.min(Math.max(snapped, min), max);
+  }
+
+  snapValue(value, worldLimit, axis = 'x') {
+    const cellSize = this.getCellSize();
+    const resolvedCell = Math.max(cellSize, 1);
+    const offset =
+      axis === 'x'
+        ? (Number.isFinite(this.state.gridOffsetX) ? this.state.gridOffsetX : 0)
+        : (Number.isFinite(this.state.gridOffsetY) ? this.state.gridOffsetY : 0);
+    const limit = Number.isFinite(worldLimit) && worldLimit > 0 ? worldLimit : resolvedCell;
+    const half = resolvedCell / 2;
+    const min = offset + half;
+    const max = Math.max(limit - half, min);
+    const index = Math.round((value - offset - half) / resolvedCell);
+    const snapped = offset + index * resolvedCell + half;
+    return Math.min(Math.max(snapped, min), max);
   }
 
   getSnappedWorldPosition(screenX, screenY) {
@@ -1927,8 +2188,8 @@ export default class PixiBattleMap {
       return null;
     }
 
-    const snappedX = this.snapValue(world.x, this.state.worldWidth);
-    const snappedY = this.snapValue(world.y, this.state.worldHeight);
+    const snappedX = this.snapValue(world.x, this.state.worldWidth, 'x');
+    const snappedY = this.snapValue(world.y, this.state.worldHeight, 'y');
 
     const cellSize = this.state.cellSize || DEFAULTS.cellSize;
     const half = cellSize / 2;
