@@ -2120,10 +2120,48 @@ export default class PixiBattleMap {
     const sizePixels = sizeCells * cellSize;
     const halfSize = sizePixels / 2;
 
-    const topLeftX = this.snapCoordinateToGrid(token.x - halfSize, 'x', sizePixels);
-    const topLeftY = this.snapCoordinateToGrid(token.y - halfSize, 'y', sizePixels);
-    const snappedCenterX = topLeftX + halfSize;
-    const snappedCenterY = topLeftY + halfSize;
+    const isEvenFootprint =
+      Number.isFinite(sizeCells) && Math.abs(sizeCells % 2) < 1e-6;
+
+    let snappedCenterX;
+    let snappedCenterY;
+
+    if (isEvenFootprint) {
+      const topLeftX = this.snapCoordinateToGrid(token.x - halfSize, 'x', sizePixels);
+      const topLeftY = this.snapCoordinateToGrid(token.y - halfSize, 'y', sizePixels);
+      snappedCenterX = topLeftX + halfSize;
+      snappedCenterY = topLeftY + halfSize;
+    } else {
+      const worldWidth =
+        Number.isFinite(this.state.worldWidth) && this.state.worldWidth > 0
+          ? this.state.worldWidth
+          : cellSize;
+      const worldHeight =
+        Number.isFinite(this.state.worldHeight) && this.state.worldHeight > 0
+          ? this.state.worldHeight
+          : cellSize;
+      const offsetX = Number.isFinite(this.state.gridOffsetX)
+        ? this.state.gridOffsetX
+        : 0;
+      const offsetY = Number.isFinite(this.state.gridOffsetY)
+        ? this.state.gridOffsetY
+        : 0;
+      const cellHalf = cellSize / 2;
+
+      const computeCenter = (value, axis) => {
+        const worldLimit = axis === 'x' ? worldWidth : worldHeight;
+        const offset = axis === 'x' ? offsetX : offsetY;
+        const rawValue = Number.isFinite(value) ? value : offset + cellHalf;
+        const index = Math.round((rawValue - offset - cellHalf) / cellSize);
+        const snapped = offset + index * cellSize + cellHalf;
+        const min = offset + halfSize;
+        const max = Math.max(worldLimit - halfSize, min);
+        return Math.min(Math.max(snapped, min), max);
+      };
+
+      snappedCenterX = computeCenter(token.x, 'x');
+      snappedCenterY = computeCenter(token.y, 'y');
+    }
 
     token.position.set(snappedCenterX, snappedCenterY);
     if (token.battlemapData) {
