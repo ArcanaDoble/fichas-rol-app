@@ -665,6 +665,14 @@ export default class PixiBattleMap {
       clampMax: 1,
     });
     assignNumber('zIndex', options.zIndex, {});
+    assignNumber(
+      'tintOpacity',
+      options.tintOpacity ?? options.tintAlpha,
+      {
+        clampMin: 0,
+        clampMax: 1,
+      }
+    );
 
     if (options.layer !== undefined) {
       next.layer = String(options.layer);
@@ -703,6 +711,14 @@ export default class PixiBattleMap {
       next.zIndex = token.baseZIndex ?? this.tokensLayer.children.length + 1;
     }
 
+    const hasTintColor = next.tint !== undefined && next.tint !== null;
+    let resolvedTintOpacity = Number(next.tintOpacity);
+    if (!Number.isFinite(resolvedTintOpacity)) {
+      resolvedTintOpacity = hasTintColor ? 1 : 0;
+    }
+    resolvedTintOpacity = Math.min(Math.max(resolvedTintOpacity, 0), 1);
+    next.tintOpacity = resolvedTintOpacity;
+
     token.battlemapData = next;
     token.position.set(next.x, next.y);
 
@@ -715,10 +731,12 @@ export default class PixiBattleMap {
     token.rotation = rotationRadians;
     token.alpha = Math.min(Math.max(Number(next.opacity), 0), 1);
 
-    if (next.tint !== undefined && next.tint !== null) {
+    if (hasTintColor && resolvedTintOpacity > 0) {
       token.tint = normalizeColor(next.tint, 0xffffff);
+      token.tintAlpha = resolvedTintOpacity;
     } else {
       token.tint = 0xffffff;
+      token.tintAlpha = 0;
     }
 
     token.baseZIndex = Number(next.zIndex) || 0;
