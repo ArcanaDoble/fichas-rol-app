@@ -322,7 +322,7 @@ export default class PixiBattleMap {
 
     this.overlayLayer = new Container();
     this.overlayLayer.sortableChildren = true;
-    this.overlayLayer.eventMode = 'none';
+    this.overlayLayer.eventMode = 'static';
 
     this.fogLayer = new Graphics();
     this.fogLayer.eventMode = 'none';
@@ -357,7 +357,7 @@ export default class PixiBattleMap {
     this.registerLayer('overlay', this.overlayLayer, {
       type: 'overlay',
       locked: true,
-      eventMode: 'none',
+      eventMode: 'static',
       zIndex: 60,
     });
     this.registerLayer('fog', this.fogLayer, {
@@ -1076,6 +1076,17 @@ export default class PixiBattleMap {
       id: tokenId,
       data: token.battlemapData ? { ...token.battlemapData } : undefined,
     };
+    if (token.selectionGraphic?.__isOverlay) {
+      const overlay = token.selectionGraphic;
+      this.detachResizeHandles(token);
+      if (overlay.parent) {
+        overlay.removeFromParent();
+      }
+      if (typeof overlay.destroy === 'function') {
+        overlay.destroy({ children: true });
+      }
+      token.selectionGraphic = null;
+    }
     token.removeFromParent();
     token.destroy({ children: true });
     this.tokens.delete(tokenId);
@@ -1143,7 +1154,19 @@ export default class PixiBattleMap {
       return;
     }
     const previous = Array.from(this.selectedTokens);
-    previous.forEach((sprite) => this.deselectToken(sprite));
+    previous.forEach((sprite) => {
+      this.deselectToken(sprite);
+      const overlay = sprite?.selectionGraphic;
+      if (overlay?.frameGraphic) {
+        overlay.frameGraphic.clear();
+      }
+      if (Array.isArray(overlay?.handles)) {
+        overlay.handles.forEach((handle) => {
+          handle.clear();
+          handle.visible = false;
+        });
+      }
+    });
     this.emit('selection:change', []);
   }
 
@@ -1213,51 +1236,56 @@ export default class PixiBattleMap {
     if (!token) {
       return;
     }
-    if (token.selectionGraphic?.__isOverlay) {
-      return;
+
+    let overlay = token.selectionGraphic;
+
+    if (overlay && !overlay.__isOverlay) {
+      if (overlay.parent) {
+        overlay.removeFromParent();
+      }
+      if (typeof overlay.destroy === 'function') {
+        overlay.destroy({ children: true });
+      }
+      overlay = null;
     }
 
-    if (token.selectionGraphic) {
-      const previous = token.selectionGraphic;
-      if (previous.parent === token) {
-        previous.removeFromParent();
-      }
-      if (typeof previous.destroy === 'function') {
-        previous.destroy({ children: true });
-      }
-      token.selectionGraphic = null;
+    if (!overlay) {
+      overlay = new Container();
+      overlay.visible = false;
+      overlay.sortableChildren = false;
+      overlay.eventMode = 'static';
+      overlay.__isOverlay = true;
+
+      const frame = new Graphics();
+      frame.eventMode = 'none';
+      overlay.addChild(frame);
+      overlay.frameGraphic = frame;
+
+      const handleDefinitions = [
+        { key: 'topLeft', sx: -1, sy: -1, cursor: 'nwse-resize' },
+        { key: 'topRight', sx: 1, sy: -1, cursor: 'nesw-resize' },
+        { key: 'bottomRight', sx: 1, sy: 1, cursor: 'nwse-resize' },
+        { key: 'bottomLeft', sx: -1, sy: 1, cursor: 'nesw-resize' },
+      ];
+
+      overlay.handles = handleDefinitions.map((definition) => {
+        const handle = new Graphics();
+        handle.__resizeMeta = definition;
+        handle.visible = false;
+        handle.eventMode = 'static';
+        handle.cursor = definition.cursor;
+        overlay.addChild(handle);
+        return handle;
+      });
     }
 
-    const overlay = new Container();
-    overlay.visible = false;
-    overlay.sortableChildren = false;
-    overlay.eventMode = 'none';
-    overlay.__isOverlay = true;
-
-    const frame = new Graphics();
-    frame.eventMode = 'none';
-    overlay.addChild(frame);
-    overlay.frameGraphic = frame;
-
-    const handleDefinitions = [
-      { key: 'topLeft', sx: -1, sy: -1, cursor: 'nwse-resize' },
-      { key: 'topRight', sx: 1, sy: -1, cursor: 'nesw-resize' },
-      { key: 'bottomRight', sx: 1, sy: 1, cursor: 'nwse-resize' },
-      { key: 'bottomLeft', sx: -1, sy: 1, cursor: 'nesw-resize' },
-    ];
-
-    overlay.handles = handleDefinitions.map((definition) => {
-      const handle = new Graphics();
-      handle.__resizeMeta = definition;
-      handle.visible = false;
-      handle.eventMode = 'dynamic';
-      handle.cursor = definition.cursor;
-      overlay.addChild(handle);
-      return handle;
-    });
+    overlay.followToken = token;
+    if (overlay.parent !== this.overlayLayer && this.overlayLayer) {
+      overlay.removeFromParent();
+      this.overlayLayer.addChild(overlay);
+    }
 
     token.selectionGraphic = overlay;
-    token.addChild(overlay);
   }
 
   refreshSelectionOverlay(token) {
@@ -1266,14 +1294,26 @@ export default class PixiBattleMap {
       return;
     }
 
-    const width = Math.max(1, Number(token.width) || 0);
-    const height = Math.max(1, Number(token.height) || 0);
+    const bounds = typeof token?.getBounds === 'function' ? token.getBounds(false) : null;
+    if (!bounds) {
+      return;
+    }
+
+    const width = Math.max(1, Number(bounds.width) || 0);
+    const height = Math.max(1, Number(bounds.height) || 0);
+    const centerX = bounds.x + width / 2;
+    const centerY = bounds.y + height / 2;
+
+    overlay.position.set(centerX, centerY);
 
     overlay.frameGraphic.clear();
-    overlay.frameGraphic.lineStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
-    overlay.frameGraphic.drawRect(-width / 2, -height / 2, width, height);
+    overlay.frameGraphic.setStrokeStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
+    overlay.frameGraphic.strokeRect(-width / 2, -height / 2, width, height);
 
-    const baseSize = Math.max(8, Math.min(28, Math.round((this.state.cellSize || 20) * 0.35)));
+    const baseSize = Math.max(
+      8,
+      Math.min(28, Math.round((this.state.cellSize || 20) * 0.35))
+    );
 
     if (Array.isArray(overlay.handles)) {
       overlay.handles.forEach((handle) => {
