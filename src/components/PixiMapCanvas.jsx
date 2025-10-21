@@ -24,6 +24,7 @@ const PixiMapCanvas = forwardRef(
       gridOffsetY = 0,
       tokens = [],
       onTokensChange,
+      onAutoGridGuess,
       ...rest
     },
     ref
@@ -167,6 +168,31 @@ const PixiMapCanvas = forwardRef(
           return;
         }
 
+        if (typeof onAutoGridGuess === 'function') {
+          const safeGridSize =
+            Number.isFinite(gridSize) && gridSize > 0
+              ? gridSize
+              : DEFAULT_GRID_SIZE;
+          const cellsX = Math.max(
+            1,
+            Math.round(dimensions.width / safeGridSize) || 1
+          );
+          const cellsY = Math.max(
+            1,
+            Math.round(dimensions.height / safeGridSize) || 1
+          );
+          const suggestedCells = Math.max(cellsX, cellsY);
+          onAutoGridGuess({
+            gridSize: safeGridSize,
+            gridCells: suggestedCells,
+            gridOffsetX: 0,
+            gridOffsetY: 0,
+            imageWidth: dimensions.width,
+            imageHeight: dimensions.height,
+            backgroundImage,
+          });
+        }
+
         await map.loadMap(backgroundImage, dimensions.width, dimensions.height);
       };
       loadBackground();
@@ -174,7 +200,7 @@ const PixiMapCanvas = forwardRef(
       return () => {
         cancelled = true;
       };
-    }, [backgroundImage, gridSize, gridCells]);
+    }, [backgroundImage, gridSize, onAutoGridGuess]);
 
     useEffect(() => {
       const map = mapRef.current;
@@ -602,6 +628,7 @@ PixiMapCanvas.propTypes = {
   onTokensChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onAssetDrop: PropTypes.func,
+  onAutoGridGuess: PropTypes.func,
 };
 
 export default PixiMapCanvas;
