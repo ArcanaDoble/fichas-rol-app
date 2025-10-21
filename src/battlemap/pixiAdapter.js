@@ -100,6 +100,8 @@ export default class PixiBattleMap {
     this.destroyPromise = null;
     this.canvas = null;
     this.viewport = null;
+    this.backgroundSprite = null;
+    this.backgroundMaskSprite = null;
 
     this.app = new Application();
     this.readyPromise = this.init().catch((error) => {
@@ -414,6 +416,19 @@ export default class PixiBattleMap {
     }
 
     this.hidePlaceholder();
+    if (this.backgroundSprite) {
+      this.backgroundSprite.removeFromParent();
+      this.backgroundSprite.destroy({ texture: false, baseTexture: false });
+      this.backgroundSprite = null;
+    }
+    if (this.backgroundMaskSprite) {
+      this.backgroundMaskSprite.removeFromParent();
+      this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+      this.backgroundMaskSprite = null;
+    }
+    if (this.gridLayer) {
+      this.gridLayer.mask = null;
+    }
     this.backgroundLayer.removeChildren();
 
     if (url) {
@@ -425,15 +440,47 @@ export default class PixiBattleMap {
         background.width = targetWidth;
         background.height = targetHeight;
         background.eventMode = 'none';
+
+        const maskSprite = new Sprite(texture);
+        maskSprite.anchor.set(0);
+        maskSprite.position.set(0, 0);
+        maskSprite.width = targetWidth;
+        maskSprite.height = targetHeight;
+        maskSprite.eventMode = 'none';
+
         this.backgroundLayer.addChild(background);
+        this.backgroundLayer.addChild(maskSprite);
+
+        this.backgroundSprite = background;
+        this.backgroundMaskSprite = maskSprite;
+
+        if (this.gridLayer) {
+          this.gridLayer.mask = this.backgroundMaskSprite;
+        }
         this.hidePlaceholder();
       } catch (error) {
         console.error('[PixiBattleMap] No se pudo cargar el mapa:', error);
         this.ensurePlaceholder();
+        if (this.gridLayer) {
+          this.gridLayer.mask = null;
+        }
+        if (this.backgroundMaskSprite) {
+          this.backgroundMaskSprite.removeFromParent();
+          this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+          this.backgroundMaskSprite = null;
+        }
       }
     }
     if (!url) {
       this.ensurePlaceholder();
+      if (this.gridLayer) {
+        this.gridLayer.mask = null;
+      }
+      if (this.backgroundMaskSprite) {
+        this.backgroundMaskSprite.removeFromParent();
+        this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+        this.backgroundMaskSprite = null;
+      }
     }
 
     this.state.worldWidth = targetWidth;
@@ -1614,12 +1661,38 @@ export default class PixiBattleMap {
       ? this.state.worldHeight
       : 0;
 
-    const verticalLimit =
-      columns && cellSize > 0
-        ? offsetX + columns * cellSize
-        : worldWidth;
-    const horizontalLimit =
+    const usingMask = Boolean(this.gridLayer?.mask);
+    const gridWidth =
+      columns && cellSize > 0 ? columns * cellSize : worldWidth;
+    const gridHeight =
+      rows && cellSize > 0 ? rows * cellSize : worldHeight;
+
+    const maskBounds = {
+      left: 0,
+      top: 0,
+      right: worldWidth,
+      bottom: worldHeight,
+    };
+    if (usingMask && this.backgroundMaskSprite) {
+      const { x, y, width: w, height: h } = this.backgroundMaskSprite;
+      maskBounds.left = Number.isFinite(x) ? x : 0;
+      maskBounds.top = Number.isFinite(y) ? y : 0;
+      maskBounds.right = maskBounds.left + (Number.isFinite(w) ? w : worldWidth);
+      maskBounds.bottom = maskBounds.top + (Number.isFinite(h) ? h : worldHeight);
+    }
+
+    const gridBounds = {
+      left: offsetX,
+      top: offsetY,
+      right: offsetX + gridWidth,
+      bottom: offsetY + gridHeight,
+    };
+
+    const fallbackRight =
+      columns && cellSize > 0 ? offsetX + columns * cellSize : worldWidth;
+    const fallbackBottom =
       rows && cellSize > 0 ? offsetY + rows * cellSize : worldHeight;
+
     const epsilon = cellSize * 0.0001;
 
     this.gridLayer.setStrokeStyle({
@@ -1628,13 +1701,95 @@ export default class PixiBattleMap {
       alpha: this.state.gridOpacity,
     });
 
-    for (let x = offsetX; x < verticalLimit + epsilon; x += cellSize) {
-      this.gridLayer.moveTo(x, 0);
-      this.gridLayer.lineTo(x, worldHeight);
-    }
-    for (let y = offsetY; y < horizontalLimit + epsilon; y += cellSize) {
-      this.gridLayer.moveTo(0, y);
-      this.gridLayer.lineTo(worldWidth, y);
+    if (usingMask) {
+      const left = Math.max(maskBounds.left, gridBounds.left);
+      const top = Math.max(maskBounds.top, gridBounds.top);
+      const right = Math.min(maskBounds.right, gridBounds.right);
+      const bottom = Math.min(maskBounds.bottom, gridBounds.bottom);
+
+      if (!(right > left && bottom > top)) {
+        this.gridLayer.stroke();
+        return;
+      }
+
+      let startX = offsetX;
+      if (startX + epsilon < left) {
+        const delta = left - startX;
+        const steps = Math.ceil(delta / cellSize);
+        startX = offsetX + steps * cellSize;
+      }
+      let lastVertical = null;
+      for (let x = startX; x <= right + epsilon; x += cellSize) {
+        if (x + epsilon < left || x - epsilon > right) {
+          continue;
+        }
+        this.gridLayer.moveTo(x, top);
+        this.gridLayer.lineTo(x, bottom);
+        lastVertical = x;
+      }
+      if (
+        Number.isFinite(right) &&
+        (lastVertical === null || Math.abs(right - lastVertical) > epsilon)
+      ) {
+        this.gridLayer.moveTo(right, top);
+        this.gridLayer.lineTo(right, bottom);
+      }
+
+      let startY = offsetY;
+      if (startY + epsilon < top) {
+        const delta = top - startY;
+        const steps = Math.ceil(delta / cellSize);
+        startY = offsetY + steps * cellSize;
+      }
+      let lastHorizontal = null;
+      for (let y = startY; y <= bottom + epsilon; y += cellSize) {
+        if (y + epsilon < top || y - epsilon > bottom) {
+          continue;
+        }
+        this.gridLayer.moveTo(left, y);
+        this.gridLayer.lineTo(right, y);
+        lastHorizontal = y;
+      }
+      if (
+        Number.isFinite(bottom) &&
+        (lastHorizontal === null || Math.abs(bottom - lastHorizontal) > epsilon)
+      ) {
+        this.gridLayer.moveTo(left, bottom);
+        this.gridLayer.lineTo(right, bottom);
+      }
+    } else {
+      const left = 0;
+      const top = 0;
+      const right = fallbackRight;
+      const bottom = fallbackBottom;
+
+      let lastVertical = null;
+      for (let x = offsetX; x <= right + epsilon; x += cellSize) {
+        this.gridLayer.moveTo(x, top);
+        this.gridLayer.lineTo(x, worldHeight);
+        lastVertical = x;
+      }
+      if (
+        Number.isFinite(right) &&
+        (lastVertical === null || Math.abs(right - lastVertical) > epsilon)
+      ) {
+        this.gridLayer.moveTo(right, top);
+        this.gridLayer.lineTo(right, worldHeight);
+      }
+
+      let lastHorizontal = null;
+      for (let y = offsetY; y <= bottom + epsilon; y += cellSize) {
+        this.gridLayer.moveTo(left, y);
+        this.gridLayer.lineTo(worldWidth, y);
+        lastHorizontal = y;
+      }
+      if (
+        Number.isFinite(bottom) &&
+        (lastHorizontal === null || Math.abs(bottom - lastHorizontal) > epsilon)
+      ) {
+        this.gridLayer.moveTo(left, bottom);
+        this.gridLayer.lineTo(worldWidth, bottom);
+      }
     }
 
     this.gridLayer.stroke();
@@ -1763,6 +1918,8 @@ export default class PixiBattleMap {
         this.backgroundLayer.destroy({ children: true });
         this.backgroundLayer = null;
       }
+      this.backgroundSprite = null;
+      this.backgroundMaskSprite = null;
       if (this.gridLayer) {
         this.gridLayer.destroy();
         this.gridLayer = null;
