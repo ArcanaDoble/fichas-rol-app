@@ -74,6 +74,14 @@ const PixiBattleMapView = ({
   gridOpacity: propGridOpacity = 0.2,
   tokens = [],
   onTokensChange,
+  tiles = [],
+  onTilesChange,
+  lines = [],
+  onLinesChange,
+  walls = [],
+  onWallsChange,
+  texts = [],
+  onTextsChange,
   shopConfig = {},
   onShopConfigChange,
   onShopApply,
@@ -366,6 +374,91 @@ const PixiBattleMapView = ({
 
   const [clipboard, setClipboard] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  const [tilesState, setTilesState] = useState(() =>
+    Array.isArray(tiles) ? tiles : []
+  );
+  const [linesState, setLinesState] = useState(() =>
+    Array.isArray(lines) ? lines : []
+  );
+  const [wallsState, setWallsState] = useState(() =>
+    Array.isArray(walls) ? walls : []
+  );
+  const [textsState, setTextsState] = useState(() =>
+    Array.isArray(texts) ? texts : []
+  );
+
+  useEffect(() => {
+    setTilesState(Array.isArray(tiles) ? tiles : []);
+  }, [tiles]);
+
+  useEffect(() => {
+    setLinesState(Array.isArray(lines) ? lines : []);
+  }, [lines]);
+
+  useEffect(() => {
+    setWallsState(Array.isArray(walls) ? walls : []);
+  }, [walls]);
+
+  useEffect(() => {
+    setTextsState(Array.isArray(texts) ? texts : []);
+  }, [texts]);
+
+  const handleTilesChange = useCallback(
+    (updater) => {
+      setTilesState((prev) => {
+        const next =
+          typeof updater === 'function' ? updater(prev || []) : updater || [];
+        if (onTilesChange) {
+          onTilesChange(next);
+        }
+        return next;
+      });
+    },
+    [onTilesChange]
+  );
+
+  const handleLinesChange = useCallback(
+    (updater) => {
+      setLinesState((prev) => {
+        const next =
+          typeof updater === 'function' ? updater(prev || []) : updater || [];
+        if (onLinesChange) {
+          onLinesChange(next);
+        }
+        return next;
+      });
+    },
+    [onLinesChange]
+  );
+
+  const handleWallsChange = useCallback(
+    (updater) => {
+      setWallsState((prev) => {
+        const next =
+          typeof updater === 'function' ? updater(prev || []) : updater || [];
+        if (onWallsChange) {
+          onWallsChange(next);
+        }
+        return next;
+      });
+    },
+    [onWallsChange]
+  );
+
+  const handleTextsChange = useCallback(
+    (updater) => {
+      setTextsState((prev) => {
+        const next =
+          typeof updater === 'function' ? updater(prev || []) : updater || [];
+        if (onTextsChange) {
+          onTextsChange(next);
+        }
+        return next;
+      });
+    },
+    [onTextsChange]
+  );
 
   const handlePointerMove = useCallback((event) => {
     const bounds = containerRef.current?.getBoundingClientRect();
@@ -786,6 +879,20 @@ const PixiBattleMapView = ({
           showGrid={showGrid}
           tokens={tokens}
           onTokensChange={onTokensChange}
+          tiles={tilesState}
+          onTilesChange={handleTilesChange}
+          lines={linesState}
+          onLinesChange={handleLinesChange}
+          texts={textsState}
+          onTextsChange={handleTextsChange}
+          walls={wallsState}
+          onWallsChange={handleWallsChange}
+          measureShape={measureShape}
+          measureSnap={measureSnap}
+          measureVisible={measureVisible}
+          measureRule={measureRule}
+          measureUnitValue={measureUnitValue}
+          measureUnitLabel={measureUnitLabel}
           activeLayer={activeLayer}
           onAssetDrop={handleAssetDrop}
           onAutoGridGuess={handleAutoGridGuess}
@@ -928,6 +1035,14 @@ PixiBattleMapView.propTypes = {
   gridOpacity: PropTypes.number,
   tokens: PropTypes.arrayOf(PropTypes.object),
   onTokensChange: PropTypes.func,
+  tiles: PropTypes.arrayOf(PropTypes.object),
+  onTilesChange: PropTypes.func,
+  lines: PropTypes.arrayOf(PropTypes.object),
+  onLinesChange: PropTypes.func,
+  walls: PropTypes.arrayOf(PropTypes.object),
+  onWallsChange: PropTypes.func,
+  texts: PropTypes.arrayOf(PropTypes.object),
+  onTextsChange: PropTypes.func,
   shopConfig: PropTypes.object,
   onShopConfigChange: PropTypes.func,
   onShopApply: PropTypes.func,

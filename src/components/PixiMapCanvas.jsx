@@ -23,7 +23,21 @@ const PixiMapCanvas = forwardRef(
       gridOffsetX = 0,
       gridOffsetY = 0,
       tokens = [],
+      tiles = [],
+      lines = [],
+      texts = [],
+      walls = [],
+      measureShape = 'line',
+      measureSnap = 'center',
+      measureVisible = true,
+      measureRule = 'chebyshev',
+      measureUnitValue = 5,
+      measureUnitLabel = 'ft',
       onTokensChange,
+      onTilesChange,
+      onLinesChange,
+      onTextsChange,
+      onWallsChange,
       onAutoGridGuess,
       ...rest
     },
@@ -253,6 +267,51 @@ const PixiMapCanvas = forwardRef(
 
       let cancelled = false;
 
+      const applyMeasureOptions = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error(
+            '[PixiMapCanvas] Error esperando ready al actualizar mediciones:',
+            error
+          );
+          return;
+        }
+        if (cancelled || unmountedRef.current || mapRef.current !== map) {
+          return;
+        }
+        await map.setMeasureOptions({
+          shape: measureShape,
+          snap: measureSnap,
+          visible: measureVisible,
+          rule: measureRule,
+          unitValue: measureUnitValue,
+          unitLabel: measureUnitLabel,
+        });
+      };
+
+      applyMeasureOptions();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      measureShape,
+      measureSnap,
+      measureVisible,
+      measureRule,
+      measureUnitValue,
+      measureUnitLabel,
+    ]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+
+      let cancelled = false;
+
       const syncTokens = async () => {
         try {
           await map.ready;
@@ -400,6 +459,118 @@ const PixiMapCanvas = forwardRef(
       if (!map) {
         return undefined;
       }
+
+      let cancelled = false;
+
+      const syncTiles = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al sincronizar tiles:', error);
+          return;
+        }
+        if (cancelled || unmountedRef.current || mapRef.current !== map) {
+          return;
+        }
+        await map.setTiles(Array.isArray(tiles) ? tiles : []);
+      };
+
+      syncTiles();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [tiles]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+
+      let cancelled = false;
+
+      const syncLines = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al sincronizar líneas:', error);
+          return;
+        }
+        if (cancelled || unmountedRef.current || mapRef.current !== map) {
+          return;
+        }
+        await map.setLines(Array.isArray(lines) ? lines : []);
+      };
+
+      syncLines();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [lines]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+
+      let cancelled = false;
+
+      const syncTexts = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al sincronizar textos:', error);
+          return;
+        }
+        if (cancelled || unmountedRef.current || mapRef.current !== map) {
+          return;
+        }
+        await map.setTexts(Array.isArray(texts) ? texts : []);
+      };
+
+      syncTexts();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [texts]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+
+      let cancelled = false;
+
+      const syncWalls = async () => {
+        try {
+          await map.ready;
+        } catch (error) {
+          console.error('[PixiMapCanvas] Error esperando ready al sincronizar muros:', error);
+          return;
+        }
+        if (cancelled || unmountedRef.current || mapRef.current !== map) {
+          return;
+        }
+        await map.setWalls(Array.isArray(walls) ? walls : []);
+      };
+
+      syncWalls();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [walls]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
       const unsubscribe = map.on('token:remove', ({ id }) => {
         if (!id) {
           return;
@@ -420,6 +591,116 @@ const PixiMapCanvas = forwardRef(
       };
     }, []);
 
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return undefined;
+      }
+      const offTileMove = map.on('tile:move', ({ id, data }) => {
+        if (!onTilesChange) {
+          return;
+        }
+        onTilesChange((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          let didChange = false;
+          const next = prev.map((tile) => {
+            if (String(tile.id) !== String(id)) {
+              return tile;
+            }
+            didChange = true;
+            return { ...tile, ...data };
+          });
+          return didChange ? next : prev;
+        });
+      });
+      const offLineMove = map.on('line:move', ({ id, data }) => {
+        if (!onLinesChange) {
+          return;
+        }
+        onLinesChange((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          let changed = false;
+          const next = prev.map((line) => {
+            if (String(line.id) !== String(id)) {
+              return line;
+            }
+            changed = true;
+            return { ...line, ...data };
+          });
+          return changed ? next : prev;
+        });
+      });
+      const offTextMove = map.on('text:move', ({ id, data }) => {
+        if (!onTextsChange) {
+          return;
+        }
+        onTextsChange((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          let changed = false;
+          const next = prev.map((text) => {
+            if (String(text.id) !== String(id)) {
+              return text;
+            }
+            changed = true;
+            return { ...text, ...data };
+          });
+          return changed ? next : prev;
+        });
+      });
+      const offWallMove = map.on('wall:move', ({ id, data }) => {
+        if (!onWallsChange) {
+          return;
+        }
+        onWallsChange((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          let changed = false;
+          const next = prev.map((wall) => {
+            if (String(wall.id) !== String(id)) {
+              return wall;
+            }
+            changed = true;
+            return { ...wall, ...data };
+          });
+          return changed ? next : prev;
+        });
+      });
+      const offDoorToggle = map.on('door:toggle', ({ id, current }) => {
+        if (!onWallsChange) {
+          return;
+        }
+        onWallsChange((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          let changed = false;
+          const next = prev.map((wall) => {
+            if (String(wall.id) !== String(id)) {
+              return wall;
+            }
+            const nextDoor = current === 'closed' ? 'open' : 'closed';
+            changed = true;
+            return { ...wall, door: nextDoor };
+          });
+          return changed ? next : prev;
+        });
+      });
+      return () => {
+        offTileMove?.();
+        offLineMove?.();
+        offTextMove?.();
+        offWallMove?.();
+        offDoorToggle?.();
+      };
+    }, [onTilesChange, onLinesChange, onTextsChange, onWallsChange]);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -438,6 +719,14 @@ const PixiMapCanvas = forwardRef(
           }
           await map.ready;
           await map.setGrid(options);
+        },
+        async setMeasureOptions(options) {
+          const map = mapRef.current;
+          if (!map) {
+            return;
+          }
+          await map.ready;
+          await map.setMeasureOptions(options);
         },
         async addToken(options) {
           const map = mapRef.current;
@@ -592,6 +881,13 @@ const PixiMapCanvas = forwardRef(
           }
           map.off(eventName, handler);
         },
+        getInteractiveDoors() {
+          const map = mapRef.current;
+          if (!map) {
+            return [];
+          }
+          return map.getInteractiveDoors();
+        },
         destroy() {
           const map = mapRef.current;
           if (map) {
@@ -634,7 +930,21 @@ PixiMapCanvas.propTypes = {
   gridOffsetX: PropTypes.number,
   gridOffsetY: PropTypes.number,
   tokens: PropTypes.arrayOf(PropTypes.object),
+  tiles: PropTypes.arrayOf(PropTypes.object),
+  lines: PropTypes.arrayOf(PropTypes.object),
+  texts: PropTypes.arrayOf(PropTypes.object),
+  walls: PropTypes.arrayOf(PropTypes.object),
+  measureShape: PropTypes.oneOf(['line', 'square', 'circle', 'cone', 'beam']),
+  measureSnap: PropTypes.oneOf(['center', 'corner', 'free']),
+  measureVisible: PropTypes.bool,
+  measureRule: PropTypes.oneOf(['chebyshev', 'manhattan', 'euclidean', '5105']),
+  measureUnitValue: PropTypes.number,
+  measureUnitLabel: PropTypes.string,
   onTokensChange: PropTypes.func,
+  onTilesChange: PropTypes.func,
+  onLinesChange: PropTypes.func,
+  onTextsChange: PropTypes.func,
+  onWallsChange: PropTypes.func,
   activeLayer: PropTypes.string,
   onAssetDrop: PropTypes.func,
   onAutoGridGuess: PropTypes.func,
