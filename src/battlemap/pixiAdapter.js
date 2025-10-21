@@ -1612,6 +1612,88 @@ export default class PixiBattleMap {
     this.refreshSelectionOverlay(token);
   }
 
+  resizeSelection(options = {}) {
+    const selected = Array.from(this.selectedTokens || []);
+    if (selected.length === 0) {
+      return [];
+    }
+
+    let params = options;
+    if (typeof options === 'number') {
+      params = { deltaCells: options };
+    } else if (!options || typeof options !== 'object') {
+      params = {};
+    }
+
+    const {
+      deltaCells,
+      deltaPixels,
+      sizeCells,
+      sizePixels,
+      disableSnap = false,
+      force = false,
+    } = params;
+
+    const cellSize = this.getCellSize();
+    const results = [];
+
+    selected.forEach((token) => {
+      if (!token || this.isLayerLocked(token.battlemapLayerId)) {
+        return;
+      }
+
+      const currentCells = this.getTokenSizeCells(token);
+      let targetCells;
+
+      if (Number.isFinite(sizeCells)) {
+        targetCells = Number(sizeCells);
+      } else if (Number.isFinite(sizePixels)) {
+        targetCells = Number(sizePixels) / cellSize;
+      } else {
+        let deltaTotal = 0;
+        if (Number.isFinite(deltaCells)) {
+          deltaTotal += Number(deltaCells);
+        }
+        if (Number.isFinite(deltaPixels)) {
+          deltaTotal += Number(deltaPixels) / cellSize;
+        }
+        if (deltaTotal === 0) {
+          return;
+        }
+        targetCells = currentCells + deltaTotal;
+      }
+
+      if (!Number.isFinite(targetCells)) {
+        return;
+      }
+
+      const nextCells = disableSnap
+        ? this.clampSizeCells(targetCells)
+        : this.snapSizeCells(targetCells);
+
+      const changed = this.applyTokenSize(token, nextCells, {
+        isCells: true,
+        force,
+      });
+
+      if (!changed && !force) {
+        return;
+      }
+
+      this.snapToken(token);
+      this.refreshSelectionOverlay(token);
+      this.emitTokenResize(token);
+
+      results.push({
+        id: token.battlemapId,
+        sizeCells: nextCells,
+        sizePixels: nextCells * cellSize,
+      });
+    });
+
+    return results;
+  }
+
   startTokenResize(token, handle, event) {
     if (!token || !handle) {
       return;

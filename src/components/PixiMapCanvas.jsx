@@ -500,6 +500,14 @@ const PixiMapCanvas = forwardRef(
           }
           return map.pasteAt(x, y);
         },
+        async resizeSelection(options) {
+          const map = mapRef.current;
+          if (!map) {
+            return [];
+          }
+          await map.ready;
+          return map.resizeSelection(options);
+        },
         setTool(toolId) {
           const map = mapRef.current;
           if (!map) {
