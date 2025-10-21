@@ -363,6 +363,16 @@ const PixiMapCanvas = forwardRef(
             zIndex: token.zIndex,
             tintColor: token.tintColor ?? token.tint,
             tintOpacity: token.tintOpacity,
+            color: token.color,
+            name: token.name,
+            customName: token.customName,
+            showName: token.showName,
+            estados: token.estados,
+            auraRadius: token.auraRadius,
+            auraShape: token.auraShape,
+            auraColor: token.auraColor,
+            auraOpacity: token.auraOpacity,
+            tokenSheetId: token.tokenSheetId,
             vision: token.vision,
             metadata: {
               name: token.name,
@@ -371,6 +381,8 @@ const PixiMapCanvas = forwardRef(
               tokenSheetId: token.tokenSheetId,
               controlledBy: token.controlledBy,
               barsVisibility: token.barsVisibility,
+              estados: token.estados,
+              showName: token.showName,
             },
           });
 
@@ -845,6 +857,13 @@ const PixiMapCanvas = forwardRef(
             return null;
           }
           return map.setTokenVision(id, vision);
+        },
+        highlightTokenDamage(id, options) {
+          const map = mapRef.current;
+          if (!map) {
+            return false;
+          }
+          return map.highlightTokenDamage(id, options);
         },
         toggleFog(enabled, options) {
           const map = mapRef.current;
