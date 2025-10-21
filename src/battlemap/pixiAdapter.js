@@ -633,9 +633,7 @@ export default class PixiBattleMap {
       token.eventMode = 'dynamic';
       token.cursor = 'pointer';
       token.sortableChildren = false;
-      token.selectionGraphic = new Graphics();
-      token.selectionGraphic.visible = false;
-      token.addChild(token.selectionGraphic);
+      this.setupSelectionOverlay(token);
       token.battlemapId = tokenId;
       this.attachTokenInteraction(token);
       this.tokens.set(tokenId, token);
@@ -1008,6 +1006,7 @@ export default class PixiBattleMap {
       return;
     }
     this.selectedTokens.delete(token);
+    this.detachResizeHandles(token);
     if (token.selectionGraphic) {
       token.selectionGraphic.visible = false;
     }
@@ -1062,6 +1061,260 @@ export default class PixiBattleMap {
         this.selectToken(token, { additive: true });
       }
     });
+  }
+
+  setupSelectionOverlay(token) {
+    if (!token) {
+      return;
+    }
+    if (token.selectionGraphic?.__isOverlay) {
+      return;
+    }
+
+    if (token.selectionGraphic) {
+      const previous = token.selectionGraphic;
+      if (previous.parent === token) {
+        previous.removeFromParent();
+      }
+      if (typeof previous.destroy === 'function') {
+        previous.destroy({ children: true });
+      }
+      token.selectionGraphic = null;
+    }
+
+    const overlay = new Container();
+    overlay.visible = false;
+    overlay.sortableChildren = false;
+    overlay.eventMode = 'none';
+    overlay.__isOverlay = true;
+
+    const frame = new Graphics();
+    frame.eventMode = 'none';
+    overlay.addChild(frame);
+    overlay.frameGraphic = frame;
+
+    const handleDefinitions = [
+      { key: 'topLeft', sx: -1, sy: -1, cursor: 'nwse-resize' },
+      { key: 'topRight', sx: 1, sy: -1, cursor: 'nesw-resize' },
+      { key: 'bottomRight', sx: 1, sy: 1, cursor: 'nwse-resize' },
+      { key: 'bottomLeft', sx: -1, sy: 1, cursor: 'nesw-resize' },
+    ];
+
+    overlay.handles = handleDefinitions.map((definition) => {
+      const handle = new Graphics();
+      handle.__resizeMeta = definition;
+      handle.visible = false;
+      handle.eventMode = 'dynamic';
+      handle.cursor = definition.cursor;
+      overlay.addChild(handle);
+      return handle;
+    });
+
+    token.selectionGraphic = overlay;
+    token.addChild(overlay);
+  }
+
+  refreshSelectionOverlay(token) {
+    const overlay = token?.selectionGraphic;
+    if (!overlay?.frameGraphic) {
+      return;
+    }
+
+    const width = Math.max(1, Number(token.width) || 0);
+    const height = Math.max(1, Number(token.height) || 0);
+
+    overlay.frameGraphic.clear();
+    overlay.frameGraphic.lineStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
+    overlay.frameGraphic.drawRect(-width / 2, -height / 2, width, height);
+
+    const baseSize = Math.max(8, Math.min(28, Math.round((this.state.cellSize || 20) * 0.35)));
+
+    if (Array.isArray(overlay.handles)) {
+      overlay.handles.forEach((handle) => {
+        handle.clear();
+        handle.lineStyle({ width: 1, color: 0x000000, alpha: 0.35 });
+        handle.beginFill(SELECTION_COLOR, 0.95);
+        handle.drawRect(-baseSize / 2, -baseSize / 2, baseSize, baseSize);
+        handle.endFill();
+        const direction = handle.__resizeMeta;
+        const offsetX = (width / 2) * (direction?.sx ?? 0);
+        const offsetY = (height / 2) * (direction?.sy ?? 0);
+        handle.position.set(offsetX, offsetY);
+        handle.visible = true;
+      });
+    }
+  }
+
+  detachResizeHandles(token, options = {}) {
+    const overlay = token?.selectionGraphic;
+    if (!overlay?.handles) {
+      return;
+    }
+    const { hideHandles = true } = options;
+
+    overlay.handles.forEach((handle) => {
+      if (handle.__pointerdownHandler) {
+        handle.off('pointerdown', handle.__pointerdownHandler);
+        handle.__pointerdownHandler = null;
+      }
+      if (hideHandles) {
+        handle.visible = false;
+      }
+    });
+
+    if (token?.__resizeState) {
+      const stage = this.app?.stage;
+      const { moveHandler, upHandler } = token.__resizeState;
+      if (stage) {
+        if (moveHandler) {
+          stage.off('pointermove', moveHandler);
+        }
+        if (upHandler) {
+          stage.off('pointerup', upHandler);
+          stage.off('pointerupoutside', upHandler);
+        }
+      }
+      token.__resizeState = null;
+    }
+  }
+
+  attachResizeHandles(token) {
+    const overlay = token?.selectionGraphic;
+    if (!overlay?.handles) {
+      return;
+    }
+
+    this.detachResizeHandles(token, { hideHandles: false });
+
+    overlay.handles.forEach((handle) => {
+      const pointerDown = (event) => this.startTokenResize(token, handle, event);
+      handle.__pointerdownHandler = pointerDown;
+      handle.on('pointerdown', pointerDown);
+    });
+  }
+
+  startTokenResize(token, handle, event) {
+    if (!token || !handle) {
+      return;
+    }
+    event.stopPropagation();
+    if (typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+
+    const stage = this.app?.stage;
+    if (!stage) {
+      return;
+    }
+
+    const pointerId =
+      event.pointerId ?? event.data?.pointerId ?? event.data?.identifier ?? 0;
+
+    const initialSize = Number(token.battlemapData?.size ?? token.width);
+
+    const handleResizeMove = (moveEvent) => {
+      const movePointerId =
+        moveEvent.pointerId ?? moveEvent.data?.pointerId ?? moveEvent.data?.identifier ?? 0;
+      if (movePointerId !== pointerId) {
+        return;
+      }
+      this.resizeTokenWithPointer(token, moveEvent);
+    };
+
+    const stopResize = (endEvent) => {
+      const endPointerId =
+        endEvent.pointerId ?? endEvent.data?.pointerId ?? endEvent.data?.identifier ?? 0;
+      if (endPointerId !== pointerId) {
+        return;
+      }
+      stage.off('pointermove', handleResizeMove);
+      stage.off('pointerup', stopResize);
+      stage.off('pointerupoutside', stopResize);
+      token.__resizeState = null;
+      this.attachResizeHandles(token);
+      const currentSize = Number(token.battlemapData?.size ?? token.width);
+      if (!Number.isFinite(initialSize) || Math.abs(currentSize - initialSize) > 0.01) {
+        this.emitTokenResize(token);
+      }
+    };
+
+    stage.on('pointermove', handleResizeMove);
+    stage.on('pointerup', stopResize);
+    stage.on('pointerupoutside', stopResize);
+
+    token.__resizeState = {
+      pointerId,
+      moveHandler: handleResizeMove,
+      upHandler: stopResize,
+      initialSize,
+    };
+
+    this.resizeTokenWithPointer(token, event);
+  }
+
+  resizeTokenWithPointer(token, event) {
+    if (!token) {
+      return;
+    }
+
+    if (!token.parent && !this.tokensLayer) {
+      return;
+    }
+
+    const local = token.toLocal(event.global ?? event.data?.global ?? event.data);
+    const halfWidth = Math.abs(local?.x ?? 0);
+    const halfHeight = Math.abs(local?.y ?? 0);
+    const nextSize = Math.max(halfWidth, halfHeight) * 2;
+    const snappedSize = this.snapSizeValue(nextSize);
+
+    if (this.applyTokenSize(token, snappedSize)) {
+      this.refreshSelectionOverlay(token);
+    }
+  }
+
+  snapSizeValue(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return Math.max(this.state.cellSize, 1);
+    }
+    const cellSize = Math.max(this.state.cellSize || DEFAULTS.cellSize, 1);
+    const snapped = Math.round(numeric / cellSize) * cellSize;
+    return Math.max(cellSize, snapped);
+  }
+
+  applyTokenSize(token, size) {
+    const resolved = Math.max(this.state.cellSize || 1, Number(size) || 0);
+    const current = Number(token.width) || 0;
+    if (Math.abs(resolved - current) < 0.01) {
+      return false;
+    }
+
+    token.width = resolved;
+    token.height = resolved;
+    token.hitArea = new Rectangle(-resolved / 2, -resolved / 2, resolved, resolved);
+
+    if (!token.battlemapData) {
+      token.battlemapData = { id: token.battlemapId };
+    }
+    token.battlemapData.size = resolved;
+    return true;
+  }
+
+  emitTokenResize(token) {
+    if (!token) {
+      return;
+    }
+
+    const payload = {
+      id: token.battlemapId,
+      x: token.x,
+      y: token.y,
+      data: token.battlemapData
+        ? { ...token.battlemapData, x: token.x, y: token.y }
+        : undefined,
+    };
+    token.emit('battlemap:tokenResize', payload);
+    this.emit('token:resize', payload);
   }
 
   attachTokenInteraction(token) {
@@ -1123,14 +1376,23 @@ export default class PixiBattleMap {
   }
 
   updateSelectionGraphic(token) {
-    if (!token?.selectionGraphic) {
+    if (!token) {
       return;
     }
-    const radius = Math.max(token.width, token.height) / 2 + 4;
-    token.selectionGraphic.clear();
-    token.selectionGraphic.lineStyle({ width: 3, color: SELECTION_COLOR, alpha: 0.9 });
-    token.selectionGraphic.drawCircle(0, 0, radius);
-    token.selectionGraphic.visible = this.selectedTokens.has(token);
+    this.setupSelectionOverlay(token);
+    if (!token.selectionGraphic) {
+      return;
+    }
+
+    const isSelected = this.selectedTokens.has(token);
+    token.selectionGraphic.visible = isSelected;
+    if (!isSelected) {
+      this.detachResizeHandles(token);
+      return;
+    }
+
+    this.refreshSelectionOverlay(token);
+    this.attachResizeHandles(token);
   }
 
   snapToken(token) {

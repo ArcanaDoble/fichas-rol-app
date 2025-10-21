@@ -68,6 +68,7 @@ const PixiMapCanvas = forwardRef(
         unmountedRef.current = true;
         listenersRef.current.forEach(({ sprite, handler }) => {
           sprite.off('battlemap:tokenDrop', handler);
+          sprite.off('battlemap:tokenResize', handler);
         });
         listenersRef.current.clear();
         map.destroy();
@@ -242,6 +243,7 @@ const PixiMapCanvas = forwardRef(
           const existingListener = listenersRef.current.get(id);
           if (existingListener) {
             existingListener.sprite.off('battlemap:tokenDrop', existingListener.handler);
+            existingListener.sprite.off('battlemap:tokenResize', existingListener.handler);
           }
 
           if (!sprite) {
@@ -256,23 +258,45 @@ const PixiMapCanvas = forwardRef(
               if (!prev) {
                 return prev;
               }
-              let changed = false;
+              let didChange = false;
               const next = prev.map((entry) => {
                 if (String(entry.id ?? entry.key) !== id) {
                   return entry;
                 }
-                if (entry.x === x && entry.y === y) {
-                  return entry;
-                }
-                changed = true;
                 const payload = data && typeof data === 'object' ? data : null;
-                return payload ? { ...entry, ...payload, x, y } : { ...entry, x, y };
+                let entryChanged = false;
+                const updated = { ...entry };
+
+                if (Number.isFinite(x) && updated.x !== x) {
+                  updated.x = x;
+                  entryChanged = true;
+                }
+                if (Number.isFinite(y) && updated.y !== y) {
+                  updated.y = y;
+                  entryChanged = true;
+                }
+
+                if (payload) {
+                  Object.entries(payload).forEach(([key, value]) => {
+                    if (updated[key] !== value) {
+                      updated[key] = value;
+                      entryChanged = true;
+                    }
+                  });
+                }
+
+                if (entryChanged) {
+                  didChange = true;
+                  return updated;
+                }
+                return entry;
               });
-              return changed ? next : prev;
+              return didChange ? next : prev;
             });
           };
 
           sprite.on('battlemap:tokenDrop', handler);
+          sprite.on('battlemap:tokenResize', handler);
           listenersRef.current.set(id, { sprite, handler });
         }
 
@@ -282,6 +306,7 @@ const PixiMapCanvas = forwardRef(
             return;
           }
           sprite.off('battlemap:tokenDrop', handler);
+          sprite.off('battlemap:tokenResize', handler);
           listenersRef.current.delete(id);
           removals.push(map.removeToken(id));
         });
@@ -310,6 +335,7 @@ const PixiMapCanvas = forwardRef(
           return;
         }
         listener.sprite.off('battlemap:tokenDrop', listener.handler);
+        listener.sprite.off('battlemap:tokenResize', listener.handler);
         listenersRef.current.delete(key);
       });
       return () => {
