@@ -1622,7 +1622,7 @@ export default class PixiBattleMap {
       rows && cellSize > 0 ? offsetY + rows * cellSize : worldHeight;
     const epsilon = cellSize * 0.0001;
 
-    this.gridLayer.lineStyle({
+    this.gridLayer.setStrokeStyle({
       width: 1,
       color: this.state.gridColor,
       alpha: this.state.gridOpacity,
@@ -1636,6 +1636,8 @@ export default class PixiBattleMap {
       this.gridLayer.moveTo(0, y);
       this.gridLayer.lineTo(worldWidth, y);
     }
+
+    this.gridLayer.stroke();
   }
 
   ensurePlaceholder() {
