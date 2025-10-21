@@ -1716,10 +1716,15 @@ export default class PixiBattleMap {
       event.pointerId ?? event.data?.pointerId ?? event.data?.identifier ?? 0;
 
     const cellSize = this.getCellSize();
-    const initialSizeCells = this.getTokenSizeCells(token);
-    const initialSnappedCells = this.snapSizeCells(initialSizeCells);
+    const rawInitialCells = this.getTokenSizeCells(token);
+    const initialSizeCells = Number.isFinite(rawInitialCells)
+      ? this.clampSizeCells(rawInitialCells)
+      : null;
+    const resolvedInitialCells =
+      initialSizeCells ?? this.snapSizeCells(rawInitialCells ?? MIN_TOKEN_CELLS);
+    const initialPixelSize = resolvedInitialCells * cellSize;
+    const initialSnappedCells = this.snapSizeCells(resolvedInitialCells);
     const initialSnappedSize = initialSnappedCells * cellSize;
-    const initialPixelSize = initialSizeCells * cellSize;
 
     const globalPoint =
       event.global ?? event.data?.global ?? event.data ?? new Point(0, 0);
@@ -1797,14 +1802,15 @@ export default class PixiBattleMap {
       moveHandler: handleResizeMove,
       upHandler: stopResize,
       initialSize: initialPixelSize,
-      initialSizeCells,
+      initialSizeCells: resolvedInitialCells,
+      initialHalfSize: initialPixelSize / 2,
       initialSnappedSize,
       initialSnappedCells,
       initialWorld: resolvedWorld,
       initialParentLocal: parentLocal,
       initialLocal: localOffset,
-      lastSnappedSize: initialSnappedSize,
-      lastSnappedCells: initialSnappedCells,
+      lastSnappedSize: initialPixelSize,
+      lastSnappedCells: resolvedInitialCells,
       handleDirection: handle?.__resizeMeta ?? null,
     };
 
@@ -1881,8 +1887,21 @@ export default class PixiBattleMap {
     }
 
     const cellSize = this.getCellSize();
-    const initialHalf = Number(state.initialSnappedSize) / 2;
-    const safeInitialHalf = Number.isFinite(initialHalf) && initialHalf > 0 ? initialHalf : cellSize / 2;
+    const rawInitialHalf = Number(state.initialHalfSize);
+    const derivedInitialHalf = Number(state.initialSize) / 2;
+    const snappedInitialHalf = Number(state.initialSnappedSize) / 2;
+    const safeInitialHalf = (() => {
+      if (Number.isFinite(rawInitialHalf) && rawInitialHalf > 0) {
+        return rawInitialHalf;
+      }
+      if (Number.isFinite(derivedInitialHalf) && derivedInitialHalf > 0) {
+        return derivedInitialHalf;
+      }
+      if (Number.isFinite(snappedInitialHalf) && snappedInitialHalf > 0) {
+        return snappedInitialHalf;
+      }
+      return cellSize / 2;
+    })();
     const minHalf = (MIN_TOKEN_CELLS * cellSize) / 2;
     const maxHalf = (MAX_TOKEN_CELLS * cellSize) / 2;
     let nextHalf = safeInitialHalf + projectedDelta;
