@@ -101,6 +101,7 @@ export default class PixiBattleMap {
     this.canvas = null;
     this.viewport = null;
     this.backgroundSprite = null;
+    this.backgroundMaskSprite = null;
 
     this.app = new Application();
     this.readyPromise = this.init().catch((error) => {
@@ -420,6 +421,11 @@ export default class PixiBattleMap {
       this.backgroundSprite.destroy({ texture: false, baseTexture: false });
       this.backgroundSprite = null;
     }
+    if (this.backgroundMaskSprite) {
+      this.backgroundMaskSprite.removeFromParent();
+      this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+      this.backgroundMaskSprite = null;
+    }
     if (this.gridLayer) {
       this.gridLayer.mask = null;
     }
@@ -434,10 +440,22 @@ export default class PixiBattleMap {
         background.width = targetWidth;
         background.height = targetHeight;
         background.eventMode = 'none';
+
+        const maskSprite = new Sprite(texture);
+        maskSprite.anchor.set(0);
+        maskSprite.position.set(0, 0);
+        maskSprite.width = targetWidth;
+        maskSprite.height = targetHeight;
+        maskSprite.eventMode = 'none';
+
         this.backgroundLayer.addChild(background);
+        this.backgroundLayer.addChild(maskSprite);
+
         this.backgroundSprite = background;
+        this.backgroundMaskSprite = maskSprite;
+
         if (this.gridLayer) {
-          this.gridLayer.mask = this.backgroundSprite;
+          this.gridLayer.mask = this.backgroundMaskSprite;
         }
         this.hidePlaceholder();
       } catch (error) {
@@ -446,12 +464,22 @@ export default class PixiBattleMap {
         if (this.gridLayer) {
           this.gridLayer.mask = null;
         }
+        if (this.backgroundMaskSprite) {
+          this.backgroundMaskSprite.removeFromParent();
+          this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+          this.backgroundMaskSprite = null;
+        }
       }
     }
     if (!url) {
       this.ensurePlaceholder();
       if (this.gridLayer) {
         this.gridLayer.mask = null;
+      }
+      if (this.backgroundMaskSprite) {
+        this.backgroundMaskSprite.removeFromParent();
+        this.backgroundMaskSprite.destroy({ texture: false, baseTexture: false });
+        this.backgroundMaskSprite = null;
       }
     }
 
@@ -1633,7 +1661,7 @@ export default class PixiBattleMap {
       ? this.state.worldHeight
       : 0;
 
-    const usingMask = Boolean(this.backgroundSprite);
+    const usingMask = Boolean(this.gridLayer?.mask);
     const gridWidth =
       columns && cellSize > 0 ? columns * cellSize : worldWidth;
     const gridHeight =
@@ -1816,6 +1844,8 @@ export default class PixiBattleMap {
         this.backgroundLayer.destroy({ children: true });
         this.backgroundLayer = null;
       }
+      this.backgroundSprite = null;
+      this.backgroundMaskSprite = null;
       if (this.gridLayer) {
         this.gridLayer.destroy();
         this.gridLayer = null;
