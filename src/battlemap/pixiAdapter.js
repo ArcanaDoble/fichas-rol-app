@@ -1813,8 +1813,6 @@ export default class PixiBattleMap {
       lastSnappedCells: resolvedInitialCells,
       handleDirection: handle?.__resizeMeta ?? null,
     };
-
-    this.resizeTokenWithPointer(token, event);
   }
 
   resizeTokenWithPointer(token, event) {
@@ -1884,6 +1882,11 @@ export default class PixiBattleMap {
       if (Math.abs(value) > Math.abs(projectedDelta)) {
         projectedDelta = value;
       }
+    }
+
+    const hasMovement = Math.abs(projectedDelta) > 0.0001;
+    if (!hasMovement) {
+      return;
     }
 
     const cellSize = this.getCellSize();
