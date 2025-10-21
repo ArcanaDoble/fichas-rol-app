@@ -11,6 +11,7 @@ import {
   Text,
 } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
+import TokenSprite from './TokenSprite';
 
 const DEFAULTS = {
   cellSize: 70,
@@ -57,6 +58,10 @@ function getSpriteLocalSize(sprite) {
     return { width: 0, height: 0 };
   }
 
+  if (typeof sprite.getLocalSize === 'function') {
+    return sprite.getLocalSize();
+  }
+
   const texture = sprite.texture;
   const scaleX = Math.abs(sprite.scale?.x ?? 1);
   const scaleY = Math.abs(sprite.scale?.y ?? 1);
@@ -86,6 +91,11 @@ function getSpriteLocalSize(sprite) {
 
 function updateSpriteHitArea(sprite) {
   if (!sprite) {
+    return;
+  }
+
+  if (typeof sprite.updateHitArea === 'function') {
+    sprite.updateHitArea();
     return;
   }
 
@@ -853,6 +863,53 @@ export default class PixiBattleMap {
     if (options.metadata) {
       next.metadata = { ...(next.metadata || {}), ...options.metadata };
     }
+    if (options.color !== undefined) {
+      next.color = options.color;
+    }
+    if (options.customName !== undefined) {
+      next.customName = options.customName;
+      next.metadata = { ...(next.metadata || {}), customName: options.customName };
+    }
+    if (options.name !== undefined) {
+      next.name = options.name;
+      next.metadata = { ...(next.metadata || {}), name: options.name };
+    }
+    if (options.showName !== undefined) {
+      next.showName = Boolean(options.showName);
+      next.metadata = { ...(next.metadata || {}), showName: Boolean(options.showName) };
+    }
+    if (options.tokenSheetId !== undefined) {
+      next.tokenSheetId = options.tokenSheetId;
+      next.metadata = { ...(next.metadata || {}), tokenSheetId: options.tokenSheetId };
+    }
+    if (options.barsVisibility !== undefined) {
+      next.metadata = { ...(next.metadata || {}), barsVisibility: options.barsVisibility };
+    }
+    if (options.controlledBy !== undefined) {
+      next.metadata = { ...(next.metadata || {}), controlledBy: options.controlledBy };
+    }
+    if (options.enemyId !== undefined) {
+      next.metadata = { ...(next.metadata || {}), enemyId: options.enemyId };
+    }
+    if (options.estados !== undefined) {
+      const estadosList = Array.isArray(options.estados)
+        ? options.estados.filter((estado) => estado !== undefined && estado !== null)
+        : [];
+      next.estados = estadosList;
+      next.metadata = { ...(next.metadata || {}), estados: estadosList };
+    }
+    if (options.auraRadius !== undefined) {
+      assignNumber('auraRadius', options.auraRadius, {});
+    }
+    if (options.auraShape !== undefined) {
+      next.auraShape = options.auraShape;
+    }
+    if (options.auraColor !== undefined) {
+      next.auraColor = options.auraColor;
+    }
+    if (options.auraOpacity !== undefined) {
+      assignNumber('auraOpacity', options.auraOpacity, { clampMin: 0, clampMax: 1 });
+    }
     if (options.vision !== undefined) {
       next.vision = options.vision;
     }
@@ -902,24 +959,37 @@ export default class PixiBattleMap {
     next.tintOpacity = resolvedTintOpacity;
 
     token.battlemapData = next;
-    token.position.set(next.x, next.y);
 
-    this.applyTokenSize(token, next.sizeCells, {
-      isCells: true,
-      updateData: next,
-      force: true,
-    });
-
-    const rotationRadians = (Number(next.rotation) * Math.PI) / 180;
-    token.rotation = rotationRadians;
-    token.alpha = Math.min(Math.max(Number(next.opacity), 0), 1);
-
-    if (hasTintColor && resolvedTintOpacity > 0) {
-      token.tint = normalizeColor(next.tint, 0xffffff);
-      token.tintAlpha = resolvedTintOpacity;
+    if (typeof token.applyBattlemapData === 'function') {
+      const maybePromise = token.applyBattlemapData(next, {
+        loader: (url) => this.loadTexture(url),
+        cellSize,
+      });
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.catch((error) => {
+          console.error('[PixiBattleMap] Error al aplicar datos del token:', error);
+        });
+      }
     } else {
-      token.tint = 0xffffff;
-      token.tintAlpha = 0;
+      token.position.set(next.x, next.y);
+
+      this.applyTokenSize(token, next.sizeCells, {
+        isCells: true,
+        updateData: next,
+        force: true,
+      });
+
+      const rotationRadians = (Number(next.rotation) * Math.PI) / 180;
+      token.rotation = rotationRadians;
+      token.alpha = Math.min(Math.max(Number(next.opacity), 0), 1);
+
+      if (hasTintColor && resolvedTintOpacity > 0) {
+        token.tint = normalizeColor(next.tint, 0xffffff);
+        token.tintAlpha = resolvedTintOpacity;
+      } else {
+        token.tint = 0xffffff;
+        token.tintAlpha = 0;
+      }
     }
 
     token.baseZIndex = Number(next.zIndex) || 0;
@@ -942,24 +1012,26 @@ export default class PixiBattleMap {
     }
     token.battlemapLayerId = targetLayerId;
 
-    if (next.textureUrl && next.textureUrl !== token.__textureUrl) {
-      token.__textureUrl = next.textureUrl;
-      this.loadTexture(next.textureUrl)
-        .then((texture) => {
-          if (this.tokens.get(token.battlemapId) === token && !this.destroyed) {
-            token.texture = texture;
-            this.applyTokenSize(token, token.battlemapData?.sizeCells, {
-              isCells: true,
-            });
-            this.updateSelectionGraphic(token);
-          }
-        })
-        .catch((error) => {
-          console.warn('[PixiBattleMap] No se pudo cargar la textura del token.', error);
-        });
-    } else if (!next.textureUrl) {
-      token.__textureUrl = null;
-      token.texture = Texture.WHITE;
+    if (typeof token.applyBattlemapData !== 'function') {
+      if (next.textureUrl && next.textureUrl !== token.__textureUrl) {
+        token.__textureUrl = next.textureUrl;
+        this.loadTexture(next.textureUrl)
+          .then((texture) => {
+            if (this.tokens.get(token.battlemapId) === token && !this.destroyed) {
+              token.texture = texture;
+              this.applyTokenSize(token, token.battlemapData?.sizeCells, {
+                isCells: true,
+              });
+              this.updateSelectionGraphic(token);
+            }
+          })
+          .catch((error) => {
+            console.warn('[PixiBattleMap] No se pudo cargar la textura del token.', error);
+          });
+      } else if (!next.textureUrl) {
+        token.__textureUrl = null;
+        token.texture = Texture.WHITE;
+      }
     }
 
     this.updateSelectionGraphic(token);
@@ -979,14 +1051,14 @@ export default class PixiBattleMap {
     let token = this.tokens.get(tokenId);
     const created = !token;
     if (!token) {
-      token = new Sprite(Texture.WHITE);
-      token.anchor.set(0.5);
+      token = new TokenSprite({ battlemap: this, id: tokenId, cellSize: this.getCellSize() });
       token.eventMode = 'dynamic';
       token.cursor = 'pointer';
-      token.sortableChildren = false;
+      token.sortableChildren = true;
       this.setupSelectionOverlay(token);
       token.battlemapId = tokenId;
       this.attachTokenInteraction(token);
+      this._attachTokenUiListeners(token);
       this.tokens.set(tokenId, token);
     }
 
@@ -1379,6 +1451,15 @@ export default class PixiBattleMap {
     this.emit('token:remove', payload);
   }
 
+  highlightTokenDamage(id, options = {}) {
+    const token = this.tokens.get(String(id));
+    if (!token || typeof token.highlightDamage !== 'function') {
+      return false;
+    }
+    token.highlightDamage(options);
+    return true;
+  }
+
   getToken(id) {
     return this.tokens.get(String(id)) || null;
   }
@@ -1468,6 +1549,9 @@ export default class PixiBattleMap {
     if (Number.isFinite(token.baseZIndex)) {
       token.zIndex = token.baseZIndex;
     }
+    if (typeof token.setSelected === 'function') {
+      token.setSelected(false);
+    }
   }
 
   selectToken(token, options = {}) {
@@ -1491,6 +1575,9 @@ export default class PixiBattleMap {
 
     if (!alreadySelected) {
       this.selectedTokens.add(token);
+      if (typeof token.setSelected === 'function') {
+        token.setSelected(true);
+      }
     }
     if (Number.isFinite(token.baseZIndex)) {
       token.zIndex = token.baseZIndex + TOKEN_SELECTION_Z_OFFSET;
@@ -2218,9 +2305,16 @@ export default class PixiBattleMap {
       return false;
     }
 
-    token.width = targetPixels;
-    token.height = targetPixels;
-    updateSpriteHitArea(token);
+    if (typeof token.setSize === 'function') {
+      token.setSize(targetPixels, targetPixels);
+      if (typeof token.setCellSize === 'function') {
+        token.setCellSize(cellSize);
+      }
+    } else {
+      token.width = targetPixels;
+      token.height = targetPixels;
+      updateSpriteHitArea(token);
+    }
 
     const data = updateData || token.battlemapData || { id: token.battlemapId };
     data.sizeCells = targetCells;
@@ -2377,6 +2471,50 @@ export default class PixiBattleMap {
         return;
       }
       updateDragPosition(event);
+    });
+  }
+
+  _attachTokenUiListeners(token) {
+    if (!token || typeof token.on !== 'function') {
+      return;
+    }
+    const reEmit = (sourceEvent, targetEvent) => {
+      token.on(sourceEvent, (payload = {}) => {
+        const eventPayload = {
+          id: token.battlemapId,
+          ...payload,
+        };
+        this.emit(targetEvent, eventPayload);
+      });
+    };
+
+    reEmit('battlemap:hover', 'token:hover');
+    reEmit('battlemap:openSettings', 'token:settings');
+    reEmit('battlemap:openBars', 'token:bars');
+    reEmit('battlemap:openStates', 'token:states');
+    reEmit('battlemap:statChange', 'token:statChange');
+
+    token.on('battlemap:tokenRotate', ({ rotation }) => {
+      const degrees = Number(rotation) || 0;
+      if (!token.battlemapData) {
+        token.battlemapData = { id: token.battlemapId };
+      }
+      token.battlemapData.rotation = degrees;
+      token.rotation = (degrees * Math.PI) / 180;
+      this.refreshSelectionOverlay(token);
+      this.emit('token:rotate', {
+        id: token.battlemapId,
+        rotation: degrees,
+        data: token.battlemapData ? { ...token.battlemapData } : undefined,
+      });
+    });
+
+    token.on('battlemap:tokenRotatePreview', ({ rotation }) => {
+      this.refreshSelectionOverlay(token);
+      this.emit('token:rotate:preview', {
+        id: token.battlemapId,
+        rotation: Number(rotation) || 0,
+      });
     });
   }
 

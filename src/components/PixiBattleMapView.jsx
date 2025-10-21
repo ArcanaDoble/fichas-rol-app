@@ -7,12 +7,14 @@ import React, {
 } from 'react';
 import PropTypes from 'prop-types';
 import { nanoid } from 'nanoid';
+import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import PixiMapCanvas from './PixiMapCanvas';
 import Toolbar from './Toolbar';
 import { DEFAULT_GRID_SIZE } from '../utils/grid';
 import { useDrop } from 'react-dnd';
 import { AssetTypes } from './AssetSidebar';
 import { createToken, cloneTokenSheet } from '../utils/token';
+import { db } from '../firebase';
 
 const DEFAULT_TEXT_OPTIONS = {
   fill: '#ffffff',
@@ -23,6 +25,8 @@ const DEFAULT_TEXT_OPTIONS = {
   italic: false,
   underline: false,
 };
+
+const DAMAGE_ANIMATION_MS = 8000;
 
 const isEditableElement = (element) => {
   if (!element) {
@@ -115,6 +119,11 @@ const PixiBattleMapView = ({
   const containerRef = useRef(null);
   const previousLightsRef = useRef(new Set());
   const lastAutoGridGuessRef = useRef(null);
+  const tokensRef = useRef(tokens);
+
+  useEffect(() => {
+    tokensRef.current = tokens;
+  }, [tokens]);
 
   const [activeTool, setActiveTool] = useState('select');
   const [drawColor, setDrawColor] = useState('#ffffff');
@@ -721,6 +730,51 @@ const PixiBattleMapView = ({
   useEffect(() => {
     setAmbientLights(normalizedAmbientLights);
   }, [normalizedAmbientLights]);
+
+  useEffect(() => {
+    if (!pageId) {
+      return undefined;
+    }
+
+    const damageQuery = query(
+      collection(db, 'damageEvents'),
+      where('pageId', '==', pageId)
+    );
+
+    const unsubscribe = onSnapshot(damageQuery, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') {
+          return;
+        }
+        const data = change.doc.data();
+        const tokenId = data?.tokenId;
+        if (!tokenId) {
+          return;
+        }
+
+        const tokenExists = (tokensRef.current || []).some(
+          (token) => String(token?.id ?? token?.key) === String(tokenId)
+        );
+        if (tokenExists) {
+          const map = pixiRef.current;
+          if (map && typeof map.highlightTokenDamage === 'function') {
+            map.highlightTokenDamage(tokenId, {
+              opacity: 0.5,
+              duration: DAMAGE_ANIMATION_MS,
+            });
+          }
+        }
+
+        setTimeout(() => {
+          deleteDoc(doc(db, 'damageEvents', change.doc.id)).catch((error) => {
+            console.error('[PixiBattleMapView] Error eliminando evento de daño:', error);
+          });
+        }, DAMAGE_ANIMATION_MS);
+      });
+    });
+
+    return () => unsubscribe();
+  }, [pageId]);
 
   const updateAmbientLights = useCallback(
     (updater) => {
