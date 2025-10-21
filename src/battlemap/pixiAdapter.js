@@ -1540,6 +1540,43 @@ export default class PixiBattleMap {
 
     const initialSize = Number(token.battlemapData?.size ?? token.width);
 
+    const globalPoint =
+      event.global ?? event.data?.global ?? event.data ?? new Point(0, 0);
+    const resolvedGlobal = {
+      x: Number(globalPoint?.x) || 0,
+      y: Number(globalPoint?.y) || 0,
+    };
+
+    const viewport = this.viewport;
+    const worldPoint = viewport
+      ? viewport.toWorld(resolvedGlobal.x, resolvedGlobal.y)
+      : resolvedGlobal;
+    const resolvedWorld = {
+      x: Number(worldPoint?.x) || resolvedGlobal.x,
+      y: Number(worldPoint?.y) || resolvedGlobal.y,
+    };
+
+    const parent = token.parent || this.tokensLayer || viewport;
+    let parentLocal = { ...resolvedWorld };
+    if (parent && typeof parent.toLocal === 'function' && parent !== viewport) {
+      const localPoint = parent.toLocal(resolvedWorld, viewport);
+      parentLocal = {
+        x: Number(localPoint?.x) || resolvedWorld.x,
+        y: Number(localPoint?.y) || resolvedWorld.y,
+      };
+    }
+
+    const localOffset = {
+      x: parentLocal.x - token.x,
+      y: parentLocal.y - token.y,
+    };
+
+    const initialHalf = Math.max(
+      Math.abs(localOffset.x) || 0,
+      Math.abs(localOffset.y) || 0
+    );
+    const initialSnappedSize = this.snapSizeValue(initialSize);
+
     const handleResizeMove = (moveEvent) => {
       const movePointerId =
         moveEvent.pointerId ?? moveEvent.data?.pointerId ?? moveEvent.data?.identifier ?? 0;
@@ -1558,10 +1595,16 @@ export default class PixiBattleMap {
       stage.off('pointermove', handleResizeMove);
       stage.off('pointerup', stopResize);
       stage.off('pointerupoutside', stopResize);
+      const state = token.__resizeState;
       token.__resizeState = null;
       this.attachResizeHandles(token);
       const currentSize = Number(token.battlemapData?.size ?? token.width);
-      if (!Number.isFinite(initialSize) || Math.abs(currentSize - initialSize) > 0.01) {
+      const snappedCurrent = this.snapSizeValue(currentSize);
+      const initialSnapped = state?.initialSnappedSize ?? this.snapSizeValue(initialSize);
+      if (
+        !Number.isFinite(initialSnapped) ||
+        Math.abs((state?.lastSnappedSize ?? snappedCurrent) - initialSnapped) > 0.01
+      ) {
         this.emitTokenResize(token);
       }
     };
@@ -1575,6 +1618,13 @@ export default class PixiBattleMap {
       moveHandler: handleResizeMove,
       upHandler: stopResize,
       initialSize,
+      initialSnappedSize,
+      initialWorld: resolvedWorld,
+      initialParentLocal: parentLocal,
+      initialLocal: localOffset,
+      initialHalf,
+      lastSnappedSize: initialSnappedSize,
+      handleDirection: handle?.__resizeMeta ?? null,
     };
 
     this.resizeTokenWithPointer(token, event);
@@ -1585,17 +1635,69 @@ export default class PixiBattleMap {
       return;
     }
 
+    const state = token.__resizeState;
+    if (!state) {
+      return;
+    }
+
     if (!token.parent && !this.tokensLayer) {
       return;
     }
 
-    const local = token.toLocal(event.global ?? event.data?.global ?? event.data);
-    const halfWidth = Math.abs(local?.x ?? 0);
-    const halfHeight = Math.abs(local?.y ?? 0);
-    const nextSize = Math.max(halfWidth, halfHeight) * 2;
+    const globalPoint =
+      event.global ?? event.data?.global ?? event.data ?? new Point(0, 0);
+    const resolvedGlobal = {
+      x: Number(globalPoint?.x) || 0,
+      y: Number(globalPoint?.y) || 0,
+    };
+
+    const viewport = this.viewport;
+    const worldPoint = viewport
+      ? viewport.toWorld(resolvedGlobal.x, resolvedGlobal.y)
+      : resolvedGlobal;
+    const resolvedWorld = {
+      x: Number(worldPoint?.x) || resolvedGlobal.x,
+      y: Number(worldPoint?.y) || resolvedGlobal.y,
+    };
+
+    const parent = token.parent || this.tokensLayer || viewport;
+    let parentLocal = { ...resolvedWorld };
+    if (parent && typeof parent.toLocal === 'function' && parent !== viewport) {
+      const localPoint = parent.toLocal(resolvedWorld, viewport);
+      parentLocal = {
+        x: Number(localPoint?.x) || resolvedWorld.x,
+        y: Number(localPoint?.y) || resolvedWorld.y,
+      };
+    }
+
+    const currentLocal = {
+      x: parentLocal.x - token.x,
+      y: parentLocal.y - token.y,
+    };
+
+    const direction = state.handleDirection || { sx: 0, sy: 0 };
+    const orientedCurrentX = direction.sx
+      ? (currentLocal.x || 0) * direction.sx
+      : Math.abs(currentLocal.x || 0);
+    const orientedCurrentY = direction.sy
+      ? (currentLocal.y || 0) * direction.sy
+      : Math.abs(currentLocal.y || 0);
+    const currentHalf = Math.max(orientedCurrentX, orientedCurrentY, 0);
+
+    const initialHalf = Number.isFinite(state.initialHalf)
+      ? state.initialHalf
+      : Math.max(
+          Math.abs(state.initialLocal?.x ?? 0),
+          Math.abs(state.initialLocal?.y ?? 0),
+          0
+        );
+    const deltaHalf = currentHalf - initialHalf;
+    const nextHalf = Math.max(initialHalf + deltaHalf, (this.state.cellSize || 1) / 2);
+    const nextSize = Math.max(nextHalf * 2, this.state.cellSize || 1);
     const snappedSize = this.snapSizeValue(nextSize);
 
     if (this.applyTokenSize(token, snappedSize)) {
+      state.lastSnappedSize = snappedSize;
       this.refreshSelectionOverlay(token);
     }
   }
