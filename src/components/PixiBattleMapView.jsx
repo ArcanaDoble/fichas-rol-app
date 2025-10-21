@@ -66,6 +66,9 @@ const sanitizeNumber = (value, fallback) => {
 const PixiBattleMapView = ({
   backgroundImage,
   gridSize = DEFAULT_GRID_SIZE,
+  gridCells = null,
+  gridOffsetX = 0,
+  gridOffsetY = 0,
   showGrid: propShowGrid = true,
   gridColor: propGridColor = '#ffffff',
   gridOpacity: propGridOpacity = 0.2,
@@ -638,6 +641,9 @@ const PixiBattleMapView = ({
           ref={pixiRef}
           backgroundImage={backgroundImage}
           gridSize={gridSize}
+          gridCells={gridCells}
+          gridOffsetX={gridOffsetX}
+          gridOffsetY={gridOffsetY}
           gridColor={gridColor}
           gridOpacity={gridOpacity}
           showGrid={showGrid}
@@ -770,6 +776,15 @@ const PixiBattleMapView = ({
 PixiBattleMapView.propTypes = {
   backgroundImage: PropTypes.string,
   gridSize: PropTypes.number,
+  gridCells: PropTypes.oneOfType([
+    PropTypes.number,
+    PropTypes.shape({
+      columns: PropTypes.number,
+      rows: PropTypes.number,
+    }),
+  ]),
+  gridOffsetX: PropTypes.number,
+  gridOffsetY: PropTypes.number,
   showGrid: PropTypes.bool,
   gridColor: PropTypes.string,
   gridOpacity: PropTypes.number,
