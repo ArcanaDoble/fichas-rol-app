@@ -10,6 +10,9 @@ import { nanoid } from 'nanoid';
 import PixiMapCanvas from './PixiMapCanvas';
 import Toolbar from './Toolbar';
 import { DEFAULT_GRID_SIZE } from '../utils/grid';
+import { useDrop } from 'react-dnd';
+import { AssetTypes } from './AssetSidebar';
+import { createToken, cloneTokenSheet } from '../utils/token';
 
 const DEFAULT_TEXT_OPTIONS = {
   fill: '#ffffff',
@@ -307,6 +310,107 @@ const PixiBattleMapView = ({
     });
   }, []);
 
+  const handleAssetDrop = useCallback(
+    async (item, clientOffset) => {
+      const map = pixiRef.current;
+      if (!map || !clientOffset || typeof map.addToken !== 'function') {
+        return;
+      }
+
+      try {
+        const snappedPosition = await map.getSnappedPositionFromClient(
+          clientOffset.x,
+          clientOffset.y,
+        );
+
+        if (!snappedPosition) {
+          return;
+        }
+
+        const { x, y } = snappedPosition;
+
+        const newToken = createToken({
+          x,
+          y,
+          w: 1,
+          h: 1,
+          size: gridSize,
+          angle: 0,
+          url: item.url,
+          name: item.name || '',
+          enemyId: item.enemyId || null,
+          customName: '',
+          showName: false,
+          controlledBy: 'master',
+          barsVisibility: 'all',
+          auraRadius: 0,
+          auraShape: 'circle',
+          auraColor: '#ffff00',
+          auraOpacity: 0.25,
+          auraVisibility: 'all',
+          opacity: 1,
+          tintColor: '#ff0000',
+          tintOpacity: 0,
+          estados: [],
+          layer: activeLayer,
+        });
+
+        if (item.tokenSheetId) {
+          cloneTokenSheet(item.tokenSheetId, newToken.tokenSheetId);
+        }
+
+        await map.addToken({
+          id: newToken.id,
+          textureUrl: newToken.url,
+          x,
+          y,
+          size: newToken.size || gridSize,
+          layer: newToken.layer,
+          metadata: {
+            name: newToken.name,
+            customName: newToken.customName,
+            enemyId: newToken.enemyId,
+            tokenSheetId: newToken.tokenSheetId,
+            controlledBy: newToken.controlledBy,
+            barsVisibility: newToken.barsVisibility,
+          },
+        });
+
+        if (typeof onTokensChange === 'function') {
+          const nextTokens = Array.isArray(tokens)
+            ? [...tokens, newToken]
+            : [newToken];
+          onTokensChange(nextTokens);
+        }
+      } catch (error) {
+        console.error('[PixiBattleMapView] Error al soltar un asset en el mapa:', error);
+      }
+    },
+    [activeLayer, gridSize, onTokensChange, tokens]
+  );
+
+  const [{ isOver: isAssetOverMap }, dropTarget] = useDrop(
+    () => ({
+      accept: AssetTypes.IMAGE,
+      drop: (item, monitor) => {
+        const offset = monitor.getClientOffset();
+        if (!offset) {
+          return;
+        }
+        handleAssetDrop(item, offset);
+      },
+    }),
+    [handleAssetDrop]
+  );
+
+  const setContainerRef = useCallback(
+    (node) => {
+      containerRef.current = node;
+      dropTarget(node);
+    },
+    [dropTarget]
+  );
+
   const handleCopySelection = useCallback(() => {
     const map = pixiRef.current;
     if (!map || typeof map.copySelection !== 'function') {
@@ -524,20 +628,24 @@ const PixiBattleMapView = ({
 
     return (
       <div
-        ref={containerRef}
-        className="relative h-full w-full"
+        ref={setContainerRef}
+        className={`relative h-full w-full ${
+          isAssetOverMap ? 'ring-2 ring-indigo-400/70' : ''
+        }`}
         onPointerMove={handlePointerMove}
       >
-      <PixiMapCanvas
-        ref={pixiRef}
-        backgroundImage={backgroundImage}
-        gridSize={gridSize}
-        gridColor={gridColor}
-        gridOpacity={gridOpacity}
-        showGrid={showGrid}
-        tokens={tokens}
-        onTokensChange={onTokensChange}
-      />
+        <PixiMapCanvas
+          ref={pixiRef}
+          backgroundImage={backgroundImage}
+          gridSize={gridSize}
+          gridColor={gridColor}
+          gridOpacity={gridOpacity}
+          showGrid={showGrid}
+          tokens={tokens}
+          onTokensChange={onTokensChange}
+          activeLayer={activeLayer}
+          onAssetDrop={handleAssetDrop}
+        />
       <Toolbar
         activeTool={activeTool}
         onSelect={setActiveTool}

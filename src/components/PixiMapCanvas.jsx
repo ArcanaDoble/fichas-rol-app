@@ -21,9 +21,13 @@ const PixiMapCanvas = forwardRef(
       showGrid = true,
       tokens = [],
       onTokensChange,
+      ...rest
     },
     ref
   ) => {
+    const { activeLayer, onAssetDrop } = rest;
+    void activeLayer;
+    void onAssetDrop;
     const stageRef = useRef(null);
     const mapRef = useRef(null);
     const listenersRef = useRef(new Map());
@@ -372,6 +376,22 @@ const PixiMapCanvas = forwardRef(
           await map.ready;
           return map.addToken(options);
         },
+        async getSnappedPositionFromClient(clientX, clientY) {
+          const map = mapRef.current;
+          const container = stageRef.current;
+          if (!map || !container) {
+            return null;
+          }
+          await map.ready;
+          const rect = container.getBoundingClientRect();
+          const normalizedClientX = Number(clientX);
+          const normalizedClientY = Number(clientY);
+          const screenX =
+            (Number.isFinite(normalizedClientX) ? normalizedClientX : 0) - rect.left;
+          const screenY =
+            (Number.isFinite(normalizedClientY) ? normalizedClientY : 0) - rect.top;
+          return map.getSnappedWorldPosition({ x: screenX, y: screenY });
+        },
         async updateToken(id, patch) {
           const map = mapRef.current;
           if (!map) {
@@ -527,6 +547,8 @@ PixiMapCanvas.propTypes = {
   showGrid: PropTypes.bool,
   tokens: PropTypes.arrayOf(PropTypes.object),
   onTokensChange: PropTypes.func,
+  activeLayer: PropTypes.string,
+  onAssetDrop: PropTypes.func,
 };
 
 export default PixiMapCanvas;
