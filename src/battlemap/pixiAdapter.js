@@ -1646,6 +1646,50 @@ export default class PixiBattleMap {
   }
 
   attachTokenInteraction(token) {
+    const getPointerId = (event) =>
+      event?.pointerId ?? event?.data?.pointerId ?? event?.data?.identifier ?? 0;
+
+    const cleanupStageDragListeners = () => {
+      if (!token.__dragState) {
+        return;
+      }
+      const stage = this.app?.stage;
+      const { moveHandler, upHandler } = token.__dragState;
+      if (stage) {
+        if (moveHandler) {
+          stage.off('pointermove', moveHandler);
+        }
+        if (upHandler) {
+          stage.off('pointerup', upHandler);
+          stage.off('pointerupoutside', upHandler);
+        }
+      }
+      token.__dragState = null;
+    };
+
+    const updateDragPosition = (event) => {
+      const viewport = this.viewport;
+      const globalPoint = event?.global ?? event?.data?.global ?? event?.data;
+      if (!globalPoint) {
+        return;
+      }
+      let worldPoint = null;
+      if (viewport?.toWorld) {
+        worldPoint = viewport.toWorld(globalPoint.x, globalPoint.y);
+      }
+      if (worldPoint) {
+        token.position.set(worldPoint.x, worldPoint.y);
+      } else {
+        const parentLayer = token.parent || this.tokensLayer;
+        if (!parentLayer?.toLocal) {
+          return;
+        }
+        const localPoint = parentLayer.toLocal(globalPoint);
+        token.position.set(localPoint.x, localPoint.y);
+      }
+      this.updateSelectionGraphic(token);
+    };
+
     token.on('pointerdown', (event) => {
       event.stopPropagation();
       const originalEvent = event.data?.originalEvent || event.data?.nativeEvent;
@@ -1663,16 +1707,45 @@ export default class PixiBattleMap {
         this.viewport.plugins.pause('drag');
       }
       token.dragging = true;
-      token.dragPointerId = event.pointerId;
+      token.dragPointerId = getPointerId(event);
       token.__dragStart = { x: token.x, y: token.y };
+
+      const stage = this.app?.stage;
+      if (stage && this.viewport) {
+        const pointerId = token.dragPointerId;
+        const stageMoveHandler = (moveEvent) => {
+          if (!token.dragging || getPointerId(moveEvent) !== pointerId) {
+            return;
+          }
+          updateDragPosition(moveEvent);
+        };
+
+        const stageUpHandler = (endEvent) => {
+          if (getPointerId(endEvent) !== pointerId) {
+            return;
+          }
+          handlePointerUp(endEvent);
+        };
+
+        cleanupStageDragListeners();
+        stage.on('pointermove', stageMoveHandler);
+        stage.on('pointerup', stageUpHandler);
+        stage.on('pointerupoutside', stageUpHandler);
+        token.__dragState = {
+          pointerId,
+          moveHandler: stageMoveHandler,
+          upHandler: stageUpHandler,
+        };
+      }
     });
 
     const handlePointerUp = (event) => {
-      if (!token.dragging || token.dragPointerId !== event.pointerId) {
+      if (!token.dragging || token.dragPointerId !== getPointerId(event)) {
         return;
       }
       token.dragging = false;
       token.dragPointerId = null;
+      cleanupStageDragListeners();
       this.snapToken(token);
       if (this.viewport?.plugins) {
         this.viewport.plugins.resume('drag');
@@ -1693,13 +1766,10 @@ export default class PixiBattleMap {
     token.on('pointerupoutside', handlePointerUp);
 
     token.on('pointermove', (event) => {
-      if (!token.dragging || token.dragPointerId !== event.pointerId) {
+      if (!token.dragging || token.dragPointerId !== getPointerId(event)) {
         return;
       }
-      const parentLayer = token.parent || this.tokensLayer;
-      const nextPosition = parentLayer.toLocal(event.global);
-      token.position.set(nextPosition.x, nextPosition.y);
-      this.updateSelectionGraphic(token);
+      updateDragPosition(event);
     });
   }
 
