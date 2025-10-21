@@ -1672,29 +1672,30 @@ export default class PixiBattleMap {
       };
     }
 
-    const currentLocal = {
-      x: parentLocal.x - token.x,
-      y: parentLocal.y - token.y,
+    const startParentLocal = state.initialParentLocal || {
+      x: (state.initialLocal?.x ?? 0) + token.x,
+      y: (state.initialLocal?.y ?? 0) + token.y,
+    };
+
+    const delta = {
+      x: parentLocal.x - (startParentLocal.x ?? 0),
+      y: parentLocal.y - (startParentLocal.y ?? 0),
     };
 
     const direction = state.handleDirection || { sx: 0, sy: 0 };
-    const orientedCurrentX = direction.sx
-      ? (currentLocal.x || 0) * direction.sx
-      : Math.abs(currentLocal.x || 0);
-    const orientedCurrentY = direction.sy
-      ? (currentLocal.y || 0) * direction.sy
-      : Math.abs(currentLocal.y || 0);
-    const currentHalf = Math.max(orientedCurrentX, orientedCurrentY, 0);
+    const projectedDeltaX = direction.sx
+      ? (delta.x || 0) * direction.sx
+      : Math.abs(delta.x || 0);
+    const projectedDeltaY = direction.sy
+      ? (delta.y || 0) * direction.sy
+      : Math.abs(delta.y || 0);
+    const projectedDelta = Math.max(projectedDeltaX, projectedDeltaY, 0);
 
-    const initialHalf = Number.isFinite(state.initialHalf)
-      ? state.initialHalf
-      : Math.max(
-          Math.abs(state.initialLocal?.x ?? 0),
-          Math.abs(state.initialLocal?.y ?? 0),
-          0
-        );
-    const deltaHalf = currentHalf - initialHalf;
-    const nextHalf = Math.max(initialHalf + deltaHalf, (this.state.cellSize || 1) / 2);
+    const initialSnappedHalf = Math.max(
+      (Number(state.initialSnappedSize) || this.state.cellSize || 1) / 2,
+      (this.state.cellSize || 1) / 2
+    );
+    const nextHalf = Math.max(initialSnappedHalf + projectedDelta, (this.state.cellSize || 1) / 2);
     const nextSize = Math.max(nextHalf * 2, this.state.cellSize || 1);
     const snappedSize = this.snapSizeValue(nextSize);
 
