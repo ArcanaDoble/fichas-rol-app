@@ -1324,9 +1324,23 @@ export default class PixiBattleMap {
 
     overlay.position.set(centerX, centerY);
 
-    overlay.frameGraphic.clear();
-    overlay.frameGraphic.setStrokeStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
-    overlay.frameGraphic.strokeRect(-width / 2, -height / 2, width, height);
+    const frameGraphic = overlay.frameGraphic;
+    frameGraphic.clear();
+
+    if (typeof frameGraphic.setStrokeStyle === 'function') {
+      frameGraphic.setStrokeStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
+    } else if (typeof frameGraphic.lineStyle === 'function') {
+      frameGraphic.lineStyle({ width: 2, color: SELECTION_COLOR, alpha: 0.9 });
+    }
+
+    if (typeof frameGraphic.strokeRect === 'function') {
+      frameGraphic.strokeRect(-width / 2, -height / 2, width, height);
+    } else {
+      frameGraphic.rect(-width / 2, -height / 2, width, height);
+      if (typeof frameGraphic.stroke === 'function') {
+        frameGraphic.stroke();
+      }
+    }
 
     const baseSize = Math.max(
       8,
