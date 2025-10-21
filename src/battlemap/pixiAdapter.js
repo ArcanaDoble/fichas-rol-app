@@ -100,6 +100,7 @@ export default class PixiBattleMap {
     this.destroyPromise = null;
     this.canvas = null;
     this.viewport = null;
+    this.backgroundSprite = null;
 
     this.app = new Application();
     this.readyPromise = this.init().catch((error) => {
@@ -414,6 +415,14 @@ export default class PixiBattleMap {
     }
 
     this.hidePlaceholder();
+    if (this.backgroundSprite) {
+      this.backgroundSprite.removeFromParent();
+      this.backgroundSprite.destroy({ texture: false, baseTexture: false });
+      this.backgroundSprite = null;
+    }
+    if (this.gridLayer) {
+      this.gridLayer.mask = null;
+    }
     this.backgroundLayer.removeChildren();
 
     if (url) {
@@ -426,14 +435,24 @@ export default class PixiBattleMap {
         background.height = targetHeight;
         background.eventMode = 'none';
         this.backgroundLayer.addChild(background);
+        this.backgroundSprite = background;
+        if (this.gridLayer) {
+          this.gridLayer.mask = this.backgroundSprite;
+        }
         this.hidePlaceholder();
       } catch (error) {
         console.error('[PixiBattleMap] No se pudo cargar el mapa:', error);
         this.ensurePlaceholder();
+        if (this.gridLayer) {
+          this.gridLayer.mask = null;
+        }
       }
     }
     if (!url) {
       this.ensurePlaceholder();
+      if (this.gridLayer) {
+        this.gridLayer.mask = null;
+      }
     }
 
     this.state.worldWidth = targetWidth;
@@ -1614,12 +1633,27 @@ export default class PixiBattleMap {
       ? this.state.worldHeight
       : 0;
 
-    const verticalLimit =
-      columns && cellSize > 0
-        ? offsetX + columns * cellSize
-        : worldWidth;
-    const horizontalLimit =
+    const usingMask = Boolean(this.backgroundSprite);
+    const gridWidth =
+      columns && cellSize > 0 ? columns * cellSize : worldWidth;
+    const gridHeight =
+      rows && cellSize > 0 ? rows * cellSize : worldHeight;
+
+    const maskLeft = offsetX;
+    const maskTop = offsetY;
+    const maskRight = maskLeft + gridWidth;
+    const maskBottom = maskTop + gridHeight;
+
+    const fallbackRight =
+      columns && cellSize > 0 ? offsetX + columns * cellSize : worldWidth;
+    const fallbackBottom =
       rows && cellSize > 0 ? offsetY + rows * cellSize : worldHeight;
+
+    const left = usingMask ? maskLeft : 0;
+    const top = usingMask ? maskTop : 0;
+    const right = usingMask ? maskRight : fallbackRight;
+    const bottom = usingMask ? maskBottom : fallbackBottom;
+
     const epsilon = cellSize * 0.0001;
 
     this.gridLayer.setStrokeStyle({
@@ -1628,13 +1662,32 @@ export default class PixiBattleMap {
       alpha: this.state.gridOpacity,
     });
 
-    for (let x = offsetX; x < verticalLimit + epsilon; x += cellSize) {
-      this.gridLayer.moveTo(x, 0);
-      this.gridLayer.lineTo(x, worldHeight);
+    let currentX = offsetX;
+    if (usingMask && currentX + epsilon < left) {
+      const delta = left - currentX;
+      const steps = Math.ceil(delta / cellSize);
+      currentX = offsetX + steps * cellSize;
     }
-    for (let y = offsetY; y < horizontalLimit + epsilon; y += cellSize) {
-      this.gridLayer.moveTo(0, y);
-      this.gridLayer.lineTo(worldWidth, y);
+    for (let x = currentX; x <= right + epsilon; x += cellSize) {
+      if (usingMask && (x + epsilon < left || x - epsilon > right)) {
+        continue;
+      }
+      this.gridLayer.moveTo(x, top);
+      this.gridLayer.lineTo(x, bottom);
+    }
+
+    let currentY = offsetY;
+    if (usingMask && currentY + epsilon < top) {
+      const delta = top - currentY;
+      const steps = Math.ceil(delta / cellSize);
+      currentY = offsetY + steps * cellSize;
+    }
+    for (let y = currentY; y <= bottom + epsilon; y += cellSize) {
+      if (usingMask && (y + epsilon < top || y - epsilon > bottom)) {
+        continue;
+      }
+      this.gridLayer.moveTo(left, y);
+      this.gridLayer.lineTo(right, y);
     }
 
     this.gridLayer.stroke();
