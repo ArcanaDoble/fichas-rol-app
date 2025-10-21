@@ -1271,6 +1271,7 @@ function App() {
   const pendingGridRef = useRef(null);
   const pendingGridTimeoutRef = useRef(null);
   const lastSkippedGridRef = useRef(null);
+  const manualGridOverridesRef = useRef(new Map());
   const saveVersionRef = useRef({
     tokens: 0,
     lines: 0,
@@ -1369,9 +1370,20 @@ function App() {
 
   const handleGridSettingsChange = useCallback(
     (
-      { showGrid: nextShowGrid, gridColor: nextColor, gridOpacity: nextOpacity } = {},
+      {
+        showGrid: nextShowGrid,
+        gridColor: nextColor,
+        gridOpacity: nextOpacity,
+        gridSize: nextGridSize,
+        gridCells: nextGridCells,
+        gridOffsetX: nextGridOffsetX,
+        gridOffsetY: nextGridOffsetY,
+      } = {},
       meta = {}
     ) => {
+      const pageId = pages[currentPage]?.id;
+      const currentBackground = pages[currentPage]?.background ?? null;
+
       const sanitizedNextColor =
         typeof nextColor === 'string' && nextColor.trim() !== ''
           ? nextColor.trim().toLowerCase()
@@ -1384,14 +1396,144 @@ function App() {
         }
       }
 
-      if (typeof nextShowGrid === 'boolean') {
-        setShowGrid((prev) => (prev === nextShowGrid ? prev : nextShowGrid));
+      const structuralUpdates = {};
+      if (nextGridSize !== undefined) {
+        structuralUpdates.gridSize = resolveGridSize(nextGridSize, gridSize);
       }
-      if (sanitizedNextColor) {
-        setGridColor((prev) => (prev === sanitizedNextColor ? prev : sanitizedNextColor));
+      if (nextGridCells !== undefined) {
+        structuralUpdates.gridCells = resolveGridCells(nextGridCells, gridCells);
       }
-      if (nextOpacity !== undefined && !Number.isNaN(resolvedOpacity)) {
-        setGridOpacity((prev) => (prev === resolvedOpacity ? prev : resolvedOpacity));
+      const resolveOffset = (value) => {
+        if (value === undefined) {
+          return undefined;
+        }
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : undefined;
+      };
+      const resolvedOffsetX = resolveOffset(nextGridOffsetX);
+      const resolvedOffsetY = resolveOffset(nextGridOffsetY);
+      if (resolvedOffsetX !== undefined) {
+        structuralUpdates.gridOffsetX = resolvedOffsetX;
+      }
+      if (resolvedOffsetY !== undefined) {
+        structuralUpdates.gridOffsetY = resolvedOffsetY;
+      }
+
+      const structuralChangeDetected = Object.entries(structuralUpdates).some(
+        ([key, value]) => {
+          if (value === undefined) {
+            return false;
+          }
+          if (key === 'gridSize') {
+            return gridSize !== value;
+          }
+          if (key === 'gridCells') {
+            return gridCells !== value;
+          }
+          if (key === 'gridOffsetX') {
+            return gridOffsetX !== value;
+          }
+          if (key === 'gridOffsetY') {
+            return gridOffsetY !== value;
+          }
+          return false;
+        }
+      );
+
+      const isAutoGuess = meta?.reason === 'auto-grid-guess';
+      const manualStatus = pageId
+        ? manualGridOverridesRef.current.get(pageId)
+        : null;
+
+      if (
+        isAutoGuess &&
+        structuralChangeDetected &&
+        pageId &&
+        manualStatus?.hasManualOverride &&
+        manualStatus.background === currentBackground
+      ) {
+        return;
+      }
+
+      const updates = {};
+
+      if (typeof nextShowGrid === 'boolean' && showGrid !== nextShowGrid) {
+        updates.showGrid = nextShowGrid;
+        setShowGrid(nextShowGrid);
+      }
+      if (sanitizedNextColor && gridColor !== sanitizedNextColor) {
+        updates.gridColor = sanitizedNextColor;
+        setGridColor(sanitizedNextColor);
+      }
+      if (
+        nextOpacity !== undefined &&
+        !Number.isNaN(resolvedOpacity) &&
+        gridOpacity !== resolvedOpacity
+      ) {
+        updates.gridOpacity = resolvedOpacity;
+        setGridOpacity(resolvedOpacity);
+      }
+
+      if (structuralUpdates.gridSize !== undefined) {
+        const resolvedSize = structuralUpdates.gridSize;
+        if (gridSize !== resolvedSize) {
+          updates.gridSize = resolvedSize;
+          setGridSize(resolvedSize);
+        }
+      }
+      if (structuralUpdates.gridCells !== undefined) {
+        const resolvedCells = structuralUpdates.gridCells;
+        if (gridCells !== resolvedCells) {
+          updates.gridCells = resolvedCells;
+          setGridCells(resolvedCells);
+        }
+      }
+      if (structuralUpdates.gridOffsetX !== undefined) {
+        const nextOffsetX = structuralUpdates.gridOffsetX;
+        if (gridOffsetX !== nextOffsetX) {
+          updates.gridOffsetX = nextOffsetX;
+          setGridOffsetX(nextOffsetX);
+        }
+      }
+      if (structuralUpdates.gridOffsetY !== undefined) {
+        const nextOffsetY = structuralUpdates.gridOffsetY;
+        if (gridOffsetY !== nextOffsetY) {
+          updates.gridOffsetY = nextOffsetY;
+          setGridOffsetY(nextOffsetY);
+        }
+      }
+
+      if (pageId && Object.keys(updates).length > 0) {
+        setPages((prevPages) => {
+          const pageIndex = prevPages.findIndex((page) => page.id === pageId);
+          if (pageIndex === -1) {
+            return prevPages;
+          }
+          const previousPage = prevPages[pageIndex];
+          const shouldUpdate = Object.entries(updates).some(
+            ([key, value]) => previousPage[key] !== value
+          );
+          if (!shouldUpdate) {
+            return prevPages;
+          }
+          const nextPages = [...prevPages];
+          nextPages[pageIndex] = { ...previousPage, ...updates };
+          return nextPages;
+        });
+      }
+
+      if (pageId) {
+        if (structuralChangeDetected) {
+          manualGridOverridesRef.current.set(pageId, {
+            hasManualOverride: !isAutoGuess,
+            background: currentBackground,
+          });
+        } else if (isAutoGuess) {
+          manualGridOverridesRef.current.set(pageId, {
+            hasManualOverride: false,
+            background: currentBackground,
+          });
+        }
       }
 
       if (meta?.source === 'map-canvas') {
@@ -1437,7 +1579,17 @@ function App() {
         }
       }
     },
-    [showGrid, gridColor, gridOpacity]
+    [
+      currentPage,
+      gridCells,
+      gridColor,
+      gridOffsetX,
+      gridOffsetY,
+      gridOpacity,
+      gridSize,
+      pages,
+      showGrid,
+    ]
   );
 
   const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {

@@ -98,10 +98,12 @@ const PixiBattleMapView = ({
   onGridSettingsChange,
   inventoryFeedback = null,
   showTextMenu = false,
+  pageId = null,
 }) => {
   const pixiRef = useRef(null);
   const containerRef = useRef(null);
   const previousLightsRef = useRef(new Set());
+  const lastAutoGridGuessRef = useRef(null);
 
   const [activeTool, setActiveTool] = useState('select');
   const [drawColor, setDrawColor] = useState('#ffffff');
@@ -240,6 +242,69 @@ const PixiBattleMapView = ({
     },
     [onGridSettingsChange]
   );
+
+  const handleAutoGridGuess = useCallback(
+    (guess) => {
+      if (!guess || typeof guess !== 'object') {
+        return;
+      }
+
+      const numericSize = Number(guess.gridSize);
+      const numericCells = Number(guess.gridCells);
+      const hasSize = Number.isFinite(numericSize) && numericSize > 0;
+      const hasCells = Number.isFinite(numericCells) && numericCells > 0;
+
+      if (!hasSize && !hasCells) {
+        return;
+      }
+
+      const offsetX = Number.isFinite(Number(guess.gridOffsetX))
+        ? Number(guess.gridOffsetX)
+        : 0;
+      const offsetY = Number.isFinite(Number(guess.gridOffsetY))
+        ? Number(guess.gridOffsetY)
+        : 0;
+
+      const payload = {};
+      if (hasSize) {
+        payload.gridSize = numericSize;
+      }
+      if (hasCells) {
+        payload.gridCells = numericCells;
+      }
+      payload.gridOffsetX = offsetX;
+      payload.gridOffsetY = offsetY;
+
+      const signature = JSON.stringify({
+        gridSize: payload.gridSize ?? null,
+        gridCells: payload.gridCells ?? null,
+        gridOffsetX: payload.gridOffsetX ?? null,
+        gridOffsetY: payload.gridOffsetY ?? null,
+        background: guess.backgroundImage ?? backgroundImage ?? null,
+        width: Number(guess.imageWidth) || null,
+        height: Number(guess.imageHeight) || null,
+        pageId: pageId ?? null,
+      });
+
+      if (lastAutoGridGuessRef.current === signature) {
+        return;
+      }
+      lastAutoGridGuessRef.current = signature;
+
+      emitGridSettingsChange(payload, {
+        interaction: 'auto',
+        reason: 'auto-grid-guess',
+        imageWidth: Number(guess.imageWidth) || undefined,
+        imageHeight: Number(guess.imageHeight) || undefined,
+        backgroundSource: guess.backgroundImage ?? backgroundImage ?? null,
+      });
+    },
+    [backgroundImage, emitGridSettingsChange, pageId]
+  );
+
+  useEffect(() => {
+    lastAutoGridGuessRef.current = null;
+  }, [pageId, backgroundImage]);
 
   const applyGridSettingsToPixi = useCallback(() => {
     const map = pixiRef.current;
@@ -645,6 +710,7 @@ const PixiBattleMapView = ({
           onTokensChange={onTokensChange}
           activeLayer={activeLayer}
           onAssetDrop={handleAssetDrop}
+          onAutoGridGuess={handleAutoGridGuess}
         />
       <Toolbar
         activeTool={activeTool}
@@ -802,6 +868,7 @@ PixiBattleMapView.propTypes = {
   inventoryFeedback: PropTypes.object,
   showTextMenu: PropTypes.bool,
   userType: PropTypes.oneOf(['master', 'player']),
+  pageId: PropTypes.string,
 };
 
 export default PixiBattleMapView;
