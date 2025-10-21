@@ -1147,6 +1147,40 @@ export default class PixiBattleMap {
     return Math.min(Math.max(snapped, half), Math.max(worldLimit - half, half));
   }
 
+  getSnappedWorldPosition(screenX, screenY) {
+    if (!this.viewport) {
+      return null;
+    }
+
+    const point =
+      typeof screenX === 'object' && screenX !== null
+        ? { x: Number(screenX.x) || 0, y: Number(screenX.y) || 0 }
+        : { x: Number(screenX) || 0, y: Number(screenY) || 0 };
+
+    const world = this.viewport.toWorld(point.x, point.y);
+    if (!world) {
+      return null;
+    }
+
+    const snappedX = this.snapValue(world.x, this.state.worldWidth);
+    const snappedY = this.snapValue(world.y, this.state.worldHeight);
+
+    const cellSize = this.state.cellSize || DEFAULTS.cellSize;
+    const half = cellSize / 2;
+    const maxCellX = Math.max(Math.floor((this.state.worldWidth - half) / cellSize), 0);
+    const maxCellY = Math.max(Math.floor((this.state.worldHeight - half) / cellSize), 0);
+
+    const cellX = Math.min(Math.max(Math.round((snappedX - half) / cellSize), 0), maxCellX);
+    const cellY = Math.min(Math.max(Math.round((snappedY - half) / cellSize), 0), maxCellY);
+
+    return {
+      x: snappedX,
+      y: snappedY,
+      cellX,
+      cellY,
+    };
+  }
+
   drawGrid() {
     if (!this.gridLayer) {
       return;
