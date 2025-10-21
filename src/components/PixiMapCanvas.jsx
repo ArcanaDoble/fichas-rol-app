@@ -303,6 +303,7 @@ const PixiMapCanvas = forwardRef(
             opacity: token.opacity,
             zIndex: token.zIndex,
             tintColor: token.tintColor ?? token.tint,
+            tintOpacity: token.tintOpacity,
             vision: token.vision,
             metadata: {
               name: token.name,
