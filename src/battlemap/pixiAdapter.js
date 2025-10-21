@@ -1667,20 +1667,31 @@ export default class PixiBattleMap {
     const gridHeight =
       rows && cellSize > 0 ? rows * cellSize : worldHeight;
 
-    const maskLeft = offsetX;
-    const maskTop = offsetY;
-    const maskRight = maskLeft + gridWidth;
-    const maskBottom = maskTop + gridHeight;
+    const maskBounds = {
+      left: 0,
+      top: 0,
+      right: worldWidth,
+      bottom: worldHeight,
+    };
+    if (usingMask && this.backgroundMaskSprite) {
+      const { x, y, width: w, height: h } = this.backgroundMaskSprite;
+      maskBounds.left = Number.isFinite(x) ? x : 0;
+      maskBounds.top = Number.isFinite(y) ? y : 0;
+      maskBounds.right = maskBounds.left + (Number.isFinite(w) ? w : worldWidth);
+      maskBounds.bottom = maskBounds.top + (Number.isFinite(h) ? h : worldHeight);
+    }
+
+    const gridBounds = {
+      left: offsetX,
+      top: offsetY,
+      right: offsetX + gridWidth,
+      bottom: offsetY + gridHeight,
+    };
 
     const fallbackRight =
       columns && cellSize > 0 ? offsetX + columns * cellSize : worldWidth;
     const fallbackBottom =
       rows && cellSize > 0 ? offsetY + rows * cellSize : worldHeight;
-
-    const left = usingMask ? maskLeft : 0;
-    const top = usingMask ? maskTop : 0;
-    const right = usingMask ? maskRight : fallbackRight;
-    const bottom = usingMask ? maskBottom : fallbackBottom;
 
     const epsilon = cellSize * 0.0001;
 
@@ -1690,32 +1701,95 @@ export default class PixiBattleMap {
       alpha: this.state.gridOpacity,
     });
 
-    let currentX = offsetX;
-    if (usingMask && currentX + epsilon < left) {
-      const delta = left - currentX;
-      const steps = Math.ceil(delta / cellSize);
-      currentX = offsetX + steps * cellSize;
-    }
-    for (let x = currentX; x <= right + epsilon; x += cellSize) {
-      if (usingMask && (x + epsilon < left || x - epsilon > right)) {
-        continue;
-      }
-      this.gridLayer.moveTo(x, top);
-      this.gridLayer.lineTo(x, bottom);
-    }
+    if (usingMask) {
+      const left = Math.max(maskBounds.left, gridBounds.left);
+      const top = Math.max(maskBounds.top, gridBounds.top);
+      const right = Math.min(maskBounds.right, gridBounds.right);
+      const bottom = Math.min(maskBounds.bottom, gridBounds.bottom);
 
-    let currentY = offsetY;
-    if (usingMask && currentY + epsilon < top) {
-      const delta = top - currentY;
-      const steps = Math.ceil(delta / cellSize);
-      currentY = offsetY + steps * cellSize;
-    }
-    for (let y = currentY; y <= bottom + epsilon; y += cellSize) {
-      if (usingMask && (y + epsilon < top || y - epsilon > bottom)) {
-        continue;
+      if (!(right > left && bottom > top)) {
+        this.gridLayer.stroke();
+        return;
       }
-      this.gridLayer.moveTo(left, y);
-      this.gridLayer.lineTo(right, y);
+
+      let startX = offsetX;
+      if (startX + epsilon < left) {
+        const delta = left - startX;
+        const steps = Math.ceil(delta / cellSize);
+        startX = offsetX + steps * cellSize;
+      }
+      let lastVertical = null;
+      for (let x = startX; x <= right + epsilon; x += cellSize) {
+        if (x + epsilon < left || x - epsilon > right) {
+          continue;
+        }
+        this.gridLayer.moveTo(x, top);
+        this.gridLayer.lineTo(x, bottom);
+        lastVertical = x;
+      }
+      if (
+        Number.isFinite(right) &&
+        (lastVertical === null || Math.abs(right - lastVertical) > epsilon)
+      ) {
+        this.gridLayer.moveTo(right, top);
+        this.gridLayer.lineTo(right, bottom);
+      }
+
+      let startY = offsetY;
+      if (startY + epsilon < top) {
+        const delta = top - startY;
+        const steps = Math.ceil(delta / cellSize);
+        startY = offsetY + steps * cellSize;
+      }
+      let lastHorizontal = null;
+      for (let y = startY; y <= bottom + epsilon; y += cellSize) {
+        if (y + epsilon < top || y - epsilon > bottom) {
+          continue;
+        }
+        this.gridLayer.moveTo(left, y);
+        this.gridLayer.lineTo(right, y);
+        lastHorizontal = y;
+      }
+      if (
+        Number.isFinite(bottom) &&
+        (lastHorizontal === null || Math.abs(bottom - lastHorizontal) > epsilon)
+      ) {
+        this.gridLayer.moveTo(left, bottom);
+        this.gridLayer.lineTo(right, bottom);
+      }
+    } else {
+      const left = 0;
+      const top = 0;
+      const right = fallbackRight;
+      const bottom = fallbackBottom;
+
+      let lastVertical = null;
+      for (let x = offsetX; x <= right + epsilon; x += cellSize) {
+        this.gridLayer.moveTo(x, top);
+        this.gridLayer.lineTo(x, worldHeight);
+        lastVertical = x;
+      }
+      if (
+        Number.isFinite(right) &&
+        (lastVertical === null || Math.abs(right - lastVertical) > epsilon)
+      ) {
+        this.gridLayer.moveTo(right, top);
+        this.gridLayer.lineTo(right, worldHeight);
+      }
+
+      let lastHorizontal = null;
+      for (let y = offsetY; y <= bottom + epsilon; y += cellSize) {
+        this.gridLayer.moveTo(left, y);
+        this.gridLayer.lineTo(worldWidth, y);
+        lastHorizontal = y;
+      }
+      if (
+        Number.isFinite(bottom) &&
+        (lastHorizontal === null || Math.abs(bottom - lastHorizontal) > epsilon)
+      ) {
+        this.gridLayer.moveTo(left, bottom);
+        this.gridLayer.lineTo(worldWidth, bottom);
+      }
     }
 
     this.gridLayer.stroke();
