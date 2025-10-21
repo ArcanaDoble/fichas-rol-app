@@ -140,7 +140,12 @@ export default class PixiBattleMap {
       worldHeight: MIN_WORLD_SIZE,
     };
 
+    this.tiles = new Map();
     this.tokens = new Map();
+    this.lines = new Map();
+    this.texts = new Map();
+    this.walls = new Map();
+    this.doorIcons = new Map();
     this.textureCache = new Map();
     this.layers = new Map();
     this.selectedTokens = new Set();
@@ -158,6 +163,27 @@ export default class PixiBattleMap {
     this.viewport = null;
     this.backgroundSprite = null;
     this.backgroundMaskSprite = null;
+    this.measureLayer = null;
+    this.measureGraphics = null;
+    this.measureLabel = null;
+    this.measureConfig = {
+      shape: 'line',
+      snap: 'center',
+      visible: true,
+      rule: 'chebyshev',
+      unitValue: 5,
+      unitLabel: 'ft',
+    };
+    this.measureState = {
+      active: false,
+      pointerId: null,
+      start: null,
+      end: null,
+    };
+
+    this.handleViewportPointerDown = this.handleViewportPointerDown.bind(this);
+    this.handleViewportPointerMove = this.handleViewportPointerMove.bind(this);
+    this.handleViewportPointerUp = this.handleViewportPointerUp.bind(this);
 
     this.app = new Application();
     this.readyPromise = this.init().catch((error) => {
@@ -366,12 +392,27 @@ export default class PixiBattleMap {
     this.viewport.eventMode = 'static';
 
     this.backgroundLayer = new Container();
+    this.tilesLayer = new Container();
+    this.tilesLayer.sortableChildren = true;
+    this.tilesLayer.eventMode = 'static';
     this.gridLayer = new Graphics();
+    this.linesLayer = new Container();
+    this.linesLayer.sortableChildren = true;
+    this.linesLayer.eventMode = 'static';
+    this.textsLayer = new Container();
+    this.textsLayer.sortableChildren = true;
+    this.textsLayer.eventMode = 'static';
     this.tokensLayer = new Container();
     this.tokensLayer.sortableChildren = true;
     this.tokensLayer.eventMode = 'static';
     this.tokensLayer.cursor = 'pointer';
 
+    this.wallsLayer = new Container();
+    this.wallsLayer.sortableChildren = true;
+    this.wallsLayer.eventMode = 'static';
+    this.doorLayer = new Container();
+    this.doorLayer.sortableChildren = true;
+    this.doorLayer.eventMode = 'static';
     this.lightsLayer = new Container();
     this.lightsLayer.sortableChildren = true;
     this.lightsLayer.eventMode = 'none';
@@ -390,11 +431,32 @@ export default class PixiBattleMap {
       eventMode: 'none',
       zIndex: 0,
     });
+    this.registerLayer('tiles', this.tilesLayer, {
+      type: 'tiles',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 10,
+    });
     this.registerLayer('grid', this.gridLayer, {
       type: 'grid',
       locked: true,
       eventMode: 'static',
       zIndex: 5,
+    });
+    this.registerLayer('lines', this.linesLayer, {
+      type: 'lines',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 15,
+    });
+    this.registerLayer('texts', this.textsLayer, {
+      type: 'texts',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 18,
     });
     this.registerLayer('tokens', this.tokensLayer, {
       type: 'tokens',
@@ -402,6 +464,21 @@ export default class PixiBattleMap {
       sortableChildren: true,
       eventMode: 'static',
       zIndex: 20,
+      cursor: 'pointer',
+    });
+    this.registerLayer('walls', this.wallsLayer, {
+      type: 'walls',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 25,
+    });
+    this.registerLayer('doors', this.doorLayer, {
+      type: 'doors',
+      locked: false,
+      sortableChildren: true,
+      eventMode: 'static',
+      zIndex: 30,
       cursor: 'pointer',
     });
     this.registerLayer('lights', this.lightsLayer, {
@@ -424,6 +501,29 @@ export default class PixiBattleMap {
       visible: false,
     });
 
+    this.measureLayer = new Container();
+    this.measureLayer.eventMode = 'none';
+    this.measureLayer.sortableChildren = false;
+    this.measureLayer.visible = false;
+    this.overlayLayer.addChild(this.measureLayer);
+    this.measureGraphics = new Graphics();
+    this.measureGraphics.eventMode = 'none';
+    this.measureLayer.addChild(this.measureGraphics);
+    this.measureLabel = new Text({
+      text: '',
+      style: {
+        fill: '#ffffff',
+        fontSize: 16,
+        stroke: '#000000',
+        strokeThickness: 4,
+      },
+    });
+    if (this.measureLabel?.anchor) {
+      this.measureLabel.anchor.set(0, 0);
+    }
+    this.measureLabel.visible = false;
+    this.measureLayer.addChild(this.measureLabel);
+
     this.layers.forEach((meta) => {
       if (!meta?.container) {
         return;
@@ -443,11 +543,10 @@ export default class PixiBattleMap {
     this.ensurePlaceholder();
     this.updatePlaceholderPosition();
 
-    this.viewport.on('pointerdown', (event) => {
-      if (event.target === this.viewport) {
-        this.clearSelection();
-      }
-    });
+    this.viewport.on('pointerdown', this.handleViewportPointerDown);
+    this.viewport.on('pointermove', this.handleViewportPointerMove);
+    this.viewport.on('pointerup', this.handleViewportPointerUp);
+    this.viewport.on('pointerupoutside', this.handleViewportPointerUp);
     this.gridLayer.on('pointerdown', () => this.clearSelection());
 
     this.updateViewportHitArea();
@@ -675,6 +774,7 @@ export default class PixiBattleMap {
     }
 
     this.drawGrid();
+    this.updateMeasureGraphics();
     this.tokens.forEach((token) => this.updateSelectionGraphic(token));
   }
 
@@ -1004,14 +1104,95 @@ export default class PixiBattleMap {
   }
 
   setTool(toolId) {
-    this.activeTool = typeof toolId === 'string' && toolId.trim() !== '' ? toolId : 'select';
-    const cursor = this.activeTool === 'select' ? 'pointer' : 'default';
+    this.activeTool =
+      typeof toolId === 'string' && toolId.trim() !== '' ? toolId : 'select';
+    if (this.activeTool !== 'measure') {
+      this.cancelMeasure();
+    }
+    let cursor = 'default';
+    if (this.activeTool === 'select' || this.activeTool === 'target') {
+      cursor = 'pointer';
+    } else if (this.activeTool === 'measure') {
+      cursor = 'crosshair';
+    }
     if (this.viewport) {
-      this.viewport.cursor = this.activeTool === 'draw' ? 'crosshair' : 'default';
+      this.viewport.cursor =
+        this.activeTool === 'draw' || this.activeTool === 'measure'
+          ? 'crosshair'
+          : 'default';
     }
     this.tokens.forEach((token) => {
       token.cursor = cursor;
     });
+  }
+
+  async setMeasureOptions(options = {}) {
+    await this.ready;
+    if (this.destroyed) {
+      return;
+    }
+
+    const allowedShapes = ['line', 'square', 'circle', 'cone', 'beam'];
+    const allowedSnaps = ['center', 'corner', 'free'];
+    const allowedRules = ['chebyshev', 'manhattan', 'euclidean', '5105'];
+
+    const next = { ...(this.measureConfig || {}) };
+    let changed = false;
+
+    if (options.shape !== undefined) {
+      const normalized = String(options.shape || 'line').toLowerCase();
+      if (allowedShapes.includes(normalized)) {
+        next.shape = normalized;
+        changed = true;
+      }
+    }
+
+    if (options.snap !== undefined) {
+      const normalized = String(options.snap || 'center').toLowerCase();
+      if (allowedSnaps.includes(normalized)) {
+        next.snap = normalized;
+        changed = true;
+      }
+    }
+
+    if (options.rule !== undefined) {
+      const normalized = String(options.rule || 'chebyshev').toLowerCase();
+      if (allowedRules.includes(normalized)) {
+        next.rule = normalized;
+        changed = true;
+      }
+    }
+
+    if (options.visible !== undefined) {
+      const visible = Boolean(options.visible);
+      if (visible !== Boolean(next.visible)) {
+        next.visible = visible;
+        changed = true;
+      }
+    }
+
+    if (options.unitValue !== undefined) {
+      const numeric = Number(options.unitValue);
+      if (Number.isFinite(numeric) && numeric > 0 && numeric !== next.unitValue) {
+        next.unitValue = numeric;
+        changed = true;
+      }
+    }
+
+    if (options.unitLabel !== undefined) {
+      const label = String(options.unitLabel || '').trim();
+      if (label !== next.unitLabel) {
+        next.unitLabel = label;
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    this.measureConfig = next;
+    this.updateMeasureGraphics();
   }
 
   createLayer(options = {}) {
@@ -2114,6 +2295,9 @@ export default class PixiBattleMap {
     };
 
     token.on('pointerdown', (event) => {
+      if (this.activeTool === 'measure') {
+        return;
+      }
       event.stopPropagation();
       const originalEvent = event.data?.originalEvent || event.data?.nativeEvent;
       const additive = Boolean(
@@ -2314,6 +2498,329 @@ export default class PixiBattleMap {
     const index = Math.round((value - offset - half) / resolvedCell);
     const snapped = offset + index * resolvedCell + half;
     return Math.min(Math.max(snapped, min), max);
+  }
+
+  snapMeasureCell(value, axis = 'x') {
+    const cellSize = this.getCellSize();
+    if (!Number.isFinite(cellSize) || cellSize <= 0) {
+      return 0;
+    }
+    const offset =
+      axis === 'x'
+        ? (Number.isFinite(this.state.gridOffsetX) ? this.state.gridOffsetX : 0)
+        : (Number.isFinite(this.state.gridOffsetY) ? this.state.gridOffsetY : 0);
+    return Math.floor((Number(value) - offset) / cellSize);
+  }
+
+  snapMeasurePoint(x, y) {
+    const mode = (this.measureConfig?.snap || 'center').toLowerCase();
+    if (mode === 'free') {
+      return [Number(x) || 0, Number(y) || 0];
+    }
+    const cellSize = this.getCellSize();
+    const offsetX = Number.isFinite(this.state.gridOffsetX)
+      ? this.state.gridOffsetX
+      : 0;
+    const offsetY = Number.isFinite(this.state.gridOffsetY)
+      ? this.state.gridOffsetY
+      : 0;
+    const cellX = this.snapMeasureCell(x, 'x');
+    const cellY = this.snapMeasureCell(y, 'y');
+    if (mode === 'center') {
+      return [
+        offsetX + (cellX + 0.5) * cellSize,
+        offsetY + (cellY + 0.5) * cellSize,
+      ];
+    }
+    return [offsetX + cellX * cellSize, offsetY + cellY * cellSize];
+  }
+
+  getPointerId(event) {
+    if (!event) {
+      return null;
+    }
+    return (
+      event.pointerId ??
+      event.data?.pointerId ??
+      event.data?.identifier ??
+      event.data?.id ??
+      event.data?.pointerId ??
+      null
+    );
+  }
+
+  resolveWorldPoint(event) {
+    if (!event) {
+      return { x: 0, y: 0 };
+    }
+    const globalPoint =
+      event.global ?? event.data?.global ?? event.data ?? new Point(0, 0);
+    const resolvedGlobal = {
+      x: Number(globalPoint?.x) || 0,
+      y: Number(globalPoint?.y) || 0,
+    };
+    if (!this.viewport || typeof this.viewport.toWorld !== 'function') {
+      return resolvedGlobal;
+    }
+    const world = this.viewport.toWorld(resolvedGlobal.x, resolvedGlobal.y);
+    return {
+      x: Number(world?.x) || resolvedGlobal.x,
+      y: Number(world?.y) || resolvedGlobal.y,
+    };
+  }
+
+  computeMeasureData(start, end) {
+    if (!start || !end) {
+      return null;
+    }
+    const [sx1, sy1] = this.snapMeasurePoint(start.x, start.y);
+    const [sx2, sy2] = this.snapMeasurePoint(end.x, end.y);
+    const sdx = sx2 - sx1;
+    const sdy = sy2 - sy1;
+    const cellDx = Math.abs(this.snapMeasureCell(sx2, 'x') - this.snapMeasureCell(sx1, 'x'));
+    const cellDy = Math.abs(this.snapMeasureCell(sy2, 'y') - this.snapMeasureCell(sy1, 'y'));
+    const diagonalSteps = Math.min(cellDx, cellDy);
+    const straightSteps = Math.abs(cellDx - cellDy);
+
+    const rule = (this.measureConfig?.rule || 'chebyshev').toLowerCase();
+    const unitValue = Number.isFinite(this.measureConfig?.unitValue)
+      ? Math.max(this.measureConfig.unitValue, 0)
+      : 0;
+    let distanceCells = 0;
+    let distanceUnits = 0;
+    if (rule === 'manhattan') {
+      distanceCells = cellDx + cellDy;
+      distanceUnits = distanceCells * unitValue;
+    } else if (rule === 'euclidean') {
+      distanceCells = Math.sqrt(cellDx * cellDx + cellDy * cellDy);
+      distanceUnits = distanceCells * unitValue;
+    } else if (rule === '5105') {
+      distanceCells = diagonalSteps + straightSteps;
+      let diagonalUnits = 0;
+      for (let i = 0; i < diagonalSteps; i += 1) {
+        diagonalUnits += unitValue * (i % 2 === 0 ? 1 : 2);
+      }
+      distanceUnits = diagonalUnits + straightSteps * unitValue;
+    } else {
+      distanceCells = Math.max(cellDx, cellDy);
+      distanceUnits = distanceCells * unitValue;
+    }
+
+    const len = Math.hypot(sdx, sdy);
+    const angle = Math.atan2(sdy, sdx);
+    const roundedCells =
+      distanceCells % 1 === 0
+        ? distanceCells
+        : Math.round(distanceCells * 100) / 100;
+    const roundedUnits =
+      distanceUnits % 1 === 0
+        ? distanceUnits
+        : Math.round(distanceUnits * 100) / 100;
+    const unitLabel = this.measureConfig?.unitLabel
+      ? ` ${this.measureConfig.unitLabel}`
+      : '';
+
+    return {
+      sx1,
+      sy1,
+      sx2,
+      sy2,
+      sdx,
+      sdy,
+      len,
+      angle,
+      cellDx,
+      cellDy,
+      diagonalSteps,
+      straightSteps,
+      distanceCells,
+      distanceUnits,
+      roundedCells,
+      roundedUnits,
+      unitLabel,
+      shape: (this.measureConfig?.shape || 'line').toLowerCase(),
+      label: `${roundedCells} casillas (${roundedUnits}${unitLabel})`,
+      labelX: sx2 + 20,
+      labelY: sy2 + 20,
+    };
+  }
+
+  updateMeasureGraphics() {
+    if (!this.measureLayer || !this.measureGraphics || !this.measureLabel) {
+      return;
+    }
+    const { visible = true } = this.measureConfig || {};
+    const { start, end } = this.measureState || {};
+    if (!visible || !start || !end) {
+      this.measureGraphics.clear();
+      this.measureLayer.visible = false;
+      this.measureLabel.visible = false;
+      this.measureLabel.text = '';
+      return;
+    }
+
+    const data = this.computeMeasureData(start, end);
+    if (!data || !Number.isFinite(data.len) || data.len === 0) {
+      this.measureGraphics.clear();
+      this.measureLayer.visible = false;
+      this.measureLabel.visible = false;
+      this.measureLabel.text = '';
+      return;
+    }
+
+    const { sx1, sy1, sx2, sy2, len, angle, shape } = data;
+    this.measureLayer.visible = true;
+    this.measureGraphics.clear();
+    this.measureGraphics.lineStyle({ color: 0x00ffff, width: 2, alpha: 1 });
+
+    if (shape === 'square') {
+      const x = Math.min(sx1, sx2);
+      const y = Math.min(sy1, sy2);
+      const width = Math.abs(sx2 - sx1) || 1;
+      const height = Math.abs(sy2 - sy1) || 1;
+      this.measureGraphics.drawRect(x, y, width, height);
+    } else if (shape === 'circle') {
+      this.measureGraphics.drawCircle(sx1, sy1, len);
+    } else if (shape === 'cone') {
+      const spread = Math.PI / 6;
+      const p2x = sx1 + len * Math.cos(angle + spread);
+      const p2y = sy1 + len * Math.sin(angle + spread);
+      const p3x = sx1 + len * Math.cos(angle - spread);
+      const p3y = sy1 + len * Math.sin(angle - spread);
+      this.measureGraphics.moveTo(sx1, sy1);
+      this.measureGraphics.lineTo(p2x, p2y);
+      this.measureGraphics.lineTo(p3x, p3y);
+      this.measureGraphics.closePath();
+    } else if (shape === 'beam') {
+      const cellSize = this.getCellSize();
+      const half = (cellSize / 2) || 1;
+      const dx = half * Math.cos(angle + Math.PI / 2);
+      const dy = half * Math.sin(angle + Math.PI / 2);
+      this.measureGraphics.moveTo(sx1 + dx, sy1 + dy);
+      this.measureGraphics.lineTo(sx2 + dx, sy2 + dy);
+      this.measureGraphics.lineTo(sx2 - dx, sy2 - dy);
+      this.measureGraphics.lineTo(sx1 - dx, sy1 - dy);
+      this.measureGraphics.closePath();
+    } else {
+      this.measureGraphics.moveTo(sx1, sy1);
+      this.measureGraphics.lineTo(sx2, sy2);
+    }
+
+    this.measureLabel.text = data.label;
+    this.measureLabel.position.set(data.labelX, data.labelY);
+    this.measureLabel.visible = true;
+    this.measureState.lastData = data;
+    this.emit('measure:update', { ...data });
+  }
+
+  isPrimaryPointer(event) {
+    const original =
+      event?.data?.originalEvent ?? event?.data?.nativeEvent ?? event?.data ?? event;
+    if (!original) {
+      return true;
+    }
+    if (original.button !== undefined) {
+      return original.button === 0;
+    }
+    if (original.which !== undefined) {
+      return original.which === 1;
+    }
+    if (original.buttons !== undefined) {
+      return original.buttons === 1;
+    }
+    return true;
+  }
+
+  startMeasure(event) {
+    if (this.destroyed || this.activeTool !== 'measure') {
+      return false;
+    }
+    if (!this.isPrimaryPointer(event)) {
+      return false;
+    }
+    const pointerId = this.getPointerId(event);
+    const world = this.resolveWorldPoint(event);
+    this.measureState = {
+      active: true,
+      pointerId,
+      start: world,
+      end: { ...world },
+      lastData: null,
+    };
+    this.updateMeasureGraphics();
+    this.emit('measure:start', { start: { ...world }, pointerId });
+    return true;
+  }
+
+  updateMeasure(event) {
+    if (!this.measureState?.active) {
+      return;
+    }
+    const pointerId = this.getPointerId(event);
+    if (
+      this.measureState.pointerId !== null &&
+      pointerId !== null &&
+      pointerId !== this.measureState.pointerId
+    ) {
+      return;
+    }
+    const world = this.resolveWorldPoint(event);
+    this.measureState.end = { ...world };
+    this.updateMeasureGraphics();
+  }
+
+  cancelMeasure() {
+    if (this.measureState?.active || this.measureLayer?.visible) {
+      this.emit('measure:end', {
+        pointerId: this.measureState?.pointerId ?? null,
+        data: this.measureState?.lastData ? { ...this.measureState.lastData } : null,
+      });
+    }
+    this.measureState = {
+      active: false,
+      pointerId: null,
+      start: null,
+      end: null,
+      lastData: null,
+    };
+    this.updateMeasureGraphics();
+  }
+
+  endMeasure(event) {
+    if (!this.measureState?.active) {
+      return;
+    }
+    const pointerId = this.getPointerId(event);
+    if (
+      this.measureState.pointerId !== null &&
+      pointerId !== null &&
+      pointerId !== this.measureState.pointerId
+    ) {
+      // Ignore events from other pointers
+      return;
+    }
+    this.cancelMeasure();
+  }
+
+  handleViewportPointerDown(event) {
+    if (this.activeTool === 'measure' && this.startMeasure(event)) {
+      return;
+    }
+    if (event?.target === this.viewport) {
+      this.clearSelection();
+    }
+  }
+
+  handleViewportPointerMove(event) {
+    if (this.measureState?.active) {
+      this.updateMeasure(event);
+    }
+  }
+
+  handleViewportPointerUp(event) {
+    if (this.measureState?.active) {
+      this.endMeasure(event);
+    }
   }
 
   getSnappedWorldPosition(screenX, screenY) {
@@ -2556,6 +3063,622 @@ export default class PixiBattleMap {
     this.gridLayer.stroke();
   }
 
+  applyTileOptions(sprite, options = {}) {
+    if (!sprite) {
+      return null;
+    }
+
+    const data = sprite.battlemapData || {};
+    if (options.id !== undefined) {
+      data.id = String(options.id);
+    } else if (!data.id && sprite.battlemapId) {
+      data.id = sprite.battlemapId;
+    }
+
+    if (!data.id) {
+      data.id = `tile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    const assignNumeric = (key, value, fallback = 0) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        data[key] = numeric;
+      } else if (fallback !== undefined) {
+        data[key] = fallback;
+      }
+    };
+
+    assignNumeric('x', options.x ?? options.position?.x);
+    assignNumeric('y', options.y ?? options.position?.y);
+    assignNumeric('width', options.width ?? options.w);
+    assignNumeric('height', options.height ?? options.h);
+    assignNumeric('rotation', options.rotation ?? options.angle, 0);
+    assignNumeric('opacity', options.opacity, 1);
+
+    data.layer = options.layer ? String(options.layer) : data.layer || 'tiles';
+    data.url = options.url ?? options.textureUrl ?? data.url ?? null;
+    data.isBackground = Boolean(options.isBackground ?? data.isBackground);
+    data.locked = Boolean(options.locked ?? data.locked);
+
+    sprite.battlemapId = data.id;
+    sprite.battlemapData = { ...data };
+
+    const width = Math.max(Number(data.width) || 0, 1);
+    const height = Math.max(Number(data.height) || 0, 1);
+
+    sprite.width = width;
+    sprite.height = height;
+    sprite.position.set(Number(data.x) || 0, Number(data.y) || 0);
+    sprite.rotation = (Number(data.rotation) || 0) * (Math.PI / 180);
+    sprite.alpha = Math.min(Math.max(Number(data.opacity) || 1, 0), 1);
+
+    updateSpriteHitArea(sprite);
+
+    return sprite.battlemapData;
+  }
+
+  async ensureTileSprite(tile) {
+    if (!tile?.id) {
+      return null;
+    }
+    const tileId = String(tile.id);
+    let sprite = this.tiles.get(tileId);
+    const textureUrl = tile.url ?? tile.textureUrl;
+    if (!sprite) {
+      let texture = Texture.WHITE;
+      if (textureUrl) {
+        try {
+          texture = await this.loadTexture(textureUrl);
+        } catch (error) {
+          console.warn('[PixiBattleMap] No se pudo cargar la textura del tile:', error);
+        }
+      }
+      sprite = new Sprite(texture);
+      sprite.anchor.set(0, 0);
+      sprite.eventMode = 'static';
+      sprite.cursor = tile.locked ? 'not-allowed' : 'move';
+      sprite.sortableChildren = false;
+      sprite.battlemapId = tileId;
+      sprite.on('pointerdown', (event) => {
+        if (this.isLayerLocked(sprite.battlemapLayerId)) {
+          return;
+        }
+        sprite.dragging = true;
+        sprite.__dragOffset = {
+          x: event.globalX - sprite.x,
+          y: event.globalY - sprite.y,
+        };
+        this.emit('tile:pointerdown', { id: tileId, data: { ...sprite.battlemapData } });
+      });
+      sprite.on('pointerup', () => {
+        if (!sprite.dragging) {
+          return;
+        }
+        sprite.dragging = false;
+        sprite.__dragOffset = null;
+        const data = this.applyTileOptions(sprite, { ...sprite.battlemapData });
+        this.emit('tile:move', { id: tileId, data: { ...data } });
+      });
+      sprite.on('pointerupoutside', () => {
+        if (!sprite.dragging) {
+          return;
+        }
+        sprite.dragging = false;
+        sprite.__dragOffset = null;
+        const data = this.applyTileOptions(sprite, { ...sprite.battlemapData });
+        this.emit('tile:move', { id: tileId, data: { ...data } });
+      });
+      sprite.on('pointermove', (event) => {
+        if (!sprite.dragging || this.isLayerLocked(sprite.battlemapLayerId)) {
+          return;
+        }
+        const offset = sprite.__dragOffset || { x: 0, y: 0 };
+        sprite.position.set(event.globalX - offset.x, event.globalY - offset.y);
+        this.applyTileOptions(sprite, { x: sprite.x, y: sprite.y });
+        this.emit('tile:drag', {
+          id: tileId,
+          x: sprite.x,
+          y: sprite.y,
+          data: { ...sprite.battlemapData },
+        });
+      });
+      this.tiles.set(tileId, sprite);
+    }
+    const container = tile.isBackground
+      ? this.backgroundLayer
+      : this.getLayerContainer(tile.layer || 'tiles', 'tiles');
+    sprite.battlemapLayerId = tile.isBackground
+      ? 'background'
+      : String(tile.layer || 'tiles');
+    if (container && sprite.parent !== container) {
+      container.addChild(sprite);
+    }
+    const textureUrlChanged =
+      textureUrl && sprite.texture?.baseTexture?.resource?.url !== textureUrl;
+    if (textureUrlChanged) {
+      try {
+        const texture = await this.loadTexture(textureUrl);
+        sprite.texture = texture;
+      } catch (error) {
+        console.warn('[PixiBattleMap] Error recargando textura de tile:', error);
+      }
+    }
+    this.applyTileOptions(sprite, tile);
+    return sprite;
+  }
+
+  async setTiles(list = []) {
+    await this.ready;
+    const validList = Array.isArray(list) ? list : [];
+    const seen = new Set();
+    for (const tile of validList) {
+      if (!tile || tile.hidden) {
+        continue;
+      }
+      const sprite = await this.ensureTileSprite(tile);
+      if (!sprite) {
+        continue;
+      }
+      seen.add(sprite.battlemapId);
+    }
+    this.tiles.forEach((sprite, id) => {
+      if (seen.has(id)) {
+        return;
+      }
+      if (sprite.parent) {
+        sprite.removeFromParent();
+      }
+      sprite.destroy({ texture: false, baseTexture: false });
+      this.tiles.delete(id);
+    });
+  }
+
+  applyLineOptions(graphic, line) {
+    if (!graphic || !line) {
+      return;
+    }
+    const id = String(line.id ?? graphic.battlemapId);
+    graphic.battlemapId = id;
+    graphic.battlemapData = {
+      ...(graphic.battlemapData || {}),
+      ...line,
+      id,
+    };
+    graphic.position.set(Number(line.x) || 0, Number(line.y) || 0);
+    graphic.alpha = Number.isFinite(line.opacity) ? line.opacity : 1;
+    graphic.zIndex = Number.isFinite(line.zIndex) ? line.zIndex : graphic.zIndex;
+    graphic.tint = normalizeColor(line.color ?? '#ffffff', 0xffffff);
+    updateSpriteHitArea(graphic);
+  }
+
+  ensureLineGraphic(line) {
+    if (!line?.id) {
+      return null;
+    }
+    const lineId = String(line.id);
+    let graphic = this.lines.get(lineId);
+    if (!graphic) {
+      graphic = new Graphics();
+      graphic.eventMode = 'static';
+      graphic.cursor = 'pointer';
+      graphic.battlemapId = lineId;
+      graphic.dragging = false;
+      graphic.__dragOffset = { x: 0, y: 0 };
+      graphic.on('pointerdown', (event) => {
+        if (this.activeTool !== 'select' || this.isLayerLocked(graphic.battlemapLayerId)) {
+          return;
+        }
+        graphic.dragging = true;
+        graphic.__dragOffset = {
+          x: event.globalX - graphic.x,
+          y: event.globalY - graphic.y,
+        };
+        this.emit('line:pointerdown', { id: lineId, data: { ...graphic.battlemapData } });
+      });
+      const stopDrag = () => {
+        if (!graphic.dragging) {
+          return;
+        }
+        graphic.dragging = false;
+        const data = { ...graphic.battlemapData, x: graphic.x, y: graphic.y };
+        graphic.battlemapData = data;
+        this.emit('line:move', { id: lineId, data });
+      };
+      graphic.on('pointerup', stopDrag);
+      graphic.on('pointerupoutside', stopDrag);
+      graphic.on('pointermove', (event) => {
+        if (!graphic.dragging || this.isLayerLocked(graphic.battlemapLayerId)) {
+          return;
+        }
+        graphic.position.set(
+          event.globalX - (graphic.__dragOffset?.x ?? 0),
+          event.globalY - (graphic.__dragOffset?.y ?? 0)
+        );
+        graphic.battlemapData = {
+          ...(graphic.battlemapData || {}),
+          x: graphic.x,
+          y: graphic.y,
+        };
+        this.emit('line:drag', {
+          id: lineId,
+          x: graphic.x,
+          y: graphic.y,
+          data: { ...graphic.battlemapData },
+        });
+      });
+      this.lines.set(lineId, graphic);
+    }
+
+    const container = this.getLayerContainer(line.layer || 'lines', 'lines');
+    graphic.battlemapLayerId = String(line.layer || 'lines');
+    if (container && graphic.parent !== container) {
+      container.addChild(graphic);
+    }
+
+    graphic.clear();
+    const color = normalizeColor(line.color ?? '#ffffff', 0xffffff);
+    const width = Math.max(Number(line.width) || 4, 1);
+    graphic.lineStyle({ width, color, alpha: Number.isFinite(line.opacity) ? line.opacity : 1 });
+    const points = Array.isArray(line.points) ? line.points : [];
+    if (points.length >= 2) {
+      graphic.moveTo(points[0], points[1]);
+      for (let i = 2; i < points.length; i += 2) {
+        graphic.lineTo(points[i], points[i + 1]);
+      }
+    }
+
+    this.applyLineOptions(graphic, line);
+    return graphic;
+  }
+
+  async setLines(list = []) {
+    await this.ready;
+    const valid = Array.isArray(list) ? list : [];
+    const seen = new Set();
+    valid.forEach((line) => {
+      if (!line) {
+        return;
+      }
+      const graphic = this.ensureLineGraphic(line);
+      if (graphic) {
+        seen.add(graphic.battlemapId);
+      }
+    });
+    this.lines.forEach((graphic, id) => {
+      if (seen.has(id)) {
+        return;
+      }
+      if (graphic.parent) {
+        graphic.removeFromParent();
+      }
+      graphic.destroy();
+      this.lines.delete(id);
+    });
+  }
+
+  ensureTextContainer(text) {
+    if (!text?.id) {
+      return null;
+    }
+    const textId = String(text.id);
+    let container = this.texts.get(textId);
+    if (!container) {
+      container = new Container();
+      container.eventMode = 'static';
+      container.cursor = 'text';
+      container.battlemapId = textId;
+      container.dragging = false;
+      const label = new Text({ text: '', fill: '#ffffff' });
+      label.anchor.set(0.5);
+      container.addChild(label);
+      container.textNode = label;
+      container.on('pointerdown', (event) => {
+        if (this.activeTool !== 'select' || this.isLayerLocked(container.battlemapLayerId)) {
+          return;
+        }
+        container.dragging = true;
+        container.__dragOffset = {
+          x: event.globalX - container.x,
+          y: event.globalY - container.y,
+        };
+        this.emit('text:pointerdown', {
+          id: textId,
+          data: { ...(container.battlemapData || {}) },
+        });
+      });
+      const stopDrag = () => {
+        if (!container.dragging) {
+          return;
+        }
+        container.dragging = false;
+        const data = { ...container.battlemapData, x: container.x, y: container.y };
+        container.battlemapData = data;
+        this.emit('text:move', { id: textId, data });
+      };
+      container.on('pointerup', stopDrag);
+      container.on('pointerupoutside', stopDrag);
+      container.on('pointermove', (event) => {
+        if (!container.dragging || this.isLayerLocked(container.battlemapLayerId)) {
+          return;
+        }
+        container.position.set(
+          event.globalX - (container.__dragOffset?.x ?? 0),
+          event.globalY - (container.__dragOffset?.y ?? 0)
+        );
+        container.battlemapData = {
+          ...(container.battlemapData || {}),
+          x: container.x,
+          y: container.y,
+        };
+        this.emit('text:drag', {
+          id: textId,
+          x: container.x,
+          y: container.y,
+          data: { ...container.battlemapData },
+        });
+      });
+      this.texts.set(textId, container);
+    }
+
+    const layerId = String(text.layer || 'texts');
+    const layerContainer = this.getLayerContainer(layerId, 'texts');
+    container.battlemapLayerId = layerId;
+    if (layerContainer && container.parent !== layerContainer) {
+      layerContainer.addChild(container);
+    }
+
+    const style = {
+      fill: text.fill || '#ffffff',
+      fontFamily: text.fontFamily || 'Arial',
+      fontSize: Number(text.fontSize) || 24,
+      fontWeight: text.bold ? 'bold' : 'normal',
+      fontStyle: text.italic ? 'italic' : 'normal',
+      align: 'center',
+    };
+    const decoration = text.underline ? 'underline' : 'none';
+    const label = container.textNode;
+    if (label) {
+      label.style = { ...label.style, ...style, textDecoration: decoration };
+      label.text = text.text ?? '';
+    }
+    container.alpha = Number.isFinite(text.opacity) ? text.opacity : 1;
+    container.position.set(Number(text.x) || 0, Number(text.y) || 0);
+    container.battlemapData = { ...text, id: textId };
+    return container;
+  }
+
+  async setTexts(list = []) {
+    await this.ready;
+    const valid = Array.isArray(list) ? list : [];
+    const seen = new Set();
+    valid.forEach((text) => {
+      if (!text) {
+        return;
+      }
+      const container = this.ensureTextContainer(text);
+      if (container) {
+        seen.add(container.battlemapId);
+      }
+    });
+    this.texts.forEach((container, id) => {
+      if (seen.has(id)) {
+        return;
+      }
+      if (container.parent) {
+        container.removeFromParent();
+      }
+      container.destroy({ children: true });
+      this.texts.delete(id);
+    });
+  }
+
+  ensureWallGraphic(wall) {
+    if (!wall?.id) {
+      return null;
+    }
+    const wallId = String(wall.id);
+    let graphic = this.walls.get(wallId);
+    if (!graphic) {
+      graphic = new Graphics();
+      graphic.eventMode = 'static';
+      graphic.cursor = 'pointer';
+      graphic.battlemapId = wallId;
+      graphic.dragging = false;
+      graphic.__dragOffset = { x: 0, y: 0 };
+      graphic.on('pointerdown', (event) => {
+        if (this.activeTool !== 'select' || this.isLayerLocked(graphic.battlemapLayerId)) {
+          return;
+        }
+        graphic.dragging = true;
+        graphic.__dragOffset = {
+          x: event.globalX - graphic.x,
+          y: event.globalY - graphic.y,
+        };
+        this.emit('wall:pointerdown', {
+          id: wallId,
+          data: { ...(graphic.battlemapData || {}) },
+        });
+      });
+      const stopDrag = () => {
+        if (!graphic.dragging) {
+          return;
+        }
+        graphic.dragging = false;
+        const data = { ...graphic.battlemapData, x: graphic.x, y: graphic.y };
+        graphic.battlemapData = data;
+        this.emit('wall:move', { id: wallId, data });
+      };
+      graphic.on('pointerup', stopDrag);
+      graphic.on('pointerupoutside', stopDrag);
+      graphic.on('pointermove', (event) => {
+        if (!graphic.dragging || this.isLayerLocked(graphic.battlemapLayerId)) {
+          return;
+        }
+        graphic.position.set(
+          event.globalX - (graphic.__dragOffset?.x ?? 0),
+          event.globalY - (graphic.__dragOffset?.y ?? 0)
+        );
+        graphic.battlemapData = {
+          ...(graphic.battlemapData || {}),
+          x: graphic.x,
+          y: graphic.y,
+        };
+        this.emit('wall:drag', {
+          id: wallId,
+          x: graphic.x,
+          y: graphic.y,
+          data: { ...graphic.battlemapData },
+        });
+      });
+      this.walls.set(wallId, graphic);
+    }
+
+    const layerId = String(wall.layer || 'walls');
+    const container = this.getLayerContainer(layerId, 'walls');
+    graphic.battlemapLayerId = layerId;
+    if (container && graphic.parent !== container) {
+      container.addChild(graphic);
+    }
+
+    const width = Math.max(Number(wall.width) || 6, 1);
+    const color = normalizeColor(wall.color ?? '#ffffff', 0xffffff);
+    graphic.clear();
+    graphic.lineStyle({ width, color, alpha: Number.isFinite(wall.opacity) ? wall.opacity : 1 });
+    const points = Array.isArray(wall.points) ? wall.points : [];
+    if (points.length >= 4) {
+      graphic.moveTo(points[0], points[1]);
+      graphic.lineTo(points[2], points[3]);
+    }
+    graphic.position.set(Number(wall.x) || 0, Number(wall.y) || 0);
+    graphic.battlemapData = { ...wall, id: wallId };
+    return graphic;
+  }
+
+  ensureDoorIcon(wall) {
+    const wallId = String(wall.id);
+    const doorState = wall.door;
+    if (doorState !== 'closed' && doorState !== 'open') {
+      const existing = this.doorIcons.get(wallId);
+      if (existing) {
+        if (existing.parent) {
+          existing.removeFromParent();
+        }
+        existing.destroy();
+        this.doorIcons.delete(wallId);
+      }
+      return null;
+    }
+
+    let icon = this.doorIcons.get(wallId);
+    if (!icon) {
+      icon = new Container();
+      icon.eventMode = 'static';
+      icon.cursor = 'pointer';
+      const background = new Graphics();
+      const label = new Text({ text: '', fill: '#000000' });
+      label.anchor.set(0.5);
+      icon.addChild(background);
+      icon.addChild(label);
+      icon.background = background;
+      icon.label = label;
+      icon.on('pointertap', () => {
+        this.emit('door:toggle', {
+          id: wallId,
+          current: wall.door,
+        });
+      });
+      this.doorIcons.set(wallId, icon);
+    }
+
+    const doorColor = doorState === 'closed' ? 0x8b4513 : 0x32cd32;
+    const text = doorState === 'closed' ? '🔒' : '🔓';
+    const background = icon.background;
+    background.clear();
+    background.beginFill(doorColor, 0.9);
+    background.drawCircle(0, 0, 16);
+    background.endFill();
+    if (icon.label) {
+      icon.label.text = text;
+      icon.label.style = { ...icon.label.style, fontSize: 20 };
+    }
+    const container = this.doorLayer;
+    if (container && icon.parent !== container) {
+      container.addChild(icon);
+    }
+    const midPoint = this.getWallMidpoint(wall);
+    icon.position.set(midPoint.x, midPoint.y);
+    icon.battlemapId = wallId;
+    return icon;
+  }
+
+  getWallMidpoint(wall) {
+    const points = Array.isArray(wall.points) ? wall.points : [];
+    const x = Number(wall.x) || 0;
+    const y = Number(wall.y) || 0;
+    if (points.length < 4) {
+      return { x, y };
+    }
+    const x1 = x + Number(points[0]);
+    const y1 = y + Number(points[1]);
+    const x2 = x + Number(points[2]);
+    const y2 = y + Number(points[3]);
+    return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  }
+
+  async setWalls(list = []) {
+    await this.ready;
+    const valid = Array.isArray(list) ? list : [];
+    const seen = new Set();
+    const doorSeen = new Set();
+    valid.forEach((wall) => {
+      if (!wall) {
+        return;
+      }
+      const graphic = this.ensureWallGraphic(wall);
+      if (graphic) {
+        seen.add(graphic.battlemapId);
+      }
+      const icon = this.ensureDoorIcon(wall);
+      if (icon) {
+        doorSeen.add(String(wall.id));
+      }
+    });
+    this.walls.forEach((graphic, id) => {
+      if (seen.has(id)) {
+        return;
+      }
+      if (graphic.parent) {
+        graphic.removeFromParent();
+      }
+      graphic.destroy();
+      this.walls.delete(id);
+    });
+    this.doorIcons.forEach((icon, id) => {
+      if (doorSeen.has(id)) {
+        return;
+      }
+      if (icon.parent) {
+        icon.removeFromParent();
+      }
+      icon.destroy({ children: true });
+      this.doorIcons.delete(id);
+    });
+  }
+
+  getInteractiveDoors() {
+    const doors = [];
+    this.walls.forEach((wall) => {
+      const data = wall.battlemapData || {};
+      if (data.door === 'closed' || data.door === 'open') {
+        doors.push({ ...data });
+      }
+    });
+    return doors;
+  }
+
   ensurePlaceholder() {
     if (this.destroyed || !this.backgroundLayer) {
       return;
@@ -2654,11 +3777,47 @@ export default class PixiBattleMap {
         this.resizeObserver.disconnect();
         this.resizeObserver = null;
       }
+      this.cancelMeasure();
+      this.tiles.forEach((tile) => {
+        if (tile?.parent) {
+          tile.removeFromParent();
+        }
+        tile?.destroy?.({ texture: false, baseTexture: false });
+      });
+      this.tiles.clear();
       this.tokens.forEach((token) => {
         token.removeFromParent();
         token.destroy({ children: true });
       });
       this.tokens.clear();
+      this.lines.forEach((graphic) => {
+        if (graphic?.parent) {
+          graphic.removeFromParent();
+        }
+        graphic?.destroy?.();
+      });
+      this.lines.clear();
+      this.texts.forEach((container) => {
+        if (container?.parent) {
+          container.removeFromParent();
+        }
+        container?.destroy?.({ children: true });
+      });
+      this.texts.clear();
+      this.walls.forEach((graphic) => {
+        if (graphic?.parent) {
+          graphic.removeFromParent();
+        }
+        graphic?.destroy?.();
+      });
+      this.walls.clear();
+      this.doorIcons.forEach((icon) => {
+        if (icon?.parent) {
+          icon.removeFromParent();
+        }
+        icon?.destroy?.({ children: true });
+      });
+      this.doorIcons.clear();
       this.selectedTokens.clear();
       this.clipboard = null;
       this.events.clear();
@@ -2671,6 +3830,10 @@ export default class PixiBattleMap {
       this.lights.clear();
       this.textureCache.clear();
       if (this.viewport) {
+        this.viewport.off('pointerdown', this.handleViewportPointerDown);
+        this.viewport.off('pointermove', this.handleViewportPointerMove);
+        this.viewport.off('pointerup', this.handleViewportPointerUp);
+        this.viewport.off('pointerupoutside', this.handleViewportPointerUp);
         this.viewport.destroy({ children: true });
         this.viewport = null;
       }
@@ -2681,6 +3844,18 @@ export default class PixiBattleMap {
       }
       this.backgroundSprite = null;
       this.backgroundMaskSprite = null;
+      if (this.tilesLayer) {
+        this.tilesLayer.destroy({ children: true });
+        this.tilesLayer = null;
+      }
+      if (this.linesLayer) {
+        this.linesLayer.destroy({ children: true });
+        this.linesLayer = null;
+      }
+      if (this.textsLayer) {
+        this.textsLayer.destroy({ children: true });
+        this.textsLayer = null;
+      }
       if (this.gridLayer) {
         this.gridLayer.destroy();
         this.gridLayer = null;
@@ -2688,6 +3863,14 @@ export default class PixiBattleMap {
       if (this.tokensLayer) {
         this.tokensLayer.destroy({ children: true });
         this.tokensLayer = null;
+      }
+      if (this.wallsLayer) {
+        this.wallsLayer.destroy({ children: true });
+        this.wallsLayer = null;
+      }
+      if (this.doorLayer) {
+        this.doorLayer.destroy({ children: true });
+        this.doorLayer = null;
       }
       if (this.lightsLayer) {
         this.lightsLayer.destroy({ children: true });
@@ -2697,6 +3880,9 @@ export default class PixiBattleMap {
         this.overlayLayer.destroy({ children: true });
         this.overlayLayer = null;
       }
+      this.measureLayer = null;
+      this.measureGraphics = null;
+      this.measureLabel = null;
       if (this.fogLayer) {
         this.fogLayer.destroy();
         this.fogLayer = null;
