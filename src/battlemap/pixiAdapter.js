@@ -1912,11 +1912,12 @@ export default class PixiBattleMap {
     const nextCellsRaw = (nextHalf * 2) / cellSize;
 
     const originalEvent = event?.data?.originalEvent || event?.data?.nativeEvent || event;
-    const disableSnap = Boolean(originalEvent?.altKey);
-    const shiftKey = Boolean(originalEvent?.shiftKey);
+    const snapRequested = Boolean(originalEvent?.shiftKey);
+    const forceFreeResize = Boolean(originalEvent?.altKey);
+    const disableSnap = forceFreeResize || !snapRequested;
 
     let snappedCells = this.snapSizeCells(nextCellsRaw, { disableSnap });
-    if (shiftKey && !disableSnap) {
+    if (snapRequested && !disableSnap) {
       const lastCells = state.lastSnappedCells ?? state.initialSnappedCells ?? snappedCells;
       const epsilon = 0.0001;
       if (nextCellsRaw > lastCells + epsilon) {
