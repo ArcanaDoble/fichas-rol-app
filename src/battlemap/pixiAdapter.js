@@ -47,6 +47,57 @@ function clampNumber(value, min, max, fallback) {
   return fallback;
 }
 
+function getSpriteLocalSize(sprite) {
+  if (!sprite) {
+    return { width: 0, height: 0 };
+  }
+
+  const texture = sprite.texture;
+  const scaleX = Math.abs(sprite.scale?.x ?? 1);
+  const scaleY = Math.abs(sprite.scale?.y ?? 1);
+
+  let width = Number.isFinite(sprite.width) && scaleX > 0 ? sprite.width / scaleX : 0;
+  let height = Number.isFinite(sprite.height) && scaleY > 0 ? sprite.height / scaleY : 0;
+
+  if (!Number.isFinite(width) || width <= 0) {
+    width = texture?.orig?.width ?? texture?.width ?? 0;
+  }
+  if (!Number.isFinite(height) || height <= 0) {
+    height = texture?.orig?.height ?? texture?.height ?? 0;
+  }
+
+  if (!Number.isFinite(width) || width <= 0) {
+    width = Math.abs(sprite.width ?? 0);
+  }
+  if (!Number.isFinite(height) || height <= 0) {
+    height = Math.abs(sprite.height ?? 0);
+  }
+
+  return {
+    width: Number.isFinite(width) && width > 0 ? width : 0,
+    height: Number.isFinite(height) && height > 0 ? height : 0,
+  };
+}
+
+function updateSpriteHitArea(sprite) {
+  if (!sprite) {
+    return;
+  }
+
+  const { width, height } = getSpriteLocalSize(sprite);
+  if (!width || !height) {
+    sprite.hitArea = null;
+    return;
+  }
+
+  const anchorX = sprite.anchor?.x ?? 0;
+  const anchorY = sprite.anchor?.y ?? 0;
+  const originX = -anchorX * width;
+  const originY = -anchorY * height;
+
+  sprite.hitArea = new Rectangle(originX, originY, width, height);
+}
+
 export default class PixiBattleMap {
   constructor(containerEl, opts = {}) {
     if (!containerEl) {
@@ -725,7 +776,7 @@ export default class PixiBattleMap {
     const resolvedSize = Math.max(1, Number(next.size));
     token.width = resolvedSize;
     token.height = resolvedSize;
-    token.hitArea = new Rectangle(-resolvedSize / 2, -resolvedSize / 2, resolvedSize, resolvedSize);
+    updateSpriteHitArea(token);
 
     const rotationRadians = (Number(next.rotation) * Math.PI) / 180;
     token.rotation = rotationRadians;
@@ -1509,7 +1560,7 @@ export default class PixiBattleMap {
 
     token.width = resolved;
     token.height = resolved;
-    token.hitArea = new Rectangle(-resolved / 2, -resolved / 2, resolved, resolved);
+    updateSpriteHitArea(token);
 
     if (!token.battlemapData) {
       token.battlemapData = { id: token.battlemapId };
