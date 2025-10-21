@@ -817,6 +817,9 @@ export default class PixiBattleMap {
         .then((texture) => {
           if (this.tokens.get(token.battlemapId) === token && !this.destroyed) {
             token.texture = texture;
+            this.applyTokenSize(token, resolvedSize);
+            updateSpriteHitArea(token);
+            this.updateSelectionGraphic(token);
           }
         })
         .catch((error) => {
