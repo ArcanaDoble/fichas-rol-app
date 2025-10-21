@@ -55,7 +55,7 @@ import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
-import PixiMapCanvas from './components/PixiMapCanvas';
+import PixiBattleMapView from './components/PixiBattleMapView';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
@@ -7489,7 +7489,7 @@ function App() {
     (chosenView === 'canvas' || chosenView === 'pixiCanvas')
   ) {
     const isPixiView = chosenView === 'pixiCanvas';
-    const CanvasComponent = isPixiView ? PixiMapCanvas : MapCanvas;
+    const CanvasComponent = isPixiView ? PixiBattleMapView : MapCanvas;
     return withTooltips(
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
         <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
