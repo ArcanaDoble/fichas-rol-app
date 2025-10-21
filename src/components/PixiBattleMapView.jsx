@@ -502,13 +502,85 @@ const PixiBattleMapView = ({
     });
   }, [mousePosition.x, mousePosition.y]);
 
-  const handleDeleteSelection = useCallback(() => {
+  const handleDeleteSelection = useCallback(async () => {
     const map = pixiRef.current;
     if (!map || typeof map.deleteSelection !== 'function') {
       return;
     }
-    map.deleteSelection();
-  }, []);
+
+    try {
+      const removedIds = await map.deleteSelection();
+      if (!Array.isArray(removedIds) || removedIds.length === 0) {
+        return;
+      }
+
+      const idSet = new Set(
+        removedIds
+          .map((entry) => {
+            if (entry && typeof entry === 'object') {
+              if (entry.id !== undefined && entry.id !== null) {
+                return entry.id;
+              }
+              if (entry.key !== undefined && entry.key !== null) {
+                return entry.key;
+              }
+            }
+            return entry;
+          })
+          .filter((value) => value !== undefined && value !== null)
+          .map((value) => String(value))
+      );
+
+      if (idSet.size === 0) {
+        return;
+      }
+
+      if (typeof onTokensChange === 'function') {
+        const currentTokens = Array.isArray(tokens) ? tokens : [];
+        const nextTokens = currentTokens.filter((token) => {
+          if (!token) {
+            return false;
+          }
+          const tokenId = token.id ?? token.key ?? token.name;
+          if (tokenId === undefined || tokenId === null) {
+            return true;
+          }
+          return !idSet.has(String(tokenId));
+        });
+        if (nextTokens.length !== currentTokens.length) {
+          onTokensChange(nextTokens);
+        }
+      }
+
+      setClipboard((prev) => {
+        if (!prev || !Array.isArray(prev.tokens)) {
+          return prev;
+        }
+        const filteredTokens = prev.tokens.filter((token) => {
+          if (!token) {
+            return false;
+          }
+          const tokenId = token.id ?? token.key ?? token.name;
+          if (tokenId === undefined || tokenId === null) {
+            return true;
+          }
+          return !idSet.has(String(tokenId));
+        });
+
+        if (filteredTokens.length === 0) {
+          return null;
+        }
+
+        if (filteredTokens.length === prev.tokens.length) {
+          return prev;
+        }
+
+        return { ...prev, tokens: filteredTokens };
+      });
+    } catch (error) {
+      console.error('[PixiBattleMapView] Error deleting selection:', error);
+    }
+  }, [onTokensChange, tokens]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
