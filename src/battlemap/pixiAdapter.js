@@ -5,6 +5,7 @@ import {
   Container,
   Graphics,
   Rectangle,
+  Point,
   Sprite,
   Texture,
 } from 'pixi.js';
@@ -1308,23 +1309,81 @@ export default class PixiBattleMap {
 
   refreshSelectionOverlay(token) {
     const overlay = token?.selectionGraphic;
-    if (!overlay?.frameGraphic) {
+    const frameGraphic = overlay?.frameGraphic;
+    if (!overlay || !frameGraphic || !token) {
       return;
     }
 
-    const bounds = typeof token?.getBounds === 'function' ? token.getBounds(false) : null;
-    if (!bounds) {
+    const overlayParent = overlay.parent ?? this.overlayLayer;
+    const tokenParent = token.parent;
+
+    if (!overlayParent) {
       return;
     }
 
-    const width = Math.max(1, Number(bounds.width) || 0);
-    const height = Math.max(1, Number(bounds.height) || 0);
-    const centerX = bounds.x + width / 2;
-    const centerY = bounds.y + height / 2;
+    let centerX = Number.isFinite(token?.x) ? token.x : 0;
+    let centerY = Number.isFinite(token?.y) ? token.y : 0;
+
+    if (
+      overlayParent !== tokenParent &&
+      typeof overlayParent.toLocal === 'function' &&
+      tokenParent
+    ) {
+      const centerPoint = overlayParent.toLocal(token.position, tokenParent);
+      centerX = centerPoint.x;
+      centerY = centerPoint.y;
+    }
 
     overlay.position.set(centerX, centerY);
 
-    const frameGraphic = overlay.frameGraphic;
+    let width = Number(token?.width);
+    let height = Number(token?.height);
+
+    const needsConversion =
+      overlayParent !== tokenParent &&
+      typeof overlayParent.toLocal === 'function' &&
+      tokenParent &&
+      Number.isFinite(token?.x) &&
+      Number.isFinite(token?.y);
+
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      if (needsConversion) {
+        const halfWidth = width / 2;
+        const halfHeight = height / 2;
+        const left = overlayParent.toLocal(
+          new Point(token.x - halfWidth, token.y),
+          tokenParent
+        );
+        const right = overlayParent.toLocal(
+          new Point(token.x + halfWidth, token.y),
+          tokenParent
+        );
+        const top = overlayParent.toLocal(
+          new Point(token.x, token.y - halfHeight),
+          tokenParent
+        );
+        const bottom = overlayParent.toLocal(
+          new Point(token.x, token.y + halfHeight),
+          tokenParent
+        );
+        width = Math.abs(right.x - left.x);
+        height = Math.abs(bottom.y - top.y);
+      }
+    } else {
+      const bounds = typeof token.getBounds === 'function' ? token.getBounds(false) : null;
+      if (bounds) {
+        const topLeft = overlayParent.toLocal(new Point(bounds.x, bounds.y));
+        const bottomRight = overlayParent.toLocal(
+          new Point(bounds.x + bounds.width, bounds.y + bounds.height)
+        );
+        width = Math.abs(bottomRight.x - topLeft.x);
+        height = Math.abs(bottomRight.y - topLeft.y);
+      }
+    }
+
+    width = Math.max(1, Number(width) || 0);
+    height = Math.max(1, Number(height) || 0);
+
     frameGraphic.clear();
 
     if (typeof frameGraphic.setStrokeStyle === 'function') {
