@@ -709,6 +709,8 @@ const Token = forwardRef(
     const isImgLoading = !!image && imgStatus === 'loading';
     const groupRef = useRef();
     const shapeRef = useRef();
+    const damageFlashRef = useRef();
+    const damageFlashCachedPixelRatioRef = useRef(null);
     const trRef = useRef();
     const rotateRef = useRef();
     const gearRef = useRef();
@@ -815,6 +817,35 @@ const Token = forwardRef(
         }
       };
     }, [scheduleTintCache]);
+
+    useEffect(() => {
+      const node = damageFlashRef.current;
+      if (!node || !img) return undefined;
+
+      const pixelRatio = Math.min(
+        window.devicePixelRatio * groupScale,
+        MAX_PIXEL_RATIO,
+      );
+
+      if (
+        !node.hasCachedCanvas?.() ||
+        damageFlashCachedPixelRatioRef.current !== pixelRatio
+      ) {
+        node.cache({ pixelRatio });
+        damageFlashCachedPixelRatioRef.current = pixelRatio;
+      }
+
+      node.getLayer()?.batchDraw();
+
+      return () => {
+        const current = damageFlashRef.current;
+        if (current?.hasCachedCanvas?.()) {
+          current.clearCache();
+          damageFlashCachedPixelRatioRef.current = null;
+          current.getLayer()?.batchDraw();
+        }
+      };
+    }, [img, groupScale]);
 
     useEffect(() => {
       if (!tokenSheetId) return;
@@ -1146,28 +1177,32 @@ const Token = forwardRef(
             )}
           </>
         )}
-        {damageFlashIntensity > 0 &&
-          (img && !isImgLoading ? (
-            <KonvaImage
-              {...geometry}
-              image={img}
-              listening={false}
-              opacity={damageFlashIntensity}
-              globalCompositeOperation="screen"
-              filters={[Konva.Filters.RGBA]}
-              red={255}
-              green={0}
-              blue={0}
-              alpha={1}
-            />
-          ) : (
-            <Rect
-              {...geometry}
-              listening={false}
-              fill={hexToRgba('#ff0000', damageFlashIntensity)}
-              globalCompositeOperation="screen"
-            />
-          ))}
+        {img && !isImgLoading ? (
+          <KonvaImage
+            ref={damageFlashRef}
+            {...geometry}
+            image={img}
+            listening={false}
+            opacity={damageFlashIntensity}
+            globalCompositeOperation="screen"
+            filters={[Konva.Filters.RGBA]}
+            red={255}
+            green={0}
+            blue={0}
+            alpha={1}
+            perfectDrawEnabled={false}
+            visible={damageFlashIntensity > 0}
+          />
+        ) : (
+          <Rect
+            {...geometry}
+            listening={false}
+            fill={hexToRgba('#ff0000', 1)}
+            opacity={damageFlashIntensity}
+            globalCompositeOperation="screen"
+            visible={damageFlashIntensity > 0}
+          />
+        )}
         {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
