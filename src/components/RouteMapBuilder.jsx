@@ -1,8 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Application, Container, Graphics, Point, Text } from 'pixi.js';
+import { Application, Container, Graphics, Point, Sprite, Text, Texture } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
+import {
+  ArrowLeft,
+  Compass,
+  Copy,
+  FileDown,
+  Link2,
+  LockKeyhole,
+  MousePointer2,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2,
+  Wand2,
+  Crown,
+  HeartPulse,
+  Home,
+  ScrollText,
+  Shield,
+  Store,
+  Swords,
+} from 'lucide-react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import Boton from './Boton';
 import Input from './Input';
 
@@ -124,11 +146,11 @@ const NODE_STATES = {
 };
 
 const TOOLBAR_ACTIONS = [
-  { id: 'select', label: 'Seleccionar / Mover', icon: '🖱️' },
-  { id: 'create', label: 'Crear Nodo', icon: '🪄' },
-  { id: 'connect', label: 'Conectar', icon: '🔗' },
-  { id: 'delete', label: 'Borrar', icon: '🗑️' },
-  { id: 'toggleLock', label: 'Bloquear / Desbloquear', icon: '🔒' },
+  { id: 'select', label: 'Seleccionar / Mover', icon: MousePointer2 },
+  { id: 'create', label: 'Crear Nodo', icon: Wand2 },
+  { id: 'connect', label: 'Conectar', icon: Link2 },
+  { id: 'delete', label: 'Borrar', icon: Trash2 },
+  { id: 'toggleLock', label: 'Bloquear / Desbloquear', icon: LockKeyhole },
 ];
 
 const GRID_SIZES = [20, 32, 40, 48, 64];
@@ -224,293 +246,106 @@ const applyAppearanceDefaults = (node) => {
 
 const normalizeNodesCollection = (nodes) => nodes.map((node) => applyAppearanceDefaults(node));
 
-const createHouseIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-  const roofColor = lightenHex(iconColor, 0.2);
-  const roof = new Graphics();
-  roof.beginFill(hexToInt(roofColor), 0.95);
-  roof.drawPolygon([0, -18, 18, -2, -16, -2]);
-  roof.endFill();
-  container.addChild(roof);
+const ensureSvgNamespace = (svgString) =>
+  svgString.includes('xmlns') ? svgString : svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
 
-  const body = new Graphics();
-  body.beginFill(hexToInt(iconColor), 0.92);
-  body.drawRoundedRect(-16, -2, 32, 22, 6);
-  body.endFill();
-  container.addChild(body);
+const encodeSvgDataUri = (svgString) =>
+  `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22')}`;
 
-  const frame = new Graphics();
-  frame.lineStyle(2, hexToInt(lightenHex(iconColor, 0.35)), 0.85);
-  frame.drawRoundedRect(-16, -2, 32, 22, 6);
-  container.addChild(frame);
+const lucideTextureCache = new Map();
 
-  const door = new Graphics();
-  door.beginFill(hexToInt(accentColor), 0.92);
-  door.drawRoundedRect(-5, 4, 10, 14, 3);
-  door.endFill();
-  container.addChild(door);
+const getLucideTexture = (IconComponent, color) => {
+  const normalizedColor = normalizeHex(color) || '#f8fafc';
+  const key = `${IconComponent.displayName || IconComponent.name || 'icon'}-${normalizedColor}`;
+  let texture = lucideTextureCache.get(key);
 
-  const knob = new Graphics();
-  knob.beginFill(hexToInt(lightenHex(accentColor, 0.4)), 0.9);
-  knob.drawCircle(3, 11, 1.6);
-  knob.endFill();
-  container.addChild(knob);
+  if (!texture || texture.destroyed || texture.baseTexture.destroyed || !texture.valid) {
+    const svgMarkup = renderToStaticMarkup(
+      <IconComponent color={normalizedColor} size={64} strokeWidth={2.4} absoluteStrokeWidth />
+    );
+    const svgWithNs = ensureSvgNamespace(svgMarkup);
+    const encoded = encodeSvgDataUri(svgWithNs);
+    texture = Texture.from(encoded, {
+      resourceOptions: {
+        width: 64,
+        height: 64,
+      },
+    });
+    const applySize = () => {
+      if (typeof texture.baseTexture.setSize === 'function') {
+        texture.baseTexture.setSize(64, 64);
+      } else if (typeof texture.baseTexture.resize === 'function') {
+        texture.baseTexture.resize(64, 64);
+      }
+    };
+    if (!texture.baseTexture.valid) {
+      texture.baseTexture.once('loaded', applySize);
+    } else {
+      applySize();
+    }
+    lucideTextureCache.set(key, texture);
+  }
 
-  const windowPane = new Graphics();
-  const windowColor = lightenHex(iconColor, 0.45);
-  windowPane.beginFill(hexToInt(windowColor), 0.9);
-  windowPane.drawRoundedRect(-12, 2, 8, 8, 2);
-  windowPane.endFill();
-  container.addChild(windowPane);
-
-  const windowGrid = new Graphics();
-  windowGrid.lineStyle(1.6, hexToInt(darkenHex(windowColor, 0.35)), 0.9);
-  windowGrid.moveTo(-8, 2);
-  windowGrid.lineTo(-8, 10);
-  windowGrid.moveTo(-12, 6);
-  windowGrid.lineTo(-4, 6);
-  container.addChild(windowGrid);
-
-  return container;
+  return texture;
 };
 
-const createBattleIcon = ({ iconColor, accentColor }) => {
+const fallbackHex = (...values) => {
+  for (const value of values) {
+    const normalized = normalizeHex(value);
+    if (normalized) return normalized;
+  }
+  return '#f8fafc';
+};
+
+const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, borderColor }) => {
   const container = new Container();
-  const swordFactory = () => {
-    const sword = new Container();
-    const blade = new Graphics();
-    blade.beginFill(hexToInt(lightenHex(iconColor, 0.1)), 0.95);
-    blade.drawPolygon([0, -18, 6, 12, -6, 12]);
-    blade.endFill();
-    sword.addChild(blade);
+  const accentBase = fallbackHex(accentColor, borderColor, iconColor, '#38bdf8');
+  const auraColor = lightenHex(accentBase, 0.18) || accentBase;
+  const ringColor = lightenHex(accentBase, 0.05) || accentBase;
+  const resolvedIconColor = fallbackHex(iconColor, '#e2e8f0');
 
-    const core = new Graphics();
-    core.lineStyle(1.6, hexToInt(darkenHex(iconColor, 0.4)), 0.9);
-    core.moveTo(0, -18);
-    core.lineTo(0, 12);
-    sword.addChild(core);
+  const aura = new Graphics();
+  aura.beginFill(hexToInt(auraColor), 0.22);
+  aura.drawCircle(0, 0, 18);
+  aura.endFill();
+  container.addChild(aura);
 
-    const guard = new Graphics();
-    guard.lineStyle(3, hexToInt(accentColor), 1);
-    guard.moveTo(-8, 2);
-    guard.lineTo(8, 2);
-    sword.addChild(guard);
+  const ring = new Graphics();
+  ring.lineStyle(2.2, hexToInt(ringColor), 0.8);
+  ring.drawCircle(0, 0, 15);
+  container.addChild(ring);
 
-    const handle = new Graphics();
-    handle.beginFill(hexToInt(darkenHex(accentColor, 0.4)), 0.95);
-    handle.drawRoundedRect(-2, 2, 4, 8, 1.5);
-    handle.endFill();
-    sword.addChild(handle);
-
-    const pommel = new Graphics();
-    pommel.beginFill(hexToInt(accentColor), 0.95);
-    pommel.drawCircle(0, 12, 2.6);
-    pommel.endFill();
-    sword.addChild(pommel);
-
-    return sword;
+  const sprite = new Sprite(getLucideTexture(IconComponent, resolvedIconColor));
+  sprite.anchor.set(0.5);
+  const targetSize = 36;
+  const applyTargetSize = () => {
+    if (typeof sprite.setSize === 'function') {
+      sprite.setSize(targetSize);
+    } else {
+      sprite.width = targetSize;
+      sprite.height = targetSize;
+    }
   };
-
-  const leftSword = swordFactory();
-  leftSword.rotation = -0.65;
-  leftSword.scale.x = -1;
-  container.addChild(leftSword);
-
-  const rightSword = swordFactory();
-  rightSword.rotation = 0.65;
-  container.addChild(rightSword);
-
-  return container;
-};
-
-const createEventIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-  const aura = new Graphics();
-  aura.beginFill(hexToInt(lightenHex(accentColor, 0.35)), 0.24);
-  aura.drawCircle(0, -2, 16);
-  aura.endFill();
-  container.addChild(aura);
-
-  const mark = new Graphics();
-  mark.beginFill(hexToInt(iconColor), 0.95);
-  mark.drawRoundedRect(-5, -16, 10, 20, 4);
-  mark.endFill();
-  container.addChild(mark);
-
-  const shine = new Graphics();
-  shine.beginFill(hexToInt(lightenHex(iconColor, 0.4)), 0.6);
-  shine.drawRoundedRect(-2.2, -14, 4.4, 12, 2);
-  shine.endFill();
-  container.addChild(shine);
-
-  const dot = new Graphics();
-  dot.beginFill(hexToInt(iconColor), 0.95);
-  dot.drawCircle(0, 8, 3.5);
-  dot.endFill();
-  container.addChild(dot);
-
-  return container;
-};
-
-const createShopIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-  const bag = new Graphics();
-  bag.beginFill(hexToInt(iconColor), 0.92);
-  bag.drawRoundedRect(-16, -6, 32, 24, 12);
-  bag.endFill();
-  container.addChild(bag);
-
-  const neck = new Graphics();
-  neck.beginFill(hexToInt(darkenHex(iconColor, 0.2)), 0.95);
-  neck.drawRoundedRect(-12, -14, 24, 10, 4);
-  neck.endFill();
-  container.addChild(neck);
-
-  const ties = new Graphics();
-  ties.lineStyle(2, hexToInt(accentColor), 0.95);
-  ties.moveTo(-6, -6);
-  ties.lineTo(-2, 2);
-  ties.moveTo(6, -6);
-  ties.lineTo(2, 2);
-  container.addChild(ties);
-
-  const coin = new Graphics();
-  coin.beginFill(hexToInt(accentColor), 0.95);
-  coin.drawCircle(10, 8, 6.2);
-  coin.endFill();
-  container.addChild(coin);
-
-  const coinMark = new Graphics();
-  coinMark.lineStyle(1.6, hexToInt(lightenHex(accentColor, 0.45)), 1);
-  coinMark.moveTo(10, 3);
-  coinMark.lineTo(10, 13);
-  coinMark.moveTo(5, 8);
-  coinMark.lineTo(15, 8);
-  container.addChild(coinMark);
-
-  return container;
-};
-
-const createEliteIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-  const aura = new Graphics();
-  aura.beginFill(hexToInt(lightenHex(accentColor, 0.3)), 0.2);
-  aura.drawCircle(0, 0, 16);
-  aura.endFill();
-  container.addChild(aura);
-
-  const star = new Graphics();
-  star.beginFill(hexToInt(iconColor), 0.95);
-  star.drawPolygon([0, -15, 5, -5, 15, -3, 8, 4, 11, 15, 0, 8, -11, 15, -8, 4, -15, -3, -5, -5]);
-  star.endFill();
-  container.addChild(star);
-
-  const shine = new Graphics();
-  shine.lineStyle(1.6, hexToInt(lightenHex(iconColor, 0.45)), 0.9);
-  shine.moveTo(-9, -1);
-  shine.lineTo(9, -1);
-  shine.moveTo(0, -10);
-  shine.lineTo(0, 6);
-  container.addChild(shine);
-
-  return container;
-};
-
-const createHealIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-  const aura = new Graphics();
-  aura.beginFill(hexToInt(lightenHex(accentColor, 0.35)), 0.22);
-  aura.drawCircle(0, 0, 16);
-  aura.endFill();
-  container.addChild(aura);
-
-  const cross = new Graphics();
-  cross.beginFill(hexToInt(iconColor), 0.96);
-  cross.drawRoundedRect(-6, -16, 12, 32, 4);
-  cross.drawRoundedRect(-16, -6, 32, 12, 4);
-  cross.endFill();
-  container.addChild(cross);
-
-  const shine = new Graphics();
-  shine.beginFill(hexToInt(lightenHex(iconColor, 0.4)), 0.5);
-  shine.drawRoundedRect(-3, -12, 6, 24, 2);
-  shine.endFill();
-  container.addChild(shine);
-
-  return container;
-};
-
-const createBossIcon = ({ iconColor, accentColor }) => {
-  const container = new Container();
-
-  const crown = new Graphics();
-  crown.beginFill(hexToInt(accentColor), 0.9);
-  crown.drawPolygon([-12, -10, -6, -20, 0, -12, 6, -20, 12, -10]);
-  crown.endFill();
-  container.addChild(crown);
-
-  const crownShine = new Graphics();
-  crownShine.lineStyle(1.4, hexToInt(lightenHex(accentColor, 0.45)), 1);
-  crownShine.moveTo(-7, -16);
-  crownShine.lineTo(-3, -14);
-  crownShine.moveTo(3, -14);
-  crownShine.lineTo(7, -16);
-  container.addChild(crownShine);
-
-  const skull = new Graphics();
-  skull.beginFill(hexToInt(iconColor), 0.95);
-  skull.drawCircle(0, -2, 14);
-  skull.endFill();
-  container.addChild(skull);
-
-  const jaw = new Graphics();
-  jaw.beginFill(hexToInt(iconColor), 0.95);
-  jaw.drawRoundedRect(-12, 6, 24, 12, 5);
-  jaw.endFill();
-  container.addChild(jaw);
-
-  const eyeColor = hexToInt(darkenHex(accentColor, 0.35));
-  const leftEye = new Graphics();
-  leftEye.beginFill(eyeColor, 0.95);
-  leftEye.drawEllipse(-5.5, -4, 4.5, 5.5);
-  leftEye.endFill();
-  container.addChild(leftEye);
-
-  const rightEye = new Graphics();
-  rightEye.beginFill(eyeColor, 0.95);
-  rightEye.drawEllipse(5.5, -4, 4.5, 5.5);
-  rightEye.endFill();
-  container.addChild(rightEye);
-
-  const nose = new Graphics();
-  nose.beginFill(eyeColor, 0.9);
-  nose.drawPolygon([0, -1, -3, 4, 3, 4]);
-  nose.endFill();
-  container.addChild(nose);
-
-  const teeth = new Graphics();
-  teeth.lineStyle(1.8, hexToInt(darkenHex(iconColor, 0.45)), 0.95);
-  teeth.moveTo(-8, 9);
-  teeth.lineTo(8, 9);
-  teeth.moveTo(-4, 9);
-  teeth.lineTo(-4, 15);
-  teeth.moveTo(0, 9);
-  teeth.lineTo(0, 15);
-  teeth.moveTo(4, 9);
-  teeth.lineTo(4, 15);
-  container.addChild(teeth);
+  if (sprite.texture.valid) {
+    applyTargetSize();
+  } else {
+    sprite.texture.once('update', applyTargetSize);
+  }
+  container.addChild(sprite);
 
   return container;
 };
 
 const NODE_ICON_BUILDERS = {
-  start: createHouseIcon,
-  normal: createBattleIcon,
-  event: createEventIcon,
-  shop: createShopIcon,
-  elite: createEliteIcon,
-  heal: createHealIcon,
-  boss: createBossIcon,
+  start: createLucideIconBuilder(Home),
+  normal: createLucideIconBuilder(Swords),
+  event: createLucideIconBuilder(ScrollText),
+  shop: createLucideIconBuilder(Store),
+  elite: createLucideIconBuilder(Shield),
+  heal: createLucideIconBuilder(HeartPulse),
+  boss: createLucideIconBuilder(Crown),
 };
 
 const createLockBadge = ({ badgeColor, accentColor, open }) => {
@@ -1695,10 +1530,11 @@ const RouteMapBuilder = ({ onBack }) => {
       const paddingX = 14;
       const paddingY = 6;
       const labelBackground = new Graphics();
+      const labelStrokeColor = selected ? accentColor : stateStroke;
       const labelWidth = labelText.width + paddingX * 2;
       const labelHeight = labelText.height + paddingY * 2;
       labelBackground.beginFill(0x0b1220, 0.9);
-      labelBackground.lineStyle(1, strokeColor, 0.6);
+      labelBackground.lineStyle(1, labelStrokeColor, 0.6);
       labelBackground.drawRoundedRect(-labelWidth / 2, -labelHeight / 2, labelWidth, labelHeight, labelHeight / 2);
       labelBackground.endFill();
       labelContainer.addChild(labelBackground);
@@ -1757,10 +1593,10 @@ const RouteMapBuilder = ({ onBack }) => {
     setEdgeEditor(null);
   }, [edgeEditor]);
 
-  const currentToolLabel = useMemo(() => {
-    const tool = TOOLBAR_ACTIONS.find((item) => item.id === activeTool);
-    return tool ? `${tool.icon} ${tool.label}` : '';
-  }, [activeTool]);
+  const currentTool = useMemo(
+    () => TOOLBAR_ACTIONS.find((item) => item.id === activeTool),
+    [activeTool],
+  );
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1773,8 +1609,9 @@ const RouteMapBuilder = ({ onBack }) => {
           <Boton
             className="mt-4 w-full border border-sky-500/40 bg-none bg-slate-900/70 text-slate-200 hover:border-sky-400/70 hover:bg-slate-900"
             onClick={onBack}
+            icon={<ArrowLeft className="h-4 w-4" aria-hidden />}
           >
-            ← Volver al menú
+            Volver al menú
           </Boton>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
@@ -1795,7 +1632,7 @@ const RouteMapBuilder = ({ onBack }) => {
                       : 'border-slate-800/80 bg-slate-900/80 hover:border-slate-600/70 hover:bg-slate-800/70'
                   }`}
                 >
-                  <span className="text-lg opacity-90">{action.icon}</span>
+                  <action.icon className="h-4 w-4" aria-hidden />
                   <span>{action.label}</span>
                 </button>
               ))}
@@ -1821,23 +1658,40 @@ const RouteMapBuilder = ({ onBack }) => {
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Acciones rápidas</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <Boton onClick={handleUndo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ↩️ Deshacer
+              <Boton
+                onClick={handleUndo}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Undo2 className="h-4 w-4" aria-hidden />}
+              >
+                Deshacer
               </Boton>
-              <Boton onClick={handleRedo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ↪️ Rehacer
+              <Boton
+                onClick={handleRedo}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Redo2 className="h-4 w-4" aria-hidden />}
+              >
+                Rehacer
               </Boton>
-              <Boton onClick={duplicateSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ⎘ Duplicar
+              <Boton
+                onClick={duplicateSelection}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Copy className="h-4 w-4" aria-hidden />}
+              >
+                Duplicar
               </Boton>
-              <Boton onClick={deleteSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                Supr
+              <Boton
+                onClick={deleteSelection}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Trash2 className="h-4 w-4" aria-hidden />}
+              >
+                Suprimir
               </Boton>
               <Boton
                 onClick={toggleNodeLock}
                 className="col-span-2 bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<LockKeyhole className="h-4 w-4" aria-hidden />}
               >
-                🔒 Bloquear / Desbloquear
+                Bloquear / Desbloquear
               </Boton>
             </div>
           </section>
@@ -1949,8 +1803,9 @@ const RouteMapBuilder = ({ onBack }) => {
             <Boton
               onClick={applyAutoLayout}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<Compass className="h-4 w-4" aria-hidden />}
             >
-              🧭 Auto-layout
+              Auto-layout
             </Boton>
           </section>
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
@@ -1958,14 +1813,16 @@ const RouteMapBuilder = ({ onBack }) => {
             <Boton
               onClick={() => saveToLocalStorage(state.nodes, state.edges)}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<Save className="h-4 w-4" aria-hidden />}
             >
-              💾 Guardar en navegador
+              Guardar en navegador
             </Boton>
             <Boton
               onClick={exportToFile}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<FileDown className="h-4 w-4" aria-hidden />}
             >
-              📁 Exportar JSON
+              Exportar JSON
             </Boton>
             <label className="block w-full text-xs text-slate-400">
               Importar JSON
@@ -2032,7 +1889,16 @@ const RouteMapBuilder = ({ onBack }) => {
         <div className="pointer-events-none absolute inset-0 z-0 opacity-25" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.18), transparent 45%), radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.16), transparent 55%), radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.12), transparent 50%)' }} />
         <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
-          <span className="font-medium text-sky-200">{currentToolLabel}</span>
+          <span className="font-medium text-sky-200 flex items-center gap-2">
+            {currentTool ? (
+              <>
+                <currentTool.icon className="h-4 w-4" aria-hidden />
+                {currentTool.label}
+              </>
+            ) : (
+              'Selecciona una herramienta'
+            )}
+          </span>
           {connectOriginId && activeTool === 'connect' && (
             <span className="text-xs text-amber-300">Selecciona nodo destino…</span>
           )}
