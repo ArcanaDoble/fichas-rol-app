@@ -11,6 +11,7 @@ import {
 } from 'pixi.js';
 import { ensureSheetDefaults, saveTokenSheet } from '../utils/token';
 import { ESTADOS } from '../components/EstadoSelector';
+import PixiSpinner from './PixiSpinner';
 
 const DAMAGE_ANIMATION_MS = 8000;
 const HANDLE_OFFSET_FACTOR = 0.18;
@@ -61,6 +62,8 @@ export default class TokenSprite extends Container {
     this._tintOpacity = 0;
     this._hovering = false;
     this._rotationState = null;
+    this._isTextureLoading = false;
+    this._currentTextureLoadId = null;
 
     this._onSheetSaved = (event) => {
       if (!event?.detail || event.detail.id !== this._tokenSheetId) {
@@ -80,6 +83,12 @@ export default class TokenSprite extends Container {
       this._ticker.destroy();
       this._ticker = null;
     }
+    if (this.loadingSpinner) {
+      this.loadingSpinner.destroy({ children: true });
+      this.loadingSpinner = null;
+    }
+    this._currentTextureLoadId = null;
+    this._setTextureLoading(false);
     window.removeEventListener('tokenSheetSaved', this._onSheetSaved);
     super.destroy(options);
   }
@@ -113,6 +122,16 @@ export default class TokenSprite extends Container {
     this.damageOverlay.eventMode = 'none';
     this.damageOverlay.visible = false;
     this.bodyLayer.addChild(this.damageOverlay);
+
+    this.loadingSpinner = new PixiSpinner({
+      radius: Math.max(this._cellSize * 0.35, 10),
+      thickness: Math.max(this._cellSize * 0.1, 3),
+      color: 0xffffff,
+      alpha: 0.9,
+      active: false,
+    });
+    this.loadingSpinner.eventMode = 'none';
+    this.bodyLayer.addChild(this.loadingSpinner);
 
     this.estadoLayer = new Container();
     this.estadoLayer.sortableChildren = true;
@@ -348,6 +367,20 @@ export default class TokenSprite extends Container {
       this.rotationHandle.position.set(halfWidth + handleOffset, -halfHeight - handleOffset);
     }
 
+    if (this.loadingSpinner) {
+      const minDimension = Math.min(this._width, this._height);
+      const spinnerRadius = Math.max(Math.min(minDimension, this._cellSize * 2) * 0.25, 8);
+      const spinnerThickness = Math.max(spinnerRadius * 0.35, 3);
+      this.loadingSpinner.setStyle({
+        radius: spinnerRadius,
+        thickness: spinnerThickness,
+        color: 0xffffff,
+        alpha: 0.9,
+      });
+      this.loadingSpinner.position.set(0, 0);
+      this.loadingSpinner.setActive(this._isTextureLoading);
+    }
+
     const buttonSize = Math.max(12, this._cellSize * BUTTON_SIZE_FACTOR);
     [this.settingsButton, this.barsButton, this.statesButton].forEach((button, index) => {
       button.style.fontSize = buttonSize;
@@ -396,35 +429,109 @@ export default class TokenSprite extends Container {
       this.bodySprite.texture = Texture.WHITE;
       this._hasTexture = false;
       this.placeholder.visible = true;
+      this._updateDimensions();
       return;
     }
     this.bodySprite.texture = texture;
     this._hasTexture = texture !== Texture.WHITE;
     this.placeholder.visible = !this._hasTexture;
+    this._updateDimensions();
   }
 
   async setTexture(url, loader) {
     if (!url) {
       this._textureUrl = null;
+      this._currentTextureLoadId = null;
+      this._setTextureLoading(false);
       this.setTextureFrom(Texture.WHITE);
       return;
     }
-    if (this._textureUrl === url) {
+    if (this._textureUrl === url && this._hasTexture && !this._isTextureLoading) {
       return;
     }
     this._textureUrl = url;
+    const loadId = Symbol('texture-load');
+    this._currentTextureLoadId = loadId;
+    this._setTextureLoading(true);
+    this.setTextureFrom(Texture.WHITE);
+
     if (typeof loader === 'function') {
       try {
         const texture = await loader(url);
+        if (this._currentTextureLoadId !== loadId || this.destroyed) {
+          return;
+        }
+        if (!texture) {
+          throw new Error('Loader returned no texture');
+        }
         this.setTextureFrom(texture);
       } catch (error) {
-        console.error('[TokenSprite] Error loading texture', error);
-        this.setTextureFrom(Texture.WHITE);
+        if (this._currentTextureLoadId === loadId && !this.destroyed) {
+          console.error('[TokenSprite] Error loading texture', error);
+          this.setTextureFrom(Texture.WHITE);
+        }
+      } finally {
+        if (this._currentTextureLoadId === loadId && !this.destroyed) {
+          this._setTextureLoading(false);
+        }
       }
-    } else {
-      this.setTextureFrom(Texture.from(url));
+      return;
     }
-    this._updateDimensions();
+
+    const texture = Texture.from(url);
+    if (this._currentTextureLoadId !== loadId || this.destroyed) {
+      return;
+    }
+    this.setTextureFrom(texture);
+    const baseTexture = texture?.baseTexture;
+    if (!baseTexture) {
+      if (this._currentTextureLoadId === loadId && !this.destroyed) {
+        this._setTextureLoading(false);
+      }
+      return;
+    }
+
+    if (baseTexture.valid) {
+      if (this._currentTextureLoadId === loadId && !this.destroyed) {
+        this._setTextureLoading(false);
+      }
+      return;
+    }
+
+    const handleLoad = () => {
+      if (this._currentTextureLoadId !== loadId || this.destroyed) {
+        return;
+      }
+      this._setTextureLoading(false);
+      baseTexture.off('error', handleError);
+    };
+
+    const handleError = (event) => {
+      if (this._currentTextureLoadId !== loadId || this.destroyed) {
+        return;
+      }
+      console.error('[TokenSprite] Error loading texture', event);
+      this.setTextureFrom(Texture.WHITE);
+      this._setTextureLoading(false);
+      baseTexture.off('loaded', handleLoad);
+    };
+
+    baseTexture.once('loaded', handleLoad);
+    baseTexture.once('error', handleError);
+  }
+
+  _setTextureLoading(loading) {
+    const normalized = Boolean(loading);
+    if (this._isTextureLoading === normalized) {
+      if (this.loadingSpinner) {
+        this.loadingSpinner.setActive(normalized);
+      }
+      return;
+    }
+    this._isTextureLoading = normalized;
+    if (this.loadingSpinner) {
+      this.loadingSpinner.setActive(normalized);
+    }
   }
 
   setPlaceholderColor(color) {
