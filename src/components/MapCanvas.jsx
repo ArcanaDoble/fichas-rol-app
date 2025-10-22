@@ -698,6 +698,7 @@ const Token = forwardRef(
       showAura = true,
       tintColor = '#ff0000',
       tintOpacity = 0,
+      damageFlashIntensity = 0,
       showSpinner = true,
       estados = [],
     },
@@ -1145,6 +1146,14 @@ const Token = forwardRef(
             )}
           </>
         )}
+        {damageFlashIntensity > 0 && (
+          <Rect
+            {...geometry}
+            listening={false}
+            fill={hexToRgba('#ff0000', damageFlashIntensity)}
+            globalCompositeOperation="screen"
+          />
+        )}
         {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
@@ -1300,6 +1309,7 @@ Token.propTypes = {
   showAura: PropTypes.bool,
   tintColor: PropTypes.string,
   tintOpacity: PropTypes.number,
+  damageFlashIntensity: PropTypes.number,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -1503,7 +1513,93 @@ const MapCanvas = ({
   const [selectedTileId, setSelectedTileId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [damagePopups, setDamagePopups] = useState([]);
-  const [damageEffects, setDamageEffects] = useState(new Map());
+  const [damageFlashTimes, setDamageFlashTimes] = useState(new Map());
+  const damageFlashTimesRef = useRef(damageFlashTimes);
+  useEffect(() => {
+    damageFlashTimesRef.current = damageFlashTimes;
+  }, [damageFlashTimes]);
+  const getTimestamp = useCallback(
+    () =>
+      typeof performance !== 'undefined' && performance.now
+        ? performance.now()
+        : Date.now(),
+    [],
+  );
+  const [damageFlashNow, setDamageFlashNow] = useState(() => getTimestamp());
+  const damageFlashCount = damageFlashTimes.size;
+  useEffect(() => {
+    if (damageFlashCount === 0) return undefined;
+
+    let frameId;
+    const nowGetter = () =>
+      typeof performance !== 'undefined' && performance.now
+        ? performance.now()
+        : Date.now();
+    const raf =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb) => setTimeout(() => cb(nowGetter()), 16);
+    const caf =
+      typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout;
+    const animate = (now) => {
+      setDamageFlashNow(now);
+      const duration = DAMAGE_ANIMATION_MS;
+      const expiredIds = [];
+      let hasActive = false;
+
+      damageFlashTimesRef.current.forEach((start, tokenId) => {
+        const elapsed = now - start;
+        if (elapsed < duration) {
+          hasActive = true;
+        } else {
+          expiredIds.push(tokenId);
+        }
+      });
+
+      if (expiredIds.length > 0) {
+        setDamageFlashTimes((prev) => {
+          if (prev.size === 0) return prev;
+          const next = new Map(prev);
+          let changed = false;
+          expiredIds.forEach((id) => {
+            if (next.delete(id)) {
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
+
+      if (hasActive) {
+        frameId = raf(animate);
+      } else {
+        frameId = undefined;
+      }
+    };
+
+    frameId = raf(animate);
+
+    return () => {
+      if (frameId) {
+        caf(frameId);
+      }
+    };
+  }, [damageFlashCount]);
+
+  const damageFlashIntensities = useMemo(() => {
+    if (damageFlashTimes.size === 0) return new Map();
+    const duration = DAMAGE_ANIMATION_MS;
+    const now = damageFlashNow;
+    const result = new Map();
+    damageFlashTimes.forEach((start, tokenId) => {
+      const elapsed = now - start;
+      if (elapsed < duration) {
+        const progress = Math.min(Math.max(elapsed / duration, 0), 1);
+        result.set(tokenId, 1 - progress);
+      }
+    });
+    return result;
+  }, [damageFlashNow, damageFlashTimes]);
   const [dragShadow, setDragShadow] = useState(null);
   const [pendingTokenPositions, setPendingTokenPositions] = useState({});
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
@@ -3564,53 +3660,17 @@ const MapCanvas = ({
     []
   );
 
-  const damageTweensRef = useRef(new Map());
-
   const highlightTokenDamage = useCallback((tokenId) => {
     if (!tokenId) return;
     const current = tokensRef.current;
     if (!current.find((t) => t.id === tokenId)) return;
-    const startOpacity = 0.5;
-    const duration = DAMAGE_ANIMATION_MS;
-
-    const tokenRef = tokenRefs.current[tokenId];
-    const shapeNode = tokenRef?.shapeNode;
-    if (!shapeNode) return;
-
-    if (damageTweensRef.current.has(tokenId)) {
-      damageTweensRef.current.get(tokenId).destroy();
-    }
-
-    setDamageEffects((prev) => {
-      const map = new Map(prev);
-      map.set(tokenId, startOpacity);
-      return map;
+    const timestamp = getTimestamp();
+    setDamageFlashTimes((prev) => {
+      const next = new Map(prev);
+      next.set(tokenId, timestamp);
+      return next;
     });
-
-    shapeNode.alpha(startOpacity);
-    const tween = new Konva.Tween({
-      node: shapeNode,
-      duration: duration / 1000,
-      alpha: 0,
-      onFinish: () => {
-        setDamageEffects((prev) => {
-          const map = new Map(prev);
-          map.delete(tokenId);
-          return map;
-        });
-        damageTweensRef.current.delete(tokenId);
-        tween.destroy();
-      },
-    });
-
-    damageTweensRef.current.set(tokenId, tween);
-    tween.play();
-  }, []);
-
-  useEffect(() => () => {
-    damageTweensRef.current.forEach((tween) => tween.destroy());
-    damageTweensRef.current.clear();
-  }, []);
+  }, [getTimestamp]);
 
   // Listener de Firebase para eventos de daño
   useEffect(() => {
@@ -6006,6 +6066,7 @@ const MapCanvas = ({
                   opacity={0.35}
                   tintColor={dragShadow.tintColor}
                   tintOpacity={dragShadow.tintOpacity}
+                  damageFlashIntensity={0}
                   showSpinner={false}
                   showAura={false}
                   auraRadius={dragShadow.auraRadius}
@@ -6045,7 +6106,8 @@ const MapCanvas = ({
                     showName={token.showName}
                     opacity={(token.opacity ?? 1) * (token.crossLayerOpacity ?? 1) * getTokenOpacity(token)}
                     tintColor={token.tintColor}
-                    tintOpacity={damageEffects.get(token.id) ?? token.tintOpacity}
+                    tintOpacity={token.tintOpacity}
+                    damageFlashIntensity={damageFlashIntensities.get(token.id) ?? 0}
                     showAura={false}
                     tokenSheetId={token.tokenSheetId}
                     auraRadius={token.auraRadius}
