@@ -1146,14 +1146,28 @@ const Token = forwardRef(
             )}
           </>
         )}
-        {damageFlashIntensity > 0 && (
-          <Rect
-            {...geometry}
-            listening={false}
-            fill={hexToRgba('#ff0000', damageFlashIntensity)}
-            globalCompositeOperation="screen"
-          />
-        )}
+        {damageFlashIntensity > 0 &&
+          (img && !isImgLoading ? (
+            <KonvaImage
+              {...geometry}
+              image={img}
+              listening={false}
+              opacity={damageFlashIntensity}
+              globalCompositeOperation="screen"
+              filters={[Konva.Filters.RGBA]}
+              red={255}
+              green={0}
+              blue={0}
+              alpha={1}
+            />
+          ) : (
+            <Rect
+              {...geometry}
+              listening={false}
+              fill={hexToRgba('#ff0000', damageFlashIntensity)}
+              globalCompositeOperation="screen"
+            />
+          ))}
         {roleOutline && <Rect {...outline} {...roleOutline} />}
         {selected && <Rect {...outline} />}
         {estadosInfo.length > 0 && (
