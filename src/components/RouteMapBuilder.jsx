@@ -259,36 +259,65 @@ const lucideTextureCache = new Map();
 const getLucideTexture = (IconComponent, color) => {
   const normalizedColor = normalizeHex(color) || '#f8fafc';
   const key = `${IconComponent.displayName || IconComponent.name || 'icon'}-${normalizedColor}`;
-  let texture = lucideTextureCache.get(key);
+  const cached = lucideTextureCache.get(key);
 
-  if (!texture || texture.destroyed || texture.baseTexture.destroyed || !texture.valid) {
-    const svgMarkup = renderToStaticMarkup(
-      <IconComponent color={normalizedColor} size={64} strokeWidth={2.4} absoluteStrokeWidth />
-    );
-    const svgWithNs = ensureSvgNamespace(svgMarkup);
-    const encoded = encodeSvgDataUri(svgWithNs);
-    texture = Texture.from(encoded, {
-      resourceOptions: {
-        width: 64,
-        height: 64,
-      },
-    });
-    const applySize = () => {
-      if (typeof texture.baseTexture.setSize === 'function') {
-        texture.baseTexture.setSize(64, 64);
-      } else if (typeof texture.baseTexture.resize === 'function') {
-        texture.baseTexture.resize(64, 64);
-      }
-    };
-    if (!texture.baseTexture.valid) {
-      texture.baseTexture.once('loaded', applySize);
-    } else {
-      applySize();
+  if (cached instanceof Texture) {
+    if (!cached.destroyed && cached.valid) {
+      return cached;
     }
-    lucideTextureCache.set(key, texture);
+    lucideTextureCache.delete(key);
+  } else if (cached && typeof cached.then === 'function') {
+    return cached;
   }
 
-  return texture;
+  const svgMarkup = renderToStaticMarkup(
+    <IconComponent color={normalizedColor} size={64} strokeWidth={2.4} absoluteStrokeWidth />
+  );
+  const svgWithNs = ensureSvgNamespace(svgMarkup);
+  const encoded = encodeSvgDataUri(svgWithNs);
+
+  if (typeof Image === 'undefined') {
+    return Texture.WHITE;
+  }
+
+  const image = new Image();
+  image.decoding = 'async';
+  image.width = 64;
+  image.height = 64;
+
+  const texturePromise = new Promise((resolve, reject) => {
+    const cleanup = () => {
+      image.onload = null;
+      image.onerror = null;
+    };
+
+    image.onload = () => {
+      try {
+        const texture = Texture.from({ resource: image, label: key });
+        if (texture?.source && typeof texture.source.resize === 'function') {
+          texture.source.resize(64, 64);
+        }
+        lucideTextureCache.set(key, texture);
+        cleanup();
+        resolve(texture);
+      } catch (error) {
+        lucideTextureCache.delete(key);
+        cleanup();
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      lucideTextureCache.delete(key);
+      cleanup();
+      reject(new Error(`No se pudo cargar la textura del icono ${key}`));
+    };
+  });
+
+  lucideTextureCache.set(key, texturePromise);
+  image.src = encoded;
+
+  return texturePromise;
 };
 
 const fallbackHex = (...values) => {
@@ -317,8 +346,9 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   ring.drawCircle(0, 0, 15);
   container.addChild(ring);
 
-  const sprite = new Sprite(getLucideTexture(IconComponent, resolvedIconColor));
+  const sprite = new Sprite(Texture.WHITE);
   sprite.anchor.set(0.5);
+  sprite.alpha = 0;
   const targetSize = 36;
   const applyTargetSize = () => {
     if (typeof sprite.setSize === 'function') {
@@ -328,11 +358,35 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
       sprite.height = targetSize;
     }
   };
-  if (sprite.texture.valid) {
-    applyTargetSize();
-  } else {
-    sprite.texture.once('update', applyTargetSize);
+
+  const applyTexture = (texture) => {
+    if (!texture || sprite.destroyed) return;
+    sprite.texture = texture;
+    sprite.alpha = 1;
+    if (texture.valid) {
+      applyTargetSize();
+    } else {
+      texture.once('update', applyTargetSize);
+    }
+  };
+
+  const textureResult = getLucideTexture(IconComponent, resolvedIconColor);
+
+  if (textureResult instanceof Texture) {
+    applyTexture(textureResult);
+  } else if (textureResult && typeof textureResult.then === 'function') {
+    textureResult
+      .then(applyTexture)
+      .catch((error) => {
+        console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
+        if (!sprite.destroyed) {
+          sprite.texture = Texture.WHITE;
+          sprite.alpha = 1;
+          applyTargetSize();
+        }
+      });
   }
+
   container.addChild(sprite);
 
   return container;
