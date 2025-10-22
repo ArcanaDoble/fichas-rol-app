@@ -1,17 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import {
-  Application,
-  BLEND_MODES,
-  Container,
-  Graphics,
-  MIPMAP_MODES,
-  Point,
-  SCALE_MODES,
-  Sprite,
-  Text,
-  Texture,
-} from 'pixi.js';
+import { Application, Container, Graphics, Point, Sprite, Text, Texture } from 'pixi.js';
+import { BLEND_MODES, MIPMAP_MODES, SCALE_MODES } from '@pixi/constants';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
 import {
