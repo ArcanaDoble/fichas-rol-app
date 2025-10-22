@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Application, Container, Graphics, Point, Sprite, Text, Texture } from 'pixi.js';
+import {
+  Application,
+  BLEND_MODES,
+  Container,
+  Graphics,
+  MIPMAP_MODES,
+  Point,
+  SCALE_MODES,
+  Sprite,
+  Text,
+  Texture,
+} from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
 import {
@@ -256,6 +267,9 @@ const encodeSvgDataUri = (svgString) =>
 
 const lucideTextureCache = new Map();
 
+const LUCIDE_TEXTURE_SIZE = 96;
+const LUCIDE_TEXTURE_RESOLUTION = 2;
+
 const getLucideTexture = (IconComponent, color) => {
   const normalizedColor = normalizeHex(color) || '#f8fafc';
   const key = `${IconComponent.displayName || IconComponent.name || 'icon'}-${normalizedColor}`;
@@ -271,7 +285,12 @@ const getLucideTexture = (IconComponent, color) => {
   }
 
   const svgMarkup = renderToStaticMarkup(
-    <IconComponent color={normalizedColor} size={64} strokeWidth={2.4} absoluteStrokeWidth />
+    <IconComponent
+      color={normalizedColor}
+      size={LUCIDE_TEXTURE_SIZE}
+      strokeWidth={2.4}
+      absoluteStrokeWidth
+    />
   );
   const svgWithNs = ensureSvgNamespace(svgMarkup);
   const encoded = encodeSvgDataUri(svgWithNs);
@@ -282,8 +301,8 @@ const getLucideTexture = (IconComponent, color) => {
 
   const image = new Image();
   image.decoding = 'async';
-  image.width = 64;
-  image.height = 64;
+  image.width = LUCIDE_TEXTURE_SIZE;
+  image.height = LUCIDE_TEXTURE_SIZE;
 
   const texturePromise = new Promise((resolve, reject) => {
     const cleanup = () => {
@@ -293,9 +312,20 @@ const getLucideTexture = (IconComponent, color) => {
 
     image.onload = () => {
       try {
-        const texture = Texture.from({ resource: image, label: key });
+        const texture = Texture.from({
+          resource: image,
+          label: key,
+          resolution: LUCIDE_TEXTURE_RESOLUTION,
+          scaleMode: SCALE_MODES.LINEAR,
+          mipmap: MIPMAP_MODES.ON,
+        });
+        if (texture?.baseTexture) {
+          texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+          texture.baseTexture.mipmap = MIPMAP_MODES.ON;
+          texture.baseTexture.anisotropicLevel = 8;
+        }
         if (texture?.source && typeof texture.source.resize === 'function') {
-          texture.source.resize(64, 64);
+          texture.source.resize(LUCIDE_TEXTURE_SIZE, LUCIDE_TEXTURE_SIZE);
         }
         lucideTextureCache.set(key, texture);
         cleanup();
@@ -332,19 +362,74 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   const container = new Container();
   const accentBase = fallbackHex(accentColor, borderColor, iconColor, '#38bdf8');
   const auraColor = lightenHex(accentBase, 0.18) || accentBase;
+  const auraSoftColor = lightenHex(accentBase, 0.4) || auraColor;
   const ringColor = lightenHex(accentBase, 0.05) || accentBase;
+  const ringShadowColor = darkenHex(accentBase, 0.35) || accentBase;
   const resolvedIconColor = fallbackHex(iconColor, '#e2e8f0');
 
-  const aura = new Graphics();
-  aura.beginFill(hexToInt(auraColor), 0.22);
-  aura.drawCircle(0, 0, 18);
-  aura.endFill();
-  container.addChild(aura);
+  const outerGlow = new Sprite(Texture.WHITE);
+  outerGlow.anchor.set(0.5);
+  outerGlow.tint = hexToInt(auraSoftColor);
+  outerGlow.alpha = 0.38;
+  outerGlow.width = 82;
+  outerGlow.height = 82;
+  outerGlow.blendMode = BLEND_MODES.ADD;
+  container.addChild(outerGlow);
+
+  const innerGlow = new Sprite(Texture.WHITE);
+  innerGlow.anchor.set(0.5);
+  innerGlow.tint = hexToInt(auraColor);
+  innerGlow.alpha = 0.42;
+  innerGlow.width = 64;
+  innerGlow.height = 64;
+  innerGlow.blendMode = BLEND_MODES.SCREEN;
+  container.addChild(innerGlow);
+
+  const basePlate = new Graphics();
+  basePlate.beginFill(hexToInt(darkenHex(accentBase, 0.55)), 0.95);
+  basePlate.drawCircle(0, 0, 20);
+  basePlate.endFill();
+  basePlate.blendMode = BLEND_MODES.MULTIPLY;
+  container.addChild(basePlate);
+
+  const baseHighlight = new Graphics();
+  baseHighlight.beginFill(hexToInt(lightenHex(accentBase, 0.25)), 0.75);
+  baseHighlight.drawCircle(-2, -3, 16);
+  baseHighlight.endFill();
+  baseHighlight.alpha = 0.9;
+  baseHighlight.blendMode = BLEND_MODES.SCREEN;
+  container.addChild(baseHighlight);
+
+  const coreShadow = new Graphics();
+  coreShadow.beginFill(hexToInt(darkenHex(accentBase, 0.75)), 0.45);
+  coreShadow.drawCircle(3, 4, 11);
+  coreShadow.endFill();
+  coreShadow.blendMode = BLEND_MODES.MULTIPLY;
+  container.addChild(coreShadow);
+
+  const ringShadow = new Graphics();
+  ringShadow.lineStyle({ width: 4, color: hexToInt(ringShadowColor), alpha: 0.45 });
+  ringShadow.drawCircle(1.5, 1.5, 15);
+  ringShadow.blendMode = BLEND_MODES.MULTIPLY;
+  container.addChild(ringShadow);
 
   const ring = new Graphics();
-  ring.lineStyle(2.2, hexToInt(ringColor), 0.8);
+  ring.lineStyle({ width: 4, color: hexToInt(ringColor), alpha: 0.9 });
   ring.drawCircle(0, 0, 15);
   container.addChild(ring);
+
+  const innerSheen = new Graphics();
+  innerSheen.beginFill(hexToInt(lightenHex(resolvedIconColor, 0.3)), 0.2);
+  innerSheen.drawCircle(-4, -5, 11);
+  innerSheen.endFill();
+  innerSheen.blendMode = BLEND_MODES.SCREEN;
+  container.addChild(innerSheen);
+
+  const focalRing = new Graphics();
+  focalRing.lineStyle({ width: 2, color: hexToInt(lightenHex(resolvedIconColor, 0.4)), alpha: 0.6 });
+  focalRing.drawCircle(0, 0, 9);
+  focalRing.blendMode = BLEND_MODES.SCREEN;
+  container.addChild(focalRing);
 
   const sprite = new Sprite(Texture.WHITE);
   sprite.anchor.set(0.5);
