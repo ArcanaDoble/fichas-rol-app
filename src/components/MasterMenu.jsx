@@ -57,6 +57,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: true,
     },
     {
+      id: 'routeMap',
+      title: 'Mapa de Rutas (Roguelike)',
+      description: 'Define rutas ramificadas con nodos, estados y conexiones dinámicas',
+      color: 'blue',
+      features: ['Pixi', 'Pan & Zoom', 'Desbloqueos', 'Guardado'],
+      isNew: true,
+    },
+    {
       id: 'default',
       title: 'Herramientas Tradicionales',
       description: 'Gestión de catálogo, habilidades y glosario',
