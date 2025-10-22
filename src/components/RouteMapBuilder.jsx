@@ -7,21 +7,52 @@ import Boton from './Boton';
 import Input from './Input';
 
 const NODE_TYPES = [
-  { id: 'start', label: 'Inicio', color: '#38bdf8', icon: '🚩' },
-  { id: 'normal', label: 'Normal', color: '#64748b', icon: '⚔️' },
-  { id: 'event', label: 'Evento', color: '#facc15', icon: '✨' },
-  { id: 'shop', label: 'Tienda', color: '#f97316', icon: '🛒' },
-  { id: 'elite', label: 'Elite', color: '#fb7185', icon: '👑' },
-  { id: 'heal', label: 'Curación', color: '#34d399', icon: '➕' },
-  { id: 'boss', label: 'Jefe', color: '#a855f7', icon: '🐉' },
+  { id: 'start', label: 'Inicio', color: '#38bdf8', icon: '⭑' },
+  { id: 'normal', label: 'Normal', color: '#a855f7', icon: '⚔' },
+  { id: 'event', label: 'Evento', color: '#fbbf24', icon: '☄' },
+  { id: 'shop', label: 'Tienda', color: '#f97316', icon: '◆' },
+  { id: 'elite', label: 'Elite', color: '#fb7185', icon: '✦' },
+  { id: 'heal', label: 'Curación', color: '#34d399', icon: '✚' },
+  { id: 'boss', label: 'Jefe', color: '#f59e0b', icon: '✹' },
 ];
 
 const NODE_STATES = {
-  locked: { label: 'Bloqueado', stroke: '#475569', fillAlpha: 0.3 },
-  visible: { label: 'Visible', stroke: '#64748b', fillAlpha: 0.45 },
-  unlocked: { label: 'Desbloqueado', stroke: '#f1f5f9', fillAlpha: 0.85 },
-  completed: { label: 'Completado', stroke: '#22c55e', fillAlpha: 0.95 },
-  current: { label: 'Actual', stroke: '#38bdf8', fillAlpha: 0.95 },
+  locked: {
+    label: 'Bloqueado',
+    stroke: '#1f2937',
+    fillAlpha: 0.45,
+    aura: '#1f2937',
+    badge: '🔒',
+    badgeColor: '#f8fafc',
+  },
+  visible: {
+    label: 'Visible',
+    stroke: '#334155',
+    fillAlpha: 0.55,
+    aura: '#475569',
+    badge: '🔒',
+    badgeColor: '#fbbf24',
+  },
+  unlocked: {
+    label: 'Desbloqueado',
+    stroke: '#38bdf8',
+    fillAlpha: 0.85,
+    aura: '#0ea5e9',
+  },
+  completed: {
+    label: 'Completado',
+    stroke: '#facc15',
+    fillAlpha: 0.95,
+    aura: '#fbbf24',
+    badge: '✔',
+    badgeColor: '#facc15',
+  },
+  current: {
+    label: 'Actual',
+    stroke: '#22d3ee',
+    fillAlpha: 0.95,
+    aura: '#38bdf8',
+  },
 };
 
 const TOOLBAR_ACTIONS = [
@@ -33,6 +64,23 @@ const TOOLBAR_ACTIONS = [
 ];
 
 const GRID_SIZES = [20, 32, 40, 48, 64];
+
+const hexToInt = (hex) => parseInt(hex.replace('#', ''), 16);
+
+const drawDottedQuadratic = (graphics, from, control, to, { color, size = 4, spacing = 18 }) => {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(12, Math.floor(distance / spacing) * 4);
+  graphics.beginFill(color, 0.9);
+  for (let i = 0; i <= steps; i += 1) {
+    if (i % 2 !== 0) continue;
+    const t = i / steps;
+    const inv = 1 - t;
+    const x = inv * inv * from.x + 2 * inv * t * control.x + t * t * to.x;
+    const y = inv * inv * from.y + 2 * inv * t * control.y + t * t * to.y;
+    graphics.drawCircle(x, y, size);
+  }
+  graphics.endFill();
+};
 
 const cloneState = (nodes, edges) => ({
   nodes: nodes.map((node) => ({ ...node })),
@@ -731,19 +779,30 @@ const RouteMapBuilder = ({ onBack }) => {
       const from = nodesMap.get(edge.from);
       const to = nodesMap.get(edge.to);
       if (!from || !to) return;
-      const path = new Graphics();
-      const selected = selectedEdgeIds.includes(edge.id);
-      const color = selected ? 0xf97316 : 0x94a3b8;
-      path.lineStyle(4, color, 0.9);
       const control = {
         x: (from.x + to.x) / 2,
         y: Math.min(from.y, to.y) - Math.abs(from.x - to.x) * 0.2,
       };
-      path.moveTo(from.x, from.y);
-      path.quadraticCurveTo(control.x, control.y, to.x, to.y);
+      const selected = selectedEdgeIds.includes(edge.id);
+      const color = selected ? 0xfbbf24 : 0x5f6b8d;
+      const path = new Graphics();
+      drawDottedQuadratic(path, from, control, to, {
+        color,
+        size: selected ? 5 : 4,
+        spacing: 18,
+      });
       path.edgeId = edge.id;
       path.eventMode = 'static';
       path.cursor = 'pointer';
+      path.hitArea = {
+        contains: (x, y) => {
+          const minX = Math.min(from.x, to.x, control.x) - 24;
+          const maxX = Math.max(from.x, to.x, control.x) + 24;
+          const minY = Math.min(from.y, to.y, control.y) - 24;
+          const maxY = Math.max(from.y, to.y, control.y) + 24;
+          return x >= minX && x <= maxX && y >= minY && y <= maxY;
+        },
+      };
       path.on('pointertap', (event) => {
         event.stopPropagation();
         if (event.detail >= 2) {
@@ -767,7 +826,7 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesLayer.addChild(path);
 
       const arrow = new Graphics();
-      const arrowSize = 16;
+      const arrowSize = selected ? 18 : 16;
       const dx = to.x - control.x;
       const dy = to.y - control.y;
       const angle = Math.atan2(dy, dx);
@@ -782,19 +841,33 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesLayer.addChild(arrow);
 
       if (edge.label) {
-        const text = new Text({
+        const labelText = new Text({
           text: edge.label,
           style: {
-            fill: selected ? '#f97316' : '#e2e8f0',
+            fill: selected ? '#fbbf24' : '#e2e8f0',
             fontFamily: 'Inter, sans-serif',
-            fontSize: 14,
+            fontSize: 13,
+            letterSpacing: 1,
           },
         });
-        text.anchor.set(0.5);
-        text.position.set((from.x + to.x) / 2, (from.y + to.y) / 2);
-        text.eventMode = 'static';
-        text.cursor = 'text';
-        text.on('pointertap', (event) => {
+        labelText.anchor.set(0.5);
+        const labelContainer = new Container();
+        const paddingX = 12;
+        const paddingY = 6;
+        const background = new Graphics();
+        const width = labelText.width + paddingX * 2;
+        const height = labelText.height + paddingY * 2;
+        background.beginFill(0x0b1220, 0.85);
+        background.lineStyle(1, color, 0.6);
+        background.drawRoundedRect(-width / 2, -height / 2, width, height, height / 2);
+        background.endFill();
+        labelContainer.addChild(background);
+        labelContainer.addChild(labelText);
+        labelText.position.set(0, 0);
+        labelContainer.position.set((from.x + to.x) / 2, (from.y + to.y) / 2 - 20);
+        labelContainer.eventMode = 'static';
+        labelContainer.cursor = 'text';
+        labelContainer.on('pointertap', (event) => {
           event.stopPropagation();
           if (event.detail >= 2) {
             setEdgeEditor(edge);
@@ -803,34 +876,123 @@ const RouteMapBuilder = ({ onBack }) => {
             setSelectedNodeIds([]);
           }
         });
-        edgesLayer.addChild(text);
+        edgesLayer.addChild(labelContainer);
       }
     });
 
     state.nodes.forEach((node) => {
-      const nodeGraphic = new Graphics();
+      const nodeContainer = new Container();
       const typeDef = NODE_TYPES.find((item) => item.id === node.type) || NODE_TYPES[1];
       const stateDef = NODE_STATES[node.state] || NODE_STATES.locked;
       const selected = selectedNodeIds.includes(node.id);
-      const baseColor = parseInt(typeDef.color.replace('#', ''), 16);
-      const strokeColor = parseInt(stateDef.stroke.replace('#', ''), 16);
-      const radius = 34;
-      nodeGraphic.beginFill(baseColor, stateDef.fillAlpha);
-      nodeGraphic.lineStyle(selected ? 6 : 4, strokeColor, 1);
-      nodeGraphic.drawCircle(0, 0, radius);
-      nodeGraphic.endFill();
+      const accentColor = hexToInt(typeDef.color);
+      const strokeColor = hexToInt(stateDef.stroke);
+      const auraColor = stateDef.aura ? hexToInt(stateDef.aura) : null;
+      const radius = 36;
+
+      if (auraColor) {
+        const aura = new Graphics();
+        aura.beginFill(auraColor, selected ? 0.25 : 0.18);
+        aura.drawCircle(0, 0, radius + 16);
+        aura.endFill();
+        nodeContainer.addChild(aura);
+      }
+
+      if (selected) {
+        const selectionAura = new Graphics();
+        selectionAura.beginFill(accentColor, 0.12);
+        selectionAura.drawCircle(0, 0, radius + 22);
+        selectionAura.endFill();
+        nodeContainer.addChild(selectionAura);
+      }
+
+      const base = new Graphics();
+      base.beginFill(0x070d1a, 0.96);
+      base.drawCircle(0, 0, radius);
+      base.endFill();
+      nodeContainer.addChild(base);
+
+      const innerGlow = new Graphics();
+      innerGlow.lineStyle(2, accentColor, 0.4);
+      innerGlow.drawCircle(0, 0, radius - 6);
+      innerGlow.endFill();
+      nodeContainer.addChild(innerGlow);
+
+      const innerFill = new Graphics();
+      innerFill.beginFill(accentColor, 0.18);
+      innerFill.drawCircle(0, 0, radius - 10);
+      innerFill.endFill();
+      nodeContainer.addChild(innerFill);
+
+      const innerCore = new Graphics();
+      innerCore.beginFill(0x0f172a, stateDef.fillAlpha ?? 0.85);
+      innerCore.drawCircle(0, 0, radius - 16);
+      innerCore.endFill();
+      nodeContainer.addChild(innerCore);
+
+      const outerRing = new Graphics();
+      outerRing.lineStyle(selected ? 6 : 4, strokeColor, selected ? 1 : 0.9);
+      outerRing.drawCircle(0, 0, radius + (selected ? 1 : 0));
+      outerRing.endFill();
+      nodeContainer.addChild(outerRing);
+
+      const accentRing = new Graphics();
+      accentRing.lineStyle(3, accentColor, 0.8);
+      accentRing.drawCircle(0, 0, radius - 12);
+      accentRing.endFill();
+      nodeContainer.addChild(accentRing);
+
       if (node.state === 'current') {
         const halo = new Graphics();
-        halo.lineStyle(3, 0x38bdf8, 0.8);
-        halo.drawCircle(0, 0, radius + 8);
+        halo.lineStyle(4, accentColor, 0.55);
+        halo.drawCircle(0, 0, radius + 12);
         halo.endFill();
-        nodeGraphic.addChild(halo);
+        nodeContainer.addChild(halo);
       }
-      nodeGraphic.position.set(node.x, node.y);
-      nodeGraphic.nodeId = node.id;
-      nodeGraphic.eventMode = 'static';
-      nodeGraphic.cursor = activeTool === 'connect' ? 'crosshair' : 'pointer';
-      nodeGraphic.on('pointerdown', (event) => {
+
+      const showStateBadge = stateDef.badge && (node.state === 'locked' || node.state === 'visible');
+      const mainSymbol = showStateBadge ? stateDef.badge : typeDef.icon;
+      const symbolColor = showStateBadge ? stateDef.badgeColor || '#f8fafc' : '#f8fafc';
+      const iconText = new Text({
+        text: mainSymbol,
+        style: {
+          fill: symbolColor,
+          fontFamily: 'Inter, sans-serif',
+          fontSize: showStateBadge ? 26 : 24,
+          fontWeight: 600,
+          dropShadow: true,
+          dropShadowColor: '#020617',
+          dropShadowAlpha: 0.6,
+          dropShadowBlur: 6,
+          dropShadowDistance: 0,
+        },
+      });
+      iconText.anchor.set(0.5);
+      nodeContainer.addChild(iconText);
+
+      if (node.state === 'completed') {
+        const badgeContainer = new Container();
+        const badgeBg = new Graphics();
+        badgeBg.beginFill(0x0f172a, 0.95);
+        badgeBg.lineStyle(2, hexToInt('#facc15'), 0.9);
+        badgeBg.drawCircle(0, 0, 12);
+        badgeBg.endFill();
+        badgeContainer.addChild(badgeBg);
+        const badgeText = new Text({
+          text: '✔',
+          style: { fontSize: 14, fill: '#facc15', fontFamily: 'Inter, sans-serif', fontWeight: 600 },
+        });
+        badgeText.anchor.set(0.5);
+        badgeContainer.addChild(badgeText);
+        badgeContainer.position.set(radius - 8, -radius + 8);
+        nodeContainer.addChild(badgeContainer);
+      }
+
+      nodeContainer.position.set(node.x, node.y);
+      nodeContainer.nodeId = node.id;
+      nodeContainer.eventMode = 'static';
+      nodeContainer.cursor = activeTool === 'connect' ? 'crosshair' : 'pointer';
+      nodeContainer.on('pointerdown', (event) => {
         event.stopPropagation();
         const button = event.data?.originalEvent?.button;
         const isLeftButton = button === undefined || button === 0;
@@ -915,50 +1077,48 @@ const RouteMapBuilder = ({ onBack }) => {
           committed: false,
         };
       });
-      nodeGraphic.on('pointerup', (event) => {
+      nodeContainer.on('pointerup', (event) => {
         event.stopPropagation();
         handleViewportDragEnd();
       });
-      nodeGraphic.on('pointerupoutside', () => {
+      nodeContainer.on('pointerupoutside', () => {
         handleViewportDragEnd();
       });
-      nodeGraphic.on('pointertap', (event) => {
+      nodeContainer.on('pointertap', (event) => {
         if (event.detail >= 2) {
           setNodeEditor(node);
         }
       });
-      const iconText = new Text({
-        text: typeDef.icon,
-        style: {
-          fontSize: 26,
-        },
-      });
-      iconText.anchor.set(0.5);
-      nodeGraphic.addChild(iconText);
-      if (node.state === 'completed') {
-        const check = new Text({
-          text: '✔',
-          style: { fontSize: 16, fill: '#22c55e' },
-        });
-        check.anchor.set(1, 1);
-        check.position.set(radius, radius);
-        nodeGraphic.addChild(check);
-      }
-      nodesLayer.addChild(nodeGraphic);
+      nodesLayer.addChild(nodeContainer);
 
-      const label = new Text({
+      const labelText = new Text({
         text: node.name,
         style: {
           fill: '#e2e8f0',
-          fontSize: 12,
+          fontSize: 13,
           fontFamily: 'Inter, sans-serif',
+          fontWeight: 500,
+          letterSpacing: 0.6,
         },
       });
-      label.anchor.set(0.5, -0.3);
-      label.position.set(node.x, node.y);
-      label.eventMode = 'static';
-      label.cursor = 'text';
-      label.on('pointertap', (event) => {
+      labelText.anchor.set(0.5);
+      const labelContainer = new Container();
+      const paddingX = 14;
+      const paddingY = 6;
+      const labelBackground = new Graphics();
+      const labelWidth = labelText.width + paddingX * 2;
+      const labelHeight = labelText.height + paddingY * 2;
+      labelBackground.beginFill(0x0b1220, 0.9);
+      labelBackground.lineStyle(1, strokeColor, 0.6);
+      labelBackground.drawRoundedRect(-labelWidth / 2, -labelHeight / 2, labelWidth, labelHeight, labelHeight / 2);
+      labelBackground.endFill();
+      labelContainer.addChild(labelBackground);
+      labelContainer.addChild(labelText);
+      labelText.position.set(0, 0);
+      labelContainer.position.set(node.x, node.y + radius + 28);
+      labelContainer.eventMode = 'static';
+      labelContainer.cursor = 'text';
+      labelContainer.on('pointertap', (event) => {
         event.stopPropagation();
         if (event.detail >= 2) {
           setNodeEditor(node);
@@ -966,7 +1126,7 @@ const RouteMapBuilder = ({ onBack }) => {
           setSelectedNodeIds([node.id]);
         }
       });
-      nodesLayer.addChild(label);
+      nodesLayer.addChild(labelContainer);
     });
     return () => {
       viewport.off('pointermove', handleViewportDragMove);
@@ -1013,21 +1173,24 @@ const RouteMapBuilder = ({ onBack }) => {
   }, [activeTool]);
 
   return (
-    <div className="w-full h-screen flex bg-slate-950 text-slate-100">
-      <div className="w-72 border-r border-slate-800 bg-slate-900/80 backdrop-blur flex flex-col">
-        <div className="p-4 border-b border-slate-800">
-          <h2 className="text-lg font-semibold mb-2">Mapa de Rutas</h2>
-          <p className="text-xs text-slate-400">
-            Diseña encuentros roguelike conectando nodos y controlando el flujo de tu campaña.
+    <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
+      <div className="w-80 border-r border-slate-900/70 bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/95 backdrop-blur-xl flex flex-col shadow-[inset_-1px_0_0_rgba(56,189,248,0.25)]">
+        <div className="p-6 border-b border-slate-900/60 bg-slate-950/60">
+          <h2 className="text-xl font-semibold tracking-wide text-sky-200">Mapa de rutas</h2>
+          <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+            Diseña recorridos roguelike enlazando nodos, tiendas y jefes con el pulido de un tablero arcano.
           </p>
-          <Boton className="mt-4 w-full" onClick={onBack}>
+          <Boton
+            className="mt-4 w-full border border-sky-500/40 bg-none bg-slate-900/70 text-slate-200 hover:border-sky-400/70 hover:bg-slate-900"
+            onClick={onBack}
+          >
             ← Volver al menú
           </Boton>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-6">
-          <section>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Herramientas</h3>
-            <div className="space-y-2">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Herramientas</h3>
+            <div className="mt-3 space-y-2">
               {TOOLBAR_ACTIONS.map((action) => (
                 <button
                   key={action.id}
@@ -1036,26 +1199,26 @@ const RouteMapBuilder = ({ onBack }) => {
                     setActiveTool(action.id);
                     setConnectOriginId(null);
                   }}
-                  className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                  className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition ${
                     activeTool === action.id
-                      ? 'border-sky-400/60 bg-sky-500/10 text-sky-200'
-                      : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                      ? 'border-sky-400/80 bg-sky-500/15 text-sky-200 shadow-[0_0_22px_rgba(56,189,248,0.35)]'
+                      : 'border-slate-800/80 bg-slate-900/80 hover:border-slate-600/70 hover:bg-slate-800/70'
                   }`}
                 >
-                  <span className="text-base">{action.icon}</span>
+                  <span className="text-lg opacity-90">{action.icon}</span>
                   <span>{action.label}</span>
                 </button>
               ))}
             </div>
           </section>
-          <section>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Creación</h3>
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Creación</h3>
             <label className="flex flex-col gap-2 text-sm">
               <span className="text-slate-400">Tipo de nodo</span>
               <select
                 value={nodeTypeToCreate}
                 onChange={(event) => setNodeTypeToCreate(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
               >
                 {NODE_TYPES.map((type) => (
                   <option key={type.id} value={type.id}>
@@ -1065,30 +1228,38 @@ const RouteMapBuilder = ({ onBack }) => {
               </select>
             </label>
           </section>
-          <section className="grid grid-cols-2 gap-2 text-sm">
-            <Boton onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700">
-              ↩️ Deshacer
-            </Boton>
-            <Boton onClick={handleRedo} className="bg-slate-800 hover:bg-slate-700">
-              ↪️ Rehacer
-            </Boton>
-            <Boton onClick={duplicateSelection} className="bg-slate-800 hover:bg-slate-700">
-              ⎘ Duplicar
-            </Boton>
-            <Boton onClick={deleteSelection} className="bg-slate-800 hover:bg-slate-700">
-              Supr
-            </Boton>
-            <Boton onClick={toggleNodeLock} className="bg-slate-800 hover:bg-slate-700 col-span-2">
-              🔒 Bloquear / Desbloquear
-            </Boton>
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Acciones rápidas</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <Boton onClick={handleUndo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
+                ↩️ Deshacer
+              </Boton>
+              <Boton onClick={handleRedo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
+                ↪️ Rehacer
+              </Boton>
+              <Boton onClick={duplicateSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
+                ⎘ Duplicar
+              </Boton>
+              <Boton onClick={deleteSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
+                Supr
+              </Boton>
+              <Boton
+                onClick={toggleNodeLock}
+                className="col-span-2 bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+              >
+                🔒 Bloquear / Desbloquear
+              </Boton>
+            </div>
           </section>
-          <section className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Grid & Layout</h3>
+            <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={snapToGrid}
                   onChange={(event) => setSnapToGrid(event.target.checked)}
+                  className="accent-sky-500"
                 />
                 <span>Snap a grid</span>
               </label>
@@ -1097,6 +1268,7 @@ const RouteMapBuilder = ({ onBack }) => {
                   type="checkbox"
                   checked={showGrid}
                   onChange={(event) => setShowGrid(event.target.checked)}
+                  className="accent-sky-500"
                 />
                 <span>Mostrar grid</span>
               </label>
@@ -1106,7 +1278,7 @@ const RouteMapBuilder = ({ onBack }) => {
               <select
                 value={gridSize}
                 onChange={(event) => setGridSize(Number(event.target.value))}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
               >
                 {GRID_SIZES.map((size) => (
                   <option key={size} value={size}>
@@ -1115,16 +1287,25 @@ const RouteMapBuilder = ({ onBack }) => {
                 ))}
               </select>
             </label>
-            <Boton onClick={applyAutoLayout} className="bg-slate-800 hover:bg-slate-700 w-full">
+            <Boton
+              onClick={applyAutoLayout}
+              className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+            >
               🧭 Auto-layout
             </Boton>
           </section>
-          <section className="space-y-2 text-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Guardar</h3>
-            <Boton onClick={() => saveToLocalStorage(state.nodes, state.edges)} className="bg-slate-800 hover:bg-slate-700 w-full">
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Guardar</h3>
+            <Boton
+              onClick={() => saveToLocalStorage(state.nodes, state.edges)}
+              className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+            >
               💾 Guardar en navegador
             </Boton>
-            <Boton onClick={exportToFile} className="bg-slate-800 hover:bg-slate-700 w-full">
+            <Boton
+              onClick={exportToFile}
+              className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+            >
               📁 Exportar JSON
             </Boton>
             <label className="block w-full text-xs text-slate-400">
@@ -1137,32 +1318,37 @@ const RouteMapBuilder = ({ onBack }) => {
               />
             </label>
           </section>
-          <section className="space-y-2 text-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Fondo</h3>
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Fondo</h3>
             <label className="flex flex-col gap-2">
               <span className="text-slate-400">Color</span>
               <input
                 type="color"
                 value={backgroundColor}
                 onChange={(event) => setBackgroundColor(event.target.value)}
-                className="h-10 w-full rounded"
+                className="h-10 w-full rounded border border-slate-800/70 bg-slate-900/80"
               />
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-slate-400">Imagen (URL)</span>
-              <Input value={backgroundImage} onChange={handleBackgroundInput} placeholder="https://..." />
+              <Input
+                value={backgroundImage}
+                onChange={handleBackgroundInput}
+                placeholder="https://..."
+                className="bg-slate-900/80"
+              />
             </label>
           </section>
-          <section className="space-y-2 text-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Estados</h3>
+          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-2 text-sm">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Estados</h3>
             <div className="space-y-1 text-xs">
               {Object.entries(NODE_STATES).map(([key, value]) => (
-                <div key={key} className="flex items-center gap-2">
+                <div key={key} className="flex items-center gap-3">
                   <span
                     className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: value.stroke }}
                   />
-                  <span className="capitalize">{value.label}</span>
+                  <span className="capitalize text-slate-300">{value.label}</span>
                 </div>
               ))}
             </div>
@@ -1178,15 +1364,15 @@ const RouteMapBuilder = ({ onBack }) => {
           backgroundPosition: 'center',
         }}
       >
-        <div className="absolute left-6 top-4 z-10 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm backdrop-blur">
-          <span className="text-slate-400">Herramienta:</span>
+        <div className="absolute left-6 top-6 z-10 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
+          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
           <span className="font-medium text-sky-200">{currentToolLabel}</span>
           {connectOriginId && activeTool === 'connect' && (
             <span className="text-xs text-amber-300">Selecciona nodo destino…</span>
           )}
         </div>
         {statusMessage && (
-          <div className="absolute right-6 top-4 z-10 rounded-xl bg-emerald-500/20 px-4 py-2 text-sm text-emerald-200 backdrop-blur">
+          <div className="absolute right-6 top-6 z-10 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2 text-sm text-emerald-200 shadow-lg shadow-emerald-900/30 backdrop-blur">
             {statusMessage}
           </div>
         )}
