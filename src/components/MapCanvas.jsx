@@ -711,6 +711,7 @@ const Token = forwardRef(
     const shapeRef = useRef();
     const damageFlashRef = useRef();
     const damageFlashCachedPixelRatioRef = useRef(null);
+    const damageFlashCachedDimensionsRef = useRef({ width: null, height: null });
     const trRef = useRef();
     const rotateRef = useRef();
     const gearRef = useRef();
@@ -827,12 +828,24 @@ const Token = forwardRef(
         MAX_PIXEL_RATIO,
       );
 
+      const renderWidth = width * gridSize;
+      const renderHeight = height * gridSize;
+
       if (
         !node.hasCachedCanvas?.() ||
-        damageFlashCachedPixelRatioRef.current !== pixelRatio
+        damageFlashCachedPixelRatioRef.current !== pixelRatio ||
+        damageFlashCachedDimensionsRef.current.width !== renderWidth ||
+        damageFlashCachedDimensionsRef.current.height !== renderHeight
       ) {
+        if (node.hasCachedCanvas?.()) {
+          node.clearCache();
+        }
         node.cache({ pixelRatio });
         damageFlashCachedPixelRatioRef.current = pixelRatio;
+        damageFlashCachedDimensionsRef.current = {
+          width: renderWidth,
+          height: renderHeight,
+        };
       }
 
       node.getLayer()?.batchDraw();
@@ -842,10 +855,11 @@ const Token = forwardRef(
         if (current?.hasCachedCanvas?.()) {
           current.clearCache();
           damageFlashCachedPixelRatioRef.current = null;
+          damageFlashCachedDimensionsRef.current = { width: null, height: null };
           current.getLayer()?.batchDraw();
         }
       };
-    }, [img, groupScale]);
+    }, [img, groupScale, width, height, gridSize]);
 
     useEffect(() => {
       if (!tokenSheetId) return;
