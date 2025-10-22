@@ -158,6 +158,44 @@ const dadoImgUrl = (dado) => `/dados/${dado}.png`;
 
 const CLOCK_SKEW_MS = 5000;
 
+export const evaluatePendingTokenChange = ({
+  pending,
+  token,
+  currentAuthor,
+  clockSkewMs = CLOCK_SKEW_MS,
+}) => {
+  const remoteUpdatedAt = normalizeTokenUpdatedAt(token?.updatedAt);
+  const pendingUpdatedAt = normalizeTokenUpdatedAt(pending?.updatedAt);
+  const pendingStripped = stripTokenMetadata(pending);
+  const tokenStripped = stripTokenMetadata(token);
+  const metadataMatches = deepEqual(pendingStripped, tokenStripped);
+  const pendingAuthor = pending?.updatedBy;
+  const remoteAuthor = token?.updatedBy;
+  const sameAuthor =
+    (pendingAuthor && remoteAuthor && pendingAuthor === remoteAuthor) ||
+    (remoteAuthor && remoteAuthor === currentAuthor) ||
+    (!remoteAuthor && pendingAuthor && pendingAuthor === currentAuthor);
+
+  if (!metadataMatches && sameAuthor) {
+    return { action: 'skip', deletePending: false };
+  }
+
+  if (metadataMatches) {
+    return { action: 'skip', deletePending: true };
+  }
+
+  if (
+    typeof remoteUpdatedAt === 'number' &&
+    typeof pendingUpdatedAt === 'number' &&
+    remoteUpdatedAt <= pendingUpdatedAt &&
+    pendingUpdatedAt - remoteUpdatedAt > clockSkewMs
+  ) {
+    return { action: 'skip', deletePending: false };
+  }
+
+  return { action: 'apply', deletePending: true };
+};
+
 const createImageElement = (url) =>
   new Promise((resolve, reject) => {
     const image = new Image();
@@ -1753,27 +1791,15 @@ function App() {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-            const pendingUpdatedAt = normalizeTokenUpdatedAt(pending.updatedAt);
-            if (
-              deepEqual(
-                stripTokenMetadata(pending),
-                stripTokenMetadata(tk)
-              )
-            ) {
+            const { action, deletePending } = evaluatePendingTokenChange({
+              pending,
+              token: tk,
+              currentAuthor: playerName || 'Master',
+            });
+            if (deletePending) {
               pendingTokenChangesRef.current.delete(tokenId);
-              return false;
             }
-            if (
-              typeof remoteUpdatedAt === 'number' &&
-              typeof pendingUpdatedAt === 'number' &&
-              remoteUpdatedAt <= pendingUpdatedAt &&
-              pendingUpdatedAt - remoteUpdatedAt > CLOCK_SKEW_MS
-            ) {
-              return false;
-            }
-            pendingTokenChangesRef.current.delete(tokenId);
-            return true;
+            return action === 'apply';
           }
           return true;
         });
@@ -1934,27 +1960,15 @@ function App() {
           const tokenId = String(tk.id);
           const pending = pendingTokenChangesRef.current.get(tokenId);
           if (pending) {
-            const remoteUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-            const pendingUpdatedAt = normalizeTokenUpdatedAt(pending.updatedAt);
-            if (
-              deepEqual(
-                stripTokenMetadata(pending),
-                stripTokenMetadata(tk)
-              )
-            ) {
+            const { action, deletePending } = evaluatePendingTokenChange({
+              pending,
+              token: tk,
+              currentAuthor: playerName || 'Master',
+            });
+            if (deletePending) {
               pendingTokenChangesRef.current.delete(tokenId);
-              return false;
             }
-            if (
-              typeof remoteUpdatedAt === 'number' &&
-              typeof pendingUpdatedAt === 'number' &&
-              remoteUpdatedAt <= pendingUpdatedAt &&
-              pendingUpdatedAt - remoteUpdatedAt > CLOCK_SKEW_MS
-            ) {
-              return false;
-            }
-            pendingTokenChangesRef.current.delete(tokenId);
-            return true;
+            return action === 'apply';
           }
           return true;
         });
