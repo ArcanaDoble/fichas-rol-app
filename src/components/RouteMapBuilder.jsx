@@ -296,24 +296,31 @@ const RouteMapBuilder = ({ onBack }) => {
     addNodeAtRef.current = addNodeAt;
   }, [addNodeAt]);
 
-  const updateNodesPositions = useCallback((ids, delta) => {
-    if (delta.x === 0 && delta.y === 0) return;
-    const idSet = new Set(ids);
-    dispatch({
-      type: 'UPDATE',
-      skipHistory: true,
-      updater: (nodes) => {
-        nodes.forEach((node) => {
-          if (idSet.has(node.id)) {
-            const newX = node.x + delta.x;
-            const newY = node.y + delta.y;
-            node.x = snapToGrid ? Math.round(newX / gridSize) * gridSize : newX;
-            node.y = snapToGrid ? Math.round(newY / gridSize) * gridSize : newY;
-          }
-        });
-      },
-    });
-  }, [gridSize, snapToGrid]);
+  const applyDragDelta = useCallback(
+    (dragState, delta, snap) => {
+      if (!dragState || !delta) return;
+      const { startPositions } = dragState;
+      dispatch({
+        type: 'UPDATE',
+        skipHistory: true,
+        updater: (nodes) => {
+          nodes.forEach((node) => {
+            const start = startPositions.get(node.id);
+            if (!start) return;
+            let nextX = start.x + delta.x;
+            let nextY = start.y + delta.y;
+            if (snap && snapToGrid) {
+              nextX = Math.round(nextX / gridSize) * gridSize;
+              nextY = Math.round(nextY / gridSize) * gridSize;
+            }
+            node.x = nextX;
+            node.y = nextY;
+          });
+        },
+      });
+    },
+    [gridSize, snapToGrid],
+  );
 
   const deleteSelection = useCallback(() => {
     if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return;
@@ -659,6 +666,15 @@ const RouteMapBuilder = ({ onBack }) => {
     edgesLayer.removeChildren();
     nodesLayer.removeChildren();
 
+    const commitDrag = () => {
+      if (!dragStateRef.current) return;
+      if (dragStateRef.current.moved && !dragStateRef.current.committed) {
+        applyDragDelta(dragStateRef.current, dragStateRef.current.lastDelta, true);
+        dispatch({ type: 'PUSH_HISTORY' });
+        dragStateRef.current.committed = true;
+      }
+    };
+
     if (showGrid) {
       const grid = new Graphics();
       grid.lineStyle(1, 0x1e293b, 0.4);
@@ -823,24 +839,49 @@ const RouteMapBuilder = ({ onBack }) => {
         if (activeTool !== 'select') {
           return;
         }
-        if (!selectedNodeIds.includes(node.id)) {
-          if (event.data?.originalEvent?.shiftKey) {
-            setSelectedNodeIds((prev) => [...prev, node.id]);
-          } else {
-            setSelectedNodeIds([node.id]);
+        const shift = event.data?.originalEvent?.shiftKey;
+        const alreadySelected = selectedNodeIds.includes(node.id);
+        let nextSelection = selectedNodeIds;
+        if (shift) {
+          if (!alreadySelected) {
+            nextSelection = [...selectedNodeIds, node.id];
           }
+        } else if (!alreadySelected) {
+          nextSelection = [node.id];
+        }
+        if (nextSelection !== selectedNodeIds) {
+          setSelectedNodeIds(nextSelection);
+        }
+        setSelectedEdgeIds([]);
+        const dragIds = nextSelection.includes(node.id) ? [...new Set(nextSelection)] : [node.id];
+        const pointerStart = pointerToWorld(viewport, event);
+        const startPositions = new Map();
+        dragIds.forEach((id) => {
+          const target = nodesMap.get(id);
+          if (target) {
+            startPositions.set(id, { x: target.x, y: target.y });
+          }
+        });
+        if (startPositions.size === 0) {
+          dragStateRef.current = null;
+          if (shouldResumeDragRef.current) {
+            shouldResumeDragRef.current = false;
+            resumeViewportDrag();
+          }
+          return;
         }
         dragStateRef.current = {
-          nodeIds: event.data?.originalEvent?.shiftKey ? [...selectedNodeIds, node.id] : [node.id],
-          origin: pointerToWorld(viewport, event),
+          nodeIds: [...startPositions.keys()],
+          startPointer: pointerStart,
+          startPositions,
+          lastDelta: { x: 0, y: 0 },
           moved: false,
+          committed: false,
         };
       });
       nodeGraphic.on('pointerup', (event) => {
         event.stopPropagation();
-        if (dragStateRef.current?.moved) {
-          dispatch({ type: 'PUSH_HISTORY' });
-        }
+        commitDrag();
         dragStateRef.current = null;
         if (shouldResumeDragRef.current) {
           shouldResumeDragRef.current = false;
@@ -848,9 +889,7 @@ const RouteMapBuilder = ({ onBack }) => {
         }
       });
       nodeGraphic.on('pointerupoutside', () => {
-        if (dragStateRef.current?.moved) {
-          dispatch({ type: 'PUSH_HISTORY' });
-        }
+        commitDrag();
         dragStateRef.current = null;
         if (shouldResumeDragRef.current) {
           shouldResumeDragRef.current = false;
@@ -861,17 +900,22 @@ const RouteMapBuilder = ({ onBack }) => {
         if (!dragStateRef.current || activeTool !== 'select') return;
         const buttons = event.data?.originalEvent?.buttons ?? 0;
         if (buttons === 0) {
+          commitDrag();
           dragStateRef.current = null;
+          if (shouldResumeDragRef.current) {
+            shouldResumeDragRef.current = false;
+            resumeViewportDrag();
+          }
           return;
         }
         const world = pointerToWorld(viewport, event);
         if (!world) return;
         const delta = {
-          x: world.x - dragStateRef.current.origin.x,
-          y: world.y - dragStateRef.current.origin.y,
+          x: world.x - dragStateRef.current.startPointer.x,
+          y: world.y - dragStateRef.current.startPointer.y,
         };
-        updateNodesPositions([...new Set(dragStateRef.current.nodeIds)], delta);
-        dragStateRef.current.origin = world;
+        dragStateRef.current.lastDelta = delta;
+        applyDragDelta(dragStateRef.current, delta, true);
         dragStateRef.current.moved = true;
       });
       nodeGraphic.on('pointertap', (event) => {
@@ -920,7 +964,7 @@ const RouteMapBuilder = ({ onBack }) => {
       });
       nodesLayer.addChild(label);
     });
-  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, updateNodesPositions, pauseViewportDrag, resumeViewportDrag]);
+  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, applyDragDelta, pauseViewportDrag, resumeViewportDrag]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
