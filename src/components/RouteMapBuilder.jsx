@@ -153,6 +153,7 @@ const RouteMapBuilder = ({ onBack }) => {
   const edgesContainerRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const shouldResumeDragRef = useRef(false);
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [activeTool, setActiveTool] = useState('select');
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -194,6 +195,18 @@ const RouteMapBuilder = ({ onBack }) => {
     animationFrameRef.current = requestAnimationFrame(() => {
       setTimeout(() => setStatusMessage(''), 2200);
     });
+  }, []);
+
+  const pauseViewportDrag = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport?.plugins) return;
+    viewport.plugins.pause('drag');
+  }, []);
+
+  const resumeViewportDrag = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport?.plugins) return;
+    viewport.plugins.resume('drag');
   }, []);
 
   const saveToLocalStorage = useCallback((nodes, edges) => {
@@ -541,6 +554,14 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
+        const button = event.data?.originalEvent?.button;
+        const isLeftButton = button === undefined || button === 0;
+        if (!isLeftButton) {
+          shouldResumeDragRef.current = false;
+          return;
+        }
+        shouldResumeDragRef.current = true;
+        pauseViewportDrag();
         if (tool === 'create') {
           const point = pointerToWorld(viewport, event);
           addNodeAtRef.current?.(point);
@@ -578,6 +599,10 @@ const RouteMapBuilder = ({ onBack }) => {
         }
       });
       const finishSelection = (event) => {
+        if (shouldResumeDragRef.current) {
+          shouldResumeDragRef.current = false;
+          resumeViewportDrag();
+        }
         if (!selectionStartRef.current) return;
         const current = pointerToWorld(viewport, event);
         const rect = {
@@ -601,6 +626,7 @@ const RouteMapBuilder = ({ onBack }) => {
           )
           .map((node) => node.id);
         setSelectedNodeIds(selected);
+        setSelectedEdgeIds([]);
       };
       viewport.on('pointerup', finishSelection);
       viewport.on('pointerupoutside', finishSelection);
@@ -754,6 +780,14 @@ const RouteMapBuilder = ({ onBack }) => {
       nodeGraphic.cursor = activeTool === 'connect' ? 'crosshair' : 'pointer';
       nodeGraphic.on('pointerdown', (event) => {
         event.stopPropagation();
+        const button = event.data?.originalEvent?.button;
+        const isLeftButton = button === undefined || button === 0;
+        if (!isLeftButton) {
+          shouldResumeDragRef.current = false;
+          return;
+        }
+        shouldResumeDragRef.current = true;
+        pauseViewportDrag();
         if (activeTool === 'delete') {
           setSelectedNodeIds([node.id]);
           deleteSelection();
@@ -786,6 +820,9 @@ const RouteMapBuilder = ({ onBack }) => {
           }
           return;
         }
+        if (activeTool !== 'select') {
+          return;
+        }
         if (!selectedNodeIds.includes(node.id)) {
           if (event.data?.originalEvent?.shiftKey) {
             setSelectedNodeIds((prev) => [...prev, node.id]);
@@ -805,15 +842,28 @@ const RouteMapBuilder = ({ onBack }) => {
           dispatch({ type: 'PUSH_HISTORY' });
         }
         dragStateRef.current = null;
+        if (shouldResumeDragRef.current) {
+          shouldResumeDragRef.current = false;
+          resumeViewportDrag();
+        }
       });
       nodeGraphic.on('pointerupoutside', () => {
         if (dragStateRef.current?.moved) {
           dispatch({ type: 'PUSH_HISTORY' });
         }
         dragStateRef.current = null;
+        if (shouldResumeDragRef.current) {
+          shouldResumeDragRef.current = false;
+          resumeViewportDrag();
+        }
       });
       nodeGraphic.on('pointermove', (event) => {
         if (!dragStateRef.current || activeTool !== 'select') return;
+        const buttons = event.data?.originalEvent?.buttons ?? 0;
+        if (buttons === 0) {
+          dragStateRef.current = null;
+          return;
+        }
         const world = pointerToWorld(viewport, event);
         if (!world) return;
         const delta = {
@@ -870,7 +920,7 @@ const RouteMapBuilder = ({ onBack }) => {
       });
       nodesLayer.addChild(label);
     });
-  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, updateNodesPositions]);
+  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, updateNodesPositions, pauseViewportDrag, resumeViewportDrag]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
