@@ -7,50 +7,118 @@ import Boton from './Boton';
 import Input from './Input';
 
 const NODE_TYPES = [
-  { id: 'start', label: 'Inicio', color: '#38bdf8', icon: '⭑' },
-  { id: 'normal', label: 'Normal', color: '#a855f7', icon: '⚔' },
-  { id: 'event', label: 'Evento', color: '#fbbf24', icon: '☄' },
-  { id: 'shop', label: 'Tienda', color: '#f97316', icon: '◆' },
-  { id: 'elite', label: 'Elite', color: '#fb7185', icon: '✦' },
-  { id: 'heal', label: 'Curación', color: '#34d399', icon: '✚' },
-  { id: 'boss', label: 'Jefe', color: '#f59e0b', icon: '✹' },
+  {
+    id: 'start',
+    label: 'Inicio',
+    iconLabel: 'Casa',
+    defaults: {
+      accent: '#38bdf8',
+      fill: '#0c1a2e',
+      border: '#7dd3fc',
+      icon: '#f8fafc',
+    },
+  },
+  {
+    id: 'normal',
+    label: 'Normal',
+    iconLabel: 'Combate',
+    defaults: {
+      accent: '#a855f7',
+      fill: '#180d2b',
+      border: '#c084fc',
+      icon: '#f5f3ff',
+    },
+  },
+  {
+    id: 'event',
+    label: 'Evento',
+    iconLabel: 'Evento',
+    defaults: {
+      accent: '#fbbf24',
+      fill: '#2a1705',
+      border: '#fcd34d',
+      icon: '#fef3c7',
+    },
+  },
+  {
+    id: 'shop',
+    label: 'Tienda',
+    iconLabel: 'Mercader',
+    defaults: {
+      accent: '#f97316',
+      fill: '#2a1305',
+      border: '#fb923c',
+      icon: '#fff7ed',
+    },
+  },
+  {
+    id: 'elite',
+    label: 'Elite',
+    iconLabel: 'Élite',
+    defaults: {
+      accent: '#fb7185',
+      fill: '#2a0f16',
+      border: '#fda4af',
+      icon: '#ffe4e6',
+    },
+  },
+  {
+    id: 'heal',
+    label: 'Curación',
+    iconLabel: 'Curación',
+    defaults: {
+      accent: '#34d399',
+      fill: '#052015',
+      border: '#6ee7b7',
+      icon: '#ecfdf5',
+    },
+  },
+  {
+    id: 'boss',
+    label: 'Jefe',
+    iconLabel: 'Jefe',
+    defaults: {
+      accent: '#f59e0b',
+      fill: '#2b1503',
+      border: '#fbbf24',
+      icon: '#fef3c7',
+    },
+  },
 ];
 
 const NODE_STATES = {
   locked: {
     label: 'Bloqueado',
     stroke: '#1f2937',
-    fillAlpha: 0.45,
-    aura: '#1f2937',
-    badge: '🔒',
+    fillAlpha: 0.48,
+    aura: '#0f172a',
+    badge: 'lock',
     badgeColor: '#f8fafc',
   },
   visible: {
     label: 'Visible',
     stroke: '#334155',
-    fillAlpha: 0.55,
-    aura: '#475569',
-    badge: '🔒',
+    fillAlpha: 0.6,
+    aura: '#1e293b',
+    badge: 'lockOpen',
     badgeColor: '#fbbf24',
   },
   unlocked: {
     label: 'Desbloqueado',
     stroke: '#38bdf8',
-    fillAlpha: 0.85,
+    fillAlpha: 0.92,
     aura: '#0ea5e9',
   },
   completed: {
     label: 'Completado',
     stroke: '#facc15',
-    fillAlpha: 0.95,
-    aura: '#fbbf24',
-    badge: '✔',
-    badgeColor: '#facc15',
+    fillAlpha: 0.96,
+    aura: '#facc15',
   },
   current: {
     label: 'Actual',
     stroke: '#22d3ee',
-    fillAlpha: 0.95,
+    fillAlpha: 0.98,
     aura: '#38bdf8',
   },
 };
@@ -66,6 +134,43 @@ const TOOLBAR_ACTIONS = [
 const GRID_SIZES = [20, 32, 40, 48, 64];
 
 const hexToInt = (hex) => parseInt(hex.replace('#', ''), 16);
+
+const normalizeHex = (hex) => {
+  if (typeof hex !== 'string') return null;
+  const trimmed = hex.trim();
+  if (!trimmed) return null;
+  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  return /^#[0-9a-fA-F]{6}$/.test(prefixed) ? prefixed.toLowerCase() : null;
+};
+
+const hexToRgb = (hex) => {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return null;
+  const value = normalized.replace('#', '');
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return { r, g, b };
+};
+
+const rgbToHex = (r, g, b) => {
+  const clamp = (num) => Math.min(255, Math.max(0, Math.round(num)));
+  return `#${[clamp(r), clamp(g), clamp(b)]
+    .map((channel) => channel.toString(16).padStart(2, '0'))
+    .join('')}`;
+};
+
+const mixHex = (hexA, hexB, amount) => {
+  const colorA = hexToRgb(hexA);
+  const colorB = hexToRgb(hexB);
+  if (!colorA || !colorB) return normalizeHex(hexA) || normalizeHex(hexB);
+  const t = Math.min(1, Math.max(0, amount));
+  const mix = (a, b) => a + (b - a) * t;
+  return rgbToHex(mix(colorA.r, colorB.r), mix(colorA.g, colorB.g), mix(colorA.b, colorB.b));
+};
+
+const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
+const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const drawDottedQuadratic = (graphics, from, control, to, { color, size = 4, spacing = 18 }) => {
   const distance = Math.hypot(to.x - from.x, to.y - from.y);
@@ -87,18 +192,412 @@ const cloneState = (nodes, edges) => ({
   edges: edges.map((edge) => ({ ...edge })),
 });
 
-const DEFAULT_NODE = () => ({
-  id: nanoid(),
-  name: 'Inicio',
-  type: 'start',
-  x: 0,
-  y: 0,
-  state: 'current',
-  unlockMode: 'or',
-  loot: '',
-  event: '',
-  notes: '',
-});
+const DEFAULT_APPEARANCE = {
+  accent: '#38bdf8',
+  fill: '#0f172a',
+  border: '#38bdf8',
+  icon: '#f8fafc',
+};
+
+const getTypeDefaults = (typeId) => {
+  const type = NODE_TYPES.find((item) => item.id === typeId);
+  if (!type || !type.defaults) return DEFAULT_APPEARANCE;
+  return {
+    accent: normalizeHex(type.defaults.accent) || DEFAULT_APPEARANCE.accent,
+    fill: normalizeHex(type.defaults.fill) || DEFAULT_APPEARANCE.fill,
+    border: normalizeHex(type.defaults.border) || DEFAULT_APPEARANCE.border,
+    icon: normalizeHex(type.defaults.icon) || DEFAULT_APPEARANCE.icon,
+  };
+};
+
+const applyAppearanceDefaults = (node) => {
+  if (!node) return node;
+  const palette = getTypeDefaults(node.type);
+  return {
+    ...node,
+    accentColor: normalizeHex(node.accentColor) || palette.accent,
+    fillColor: normalizeHex(node.fillColor) || palette.fill,
+    borderColor: normalizeHex(node.borderColor) || palette.border,
+    iconColor: normalizeHex(node.iconColor) || palette.icon,
+  };
+};
+
+const normalizeNodesCollection = (nodes) => nodes.map((node) => applyAppearanceDefaults(node));
+
+const createHouseIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const roofColor = lightenHex(iconColor, 0.2);
+  const roof = new Graphics();
+  roof.beginFill(hexToInt(roofColor), 0.95);
+  roof.drawPolygon([0, -18, 18, -2, -16, -2]);
+  roof.endFill();
+  container.addChild(roof);
+
+  const body = new Graphics();
+  body.beginFill(hexToInt(iconColor), 0.92);
+  body.drawRoundedRect(-16, -2, 32, 22, 6);
+  body.endFill();
+  container.addChild(body);
+
+  const frame = new Graphics();
+  frame.lineStyle(2, hexToInt(lightenHex(iconColor, 0.35)), 0.85);
+  frame.drawRoundedRect(-16, -2, 32, 22, 6);
+  container.addChild(frame);
+
+  const door = new Graphics();
+  door.beginFill(hexToInt(accentColor), 0.92);
+  door.drawRoundedRect(-5, 4, 10, 14, 3);
+  door.endFill();
+  container.addChild(door);
+
+  const knob = new Graphics();
+  knob.beginFill(hexToInt(lightenHex(accentColor, 0.4)), 0.9);
+  knob.drawCircle(3, 11, 1.6);
+  knob.endFill();
+  container.addChild(knob);
+
+  const windowPane = new Graphics();
+  const windowColor = lightenHex(iconColor, 0.45);
+  windowPane.beginFill(hexToInt(windowColor), 0.9);
+  windowPane.drawRoundedRect(-12, 2, 8, 8, 2);
+  windowPane.endFill();
+  container.addChild(windowPane);
+
+  const windowGrid = new Graphics();
+  windowGrid.lineStyle(1.6, hexToInt(darkenHex(windowColor, 0.35)), 0.9);
+  windowGrid.moveTo(-8, 2);
+  windowGrid.lineTo(-8, 10);
+  windowGrid.moveTo(-12, 6);
+  windowGrid.lineTo(-4, 6);
+  container.addChild(windowGrid);
+
+  return container;
+};
+
+const createBattleIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const swordFactory = () => {
+    const sword = new Container();
+    const blade = new Graphics();
+    blade.beginFill(hexToInt(lightenHex(iconColor, 0.1)), 0.95);
+    blade.drawPolygon([0, -18, 6, 12, -6, 12]);
+    blade.endFill();
+    sword.addChild(blade);
+
+    const core = new Graphics();
+    core.lineStyle(1.6, hexToInt(darkenHex(iconColor, 0.4)), 0.9);
+    core.moveTo(0, -18);
+    core.lineTo(0, 12);
+    sword.addChild(core);
+
+    const guard = new Graphics();
+    guard.lineStyle(3, hexToInt(accentColor), 1);
+    guard.moveTo(-8, 2);
+    guard.lineTo(8, 2);
+    sword.addChild(guard);
+
+    const handle = new Graphics();
+    handle.beginFill(hexToInt(darkenHex(accentColor, 0.4)), 0.95);
+    handle.drawRoundedRect(-2, 2, 4, 8, 1.5);
+    handle.endFill();
+    sword.addChild(handle);
+
+    const pommel = new Graphics();
+    pommel.beginFill(hexToInt(accentColor), 0.95);
+    pommel.drawCircle(0, 12, 2.6);
+    pommel.endFill();
+    sword.addChild(pommel);
+
+    return sword;
+  };
+
+  const leftSword = swordFactory();
+  leftSword.rotation = -0.65;
+  leftSword.scale.x = -1;
+  container.addChild(leftSword);
+
+  const rightSword = swordFactory();
+  rightSword.rotation = 0.65;
+  container.addChild(rightSword);
+
+  return container;
+};
+
+const createEventIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const aura = new Graphics();
+  aura.beginFill(hexToInt(lightenHex(accentColor, 0.35)), 0.24);
+  aura.drawCircle(0, -2, 16);
+  aura.endFill();
+  container.addChild(aura);
+
+  const mark = new Graphics();
+  mark.beginFill(hexToInt(iconColor), 0.95);
+  mark.drawRoundedRect(-5, -16, 10, 20, 4);
+  mark.endFill();
+  container.addChild(mark);
+
+  const shine = new Graphics();
+  shine.beginFill(hexToInt(lightenHex(iconColor, 0.4)), 0.6);
+  shine.drawRoundedRect(-2.2, -14, 4.4, 12, 2);
+  shine.endFill();
+  container.addChild(shine);
+
+  const dot = new Graphics();
+  dot.beginFill(hexToInt(iconColor), 0.95);
+  dot.drawCircle(0, 8, 3.5);
+  dot.endFill();
+  container.addChild(dot);
+
+  return container;
+};
+
+const createShopIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const bag = new Graphics();
+  bag.beginFill(hexToInt(iconColor), 0.92);
+  bag.drawRoundedRect(-16, -6, 32, 24, 12);
+  bag.endFill();
+  container.addChild(bag);
+
+  const neck = new Graphics();
+  neck.beginFill(hexToInt(darkenHex(iconColor, 0.2)), 0.95);
+  neck.drawRoundedRect(-12, -14, 24, 10, 4);
+  neck.endFill();
+  container.addChild(neck);
+
+  const ties = new Graphics();
+  ties.lineStyle(2, hexToInt(accentColor), 0.95);
+  ties.moveTo(-6, -6);
+  ties.lineTo(-2, 2);
+  ties.moveTo(6, -6);
+  ties.lineTo(2, 2);
+  container.addChild(ties);
+
+  const coin = new Graphics();
+  coin.beginFill(hexToInt(accentColor), 0.95);
+  coin.drawCircle(10, 8, 6.2);
+  coin.endFill();
+  container.addChild(coin);
+
+  const coinMark = new Graphics();
+  coinMark.lineStyle(1.6, hexToInt(lightenHex(accentColor, 0.45)), 1);
+  coinMark.moveTo(10, 3);
+  coinMark.lineTo(10, 13);
+  coinMark.moveTo(5, 8);
+  coinMark.lineTo(15, 8);
+  container.addChild(coinMark);
+
+  return container;
+};
+
+const createEliteIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const aura = new Graphics();
+  aura.beginFill(hexToInt(lightenHex(accentColor, 0.3)), 0.2);
+  aura.drawCircle(0, 0, 16);
+  aura.endFill();
+  container.addChild(aura);
+
+  const star = new Graphics();
+  star.beginFill(hexToInt(iconColor), 0.95);
+  star.drawPolygon([0, -15, 5, -5, 15, -3, 8, 4, 11, 15, 0, 8, -11, 15, -8, 4, -15, -3, -5, -5]);
+  star.endFill();
+  container.addChild(star);
+
+  const shine = new Graphics();
+  shine.lineStyle(1.6, hexToInt(lightenHex(iconColor, 0.45)), 0.9);
+  shine.moveTo(-9, -1);
+  shine.lineTo(9, -1);
+  shine.moveTo(0, -10);
+  shine.lineTo(0, 6);
+  container.addChild(shine);
+
+  return container;
+};
+
+const createHealIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+  const aura = new Graphics();
+  aura.beginFill(hexToInt(lightenHex(accentColor, 0.35)), 0.22);
+  aura.drawCircle(0, 0, 16);
+  aura.endFill();
+  container.addChild(aura);
+
+  const cross = new Graphics();
+  cross.beginFill(hexToInt(iconColor), 0.96);
+  cross.drawRoundedRect(-6, -16, 12, 32, 4);
+  cross.drawRoundedRect(-16, -6, 32, 12, 4);
+  cross.endFill();
+  container.addChild(cross);
+
+  const shine = new Graphics();
+  shine.beginFill(hexToInt(lightenHex(iconColor, 0.4)), 0.5);
+  shine.drawRoundedRect(-3, -12, 6, 24, 2);
+  shine.endFill();
+  container.addChild(shine);
+
+  return container;
+};
+
+const createBossIcon = ({ iconColor, accentColor }) => {
+  const container = new Container();
+
+  const crown = new Graphics();
+  crown.beginFill(hexToInt(accentColor), 0.9);
+  crown.drawPolygon([-12, -10, -6, -20, 0, -12, 6, -20, 12, -10]);
+  crown.endFill();
+  container.addChild(crown);
+
+  const crownShine = new Graphics();
+  crownShine.lineStyle(1.4, hexToInt(lightenHex(accentColor, 0.45)), 1);
+  crownShine.moveTo(-7, -16);
+  crownShine.lineTo(-3, -14);
+  crownShine.moveTo(3, -14);
+  crownShine.lineTo(7, -16);
+  container.addChild(crownShine);
+
+  const skull = new Graphics();
+  skull.beginFill(hexToInt(iconColor), 0.95);
+  skull.drawCircle(0, -2, 14);
+  skull.endFill();
+  container.addChild(skull);
+
+  const jaw = new Graphics();
+  jaw.beginFill(hexToInt(iconColor), 0.95);
+  jaw.drawRoundedRect(-12, 6, 24, 12, 5);
+  jaw.endFill();
+  container.addChild(jaw);
+
+  const eyeColor = hexToInt(darkenHex(accentColor, 0.35));
+  const leftEye = new Graphics();
+  leftEye.beginFill(eyeColor, 0.95);
+  leftEye.drawEllipse(-5.5, -4, 4.5, 5.5);
+  leftEye.endFill();
+  container.addChild(leftEye);
+
+  const rightEye = new Graphics();
+  rightEye.beginFill(eyeColor, 0.95);
+  rightEye.drawEllipse(5.5, -4, 4.5, 5.5);
+  rightEye.endFill();
+  container.addChild(rightEye);
+
+  const nose = new Graphics();
+  nose.beginFill(eyeColor, 0.9);
+  nose.drawPolygon([0, -1, -3, 4, 3, 4]);
+  nose.endFill();
+  container.addChild(nose);
+
+  const teeth = new Graphics();
+  teeth.lineStyle(1.8, hexToInt(darkenHex(iconColor, 0.45)), 0.95);
+  teeth.moveTo(-8, 9);
+  teeth.lineTo(8, 9);
+  teeth.moveTo(-4, 9);
+  teeth.lineTo(-4, 15);
+  teeth.moveTo(0, 9);
+  teeth.lineTo(0, 15);
+  teeth.moveTo(4, 9);
+  teeth.lineTo(4, 15);
+  container.addChild(teeth);
+
+  return container;
+};
+
+const NODE_ICON_BUILDERS = {
+  start: createHouseIcon,
+  normal: createBattleIcon,
+  event: createEventIcon,
+  shop: createShopIcon,
+  elite: createEliteIcon,
+  heal: createHealIcon,
+  boss: createBossIcon,
+};
+
+const createLockBadge = ({ badgeColor, accentColor, open }) => {
+  const container = new Container();
+  const aura = new Graphics();
+  aura.beginFill(hexToInt(lightenHex(accentColor, 0.2)), 0.2);
+  aura.drawCircle(0, 0, 13);
+  aura.endFill();
+  container.addChild(aura);
+
+  const ring = new Graphics();
+  ring.lineStyle(2, hexToInt(badgeColor), 0.9);
+  ring.drawCircle(0, 0, 12);
+  container.addChild(ring);
+
+  const shackle = new Graphics();
+  shackle.lineStyle(2.2, hexToInt(badgeColor), 0.95);
+  shackle.moveTo(-6, -3);
+  shackle.quadraticCurveTo(0, open ? -12 : -10, 6, -3);
+  container.addChild(shackle);
+
+  const body = new Graphics();
+  body.beginFill(hexToInt(badgeColor), 0.92);
+  const width = open ? 12 : 14;
+  body.drawRoundedRect(-width / 2, -3, width, 12, 4);
+  body.endFill();
+  container.addChild(body);
+
+  if (open) {
+    body.rotation = -0.15;
+    body.y += 1;
+  }
+
+  const keyStem = new Graphics();
+  const innerColor = hexToInt(darkenHex(badgeColor, 0.35));
+  keyStem.beginFill(innerColor, 0.95);
+  keyStem.drawRoundedRect(-1.4, 0, 2.8, 5, 1.2);
+  keyStem.endFill();
+  container.addChild(keyStem);
+
+  const keyDot = new Graphics();
+  keyDot.beginFill(innerColor, 0.95);
+  keyDot.drawCircle(0, 4.2, 1.8);
+  keyDot.endFill();
+  container.addChild(keyDot);
+
+  return container;
+};
+
+const createCompletionBadge = (accentColor) => {
+  const color = normalizeHex(accentColor) || '#facc15';
+  const container = new Container();
+  const halo = new Graphics();
+  halo.beginFill(hexToInt(lightenHex(color, 0.25)), 0.28);
+  halo.drawCircle(0, 0, 14);
+  halo.endFill();
+  container.addChild(halo);
+
+  const circle = new Graphics();
+  circle.beginFill(hexToInt(color), 0.95);
+  circle.drawCircle(0, 0, 11);
+  circle.endFill();
+  container.addChild(circle);
+
+  const check = new Graphics();
+  check.lineStyle(3, hexToInt(darkenHex(color, 0.45)), 0.95);
+  check.moveTo(-6, 0);
+  check.lineTo(-2, 5);
+  check.lineTo(6, -4);
+  container.addChild(check);
+
+  return container;
+};
+
+const DEFAULT_NODE = () =>
+  applyAppearanceDefaults({
+    id: nanoid(),
+    name: 'Inicio',
+    type: 'start',
+    x: 0,
+    y: 0,
+    state: 'current',
+    unlockMode: 'or',
+    loot: '',
+    event: '',
+    notes: '',
+  });
 
 const initialState = () => {
   const starter = DEFAULT_NODE();
@@ -115,7 +614,8 @@ function reducer(state, action) {
   switch (action.type) {
     case 'LOAD': {
       const { nodes, edges } = action;
-      const snapshot = cloneState(nodes, edges);
+      const normalizedNodes = normalizeNodesCollection(nodes);
+      const snapshot = cloneState(normalizedNodes, edges);
       return {
         nodes: snapshot.nodes,
         edges: snapshot.edges,
@@ -127,19 +627,20 @@ function reducer(state, action) {
       const draftNodes = state.nodes.map((node) => ({ ...node }));
       const draftEdges = state.edges.map((edge) => ({ ...edge }));
       action.updater(draftNodes, draftEdges);
+      const normalizedNodes = normalizeNodesCollection(draftNodes);
       if (action.skipHistory) {
         return {
           ...state,
-          nodes: draftNodes,
+          nodes: normalizedNodes,
           edges: draftEdges,
         };
       }
-      const snapshot = cloneState(draftNodes, draftEdges);
+      const snapshot = cloneState(normalizedNodes, draftEdges);
       const trimmed = state.history.slice(0, state.historyIndex + 1);
       trimmed.push(snapshot);
       const limited = trimmed.length > 10 ? trimmed.slice(trimmed.length - 10) : trimmed;
       return {
-        nodes: snapshot.nodes,
+        nodes: normalizedNodes,
         edges: snapshot.edges,
         history: limited,
         historyIndex: limited.length - 1,
@@ -224,6 +725,49 @@ const RouteMapBuilder = ({ onBack }) => {
     state.nodes.forEach((node) => map.set(node.id, node));
     return map;
   }, [state.nodes]);
+  const selectedNodes = useMemo(
+    () => selectedNodeIds.map((id) => nodesMap.get(id)).filter(Boolean),
+    [nodesMap, selectedNodeIds],
+  );
+  const appearanceValues = useMemo(() => {
+    if (selectedNodes.length === 0) {
+      const defaults = getTypeDefaults('start');
+      return {
+        accentColor: defaults.accent,
+        fillColor: defaults.fill,
+        borderColor: defaults.border,
+        iconColor: defaults.icon,
+      };
+    }
+    const reference = selectedNodes[0];
+    const defaults = getTypeDefaults(reference.type);
+    return {
+      accentColor: normalizeHex(reference.accentColor) || defaults.accent,
+      fillColor: normalizeHex(reference.fillColor) || defaults.fill,
+      borderColor: normalizeHex(reference.borderColor) || defaults.border,
+      iconColor: normalizeHex(reference.iconColor) || defaults.icon,
+    };
+  }, [selectedNodes]);
+
+  const mixedAppearance = useMemo(() => {
+    if (selectedNodes.length <= 1) {
+      return {
+        accentColor: false,
+        fillColor: false,
+        borderColor: false,
+        iconColor: false,
+      };
+    }
+    const reference = selectedNodes[0];
+    const compare = (key) =>
+      selectedNodes.some((node) => normalizeHex(node[key]) !== normalizeHex(reference[key]));
+    return {
+      accentColor: compare('accentColor'),
+      fillColor: compare('fillColor'),
+      borderColor: compare('borderColor'),
+      iconColor: compare('iconColor'),
+    };
+  }, [selectedNodes]);
   const activeToolRef = useRef(activeTool);
   useEffect(() => {
     activeToolRef.current = activeTool;
@@ -272,7 +816,7 @@ const RouteMapBuilder = ({ onBack }) => {
       if (!payload) return;
       const parsed = JSON.parse(payload);
       if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-        dispatch({ type: 'LOAD', nodes: parsed.nodes, edges: parsed.edges });
+        dispatch({ type: 'LOAD', nodes: normalizeNodesCollection(parsed.nodes), edges: parsed.edges });
         ensureVisibleMessage('Mapa cargado desde el navegador');
       }
     } catch (error) {
@@ -300,7 +844,7 @@ const RouteMapBuilder = ({ onBack }) => {
       try {
         const parsed = JSON.parse(e.target?.result);
         if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-          dispatch({ type: 'LOAD', nodes: parsed.nodes, edges: parsed.edges });
+          dispatch({ type: 'LOAD', nodes: normalizeNodesCollection(parsed.nodes), edges: parsed.edges });
           ensureVisibleMessage('Mapa importado correctamente');
         }
       } catch (error) {
@@ -320,6 +864,7 @@ const RouteMapBuilder = ({ onBack }) => {
 
   const addNodeAt = useCallback((point) => {
     const typeDef = NODE_TYPES.find((item) => item.id === nodeTypeToCreate) || NODE_TYPES[1];
+    const palette = getTypeDefaults(typeDef.id);
     dispatch({
       type: 'UPDATE',
       updater: (nodes) => {
@@ -336,6 +881,10 @@ const RouteMapBuilder = ({ onBack }) => {
           loot: '',
           event: '',
           notes: '',
+          accentColor: palette.accent,
+          fillColor: palette.fill,
+          borderColor: palette.border,
+          iconColor: palette.icon,
         });
       },
     });
@@ -402,6 +951,42 @@ const RouteMapBuilder = ({ onBack }) => {
           if (selectedNodeIds.includes(node.id)) {
             node.state = node.state === 'locked' ? 'unlocked' : 'locked';
           }
+        });
+      },
+    });
+  }, [selectedNodeIds]);
+
+  const handleAppearanceChange = useCallback(
+    (key, value) => {
+      if (selectedNodeIds.length === 0) return;
+      const normalized = normalizeHex(value);
+      if (!normalized) return;
+      dispatch({
+        type: 'UPDATE',
+        updater: (nodes) => {
+          nodes.forEach((node) => {
+            if (selectedNodeIds.includes(node.id)) {
+              node[key] = normalized;
+            }
+          });
+        },
+      });
+    },
+    [selectedNodeIds],
+  );
+
+  const handleResetAppearance = useCallback(() => {
+    if (selectedNodeIds.length === 0) return;
+    dispatch({
+      type: 'UPDATE',
+      updater: (nodes) => {
+        nodes.forEach((node) => {
+          if (!selectedNodeIds.includes(node.id)) return;
+          const defaults = getTypeDefaults(node.type);
+          node.accentColor = defaults.accent;
+          node.fillColor = defaults.fill;
+          node.borderColor = defaults.border;
+          node.iconColor = defaults.icon;
         });
       },
     });
@@ -885,107 +1470,111 @@ const RouteMapBuilder = ({ onBack }) => {
       const typeDef = NODE_TYPES.find((item) => item.id === node.type) || NODE_TYPES[1];
       const stateDef = NODE_STATES[node.state] || NODE_STATES.locked;
       const selected = selectedNodeIds.includes(node.id);
-      const accentColor = hexToInt(typeDef.color);
-      const strokeColor = hexToInt(stateDef.stroke);
-      const auraColor = stateDef.aura ? hexToInt(stateDef.aura) : null;
+      const palette = getTypeDefaults(typeDef.id);
+      const accentHex = normalizeHex(node.accentColor) || palette.accent;
+      const fillHex = normalizeHex(node.fillColor) || palette.fill;
+      const borderHex = normalizeHex(node.borderColor) || palette.border;
+      const iconHex = normalizeHex(node.iconColor) || palette.icon;
+      const accentColor = hexToInt(accentHex);
+      const fillColor = hexToInt(fillHex);
+      const borderColor = hexToInt(borderHex);
+      const stateStroke = hexToInt(normalizeHex(stateDef.stroke) || '#38bdf8');
       const radius = 36;
 
-      if (auraColor) {
+      const auraHex = normalizeHex(stateDef.aura) || lightenHex(accentHex, 0.08);
+      if (auraHex) {
         const aura = new Graphics();
-        aura.beginFill(auraColor, selected ? 0.25 : 0.18);
-        aura.drawCircle(0, 0, radius + 16);
+        aura.beginFill(hexToInt(auraHex), selected ? 0.26 : 0.2);
+        aura.drawCircle(0, 0, radius + 18);
         aura.endFill();
         nodeContainer.addChild(aura);
       }
 
       if (selected) {
         const selectionAura = new Graphics();
-        selectionAura.beginFill(accentColor, 0.12);
-        selectionAura.drawCircle(0, 0, radius + 22);
+        selectionAura.beginFill(hexToInt(lightenHex(accentHex, 0.35)), 0.18);
+        selectionAura.drawCircle(0, 0, radius + 24);
         selectionAura.endFill();
         nodeContainer.addChild(selectionAura);
       }
 
       const base = new Graphics();
-      base.beginFill(0x070d1a, 0.96);
-      base.drawCircle(0, 0, radius);
+      base.beginFill(hexToInt(darkenHex(fillHex, 0.45)), 0.95);
+      base.drawCircle(0, 0, radius + 2);
       base.endFill();
       nodeContainer.addChild(base);
 
+      const body = new Graphics();
+      body.beginFill(fillColor, 0.98);
+      body.drawCircle(0, 0, radius - 2);
+      body.endFill();
+      nodeContainer.addChild(body);
+
       const innerGlow = new Graphics();
-      innerGlow.lineStyle(2, accentColor, 0.4);
-      innerGlow.drawCircle(0, 0, radius - 6);
+      innerGlow.beginFill(hexToInt(lightenHex(fillHex, 0.18)), 0.65);
+      innerGlow.drawCircle(0, 0, radius - 14);
       innerGlow.endFill();
       nodeContainer.addChild(innerGlow);
 
-      const innerFill = new Graphics();
-      innerFill.beginFill(accentColor, 0.18);
-      innerFill.drawCircle(0, 0, radius - 10);
-      innerFill.endFill();
-      nodeContainer.addChild(innerFill);
+      const highlight = new Graphics();
+      highlight.beginFill(hexToInt(lightenHex(fillHex, 0.55)), 0.22);
+      highlight.drawEllipse(0, -radius * 0.35, radius * 0.95, radius * 0.6);
+      highlight.endFill();
+      highlight.rotation = -0.25;
+      nodeContainer.addChild(highlight);
 
-      const innerCore = new Graphics();
-      innerCore.beginFill(0x0f172a, stateDef.fillAlpha ?? 0.85);
-      innerCore.drawCircle(0, 0, radius - 16);
-      innerCore.endFill();
-      nodeContainer.addChild(innerCore);
-
-      const outerRing = new Graphics();
-      outerRing.lineStyle(selected ? 6 : 4, strokeColor, selected ? 1 : 0.9);
-      outerRing.drawCircle(0, 0, radius + (selected ? 1 : 0));
-      outerRing.endFill();
-      nodeContainer.addChild(outerRing);
+      const accentGlow = new Graphics();
+      accentGlow.beginFill(hexToInt(lightenHex(accentHex, 0.4)), 0.16);
+      accentGlow.drawCircle(0, 0, radius - 8);
+      accentGlow.endFill();
+      nodeContainer.addChild(accentGlow);
 
       const accentRing = new Graphics();
-      accentRing.lineStyle(3, accentColor, 0.8);
-      accentRing.drawCircle(0, 0, radius - 12);
-      accentRing.endFill();
+      accentRing.lineStyle(4, accentColor, 0.9);
+      accentRing.drawCircle(0, 0, radius - 10);
       nodeContainer.addChild(accentRing);
+
+      const borderRing = new Graphics();
+      borderRing.lineStyle(selected ? 6 : 4, borderColor, selected ? 1 : 0.96);
+      borderRing.drawCircle(0, 0, radius + (selected ? 1.5 : 0));
+      nodeContainer.addChild(borderRing);
+
+      const stateRing = new Graphics();
+      const stateAlpha = node.state === 'locked' ? 0.68 : node.state === 'visible' ? 0.56 : 0.38;
+      stateRing.lineStyle(3, stateStroke, stateAlpha);
+      stateRing.drawCircle(0, 0, radius + 10);
+      nodeContainer.addChild(stateRing);
 
       if (node.state === 'current') {
         const halo = new Graphics();
-        halo.lineStyle(4, accentColor, 0.55);
-        halo.drawCircle(0, 0, radius + 12);
+        halo.lineStyle(5, accentColor, 0.5);
+        halo.drawCircle(0, 0, radius + 16);
         halo.endFill();
         nodeContainer.addChild(halo);
       }
 
-      const showStateBadge = stateDef.badge && (node.state === 'locked' || node.state === 'visible');
-      const mainSymbol = showStateBadge ? stateDef.badge : typeDef.icon;
-      const symbolColor = showStateBadge ? stateDef.badgeColor || '#f8fafc' : '#f8fafc';
-      const iconText = new Text({
-        text: mainSymbol,
-        style: {
-          fill: symbolColor,
-          fontFamily: 'Inter, sans-serif',
-          fontSize: showStateBadge ? 26 : 24,
-          fontWeight: 600,
-          dropShadow: true,
-          dropShadowColor: '#020617',
-          dropShadowAlpha: 0.6,
-          dropShadowBlur: 6,
-          dropShadowDistance: 0,
-        },
-      });
-      iconText.anchor.set(0.5);
-      nodeContainer.addChild(iconText);
+      const iconBuilder = NODE_ICON_BUILDERS[typeDef.id] || NODE_ICON_BUILDERS.normal;
+      const iconContainer = iconBuilder({ iconColor: iconHex, accentColor: accentHex, borderColor: borderHex });
+      iconContainer.position.set(0, 2);
+      iconContainer.scale.set(0.82);
+      nodeContainer.addChild(iconContainer);
+
+      if (node.state === 'locked' || node.state === 'visible') {
+        const badge = createLockBadge({
+          badgeColor: normalizeHex(stateDef.badgeColor) || accentHex,
+          accentColor: accentHex,
+          open: node.state === 'visible',
+        });
+        badge.scale.set(0.62);
+        badge.position.set(-radius + 18, -radius + 18);
+        nodeContainer.addChild(badge);
+      }
 
       if (node.state === 'completed') {
-        const badgeContainer = new Container();
-        const badgeBg = new Graphics();
-        badgeBg.beginFill(0x0f172a, 0.95);
-        badgeBg.lineStyle(2, hexToInt('#facc15'), 0.9);
-        badgeBg.drawCircle(0, 0, 12);
-        badgeBg.endFill();
-        badgeContainer.addChild(badgeBg);
-        const badgeText = new Text({
-          text: '✔',
-          style: { fontSize: 14, fill: '#facc15', fontFamily: 'Inter, sans-serif', fontWeight: 600 },
-        });
-        badgeText.anchor.set(0.5);
-        badgeContainer.addChild(badgeText);
-        badgeContainer.position.set(radius - 8, -radius + 8);
-        nodeContainer.addChild(badgeContainer);
+        const completion = createCompletionBadge(accentHex);
+        completion.scale.set(0.6);
+        completion.position.set(radius - 18, -radius + 18);
+        nodeContainer.addChild(completion);
       }
 
       nodeContainer.position.set(node.x, node.y);
@@ -1086,7 +1675,7 @@ const RouteMapBuilder = ({ onBack }) => {
       });
       nodeContainer.on('pointertap', (event) => {
         if (event.detail >= 2) {
-          setNodeEditor(node);
+          setNodeEditor(applyAppearanceDefaults(node));
         }
       });
       nodesLayer.addChild(nodeContainer);
@@ -1121,7 +1710,7 @@ const RouteMapBuilder = ({ onBack }) => {
       labelContainer.on('pointertap', (event) => {
         event.stopPropagation();
         if (event.detail >= 2) {
-          setNodeEditor(node);
+          setNodeEditor(applyAppearanceDefaults(node));
         } else {
           setSelectedNodeIds([node.id]);
         }
@@ -1141,12 +1730,13 @@ const RouteMapBuilder = ({ onBack }) => {
 
   const handleNodeEditorSave = useCallback(() => {
     if (!nodeEditor) return;
+    const sanitizedEditor = applyAppearanceDefaults(nodeEditor);
     dispatch({
       type: 'UPDATE',
       updater: (nodes) => {
         const target = nodes.find((item) => item.id === nodeEditor.id);
         if (target) {
-          Object.assign(target, nodeEditor);
+          Object.assign(target, sanitizedEditor);
         }
       },
     });
@@ -1222,7 +1812,7 @@ const RouteMapBuilder = ({ onBack }) => {
               >
                 {NODE_TYPES.map((type) => (
                   <option key={type.id} value={type.id}>
-                    {type.icon} {type.label}
+                    {type.label} · {type.iconLabel}
                   </option>
                 ))}
               </select>
@@ -1251,6 +1841,75 @@ const RouteMapBuilder = ({ onBack }) => {
               </Boton>
             </div>
           </section>
+          {selectedNodes.length > 0 && (
+            <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Apariencia</h3>
+                <span className="text-[11px] text-slate-500">
+                  {selectedNodes.length > 1 ? `${selectedNodes.length} nodos` : 'Nodo seleccionado'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ajusta el color del núcleo, los bordes y el icono para personalizar la ruta.
+              </p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Fondo</span>
+                  <input
+                    type="color"
+                    value={appearanceValues.fillColor}
+                    onChange={(event) => handleAppearanceChange('fillColor', event.target.value)}
+                    className="h-10 w-full rounded border border-slate-800/70 bg-slate-900/80"
+                  />
+                  {mixedAppearance.fillColor && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Destello</span>
+                  <input
+                    type="color"
+                    value={appearanceValues.accentColor}
+                    onChange={(event) => handleAppearanceChange('accentColor', event.target.value)}
+                    className="h-10 w-full rounded border border-slate-800/70 bg-slate-900/80"
+                  />
+                  {mixedAppearance.accentColor && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Borde</span>
+                  <input
+                    type="color"
+                    value={appearanceValues.borderColor}
+                    onChange={(event) => handleAppearanceChange('borderColor', event.target.value)}
+                    className="h-10 w-full rounded border border-slate-800/70 bg-slate-900/80"
+                  />
+                  {mixedAppearance.borderColor && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Icono</span>
+                  <input
+                    type="color"
+                    value={appearanceValues.iconColor}
+                    onChange={(event) => handleAppearanceChange('iconColor', event.target.value)}
+                    className="h-10 w-full rounded border border-slate-800/70 bg-slate-900/80"
+                  />
+                  {mixedAppearance.iconColor && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </label>
+              </div>
+              <Boton
+                onClick={handleResetAppearance}
+                className="w-full border border-slate-700/70 bg-slate-900/80 text-xs hover:border-slate-500/60 hover:bg-slate-800/80"
+              >
+                Restablecer colores por tipo
+              </Boton>
+            </section>
+          )}
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Grid & Layout</h3>
             <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
@@ -1356,15 +2015,22 @@ const RouteMapBuilder = ({ onBack }) => {
         </div>
       </div>
       <div
-        className="flex-1 relative"
+        className="flex-1 relative overflow-hidden"
         style={{
           backgroundColor,
           backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundBlendMode: backgroundImage ? 'soft-light' : undefined,
         }}
       >
-        <div className="absolute left-6 top-6 z-10 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
+        <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-slate-950/55 via-slate-900/10 to-slate-950/60" />
+        {backgroundImage && (
+          <div className="pointer-events-none absolute inset-0 z-0 bg-slate-950/55 mix-blend-multiply" />
+        )}
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-25" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.18), transparent 45%), radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.16), transparent 55%), radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.12), transparent 50%)' }} />
+        <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
           <span className="font-medium text-sky-200">{currentToolLabel}</span>
           {connectOriginId && activeTool === 'connect' && (
@@ -1372,11 +2038,11 @@ const RouteMapBuilder = ({ onBack }) => {
           )}
         </div>
         {statusMessage && (
-          <div className="absolute right-6 top-6 z-10 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2 text-sm text-emerald-200 shadow-lg shadow-emerald-900/30 backdrop-blur">
+          <div className="absolute right-6 top-6 z-20 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2 text-sm text-emerald-200 shadow-lg shadow-emerald-900/30 backdrop-blur">
             {statusMessage}
           </div>
         )}
-        <div ref={containerRef} className="h-full w-full" />
+        <div ref={containerRef} className="relative z-10 h-full w-full" />
       </div>
       {(nodeEditor || edgeEditor) && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/70 backdrop-blur">
@@ -1395,12 +2061,23 @@ const RouteMapBuilder = ({ onBack }) => {
                   <span>Tipo</span>
                   <select
                     value={nodeEditor.type}
-                    onChange={(event) => setNodeEditor({ ...nodeEditor, type: event.target.value })}
+                    onChange={(event) => {
+                      const nextType = event.target.value;
+                      const defaults = getTypeDefaults(nextType);
+                      setNodeEditor({
+                        ...nodeEditor,
+                        type: nextType,
+                        accentColor: defaults.accent,
+                        fillColor: defaults.fill,
+                        borderColor: defaults.border,
+                        iconColor: defaults.icon,
+                      });
+                    }}
                     className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
                   >
                     {NODE_TYPES.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.label}
+                        {type.label} · {type.iconLabel}
                       </option>
                     ))}
                   </select>
@@ -1423,6 +2100,59 @@ const RouteMapBuilder = ({ onBack }) => {
                     />
                   </label>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span>Color de fondo</span>
+                    <input
+                      type="color"
+                      value={nodeEditor.fillColor}
+                      onChange={(event) => setNodeEditor({ ...nodeEditor, fillColor: event.target.value })}
+                      className="h-10 w-full rounded border border-slate-700 bg-slate-800"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span>Destello</span>
+                    <input
+                      type="color"
+                      value={nodeEditor.accentColor}
+                      onChange={(event) => setNodeEditor({ ...nodeEditor, accentColor: event.target.value })}
+                      className="h-10 w-full rounded border border-slate-700 bg-slate-800"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span>Borde</span>
+                    <input
+                      type="color"
+                      value={nodeEditor.borderColor}
+                      onChange={(event) => setNodeEditor({ ...nodeEditor, borderColor: event.target.value })}
+                      className="h-10 w-full rounded border border-slate-700 bg-slate-800"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span>Color del icono</span>
+                    <input
+                      type="color"
+                      value={nodeEditor.iconColor}
+                      onChange={(event) => setNodeEditor({ ...nodeEditor, iconColor: event.target.value })}
+                      className="h-10 w-full rounded border border-slate-700 bg-slate-800"
+                    />
+                  </label>
+                </div>
+                <Boton
+                  className="w-full border border-slate-700 bg-slate-800 hover:bg-slate-700"
+                  onClick={() => {
+                    const defaults = getTypeDefaults(nodeEditor.type);
+                    setNodeEditor({
+                      ...nodeEditor,
+                      accentColor: defaults.accent,
+                      fillColor: defaults.fill,
+                      borderColor: defaults.border,
+                      iconColor: defaults.icon,
+                    });
+                  }}
+                >
+                  Restablecer colores por defecto
+                </Boton>
                 <label className="flex flex-col gap-2 text-sm">
                   <span>Estado</span>
                   <select
