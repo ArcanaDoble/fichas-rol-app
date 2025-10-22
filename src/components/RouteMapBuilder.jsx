@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Application, Container, Graphics, Point, Sprite, Text, Texture } from 'pixi.js';
-import { BLEND_MODES, MIPMAP_MODES, SCALE_MODES } from '@pixi/constants';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
 import {
@@ -306,12 +305,12 @@ const getLucideTexture = (IconComponent, color) => {
           resource: image,
           label: key,
           resolution: LUCIDE_TEXTURE_RESOLUTION,
-          scaleMode: SCALE_MODES.LINEAR,
-          mipmap: MIPMAP_MODES.ON,
+          scaleMode: 'linear',
+          mipmap: 'on',
         });
         if (texture?.baseTexture) {
-          texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
-          texture.baseTexture.mipmap = MIPMAP_MODES.ON;
+          texture.baseTexture.scaleMode = 'linear';
+          texture.baseTexture.mipmap = 'on';
           texture.baseTexture.anisotropicLevel = 8;
         }
         if (texture?.source && typeof texture.source.resize === 'function') {
@@ -363,7 +362,7 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   outerGlow.alpha = 0.38;
   outerGlow.width = 82;
   outerGlow.height = 82;
-  outerGlow.blendMode = BLEND_MODES.ADD;
+  outerGlow.blendMode = 'add';
   container.addChild(outerGlow);
 
   const innerGlow = new Sprite(Texture.WHITE);
@@ -372,14 +371,14 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   innerGlow.alpha = 0.42;
   innerGlow.width = 64;
   innerGlow.height = 64;
-  innerGlow.blendMode = BLEND_MODES.SCREEN;
+  innerGlow.blendMode = 'screen';
   container.addChild(innerGlow);
 
   const basePlate = new Graphics();
   basePlate.beginFill(hexToInt(darkenHex(accentBase, 0.55)), 0.95);
   basePlate.drawCircle(0, 0, 20);
   basePlate.endFill();
-  basePlate.blendMode = BLEND_MODES.MULTIPLY;
+  basePlate.blendMode = 'multiply';
   container.addChild(basePlate);
 
   const baseHighlight = new Graphics();
@@ -387,20 +386,20 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   baseHighlight.drawCircle(-2, -3, 16);
   baseHighlight.endFill();
   baseHighlight.alpha = 0.9;
-  baseHighlight.blendMode = BLEND_MODES.SCREEN;
+  baseHighlight.blendMode = 'screen';
   container.addChild(baseHighlight);
 
   const coreShadow = new Graphics();
   coreShadow.beginFill(hexToInt(darkenHex(accentBase, 0.75)), 0.45);
   coreShadow.drawCircle(3, 4, 11);
   coreShadow.endFill();
-  coreShadow.blendMode = BLEND_MODES.MULTIPLY;
+  coreShadow.blendMode = 'multiply';
   container.addChild(coreShadow);
 
   const ringShadow = new Graphics();
   ringShadow.lineStyle({ width: 4, color: hexToInt(ringShadowColor), alpha: 0.45 });
   ringShadow.drawCircle(1.5, 1.5, 15);
-  ringShadow.blendMode = BLEND_MODES.MULTIPLY;
+  ringShadow.blendMode = 'multiply';
   container.addChild(ringShadow);
 
   const ring = new Graphics();
@@ -412,13 +411,13 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
   innerSheen.beginFill(hexToInt(lightenHex(resolvedIconColor, 0.3)), 0.2);
   innerSheen.drawCircle(-4, -5, 11);
   innerSheen.endFill();
-  innerSheen.blendMode = BLEND_MODES.SCREEN;
+  innerSheen.blendMode = 'screen';
   container.addChild(innerSheen);
 
   const focalRing = new Graphics();
   focalRing.lineStyle({ width: 2, color: hexToInt(lightenHex(resolvedIconColor, 0.4)), alpha: 0.6 });
   focalRing.drawCircle(0, 0, 9);
-  focalRing.blendMode = BLEND_MODES.SCREEN;
+  focalRing.blendMode = 'screen';
   container.addChild(focalRing);
 
   const sprite = new Sprite(Texture.WHITE);
