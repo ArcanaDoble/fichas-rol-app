@@ -261,12 +261,30 @@ const getLucideTexture = (IconComponent, color) => {
   const key = `${IconComponent.displayName || IconComponent.name || 'icon'}-${normalizedColor}`;
   let texture = lucideTextureCache.get(key);
 
-  if (!texture || texture.destroyed || texture.baseTexture.destroyed) {
+  if (!texture || texture.destroyed || texture.baseTexture.destroyed || !texture.valid) {
     const svgMarkup = renderToStaticMarkup(
-      <IconComponent color={normalizedColor} size={48} strokeWidth={2.4} absoluteStrokeWidth />
+      <IconComponent color={normalizedColor} size={64} strokeWidth={2.4} absoluteStrokeWidth />
     );
     const svgWithNs = ensureSvgNamespace(svgMarkup);
-    texture = Texture.from(encodeSvgDataUri(svgWithNs));
+    const encoded = encodeSvgDataUri(svgWithNs);
+    texture = Texture.from(encoded, {
+      resourceOptions: {
+        width: 64,
+        height: 64,
+      },
+    });
+    const applySize = () => {
+      if (typeof texture.baseTexture.setSize === 'function') {
+        texture.baseTexture.setSize(64, 64);
+      } else if (typeof texture.baseTexture.resize === 'function') {
+        texture.baseTexture.resize(64, 64);
+      }
+    };
+    if (!texture.baseTexture.valid) {
+      texture.baseTexture.once('loaded', applySize);
+    } else {
+      applySize();
+    }
     lucideTextureCache.set(key, texture);
   }
 
@@ -301,10 +319,20 @@ const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, bo
 
   const sprite = new Sprite(getLucideTexture(IconComponent, resolvedIconColor));
   sprite.anchor.set(0.5);
-  const targetSize = 28;
-  const baseSize = 48;
-  const scale = targetSize / baseSize;
-  sprite.scale.set(scale);
+  const targetSize = 36;
+  const applyTargetSize = () => {
+    if (typeof sprite.setSize === 'function') {
+      sprite.setSize(targetSize);
+    } else {
+      sprite.width = targetSize;
+      sprite.height = targetSize;
+    }
+  };
+  if (sprite.texture.valid) {
+    applyTargetSize();
+  } else {
+    sprite.texture.once('update', applyTargetSize);
+  }
   container.addChild(sprite);
 
   return container;
