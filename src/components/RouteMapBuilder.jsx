@@ -675,6 +675,42 @@ const RouteMapBuilder = ({ onBack }) => {
       }
     };
 
+    const endDrag = () => {
+      commitDrag();
+      dragStateRef.current = null;
+      if (shouldResumeDragRef.current) {
+        shouldResumeDragRef.current = false;
+        resumeViewportDrag();
+      }
+    };
+
+    const handleViewportDragMove = (event) => {
+      if (!dragStateRef.current || activeTool !== 'select') return;
+      const buttons = event.data?.originalEvent?.buttons ?? 0;
+      if (buttons === 0) {
+        endDrag();
+        return;
+      }
+      const world = pointerToWorld(viewport, event);
+      if (!world) return;
+      const delta = {
+        x: world.x - dragStateRef.current.startPointer.x,
+        y: world.y - dragStateRef.current.startPointer.y,
+      };
+      dragStateRef.current.lastDelta = delta;
+      applyDragDelta(dragStateRef.current, delta, true);
+      dragStateRef.current.moved = true;
+    };
+
+    const handleViewportDragEnd = () => {
+      if (!dragStateRef.current) return;
+      endDrag();
+    };
+
+    viewport.on('pointermove', handleViewportDragMove);
+    viewport.on('pointerup', handleViewportDragEnd);
+    viewport.on('pointerupoutside', handleViewportDragEnd);
+
     if (showGrid) {
       const grid = new Graphics();
       grid.lineStyle(1, 0x1e293b, 0.4);
@@ -881,42 +917,10 @@ const RouteMapBuilder = ({ onBack }) => {
       });
       nodeGraphic.on('pointerup', (event) => {
         event.stopPropagation();
-        commitDrag();
-        dragStateRef.current = null;
-        if (shouldResumeDragRef.current) {
-          shouldResumeDragRef.current = false;
-          resumeViewportDrag();
-        }
+        handleViewportDragEnd();
       });
       nodeGraphic.on('pointerupoutside', () => {
-        commitDrag();
-        dragStateRef.current = null;
-        if (shouldResumeDragRef.current) {
-          shouldResumeDragRef.current = false;
-          resumeViewportDrag();
-        }
-      });
-      nodeGraphic.on('pointermove', (event) => {
-        if (!dragStateRef.current || activeTool !== 'select') return;
-        const buttons = event.data?.originalEvent?.buttons ?? 0;
-        if (buttons === 0) {
-          commitDrag();
-          dragStateRef.current = null;
-          if (shouldResumeDragRef.current) {
-            shouldResumeDragRef.current = false;
-            resumeViewportDrag();
-          }
-          return;
-        }
-        const world = pointerToWorld(viewport, event);
-        if (!world) return;
-        const delta = {
-          x: world.x - dragStateRef.current.startPointer.x,
-          y: world.y - dragStateRef.current.startPointer.y,
-        };
-        dragStateRef.current.lastDelta = delta;
-        applyDragDelta(dragStateRef.current, delta, true);
-        dragStateRef.current.moved = true;
+        handleViewportDragEnd();
       });
       nodeGraphic.on('pointertap', (event) => {
         if (event.detail >= 2) {
@@ -964,6 +968,11 @@ const RouteMapBuilder = ({ onBack }) => {
       });
       nodesLayer.addChild(label);
     });
+    return () => {
+      viewport.off('pointermove', handleViewportDragMove);
+      viewport.off('pointerup', handleViewportDragEnd);
+      viewport.off('pointerupoutside', handleViewportDragEnd);
+    };
   }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, applyDragDelta, pauseViewportDrag, resumeViewportDrag]);
 
   const handleBackgroundInput = useCallback((event) => {
