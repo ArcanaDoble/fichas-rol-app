@@ -3,9 +3,18 @@ import PropTypes from 'prop-types';
 import { Group, Rect } from 'react-konva';
 import { getResourceColors } from './ResourceBar';
 
-const CAPSULE_W = 18;
-const BAR_HEIGHT = 8;
-const GAP = 2;
+const SIZE_MULTIPLIER = 1.2;
+const BASE_CAPSULE_W = 18;
+const BASE_BAR_HEIGHT = 8;
+const BASE_GAP = 2;
+const BASE_VERTICAL_OFFSET = 20;
+const BASE_STROKE_WIDTH = 2;
+
+const CAPSULE_W = BASE_CAPSULE_W * SIZE_MULTIPLIER;
+const BAR_HEIGHT = BASE_BAR_HEIGHT * SIZE_MULTIPLIER;
+const GAP = BASE_GAP * SIZE_MULTIPLIER;
+const VERTICAL_OFFSET = BASE_VERTICAL_OFFSET * SIZE_MULTIPLIER;
+const STROKE_WIDTH = BASE_STROKE_WIDTH * SIZE_MULTIPLIER;
 
 const TokenBars = ({
   tokenRef,
@@ -32,7 +41,8 @@ const TokenBars = ({
     const current = Math.min(v.actual ?? 0, max);
     const colors = getResourceColors({ color: v.color || '#ffffff', penalizacion: 0, actual: current, base: 0, buff: 0, max });
     const rowWidth = max * CAPSULE_W + (max - 1) * GAP;
-    const baseOffset = 20 + rowIdx * (BAR_HEIGHT + 2);
+    const verticalSpacing = BAR_HEIGHT + GAP;
+    const baseOffset = VERTICAL_OFFSET + rowIdx * verticalSpacing;
     const yPos = anchor === 'top' ? layout.top - baseOffset : layout.bottom + baseOffset;
     return (
       <Group key={key} x={layout.x - rowWidth / 2} y={yPos} listening>
@@ -44,7 +54,7 @@ const TokenBars = ({
             height={BAR_HEIGHT}
             fill={c}
             stroke="#1f2937"
-            strokeWidth={2}
+            strokeWidth={STROKE_WIDTH}
             cornerRadius={BAR_HEIGHT / 2}
             onClick={(e) => onStatClick(key, e)}
           />
