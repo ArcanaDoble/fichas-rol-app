@@ -1695,10 +1695,11 @@ const RouteMapBuilder = ({ onBack }) => {
       const paddingX = 14;
       const paddingY = 6;
       const labelBackground = new Graphics();
+      const labelStrokeColor = selected ? accentColor : stateStroke;
       const labelWidth = labelText.width + paddingX * 2;
       const labelHeight = labelText.height + paddingY * 2;
       labelBackground.beginFill(0x0b1220, 0.9);
-      labelBackground.lineStyle(1, strokeColor, 0.6);
+      labelBackground.lineStyle(1, labelStrokeColor, 0.6);
       labelBackground.drawRoundedRect(-labelWidth / 2, -labelHeight / 2, labelWidth, labelHeight, labelHeight / 2);
       labelBackground.endFill();
       labelContainer.addChild(labelBackground);
