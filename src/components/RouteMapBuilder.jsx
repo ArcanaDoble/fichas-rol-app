@@ -184,6 +184,7 @@ const RouteMapBuilder = ({ onBack }) => {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+  const hasSkippedInitialSaveRef = useRef(false);
 
   const ensureVisibleMessage = useCallback((text) => {
     setStatusMessage(text);
@@ -489,6 +490,10 @@ const RouteMapBuilder = ({ onBack }) => {
   }, [deleteSelection, handleRedo, handleUndo, ensureVisibleMessage, selectedNodeIds, selectedEdgeIds, state.nodes, state.edges]);
 
   useEffect(() => {
+    if (!hasSkippedInitialSaveRef.current) {
+      hasSkippedInitialSaveRef.current = true;
+      return;
+    }
     saveToLocalStorage(state.nodes, state.edges);
   }, [state.nodes, state.edges, saveToLocalStorage]);
 
