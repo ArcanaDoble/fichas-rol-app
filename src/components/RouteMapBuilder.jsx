@@ -3,6 +3,20 @@ import PropTypes from 'prop-types';
 import { Application, Container, Graphics, Point, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
+import {
+  ArrowLeft,
+  Compass,
+  Copy,
+  FileDown,
+  Link2,
+  LockKeyhole,
+  MousePointer2,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2,
+  Wand2,
+} from 'lucide-react';
 import Boton from './Boton';
 import Input from './Input';
 
@@ -124,11 +138,11 @@ const NODE_STATES = {
 };
 
 const TOOLBAR_ACTIONS = [
-  { id: 'select', label: 'Seleccionar / Mover', icon: '🖱️' },
-  { id: 'create', label: 'Crear Nodo', icon: '🪄' },
-  { id: 'connect', label: 'Conectar', icon: '🔗' },
-  { id: 'delete', label: 'Borrar', icon: '🗑️' },
-  { id: 'toggleLock', label: 'Bloquear / Desbloquear', icon: '🔒' },
+  { id: 'select', label: 'Seleccionar / Mover', icon: MousePointer2 },
+  { id: 'create', label: 'Crear Nodo', icon: Wand2 },
+  { id: 'connect', label: 'Conectar', icon: Link2 },
+  { id: 'delete', label: 'Borrar', icon: Trash2 },
+  { id: 'toggleLock', label: 'Bloquear / Desbloquear', icon: LockKeyhole },
 ];
 
 const GRID_SIZES = [20, 32, 40, 48, 64];
@@ -1695,10 +1709,11 @@ const RouteMapBuilder = ({ onBack }) => {
       const paddingX = 14;
       const paddingY = 6;
       const labelBackground = new Graphics();
+      const labelStrokeColor = selected ? accentColor : stateStroke;
       const labelWidth = labelText.width + paddingX * 2;
       const labelHeight = labelText.height + paddingY * 2;
       labelBackground.beginFill(0x0b1220, 0.9);
-      labelBackground.lineStyle(1, strokeColor, 0.6);
+      labelBackground.lineStyle(1, labelStrokeColor, 0.6);
       labelBackground.drawRoundedRect(-labelWidth / 2, -labelHeight / 2, labelWidth, labelHeight, labelHeight / 2);
       labelBackground.endFill();
       labelContainer.addChild(labelBackground);
@@ -1757,10 +1772,10 @@ const RouteMapBuilder = ({ onBack }) => {
     setEdgeEditor(null);
   }, [edgeEditor]);
 
-  const currentToolLabel = useMemo(() => {
-    const tool = TOOLBAR_ACTIONS.find((item) => item.id === activeTool);
-    return tool ? `${tool.icon} ${tool.label}` : '';
-  }, [activeTool]);
+  const currentTool = useMemo(
+    () => TOOLBAR_ACTIONS.find((item) => item.id === activeTool),
+    [activeTool],
+  );
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1773,8 +1788,9 @@ const RouteMapBuilder = ({ onBack }) => {
           <Boton
             className="mt-4 w-full border border-sky-500/40 bg-none bg-slate-900/70 text-slate-200 hover:border-sky-400/70 hover:bg-slate-900"
             onClick={onBack}
+            icon={<ArrowLeft className="h-4 w-4" aria-hidden />}
           >
-            ← Volver al menú
+            Volver al menú
           </Boton>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
@@ -1795,7 +1811,7 @@ const RouteMapBuilder = ({ onBack }) => {
                       : 'border-slate-800/80 bg-slate-900/80 hover:border-slate-600/70 hover:bg-slate-800/70'
                   }`}
                 >
-                  <span className="text-lg opacity-90">{action.icon}</span>
+                  <action.icon className="h-4 w-4" aria-hidden />
                   <span>{action.label}</span>
                 </button>
               ))}
@@ -1821,23 +1837,40 @@ const RouteMapBuilder = ({ onBack }) => {
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Acciones rápidas</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <Boton onClick={handleUndo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ↩️ Deshacer
+              <Boton
+                onClick={handleUndo}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Undo2 className="h-4 w-4" aria-hidden />}
+              >
+                Deshacer
               </Boton>
-              <Boton onClick={handleRedo} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ↪️ Rehacer
+              <Boton
+                onClick={handleRedo}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Redo2 className="h-4 w-4" aria-hidden />}
+              >
+                Rehacer
               </Boton>
-              <Boton onClick={duplicateSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                ⎘ Duplicar
+              <Boton
+                onClick={duplicateSelection}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Copy className="h-4 w-4" aria-hidden />}
+              >
+                Duplicar
               </Boton>
-              <Boton onClick={deleteSelection} className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70">
-                Supr
+              <Boton
+                onClick={deleteSelection}
+                className="bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<Trash2 className="h-4 w-4" aria-hidden />}
+              >
+                Suprimir
               </Boton>
               <Boton
                 onClick={toggleNodeLock}
                 className="col-span-2 bg-none bg-slate-900/80 hover:bg-slate-800/80 border border-slate-700/70"
+                icon={<LockKeyhole className="h-4 w-4" aria-hidden />}
               >
-                🔒 Bloquear / Desbloquear
+                Bloquear / Desbloquear
               </Boton>
             </div>
           </section>
@@ -1949,8 +1982,9 @@ const RouteMapBuilder = ({ onBack }) => {
             <Boton
               onClick={applyAutoLayout}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<Compass className="h-4 w-4" aria-hidden />}
             >
-              🧭 Auto-layout
+              Auto-layout
             </Boton>
           </section>
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20 space-y-3 text-sm">
@@ -1958,14 +1992,16 @@ const RouteMapBuilder = ({ onBack }) => {
             <Boton
               onClick={() => saveToLocalStorage(state.nodes, state.edges)}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<Save className="h-4 w-4" aria-hidden />}
             >
-              💾 Guardar en navegador
+              Guardar en navegador
             </Boton>
             <Boton
               onClick={exportToFile}
               className="w-full border border-slate-700/70 bg-none bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/80"
+              icon={<FileDown className="h-4 w-4" aria-hidden />}
             >
-              📁 Exportar JSON
+              Exportar JSON
             </Boton>
             <label className="block w-full text-xs text-slate-400">
               Importar JSON
@@ -2032,7 +2068,16 @@ const RouteMapBuilder = ({ onBack }) => {
         <div className="pointer-events-none absolute inset-0 z-0 opacity-25" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.18), transparent 45%), radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.16), transparent 55%), radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.12), transparent 50%)' }} />
         <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
-          <span className="font-medium text-sky-200">{currentToolLabel}</span>
+          <span className="font-medium text-sky-200 flex items-center gap-2">
+            {currentTool ? (
+              <>
+                <currentTool.icon className="h-4 w-4" aria-hidden />
+                {currentTool.label}
+              </>
+            ) : (
+              'Selecciona una herramienta'
+            )}
+          </span>
           {connectOriginId && activeTool === 'connect' && (
             <span className="text-xs text-amber-300">Selecciona nodo destino…</span>
           )}
