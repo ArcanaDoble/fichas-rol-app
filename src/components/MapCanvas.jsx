@@ -742,9 +742,16 @@ const Token = forwardRef(
     const SNAP = gridSize / 4;
 
     const placeholderBase = color || 'red';
+    const effectiveTintOpacity = useMemo(() => {
+      const base = Math.max(0, Math.min(1, tintOpacity));
+      const flash = Math.max(0, Math.min(1, damageFlashIntensity));
+      if (flash <= 0) return base;
+      return Math.min(1, base + flash * (1 - base));
+    }, [tintOpacity, damageFlashIntensity]);
+
     const fillColor =
-      tintOpacity > 0
-        ? mixColors(placeholderBase, tintColor, tintOpacity)
+      effectiveTintOpacity > 0
+        ? mixColors(placeholderBase, tintColor, effectiveTintOpacity)
         : placeholderBase;
     const estadoData = estados
       .map((id) => ESTADOS.find((e) => e.id === id))
@@ -778,7 +785,7 @@ const Token = forwardRef(
         MAX_PIXEL_RATIO,
       );
 
-      if (tintOpacity <= 0) {
+      if (effectiveTintOpacity <= 0) {
         clearTintCache(true);
         return;
       }
@@ -795,9 +802,15 @@ const Token = forwardRef(
       node.red(r);
       node.green(g);
       node.blue(b);
-      node.alpha(tintOpacity);
+      node.alpha(effectiveTintOpacity);
       node.getLayer()?.batchDraw();
-    }, [clearTintCache, tintColor, tintOpacity, img, groupScale]);
+    }, [
+      clearTintCache,
+      tintColor,
+      effectiveTintOpacity,
+      img,
+      groupScale,
+    ]);
 
     const scheduleTintCache = useCallback(() => {
       if (pendingTintRecacheRef.current) {
@@ -818,6 +831,7 @@ const Token = forwardRef(
         }
       };
     }, [scheduleTintCache]);
+
 
     useEffect(() => {
       const node = damageFlashRef.current;
