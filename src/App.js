@@ -64,6 +64,7 @@ import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
 import { applyIconConversions } from './utils/iconConversions';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
+const RouteMapBuilder = React.lazy(() => import('./components/RouteMapBuilder'));
 import { nanoid } from 'nanoid';
 import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
 import {
@@ -7422,6 +7423,13 @@ function App() {
           mode="master"
           onBack={() => setChosenView(null)}
         />
+      </React.Suspense>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'routeMap') {
+    return withTooltips(
+      <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando mapa de rutas…</div>}>
+        <RouteMapBuilder onBack={() => setChosenView(null)} />
       </React.Suspense>
     );
   }

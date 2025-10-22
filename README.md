@@ -14,6 +14,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).
 
+### 🧭 **Mapa de Rutas (Roguelike) — NUEVO**
+
+- **Lienzo interactivo** con Pixi v8 y pixi-viewport para pan, zoom y fondo personalizable.
+- **Tipos de nodo configurables** (Inicio, Combate, Evento, Tienda, Élite, Curación y Jefe) con estados bloqueado, visible, desbloqueado, completado y actual.
+- **Conexiones dirigidas editables** con etiquetas y requisitos OR/AND para controlar la lógica de desbloqueo.
+- **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
+- **Historial y atajos** con deshacer/rehacer, Delete, Ctrl+C y Ctrl+V para mantener el flujo de trabajo del máster.
+- **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.
+
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
 - **Línea de sucesos en tiempo real** - Seguimiento visual del orden de actuación
