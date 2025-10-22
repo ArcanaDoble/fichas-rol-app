@@ -6,6 +6,8 @@ beforeAll(() => {
     matches: false,
     addListener: () => {},
     removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
   });
 });
 
