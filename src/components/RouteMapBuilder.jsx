@@ -28,6 +28,41 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import Boton from './Boton';
 import Input from './Input';
 
+const ensurePixiViewportCompatibility = (() => {
+  let patched = false;
+  return () => {
+    if (patched) return;
+    const displayObjectProto = Object.getPrototypeOf(Container.prototype);
+    if (displayObjectProto) {
+      const hasTransformAlias = Object.getOwnPropertyDescriptor(displayObjectProto, 'transform');
+      if (!hasTransformAlias) {
+        Object.defineProperty(displayObjectProto, 'transform', {
+          configurable: true,
+          enumerable: false,
+          get() {
+            return this.localTransform;
+          },
+          set(value) {
+            if (!value) return;
+            if (this.localTransform && typeof this.localTransform.copyFrom === 'function') {
+              this.localTransform.copyFrom(value);
+            }
+          },
+        });
+      }
+      if (
+        typeof displayObjectProto.updateLocalTransform !== 'function' &&
+        typeof displayObjectProto.updateTransform === 'function'
+      ) {
+        displayObjectProto.updateLocalTransform = displayObjectProto.updateTransform;
+      }
+    }
+    patched = true;
+  };
+})();
+
+ensurePixiViewportCompatibility();
+
 const NODE_TYPES = [
   {
     id: 'start',
