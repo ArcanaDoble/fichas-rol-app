@@ -2113,24 +2113,6 @@ const RouteMapBuilder = ({ onBack }) => {
         iconBackdrop.eventMode = 'none';
         nodeContainer.addChild(iconBackdrop);
 
-        const glossSprite = new Sprite(glossTexture);
-        glossSprite.anchor.set(0.5);
-        const glossScale = glossSprite.texture?.width ? coreSize / glossSprite.texture.width : coreSize / 320;
-        glossSprite.scale.set(glossScale);
-        glossSprite.alpha = isLocked ? 0.18 : 0.42;
-        glossSprite.blendMode = 'screen';
-        glossSprite.eventMode = 'none';
-        nodeContainer.addChild(glossSprite);
-
-        const highlight = new Graphics();
-        highlight.beginFill(0xffffff, isLocked ? 0.12 : 0.25);
-        highlight.drawEllipse(-radius * 0.25, -radius * 0.32, radius * 0.6, radius * 0.45);
-        highlight.endFill();
-        highlight.rotation = -0.6;
-        highlight.blendMode = 'add';
-        highlight.eventMode = 'none';
-        nodeContainer.addChild(highlight);
-
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
         iconSprite.position.set(0, 0);
