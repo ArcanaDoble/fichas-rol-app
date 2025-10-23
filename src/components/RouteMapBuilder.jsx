@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import {
   Application,
   BitmapFont,
+  BitmapText,
+  Cache,
   Container,
   Graphics,
   Point,
@@ -701,27 +703,26 @@ const generateNodeTextures = () => ({
   label: createLabelTexture(),
 });
 
+const ROUTE_MAP_FONT_CACHE_KEY = 'RouteMapLabel-bitmap';
+
 const ensureRouteMapFont = (() => {
   let ensured = false;
   return () => {
     if (ensured) return;
-    if (!BitmapFont.available.RouteMapLabel) {
-      BitmapFont.from(
-        'RouteMapLabel',
-        {
+    if (!Cache.has(ROUTE_MAP_FONT_CACHE_KEY)) {
+      BitmapFont.install({
+        name: 'RouteMapLabel',
+        style: {
           fontFamily: 'Inter, sans-serif',
           fontSize: 32,
           fontWeight: '500',
           fill: '#e2e8f0',
-          stroke: '#020617',
-          strokeThickness: 6,
+          stroke: { color: '#020617', width: 6 },
           letterSpacing: 2,
         },
-        {
-          chars: BitmapFont.ASCII,
-          resolution: 2,
-        },
-      );
+        chars: [[' ', '~']],
+        resolution: 2,
+      });
     }
     ensured = true;
   };
