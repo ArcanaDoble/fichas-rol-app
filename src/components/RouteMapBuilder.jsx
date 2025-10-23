@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import {
   Application,
   BitmapFont,
+  BitmapText,
+  Cache,
   Container,
   Graphics,
   Point,
@@ -271,7 +273,6 @@ const mixHex = (hexA, hexB, amount) => {
 };
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
-const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
@@ -282,6 +283,7 @@ const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
 const DASH_TEXTURE_CORE_HEIGHT = 6;
+const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
 const createDashTexture = (renderer) => {
   if (!renderer) return null;
@@ -491,6 +493,7 @@ const NODE_TEXTURE_KEYS = [
   'frameActive',
   'frameBoss',
   'frameBossActive',
+  'core',
   'halo',
   'haloBoss',
   'haloComplete',
@@ -545,35 +548,238 @@ const createCanvasTexture = (id, size, draw) => {
   return texture;
 };
 
-const createFrameTexture = (id, { innerAlpha = 0.3, rimAlpha = 0.85, rimWidth = 26, glow = 0 }) =>
-  createCanvasTexture(id, 256, (ctx, size) => {
+const normalizeGradientStops = (stops) => {
+  if (!Array.isArray(stops) || stops.length === 0) {
+    return [
+      { offset: 0, color: '#0f172a' },
+      { offset: 1, color: '#020617' },
+    ];
+  }
+  const normalized = stops
+    .map((stop, index) => {
+      if (!stop || typeof stop !== 'object') {
+        return null;
+      }
+      const offset = typeof stop.offset === 'number' ? clamp01(stop.offset) : clamp01(index / Math.max(stops.length - 1, 1));
+      const color = normalizeHex(stop.color) || stop.color;
+      if (!color) {
+        return null;
+      }
+      return { offset, color };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.offset - b.offset);
+  if (normalized.length === 0) {
+    return [
+      { offset: 0, color: '#0f172a' },
+      { offset: 1, color: '#020617' },
+    ];
+  }
+  return normalized;
+};
+
+const createGradientTexture = (stops, options = {}) => {
+  const {
+    orientation = 'vertical',
+    size = 2048,
+    overlays = [],
+  } = options;
+  const normalizedStops = normalizeGradientStops(stops);
+  const overlaysArray = Array.isArray(overlays) ? overlays : [];
+  const overlayKey = overlaysArray
+    .map((overlay) => {
+      if (!overlay || typeof overlay !== 'object') return 'none';
+      const type = overlay.type || 'unknown';
+      const details = Object.keys(overlay)
+        .filter((key) => key !== 'type')
+        .sort()
+        .map((key) => `${key}:${overlay[key]}`)
+        .join(',');
+      return `${type}(${details})`;
+    })
+    .join('|');
+  const textureId = `route-gradient-${orientation}-${size}-${normalizedStops
+    .map((stop) => `${stop.offset.toFixed(2)}-${stop.color}`)
+    .join('_')}-${overlayKey}`;
+
+  return createCanvasTexture(textureId, size, (ctx, canvasSize) => {
+    const center = canvasSize / 2;
+    let gradient;
+    switch (orientation) {
+      case 'horizontal':
+        gradient = ctx.createLinearGradient(0, 0, canvasSize, 0);
+        break;
+      case 'diagonal':
+        gradient = ctx.createLinearGradient(0, 0, canvasSize, canvasSize);
+        break;
+      case 'radial':
+        gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+        break;
+      default:
+        gradient = ctx.createLinearGradient(0, 0, 0, canvasSize);
+        break;
+    }
+
+    normalizedStops.forEach((stop) => {
+      gradient.addColorStop(stop.offset, stop.color);
+    });
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    overlaysArray.forEach((overlay) => {
+      if (!overlay || typeof overlay !== 'object') return;
+      if (overlay.type === 'radial-fade') {
+        const innerRadius = clamp01(overlay.innerRadius ?? 0);
+        const outerRadius = Math.max(innerRadius, clamp01(overlay.outerRadius ?? 1));
+        const fadeGradient = ctx.createRadialGradient(
+          center,
+          center,
+          innerRadius * center * 2,
+          center,
+          center,
+          outerRadius * center * 2,
+        );
+        fadeGradient.addColorStop(0, overlay.from || 'rgba(255,255,255,0.18)');
+        fadeGradient.addColorStop(1, overlay.to || 'rgba(2,6,23,0.95)');
+        ctx.fillStyle = fadeGradient;
+        const previousComposite = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = overlay.mode || 'source-over';
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.globalCompositeOperation = previousComposite;
+      } else if (overlay.type === 'noise') {
+        const density = Math.max(0, overlay.density ?? 0.2);
+        const alpha = clamp01(overlay.alpha ?? 0.08);
+        const radius = Math.max(0.5, overlay.radius ?? 1.2);
+        const rgb = hexToRgb(overlay.color) || { r: 148, g: 163, b: 184 };
+        const particles = Math.floor(canvasSize * canvasSize * density * 0.0025);
+        for (let i = 0; i < particles; i += 1) {
+          const x = Math.random() * canvasSize;
+          const y = Math.random() * canvasSize;
+          const noiseRadius = Math.random() * radius + 0.4;
+          const localAlpha = alpha * (0.4 + Math.random() * 0.6);
+          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${localAlpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, noiseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+  });
+};
+
+const createBackgroundSprite = (texture) => {
+  const baseTexture = texture instanceof Texture ? texture : Texture.WHITE;
+  const size = 4096;
+  const sprite = new TilingSprite(baseTexture, size, size);
+  sprite.position.set(-size / 2, -size / 2);
+  sprite.tileScale.set(1);
+  sprite.alpha = 1;
+  sprite.eventMode = 'none';
+  return sprite;
+};
+
+const createSolidTexture = (id, color) =>
+  createCanvasTexture(id, 128, (ctx, size) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, size, size);
+  });
+
+const createCoreTexture = (id) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
     const center = size / 2;
-    const outerRadius = center - 6;
+    const radius = center - 24;
+
+    const baseGradient = ctx.createRadialGradient(
+      center - radius * 0.28,
+      center - radius * 0.32,
+      radius * 0.15,
+      center,
+      center,
+      radius,
+    );
+    baseGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    baseGradient.addColorStop(0.55, 'rgba(255, 255, 255, 0.7)');
+    baseGradient.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
+    ctx.fillStyle = baseGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shadowGradient = ctx.createRadialGradient(
+      center,
+      center + radius * 0.35,
+      radius * 0.15,
+      center,
+      center,
+      radius,
+    );
+    shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.3)');
+    shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const rimGradient = ctx.createLinearGradient(center, center - radius, center, center + radius);
+    rimGradient.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+    rimGradient.addColorStop(1, 'rgba(255, 255, 255, 0.28)');
+    ctx.lineWidth = size * 0.02;
+    ctx.strokeStyle = rimGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+const createFrameTexture = (id, options = {}) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
+    const {
+      rimWidth = options.rimWidth ?? 26,
+      rimAlpha = options.rimAlpha ?? 0.88,
+      innerAlpha = options.innerAlpha ?? 0.42,
+      glow = options.glow ?? 0.25,
+    } = options;
+    const center = size / 2;
+    const outerRadius = center - 12;
     const innerRadius = Math.max(outerRadius - rimWidth, 0);
+    const ringThickness = outerRadius - innerRadius;
 
     if (glow > 0) {
-      const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius);
+      const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius + ringThickness * 0.7);
       gradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(glow, 0.45)})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(center, center, outerRadius, 0, Math.PI * 2);
+      ctx.arc(center, center, outerRadius + ringThickness * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
     const rimGradient = ctx.createLinearGradient(center, center - outerRadius, center, center + outerRadius);
-    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${rimAlpha})`);
-    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.6})`);
+    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.1)})`);
+    rimGradient.addColorStop(0.5, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.2)})`);
+    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.7})`);
     ctx.strokeStyle = rimGradient;
-    ctx.lineWidth = outerRadius - innerRadius;
+    ctx.lineWidth = ringThickness;
     ctx.beginPath();
     ctx.arc(center, center, (outerRadius + innerRadius) / 2, 0, Math.PI * 2);
     ctx.stroke();
 
-    const innerGradient = ctx.createLinearGradient(center, center - innerRadius, center, center + innerRadius);
-    innerGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
-    innerGradient.addColorStop(1, `rgba(255, 255, 255, ${innerAlpha * 0.4})`);
-    ctx.fillStyle = innerGradient;
+    ctx.lineWidth = Math.max(3, ringThickness * 0.32);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, innerAlpha + 0.15)})`;
+    ctx.beginPath();
+    ctx.arc(center, center, innerRadius + ringThickness * 0.45, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(2, ringThickness * 0.22);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, rimAlpha)})`;
+    ctx.beginPath();
+    ctx.arc(center, center, outerRadius - ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const innerShadow = ctx.createRadialGradient(center, center, innerRadius * 0.35, center, center, innerRadius);
+    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0.38)');
+    innerShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = innerShadow;
     ctx.beginPath();
     ctx.arc(center, center, innerRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -674,25 +880,26 @@ const createLabelTexture = () =>
   });
 
 const generateNodeTextures = () => ({
-  frame: createFrameTexture('route-frame', { innerAlpha: 0.28, rimAlpha: 0.82, rimWidth: 24 }),
+  frame: createFrameTexture('route-frame', { innerAlpha: 0.32, rimAlpha: 0.78, rimWidth: 26, glow: 0.2 }),
   frameActive: createFrameTexture('route-frame-active', {
-    innerAlpha: 0.46,
-    rimAlpha: 0.95,
-    rimWidth: 22,
-    glow: 0.28,
-  }),
-  frameBoss: createFrameTexture('route-frame-boss', {
-    innerAlpha: 0.34,
-    rimAlpha: 0.88,
-    rimWidth: 26,
-    glow: 0.18,
-  }),
-  frameBossActive: createFrameTexture('route-frame-boss-active', {
-    innerAlpha: 0.52,
-    rimAlpha: 0.98,
-    rimWidth: 22,
+    innerAlpha: 0.5,
+    rimAlpha: 0.94,
+    rimWidth: 28,
     glow: 0.32,
   }),
+  frameBoss: createFrameTexture('route-frame-boss', {
+    innerAlpha: 0.38,
+    rimAlpha: 0.86,
+    rimWidth: 30,
+    glow: 0.26,
+  }),
+  frameBossActive: createFrameTexture('route-frame-boss-active', {
+    innerAlpha: 0.56,
+    rimAlpha: 0.98,
+    rimWidth: 30,
+    glow: 0.38,
+  }),
+  core: createCoreTexture('route-core'),
   halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
   haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
   haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
@@ -701,27 +908,26 @@ const generateNodeTextures = () => ({
   label: createLabelTexture(),
 });
 
+const ROUTE_MAP_FONT_CACHE_KEY = 'RouteMapLabel-bitmap';
+
 const ensureRouteMapFont = (() => {
   let ensured = false;
   return () => {
     if (ensured) return;
-    if (!BitmapFont.available.RouteMapLabel) {
-      BitmapFont.from(
-        'RouteMapLabel',
-        {
+    if (!Cache.has(ROUTE_MAP_FONT_CACHE_KEY)) {
+      BitmapFont.install({
+        name: 'RouteMapLabel',
+        style: {
           fontFamily: 'Inter, sans-serif',
           fontSize: 32,
           fontWeight: '500',
           fill: '#e2e8f0',
-          stroke: '#020617',
-          strokeThickness: 6,
+          stroke: { color: '#020617', width: 6 },
           letterSpacing: 2,
         },
-        {
-          chars: BitmapFont.ASCII,
-          resolution: 2,
-        },
-      );
+        chars: [[' ', '~']],
+        resolution: 2,
+      });
     }
     ensured = true;
   };
@@ -928,10 +1134,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const nodesContainerRef = useRef(null);
   const edgesContainerRef = useRef(null);
   const backgroundLayersRef = useRef({ far: null, mid: null, near: null });
-  const fxLayerRef = useRef(null);
-  const fogLayerRef = useRef(null);
-  const fogSpriteRef = useRef(null);
-  const tickerCallbackRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
   const dashTextureRef = useRef(null);
@@ -1459,92 +1661,33 @@ const RouteMapBuilder = ({ onBack }) => {
 
       const selectionGraphics = new Graphics();
 
-      const farTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#020617' },
-          { offset: 0.45, color: '#07152f' },
-          { offset: 1, color: '#0b1220' },
-        ],
-        {
-          orientation: 'vertical',
-          overlays: [
-            {
-              type: 'radial-fade',
-              from: 'rgba(30,64,175,0.28)',
-              to: 'rgba(2,6,23,0.95)',
-              innerRadius: 0.15,
-              outerRadius: 0.95,
-            },
-          ],
-        },
-      );
+      const backgroundFarLayer = new Container();
+      backgroundFarLayer.eventMode = 'none';
+      const backgroundMidLayer = new Container();
+      backgroundMidLayer.eventMode = 'none';
+      const backgroundNearLayer = new Container();
+      backgroundNearLayer.eventMode = 'none';
 
-      const midTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#081529' },
-          { offset: 0.4, color: '#0b1f3d' },
-          { offset: 1, color: '#112544' },
-        ],
-        {
-          orientation: 'diagonal',
-          overlays: [
-            { type: 'noise', density: 0.18, alpha: 0.06, color: '#4f83ff', radius: 1.4 },
-          ],
-        },
-      );
+      const farTexture = createSolidTexture('route-bg-far', '#050c18');
+      const farSprite = createBackgroundSprite(farTexture);
+      farSprite.alpha = 1;
+      backgroundFarLayer.addChild(farSprite);
 
-      const nearTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#0e1a30' },
-          { offset: 0.5, color: '#142d4d' },
-          { offset: 1, color: '#1a3555' },
-        ],
-        {
-          orientation: 'horizontal',
-          overlays: [
-            {
-              type: 'noise',
-              density: 0.25,
-              alpha: 0.08,
-              color: '#60a5fa',
-              radius: 1.1,
-            },
-            {
-              type: 'radial-fade',
-              from: 'rgba(96,165,250,0.18)',
-              to: 'rgba(2,6,23,0.95)',
-              innerRadius: 0.1,
-              outerRadius: 0.9,
-            },
-          ],
-        },
-      );
+      const midTexture = createSolidTexture('route-bg-mid', '#081423');
+      const midSprite = createBackgroundSprite(midTexture);
+      midSprite.alpha = 0.92;
+      backgroundMidLayer.addChild(midSprite);
 
-      const fogTexture = createFogTexture(512);
-      if (fogTexture?.baseTexture) {
-        fogTexture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
-      }
-
-      backgroundFarLayer.addChild(createBackgroundSprite(farTexture));
-      backgroundMidLayer.addChild(createBackgroundSprite(midTexture));
-      backgroundNearLayer.addChild(createBackgroundSprite(nearTexture));
-
-      const fogSprite = new TilingSprite(
-        fogTexture,
-        Math.max(app.renderer.width, 2048),
-        Math.max(app.renderer.height, 2048),
-      );
-      fogSprite.alpha = 0.2;
-      fogSprite.tileScale.set(0.5);
-      fogLayer.addChild(fogSprite);
+      const nearTexture = createSolidTexture('route-bg-near', '#0b1628');
+      const nearSprite = createBackgroundSprite(nearTexture);
+      nearSprite.alpha = 0.98;
+      backgroundNearLayer.addChild(nearSprite);
 
       viewport.addChild(backgroundFarLayer);
       viewport.addChild(backgroundMidLayer);
       viewport.addChild(backgroundNearLayer);
       viewport.addChild(edgesLayer);
       viewport.addChild(nodesLayer);
-      viewport.addChild(fxLayer);
-      viewport.addChild(fogLayer);
       viewport.addChild(selectionGraphics);
 
       backgroundLayersRef.current = {
@@ -1552,9 +1695,6 @@ const RouteMapBuilder = ({ onBack }) => {
         mid: backgroundMidLayer,
         near: backgroundNearLayer,
       };
-      fxLayerRef.current = fxLayer;
-      fogLayerRef.current = fogLayer;
-      fogSpriteRef.current = fogSprite;
       viewportRef.current = viewport;
       appRef.current = app;
       tickerRef.current = app.ticker;
@@ -1575,9 +1715,8 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.eventMode = 'static';
 
       const updateEnvironmentalLayers = () => {
-        if (!viewportRef.current || !appRef.current) return;
+        if (!viewportRef.current) return;
         const currentViewport = viewportRef.current;
-        const currentApp = appRef.current;
         const scaleX = currentViewport.scale?.x || 1;
         const scaleY = currentViewport.scale?.y || 1;
         const vx = currentViewport.x;
@@ -1593,40 +1732,18 @@ const RouteMapBuilder = ({ onBack }) => {
           layer.scale.set(1 / scaleX, 1 / scaleY);
         };
 
-        applyParallax(farLayer, 0.2);
-        applyParallax(midLayer, 0.5);
-        applyParallax(nearLayer, 0.8);
-
-        const fogLayerInstance = fogLayerRef.current;
-        if (fogLayerInstance) {
-          fogLayerInstance.position.set(-vx, -vy);
-          fogLayerInstance.scale.set(1 / scaleX, 1 / scaleY);
-          const fogSpriteInstance = fogSpriteRef.current;
-          if (fogSpriteInstance) {
-            const renderer = currentApp.renderer;
-            const fogWidth = renderer.width * 1.5;
-            const fogHeight = renderer.height * 1.5;
-            fogSpriteInstance.width = fogWidth;
-            fogSpriteInstance.height = fogHeight;
-            fogSpriteInstance.position.set(-fogWidth / 2, -fogHeight / 2);
-            fogSpriteInstance.tileScale.set(1 / scaleX, 1 / scaleY);
-          }
-        }
+        applyParallax(farLayer, 0.4);
+        applyParallax(midLayer, 0.7);
+        applyParallax(nearLayer, 1);
       };
 
       updateEnvironmentalLayers();
 
-      const tickerCallback = (delta) => {
-        const fogSpriteInstance = fogSpriteRef.current;
-        if (fogSpriteInstance) {
-          fogSpriteInstance.tilePosition.x += delta * 0.24;
-          fogSpriteInstance.tilePosition.y += delta * 0.18;
-        }
+      const tickerCallback = () => {
         updateEnvironmentalLayers();
       };
 
       app.ticker.add(tickerCallback);
-      tickerCallbackRef.current = tickerCallback;
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
@@ -1744,10 +1861,6 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
       backgroundLayersRef.current = { far: null, mid: null, near: null };
-      fxLayerRef.current = null;
-      fogLayerRef.current = null;
-      fogSpriteRef.current = null;
-      tickerCallbackRef.current = null;
     };
   }, []);
 
@@ -1968,6 +2081,7 @@ const RouteMapBuilder = ({ onBack }) => {
         const palette = getTypeDefaults(typeDef.id);
         const accentHex = normalizeHex(node.accentColor) || palette.accent;
         const borderHex = normalizeHex(node.borderColor) || palette.border;
+        const fillHex = normalizeHex(node.fillColor) || palette.fill;
         const iconHex = normalizeHex(node.iconColor) || palette.icon;
         const stateStroke = hexToInt(normalizeHex(stateDef.stroke) || '#38bdf8');
         const accentColor = hexToInt(accentHex);
@@ -1980,6 +2094,7 @@ const RouteMapBuilder = ({ onBack }) => {
         const activeFrameKey = isBoss ? 'frameBossActive' : 'frameActive';
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
+        const coreTexture = textures.core || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
@@ -1997,25 +2112,35 @@ const RouteMapBuilder = ({ onBack }) => {
         const haloSprite = new Sprite(haloTexture);
         haloSprite.anchor.set(0.5);
         haloSprite.scale.set(haloBaseScale);
-        haloSprite.alpha = isLocked ? 0.45 : 0.8;
-        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.1));
+        haloSprite.alpha = isLocked ? 0.42 : 0.82;
+        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.15));
         nodeContainer.addChild(haloSprite);
+
+        const coreSprite = new Sprite(coreTexture);
+        coreSprite.anchor.set(0.5);
+        const coreSize = radius * 2 - 14;
+        const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
+        coreSprite.scale.set(coreScale);
+        const coreTintHex = isLocked ? mixHex(fillHex, '#1f2937', 0.55) : fillHex;
+        coreSprite.tint = hexToInt(coreTintHex);
+        coreSprite.alpha = isLocked ? 0.85 : 1;
+        nodeContainer.addChild(coreSprite);
 
         const frameSprite = new Sprite(frameTexture);
         frameSprite.anchor.set(0.5);
-        const frameScale = frameTexture.width ? 72 / frameTexture.width : 0.28;
+        const frameSize = radius * 2 + (isBoss ? 30 : 24);
+        const frameScale = frameSprite.texture?.width ? frameSize / frameSprite.texture.width : frameSize / 320;
         frameSprite.scale.set(frameScale);
-        frameSprite.alpha = isLocked ? 0.78 : 1;
-        const frameTint = isLocked
-          ? hexToInt(mixHex('#64748b', borderHex, 0.2))
-          : selected
-            ? hexToInt(lightenHex(accentHex, 0.1))
-            : 0xffffff;
-        frameSprite.tint = frameTint;
+        const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
+        frameSprite.alpha = frameBaseAlpha;
+        const baseFrameTint = isLocked ? mixHex(borderHex, '#1f2937', 0.55) : borderHex;
+        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : baseFrameTint;
+        frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
+        iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
         const iconComponent = NODE_ICON_COMPONENTS[typeDef.id] || NODE_ICON_COMPONENTS.normal;
@@ -2024,8 +2149,9 @@ const RouteMapBuilder = ({ onBack }) => {
         const applyIconTexture = (texture) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
-          iconSprite.alpha = isLocked ? 0.82 : 1;
-          const scale = texture.width ? 34 / texture.width : 0.34;
+          iconSprite.alpha = isLocked ? 0.78 : 1;
+          const iconSize = 30;
+          const scale = texture.width ? iconSize / texture.width : iconSize / 96;
           iconSprite.scale.set(scale);
         };
         if (iconTextureResult instanceof Texture) {
@@ -2064,7 +2190,7 @@ const RouteMapBuilder = ({ onBack }) => {
           halo: haloSprite,
           frame: frameSprite,
           baseHaloScale: haloBaseScale,
-          baseFrameAlpha: frameSprite.alpha,
+          baseFrameAlpha: frameBaseAlpha,
           ticker,
         });
         if (hoverCleanup) {
