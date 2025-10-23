@@ -1121,17 +1121,27 @@ const RouteMapBuilder = ({ onBack }) => {
     if (!containerRef.current) return;
     let destroyed = false;
     const initPixi = async () => {
-      const app = new Application();
-      await app.init({
+      const options = {
         backgroundAlpha: 0,
         antialias: true,
         resizeTo: containerRef.current,
-      });
+      };
+
+      let app;
+      if (typeof Application.prototype?.init === 'function') {
+        app = new Application();
+        await app.init(options);
+      } else {
+        app = new Application(options);
+      }
       if (destroyed) {
         app.destroy(true);
         return;
       }
-      containerRef.current.appendChild(app.canvas);
+      const canvas = app.canvas ?? app.view;
+      if (canvas) {
+        containerRef.current.appendChild(canvas);
+      }
       const viewport = new Viewport({
         ticker: app.ticker,
         events: app.renderer.events,
