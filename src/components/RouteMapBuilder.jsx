@@ -2099,7 +2099,7 @@ const RouteMapBuilder = ({ onBack }) => {
         nodeContainer.addChild(frameSprite);
 
         const iconSprite = new Sprite(Texture.WHITE);
-        iconSprite.anchor.set(0.5);
+        iconSprite.anchor.set(0);
         iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
@@ -2117,6 +2117,9 @@ const RouteMapBuilder = ({ onBack }) => {
           const baseHeight = texture?.height || LUCIDE_TEXTURE_SIZE;
           const uniformScale = iconSize / Math.max(baseWidth, baseHeight);
           iconSprite.scale.set(uniformScale);
+          const iconWidth = baseWidth * uniformScale;
+          const iconHeight = baseHeight * uniformScale;
+          iconSprite.position.set(-iconWidth / 2, -iconHeight / 2);
         };
         if (iconTextureResult instanceof Texture) {
           applyIconTexture(iconTextureResult);
