@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import PropTypes from 'prop-types';
 import {
   Application,
+  BitmapFont,
   Container,
   Graphics,
   Point,
