@@ -273,7 +273,6 @@ const mixHex = (hexA, hexB, amount) => {
 };
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
-const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
@@ -495,7 +494,6 @@ const NODE_TEXTURE_KEYS = [
   'frameBoss',
   'frameBossActive',
   'core',
-  'gloss',
   'halo',
   'haloBoss',
   'haloComplete',
@@ -687,55 +685,6 @@ const createSolidTexture = (id, color) =>
     ctx.fillRect(0, 0, size, size);
   });
 
-const createGridTexture = (
-  id,
-  {
-    background = '#0b1628',
-    cellSize = 96,
-    majorEvery = 4,
-    minorLineColor = 'rgba(148, 163, 184, 0.08)',
-    majorLineColor = 'rgba(148, 163, 184, 0.18)',
-    dotColor = 'rgba(148, 163, 184, 0.22)',
-  } = {},
-) =>
-  createCanvasTexture(id, cellSize * Math.max(majorEvery, 1), (ctx, size) => {
-    ctx.fillStyle = background;
-    ctx.fillRect(0, 0, size, size);
-
-    const drawLine = (x1, y1, x2, y2, strokeStyle) => {
-      ctx.strokeStyle = strokeStyle;
-      ctx.beginPath();
-      ctx.moveTo(x1 + 0.5, y1 + 0.5);
-      ctx.lineTo(x2 + 0.5, y2 + 0.5);
-      ctx.stroke();
-    };
-
-    ctx.lineWidth = 1;
-    for (let offset = 0; offset <= size; offset += cellSize) {
-      drawLine(offset, 0, offset, size, minorLineColor);
-      drawLine(0, offset, size, offset, minorLineColor);
-    }
-
-    const majorStep = cellSize * Math.max(majorEvery, 1);
-    ctx.lineWidth = 1.2;
-    for (let offset = 0; offset <= size; offset += majorStep) {
-      drawLine(offset, 0, offset, size, majorLineColor);
-      drawLine(0, offset, size, offset, majorLineColor);
-    }
-
-    if (dotColor) {
-      const radius = 1.6;
-      ctx.fillStyle = dotColor;
-      for (let x = 0; x <= size; x += majorStep) {
-        for (let y = 0; y <= size; y += majorStep) {
-          ctx.beginPath();
-          ctx.arc(x + 0.5, y + 0.5, radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-  });
-
 const createCoreTexture = (id) =>
   createCanvasTexture(id, 320, (ctx, size) => {
     const center = size / 2;
@@ -780,38 +729,6 @@ const createCoreTexture = (id) =>
     ctx.beginPath();
     ctx.arc(center, center, radius * 0.82, 0, Math.PI * 2);
     ctx.stroke();
-  });
-
-const createGlossTexture = (id) =>
-  createCanvasTexture(id, 320, (ctx, size) => {
-    const center = size / 2;
-    const radius = center - 24;
-
-    const glossGradient = ctx.createRadialGradient(
-      center - radius * 0.48,
-      center - radius * 0.6,
-      radius * 0.05,
-      center,
-      center,
-      radius,
-    );
-    glossGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-    glossGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.35)');
-    glossGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = glossGradient;
-    ctx.beginPath();
-    ctx.arc(center, center, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-    ctx.beginPath();
-    ctx.ellipse(center - radius * 0.34, center - radius * 0.42, radius * 0.46, radius * 0.35, -0.6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.beginPath();
-    ctx.arc(center + radius * 0.22, center + radius * 0.2, radius * 0.22, 0, Math.PI * 2);
-    ctx.fill();
   });
 
 const createFrameTexture = (id, options = {}) =>
@@ -983,7 +900,6 @@ const generateNodeTextures = () => ({
     glow: 0.38,
   }),
   core: createCoreTexture('route-core'),
-  gloss: createGlossTexture('route-gloss'),
   halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
   haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
   haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
@@ -1762,16 +1678,9 @@ const RouteMapBuilder = ({ onBack }) => {
       midSprite.alpha = 0.92;
       backgroundMidLayer.addChild(midSprite);
 
-      const nearTexture = createGridTexture('route-bg-grid', {
-        background: '#0b1628',
-        cellSize: 96,
-        majorEvery: 4,
-        minorLineColor: 'rgba(148, 163, 184, 0.08)',
-        majorLineColor: 'rgba(148, 163, 184, 0.16)',
-        dotColor: 'rgba(148, 163, 184, 0.18)',
-      });
+      const nearTexture = createSolidTexture('route-bg-near', '#0b1628');
       const nearSprite = createBackgroundSprite(nearTexture);
-      nearSprite.alpha = 0.95;
+      nearSprite.alpha = 0.98;
       backgroundNearLayer.addChild(nearSprite);
 
       viewport.addChild(backgroundFarLayer);
@@ -2186,7 +2095,6 @@ const RouteMapBuilder = ({ onBack }) => {
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
         const coreTexture = textures.core || Texture.WHITE;
-        const glossTexture = textures.gloss || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
@@ -2225,11 +2133,8 @@ const RouteMapBuilder = ({ onBack }) => {
         frameSprite.scale.set(frameScale);
         const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
         frameSprite.alpha = frameBaseAlpha;
-        const frameTintHex = selected
-          ? lightenHex(accentHex, 0.18)
-          : isLocked
-            ? mixHex(accentHex, '#1f2937', 0.55)
-            : accentHex;
+        const baseFrameTint = isLocked ? mixHex(borderHex, '#1f2937', 0.55) : borderHex;
+        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : baseFrameTint;
         frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
@@ -2268,6 +2173,7 @@ const RouteMapBuilder = ({ onBack }) => {
 
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
+        iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
         const iconComponent = NODE_ICON_COMPONENTS[typeDef.id] || NODE_ICON_COMPONENTS.normal;
