@@ -2138,6 +2138,39 @@ const RouteMapBuilder = ({ onBack }) => {
         frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
+        const innerStroke = new Graphics();
+        innerStroke.lineStyle(3.5, hexToInt(isLocked ? mixHex(borderHex, '#94a3b8', 0.7) : borderHex), isLocked ? 0.55 : 0.85);
+        innerStroke.drawCircle(0, 0, radius - 6);
+        innerStroke.endFill();
+        innerStroke.eventMode = 'none';
+        nodeContainer.addChild(innerStroke);
+
+        const iconBackdrop = new Graphics();
+        const iconBgHex = isLocked ? mixHex(fillHex, '#0f172a', 0.6) : darkenHex(fillHex, 0.18);
+        iconBackdrop.beginFill(hexToInt(iconBgHex), isLocked ? 0.6 : 0.82);
+        iconBackdrop.drawCircle(0, 0, radius - 12);
+        iconBackdrop.endFill();
+        iconBackdrop.eventMode = 'none';
+        nodeContainer.addChild(iconBackdrop);
+
+        const glossSprite = new Sprite(glossTexture);
+        glossSprite.anchor.set(0.5);
+        const glossScale = glossSprite.texture?.width ? coreSize / glossSprite.texture.width : coreSize / 320;
+        glossSprite.scale.set(glossScale);
+        glossSprite.alpha = isLocked ? 0.18 : 0.42;
+        glossSprite.blendMode = 'screen';
+        glossSprite.eventMode = 'none';
+        nodeContainer.addChild(glossSprite);
+
+        const highlight = new Graphics();
+        highlight.beginFill(0xffffff, isLocked ? 0.12 : 0.25);
+        highlight.drawEllipse(-radius * 0.25, -radius * 0.32, radius * 0.6, radius * 0.45);
+        highlight.endFill();
+        highlight.rotation = -0.6;
+        highlight.blendMode = 'add';
+        highlight.eventMode = 'none';
+        nodeContainer.addChild(highlight);
+
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
         iconSprite.position.set(0, 0);
