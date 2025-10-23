@@ -495,6 +495,7 @@ const NODE_TEXTURE_KEYS = [
   'frameBoss',
   'frameBossActive',
   'core',
+  'gloss',
   'halo',
   'haloBoss',
   'haloComplete',
@@ -732,6 +733,42 @@ const createCoreTexture = (id) =>
     ctx.stroke();
   });
 
+const createGlossTexture = (id) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
+    const center = size / 2;
+    const radiusX = size * 0.42;
+    const radiusY = size * 0.32;
+
+    const highlightGradient = ctx.createRadialGradient(
+      center - radiusX * 0.2,
+      center - radiusY * 0.6,
+      radiusX * 0.1,
+      center,
+      center,
+      radiusX,
+    );
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    highlightGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.55)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.ellipse(center, center - radiusY * 0.2, radiusX, radiusY, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    const streakGradient = ctx.createLinearGradient(0, center, size, center);
+    streakGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    streakGradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.18)');
+    streakGradient.addColorStop(0.55, 'rgba(255, 255, 255, 0.32)');
+    streakGradient.addColorStop(0.65, 'rgba(255, 255, 255, 0.08)');
+    streakGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = streakGradient;
+    ctx.beginPath();
+    ctx.ellipse(center + radiusX * 0.05, center - radiusY * 0.3, radiusX * 0.9, radiusY * 0.55, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
 const createFrameTexture = (id, options = {}) =>
   createCanvasTexture(id, 320, (ctx, size) => {
     const {
@@ -901,6 +938,7 @@ const generateNodeTextures = () => ({
     glow: 0.38,
   }),
   core: createCoreTexture('route-core'),
+  gloss: createGlossTexture('route-gloss'),
   halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
   haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
   haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
@@ -2096,6 +2134,7 @@ const RouteMapBuilder = ({ onBack }) => {
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
         const coreTexture = textures.core || Texture.WHITE;
+        const glossTexture = textures.gloss || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
