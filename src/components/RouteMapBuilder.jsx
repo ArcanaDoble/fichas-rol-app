@@ -583,17 +583,22 @@ const getCustomIconTexture = (url) => {
     if (!texture || texture.destroyed) {
       throw new Error('La textura del icono personalizado no existe o está destruida');
     }
-    const width =
-      texture?.width ??
-      texture?.baseTexture?.realWidth ??
-      texture?.baseTexture?.width ??
-      0;
-    const height =
-      texture?.height ??
-      texture?.baseTexture?.realHeight ??
-      texture?.baseTexture?.height ??
-      0;
-    if (!texture?.valid || width <= 0 || height <= 0) {
+    const width = Math.max(
+      texture?.width ?? 0,
+      texture?.orig?.width ?? 0,
+      texture?.frame?.width ?? 0,
+      texture?.baseTexture?.realWidth ?? 0,
+      texture?.baseTexture?.width ?? 0,
+    );
+    const height = Math.max(
+      texture?.height ?? 0,
+      texture?.orig?.height ?? 0,
+      texture?.frame?.height ?? 0,
+      texture?.baseTexture?.realHeight ?? 0,
+      texture?.baseTexture?.height ?? 0,
+    );
+    const isTextureValid = texture?.valid ?? texture?.baseTexture?.valid ?? false;
+    if (!isTextureValid || width <= 0 || height <= 0) {
       throw new Error('La textura del icono personalizado no es válida o carece de dimensiones utilizables');
     }
     return texture;
@@ -2689,17 +2694,22 @@ const RouteMapBuilder = ({ onBack }) => {
           if (!texture || iconSprite.destroyed) return;
           const { skipFallback = false } = options;
           const iconDiameter = Math.max(coreSize - 12, 0);
-          const baseWidth =
-            texture?.width ??
-            texture?.baseTexture?.realWidth ??
-            texture?.baseTexture?.width ??
-            0;
-          const baseHeight =
-            texture?.height ??
-            texture?.baseTexture?.realHeight ??
-            texture?.baseTexture?.height ??
-            0;
-          if (!texture?.valid || baseWidth <= 0 || baseHeight <= 0) {
+          const baseWidth = Math.max(
+            texture?.width ?? 0,
+            texture?.orig?.width ?? 0,
+            texture?.frame?.width ?? 0,
+            texture?.baseTexture?.realWidth ?? 0,
+            texture?.baseTexture?.width ?? 0,
+          );
+          const baseHeight = Math.max(
+            texture?.height ?? 0,
+            texture?.orig?.height ?? 0,
+            texture?.frame?.height ?? 0,
+            texture?.baseTexture?.realHeight ?? 0,
+            texture?.baseTexture?.height ?? 0,
+          );
+          const isTextureValid = texture?.valid ?? texture?.baseTexture?.valid ?? false;
+          if (!isTextureValid || baseWidth <= 0 || baseHeight <= 0) {
             if (!skipFallback) {
               applyFallbackEmoji();
             }
