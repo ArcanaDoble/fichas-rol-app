@@ -370,26 +370,23 @@ const applyAppearanceDefaults = (node) => {
 
 const normalizeNodesCollection = (nodes) => nodes.map((node) => applyAppearanceDefaults(node));
 
-const ensureSvgNamespace = (svgString) =>
-  svgString.includes('xmlns') ? svgString : svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-
-const encodeSvgDataUri = (svgString) =>
-  `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)
-    .replace(/'/g, '%27')
-    .replace(/"/g, '%22')}`;
-
-const escapeForSvgText = (value = '') =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
 const emojiTextureCache = new Map();
 
 const EMOJI_TEXTURE_SIZE = 96;
 const EMOJI_TEXTURE_RESOLUTION = 2;
+
+const getEmojiDrawingSurface = (size) => {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    return new OffscreenCanvas(size, size);
+  }
+  if (typeof document !== 'undefined' && document.createElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    return canvas;
+  }
+  return null;
+};
 
 const getEmojiTexture = (emoji, color) => {
   const normalizedColor = normalizeHex(color) || '#f8fafc';
@@ -404,72 +401,59 @@ const getEmojiTexture = (emoji, color) => {
     }
     emojiTextureCache.delete(cacheKey);
   } else if (cached && typeof cached.then === 'function') {
-    return cached;
+    // Limpia cualquier promesa obsoleta generada por versiones anteriores del caché.
+    emojiTextureCache.delete(cacheKey);
   }
 
-  const fontSize = Math.round(EMOJI_TEXTURE_SIZE * 0.72);
-  const svgMarkup = `
-    <svg width="${EMOJI_TEXTURE_SIZE}" height="${EMOJI_TEXTURE_SIZE}" viewBox="0 0 ${EMOJI_TEXTURE_SIZE} ${EMOJI_TEXTURE_SIZE}">
-      <rect width="100%" height="100%" fill="transparent" />
-      <text x="50%" y="50%" font-size="${fontSize}" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif" fill="${normalizedColor}">${escapeForSvgText(rawEmoji)}</text>
-    </svg>
-  `;
-  const svgWithNs = ensureSvgNamespace(svgMarkup.trim());
-  const encoded = encodeSvgDataUri(svgWithNs);
+  const scaledSize = EMOJI_TEXTURE_SIZE * EMOJI_TEXTURE_RESOLUTION;
+  const drawingSurface = getEmojiDrawingSurface(scaledSize);
 
-  if (typeof Image === 'undefined') {
+  if (!drawingSurface) {
     return Texture.WHITE;
   }
 
-  const image = new Image();
-  image.decoding = 'async';
-  image.width = EMOJI_TEXTURE_SIZE;
-  image.height = EMOJI_TEXTURE_SIZE;
+  if ('width' in drawingSurface && 'height' in drawingSurface) {
+    drawingSurface.width = scaledSize;
+    drawingSurface.height = scaledSize;
+  }
 
-  const texturePromise = new Promise((resolve, reject) => {
-    const cleanup = () => {
-      image.onload = null;
-      image.onerror = null;
-    };
+  const context = drawingSurface.getContext('2d');
 
-    image.onload = () => {
-      try {
-        const texture = Texture.from({
-          resource: image,
-          label: cacheKey,
-          resolution: EMOJI_TEXTURE_RESOLUTION,
-          scaleMode: 'linear',
-          mipmap: 'on',
-        });
-        if (texture?.baseTexture) {
-          texture.baseTexture.scaleMode = 'linear';
-          texture.baseTexture.mipmap = 'on';
-          texture.baseTexture.anisotropicLevel = 8;
-        }
-        if (texture?.source && typeof texture.source.resize === 'function') {
-          texture.source.resize(EMOJI_TEXTURE_SIZE, EMOJI_TEXTURE_SIZE);
-        }
-        emojiTextureCache.set(cacheKey, texture);
-        cleanup();
-        resolve(texture);
-      } catch (error) {
-        emojiTextureCache.delete(cacheKey);
-        cleanup();
-        reject(error);
-      }
-    };
+  if (!context) {
+    return Texture.WHITE;
+  }
 
-    image.onerror = () => {
-      emojiTextureCache.delete(cacheKey);
-      cleanup();
-      reject(new Error(`No se pudo cargar la textura del emoji ${cacheKey}`));
-    };
+  context.clearRect(0, 0, scaledSize, scaledSize);
+  context.textAlign = 'left';
+  context.textBaseline = 'alphabetic';
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  const fontSize = Math.round(EMOJI_TEXTURE_SIZE * 0.72 * EMOJI_TEXTURE_RESOLUTION);
+  context.font = `${fontSize}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif`;
+  context.fillStyle = normalizedColor;
+  const metrics = context.measureText(rawEmoji);
+  const leftBearing = metrics.actualBoundingBoxLeft ?? metrics.width / 2;
+  const rightBearing = metrics.actualBoundingBoxRight ?? metrics.width / 2;
+  const ascent = metrics.actualBoundingBoxAscent ?? fontSize * 0.5;
+  const descent = metrics.actualBoundingBoxDescent ?? fontSize * 0.5;
+  const drawX = scaledSize / 2 + (leftBearing - rightBearing) / 2;
+  const drawY = scaledSize / 2 + (ascent - descent) / 2;
+  context.fillText(rawEmoji, drawX, drawY);
+
+  const texture = Texture.from(drawingSurface, {
+    resolution: EMOJI_TEXTURE_RESOLUTION,
+    scaleMode: 'linear',
   });
 
-  emojiTextureCache.set(cacheKey, texturePromise);
-  image.src = encoded;
+  if (texture?.baseTexture) {
+    texture.baseTexture.mipmap = 'on';
+    texture.baseTexture.scaleMode = 'linear';
+    texture.baseTexture.anisotropicLevel = 8;
+  }
 
-  return texturePromise;
+  emojiTextureCache.set(cacheKey, texture);
+
+  return texture;
 };
 
 const fallbackHex = (...values) => {
