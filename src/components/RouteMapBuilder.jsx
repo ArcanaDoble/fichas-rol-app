@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Application, Container, Graphics, Point, Sprite, Text, Texture } from 'pixi.js';
+import {
+  Application,
+  BitmapFont,
+  BitmapText,
+  Container,
+  Graphics,
+  Point,
+  Sprite,
+  Text,
+  Texture,
+} from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
 import {
@@ -414,205 +424,340 @@ const fallbackHex = (...values) => {
   return '#f8fafc';
 };
 
-const createLucideIconBuilder = (IconComponent) => ({ iconColor, accentColor, borderColor }) => {
-  const container = new Container();
-  const accentBase = fallbackHex(accentColor, borderColor, iconColor, '#38bdf8');
-  const auraColor = lightenHex(accentBase, 0.18) || accentBase;
-  const auraSoftColor = lightenHex(accentBase, 0.4) || auraColor;
-  const ringColor = lightenHex(accentBase, 0.05) || accentBase;
-  const ringShadowColor = darkenHex(accentBase, 0.35) || accentBase;
-  const resolvedIconColor = fallbackHex(iconColor, '#e2e8f0');
+const NODE_ICON_COMPONENTS = {
+  start: Home,
+  normal: Swords,
+  event: ScrollText,
+  shop: Store,
+  elite: Shield,
+  heal: HeartPulse,
+  boss: Crown,
+};
 
-  const outerGlow = new Sprite(Texture.WHITE);
-  outerGlow.anchor.set(0.5);
-  outerGlow.tint = hexToInt(auraSoftColor);
-  outerGlow.alpha = 0.38;
-  outerGlow.width = 82;
-  outerGlow.height = 82;
-  outerGlow.blendMode = 'add';
-  container.addChild(outerGlow);
+const NODE_TEXTURE_KEYS = [
+  'frame',
+  'frameActive',
+  'frameBoss',
+  'frameBossActive',
+  'halo',
+  'haloBoss',
+  'haloComplete',
+  'lock',
+  'check',
+  'label',
+];
 
-  const innerGlow = new Sprite(Texture.WHITE);
-  innerGlow.anchor.set(0.5);
-  innerGlow.tint = hexToInt(auraColor);
-  innerGlow.alpha = 0.42;
-  innerGlow.width = 64;
-  innerGlow.height = 64;
-  innerGlow.blendMode = 'screen';
-  container.addChild(innerGlow);
+const drawRoundedRect = (ctx, x, y, width, height, radius) => {
+  const effectiveRadius = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + effectiveRadius, y);
+  ctx.lineTo(x + width - effectiveRadius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + effectiveRadius);
+  ctx.lineTo(x + width, y + height - effectiveRadius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - effectiveRadius, y + height);
+  ctx.lineTo(x + effectiveRadius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - effectiveRadius);
+  ctx.lineTo(x, y + effectiveRadius);
+  ctx.quadraticCurveTo(x, y, x + effectiveRadius, y);
+  ctx.closePath();
+};
 
-  const basePlate = new Graphics();
-  basePlate.beginFill(hexToInt(darkenHex(accentBase, 0.55)), 0.95);
-  basePlate.drawCircle(0, 0, 20);
-  basePlate.endFill();
-  basePlate.blendMode = 'multiply';
-  container.addChild(basePlate);
+const createCanvasTexture = (id, size, draw) => {
+  if (typeof document === 'undefined') {
+    return Texture.WHITE;
+  }
 
-  const baseHighlight = new Graphics();
-  baseHighlight.beginFill(hexToInt(lightenHex(accentBase, 0.25)), 0.75);
-  baseHighlight.drawCircle(-2, -3, 16);
-  baseHighlight.endFill();
-  baseHighlight.alpha = 0.9;
-  baseHighlight.blendMode = 'screen';
-  container.addChild(baseHighlight);
+  const scale = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = size * scale;
+  canvas.height = size * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return Texture.WHITE;
+  }
 
-  const coreShadow = new Graphics();
-  coreShadow.beginFill(hexToInt(darkenHex(accentBase, 0.75)), 0.45);
-  coreShadow.drawCircle(3, 4, 11);
-  coreShadow.endFill();
-  coreShadow.blendMode = 'multiply';
-  container.addChild(coreShadow);
+  ctx.scale(scale, scale);
+  ctx.clearRect(0, 0, size, size);
+  draw(ctx, size);
 
-  const ringShadow = new Graphics();
-  ringShadow.lineStyle({ width: 4, color: hexToInt(ringShadowColor), alpha: 0.45 });
-  ringShadow.drawCircle(1.5, 1.5, 15);
-  ringShadow.blendMode = 'multiply';
-  container.addChild(ringShadow);
+  const texture = Texture.from({ resource: canvas, resolution: scale, scaleMode: 'linear' });
+  if (texture?.baseTexture) {
+    if (typeof texture.baseTexture.setSize === 'function') {
+      texture.baseTexture.setSize(size, size, true);
+    }
+    texture.baseTexture.scaleMode = 'linear';
+    texture.baseTexture.mipmap = 'on';
+    texture.baseTexture.anisotropicLevel = 8;
+  }
+  texture.label = id;
+  return texture;
+};
 
-  const ring = new Graphics();
-  ring.lineStyle({ width: 4, color: hexToInt(ringColor), alpha: 0.9 });
-  ring.drawCircle(0, 0, 15);
-  container.addChild(ring);
+const createFrameTexture = (id, { innerAlpha = 0.3, rimAlpha = 0.85, rimWidth = 26, glow = 0 }) =>
+  createCanvasTexture(id, 256, (ctx, size) => {
+    const center = size / 2;
+    const outerRadius = center - 6;
+    const innerRadius = Math.max(outerRadius - rimWidth, 0);
 
-  const innerSheen = new Graphics();
-  innerSheen.beginFill(hexToInt(lightenHex(resolvedIconColor, 0.3)), 0.2);
-  innerSheen.drawCircle(-4, -5, 11);
-  innerSheen.endFill();
-  innerSheen.blendMode = 'screen';
-  container.addChild(innerSheen);
+    if (glow > 0) {
+      const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(glow, 0.45)})`);
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(center, center, outerRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-  const focalRing = new Graphics();
-  focalRing.lineStyle({ width: 2, color: hexToInt(lightenHex(resolvedIconColor, 0.4)), alpha: 0.6 });
-  focalRing.drawCircle(0, 0, 9);
-  focalRing.blendMode = 'screen';
-  container.addChild(focalRing);
+    const rimGradient = ctx.createLinearGradient(center, center - outerRadius, center, center + outerRadius);
+    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${rimAlpha})`);
+    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.6})`);
+    ctx.strokeStyle = rimGradient;
+    ctx.lineWidth = outerRadius - innerRadius;
+    ctx.beginPath();
+    ctx.arc(center, center, (outerRadius + innerRadius) / 2, 0, Math.PI * 2);
+    ctx.stroke();
 
-  const sprite = new Sprite(Texture.WHITE);
-  sprite.anchor.set(0.5);
-  sprite.alpha = 0;
-  const targetSize = 36;
-  const applyTargetSize = () => {
-    if (typeof sprite.setSize === 'function') {
-      sprite.setSize(targetSize);
-    } else {
-      sprite.width = targetSize;
-      sprite.height = targetSize;
+    const innerGradient = ctx.createLinearGradient(center, center - innerRadius, center, center + innerRadius);
+    innerGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
+    innerGradient.addColorStop(1, `rgba(255, 255, 255, ${innerAlpha * 0.4})`);
+    ctx.fillStyle = innerGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, innerRadius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+const createHaloTexture = (id, { innerAlpha = 0.6, outerAlpha = 0 }) =>
+  createCanvasTexture(id, 420, (ctx, size) => {
+    const center = size / 2;
+    const gradient = ctx.createRadialGradient(center, center, size * 0.08, center, center, center);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
+    gradient.addColorStop(0.6, `rgba(255, 255, 255, ${(innerAlpha + outerAlpha) / 2})`);
+    gradient.addColorStop(1, `rgba(255, 255, 255, ${outerAlpha})`);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(center, center, center - 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+const createBadgeTexture = (id, drawSymbol) =>
+  createCanvasTexture(id, 144, (ctx, size) => {
+    const center = size / 2;
+    const radius = center - 6;
+    const bgGradient = ctx.createRadialGradient(center, center, radius * 0.2, center, center, radius);
+    bgGradient.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    bgGradient.addColorStop(1, 'rgba(255, 255, 255, 0.18)');
+    ctx.fillStyle = bgGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = radius * 0.12;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.12)';
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    drawSymbol(ctx, center, radius, size);
+  });
+
+const drawLockSymbol = (ctx, center, radius, size) => {
+  const shackleRadius = radius * 0.55;
+  const bodyWidth = radius * 1.2;
+  const bodyHeight = radius * 1.1;
+  const bodyX = center - bodyWidth / 2;
+  const bodyY = center - bodyHeight / 4;
+  ctx.lineWidth = radius * 0.22;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+  ctx.beginPath();
+  ctx.arc(center, bodyY, shackleRadius, Math.PI * 0.85, Math.PI * 0.15, false);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+  drawRoundedRect(ctx, bodyX, bodyY, bodyWidth, bodyHeight, radius * 0.25);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  const keyholeWidth = radius * 0.24;
+  const keyholeHeight = radius * 0.4;
+  ctx.beginPath();
+  ctx.arc(center, bodyY + bodyHeight * 0.48, keyholeWidth * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.rect(center - keyholeWidth / 2, bodyY + bodyHeight * 0.48, keyholeWidth, keyholeHeight);
+  ctx.fill();
+};
+
+const drawCheckSymbol = (ctx, center, radius) => {
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+  ctx.lineWidth = radius * 0.28;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(center - radius * 0.6, center);
+  ctx.lineTo(center - radius * 0.1, center + radius * 0.45);
+  ctx.lineTo(center + radius * 0.7, center - radius * 0.5);
+  ctx.stroke();
+};
+
+const createLabelTexture = () =>
+  createCanvasTexture('route-label', 360, (ctx, size) => {
+    const padding = size * 0.14;
+    const radius = size * 0.22;
+    const height = size * 0.42;
+    const width = size - padding * 2;
+    const x = padding;
+    const y = (size - height) / 2;
+    const gradient = ctx.createLinearGradient(x, y, x, y + height);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.7)');
+    ctx.fillStyle = gradient;
+    drawRoundedRect(ctx, x, y, width, height, radius);
+    ctx.fill();
+
+    ctx.lineWidth = size * 0.015;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.12)';
+    ctx.stroke();
+  });
+
+const generateNodeTextures = () => ({
+  frame: createFrameTexture('route-frame', { innerAlpha: 0.28, rimAlpha: 0.82, rimWidth: 24 }),
+  frameActive: createFrameTexture('route-frame-active', {
+    innerAlpha: 0.46,
+    rimAlpha: 0.95,
+    rimWidth: 22,
+    glow: 0.28,
+  }),
+  frameBoss: createFrameTexture('route-frame-boss', {
+    innerAlpha: 0.34,
+    rimAlpha: 0.88,
+    rimWidth: 26,
+    glow: 0.18,
+  }),
+  frameBossActive: createFrameTexture('route-frame-boss-active', {
+    innerAlpha: 0.52,
+    rimAlpha: 0.98,
+    rimWidth: 22,
+    glow: 0.32,
+  }),
+  halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
+  haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
+  haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
+  lock: createBadgeTexture('route-lock', drawLockSymbol),
+  check: createBadgeTexture('route-check', drawCheckSymbol),
+  label: createLabelTexture(),
+});
+
+const ensureRouteMapFont = (() => {
+  let ensured = false;
+  return () => {
+    if (ensured) return;
+    if (!BitmapFont.available.RouteMapLabel) {
+      BitmapFont.from(
+        'RouteMapLabel',
+        {
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 32,
+          fontWeight: '500',
+          fill: '#e2e8f0',
+          stroke: '#020617',
+          strokeThickness: 6,
+          letterSpacing: 2,
+        },
+        {
+          chars: BitmapFont.ASCII,
+          resolution: 2,
+        },
+      );
+    }
+    ensured = true;
+  };
+})();
+
+const ensureNodeTextures = (() => {
+  let promise;
+  return async () => {
+    if (!promise) {
+      promise = Promise.resolve().then(() => generateNodeTextures());
+    }
+    return promise;
+  };
+})();
+
+const attachHoverInteraction = ({ container, halo, frame, baseHaloScale, baseFrameAlpha, ticker }) => {
+  if (!container || !halo || !frame || !ticker) {
+    return () => {};
+  }
+  let targetScale = baseHaloScale;
+  let targetAlpha = baseFrameAlpha;
+  let active = false;
+
+  const update = () => {
+    const nextScale = halo.scale.x + (targetScale - halo.scale.x) * 0.18;
+    const nextAlpha = frame.alpha + (targetAlpha - frame.alpha) * 0.18;
+    halo.scale.set(nextScale);
+    frame.alpha = nextAlpha;
+    if (Math.abs(targetScale - nextScale) < 0.0005 && Math.abs(targetAlpha - nextAlpha) < 0.0005) {
+      halo.scale.set(targetScale);
+      frame.alpha = targetAlpha;
+      ticker.remove(update);
+      active = false;
     }
   };
 
-  const applyTexture = (texture) => {
-    if (!texture || sprite.destroyed) return;
-    sprite.texture = texture;
-    sprite.alpha = 1;
-    if (texture.valid) {
-      applyTargetSize();
-    } else {
-      texture.once('update', applyTargetSize);
+  const start = (scale, alpha) => {
+    targetScale = scale;
+    targetAlpha = alpha;
+    if (!active) {
+      active = true;
+      ticker.add(update);
     }
   };
 
-  const textureResult = getLucideTexture(IconComponent, resolvedIconColor);
+  const handleOver = () => start(baseHaloScale * 1.06, Math.min(1, baseFrameAlpha + 0.18));
+  const handleOut = () => start(baseHaloScale, baseFrameAlpha);
 
-  if (textureResult instanceof Texture) {
-    applyTexture(textureResult);
-  } else if (textureResult && typeof textureResult.then === 'function') {
-    textureResult
-      .then(applyTexture)
-      .catch((error) => {
-        console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
-        if (!sprite.destroyed) {
-          sprite.texture = Texture.WHITE;
-          sprite.alpha = 1;
-          applyTargetSize();
-        }
-      });
+  container.on('pointerover', handleOver);
+  container.on('pointerout', handleOut);
+
+  return () => {
+    container.off('pointerover', handleOver);
+    container.off('pointerout', handleOut);
+    ticker.remove(update);
+    halo.scale.set(baseHaloScale);
+    frame.alpha = baseFrameAlpha;
+  };
+};
+
+const attachSelectionPulse = ({ container, texture, baseScale, ticker }) => {
+  if (!container || !texture || !ticker) {
+    return () => {};
   }
+  const pulse = new Sprite(texture);
+  pulse.anchor.set(0.5);
+  pulse.alpha = 0.35;
+  pulse.scale.set(baseScale * 1.1);
+  container.addChildAt(pulse, 0);
+  let elapsed = Math.random() * Math.PI * 2;
 
-  container.addChild(sprite);
+  const update = (delta) => {
+    elapsed += delta * 0.05;
+    const scale = baseScale * (1.04 + 0.03 * Math.sin(elapsed));
+    const alpha = 0.3 + 0.08 * (Math.sin(elapsed + Math.PI / 3) + 1) * 0.5;
+    pulse.scale.set(scale);
+    pulse.alpha = alpha;
+  };
 
-  return container;
-};
+  ticker.add(update);
 
-const NODE_ICON_BUILDERS = {
-  start: createLucideIconBuilder(Home),
-  normal: createLucideIconBuilder(Swords),
-  event: createLucideIconBuilder(ScrollText),
-  shop: createLucideIconBuilder(Store),
-  elite: createLucideIconBuilder(Shield),
-  heal: createLucideIconBuilder(HeartPulse),
-  boss: createLucideIconBuilder(Crown),
-};
-
-const createLockBadge = ({ badgeColor, accentColor, open }) => {
-  const container = new Container();
-  const aura = new Graphics();
-  aura.beginFill(hexToInt(lightenHex(accentColor, 0.2)), 0.2);
-  aura.drawCircle(0, 0, 13);
-  aura.endFill();
-  container.addChild(aura);
-
-  const ring = new Graphics();
-  ring.lineStyle(2, hexToInt(badgeColor), 0.9);
-  ring.drawCircle(0, 0, 12);
-  container.addChild(ring);
-
-  const shackle = new Graphics();
-  shackle.lineStyle(2.2, hexToInt(badgeColor), 0.95);
-  shackle.moveTo(-6, -3);
-  shackle.quadraticCurveTo(0, open ? -12 : -10, 6, -3);
-  container.addChild(shackle);
-
-  const body = new Graphics();
-  body.beginFill(hexToInt(badgeColor), 0.92);
-  const width = open ? 12 : 14;
-  body.drawRoundedRect(-width / 2, -3, width, 12, 4);
-  body.endFill();
-  container.addChild(body);
-
-  if (open) {
-    body.rotation = -0.15;
-    body.y += 1;
-  }
-
-  const keyStem = new Graphics();
-  const innerColor = hexToInt(darkenHex(badgeColor, 0.35));
-  keyStem.beginFill(innerColor, 0.95);
-  keyStem.drawRoundedRect(-1.4, 0, 2.8, 5, 1.2);
-  keyStem.endFill();
-  container.addChild(keyStem);
-
-  const keyDot = new Graphics();
-  keyDot.beginFill(innerColor, 0.95);
-  keyDot.drawCircle(0, 4.2, 1.8);
-  keyDot.endFill();
-  container.addChild(keyDot);
-
-  return container;
-};
-
-const createCompletionBadge = (accentColor) => {
-  const color = normalizeHex(accentColor) || '#facc15';
-  const container = new Container();
-  const halo = new Graphics();
-  halo.beginFill(hexToInt(lightenHex(color, 0.25)), 0.28);
-  halo.drawCircle(0, 0, 14);
-  halo.endFill();
-  container.addChild(halo);
-
-  const circle = new Graphics();
-  circle.beginFill(hexToInt(color), 0.95);
-  circle.drawCircle(0, 0, 11);
-  circle.endFill();
-  container.addChild(circle);
-
-  const check = new Graphics();
-  check.lineStyle(3, hexToInt(darkenHex(color, 0.45)), 0.95);
-  check.moveTo(-6, 0);
-  check.lineTo(-2, 5);
-  check.lineTo(6, -4);
-  container.addChild(check);
-
-  return container;
+  return () => {
+    ticker.remove(update);
+    if (pulse.parent) {
+      pulse.parent.removeChild(pulse);
+    }
+    pulse.destroy();
+  };
 };
 
 const DEFAULT_NODE = () =>
@@ -749,6 +894,10 @@ const RouteMapBuilder = ({ onBack }) => {
   const selectionStartRef = useRef(null);
   const dragStateRef = useRef(null);
   const copyBufferRef = useRef(null);
+  const tickerRef = useRef(null);
+  const nodeTexturesRef = useRef(null);
+  const nodeCleanupRef = useRef([]);
+  const [texturesReady, setTexturesReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const nodesMap = useMemo(() => {
     const map = new Map();
@@ -1186,8 +1335,22 @@ const RouteMapBuilder = ({ onBack }) => {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    ensureRouteMapFont();
+    setTexturesReady(false);
     let destroyed = false;
     const initPixi = async () => {
+      let textures = null;
+      try {
+        textures = await ensureNodeTextures();
+      } catch (error) {
+        console.error('[RouteMapBuilder] No se pudieron cargar las texturas de nodos', error);
+      }
+      if (destroyed) {
+        return;
+      }
+      if (!textures) {
+        textures = Object.fromEntries(NODE_TEXTURE_KEYS.map((key) => [key, Texture.WHITE]));
+      }
       const options = {
         backgroundAlpha: 0,
         antialias: true,
@@ -1227,6 +1390,9 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.addChild(selectionGraphics);
       viewportRef.current = viewport;
       appRef.current = app;
+      tickerRef.current = app.ticker;
+      nodeTexturesRef.current = textures;
+      setTexturesReady(true);
       nodesContainerRef.current = nodesLayer;
       edgesContainerRef.current = edgesLayer;
       selectionGraphicsRef.current = selectionGraphics;
@@ -1317,6 +1483,8 @@ const RouteMapBuilder = ({ onBack }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      nodeCleanupRef.current.forEach((fn) => fn());
+      nodeCleanupRef.current = [];
       const viewport = viewportRef.current;
       if (viewport) {
         viewport.removeAllListeners();
@@ -1333,6 +1501,8 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       viewportRef.current = null;
       appRef.current = null;
+      tickerRef.current = null;
+      nodeTexturesRef.current = null;
       nodesContainerRef.current = null;
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
@@ -1344,8 +1514,12 @@ const RouteMapBuilder = ({ onBack }) => {
     const viewport = viewportRef.current;
     const edgesLayer = edgesContainerRef.current;
     const nodesLayer = nodesContainerRef.current;
-    edgesLayer.removeChildren();
-    nodesLayer.removeChildren();
+    const removedEdges = edgesLayer.removeChildren();
+    removedEdges.forEach((child) => child.destroy?.({ children: true }));
+    const removedNodes = nodesLayer.removeChildren();
+    removedNodes.forEach((child) => child.destroy?.({ children: true }));
+    nodeCleanupRef.current.forEach((fn) => fn());
+    nodeCleanupRef.current = [];
 
     const commitDrag = () => {
       if (!dragStateRef.current) return;
@@ -1513,265 +1687,287 @@ const RouteMapBuilder = ({ onBack }) => {
       }
     });
 
-    state.nodes.forEach((node) => {
-      const nodeContainer = new Container();
-      const typeDef = NODE_TYPES.find((item) => item.id === node.type) || NODE_TYPES[1];
-      const stateDef = NODE_STATES[node.state] || NODE_STATES.locked;
-      const selected = selectedNodeIds.includes(node.id);
-      const palette = getTypeDefaults(typeDef.id);
-      const accentHex = normalizeHex(node.accentColor) || palette.accent;
-      const fillHex = normalizeHex(node.fillColor) || palette.fill;
-      const borderHex = normalizeHex(node.borderColor) || palette.border;
-      const iconHex = normalizeHex(node.iconColor) || palette.icon;
-      const accentColor = hexToInt(accentHex);
-      const fillColor = hexToInt(fillHex);
-      const borderColor = hexToInt(borderHex);
-      const stateStroke = hexToInt(normalizeHex(stateDef.stroke) || '#38bdf8');
-      const radius = 36;
+    const textures = nodeTexturesRef.current;
+    const ticker = tickerRef.current;
+    const nodeCleanups = [];
 
-      const auraHex = normalizeHex(stateDef.aura) || lightenHex(accentHex, 0.08);
-      if (auraHex) {
-        const aura = new Graphics();
-        aura.beginFill(hexToInt(auraHex), selected ? 0.26 : 0.2);
-        aura.drawCircle(0, 0, radius + 18);
-        aura.endFill();
-        nodeContainer.addChild(aura);
-      }
+    if (textures && texturesReady) {
+      state.nodes.forEach((node) => {
+        const nodeContainer = new Container();
+        const typeDef = NODE_TYPES.find((item) => item.id === node.type) || NODE_TYPES[1];
+        const stateDef = NODE_STATES[node.state] || NODE_STATES.locked;
+        const selected = selectedNodeIds.includes(node.id);
+        const palette = getTypeDefaults(typeDef.id);
+        const accentHex = normalizeHex(node.accentColor) || palette.accent;
+        const borderHex = normalizeHex(node.borderColor) || palette.border;
+        const iconHex = normalizeHex(node.iconColor) || palette.icon;
+        const stateStroke = hexToInt(normalizeHex(stateDef.stroke) || '#38bdf8');
+        const accentColor = hexToInt(accentHex);
+        const radius = 36;
+        const isBoss = node.type === 'boss';
+        const isLocked = node.state === 'locked';
+        const isCompleted = node.state === 'completed';
+        const isVisited = node.state === 'current' || node.state === 'unlocked' || node.state === 'completed';
+        const baseFrameKey = isBoss ? 'frameBoss' : 'frame';
+        const activeFrameKey = isBoss ? 'frameBossActive' : 'frameActive';
+        const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
+        const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
 
-      if (selected) {
-        const selectionAura = new Graphics();
-        selectionAura.beginFill(hexToInt(lightenHex(accentHex, 0.35)), 0.18);
-        selectionAura.drawCircle(0, 0, radius + 24);
-        selectionAura.endFill();
-        nodeContainer.addChild(selectionAura);
-      }
-
-      const base = new Graphics();
-      base.beginFill(hexToInt(darkenHex(fillHex, 0.45)), 0.95);
-      base.drawCircle(0, 0, radius + 2);
-      base.endFill();
-      nodeContainer.addChild(base);
-
-      const body = new Graphics();
-      body.beginFill(fillColor, 0.98);
-      body.drawCircle(0, 0, radius - 2);
-      body.endFill();
-      nodeContainer.addChild(body);
-
-      const innerGlow = new Graphics();
-      innerGlow.beginFill(hexToInt(lightenHex(fillHex, 0.18)), 0.65);
-      innerGlow.drawCircle(0, 0, radius - 14);
-      innerGlow.endFill();
-      nodeContainer.addChild(innerGlow);
-
-      const highlight = new Graphics();
-      highlight.beginFill(hexToInt(lightenHex(fillHex, 0.55)), 0.22);
-      highlight.drawEllipse(0, -radius * 0.35, radius * 0.95, radius * 0.6);
-      highlight.endFill();
-      highlight.rotation = -0.25;
-      nodeContainer.addChild(highlight);
-
-      const accentGlow = new Graphics();
-      accentGlow.beginFill(hexToInt(lightenHex(accentHex, 0.4)), 0.16);
-      accentGlow.drawCircle(0, 0, radius - 8);
-      accentGlow.endFill();
-      nodeContainer.addChild(accentGlow);
-
-      const accentRing = new Graphics();
-      accentRing.lineStyle(4, accentColor, 0.9);
-      accentRing.drawCircle(0, 0, radius - 10);
-      nodeContainer.addChild(accentRing);
-
-      const borderRing = new Graphics();
-      borderRing.lineStyle(selected ? 6 : 4, borderColor, selected ? 1 : 0.96);
-      borderRing.drawCircle(0, 0, radius + (selected ? 1.5 : 0));
-      nodeContainer.addChild(borderRing);
-
-      const stateRing = new Graphics();
-      const stateAlpha = node.state === 'locked' ? 0.68 : node.state === 'visible' ? 0.56 : 0.38;
-      stateRing.lineStyle(3, stateStroke, stateAlpha);
-      stateRing.drawCircle(0, 0, radius + 10);
-      nodeContainer.addChild(stateRing);
-
-      if (node.state === 'current') {
-        const halo = new Graphics();
-        halo.lineStyle(5, accentColor, 0.5);
-        halo.drawCircle(0, 0, radius + 16);
-        halo.endFill();
-        nodeContainer.addChild(halo);
-      }
-
-      const iconBuilder = NODE_ICON_BUILDERS[typeDef.id] || NODE_ICON_BUILDERS.normal;
-      const iconContainer = iconBuilder({ iconColor: iconHex, accentColor: accentHex, borderColor: borderHex });
-      iconContainer.position.set(0, 2);
-      iconContainer.scale.set(0.82);
-      nodeContainer.addChild(iconContainer);
-
-      if (node.state === 'locked' || node.state === 'visible') {
-        const badge = createLockBadge({
-          badgeColor: normalizeHex(stateDef.badgeColor) || accentHex,
-          accentColor: accentHex,
-          open: node.state === 'visible',
-        });
-        badge.scale.set(0.62);
-        badge.position.set(-radius + 18, -radius + 18);
-        nodeContainer.addChild(badge);
-      }
-
-      if (node.state === 'completed') {
-        const completion = createCompletionBadge(accentHex);
-        completion.scale.set(0.6);
-        completion.position.set(radius - 18, -radius + 18);
-        nodeContainer.addChild(completion);
-      }
-
-      nodeContainer.position.set(node.x, node.y);
-      nodeContainer.nodeId = node.id;
-      nodeContainer.eventMode = 'static';
-      nodeContainer.cursor = activeTool === 'connect' ? 'crosshair' : 'pointer';
-      nodeContainer.on('pointerdown', (event) => {
-        event.stopPropagation();
-        const button = event.data?.originalEvent?.button;
-        const isLeftButton = button === undefined || button === 0;
-        if (!isLeftButton) {
-          shouldResumeDragRef.current = false;
-          return;
+        if (isCompleted && textures.haloComplete) {
+          const completionAura = new Sprite(textures.haloComplete);
+          completionAura.anchor.set(0.5);
+          completionAura.alpha = 0.7;
+          const completionScale = isBoss ? 0.52 : 0.5;
+          completionAura.scale.set(completionScale);
+          completionAura.tint = hexToInt(lightenHex(accentHex, 0.1));
+          nodeContainer.addChild(completionAura);
         }
-        shouldResumeDragRef.current = true;
-        pauseViewportDrag();
-        if (activeTool === 'delete') {
-          setSelectedNodeIds([node.id]);
-          deleteSelection();
-          return;
-        }
-        if (activeTool === 'toggleLock') {
-          setSelectedNodeIds([node.id]);
-          toggleNodeLock();
-          return;
-        }
-        if (activeTool === 'connect') {
-          if (!connectOriginId) {
-            setConnectOriginId(node.id);
-            setSelectedNodeIds([node.id]);
-          } else if (connectOriginId !== node.id) {
-            dispatch({
-              type: 'UPDATE',
-              updater: (nodes, edges) => {
-                edges.push({
-                  id: nanoid(),
-                  from: connectOriginId,
-                  to: node.id,
-                  label: '',
-                  requirement: 'OR',
-                });
-              },
-            });
-            setConnectOriginId(null);
-            setSelectedNodeIds([node.id]);
-          }
-          return;
-        }
-        if (activeTool !== 'select') {
-          return;
-        }
-        const shift = event.data?.originalEvent?.shiftKey;
-        const alreadySelected = selectedNodeIds.includes(node.id);
-        let nextSelection = selectedNodeIds;
-        if (shift) {
-          if (!alreadySelected) {
-            nextSelection = [...selectedNodeIds, node.id];
-          }
-        } else if (!alreadySelected) {
-          nextSelection = [node.id];
-        }
-        if (nextSelection !== selectedNodeIds) {
-          setSelectedNodeIds(nextSelection);
-        }
-        setSelectedEdgeIds([]);
-        const dragIds = nextSelection.includes(node.id) ? [...new Set(nextSelection)] : [node.id];
-        const pointerStart = pointerToWorld(viewport, event);
-        const startPositions = new Map();
-        dragIds.forEach((id) => {
-          const target = nodesMap.get(id);
-          if (target) {
-            startPositions.set(id, { x: target.x, y: target.y });
-          }
-        });
-        if (startPositions.size === 0) {
-          dragStateRef.current = null;
-          if (shouldResumeDragRef.current) {
-            shouldResumeDragRef.current = false;
-            resumeViewportDrag();
-          }
-          return;
-        }
-        dragStateRef.current = {
-          nodeIds: [...startPositions.keys()],
-          startPointer: pointerStart,
-          startPositions,
-          lastDelta: { x: 0, y: 0 },
-          moved: false,
-          committed: false,
+
+        const baseHaloScale = isBoss ? 0.46 : 0.42;
+        const currentBoost = node.state === 'current' ? 1.05 : 1;
+        const haloBaseScale = baseHaloScale * currentBoost;
+        const haloSprite = new Sprite(haloTexture);
+        haloSprite.anchor.set(0.5);
+        haloSprite.scale.set(haloBaseScale);
+        haloSprite.alpha = isLocked ? 0.45 : 0.8;
+        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.1));
+        nodeContainer.addChild(haloSprite);
+
+        const frameSprite = new Sprite(frameTexture);
+        frameSprite.anchor.set(0.5);
+        const frameScale = frameTexture.width ? 72 / frameTexture.width : 0.28;
+        frameSprite.scale.set(frameScale);
+        frameSprite.alpha = isLocked ? 0.78 : 1;
+        const frameTint = isLocked
+          ? hexToInt(mixHex('#64748b', borderHex, 0.2))
+          : selected
+            ? hexToInt(lightenHex(accentHex, 0.1))
+            : 0xffffff;
+        frameSprite.tint = frameTint;
+        nodeContainer.addChild(frameSprite);
+
+        const iconSprite = new Sprite(Texture.WHITE);
+        iconSprite.anchor.set(0.5);
+        iconSprite.alpha = 0;
+        nodeContainer.addChild(iconSprite);
+        const iconComponent = NODE_ICON_COMPONENTS[typeDef.id] || NODE_ICON_COMPONENTS.normal;
+        const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
+        const iconTextureResult = getLucideTexture(iconComponent, iconColorValue);
+        const applyIconTexture = (texture) => {
+          if (!texture || iconSprite.destroyed) return;
+          iconSprite.texture = texture;
+          iconSprite.alpha = isLocked ? 0.82 : 1;
+          const scale = texture.width ? 34 / texture.width : 0.34;
+          iconSprite.scale.set(scale);
         };
-      });
-      nodeContainer.on('pointerup', (event) => {
-        event.stopPropagation();
-        handleViewportDragEnd();
-      });
-      nodeContainer.on('pointerupoutside', () => {
-        handleViewportDragEnd();
-      });
-      nodeContainer.on('pointertap', (event) => {
-        if (event.detail >= 2) {
-          setNodeEditor(applyAppearanceDefaults(node));
+        if (iconTextureResult instanceof Texture) {
+          applyIconTexture(iconTextureResult);
+        } else if (iconTextureResult && typeof iconTextureResult.then === 'function') {
+          iconTextureResult.then((texture) => {
+            if (!iconSprite.destroyed) {
+              applyIconTexture(texture);
+            }
+          }).catch((error) => {
+            console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
+          });
         }
-      });
-      nodesLayer.addChild(nodeContainer);
 
-      const labelText = new Text({
-        text: node.name,
-        style: {
-          fill: '#e2e8f0',
-          fontSize: 13,
-          fontFamily: 'Inter, sans-serif',
-          fontWeight: 500,
-          letterSpacing: 0.6,
-        },
-      });
-      labelText.anchor.set(0.5);
-      const labelContainer = new Container();
-      const paddingX = 14;
-      const paddingY = 6;
-      const labelBackground = new Graphics();
-      const labelStrokeColor = selected ? accentColor : stateStroke;
-      const labelWidth = labelText.width + paddingX * 2;
-      const labelHeight = labelText.height + paddingY * 2;
-      labelBackground.beginFill(0x0b1220, 0.9);
-      labelBackground.lineStyle(1, labelStrokeColor, 0.6);
-      labelBackground.drawRoundedRect(-labelWidth / 2, -labelHeight / 2, labelWidth, labelHeight, labelHeight / 2);
-      labelBackground.endFill();
-      labelContainer.addChild(labelBackground);
-      labelContainer.addChild(labelText);
-      labelText.position.set(0, 0);
-      labelContainer.position.set(node.x, node.y + radius + 28);
-      labelContainer.eventMode = 'static';
-      labelContainer.cursor = 'text';
-      labelContainer.on('pointertap', (event) => {
-        event.stopPropagation();
-        if (event.detail >= 2) {
-          setNodeEditor(applyAppearanceDefaults(node));
-        } else {
-          setSelectedNodeIds([node.id]);
+        if (isLocked) {
+          const lockSprite = new Sprite(textures.lock || Texture.WHITE);
+          lockSprite.anchor.set(0.5);
+          const lockScale = lockSprite.texture?.width ? 26 / lockSprite.texture.width : 0.22;
+          lockSprite.scale.set(lockScale);
+          lockSprite.alpha = 0.92;
+          nodeContainer.addChild(lockSprite);
+        }
+
+        if (isCompleted) {
+          const checkSprite = new Sprite(textures.check || Texture.WHITE);
+          checkSprite.anchor.set(0.5);
+          const checkScale = checkSprite.texture?.width ? 28 / checkSprite.texture.width : 0.22;
+          checkSprite.scale.set(checkScale);
+          checkSprite.alpha = 0.95;
+          checkSprite.position.set(radius - 12, -radius + 12);
+          nodeContainer.addChild(checkSprite);
+        }
+
+        const hoverCleanup = attachHoverInteraction({
+          container: nodeContainer,
+          halo: haloSprite,
+          frame: frameSprite,
+          baseHaloScale: haloBaseScale,
+          baseFrameAlpha: frameSprite.alpha,
+          ticker,
+        });
+        if (hoverCleanup) {
+          nodeCleanups.push(hoverCleanup);
+        }
+        if (selected) {
+          const pulseCleanup = attachSelectionPulse({
+            container: nodeContainer,
+            texture: haloTexture,
+            baseScale: haloBaseScale,
+            ticker,
+          });
+          if (pulseCleanup) {
+            nodeCleanups.push(pulseCleanup);
+          }
+        }
+
+        nodeContainer.position.set(node.x, node.y);
+        nodeContainer.nodeId = node.id;
+        nodeContainer.eventMode = 'static';
+        nodeContainer.cursor = activeTool === 'connect' ? 'crosshair' : 'pointer';
+        nodeContainer.on('pointerdown', (event) => {
+          event.stopPropagation();
+          const button = event.data?.originalEvent?.button;
+          const isLeftButton = button === undefined || button === 0;
+          if (!isLeftButton) {
+            shouldResumeDragRef.current = false;
+            return;
+          }
+          shouldResumeDragRef.current = true;
+          pauseViewportDrag();
+          if (activeTool === 'delete') {
+            setSelectedNodeIds([node.id]);
+            deleteSelection();
+            return;
+          }
+          if (activeTool === 'toggleLock') {
+            setSelectedNodeIds([node.id]);
+            toggleNodeLock();
+            return;
+          }
+          if (activeTool === 'connect') {
+            if (!connectOriginId) {
+              setConnectOriginId(node.id);
+              setSelectedNodeIds([node.id]);
+            } else if (connectOriginId !== node.id) {
+              dispatch({
+                type: 'UPDATE',
+                updater: (nodes, edges) => {
+                  edges.push({
+                    id: nanoid(),
+                    from: connectOriginId,
+                    to: node.id,
+                    label: '',
+                    requirement: 'OR',
+                  });
+                },
+              });
+              setConnectOriginId(null);
+              setSelectedNodeIds([node.id]);
+            }
+            return;
+          }
+          if (activeTool !== 'select') {
+            return;
+          }
+          const shift = event.data?.originalEvent?.shiftKey;
+          const alreadySelected = selectedNodeIds.includes(node.id);
+          let nextSelection = selectedNodeIds;
+          if (shift) {
+            if (!alreadySelected) {
+              nextSelection = [...selectedNodeIds, node.id];
+            }
+          } else if (!alreadySelected) {
+            nextSelection = [node.id];
+          }
+          if (nextSelection !== selectedNodeIds) {
+            setSelectedNodeIds(nextSelection);
+          }
+          setSelectedEdgeIds([]);
+          const dragIds = nextSelection.includes(node.id) ? [...new Set(nextSelection)] : [node.id];
+          const pointerStart = pointerToWorld(viewport, event);
+          const startPositions = new Map();
+          dragIds.forEach((id) => {
+            const target = nodesMap.get(id);
+            if (target) {
+              startPositions.set(id, { x: target.x, y: target.y });
+            }
+          });
+          if (startPositions.size === 0) {
+            dragStateRef.current = null;
+            if (shouldResumeDragRef.current) {
+              shouldResumeDragRef.current = false;
+              resumeViewportDrag();
+            }
+            return;
+          }
+          dragStateRef.current = {
+            nodeIds: [...startPositions.keys()],
+            startPointer: pointerStart,
+            startPositions,
+            lastDelta: { x: 0, y: 0 },
+            moved: false,
+            committed: false,
+          };
+        });
+        nodeContainer.on('pointerup', (event) => {
+          event.stopPropagation();
+          handleViewportDragEnd();
+        });
+        nodeContainer.on('pointerupoutside', () => {
+          handleViewportDragEnd();
+        });
+        nodeContainer.on('pointertap', (event) => {
+          if (event.detail >= 2) {
+            setNodeEditor(applyAppearanceDefaults(node));
+          }
+        });
+        nodesLayer.addChild(nodeContainer);
+
+        if (node.name && node.name.trim()) {
+          const labelText = new BitmapText({
+            text: node.name,
+            style: {
+              fontName: 'RouteMapLabel',
+              fontSize: 30,
+              align: 'center',
+              tint: selected ? 0xffffff : isLocked ? 0xdbeafe : 0xe2e8f0,
+            },
+          });
+          const labelContainer = new Container();
+          const labelBgTexture = textures.label || Texture.WHITE;
+          const labelBackground = new Sprite(labelBgTexture);
+          labelBackground.anchor.set(0.5);
+          const paddingX = 28;
+          const paddingY = 16;
+          const textWidth = Math.max(labelText.textWidth, 1);
+          const textHeight = Math.max(labelText.textHeight, 1);
+          const scaleX = Math.max(0.35, (textWidth + paddingX) / (labelBgTexture.width || 400));
+          const scaleY = Math.max(0.4, (textHeight + paddingY) / (labelBgTexture.height || 140));
+          labelBackground.scale.set(scaleX, scaleY);
+          labelBackground.alpha = 0.9;
+          labelBackground.tint = selected ? accentColor : stateStroke;
+          labelContainer.addChild(labelBackground);
+          labelText.pivot.set(labelText.textWidth / 2, labelText.textHeight / 2);
+          labelText.position.set(0, 0);
+          labelContainer.addChild(labelText);
+          labelContainer.position.set(node.x, node.y + radius + 30);
+          labelContainer.eventMode = 'static';
+          labelContainer.cursor = 'text';
+          labelContainer.on('pointertap', (event) => {
+            event.stopPropagation();
+            if (event.detail >= 2) {
+              setNodeEditor(applyAppearanceDefaults(node));
+            } else {
+              setSelectedNodeIds([node.id]);
+            }
+          });
+          nodesLayer.addChild(labelContainer);
         }
       });
-      nodesLayer.addChild(labelContainer);
-    });
+    }
+
+    nodeCleanupRef.current = nodeCleanups;
     return () => {
+      nodeCleanups.forEach((fn) => fn());
       viewport.off('pointermove', handleViewportDragMove);
       viewport.off('pointerup', handleViewportDragEnd);
       viewport.off('pointerupoutside', handleViewportDragEnd);
     };
-  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, applyDragDelta, pauseViewportDrag, resumeViewportDrag]);
+  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, applyDragDelta, pauseViewportDrag, resumeViewportDrag, texturesReady]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
