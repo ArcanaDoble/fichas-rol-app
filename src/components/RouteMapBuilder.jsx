@@ -1250,11 +1250,19 @@ const RouteMapBuilder = ({ onBack }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      if (viewportRef.current) {
-        viewportRef.current.removeAllListeners();
+      const viewport = viewportRef.current;
+      if (viewport) {
+        viewport.removeAllListeners();
+        viewport.destroy({ children: true });
       }
-      if (appRef.current) {
-        appRef.current.destroy(true, true);
+      const app = appRef.current;
+      if (app) {
+        const canvas = app.canvas ?? app.view;
+        if (canvas?.parentNode === containerRef.current) {
+          canvas.parentNode.removeChild(canvas);
+        }
+        app.stage?.removeChildren();
+        app.destroy(true, { children: false });
       }
       viewportRef.current = null;
       appRef.current = null;
