@@ -2078,7 +2078,7 @@ const RouteMapBuilder = ({ onBack }) => {
 
         const coreSprite = new Sprite(coreTexture);
         coreSprite.anchor.set(0.5);
-        const coreSize = radius * 2 - 14;
+        const coreSize = radius * 2 - 6;
         const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
         coreSprite.scale.set(coreScale);
         const coreTintHex = isLocked ? mixHex(fillHex, '#1f2937', 0.55) : fillHex;
@@ -2098,21 +2098,6 @@ const RouteMapBuilder = ({ onBack }) => {
         frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
-        const innerStroke = new Graphics();
-        innerStroke.lineStyle(3.5, hexToInt(isLocked ? mixHex(borderHex, '#94a3b8', 0.7) : borderHex), isLocked ? 0.55 : 0.85);
-        innerStroke.drawCircle(0, 0, radius - 6);
-        innerStroke.endFill();
-        innerStroke.eventMode = 'none';
-        nodeContainer.addChild(innerStroke);
-
-        const iconBackdrop = new Graphics();
-        const iconBgHex = isLocked ? mixHex(fillHex, '#0f172a', 0.6) : darkenHex(fillHex, 0.18);
-        iconBackdrop.beginFill(hexToInt(iconBgHex), isLocked ? 0.6 : 0.82);
-        iconBackdrop.drawCircle(0, 0, radius - 12);
-        iconBackdrop.endFill();
-        iconBackdrop.eventMode = 'none';
-        nodeContainer.addChild(iconBackdrop);
-
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
         iconSprite.position.set(0, 0);
@@ -2125,7 +2110,7 @@ const RouteMapBuilder = ({ onBack }) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
           iconSprite.alpha = isLocked ? 0.78 : 1;
-          const iconSize = 30;
+          const iconSize = isBoss ? radius * 1.3 : radius * 1.15;
           const scale = texture.width ? iconSize / texture.width : iconSize / 96;
           iconSprite.scale.set(scale);
         };
