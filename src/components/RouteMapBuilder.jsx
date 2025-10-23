@@ -2,14 +2,15 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import PropTypes from 'prop-types';
 import {
   Application,
-  BitmapFont,
-  BitmapText,
   Container,
   Graphics,
   Point,
   Sprite,
   Text,
   Texture,
+  TilingSprite,
+  WRAP_MODES,
+  Rectangle,
 } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
@@ -271,19 +272,69 @@ const mixHex = (hexA, hexB, amount) => {
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
 const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
-const drawDottedQuadratic = (graphics, from, control, to, { color, size = 4, spacing = 18 }) => {
-  const distance = Math.hypot(to.x - from.x, to.y - from.y);
-  const steps = Math.max(12, Math.floor(distance / spacing) * 4);
-  graphics.beginFill(color, 0.9);
-  for (let i = 0; i <= steps; i += 1) {
-    if (i % 2 !== 0) continue;
-    const t = i / steps;
-    const inv = 1 - t;
-    const x = inv * inv * from.x + 2 * inv * t * control.x + t * t * to.x;
-    const y = inv * inv * from.y + 2 * inv * t * control.y + t * t * to.y;
-    graphics.drawCircle(x, y, size);
+const EDGE_SEGMENT_BASE_LENGTH = 48;
+const EDGE_SEGMENT_MIN_STEPS = 8;
+const EDGE_DASH_SPEED = 4.5;
+const EDGE_STROKE_WIDTH = 12;
+const EDGE_STROKE_WIDTH_SELECTED = 14;
+const DASH_TEXTURE_TOTAL_WIDTH = 96;
+const DASH_TEXTURE_DASH_WIDTH = 52;
+const DASH_TEXTURE_HEIGHT = 12;
+const DASH_TEXTURE_CORE_HEIGHT = 6;
+
+const createDashTexture = (renderer) => {
+  if (!renderer) return null;
+  const dashGraphic = new Graphics();
+  dashGraphic.beginFill(0xffffff, 0);
+  dashGraphic.drawRect(0, 0, DASH_TEXTURE_TOTAL_WIDTH, DASH_TEXTURE_HEIGHT);
+  dashGraphic.endFill();
+  const dashStartY = (DASH_TEXTURE_HEIGHT - DASH_TEXTURE_CORE_HEIGHT) / 2;
+  dashGraphic.beginFill(0xffffff, 1);
+  dashGraphic.drawRoundedRect(
+    0,
+    dashStartY,
+    DASH_TEXTURE_DASH_WIDTH,
+    DASH_TEXTURE_CORE_HEIGHT,
+    DASH_TEXTURE_CORE_HEIGHT / 2,
+  );
+  dashGraphic.endFill();
+  const texture = renderer.generateTexture(dashGraphic, {
+    resolution: 1,
+    region: new Rectangle(0, 0, DASH_TEXTURE_TOTAL_WIDTH, DASH_TEXTURE_HEIGHT),
+  });
+  dashGraphic.destroy(true);
+  if (texture?.baseTexture) {
+    texture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
   }
-  graphics.endFill();
+  return texture;
+};
+
+const getQuadraticPoint = (from, control, to, t) => {
+  const inv = 1 - t;
+  return {
+    x: inv * inv * from.x + 2 * inv * t * control.x + t * t * to.x,
+    y: inv * inv * from.y + 2 * inv * t * control.y + t * t * to.y,
+  };
+};
+
+const createQuadraticSegments = (from, control, to) => {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(EDGE_SEGMENT_MIN_STEPS, Math.ceil(distance / EDGE_SEGMENT_BASE_LENGTH) * 4);
+  const points = [];
+  for (let i = 0; i <= steps; i += 1) {
+    points.push(getQuadraticPoint(from, control, to, i / steps));
+  }
+  const segments = [];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const start = points[i];
+    const end = points[i + 1];
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (length <= 0.5) continue;
+    const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    segments.push({ start, end, midpoint, length, angle });
+  }
+  return segments;
 };
 
 const cloneState = (nodes, edges) => ({
@@ -882,6 +933,9 @@ const RouteMapBuilder = ({ onBack }) => {
   const tickerCallbackRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const dashTextureRef = useRef(null);
+  const dashSpritesRef = useRef(new Set());
+  const dashTickerRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [activeTool, setActiveTool] = useState('select');
@@ -890,6 +944,7 @@ const RouteMapBuilder = ({ onBack }) => {
   const [showGrid, setShowGrid] = useState(true);
   const [backgroundColor, setBackgroundColor] = useState('#0f172a');
   const [backgroundImage, setBackgroundImage] = useState('');
+  const [dashTexture, setDashTexture] = useState(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
   const [nodeTypeToCreate, setNodeTypeToCreate] = useState('normal');
@@ -1388,159 +1443,14 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.clampZoom({ minScale: 0.2, maxScale: 3 });
       viewport.sortableChildren = true;
       app.stage.addChild(viewport);
-
-      const applyTextureSettings = (texture) => {
-        if (texture?.baseTexture) {
-          texture.baseTexture.mipmap = MIPMAP_MODES.ON;
-          texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
-          texture.baseTexture.anisotropicLevel = 8;
-        }
-        return texture;
-      };
-
-      const createGradientTexture = (stops, options = {}) => {
-        const size = options.size ?? 1024;
-        const orientation = options.orientation ?? 'diagonal';
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const context = canvas.getContext('2d');
-        if (!context) {
-          return Texture.WHITE;
-        }
-
-        let gradient;
-        if (orientation === 'horizontal') {
-          gradient = context.createLinearGradient(0, 0, size, 0);
-        } else if (orientation === 'vertical') {
-          gradient = context.createLinearGradient(0, 0, 0, size);
-        } else if (orientation === 'radial') {
-          const radius = size * (options.radiusMultiplier ?? 0.75);
-          gradient = context.createRadialGradient(
-            size / 2,
-            size / 2,
-            size * 0.05,
-            size / 2,
-            size / 2,
-            radius,
-          );
-        } else {
-          gradient = context.createLinearGradient(0, 0, size, size);
-        }
-
-        stops.forEach((stop) => {
-          gradient.addColorStop(stop.offset, stop.color);
+      const dashTicker = (delta) => {
+        dashSpritesRef.current.forEach((sprite) => {
+          if (!sprite || sprite.destroyed) return;
+          sprite.tilePosition.x -= delta * EDGE_DASH_SPEED;
         });
-
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, size, size);
-
-        if (Array.isArray(options.overlays)) {
-          options.overlays.forEach((overlay) => {
-            if (overlay.type === 'radial-fade') {
-              const overlayGradient = context.createRadialGradient(
-                size / 2,
-                size / 2,
-                size * (overlay.innerRadius ?? 0.05),
-                size / 2,
-                size / 2,
-                size * (overlay.outerRadius ?? 0.85),
-              );
-              overlayGradient.addColorStop(0, overlay.from ?? 'rgba(255,255,255,0.08)');
-              overlayGradient.addColorStop(1, overlay.to ?? 'rgba(0,0,0,0.6)');
-              context.globalCompositeOperation = overlay.composite ?? 'source-over';
-              context.fillStyle = overlayGradient;
-              context.fillRect(0, 0, size, size);
-            }
-            if (overlay.type === 'noise') {
-              const density = Math.max(1, Math.floor(size * (overlay.density ?? 0.25)));
-              context.save();
-              context.globalAlpha = overlay.alpha ?? 0.05;
-              context.fillStyle = overlay.color ?? '#ffffff';
-              for (let i = 0; i < density * density; i += 1) {
-                const x = Math.random() * size;
-                const y = Math.random() * size;
-                const radius = (overlay.radius ?? 1.2) * (Math.random() * 0.6 + 0.4);
-                context.beginPath();
-                context.arc(x, y, radius, 0, Math.PI * 2);
-                context.fill();
-              }
-              context.restore();
-            }
-          });
-          context.globalCompositeOperation = 'source-over';
-        }
-
-        const texture = Texture.from(canvas, {
-          mipmap: MIPMAP_MODES.ON,
-          scaleMode: SCALE_MODES.LINEAR,
-          anisotropicLevel: 8,
-        });
-        return applyTextureSettings(texture);
       };
-
-      const createFogTexture = (size = 512) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const context = canvas.getContext('2d');
-        if (!context) {
-          return Texture.WHITE;
-        }
-
-        const imageData = context.createImageData(size, size);
-        const { data } = imageData;
-        for (let i = 0; i < data.length; i += 4) {
-          const variation = Math.random();
-          const base = 185 + Math.floor(variation * 40);
-          data[i] = base;
-          data[i + 1] = base + 10;
-          data[i + 2] = base + 30;
-          data[i + 3] = 80 + Math.floor(variation * 70);
-        }
-        context.putImageData(imageData, 0, 0);
-
-        context.globalAlpha = 0.25;
-        context.fillStyle = 'rgba(100, 130, 180, 0.35)';
-        for (let i = 0; i < size * 0.6; i += 1) {
-          const radius = Math.random() * (size * 0.06) + size * 0.02;
-          const x = Math.random() * size;
-          const y = Math.random() * size;
-          context.beginPath();
-          context.arc(x, y, radius, 0, Math.PI * 2);
-          context.fill();
-        }
-        context.globalAlpha = 1;
-
-        const texture = Texture.from(canvas, {
-          mipmap: MIPMAP_MODES.ON,
-          scaleMode: SCALE_MODES.LINEAR,
-          anisotropicLevel: 8,
-        });
-        return applyTextureSettings(texture);
-      };
-
-      const createBackgroundSprite = (texture) => {
-        const sprite = new Sprite(texture);
-        sprite.anchor.set(0.5);
-        sprite.roundPixels = true;
-        return sprite;
-      };
-
-      const backgroundFarLayer = new Container();
-      backgroundFarLayer.eventMode = 'none';
-      const backgroundMidLayer = new Container();
-      backgroundMidLayer.eventMode = 'none';
-      const backgroundNearLayer = new Container();
-      backgroundNearLayer.eventMode = 'none';
-
-      const fxLayer = new Container();
-      fxLayer.eventMode = 'none';
-      fxLayer.sortableChildren = true;
-
-      const fogLayer = new Container();
-      fogLayer.eventMode = 'none';
-
+      app.ticker.add(dashTicker);
+      dashTickerRef.current = dashTicker;
       const edgesLayer = new Container();
       edgesLayer.eventMode = 'none';
       const nodesLayer = new Container();
@@ -1652,6 +1562,15 @@ const RouteMapBuilder = ({ onBack }) => {
       nodesContainerRef.current = nodesLayer;
       edgesContainerRef.current = edgesLayer;
       selectionGraphicsRef.current = selectionGraphics;
+      if (dashTextureRef.current) {
+        setDashTexture(dashTextureRef.current);
+      } else {
+        const generatedTexture = createDashTexture(app.renderer);
+        if (generatedTexture) {
+          dashTextureRef.current = generatedTexture;
+          setDashTexture(generatedTexture);
+        }
+      }
       viewport.eventMode = 'static';
 
       const updateEnvironmentalLayers = () => {
@@ -1793,8 +1712,7 @@ const RouteMapBuilder = ({ onBack }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      nodeCleanupRef.current.forEach((fn) => fn());
-      nodeCleanupRef.current = [];
+      dashSpritesRef.current.clear();
       const viewport = viewportRef.current;
       if (viewport) {
         viewport.removeAllListeners();
@@ -1802,6 +1720,9 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       const app = appRef.current;
       if (app) {
+        if (dashTickerRef.current) {
+          app.ticker?.remove(dashTickerRef.current);
+        }
         const canvas = app.canvas ?? app.view;
         if (canvas?.parentNode === containerRef.current) {
           canvas.parentNode.removeChild(canvas);
@@ -1809,6 +1730,11 @@ const RouteMapBuilder = ({ onBack }) => {
         app.stage?.removeChildren();
         app.destroy(true, { children: false });
       }
+      if (dashTextureRef.current) {
+        dashTextureRef.current.destroy(true);
+        dashTextureRef.current = null;
+      }
+      dashTickerRef.current = null;
       viewportRef.current = null;
       appRef.current = null;
       tickerRef.current = null;
@@ -1829,12 +1755,9 @@ const RouteMapBuilder = ({ onBack }) => {
     const viewport = viewportRef.current;
     const edgesLayer = edgesContainerRef.current;
     const nodesLayer = nodesContainerRef.current;
-    const removedEdges = edgesLayer.removeChildren();
-    removedEdges.forEach((child) => child.destroy?.({ children: true }));
-    const removedNodes = nodesLayer.removeChildren();
-    removedNodes.forEach((child) => child.destroy?.({ children: true }));
-    nodeCleanupRef.current.forEach((fn) => fn());
-    nodeCleanupRef.current = [];
+    dashSpritesRef.current.clear();
+    edgesLayer.removeChildren();
+    nodesLayer.removeChildren();
 
     const commitDrag = () => {
       if (!dragStateRef.current) return;
@@ -1907,16 +1830,42 @@ const RouteMapBuilder = ({ onBack }) => {
       };
       const selected = selectedEdgeIds.includes(edge.id);
       const color = selected ? 0xfbbf24 : 0x5f6b8d;
-      const path = new Graphics();
-      drawDottedQuadratic(path, from, control, to, {
-        color,
-        size: selected ? 5 : 4,
-        spacing: 18,
+      const strokeWidth = selected ? EDGE_STROKE_WIDTH_SELECTED : EDGE_STROKE_WIDTH;
+      const edgeContainer = new Container();
+      edgeContainer.sortableChildren = true;
+      const segmentsContainer = new Container();
+      segmentsContainer.eventMode = 'none';
+      segmentsContainer.interactiveChildren = false;
+      segmentsContainer.zIndex = 0;
+      edgeContainer.addChild(segmentsContainer);
+      const segments = createQuadraticSegments(from, control, to);
+      segments.forEach((segment) => {
+        const segmentContainer = new Container();
+        segmentContainer.position.set(segment.midpoint.x, segment.midpoint.y);
+        segmentContainer.rotation = segment.angle;
+        segmentContainer.eventMode = 'none';
+        segmentContainer.interactiveChildren = false;
+        const tilingSprite = new TilingSprite({
+          texture: dashTexture ?? Texture.WHITE,
+          width: segment.length + strokeWidth,
+          height: strokeWidth,
+        });
+        tilingSprite.anchor.set(0.5);
+        tilingSprite.tint = color;
+        tilingSprite.alpha = selected ? 1 : 0.92;
+        tilingSprite.eventMode = 'none';
+        if (dashTexture) {
+          const yScale = strokeWidth / DASH_TEXTURE_HEIGHT;
+          tilingSprite.tileScale.set(1, yScale);
+          dashSpritesRef.current.add(tilingSprite);
+        }
+        segmentContainer.addChild(tilingSprite);
+        segmentsContainer.addChild(segmentContainer);
       });
-      path.edgeId = edge.id;
-      path.eventMode = 'static';
-      path.cursor = 'pointer';
-      path.hitArea = {
+      edgeContainer.edgeId = edge.id;
+      edgeContainer.eventMode = 'static';
+      edgeContainer.cursor = 'pointer';
+      edgeContainer.hitArea = {
         contains: (x, y) => {
           const minX = Math.min(from.x, to.x, control.x) - 24;
           const maxX = Math.max(from.x, to.x, control.x) + 24;
@@ -1925,7 +1874,7 @@ const RouteMapBuilder = ({ onBack }) => {
           return x >= minX && x <= maxX && y >= minY && y <= maxY;
         },
       };
-      path.on('pointertap', (event) => {
+      edgeContainer.on('pointertap', (event) => {
         event.stopPropagation();
         if (event.detail >= 2) {
           setEdgeEditor(edge);
@@ -1945,7 +1894,7 @@ const RouteMapBuilder = ({ onBack }) => {
           });
         }
       });
-      edgesLayer.addChild(path);
+      edgesLayer.addChild(edgeContainer);
 
       const arrow = new Graphics();
       const arrowSize = selected ? 18 : 16;
@@ -1960,7 +1909,9 @@ const RouteMapBuilder = ({ onBack }) => {
       arrow.endFill();
       arrow.position.set(to.x, to.y);
       arrow.rotation = angle;
-      edgesLayer.addChild(arrow);
+      arrow.zIndex = 1;
+      arrow.eventMode = 'none';
+      edgeContainer.addChild(arrow);
 
       if (edge.label) {
         const labelText = new Text({
@@ -1987,6 +1938,7 @@ const RouteMapBuilder = ({ onBack }) => {
         labelContainer.addChild(labelText);
         labelText.position.set(0, 0);
         labelContainer.position.set((from.x + to.x) / 2, (from.y + to.y) / 2 - 20);
+        labelContainer.zIndex = 2;
         labelContainer.eventMode = 'static';
         labelContainer.cursor = 'text';
         labelContainer.on('pointertap', (event) => {
@@ -1998,7 +1950,7 @@ const RouteMapBuilder = ({ onBack }) => {
             setSelectedNodeIds([]);
           }
         });
-        edgesLayer.addChild(labelContainer);
+        edgeContainer.addChild(labelContainer);
       }
     });
 
@@ -2282,7 +2234,23 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.off('pointerup', handleViewportDragEnd);
       viewport.off('pointerupoutside', handleViewportDragEnd);
     };
-  }, [state.nodes, state.edges, nodesMap, selectedNodeIds, selectedEdgeIds, showGrid, gridSize, connectOriginId, activeTool, deleteSelection, toggleNodeLock, applyDragDelta, pauseViewportDrag, resumeViewportDrag, texturesReady]);
+  }, [
+    state.nodes,
+    state.edges,
+    nodesMap,
+    selectedNodeIds,
+    selectedEdgeIds,
+    showGrid,
+    gridSize,
+    connectOriginId,
+    activeTool,
+    deleteSelection,
+    toggleNodeLock,
+    applyDragDelta,
+    pauseViewportDrag,
+    resumeViewportDrag,
+    dashTexture,
+  ]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
