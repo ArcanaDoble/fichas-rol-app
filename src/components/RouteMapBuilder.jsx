@@ -273,6 +273,7 @@ const mixHex = (hexA, hexB, amount) => {
 };
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
+const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
@@ -494,6 +495,7 @@ const NODE_TEXTURE_KEYS = [
   'frameBoss',
   'frameBossActive',
   'core',
+  'gloss',
   'halo',
   'haloBoss',
   'haloComplete',
@@ -731,6 +733,42 @@ const createCoreTexture = (id) =>
     ctx.stroke();
   });
 
+const createGlossTexture = (id) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
+    const center = size / 2;
+    const radiusX = size * 0.42;
+    const radiusY = size * 0.32;
+
+    const highlightGradient = ctx.createRadialGradient(
+      center - radiusX * 0.2,
+      center - radiusY * 0.6,
+      radiusX * 0.1,
+      center,
+      center,
+      radiusX,
+    );
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    highlightGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.55)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.ellipse(center, center - radiusY * 0.2, radiusX, radiusY, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    const streakGradient = ctx.createLinearGradient(0, center, size, center);
+    streakGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    streakGradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.18)');
+    streakGradient.addColorStop(0.55, 'rgba(255, 255, 255, 0.32)');
+    streakGradient.addColorStop(0.65, 'rgba(255, 255, 255, 0.08)');
+    streakGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = streakGradient;
+    ctx.beginPath();
+    ctx.ellipse(center + radiusX * 0.05, center - radiusY * 0.3, radiusX * 0.9, radiusY * 0.55, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
 const createFrameTexture = (id, options = {}) =>
   createCanvasTexture(id, 320, (ctx, size) => {
     const {
@@ -900,6 +938,7 @@ const generateNodeTextures = () => ({
     glow: 0.38,
   }),
   core: createCoreTexture('route-core'),
+  gloss: createGlossTexture('route-gloss'),
   halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
   haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
   haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
@@ -2095,6 +2134,7 @@ const RouteMapBuilder = ({ onBack }) => {
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
         const coreTexture = textures.core || Texture.WHITE;
+        const glossTexture = textures.gloss || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
@@ -2731,14 +2771,8 @@ const RouteMapBuilder = ({ onBack }) => {
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          backgroundBlendMode: backgroundImage ? 'soft-light' : undefined,
         }}
       >
-        <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-slate-950/55 via-slate-900/10 to-slate-950/60" />
-        {backgroundImage && (
-          <div className="pointer-events-none absolute inset-0 z-0 bg-slate-950/55 mix-blend-multiply" />
-        )}
-        <div className="pointer-events-none absolute inset-0 z-0 opacity-25" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.18), transparent 45%), radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.16), transparent 55%), radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.12), transparent 50%)' }} />
         <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
           <span className="font-medium text-sky-200 flex items-center gap-2">
