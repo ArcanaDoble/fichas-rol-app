@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import {
   Application,
   BitmapFont,
+  BitmapText,
+  Cache,
   Container,
   Graphics,
   Point,
@@ -282,6 +284,7 @@ const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
 const DASH_TEXTURE_CORE_HEIGHT = 6;
+const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
 const createDashTexture = (renderer) => {
   if (!renderer) return null;
@@ -545,6 +548,150 @@ const createCanvasTexture = (id, size, draw) => {
   return texture;
 };
 
+const normalizeGradientStops = (stops) => {
+  if (!Array.isArray(stops) || stops.length === 0) {
+    return [
+      { offset: 0, color: '#0f172a' },
+      { offset: 1, color: '#020617' },
+    ];
+  }
+  const normalized = stops
+    .map((stop, index) => {
+      if (!stop || typeof stop !== 'object') {
+        return null;
+      }
+      const offset = typeof stop.offset === 'number' ? clamp01(stop.offset) : clamp01(index / Math.max(stops.length - 1, 1));
+      const color = normalizeHex(stop.color) || stop.color;
+      if (!color) {
+        return null;
+      }
+      return { offset, color };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.offset - b.offset);
+  if (normalized.length === 0) {
+    return [
+      { offset: 0, color: '#0f172a' },
+      { offset: 1, color: '#020617' },
+    ];
+  }
+  return normalized;
+};
+
+const createGradientTexture = (stops, options = {}) => {
+  const {
+    orientation = 'vertical',
+    size = 2048,
+    overlays = [],
+  } = options;
+  const normalizedStops = normalizeGradientStops(stops);
+  const overlaysArray = Array.isArray(overlays) ? overlays : [];
+  const overlayKey = overlaysArray
+    .map((overlay) => {
+      if (!overlay || typeof overlay !== 'object') return 'none';
+      const type = overlay.type || 'unknown';
+      const details = Object.keys(overlay)
+        .filter((key) => key !== 'type')
+        .sort()
+        .map((key) => `${key}:${overlay[key]}`)
+        .join(',');
+      return `${type}(${details})`;
+    })
+    .join('|');
+  const textureId = `route-gradient-${orientation}-${size}-${normalizedStops
+    .map((stop) => `${stop.offset.toFixed(2)}-${stop.color}`)
+    .join('_')}-${overlayKey}`;
+
+  return createCanvasTexture(textureId, size, (ctx, canvasSize) => {
+    const center = canvasSize / 2;
+    let gradient;
+    switch (orientation) {
+      case 'horizontal':
+        gradient = ctx.createLinearGradient(0, 0, canvasSize, 0);
+        break;
+      case 'diagonal':
+        gradient = ctx.createLinearGradient(0, 0, canvasSize, canvasSize);
+        break;
+      case 'radial':
+        gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+        break;
+      default:
+        gradient = ctx.createLinearGradient(0, 0, 0, canvasSize);
+        break;
+    }
+
+    normalizedStops.forEach((stop) => {
+      gradient.addColorStop(stop.offset, stop.color);
+    });
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    overlaysArray.forEach((overlay) => {
+      if (!overlay || typeof overlay !== 'object') return;
+      if (overlay.type === 'radial-fade') {
+        const innerRadius = clamp01(overlay.innerRadius ?? 0);
+        const outerRadius = Math.max(innerRadius, clamp01(overlay.outerRadius ?? 1));
+        const fadeGradient = ctx.createRadialGradient(
+          center,
+          center,
+          innerRadius * center * 2,
+          center,
+          center,
+          outerRadius * center * 2,
+        );
+        fadeGradient.addColorStop(0, overlay.from || 'rgba(255,255,255,0.18)');
+        fadeGradient.addColorStop(1, overlay.to || 'rgba(2,6,23,0.95)');
+        ctx.fillStyle = fadeGradient;
+        const previousComposite = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = overlay.mode || 'source-over';
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.globalCompositeOperation = previousComposite;
+      } else if (overlay.type === 'noise') {
+        const density = Math.max(0, overlay.density ?? 0.2);
+        const alpha = clamp01(overlay.alpha ?? 0.08);
+        const radius = Math.max(0.5, overlay.radius ?? 1.2);
+        const rgb = hexToRgb(overlay.color) || { r: 148, g: 163, b: 184 };
+        const particles = Math.floor(canvasSize * canvasSize * density * 0.0025);
+        for (let i = 0; i < particles; i += 1) {
+          const x = Math.random() * canvasSize;
+          const y = Math.random() * canvasSize;
+          const noiseRadius = Math.random() * radius + 0.4;
+          const localAlpha = alpha * (0.4 + Math.random() * 0.6);
+          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${localAlpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, noiseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+  });
+};
+
+const createBackgroundSprite = (texture) => {
+  const baseTexture = texture instanceof Texture ? texture : Texture.WHITE;
+  const size = 4096;
+  const sprite = new TilingSprite(baseTexture, size, size);
+  sprite.position.set(-size / 2, -size / 2);
+  sprite.tileScale.set(1);
+  sprite.alpha = 1;
+  sprite.eventMode = 'none';
+  return sprite;
+};
+
+const createFogTexture = (size = 512) =>
+  createCanvasTexture(`route-fog-${size}`, size, (ctx, canvasSize) => {
+    const imageData = ctx.createImageData(canvasSize, canvasSize);
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const base = 190 + Math.random() * 40;
+      imageData.data[i] = base;
+      imageData.data[i + 1] = base + 10;
+      imageData.data[i + 2] = base + 25;
+      imageData.data[i + 3] = Math.floor(20 + Math.random() * 80);
+    }
+    ctx.putImageData(imageData, 0, 0);
+  });
+
 const createFrameTexture = (id, { innerAlpha = 0.3, rimAlpha = 0.85, rimWidth = 26, glow = 0 }) =>
   createCanvasTexture(id, 256, (ctx, size) => {
     const center = size / 2;
@@ -701,27 +848,26 @@ const generateNodeTextures = () => ({
   label: createLabelTexture(),
 });
 
+const ROUTE_MAP_FONT_CACHE_KEY = 'RouteMapLabel-bitmap';
+
 const ensureRouteMapFont = (() => {
   let ensured = false;
   return () => {
     if (ensured) return;
-    if (!BitmapFont.available.RouteMapLabel) {
-      BitmapFont.from(
-        'RouteMapLabel',
-        {
+    if (!Cache.has(ROUTE_MAP_FONT_CACHE_KEY)) {
+      BitmapFont.install({
+        name: 'RouteMapLabel',
+        style: {
           fontFamily: 'Inter, sans-serif',
           fontSize: 32,
           fontWeight: '500',
           fill: '#e2e8f0',
-          stroke: '#020617',
-          strokeThickness: 6,
+          stroke: { color: '#020617', width: 6 },
           letterSpacing: 2,
         },
-        {
-          chars: BitmapFont.ASCII,
-          resolution: 2,
-        },
-      );
+        chars: [[' ', '~']],
+        resolution: 2,
+      });
     }
     ensured = true;
   };
