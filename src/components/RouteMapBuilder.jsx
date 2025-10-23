@@ -1605,6 +1605,17 @@ const RouteMapBuilder = ({ onBack }) => {
 
       const selectionGraphics = new Graphics();
 
+      const backgroundFarLayer = new Container();
+      backgroundFarLayer.eventMode = 'none';
+      const backgroundMidLayer = new Container();
+      backgroundMidLayer.eventMode = 'none';
+      const backgroundNearLayer = new Container();
+      backgroundNearLayer.eventMode = 'none';
+      const fogLayer = new Container();
+      fogLayer.eventMode = 'none';
+      const fxLayer = new Container();
+      fxLayer.eventMode = 'none';
+
       const farTexture = createGradientTexture(
         [
           { offset: 0, color: '#020617' },
