@@ -32,31 +32,53 @@ const ensurePixiViewportCompatibility = (() => {
   let patched = false;
   return () => {
     if (patched) return;
-    const displayObjectProto = Object.getPrototypeOf(Container.prototype);
-    if (displayObjectProto) {
-      const hasTransformAlias = Object.getOwnPropertyDescriptor(displayObjectProto, 'transform');
-      if (!hasTransformAlias) {
-        Object.defineProperty(displayObjectProto, 'transform', {
-          configurable: true,
-          enumerable: false,
-          get() {
-            return this.localTransform;
-          },
-          set(value) {
-            if (!value) return;
-            if (this.localTransform && typeof this.localTransform.copyFrom === 'function') {
-              this.localTransform.copyFrom(value);
-            }
-          },
-        });
-      }
-      if (
-        typeof displayObjectProto.updateLocalTransform !== 'function' &&
-        typeof displayObjectProto.updateTransform === 'function'
-      ) {
-        displayObjectProto.updateLocalTransform = displayObjectProto.updateTransform;
+    const prototypes = new Set();
+    if (Container?.prototype) {
+      prototypes.add(Container.prototype);
+      const parentProto = Object.getPrototypeOf(Container.prototype);
+      if (parentProto) {
+        prototypes.add(parentProto);
       }
     }
+
+    const updateLocalTransformFallback = function updateLocalTransformFallback() {
+      const transform = this.transform;
+      if (!transform) {
+        return;
+      }
+
+      const matrix = transform.matrix;
+      let localTransform = this.localTransform;
+
+      if (!localTransform) {
+        this.localTransform = matrix;
+        return;
+      }
+
+      if (localTransform !== matrix) {
+        if (typeof localTransform.copyFrom === 'function') {
+          localTransform.copyFrom(matrix);
+        } else {
+          localTransform.a = matrix.a;
+          localTransform.b = matrix.b;
+          localTransform.c = matrix.c;
+          localTransform.d = matrix.d;
+          localTransform.tx = matrix.tx;
+          localTransform.ty = matrix.ty;
+        }
+      }
+
+      if (typeof this._didContainerChangeTick === 'number') {
+        this._didLocalTransformChangeId = this._didContainerChangeTick;
+      }
+    };
+
+    prototypes.forEach((proto) => {
+      if (proto && typeof proto.updateLocalTransform !== 'function') {
+        proto.updateLocalTransform = updateLocalTransformFallback;
+      }
+    });
+
     patched = true;
   };
 })();
