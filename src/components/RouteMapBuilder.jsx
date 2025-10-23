@@ -1073,6 +1073,7 @@ const createFrameTexture = (id, options = {}) =>
     const outerRadius = center - 12;
     const innerRadius = Math.max(outerRadius - rimWidth, 0);
     const ringThickness = outerRadius - innerRadius;
+    const ringMidRadius = (outerRadius + innerRadius) / 2;
 
     if (glow > 0) {
       const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius + ringThickness * 0.7);
@@ -1085,13 +1086,31 @@ const createFrameTexture = (id, options = {}) =>
     }
 
     const rimGradient = ctx.createLinearGradient(center, center - outerRadius, center, center + outerRadius);
-    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.1)})`);
-    rimGradient.addColorStop(0.5, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.2)})`);
-    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.7})`);
+    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.2)})`);
+    rimGradient.addColorStop(0.45, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.3)})`);
+    rimGradient.addColorStop(0.55, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.12)})`);
+    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.6})`);
     ctx.strokeStyle = rimGradient;
     ctx.lineWidth = ringThickness;
     ctx.beginPath();
-    ctx.arc(center, center, (outerRadius + innerRadius) / 2, 0, Math.PI * 2);
+    ctx.arc(center, center, ringMidRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const outerShadowGradient = ctx.createRadialGradient(
+      center,
+      center,
+      ringMidRadius,
+      center,
+      center,
+      outerRadius + ringThickness * 0.8,
+    );
+    outerShadowGradient.addColorStop(0.55, 'rgba(0, 0, 0, 0)');
+    outerShadowGradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.18)');
+    outerShadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.36)');
+    ctx.strokeStyle = outerShadowGradient;
+    ctx.lineWidth = Math.max(4, ringThickness * 0.7);
+    ctx.beginPath();
+    ctx.arc(center, center, outerRadius - ctx.lineWidth / 2, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.lineWidth = Math.max(3, ringThickness * 0.32);
@@ -1106,8 +1125,36 @@ const createFrameTexture = (id, options = {}) =>
     ctx.arc(center, center, outerRadius - ctx.lineWidth / 2, 0, Math.PI * 2);
     ctx.stroke();
 
-    const innerShadow = ctx.createRadialGradient(center, center, innerRadius * 0.35, center, center, innerRadius);
-    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0.38)');
+    const innerEdgeShadow = ctx.createRadialGradient(
+      center,
+      center,
+      innerRadius * 0.6,
+      center,
+      center,
+      innerRadius + ringThickness * 0.25,
+    );
+    innerEdgeShadow.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+    innerEdgeShadow.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
+    innerEdgeShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.strokeStyle = innerEdgeShadow;
+    ctx.lineWidth = Math.max(3, ringThickness * 0.55);
+    ctx.beginPath();
+    ctx.arc(center, center, innerRadius + ctx.lineWidth / 2.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const highlightGradient = ctx.createLinearGradient(center - outerRadius, center - outerRadius * 0.8, center + outerRadius, center + outerRadius * 0.8);
+    highlightGradient.addColorStop(0, 'rgba(0, 0, 0, 0.22)');
+    highlightGradient.addColorStop(0.35, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.35)})`);
+    highlightGradient.addColorStop(0.55, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.18)})`);
+    highlightGradient.addColorStop(1, 'rgba(0, 0, 0, 0.28)');
+    ctx.strokeStyle = highlightGradient;
+    ctx.lineWidth = Math.max(2, ringThickness * 0.4);
+    ctx.beginPath();
+    ctx.arc(center, center, ringMidRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const innerShadow = ctx.createRadialGradient(center, center, innerRadius * 0.25, center, center, innerRadius);
+    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0.52)');
     innerShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = innerShadow;
     ctx.beginPath();
