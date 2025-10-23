@@ -105,6 +105,7 @@ const ensurePixiViewportCompatibility = (() => {
 ensurePixiViewportCompatibility();
 
 const ROUTE_MAP_CUSTOM_ICONS_KEY = 'routeMapCustomIcons';
+const MINIMAP_CUSTOM_ICONS_KEY = 'minimapCustomIcons';
 
 function IconThumb({ src, selected, onClick, label, onDelete }) {
   return (
@@ -172,6 +173,20 @@ const readLocalCustomIcons = () => {
   }
   try {
     const raw = window.localStorage.getItem(ROUTE_MAP_CUSTOM_ICONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return sanitizeCustomIcons(parsed);
+  } catch {
+    return [];
+  }
+};
+
+const readMinimapLocalCustomIcons = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(MINIMAP_CUSTOM_ICONS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return sanitizeCustomIcons(parsed);
@@ -1300,16 +1315,30 @@ const RouteMapBuilder = ({ onBack }) => {
   const dashTickerRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
-  const initialCustomIcons = useMemo(() => readLocalCustomIcons(), []);
+  const initialCustomIcons = useMemo(() => {
+    const routeMapIcons = readLocalCustomIcons();
+    const minimapIcons = readMinimapLocalCustomIcons();
+    return sanitizeCustomIcons([...(routeMapIcons || []), ...(minimapIcons || [])]);
+  }, []);
   const [customIcons, setCustomIcons] = useState(initialCustomIcons);
   const [customIconsReady, setCustomIconsReady] = useState(false);
-  const customizationDocRef = useMemo(
+  const minimapCustomizationDocRef = useMemo(
+    () => doc(db, 'minimapSettings', 'customization'),
+    [db]
+  );
+  const routeMapCustomizationDocRef = useMemo(
     () => doc(db, 'routeMapSettings', 'customization'),
     [db]
   );
-  const customizationSnapshotRef = useRef(
-    JSON.stringify(initialCustomIcons)
-  );
+  const customizationSnapshotRef = useRef({
+    minimap: null,
+    routeMap: null,
+  });
+  const customIconSourcesRef = useRef({
+    fallback: initialCustomIcons,
+    minimap: null,
+    routeMap: null,
+  });
   const [activeTool, setActiveTool] = useState('select');
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridSize, setGridSize] = useState(40);
@@ -1859,54 +1888,124 @@ const RouteMapBuilder = ({ onBack }) => {
 
   useEffect(() => {
     let isUnmounted = false;
-    const fallbackIcons = readLocalCustomIcons();
-    const unsubscribe = onSnapshot(
-      customizationDocRef,
-      (snapshot) => {
-        if (isUnmounted) return;
-        let nextIcons = [];
-        if (snapshot.exists()) {
-          const data = snapshot.data() || {};
-          nextIcons = sanitizeCustomIcons(data.customIcons);
-        } else {
-          nextIcons = fallbackIcons;
-          setDoc(
-            customizationDocRef,
-            {
-              customIcons: nextIcons,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true }
-          ).catch((error) => {
-            console.error('[RouteMapBuilder] No se pudo inicializar la configuración de iconos', error);
-          });
-        }
-        const iconsStr = JSON.stringify(nextIcons);
-        customizationSnapshotRef.current = iconsStr;
-        setCustomIcons((prev) => {
-          const prevStr = JSON.stringify(sanitizeCustomIcons(prev));
-          if (prevStr === iconsStr) {
-            return prev;
-          }
-          return nextIcons;
-        });
-        setCustomIconsReady(true);
-      },
-      (error) => {
-        if (!isUnmounted) {
-          console.error('[RouteMapBuilder] Error al obtener iconos personalizados', error);
-          setCustomIconsReady(true);
-        }
+    customIconSourcesRef.current.fallback = sanitizeCustomIcons(initialCustomIcons);
+
+    const ensureCombinedIcons = () => {
+      const { fallback, minimap, routeMap } = customIconSourcesRef.current;
+      const combined = sanitizeCustomIcons([
+        ...(Array.isArray(fallback) ? fallback : []),
+        ...(Array.isArray(routeMap) ? routeMap : []),
+        ...(Array.isArray(minimap) ? minimap : []),
+      ]);
+      if (isUnmounted) {
+        return combined;
       }
-    );
+      setCustomIcons((prev) => {
+        const prevStr = JSON.stringify(sanitizeCustomIcons(prev));
+        const combinedStr = JSON.stringify(combined);
+        if (prevStr === combinedStr) {
+          return prev;
+        }
+        return combined;
+      });
+      setCustomIconsReady(true);
+      return combined;
+    };
+
+    const unsubscribes = [];
+
+    try {
+      const unsubscribeMinimap = onSnapshot(
+        minimapCustomizationDocRef,
+        (snapshot) => {
+          if (isUnmounted) return;
+          let icons = [];
+          if (snapshot.exists()) {
+            const data = snapshot.data() || {};
+            icons = sanitizeCustomIcons(data.customIcons);
+          }
+          customIconSourcesRef.current.minimap = icons;
+          customizationSnapshotRef.current = {
+            ...(customizationSnapshotRef.current || {}),
+            minimap: JSON.stringify(icons),
+          };
+          const combined = ensureCombinedIcons();
+          if (!snapshot.exists() && combined.length > 0) {
+            setDoc(
+              minimapCustomizationDocRef,
+              {
+                customIcons: combined,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            ).catch((error) => {
+              console.error(
+                '[RouteMapBuilder] No se pudo inicializar la configuración compartida de iconos',
+                error
+              );
+            });
+          }
+        },
+        (error) => {
+          if (!isUnmounted) {
+            console.error('[RouteMapBuilder] Error al obtener iconos del minimapa', error);
+            setCustomIconsReady(true);
+          }
+        }
+      );
+      unsubscribes.push(unsubscribeMinimap);
+    } catch (error) {
+      console.error('[RouteMapBuilder] Error al suscribirse a los iconos del minimapa', error);
+      setCustomIconsReady(true);
+    }
+
+    try {
+      const unsubscribeRouteMap = onSnapshot(
+        routeMapCustomizationDocRef,
+        (snapshot) => {
+          if (isUnmounted) return;
+          let icons = [];
+          if (snapshot.exists()) {
+            const data = snapshot.data() || {};
+            icons = sanitizeCustomIcons(data.customIcons);
+          }
+          customIconSourcesRef.current.routeMap = icons;
+          customizationSnapshotRef.current = {
+            ...(customizationSnapshotRef.current || {}),
+            routeMap: JSON.stringify(icons),
+          };
+          ensureCombinedIcons();
+        },
+        (error) => {
+          if (!isUnmounted) {
+            console.error(
+              '[RouteMapBuilder] Error al obtener iconos personalizados del mapa de rutas',
+              error
+            );
+            setCustomIconsReady(true);
+          }
+        }
+      );
+      unsubscribes.push(unsubscribeRouteMap);
+    } catch (error) {
+      console.error(
+        '[RouteMapBuilder] Error al suscribirse a los iconos personalizados del mapa de rutas',
+        error
+      );
+      setCustomIconsReady(true);
+    }
+
+    ensureCombinedIcons();
 
     return () => {
       isUnmounted = true;
-      try {
-        unsubscribe();
-      } catch {}
+      unsubscribes.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch {}
+      });
     };
-  }, [customizationDocRef]);
+  }, [initialCustomIcons, minimapCustomizationDocRef, routeMapCustomizationDocRef]);
 
   useEffect(() => {
     if (!customIconsReady || typeof window === 'undefined') {
@@ -1919,6 +2018,12 @@ const RouteMapBuilder = ({ onBack }) => {
         JSON.stringify(sanitized)
       );
     } catch {}
+    try {
+      window.localStorage.setItem(
+        MINIMAP_CUSTOM_ICONS_KEY,
+        JSON.stringify(sanitized)
+      );
+    } catch {}
   }, [customIcons, customIconsReady]);
 
   useEffect(() => {
@@ -1927,20 +2032,51 @@ const RouteMapBuilder = ({ onBack }) => {
     }
     const sanitized = sanitizeCustomIcons(customIcons);
     const iconsStr = JSON.stringify(sanitized);
-    if (iconsStr === customizationSnapshotRef.current) {
-      return;
+    const lastSnapshots = customizationSnapshotRef.current || {};
+    const writes = [];
+    if (iconsStr !== lastSnapshots.minimap) {
+      writes.push(
+        setDoc(
+          minimapCustomizationDocRef,
+          {
+            customIcons: sanitized,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch((error) => {
+          console.error(
+            '[RouteMapBuilder] No se pudieron guardar los iconos personalizados del minimapa',
+            error
+          );
+        })
+      );
     }
-    setDoc(
-      customizationDocRef,
-      {
-        customIcons: sanitized,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    ).catch((error) => {
-      console.error('[RouteMapBuilder] No se pudieron guardar los iconos personalizados', error);
-    });
-  }, [customIcons, customIconsReady, customizationDocRef]);
+    if (iconsStr !== lastSnapshots.routeMap) {
+      writes.push(
+        setDoc(
+          routeMapCustomizationDocRef,
+          {
+            customIcons: sanitized,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch((error) => {
+          console.error(
+            '[RouteMapBuilder] No se pudieron guardar los iconos personalizados del mapa de rutas',
+            error
+          );
+        })
+      );
+    }
+    if (writes.length > 0) {
+      Promise.all(writes).catch(() => {});
+    }
+  }, [
+    customIcons,
+    customIconsReady,
+    minimapCustomizationDocRef,
+    routeMapCustomizationDocRef,
+  ]);
 
   useEffect(() => {
     if (!containerRef.current) return;
