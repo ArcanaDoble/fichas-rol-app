@@ -670,23 +670,6 @@ const createGradientTexture = (stops, options = {}) => {
   });
 };
 
-const createBackgroundSprite = (texture) => {
-  const baseTexture = texture instanceof Texture ? texture : Texture.WHITE;
-  const size = 4096;
-  const sprite = new TilingSprite(baseTexture, size, size);
-  sprite.position.set(-size / 2, -size / 2);
-  sprite.tileScale.set(1);
-  sprite.alpha = 1;
-  sprite.eventMode = 'none';
-  return sprite;
-};
-
-const createSolidTexture = (id, color) =>
-  createCanvasTexture(id, 128, (ctx, size) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, size, size);
-  });
-
 const createCoreTexture = (id) =>
   createCanvasTexture(id, 320, (ctx, size) => {
     const center = size / 2;
@@ -1172,7 +1155,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const viewportRef = useRef(null);
   const nodesContainerRef = useRef(null);
   const edgesContainerRef = useRef(null);
-  const backgroundLayersRef = useRef({ far: null, mid: null, near: null });
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
   const dashTextureRef = useRef(null);
@@ -1700,40 +1682,9 @@ const RouteMapBuilder = ({ onBack }) => {
 
       const selectionGraphics = new Graphics();
 
-      const backgroundFarLayer = new Container();
-      backgroundFarLayer.eventMode = 'none';
-      const backgroundMidLayer = new Container();
-      backgroundMidLayer.eventMode = 'none';
-      const backgroundNearLayer = new Container();
-      backgroundNearLayer.eventMode = 'none';
-
-      const farTexture = createSolidTexture('route-bg-far', '#050c18');
-      const farSprite = createBackgroundSprite(farTexture);
-      farSprite.alpha = 1;
-      backgroundFarLayer.addChild(farSprite);
-
-      const midTexture = createSolidTexture('route-bg-mid', '#081423');
-      const midSprite = createBackgroundSprite(midTexture);
-      midSprite.alpha = 0.92;
-      backgroundMidLayer.addChild(midSprite);
-
-      const nearTexture = createSolidTexture('route-bg-near', '#0b1628');
-      const nearSprite = createBackgroundSprite(nearTexture);
-      nearSprite.alpha = 0.98;
-      backgroundNearLayer.addChild(nearSprite);
-
-      viewport.addChild(backgroundFarLayer);
-      viewport.addChild(backgroundMidLayer);
-      viewport.addChild(backgroundNearLayer);
       viewport.addChild(edgesLayer);
       viewport.addChild(nodesLayer);
       viewport.addChild(selectionGraphics);
-
-      backgroundLayersRef.current = {
-        far: backgroundFarLayer,
-        mid: backgroundMidLayer,
-        near: backgroundNearLayer,
-      };
       viewportRef.current = viewport;
       appRef.current = app;
       tickerRef.current = app.ticker;
@@ -1753,36 +1704,6 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       viewport.eventMode = 'static';
 
-      const updateEnvironmentalLayers = () => {
-        if (!viewportRef.current) return;
-        const currentViewport = viewportRef.current;
-        const scaleX = currentViewport.scale?.x || 1;
-        const scaleY = currentViewport.scale?.y || 1;
-        const vx = currentViewport.x;
-        const vy = currentViewport.y;
-
-        const farLayer = backgroundLayersRef.current.far;
-        const midLayer = backgroundLayersRef.current.mid;
-        const nearLayer = backgroundLayersRef.current.near;
-
-        const applyParallax = (layer, factor) => {
-          if (!layer) return;
-          layer.position.set(vx * (factor - 1), vy * (factor - 1));
-          layer.scale.set(1 / scaleX, 1 / scaleY);
-        };
-
-        applyParallax(farLayer, 0.4);
-        applyParallax(midLayer, 0.7);
-        applyParallax(nearLayer, 1);
-      };
-
-      updateEnvironmentalLayers();
-
-      const tickerCallback = () => {
-        updateEnvironmentalLayers();
-      };
-
-      app.ticker.add(tickerCallback);
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
@@ -1899,7 +1820,6 @@ const RouteMapBuilder = ({ onBack }) => {
       nodesContainerRef.current = null;
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
-      backgroundLayersRef.current = { far: null, mid: null, near: null };
     };
   }, []);
 
