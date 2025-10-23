@@ -570,20 +570,21 @@ const getCustomIconTexture = (url) => {
     return cached;
   }
 
-  const loadTexture = () => {
-    if (typeof Texture.fromURL === 'function') {
-      return Texture.fromURL(source, {
-        resourceOptions: {
-          crossOrigin: 'anonymous',
-        },
-      });
+  const applyTextureSettings = (texture) => {
+    if (texture?.baseTexture) {
+      texture.baseTexture.mipmap = 'on';
+      texture.baseTexture.scaleMode = 'linear';
+      texture.baseTexture.anisotropicLevel = 8;
     }
-    const texture = Texture.from(source);
+    return texture;
+  };
+
+  const ensureTextureReady = (texture) => {
     if (!texture?.baseTexture) {
       return Promise.resolve(texture);
     }
     if (texture.baseTexture.valid) {
-      return Promise.resolve(texture);
+      return Promise.resolve(applyTextureSettings(texture));
     }
     return new Promise((resolve, reject) => {
       const cleanup = () => {
@@ -594,7 +595,7 @@ const getCustomIconTexture = (url) => {
       };
       const handleLoaded = () => {
         cleanup();
-        resolve(texture);
+        resolve(applyTextureSettings(texture));
       };
       const handleError = (error) => {
         cleanup();
@@ -606,6 +607,83 @@ const getCustomIconTexture = (url) => {
       } catch (error) {
         cleanup();
         reject(error);
+      }
+    });
+  };
+
+  const loadTexture = () => {
+    if (typeof window === 'undefined') {
+      try {
+        const texture = Texture.from(source);
+        return ensureTextureReady(texture);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    const isDataUrl = source.startsWith('data:');
+
+    if (isDataUrl) {
+      try {
+        const dataTexture = Texture.from(source);
+        return ensureTextureReady(dataTexture);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    if (typeof Image === 'undefined') {
+      try {
+        const fallbackTexture = Texture.from(source);
+        return ensureTextureReady(fallbackTexture);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      let settled = false;
+
+      const cleanup = () => {
+        image.onload = null;
+        image.onerror = null;
+      };
+
+      image.onload = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        try {
+          const texture = Texture.from(image);
+          ensureTextureReady(texture).then(resolve).catch(reject);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      image.onerror = (event) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        const error = event?.error instanceof Error ? event.error : new Error('No se pudo cargar el icono personalizado');
+        reject(error);
+      };
+
+      try {
+        image.crossOrigin = 'anonymous';
+        image.decoding = 'async';
+        image.referrerPolicy = 'no-referrer';
+      } catch {}
+
+      image.src = source;
+
+      if (image.complete && image.naturalWidth > 0) {
+        Promise.resolve().then(() => {
+          if (typeof image.onload === 'function') {
+            image.onload();
+          }
+        });
       }
     });
   };
