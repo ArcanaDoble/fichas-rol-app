@@ -273,6 +273,7 @@ const mixHex = (hexA, hexB, amount) => {
 };
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
+const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
@@ -667,23 +668,6 @@ const createGradientTexture = (stops, options = {}) => {
     });
   });
 };
-
-const createBackgroundSprite = (texture) => {
-  const baseTexture = texture instanceof Texture ? texture : Texture.WHITE;
-  const size = 4096;
-  const sprite = new TilingSprite(baseTexture, size, size);
-  sprite.position.set(-size / 2, -size / 2);
-  sprite.tileScale.set(1);
-  sprite.alpha = 1;
-  sprite.eventMode = 'none';
-  return sprite;
-};
-
-const createSolidTexture = (id, color) =>
-  createCanvasTexture(id, 128, (ctx, size) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, size, size);
-  });
 
 const createCoreTexture = (id) =>
   createCanvasTexture(id, 320, (ctx, size) => {
@@ -1133,7 +1117,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const viewportRef = useRef(null);
   const nodesContainerRef = useRef(null);
   const edgesContainerRef = useRef(null);
-  const backgroundLayersRef = useRef({ far: null, mid: null, near: null });
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
   const dashTextureRef = useRef(null);
@@ -1661,40 +1644,9 @@ const RouteMapBuilder = ({ onBack }) => {
 
       const selectionGraphics = new Graphics();
 
-      const backgroundFarLayer = new Container();
-      backgroundFarLayer.eventMode = 'none';
-      const backgroundMidLayer = new Container();
-      backgroundMidLayer.eventMode = 'none';
-      const backgroundNearLayer = new Container();
-      backgroundNearLayer.eventMode = 'none';
-
-      const farTexture = createSolidTexture('route-bg-far', '#050c18');
-      const farSprite = createBackgroundSprite(farTexture);
-      farSprite.alpha = 1;
-      backgroundFarLayer.addChild(farSprite);
-
-      const midTexture = createSolidTexture('route-bg-mid', '#081423');
-      const midSprite = createBackgroundSprite(midTexture);
-      midSprite.alpha = 0.92;
-      backgroundMidLayer.addChild(midSprite);
-
-      const nearTexture = createSolidTexture('route-bg-near', '#0b1628');
-      const nearSprite = createBackgroundSprite(nearTexture);
-      nearSprite.alpha = 0.98;
-      backgroundNearLayer.addChild(nearSprite);
-
-      viewport.addChild(backgroundFarLayer);
-      viewport.addChild(backgroundMidLayer);
-      viewport.addChild(backgroundNearLayer);
       viewport.addChild(edgesLayer);
       viewport.addChild(nodesLayer);
       viewport.addChild(selectionGraphics);
-
-      backgroundLayersRef.current = {
-        far: backgroundFarLayer,
-        mid: backgroundMidLayer,
-        near: backgroundNearLayer,
-      };
       viewportRef.current = viewport;
       appRef.current = app;
       tickerRef.current = app.ticker;
@@ -1714,36 +1666,6 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       viewport.eventMode = 'static';
 
-      const updateEnvironmentalLayers = () => {
-        if (!viewportRef.current) return;
-        const currentViewport = viewportRef.current;
-        const scaleX = currentViewport.scale?.x || 1;
-        const scaleY = currentViewport.scale?.y || 1;
-        const vx = currentViewport.x;
-        const vy = currentViewport.y;
-
-        const farLayer = backgroundLayersRef.current.far;
-        const midLayer = backgroundLayersRef.current.mid;
-        const nearLayer = backgroundLayersRef.current.near;
-
-        const applyParallax = (layer, factor) => {
-          if (!layer) return;
-          layer.position.set(vx * (factor - 1), vy * (factor - 1));
-          layer.scale.set(1 / scaleX, 1 / scaleY);
-        };
-
-        applyParallax(farLayer, 0.4);
-        applyParallax(midLayer, 0.7);
-        applyParallax(nearLayer, 1);
-      };
-
-      updateEnvironmentalLayers();
-
-      const tickerCallback = () => {
-        updateEnvironmentalLayers();
-      };
-
-      app.ticker.add(tickerCallback);
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
@@ -1860,7 +1782,6 @@ const RouteMapBuilder = ({ onBack }) => {
       nodesContainerRef.current = null;
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
-      backgroundLayersRef.current = { far: null, mid: null, near: null };
     };
   }, []);
 
@@ -2118,7 +2039,7 @@ const RouteMapBuilder = ({ onBack }) => {
 
         const coreSprite = new Sprite(coreTexture);
         coreSprite.anchor.set(0.5);
-        const coreSize = radius * 2 - 14;
+        const coreSize = radius * 2 - 6;
         const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
         coreSprite.scale.set(coreScale);
         const coreTintHex = isLocked ? mixHex(fillHex, '#1f2937', 0.55) : fillHex;
@@ -2138,41 +2059,8 @@ const RouteMapBuilder = ({ onBack }) => {
         frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
-        const innerStroke = new Graphics();
-        innerStroke.lineStyle(3.5, hexToInt(isLocked ? mixHex(borderHex, '#94a3b8', 0.7) : borderHex), isLocked ? 0.55 : 0.85);
-        innerStroke.drawCircle(0, 0, radius - 6);
-        innerStroke.endFill();
-        innerStroke.eventMode = 'none';
-        nodeContainer.addChild(innerStroke);
-
-        const iconBackdrop = new Graphics();
-        const iconBgHex = isLocked ? mixHex(fillHex, '#0f172a', 0.6) : darkenHex(fillHex, 0.18);
-        iconBackdrop.beginFill(hexToInt(iconBgHex), isLocked ? 0.6 : 0.82);
-        iconBackdrop.drawCircle(0, 0, radius - 12);
-        iconBackdrop.endFill();
-        iconBackdrop.eventMode = 'none';
-        nodeContainer.addChild(iconBackdrop);
-
-        const glossSprite = new Sprite(glossTexture);
-        glossSprite.anchor.set(0.5);
-        const glossScale = glossSprite.texture?.width ? coreSize / glossSprite.texture.width : coreSize / 320;
-        glossSprite.scale.set(glossScale);
-        glossSprite.alpha = isLocked ? 0.18 : 0.42;
-        glossSprite.blendMode = 'screen';
-        glossSprite.eventMode = 'none';
-        nodeContainer.addChild(glossSprite);
-
-        const highlight = new Graphics();
-        highlight.beginFill(0xffffff, isLocked ? 0.12 : 0.25);
-        highlight.drawEllipse(-radius * 0.25, -radius * 0.32, radius * 0.6, radius * 0.45);
-        highlight.endFill();
-        highlight.rotation = -0.6;
-        highlight.blendMode = 'add';
-        highlight.eventMode = 'none';
-        nodeContainer.addChild(highlight);
-
         const iconSprite = new Sprite(Texture.WHITE);
-        iconSprite.anchor.set(0.5);
+        iconSprite.anchor.set(0);
         iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
@@ -2183,9 +2071,14 @@ const RouteMapBuilder = ({ onBack }) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
           iconSprite.alpha = isLocked ? 0.78 : 1;
-          const iconSize = 30;
-          const scale = texture.width ? iconSize / texture.width : iconSize / 96;
-          iconSprite.scale.set(scale);
+          const iconSize = isBoss ? radius * 1.75 : radius * 1.5;
+          const baseWidth = texture?.width || LUCIDE_TEXTURE_SIZE;
+          const baseHeight = texture?.height || LUCIDE_TEXTURE_SIZE;
+          const uniformScale = iconSize / Math.max(baseWidth, baseHeight);
+          iconSprite.scale.set(uniformScale);
+          const iconWidth = baseWidth * uniformScale;
+          const iconHeight = baseHeight * uniformScale;
+          iconSprite.position.set(-iconWidth / 2, -iconHeight / 2);
         };
         if (iconTextureResult instanceof Texture) {
           applyIconTexture(iconTextureResult);
@@ -2734,11 +2627,27 @@ const RouteMapBuilder = ({ onBack }) => {
           backgroundBlendMode: backgroundImage ? 'soft-light' : undefined,
         }}
       >
-        <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-slate-950/55 via-slate-900/10 to-slate-950/60" />
-        {backgroundImage && (
-          <div className="pointer-events-none absolute inset-0 z-0 bg-slate-950/55 mix-blend-multiply" />
-        )}
-        <div className="pointer-events-none absolute inset-0 z-0 opacity-25" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.18), transparent 45%), radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.16), transparent 55%), radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.12), transparent 50%)' }} />
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 18% 16%, rgba(148, 163, 184, 0.15), transparent 52%), ' +
+              'radial-gradient(circle at 88% 8%, rgba(56, 189, 248, 0.12), transparent 58%), ' +
+              'radial-gradient(circle at 50% 92%, rgba(14, 165, 233, 0.1), transparent 54%)',
+            mixBlendMode: backgroundImage ? 'soft-light' : 'screen',
+            opacity: backgroundImage ? 0.55 : 0.7,
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 50% 120%, rgba(2, 6, 23, 0.55), transparent 70%), ' +
+              'radial-gradient(circle at 50% -20%, rgba(15, 23, 42, 0.35), transparent 58%)',
+            mixBlendMode: 'multiply',
+            opacity: 0.55,
+          }}
+        />
         <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
           <span className="font-medium text-sky-200 flex items-center gap-2">

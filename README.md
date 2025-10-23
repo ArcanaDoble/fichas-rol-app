@@ -22,11 +22,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Conexiones dirigidas editables** con etiquetas y requisitos OR/AND para controlar la lógica de desbloqueo.
 - **Conexiones animadas** con guiones en marcha basados en sprites repetidos para visualizar el flujo de ruta.
 - **Textura procedural** de guiones generada en tiempo real sin depender de archivos binarios adicionales.
-- **Fondo minimalista** con capas sólidas en paralaje que mantienen el lienzo limpio y priorizan los nodos.
-- **Nodos renovados** con halo luminoso, anillo externo y núcleo limpio inspirado en la referencia proporcionada, con iconografía y color según el tipo.
+- **Fondo personalizable** que respeta íntegramente el color o imagen elegidos para ambientar el mapa.
+- **Profundidad atmosférica sutil** mediante viñetas y brillos suaves que recuperan el relieve clásico sin reintroducir las capas pesadas anteriores.
+- **Nodos renovados** con halo luminoso, un único aro exterior robusto y núcleo oscuro amplio inspirado en la referencia proporcionada, ahora con iconografía vectorial centrada matemáticamente y escalada protagonista según el tipo.
 - **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
 - **Historial y atajos** con deshacer/rehacer, Delete, Ctrl+C y Ctrl+V para mantener el flujo de trabajo del máster.
 - **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.
+- **Corrección de color**: se restauró la utilidad `darkenHex` para evitar errores al renderizar nodos bloqueados.
+- **Reflejos suavizados en nodos**: se retiraron las capas de brillo blanco para recuperar el acabado mate clásico sin artefactos.
+- **Fondo personalizable restaurado**: se retiraron las capas internas de Pixi que velaban el lienzo, recuperando el comportamiento de las versiones anteriores con la nueva ambientación ligera.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
