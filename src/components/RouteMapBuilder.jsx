@@ -273,6 +273,7 @@ const mixHex = (hexA, hexB, amount) => {
 };
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
+const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
