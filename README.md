@@ -17,6 +17,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 ### 🧭 **Mapa de Rutas (Roguelike) — NUEVO**
 
 - **Lienzo interactivo** con Pixi v7 y pixi-viewport v5 para pan, zoom y fondo personalizable.
+- **Capas ambientales** con fondos en paralaje (lejano/medio/cercano), contenedor de FX dedicado y niebla animada mediante tiling sprites reutilizables.
 - **Tipos de nodo configurables** (Inicio, Combate, Evento, Tienda, Élite, Curación y Jefe) con estados bloqueado, visible, desbloqueado, completado y actual.
 - **Conexiones dirigidas editables** con etiquetas y requisitos OR/AND para controlar la lógica de desbloqueo.
 - **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
