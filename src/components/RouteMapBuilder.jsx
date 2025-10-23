@@ -2109,10 +2109,14 @@ const RouteMapBuilder = ({ onBack }) => {
         const applyIconTexture = (texture) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
+          iconSprite.anchor.set(0.5);
+          iconSprite.position.set(0, 0);
           iconSprite.alpha = isLocked ? 0.78 : 1;
-          const iconSize = isBoss ? radius * 1.3 : radius * 1.15;
-          const scale = texture.width ? iconSize / texture.width : iconSize / 96;
-          iconSprite.scale.set(scale);
+          const iconSize = isBoss ? radius * 1.75 : radius * 1.5;
+          const baseWidth = texture?.width || LUCIDE_TEXTURE_SIZE;
+          const baseHeight = texture?.height || LUCIDE_TEXTURE_SIZE;
+          const uniformScale = iconSize / Math.max(baseWidth, baseHeight);
+          iconSprite.scale.set(uniformScale);
         };
         if (iconTextureResult instanceof Texture) {
           applyIconTexture(iconTextureResult);
