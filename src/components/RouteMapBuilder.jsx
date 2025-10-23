@@ -31,8 +31,11 @@ import {
   Undo2,
   Wand2,
 } from 'lucide-react';
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import Boton from './Boton';
 import Input from './Input';
+import { db } from '../firebase';
+import { getOrUploadFile } from '../utils/storage';
 
 const ensurePixiViewportCompatibility = (() => {
   let patched = false;
@@ -100,6 +103,97 @@ const ensurePixiViewportCompatibility = (() => {
 })();
 
 ensurePixiViewportCompatibility();
+
+const ROUTE_MAP_CUSTOM_ICONS_KEY = 'routeMapCustomIcons';
+const MINIMAP_CUSTOM_ICONS_KEY = 'minimapCustomIcons';
+
+function IconThumb({ src, selected, onClick, label, onDelete }) {
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        title={label || ''}
+        onClick={onClick}
+        className={`relative h-14 w-14 overflow-hidden rounded-lg border bg-slate-900/80 transition ${
+          selected
+            ? 'border-sky-400 ring-2 ring-sky-400'
+            : 'border-slate-700/80 hover:border-slate-500/80'
+        }`}
+      >
+        <img
+          loading="lazy"
+          src={src}
+          alt={label || 'icon'}
+          className="h-full w-full object-contain"
+        />
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          aria-label="Eliminar icono"
+          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-1 ring-black/40 transition hover:bg-red-500"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="h-3 w-3" aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+}
+
+IconThumb.propTypes = {
+  src: PropTypes.string.isRequired,
+  selected: PropTypes.bool,
+  onClick: PropTypes.func,
+  label: PropTypes.string,
+  onDelete: PropTypes.func,
+};
+
+const sanitizeCustomIcons = (icons) => {
+  if (!Array.isArray(icons)) return [];
+  const seen = new Set();
+  return icons
+    .map((icon) => (typeof icon === 'string' ? icon.trim() : ''))
+    .filter((icon) => {
+      if (!icon || seen.has(icon)) {
+        return false;
+      }
+      seen.add(icon);
+      return true;
+    });
+};
+
+const readLocalCustomIcons = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(ROUTE_MAP_CUSTOM_ICONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return sanitizeCustomIcons(parsed);
+  } catch {
+    return [];
+  }
+};
+
+const readMinimapLocalCustomIcons = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(MINIMAP_CUSTOM_ICONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return sanitizeCustomIcons(parsed);
+  } catch {
+    return [];
+  }
+};
 
 const NODE_TYPES = [
   {
@@ -365,12 +459,17 @@ const applyAppearanceDefaults = (node) => {
     fillColor: normalizeHex(node.fillColor) || palette.fill,
     borderColor: normalizeHex(node.borderColor) || palette.border,
     iconColor: normalizeHex(node.iconColor) || palette.icon,
+    iconUrl:
+      typeof node.iconUrl === 'string' && node.iconUrl.trim()
+        ? node.iconUrl.trim()
+        : null,
   };
 };
 
 const normalizeNodesCollection = (nodes) => nodes.map((node) => applyAppearanceDefaults(node));
 
 const emojiTextureCache = new Map();
+const customIconTextureCache = new Map();
 
 const EMOJI_TEXTURE_SIZE = 96;
 const EMOJI_TEXTURE_RESOLUTION = 2;
@@ -454,6 +553,78 @@ const getEmojiTexture = (emoji, color) => {
   emojiTextureCache.set(cacheKey, texture);
 
   return texture;
+};
+
+const getCustomIconTexture = (url) => {
+  const source = typeof url === 'string' ? url.trim() : '';
+  if (!source) {
+    return null;
+  }
+  const cached = customIconTextureCache.get(source);
+  if (cached instanceof Texture) {
+    if (!cached.destroyed && cached.valid) {
+      return cached;
+    }
+    customIconTextureCache.delete(source);
+  } else if (cached && typeof cached.then === 'function') {
+    return cached;
+  }
+
+  const loadTexture = () => {
+    if (typeof Texture.fromURL === 'function') {
+      return Texture.fromURL(source, {
+        resourceOptions: {
+          crossOrigin: 'anonymous',
+        },
+      });
+    }
+    const texture = Texture.from(source);
+    if (!texture?.baseTexture) {
+      return Promise.resolve(texture);
+    }
+    if (texture.baseTexture.valid) {
+      return Promise.resolve(texture);
+    }
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        try {
+          texture.baseTexture.off('loaded', handleLoaded);
+          texture.baseTexture.off('error', handleError);
+        } catch {}
+      };
+      const handleLoaded = () => {
+        cleanup();
+        resolve(texture);
+      };
+      const handleError = (error) => {
+        cleanup();
+        reject(error);
+      };
+      try {
+        texture.baseTexture.once('loaded', handleLoaded);
+        texture.baseTexture.once('error', handleError);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    });
+  };
+
+  const promise = loadTexture()
+    .then((texture) => {
+      if (!texture) {
+        throw new Error('No texture generated for custom icon');
+      }
+      customIconTextureCache.set(source, texture);
+      return texture;
+    })
+    .catch((error) => {
+      customIconTextureCache.delete(source);
+      throw error;
+    });
+
+  customIconTextureCache.set(source, promise);
+  return promise;
 };
 
 const fallbackHex = (...values) => {
@@ -1033,11 +1204,12 @@ const DEFAULT_NODE = () =>
     x: 0,
     y: 0,
     state: 'current',
-    unlockMode: 'or',
-    loot: '',
-    event: '',
-    notes: '',
-  });
+  unlockMode: 'or',
+  loot: '',
+  event: '',
+  notes: '',
+  iconUrl: null,
+});
 
 const initialState = () => {
   const starter = DEFAULT_NODE();
@@ -1147,6 +1319,30 @@ const RouteMapBuilder = ({ onBack }) => {
   const dashTickerRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const initialCustomIcons = useMemo(() => {
+    const routeMapIcons = readLocalCustomIcons();
+    const minimapIcons = readMinimapLocalCustomIcons();
+    return sanitizeCustomIcons([...(routeMapIcons || []), ...(minimapIcons || [])]);
+  }, []);
+  const [customIcons, setCustomIcons] = useState(initialCustomIcons);
+  const [customIconsReady, setCustomIconsReady] = useState(false);
+  const minimapCustomizationDocRef = useMemo(
+    () => doc(db, 'minimapSettings', 'customization'),
+    [db]
+  );
+  const routeMapCustomizationDocRef = useMemo(
+    () => doc(db, 'routeMapSettings', 'customization'),
+    [db]
+  );
+  const customizationSnapshotRef = useRef({
+    minimap: null,
+    routeMap: null,
+  });
+  const customIconSourcesRef = useRef({
+    fallback: initialCustomIcons,
+    minimap: null,
+    routeMap: null,
+  });
   const [activeTool, setActiveTool] = useState('select');
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridSize, setGridSize] = useState(40);
@@ -1176,6 +1372,10 @@ const RouteMapBuilder = ({ onBack }) => {
   const selectedNodes = useMemo(
     () => selectedNodeIds.map((id) => nodesMap.get(id)).filter(Boolean),
     [nodesMap, selectedNodeIds],
+  );
+  const sanitizedCustomIcons = useMemo(
+    () => sanitizeCustomIcons(customIcons),
+    [customIcons]
   );
   const appearanceValues = useMemo(() => {
     if (selectedNodes.length === 0) {
@@ -1214,6 +1414,23 @@ const RouteMapBuilder = ({ onBack }) => {
       fillColor: compare('fillColor'),
       borderColor: compare('borderColor'),
       iconColor: compare('iconColor'),
+    };
+  }, [selectedNodes]);
+  const customIconSelection = useMemo(() => {
+    if (selectedNodes.length === 0) {
+      return { url: null, hasAny: false, mixed: false };
+    }
+    const values = selectedNodes.map((node) => {
+      const value = typeof node.iconUrl === 'string' ? node.iconUrl.trim() : '';
+      return value || null;
+    });
+    const hasAny = values.some((value) => value !== null);
+    const uniqueValues = Array.from(new Set(values));
+    const singleValue = uniqueValues.length === 1 ? uniqueValues[0] : null;
+    return {
+      url: typeof singleValue === 'string' ? singleValue : null,
+      hasAny,
+      mixed: hasAny && uniqueValues.length > 1,
     };
   }, [selectedNodes]);
   const activeToolRef = useRef(activeTool);
@@ -1333,6 +1550,7 @@ const RouteMapBuilder = ({ onBack }) => {
           fillColor: palette.fill,
           borderColor: palette.border,
           iconColor: palette.icon,
+          iconUrl: null,
         });
       },
     });
@@ -1439,6 +1657,76 @@ const RouteMapBuilder = ({ onBack }) => {
       },
     });
   }, [selectedNodeIds]);
+
+  const applyCustomIconToSelection = useCallback(
+    (iconUrl) => {
+      if (selectedNodeIds.length === 0) return;
+      const normalized = typeof iconUrl === 'string' ? iconUrl.trim() : '';
+      dispatch({
+        type: 'UPDATE',
+        updater: (nodes) => {
+          nodes.forEach((node) => {
+            if (!selectedNodeIds.includes(node.id)) return;
+            node.iconUrl = normalized || null;
+          });
+        },
+      });
+    },
+    [dispatch, selectedNodeIds]
+  );
+
+  const handleCustomIconUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const { url } = await getOrUploadFile(file, 'RouteMapIcons');
+      if (url) {
+        setCustomIcons((prev) => sanitizeCustomIcons([...(prev || []), url]));
+      }
+    } catch (error) {
+      console.warn('[RouteMapBuilder] Error subiendo icono personalizado, usando fallback', error);
+      const reader = new FileReader();
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+        if (typeof dataUrl === 'string' && dataUrl) {
+          setCustomIcons((prev) => sanitizeCustomIcons([...(prev || []), dataUrl]));
+        }
+      } catch (readerError) {
+        console.error('[RouteMapBuilder] No se pudo leer el icono personalizado', readerError);
+      }
+    }
+  }, []);
+
+  const handleRemoveCustomIcon = useCallback(
+    (index) => {
+      let removed = null;
+      setCustomIcons((prev) => {
+        if (!Array.isArray(prev) || index < 0 || index >= prev.length) {
+          return prev;
+        }
+        removed = typeof prev[index] === 'string' ? prev[index].trim() : null;
+        const next = prev.filter((_, i) => i !== index);
+        return sanitizeCustomIcons(next);
+      });
+      if (removed) {
+        dispatch({
+          type: 'UPDATE',
+          skipHistory: true,
+          updater: (nodes) => {
+            nodes.forEach((node) => {
+              if (typeof node.iconUrl === 'string' && node.iconUrl.trim() === removed) {
+                node.iconUrl = null;
+              }
+            });
+          },
+        });
+      }
+    },
+    [dispatch]
+  );
 
   const applyAutoLayout = useCallback(() => {
     const edgesByTarget = new Map();
@@ -1601,6 +1889,198 @@ const RouteMapBuilder = ({ onBack }) => {
   useEffect(() => {
     loadFromLocalStorage();
   }, [loadFromLocalStorage]);
+
+  useEffect(() => {
+    let isUnmounted = false;
+    customIconSourcesRef.current.fallback = sanitizeCustomIcons(initialCustomIcons);
+
+    const ensureCombinedIcons = () => {
+      const { fallback, minimap, routeMap } = customIconSourcesRef.current;
+      const combined = sanitizeCustomIcons([
+        ...(Array.isArray(fallback) ? fallback : []),
+        ...(Array.isArray(routeMap) ? routeMap : []),
+        ...(Array.isArray(minimap) ? minimap : []),
+      ]);
+      if (isUnmounted) {
+        return combined;
+      }
+      setCustomIcons((prev) => {
+        const prevStr = JSON.stringify(sanitizeCustomIcons(prev));
+        const combinedStr = JSON.stringify(combined);
+        if (prevStr === combinedStr) {
+          return prev;
+        }
+        return combined;
+      });
+      setCustomIconsReady(true);
+      return combined;
+    };
+
+    const unsubscribes = [];
+
+    try {
+      const unsubscribeMinimap = onSnapshot(
+        minimapCustomizationDocRef,
+        (snapshot) => {
+          if (isUnmounted) return;
+          let icons = [];
+          if (snapshot.exists()) {
+            const data = snapshot.data() || {};
+            icons = sanitizeCustomIcons(data.customIcons);
+          }
+          customIconSourcesRef.current.minimap = icons;
+          customizationSnapshotRef.current = {
+            ...(customizationSnapshotRef.current || {}),
+            minimap: JSON.stringify(icons),
+          };
+          const combined = ensureCombinedIcons();
+          if (!snapshot.exists() && combined.length > 0) {
+            setDoc(
+              minimapCustomizationDocRef,
+              {
+                customIcons: combined,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            ).catch((error) => {
+              console.error(
+                '[RouteMapBuilder] No se pudo inicializar la configuración compartida de iconos',
+                error
+              );
+            });
+          }
+        },
+        (error) => {
+          if (!isUnmounted) {
+            console.error('[RouteMapBuilder] Error al obtener iconos del minimapa', error);
+            setCustomIconsReady(true);
+          }
+        }
+      );
+      unsubscribes.push(unsubscribeMinimap);
+    } catch (error) {
+      console.error('[RouteMapBuilder] Error al suscribirse a los iconos del minimapa', error);
+      setCustomIconsReady(true);
+    }
+
+    try {
+      const unsubscribeRouteMap = onSnapshot(
+        routeMapCustomizationDocRef,
+        (snapshot) => {
+          if (isUnmounted) return;
+          let icons = [];
+          if (snapshot.exists()) {
+            const data = snapshot.data() || {};
+            icons = sanitizeCustomIcons(data.customIcons);
+          }
+          customIconSourcesRef.current.routeMap = icons;
+          customizationSnapshotRef.current = {
+            ...(customizationSnapshotRef.current || {}),
+            routeMap: JSON.stringify(icons),
+          };
+          ensureCombinedIcons();
+        },
+        (error) => {
+          if (!isUnmounted) {
+            console.error(
+              '[RouteMapBuilder] Error al obtener iconos personalizados del mapa de rutas',
+              error
+            );
+            setCustomIconsReady(true);
+          }
+        }
+      );
+      unsubscribes.push(unsubscribeRouteMap);
+    } catch (error) {
+      console.error(
+        '[RouteMapBuilder] Error al suscribirse a los iconos personalizados del mapa de rutas',
+        error
+      );
+      setCustomIconsReady(true);
+    }
+
+    ensureCombinedIcons();
+
+    return () => {
+      isUnmounted = true;
+      unsubscribes.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch {}
+      });
+    };
+  }, [initialCustomIcons, minimapCustomizationDocRef, routeMapCustomizationDocRef]);
+
+  useEffect(() => {
+    if (!customIconsReady || typeof window === 'undefined') {
+      return;
+    }
+    const sanitized = sanitizeCustomIcons(customIcons);
+    try {
+      window.localStorage.setItem(
+        ROUTE_MAP_CUSTOM_ICONS_KEY,
+        JSON.stringify(sanitized)
+      );
+    } catch {}
+    try {
+      window.localStorage.setItem(
+        MINIMAP_CUSTOM_ICONS_KEY,
+        JSON.stringify(sanitized)
+      );
+    } catch {}
+  }, [customIcons, customIconsReady]);
+
+  useEffect(() => {
+    if (!customIconsReady) {
+      return;
+    }
+    const sanitized = sanitizeCustomIcons(customIcons);
+    const iconsStr = JSON.stringify(sanitized);
+    const lastSnapshots = customizationSnapshotRef.current || {};
+    const writes = [];
+    if (iconsStr !== lastSnapshots.minimap) {
+      writes.push(
+        setDoc(
+          minimapCustomizationDocRef,
+          {
+            customIcons: sanitized,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch((error) => {
+          console.error(
+            '[RouteMapBuilder] No se pudieron guardar los iconos personalizados del minimapa',
+            error
+          );
+        })
+      );
+    }
+    if (iconsStr !== lastSnapshots.routeMap) {
+      writes.push(
+        setDoc(
+          routeMapCustomizationDocRef,
+          {
+            customIcons: sanitized,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch((error) => {
+          console.error(
+            '[RouteMapBuilder] No se pudieron guardar los iconos personalizados del mapa de rutas',
+            error
+          );
+        })
+      );
+    }
+    if (writes.length > 0) {
+      Promise.all(writes).catch(() => {});
+    }
+  }, [
+    customIcons,
+    customIconsReady,
+    minimapCustomizationDocRef,
+    routeMapCustomizationDocRef,
+  ]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -2088,35 +2568,72 @@ const RouteMapBuilder = ({ onBack }) => {
         iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
-        const iconSymbol = NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
-        const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
-        const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
-        const applyIconTexture = (texture) => {
+        const customIconUrl = typeof node.iconUrl === 'string' ? node.iconUrl.trim() : '';
+        const applyIconTexture = (texture, alpha = 1) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
-          // Re-anchor to the center as soon as the emoji texture resolves.
           iconSprite.anchor.set(0.5);
           iconSprite.position.set(0, 0);
           iconSprite.tint = 0xffffff;
-          iconSprite.alpha = isLocked ? 0.78 : 1;
+          iconSprite.alpha = alpha;
           const iconDiameter = Math.max(coreSize - 12, 0);
-          const baseWidth = texture?.width || EMOJI_TEXTURE_SIZE;
-          const baseHeight = texture?.height || EMOJI_TEXTURE_SIZE;
-          const baseMaxDimension = Math.max(baseWidth, baseHeight) || 1;
+          const baseWidth =
+            texture?.width ||
+            texture?.baseTexture?.realWidth ||
+            texture?.baseTexture?.width ||
+            EMOJI_TEXTURE_SIZE;
+          const baseHeight =
+            texture?.height ||
+            texture?.baseTexture?.realHeight ||
+            texture?.baseTexture?.height ||
+            EMOJI_TEXTURE_SIZE;
+          const baseMaxDimension = Math.max(baseWidth || 0, baseHeight || 0) || 1;
           const uniformScale = iconDiameter / baseMaxDimension;
           iconSprite.scale.set(uniformScale);
           iconSprite.position.set(0, 0);
         };
-        if (iconTextureResult instanceof Texture) {
-          applyIconTexture(iconTextureResult);
-        } else if (iconTextureResult && typeof iconTextureResult.then === 'function') {
-          iconTextureResult.then((texture) => {
-            if (!iconSprite.destroyed) {
-              applyIconTexture(texture);
-            }
-          }).catch((error) => {
-            console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
-          });
+        const applyFallbackEmoji = () => {
+          const iconSymbol = NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
+          const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
+          const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
+          const targetAlpha = isLocked ? 0.78 : 1;
+          if (iconTextureResult instanceof Texture) {
+            applyIconTexture(iconTextureResult, targetAlpha);
+          } else if (iconTextureResult && typeof iconTextureResult.then === 'function') {
+            iconTextureResult
+              .then((texture) => {
+                if (!iconSprite.destroyed) {
+                  applyIconTexture(texture, targetAlpha);
+                }
+              })
+              .catch((error) => {
+                console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
+              });
+          }
+        };
+        if (customIconUrl) {
+          const customTextureResult = getCustomIconTexture(customIconUrl);
+          const targetAlpha = isLocked ? 0.75 : 1;
+          if (customTextureResult instanceof Texture) {
+            applyIconTexture(customTextureResult, targetAlpha);
+          } else if (customTextureResult && typeof customTextureResult.then === 'function') {
+            customTextureResult
+              .then((texture) => {
+                if (!iconSprite.destroyed) {
+                  applyIconTexture(texture, targetAlpha);
+                }
+              })
+              .catch((error) => {
+                console.warn('[RouteMapBuilder] Error al cargar el icono personalizado', error);
+                if (!iconSprite.destroyed) {
+                  applyFallbackEmoji();
+                }
+              });
+          } else {
+            applyFallbackEmoji();
+          }
+        } else {
+          applyFallbackEmoji();
         }
 
         if (isLocked) {
@@ -2527,6 +3044,67 @@ const RouteMapBuilder = ({ onBack }) => {
                     <span className="text-[10px] text-amber-300">Valores mixtos</span>
                   )}
                 </label>
+              </div>
+              <div className="space-y-2 rounded-xl border border-slate-800/60 bg-slate-900/60 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                    Iconos personalizados
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    {customIconSelection.hasAny && (
+                      <button
+                        type="button"
+                        onClick={() => applyCustomIconToSelection(null)}
+                        className="text-[11px] font-semibold uppercase tracking-[0.25em] text-sky-300 hover:text-sky-200"
+                      >
+                        Icono por defecto
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Elige una imagen para reemplazar el emoji de los nodos seleccionados. Los iconos se comparten con todo el grupo.
+                </p>
+                {customIconSelection.mixed && (
+                  <p className="text-[10px] text-amber-300">
+                    La selección contiene múltiples iconos personalizados.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {sanitizedCustomIcons.length > 0 ? (
+                    sanitizedCustomIcons.map((url, index) => (
+                      <IconThumb
+                        key={`route-custom-icon-${index}`}
+                        src={url}
+                        label={`Icono personalizado ${index + 1}`}
+                        selected={customIconSelection.url === url}
+                        onClick={() => applyCustomIconToSelection(url)}
+                        onDelete={() => handleRemoveCustomIcon(index)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      Aún no hay iconos personalizados disponibles.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                    Subir icono
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        handleCustomIconUpload(file);
+                        event.target.value = '';
+                      }
+                    }}
+                    className="block w-full cursor-pointer rounded border border-slate-700/70 bg-slate-900/80 px-2 py-1 text-[11px] text-slate-200 transition file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1 file:text-xs file:font-semibold file:uppercase file:text-slate-100 hover:file:bg-slate-700"
+                  />
+                </div>
               </div>
               <Boton
                 onClick={handleResetAppearance}
