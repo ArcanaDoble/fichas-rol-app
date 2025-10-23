@@ -572,7 +572,11 @@ const getCustomIconTexture = (url) => {
 
   const loadTexture = () => {
     if (typeof Texture.fromURL === 'function') {
-      return Texture.fromURL(source);
+      return Texture.fromURL(source, {
+        resourceOptions: {
+          crossOrigin: 'anonymous',
+        },
+      });
     }
     const texture = Texture.from(source);
     if (!texture?.baseTexture) {
@@ -2588,23 +2592,7 @@ const RouteMapBuilder = ({ onBack }) => {
           iconSprite.scale.set(uniformScale);
           iconSprite.position.set(0, 0);
         };
-        if (customIconUrl) {
-          const customTextureResult = getCustomIconTexture(customIconUrl);
-          const targetAlpha = isLocked ? 0.75 : 1;
-          if (customTextureResult instanceof Texture) {
-            applyIconTexture(customTextureResult, targetAlpha);
-          } else if (customTextureResult && typeof customTextureResult.then === 'function') {
-            customTextureResult
-              .then((texture) => {
-                if (!iconSprite.destroyed) {
-                  applyIconTexture(texture, targetAlpha);
-                }
-              })
-              .catch((error) => {
-                console.warn('[RouteMapBuilder] Error al cargar el icono personalizado', error);
-              });
-          }
-        } else {
+        const applyFallbackEmoji = () => {
           const iconSymbol = NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
           const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
           const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
@@ -2622,6 +2610,30 @@ const RouteMapBuilder = ({ onBack }) => {
                 console.warn('[RouteMapBuilder] Error al cargar el icono de nodo', error);
               });
           }
+        };
+        if (customIconUrl) {
+          const customTextureResult = getCustomIconTexture(customIconUrl);
+          const targetAlpha = isLocked ? 0.75 : 1;
+          if (customTextureResult instanceof Texture) {
+            applyIconTexture(customTextureResult, targetAlpha);
+          } else if (customTextureResult && typeof customTextureResult.then === 'function') {
+            customTextureResult
+              .then((texture) => {
+                if (!iconSprite.destroyed) {
+                  applyIconTexture(texture, targetAlpha);
+                }
+              })
+              .catch((error) => {
+                console.warn('[RouteMapBuilder] Error al cargar el icono personalizado', error);
+                if (!iconSprite.destroyed) {
+                  applyFallbackEmoji();
+                }
+              });
+          } else {
+            applyFallbackEmoji();
+          }
+        } else {
+          applyFallbackEmoji();
         }
 
         if (isLocked) {
