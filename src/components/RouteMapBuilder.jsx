@@ -1165,14 +1165,58 @@ const createFrameTexture = (id, options = {}) =>
 const createHaloTexture = (id, { innerAlpha = 0.6, outerAlpha = 0 }) =>
   createCanvasTexture(id, 420, (ctx, size) => {
     const center = size / 2;
-    const gradient = ctx.createRadialGradient(center, center, size * 0.08, center, center, center);
-    gradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
-    gradient.addColorStop(0.6, `rgba(255, 255, 255, ${(innerAlpha + outerAlpha) / 2})`);
-    gradient.addColorStop(1, `rgba(255, 255, 255, ${outerAlpha})`);
-    ctx.fillStyle = gradient;
+    const baseOuterRadius = center * 0.8;
+
+    const baseGradient = ctx.createRadialGradient(
+      center,
+      center,
+      baseOuterRadius * 0.12,
+      center,
+      center,
+      baseOuterRadius,
+    );
+    const midAlpha = innerAlpha * 0.55 + outerAlpha * 0.45;
+    const fadeAlpha = innerAlpha * 0.18 + outerAlpha * 0.82;
+    baseGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
+    baseGradient.addColorStop(0.35, `rgba(255, 255, 255, ${midAlpha})`);
+    baseGradient.addColorStop(0.65, `rgba(255, 255, 255, ${fadeAlpha})`);
+    baseGradient.addColorStop(1, `rgba(255, 255, 255, ${outerAlpha})`);
+    ctx.fillStyle = baseGradient;
     ctx.beginPath();
-    ctx.arc(center, center, center - 4, 0, Math.PI * 2);
+    ctx.arc(center, center, baseOuterRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    const previousComposite = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+
+    const ringInnerRadius = baseOuterRadius * 0.92;
+    const ringOuterRadius = center * 0.98;
+    const ringGradient = ctx.createRadialGradient(
+      center,
+      center,
+      ringInnerRadius,
+      center,
+      center,
+      ringOuterRadius,
+    );
+    ringGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    ringGradient.addColorStop(0.5, `rgba(255, 255, 255, ${innerAlpha * 0.4})`);
+    ringGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = ringGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, ringOuterRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const highlightRadius = baseOuterRadius * 0.45;
+    const highlightGradient = ctx.createRadialGradient(center, center, 0, center, center, highlightRadius);
+    highlightGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha * 0.5})`);
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, highlightRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = previousComposite;
   });
 
 const createBadgeTexture = (id, drawSymbol) =>
