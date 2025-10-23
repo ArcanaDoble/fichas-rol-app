@@ -2693,6 +2693,27 @@ const RouteMapBuilder = ({ onBack }) => {
           backgroundRepeat: 'no-repeat',
         }}
       >
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 18% 16%, rgba(148, 163, 184, 0.15), transparent 52%), ' +
+              'radial-gradient(circle at 88% 8%, rgba(56, 189, 248, 0.12), transparent 58%), ' +
+              'radial-gradient(circle at 50% 92%, rgba(14, 165, 233, 0.1), transparent 54%)',
+            mixBlendMode: backgroundImage ? 'soft-light' : 'screen',
+            opacity: backgroundImage ? 0.55 : 0.7,
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 50% 120%, rgba(2, 6, 23, 0.55), transparent 70%), ' +
+              'radial-gradient(circle at 50% -20%, rgba(15, 23, 42, 0.35), transparent 58%)',
+            mixBlendMode: 'multiply',
+            opacity: 0.55,
+          }}
+        />
         <div className="absolute left-6 top-6 z-20 flex items-center gap-3 rounded-full border border-sky-500/40 bg-slate-900/80 px-6 py-2.5 text-sm shadow-lg shadow-sky-900/40 backdrop-blur">
           <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Herramienta</span>
           <span className="font-medium text-sky-200 flex items-center gap-2">
