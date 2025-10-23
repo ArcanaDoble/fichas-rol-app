@@ -494,6 +494,8 @@ const NODE_TEXTURE_KEYS = [
   'frameActive',
   'frameBoss',
   'frameBossActive',
+  'core',
+  'gloss',
   'halo',
   'haloBoss',
   'haloComplete',
@@ -679,48 +681,188 @@ const createBackgroundSprite = (texture) => {
   return sprite;
 };
 
-const createFogTexture = (size = 512) =>
-  createCanvasTexture(`route-fog-${size}`, size, (ctx, canvasSize) => {
-    const imageData = ctx.createImageData(canvasSize, canvasSize);
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      const base = 190 + Math.random() * 40;
-      imageData.data[i] = base;
-      imageData.data[i + 1] = base + 10;
-      imageData.data[i + 2] = base + 25;
-      imageData.data[i + 3] = Math.floor(20 + Math.random() * 80);
-    }
-    ctx.putImageData(imageData, 0, 0);
+const createSolidTexture = (id, color) =>
+  createCanvasTexture(id, 128, (ctx, size) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, size, size);
   });
 
-const createFrameTexture = (id, { innerAlpha = 0.3, rimAlpha = 0.85, rimWidth = 26, glow = 0 }) =>
-  createCanvasTexture(id, 256, (ctx, size) => {
+const createGridTexture = (
+  id,
+  {
+    background = '#0b1628',
+    cellSize = 96,
+    majorEvery = 4,
+    minorLineColor = 'rgba(148, 163, 184, 0.08)',
+    majorLineColor = 'rgba(148, 163, 184, 0.18)',
+    dotColor = 'rgba(148, 163, 184, 0.22)',
+  } = {},
+) =>
+  createCanvasTexture(id, cellSize * Math.max(majorEvery, 1), (ctx, size) => {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, size, size);
+
+    const drawLine = (x1, y1, x2, y2, strokeStyle) => {
+      ctx.strokeStyle = strokeStyle;
+      ctx.beginPath();
+      ctx.moveTo(x1 + 0.5, y1 + 0.5);
+      ctx.lineTo(x2 + 0.5, y2 + 0.5);
+      ctx.stroke();
+    };
+
+    ctx.lineWidth = 1;
+    for (let offset = 0; offset <= size; offset += cellSize) {
+      drawLine(offset, 0, offset, size, minorLineColor);
+      drawLine(0, offset, size, offset, minorLineColor);
+    }
+
+    const majorStep = cellSize * Math.max(majorEvery, 1);
+    ctx.lineWidth = 1.2;
+    for (let offset = 0; offset <= size; offset += majorStep) {
+      drawLine(offset, 0, offset, size, majorLineColor);
+      drawLine(0, offset, size, offset, majorLineColor);
+    }
+
+    if (dotColor) {
+      const radius = 1.6;
+      ctx.fillStyle = dotColor;
+      for (let x = 0; x <= size; x += majorStep) {
+        for (let y = 0; y <= size; y += majorStep) {
+          ctx.beginPath();
+          ctx.arc(x + 0.5, y + 0.5, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  });
+
+const createCoreTexture = (id) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
     const center = size / 2;
-    const outerRadius = center - 6;
+    const radius = center - 24;
+
+    const baseGradient = ctx.createRadialGradient(
+      center - radius * 0.28,
+      center - radius * 0.32,
+      radius * 0.15,
+      center,
+      center,
+      radius,
+    );
+    baseGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    baseGradient.addColorStop(0.55, 'rgba(255, 255, 255, 0.7)');
+    baseGradient.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
+    ctx.fillStyle = baseGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shadowGradient = ctx.createRadialGradient(
+      center,
+      center + radius * 0.35,
+      radius * 0.15,
+      center,
+      center,
+      radius,
+    );
+    shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.3)');
+    shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const rimGradient = ctx.createLinearGradient(center, center - radius, center, center + radius);
+    rimGradient.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+    rimGradient.addColorStop(1, 'rgba(255, 255, 255, 0.28)');
+    ctx.lineWidth = size * 0.02;
+    ctx.strokeStyle = rimGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+const createGlossTexture = (id) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
+    const center = size / 2;
+    const radius = center - 24;
+
+    const glossGradient = ctx.createRadialGradient(
+      center - radius * 0.48,
+      center - radius * 0.6,
+      radius * 0.05,
+      center,
+      center,
+      radius,
+    );
+    glossGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    glossGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.35)');
+    glossGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = glossGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.beginPath();
+    ctx.ellipse(center - radius * 0.34, center - radius * 0.42, radius * 0.46, radius * 0.35, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.beginPath();
+    ctx.arc(center + radius * 0.22, center + radius * 0.2, radius * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+const createFrameTexture = (id, options = {}) =>
+  createCanvasTexture(id, 320, (ctx, size) => {
+    const {
+      rimWidth = options.rimWidth ?? 26,
+      rimAlpha = options.rimAlpha ?? 0.88,
+      innerAlpha = options.innerAlpha ?? 0.42,
+      glow = options.glow ?? 0.25,
+    } = options;
+    const center = size / 2;
+    const outerRadius = center - 12;
     const innerRadius = Math.max(outerRadius - rimWidth, 0);
+    const ringThickness = outerRadius - innerRadius;
 
     if (glow > 0) {
-      const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius);
+      const gradient = ctx.createRadialGradient(center, center, innerRadius, center, center, outerRadius + ringThickness * 0.7);
       gradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(glow, 0.45)})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(center, center, outerRadius, 0, Math.PI * 2);
+      ctx.arc(center, center, outerRadius + ringThickness * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
     const rimGradient = ctx.createLinearGradient(center, center - outerRadius, center, center + outerRadius);
-    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${rimAlpha})`);
-    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.6})`);
+    rimGradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.1)})`);
+    rimGradient.addColorStop(0.5, `rgba(255, 255, 255, ${Math.min(1, rimAlpha + 0.2)})`);
+    rimGradient.addColorStop(1, `rgba(255, 255, 255, ${rimAlpha * 0.7})`);
     ctx.strokeStyle = rimGradient;
-    ctx.lineWidth = outerRadius - innerRadius;
+    ctx.lineWidth = ringThickness;
     ctx.beginPath();
     ctx.arc(center, center, (outerRadius + innerRadius) / 2, 0, Math.PI * 2);
     ctx.stroke();
 
-    const innerGradient = ctx.createLinearGradient(center, center - innerRadius, center, center + innerRadius);
-    innerGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
-    innerGradient.addColorStop(1, `rgba(255, 255, 255, ${innerAlpha * 0.4})`);
-    ctx.fillStyle = innerGradient;
+    ctx.lineWidth = Math.max(3, ringThickness * 0.32);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, innerAlpha + 0.15)})`;
+    ctx.beginPath();
+    ctx.arc(center, center, innerRadius + ringThickness * 0.45, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(2, ringThickness * 0.22);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, rimAlpha)})`;
+    ctx.beginPath();
+    ctx.arc(center, center, outerRadius - ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const innerShadow = ctx.createRadialGradient(center, center, innerRadius * 0.35, center, center, innerRadius);
+    innerShadow.addColorStop(0, 'rgba(0, 0, 0, 0.38)');
+    innerShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = innerShadow;
     ctx.beginPath();
     ctx.arc(center, center, innerRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -821,25 +963,27 @@ const createLabelTexture = () =>
   });
 
 const generateNodeTextures = () => ({
-  frame: createFrameTexture('route-frame', { innerAlpha: 0.28, rimAlpha: 0.82, rimWidth: 24 }),
+  frame: createFrameTexture('route-frame', { innerAlpha: 0.32, rimAlpha: 0.78, rimWidth: 26, glow: 0.2 }),
   frameActive: createFrameTexture('route-frame-active', {
-    innerAlpha: 0.46,
-    rimAlpha: 0.95,
-    rimWidth: 22,
-    glow: 0.28,
-  }),
-  frameBoss: createFrameTexture('route-frame-boss', {
-    innerAlpha: 0.34,
-    rimAlpha: 0.88,
-    rimWidth: 26,
-    glow: 0.18,
-  }),
-  frameBossActive: createFrameTexture('route-frame-boss-active', {
-    innerAlpha: 0.52,
-    rimAlpha: 0.98,
-    rimWidth: 22,
+    innerAlpha: 0.5,
+    rimAlpha: 0.94,
+    rimWidth: 28,
     glow: 0.32,
   }),
+  frameBoss: createFrameTexture('route-frame-boss', {
+    innerAlpha: 0.38,
+    rimAlpha: 0.86,
+    rimWidth: 30,
+    glow: 0.26,
+  }),
+  frameBossActive: createFrameTexture('route-frame-boss-active', {
+    innerAlpha: 0.56,
+    rimAlpha: 0.98,
+    rimWidth: 30,
+    glow: 0.38,
+  }),
+  core: createCoreTexture('route-core'),
+  gloss: createGlossTexture('route-gloss'),
   halo: createHaloTexture('route-halo', { innerAlpha: 0.52, outerAlpha: 0 }),
   haloBoss: createHaloTexture('route-halo-boss', { innerAlpha: 0.62, outerAlpha: 0.02 }),
   haloComplete: createHaloTexture('route-halo-complete', { innerAlpha: 0.72, outerAlpha: 0.08 }),
@@ -1074,10 +1218,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const nodesContainerRef = useRef(null);
   const edgesContainerRef = useRef(null);
   const backgroundLayersRef = useRef({ far: null, mid: null, near: null });
-  const fxLayerRef = useRef(null);
-  const fogLayerRef = useRef(null);
-  const fogSpriteRef = useRef(null);
-  const tickerCallbackRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
   const dashTextureRef = useRef(null);
@@ -1611,97 +1751,34 @@ const RouteMapBuilder = ({ onBack }) => {
       backgroundMidLayer.eventMode = 'none';
       const backgroundNearLayer = new Container();
       backgroundNearLayer.eventMode = 'none';
-      const fogLayer = new Container();
-      fogLayer.eventMode = 'none';
-      const fxLayer = new Container();
-      fxLayer.eventMode = 'none';
 
-      const farTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#020617' },
-          { offset: 0.45, color: '#07152f' },
-          { offset: 1, color: '#0b1220' },
-        ],
-        {
-          orientation: 'vertical',
-          overlays: [
-            {
-              type: 'radial-fade',
-              from: 'rgba(30,64,175,0.28)',
-              to: 'rgba(2,6,23,0.95)',
-              innerRadius: 0.15,
-              outerRadius: 0.95,
-            },
-          ],
-        },
-      );
+      const farTexture = createSolidTexture('route-bg-far', '#050c18');
+      const farSprite = createBackgroundSprite(farTexture);
+      farSprite.alpha = 1;
+      backgroundFarLayer.addChild(farSprite);
 
-      const midTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#081529' },
-          { offset: 0.4, color: '#0b1f3d' },
-          { offset: 1, color: '#112544' },
-        ],
-        {
-          orientation: 'diagonal',
-          overlays: [
-            { type: 'noise', density: 0.18, alpha: 0.06, color: '#4f83ff', radius: 1.4 },
-          ],
-        },
-      );
+      const midTexture = createSolidTexture('route-bg-mid', '#081423');
+      const midSprite = createBackgroundSprite(midTexture);
+      midSprite.alpha = 0.92;
+      backgroundMidLayer.addChild(midSprite);
 
-      const nearTexture = createGradientTexture(
-        [
-          { offset: 0, color: '#0e1a30' },
-          { offset: 0.5, color: '#142d4d' },
-          { offset: 1, color: '#1a3555' },
-        ],
-        {
-          orientation: 'horizontal',
-          overlays: [
-            {
-              type: 'noise',
-              density: 0.25,
-              alpha: 0.08,
-              color: '#60a5fa',
-              radius: 1.1,
-            },
-            {
-              type: 'radial-fade',
-              from: 'rgba(96,165,250,0.18)',
-              to: 'rgba(2,6,23,0.95)',
-              innerRadius: 0.1,
-              outerRadius: 0.9,
-            },
-          ],
-        },
-      );
-
-      const fogTexture = createFogTexture(512);
-      if (fogTexture?.baseTexture) {
-        fogTexture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
-      }
-
-      backgroundFarLayer.addChild(createBackgroundSprite(farTexture));
-      backgroundMidLayer.addChild(createBackgroundSprite(midTexture));
-      backgroundNearLayer.addChild(createBackgroundSprite(nearTexture));
-
-      const fogSprite = new TilingSprite(
-        fogTexture,
-        Math.max(app.renderer.width, 2048),
-        Math.max(app.renderer.height, 2048),
-      );
-      fogSprite.alpha = 0.2;
-      fogSprite.tileScale.set(0.5);
-      fogLayer.addChild(fogSprite);
+      const nearTexture = createGridTexture('route-bg-grid', {
+        background: '#0b1628',
+        cellSize: 96,
+        majorEvery: 4,
+        minorLineColor: 'rgba(148, 163, 184, 0.08)',
+        majorLineColor: 'rgba(148, 163, 184, 0.16)',
+        dotColor: 'rgba(148, 163, 184, 0.18)',
+      });
+      const nearSprite = createBackgroundSprite(nearTexture);
+      nearSprite.alpha = 0.95;
+      backgroundNearLayer.addChild(nearSprite);
 
       viewport.addChild(backgroundFarLayer);
       viewport.addChild(backgroundMidLayer);
       viewport.addChild(backgroundNearLayer);
       viewport.addChild(edgesLayer);
       viewport.addChild(nodesLayer);
-      viewport.addChild(fxLayer);
-      viewport.addChild(fogLayer);
       viewport.addChild(selectionGraphics);
 
       backgroundLayersRef.current = {
@@ -1709,9 +1786,6 @@ const RouteMapBuilder = ({ onBack }) => {
         mid: backgroundMidLayer,
         near: backgroundNearLayer,
       };
-      fxLayerRef.current = fxLayer;
-      fogLayerRef.current = fogLayer;
-      fogSpriteRef.current = fogSprite;
       viewportRef.current = viewport;
       appRef.current = app;
       tickerRef.current = app.ticker;
@@ -1732,9 +1806,8 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.eventMode = 'static';
 
       const updateEnvironmentalLayers = () => {
-        if (!viewportRef.current || !appRef.current) return;
+        if (!viewportRef.current) return;
         const currentViewport = viewportRef.current;
-        const currentApp = appRef.current;
         const scaleX = currentViewport.scale?.x || 1;
         const scaleY = currentViewport.scale?.y || 1;
         const vx = currentViewport.x;
@@ -1750,40 +1823,18 @@ const RouteMapBuilder = ({ onBack }) => {
           layer.scale.set(1 / scaleX, 1 / scaleY);
         };
 
-        applyParallax(farLayer, 0.2);
-        applyParallax(midLayer, 0.5);
-        applyParallax(nearLayer, 0.8);
-
-        const fogLayerInstance = fogLayerRef.current;
-        if (fogLayerInstance) {
-          fogLayerInstance.position.set(-vx, -vy);
-          fogLayerInstance.scale.set(1 / scaleX, 1 / scaleY);
-          const fogSpriteInstance = fogSpriteRef.current;
-          if (fogSpriteInstance) {
-            const renderer = currentApp.renderer;
-            const fogWidth = renderer.width * 1.5;
-            const fogHeight = renderer.height * 1.5;
-            fogSpriteInstance.width = fogWidth;
-            fogSpriteInstance.height = fogHeight;
-            fogSpriteInstance.position.set(-fogWidth / 2, -fogHeight / 2);
-            fogSpriteInstance.tileScale.set(1 / scaleX, 1 / scaleY);
-          }
-        }
+        applyParallax(farLayer, 0.4);
+        applyParallax(midLayer, 0.7);
+        applyParallax(nearLayer, 1);
       };
 
       updateEnvironmentalLayers();
 
-      const tickerCallback = (delta) => {
-        const fogSpriteInstance = fogSpriteRef.current;
-        if (fogSpriteInstance) {
-          fogSpriteInstance.tilePosition.x += delta * 0.24;
-          fogSpriteInstance.tilePosition.y += delta * 0.18;
-        }
+      const tickerCallback = () => {
         updateEnvironmentalLayers();
       };
 
       app.ticker.add(tickerCallback);
-      tickerCallbackRef.current = tickerCallback;
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
@@ -1901,10 +1952,6 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
       backgroundLayersRef.current = { far: null, mid: null, near: null };
-      fxLayerRef.current = null;
-      fogLayerRef.current = null;
-      fogSpriteRef.current = null;
-      tickerCallbackRef.current = null;
     };
   }, []);
 
@@ -2125,6 +2172,7 @@ const RouteMapBuilder = ({ onBack }) => {
         const palette = getTypeDefaults(typeDef.id);
         const accentHex = normalizeHex(node.accentColor) || palette.accent;
         const borderHex = normalizeHex(node.borderColor) || palette.border;
+        const fillHex = normalizeHex(node.fillColor) || palette.fill;
         const iconHex = normalizeHex(node.iconColor) || palette.icon;
         const stateStroke = hexToInt(normalizeHex(stateDef.stroke) || '#38bdf8');
         const accentColor = hexToInt(accentHex);
@@ -2137,6 +2185,8 @@ const RouteMapBuilder = ({ onBack }) => {
         const activeFrameKey = isBoss ? 'frameBossActive' : 'frameActive';
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
+        const coreTexture = textures.core || Texture.WHITE;
+        const glossTexture = textures.gloss || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
@@ -2154,22 +2204,67 @@ const RouteMapBuilder = ({ onBack }) => {
         const haloSprite = new Sprite(haloTexture);
         haloSprite.anchor.set(0.5);
         haloSprite.scale.set(haloBaseScale);
-        haloSprite.alpha = isLocked ? 0.45 : 0.8;
-        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.1));
+        haloSprite.alpha = isLocked ? 0.42 : 0.82;
+        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.15));
         nodeContainer.addChild(haloSprite);
+
+        const coreSprite = new Sprite(coreTexture);
+        coreSprite.anchor.set(0.5);
+        const coreSize = radius * 2 - 14;
+        const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
+        coreSprite.scale.set(coreScale);
+        const coreTintHex = isLocked ? mixHex(fillHex, '#1f2937', 0.55) : fillHex;
+        coreSprite.tint = hexToInt(coreTintHex);
+        coreSprite.alpha = isLocked ? 0.85 : 1;
+        nodeContainer.addChild(coreSprite);
 
         const frameSprite = new Sprite(frameTexture);
         frameSprite.anchor.set(0.5);
-        const frameScale = frameTexture.width ? 72 / frameTexture.width : 0.28;
+        const frameSize = radius * 2 + (isBoss ? 30 : 24);
+        const frameScale = frameSprite.texture?.width ? frameSize / frameSprite.texture.width : frameSize / 320;
         frameSprite.scale.set(frameScale);
-        frameSprite.alpha = isLocked ? 0.78 : 1;
-        const frameTint = isLocked
-          ? hexToInt(mixHex('#64748b', borderHex, 0.2))
-          : selected
-            ? hexToInt(lightenHex(accentHex, 0.1))
-            : 0xffffff;
-        frameSprite.tint = frameTint;
+        const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
+        frameSprite.alpha = frameBaseAlpha;
+        const frameTintHex = selected
+          ? lightenHex(accentHex, 0.18)
+          : isLocked
+            ? mixHex(accentHex, '#1f2937', 0.55)
+            : accentHex;
+        frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
+
+        const innerStroke = new Graphics();
+        innerStroke.lineStyle(3.5, hexToInt(isLocked ? mixHex(borderHex, '#94a3b8', 0.7) : borderHex), isLocked ? 0.55 : 0.85);
+        innerStroke.drawCircle(0, 0, radius - 6);
+        innerStroke.endFill();
+        innerStroke.eventMode = 'none';
+        nodeContainer.addChild(innerStroke);
+
+        const iconBackdrop = new Graphics();
+        const iconBgHex = isLocked ? mixHex(fillHex, '#0f172a', 0.6) : darkenHex(fillHex, 0.18);
+        iconBackdrop.beginFill(hexToInt(iconBgHex), isLocked ? 0.6 : 0.82);
+        iconBackdrop.drawCircle(0, 0, radius - 12);
+        iconBackdrop.endFill();
+        iconBackdrop.eventMode = 'none';
+        nodeContainer.addChild(iconBackdrop);
+
+        const glossSprite = new Sprite(glossTexture);
+        glossSprite.anchor.set(0.5);
+        const glossScale = glossSprite.texture?.width ? coreSize / glossSprite.texture.width : coreSize / 320;
+        glossSprite.scale.set(glossScale);
+        glossSprite.alpha = isLocked ? 0.18 : 0.42;
+        glossSprite.blendMode = 'screen';
+        glossSprite.eventMode = 'none';
+        nodeContainer.addChild(glossSprite);
+
+        const highlight = new Graphics();
+        highlight.beginFill(0xffffff, isLocked ? 0.12 : 0.25);
+        highlight.drawEllipse(-radius * 0.25, -radius * 0.32, radius * 0.6, radius * 0.45);
+        highlight.endFill();
+        highlight.rotation = -0.6;
+        highlight.blendMode = 'add';
+        highlight.eventMode = 'none';
+        nodeContainer.addChild(highlight);
 
         const iconSprite = new Sprite(Texture.WHITE);
         iconSprite.anchor.set(0.5);
@@ -2181,8 +2276,9 @@ const RouteMapBuilder = ({ onBack }) => {
         const applyIconTexture = (texture) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
-          iconSprite.alpha = isLocked ? 0.82 : 1;
-          const scale = texture.width ? 34 / texture.width : 0.34;
+          iconSprite.alpha = isLocked ? 0.78 : 1;
+          const iconSize = 30;
+          const scale = texture.width ? iconSize / texture.width : iconSize / 96;
           iconSprite.scale.set(scale);
         };
         if (iconTextureResult instanceof Texture) {
@@ -2221,7 +2317,7 @@ const RouteMapBuilder = ({ onBack }) => {
           halo: haloSprite,
           frame: frameSprite,
           baseHaloScale: haloBaseScale,
-          baseFrameAlpha: frameSprite.alpha,
+          baseFrameAlpha: frameBaseAlpha,
           ticker,
         });
         if (hoverCleanup) {
