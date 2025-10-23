@@ -24,7 +24,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Textura procedural** de guiones generada en tiempo real sin depender de archivos binarios adicionales.
 - **Fondo personalizable** que respeta íntegramente el color o imagen elegidos para ambientar el mapa.
 - **Profundidad atmosférica sutil** mediante viñetas y brillos suaves que recuperan el relieve clásico sin reintroducir las capas pesadas anteriores.
-- **Nodos renovados** con halo luminoso, un único aro exterior robusto y núcleo oscuro amplio inspirado en la referencia proporcionada, ahora con iconografía vectorial centrada matemáticamente gracias al anclaje en el núcleo y escalada protagonista ajustada para permanecer dentro del aro según el tipo.
+- **Nodos renovados** con halo luminoso, un único aro exterior robusto y núcleo oscuro amplio inspirado en la referencia proporcionada, ahora con iconografía basada en emojis centrada matemáticamente gracias al anclaje en el núcleo y escalada protagonista ajustada para permanecer dentro del aro según el tipo.
 - **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
 - **Historial y atajos** con deshacer/rehacer, Delete, Ctrl+C y Ctrl+V para mantener el flujo de trabajo del máster.
 - **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.

@@ -30,15 +30,7 @@ import {
   Trash2,
   Undo2,
   Wand2,
-  Crown,
-  HeartPulse,
-  Home,
-  ScrollText,
-  Shield,
-  Store,
-  Swords,
 } from 'lucide-react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import Boton from './Boton';
 import Input from './Input';
 
@@ -386,34 +378,43 @@ const encodeSvgDataUri = (svgString) =>
     .replace(/'/g, '%27')
     .replace(/"/g, '%22')}`;
 
-const lucideTextureCache = new Map();
+const escapeForSvgText = (value = '') =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
-const LUCIDE_TEXTURE_SIZE = 96;
-const LUCIDE_TEXTURE_RESOLUTION = 2;
+const emojiTextureCache = new Map();
 
-const getLucideTexture = (IconComponent, color) => {
+const EMOJI_TEXTURE_SIZE = 96;
+const EMOJI_TEXTURE_RESOLUTION = 2;
+
+const getEmojiTexture = (emoji, color) => {
   const normalizedColor = normalizeHex(color) || '#f8fafc';
-  const key = `${IconComponent.displayName || IconComponent.name || 'icon'}-${normalizedColor}`;
-  const cached = lucideTextureCache.get(key);
+  const fallbackEmoji = '❔';
+  const rawEmoji = typeof emoji === 'string' && emoji.trim().length ? emoji : fallbackEmoji;
+  const cacheKey = `${rawEmoji}-${normalizedColor}`;
+  const cached = emojiTextureCache.get(cacheKey);
 
   if (cached instanceof Texture) {
     if (!cached.destroyed && cached.valid) {
       return cached;
     }
-    lucideTextureCache.delete(key);
+    emojiTextureCache.delete(cacheKey);
   } else if (cached && typeof cached.then === 'function') {
     return cached;
   }
 
-  const svgMarkup = renderToStaticMarkup(
-    <IconComponent
-      color={normalizedColor}
-      size={LUCIDE_TEXTURE_SIZE}
-      strokeWidth={2.4}
-      absoluteStrokeWidth
-    />
-  );
-  const svgWithNs = ensureSvgNamespace(svgMarkup);
+  const fontSize = Math.round(EMOJI_TEXTURE_SIZE * 0.72);
+  const svgMarkup = `
+    <svg width="${EMOJI_TEXTURE_SIZE}" height="${EMOJI_TEXTURE_SIZE}" viewBox="0 0 ${EMOJI_TEXTURE_SIZE} ${EMOJI_TEXTURE_SIZE}">
+      <rect width="100%" height="100%" fill="transparent" />
+      <text x="50%" y="50%" font-size="${fontSize}" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif" fill="${normalizedColor}">${escapeForSvgText(rawEmoji)}</text>
+    </svg>
+  `;
+  const svgWithNs = ensureSvgNamespace(svgMarkup.trim());
   const encoded = encodeSvgDataUri(svgWithNs);
 
   if (typeof Image === 'undefined') {
@@ -422,8 +423,8 @@ const getLucideTexture = (IconComponent, color) => {
 
   const image = new Image();
   image.decoding = 'async';
-  image.width = LUCIDE_TEXTURE_SIZE;
-  image.height = LUCIDE_TEXTURE_SIZE;
+  image.width = EMOJI_TEXTURE_SIZE;
+  image.height = EMOJI_TEXTURE_SIZE;
 
   const texturePromise = new Promise((resolve, reject) => {
     const cleanup = () => {
@@ -435,8 +436,8 @@ const getLucideTexture = (IconComponent, color) => {
       try {
         const texture = Texture.from({
           resource: image,
-          label: key,
-          resolution: LUCIDE_TEXTURE_RESOLUTION,
+          label: cacheKey,
+          resolution: EMOJI_TEXTURE_RESOLUTION,
           scaleMode: 'linear',
           mipmap: 'on',
         });
@@ -446,26 +447,26 @@ const getLucideTexture = (IconComponent, color) => {
           texture.baseTexture.anisotropicLevel = 8;
         }
         if (texture?.source && typeof texture.source.resize === 'function') {
-          texture.source.resize(LUCIDE_TEXTURE_SIZE, LUCIDE_TEXTURE_SIZE);
+          texture.source.resize(EMOJI_TEXTURE_SIZE, EMOJI_TEXTURE_SIZE);
         }
-        lucideTextureCache.set(key, texture);
+        emojiTextureCache.set(cacheKey, texture);
         cleanup();
         resolve(texture);
       } catch (error) {
-        lucideTextureCache.delete(key);
+        emojiTextureCache.delete(cacheKey);
         cleanup();
         reject(error);
       }
     };
 
     image.onerror = () => {
-      lucideTextureCache.delete(key);
+      emojiTextureCache.delete(cacheKey);
       cleanup();
-      reject(new Error(`No se pudo cargar la textura del icono ${key}`));
+      reject(new Error(`No se pudo cargar la textura del emoji ${cacheKey}`));
     };
   });
 
-  lucideTextureCache.set(key, texturePromise);
+  emojiTextureCache.set(cacheKey, texturePromise);
   image.src = encoded;
 
   return texturePromise;
@@ -479,14 +480,14 @@ const fallbackHex = (...values) => {
   return '#f8fafc';
 };
 
-const NODE_ICON_COMPONENTS = {
-  start: Home,
-  normal: Swords,
-  event: ScrollText,
-  shop: Store,
-  elite: Shield,
-  heal: HeartPulse,
-  boss: Crown,
+const NODE_ICON_EMOJIS = {
+  start: '🏠',
+  normal: '⚔️',
+  event: '📜',
+  shop: '🛒',
+  elite: '🛡️',
+  heal: '💖',
+  boss: '👑',
 };
 
 const NODE_TEXTURE_KEYS = [
@@ -2103,19 +2104,22 @@ const RouteMapBuilder = ({ onBack }) => {
         iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
-        const iconComponent = NODE_ICON_COMPONENTS[typeDef.id] || NODE_ICON_COMPONENTS.normal;
+        const iconSymbol = NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
         const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
-        const iconTextureResult = getLucideTexture(iconComponent, iconColorValue);
+        const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
         const applyIconTexture = (texture) => {
           if (!texture || iconSprite.destroyed) return;
           iconSprite.texture = texture;
+          // Re-anchor to the center as soon as the emoji texture resolves.
           iconSprite.anchor.set(0.5);
           iconSprite.position.set(0, 0);
+          iconSprite.tint = 0xffffff;
           iconSprite.alpha = isLocked ? 0.78 : 1;
-          const iconSize = isBoss ? radius * 1.75 : radius * 1.5;
-          const baseWidth = texture?.width || LUCIDE_TEXTURE_SIZE;
-          const baseHeight = texture?.height || LUCIDE_TEXTURE_SIZE;
-          const uniformScale = iconSize / Math.max(baseWidth, baseHeight);
+          const iconDiameter = Math.max(coreSize - 12, 0);
+          const baseWidth = texture?.width || EMOJI_TEXTURE_SIZE;
+          const baseHeight = texture?.height || EMOJI_TEXTURE_SIZE;
+          const baseMaxDimension = Math.max(baseWidth, baseHeight) || 1;
+          const uniformScale = iconDiameter / baseMaxDimension;
           iconSprite.scale.set(uniformScale);
           iconSprite.position.set(0, 0);
         };
