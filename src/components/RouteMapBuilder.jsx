@@ -875,6 +875,11 @@ const RouteMapBuilder = ({ onBack }) => {
   const viewportRef = useRef(null);
   const nodesContainerRef = useRef(null);
   const edgesContainerRef = useRef(null);
+  const backgroundLayersRef = useRef({ far: null, mid: null, near: null });
+  const fxLayerRef = useRef(null);
+  const fogLayerRef = useRef(null);
+  const fogSpriteRef = useRef(null);
+  const tickerCallbackRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
@@ -1381,13 +1386,264 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.wheel({ smooth: 3 });
       viewport.pinch();
       viewport.clampZoom({ minScale: 0.2, maxScale: 3 });
+      viewport.sortableChildren = true;
       app.stage.addChild(viewport);
+
+      const applyTextureSettings = (texture) => {
+        if (texture?.baseTexture) {
+          texture.baseTexture.mipmap = MIPMAP_MODES.ON;
+          texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+          texture.baseTexture.anisotropicLevel = 8;
+        }
+        return texture;
+      };
+
+      const createGradientTexture = (stops, options = {}) => {
+        const size = options.size ?? 1024;
+        const orientation = options.orientation ?? 'diagonal';
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return Texture.WHITE;
+        }
+
+        let gradient;
+        if (orientation === 'horizontal') {
+          gradient = context.createLinearGradient(0, 0, size, 0);
+        } else if (orientation === 'vertical') {
+          gradient = context.createLinearGradient(0, 0, 0, size);
+        } else if (orientation === 'radial') {
+          const radius = size * (options.radiusMultiplier ?? 0.75);
+          gradient = context.createRadialGradient(
+            size / 2,
+            size / 2,
+            size * 0.05,
+            size / 2,
+            size / 2,
+            radius,
+          );
+        } else {
+          gradient = context.createLinearGradient(0, 0, size, size);
+        }
+
+        stops.forEach((stop) => {
+          gradient.addColorStop(stop.offset, stop.color);
+        });
+
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, size, size);
+
+        if (Array.isArray(options.overlays)) {
+          options.overlays.forEach((overlay) => {
+            if (overlay.type === 'radial-fade') {
+              const overlayGradient = context.createRadialGradient(
+                size / 2,
+                size / 2,
+                size * (overlay.innerRadius ?? 0.05),
+                size / 2,
+                size / 2,
+                size * (overlay.outerRadius ?? 0.85),
+              );
+              overlayGradient.addColorStop(0, overlay.from ?? 'rgba(255,255,255,0.08)');
+              overlayGradient.addColorStop(1, overlay.to ?? 'rgba(0,0,0,0.6)');
+              context.globalCompositeOperation = overlay.composite ?? 'source-over';
+              context.fillStyle = overlayGradient;
+              context.fillRect(0, 0, size, size);
+            }
+            if (overlay.type === 'noise') {
+              const density = Math.max(1, Math.floor(size * (overlay.density ?? 0.25)));
+              context.save();
+              context.globalAlpha = overlay.alpha ?? 0.05;
+              context.fillStyle = overlay.color ?? '#ffffff';
+              for (let i = 0; i < density * density; i += 1) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                const radius = (overlay.radius ?? 1.2) * (Math.random() * 0.6 + 0.4);
+                context.beginPath();
+                context.arc(x, y, radius, 0, Math.PI * 2);
+                context.fill();
+              }
+              context.restore();
+            }
+          });
+          context.globalCompositeOperation = 'source-over';
+        }
+
+        const texture = Texture.from(canvas, {
+          mipmap: MIPMAP_MODES.ON,
+          scaleMode: SCALE_MODES.LINEAR,
+          anisotropicLevel: 8,
+        });
+        return applyTextureSettings(texture);
+      };
+
+      const createFogTexture = (size = 512) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return Texture.WHITE;
+        }
+
+        const imageData = context.createImageData(size, size);
+        const { data } = imageData;
+        for (let i = 0; i < data.length; i += 4) {
+          const variation = Math.random();
+          const base = 185 + Math.floor(variation * 40);
+          data[i] = base;
+          data[i + 1] = base + 10;
+          data[i + 2] = base + 30;
+          data[i + 3] = 80 + Math.floor(variation * 70);
+        }
+        context.putImageData(imageData, 0, 0);
+
+        context.globalAlpha = 0.25;
+        context.fillStyle = 'rgba(100, 130, 180, 0.35)';
+        for (let i = 0; i < size * 0.6; i += 1) {
+          const radius = Math.random() * (size * 0.06) + size * 0.02;
+          const x = Math.random() * size;
+          const y = Math.random() * size;
+          context.beginPath();
+          context.arc(x, y, radius, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.globalAlpha = 1;
+
+        const texture = Texture.from(canvas, {
+          mipmap: MIPMAP_MODES.ON,
+          scaleMode: SCALE_MODES.LINEAR,
+          anisotropicLevel: 8,
+        });
+        return applyTextureSettings(texture);
+      };
+
+      const createBackgroundSprite = (texture) => {
+        const sprite = new Sprite(texture);
+        sprite.anchor.set(0.5);
+        sprite.roundPixels = true;
+        return sprite;
+      };
+
+      const backgroundFarLayer = new Container();
+      backgroundFarLayer.eventMode = 'none';
+      const backgroundMidLayer = new Container();
+      backgroundMidLayer.eventMode = 'none';
+      const backgroundNearLayer = new Container();
+      backgroundNearLayer.eventMode = 'none';
+
+      const fxLayer = new Container();
+      fxLayer.eventMode = 'none';
+      fxLayer.sortableChildren = true;
+
+      const fogLayer = new Container();
+      fogLayer.eventMode = 'none';
+
       const edgesLayer = new Container();
+      edgesLayer.eventMode = 'none';
       const nodesLayer = new Container();
+      nodesLayer.eventMode = 'static';
+
+      const selectionGraphics = new Graphics();
+
+      const farTexture = createGradientTexture(
+        [
+          { offset: 0, color: '#020617' },
+          { offset: 0.45, color: '#07152f' },
+          { offset: 1, color: '#0b1220' },
+        ],
+        {
+          orientation: 'vertical',
+          overlays: [
+            {
+              type: 'radial-fade',
+              from: 'rgba(30,64,175,0.28)',
+              to: 'rgba(2,6,23,0.95)',
+              innerRadius: 0.15,
+              outerRadius: 0.95,
+            },
+          ],
+        },
+      );
+
+      const midTexture = createGradientTexture(
+        [
+          { offset: 0, color: '#081529' },
+          { offset: 0.4, color: '#0b1f3d' },
+          { offset: 1, color: '#112544' },
+        ],
+        {
+          orientation: 'diagonal',
+          overlays: [
+            { type: 'noise', density: 0.18, alpha: 0.06, color: '#4f83ff', radius: 1.4 },
+          ],
+        },
+      );
+
+      const nearTexture = createGradientTexture(
+        [
+          { offset: 0, color: '#0e1a30' },
+          { offset: 0.5, color: '#142d4d' },
+          { offset: 1, color: '#1a3555' },
+        ],
+        {
+          orientation: 'horizontal',
+          overlays: [
+            {
+              type: 'noise',
+              density: 0.25,
+              alpha: 0.08,
+              color: '#60a5fa',
+              radius: 1.1,
+            },
+            {
+              type: 'radial-fade',
+              from: 'rgba(96,165,250,0.18)',
+              to: 'rgba(2,6,23,0.95)',
+              innerRadius: 0.1,
+              outerRadius: 0.9,
+            },
+          ],
+        },
+      );
+
+      const fogTexture = createFogTexture(512);
+      if (fogTexture?.baseTexture) {
+        fogTexture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+      }
+
+      backgroundFarLayer.addChild(createBackgroundSprite(farTexture));
+      backgroundMidLayer.addChild(createBackgroundSprite(midTexture));
+      backgroundNearLayer.addChild(createBackgroundSprite(nearTexture));
+
+      const fogSprite = new TilingSprite(
+        fogTexture,
+        Math.max(app.renderer.width, 2048),
+        Math.max(app.renderer.height, 2048),
+      );
+      fogSprite.alpha = 0.2;
+      fogSprite.tileScale.set(0.5);
+      fogLayer.addChild(fogSprite);
+
+      viewport.addChild(backgroundFarLayer);
+      viewport.addChild(backgroundMidLayer);
+      viewport.addChild(backgroundNearLayer);
       viewport.addChild(edgesLayer);
       viewport.addChild(nodesLayer);
-      const selectionGraphics = new Graphics();
+      viewport.addChild(fxLayer);
+      viewport.addChild(fogLayer);
       viewport.addChild(selectionGraphics);
+
+      backgroundLayersRef.current = {
+        far: backgroundFarLayer,
+        mid: backgroundMidLayer,
+        near: backgroundNearLayer,
+      };
+      fxLayerRef.current = fxLayer;
+      fogLayerRef.current = fogLayer;
+      fogSpriteRef.current = fogSprite;
       viewportRef.current = viewport;
       appRef.current = app;
       tickerRef.current = app.ticker;
@@ -1397,6 +1653,60 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesContainerRef.current = edgesLayer;
       selectionGraphicsRef.current = selectionGraphics;
       viewport.eventMode = 'static';
+
+      const updateEnvironmentalLayers = () => {
+        if (!viewportRef.current || !appRef.current) return;
+        const currentViewport = viewportRef.current;
+        const currentApp = appRef.current;
+        const scaleX = currentViewport.scale?.x || 1;
+        const scaleY = currentViewport.scale?.y || 1;
+        const vx = currentViewport.x;
+        const vy = currentViewport.y;
+
+        const farLayer = backgroundLayersRef.current.far;
+        const midLayer = backgroundLayersRef.current.mid;
+        const nearLayer = backgroundLayersRef.current.near;
+
+        const applyParallax = (layer, factor) => {
+          if (!layer) return;
+          layer.position.set(vx * (factor - 1), vy * (factor - 1));
+          layer.scale.set(1 / scaleX, 1 / scaleY);
+        };
+
+        applyParallax(farLayer, 0.2);
+        applyParallax(midLayer, 0.5);
+        applyParallax(nearLayer, 0.8);
+
+        const fogLayerInstance = fogLayerRef.current;
+        if (fogLayerInstance) {
+          fogLayerInstance.position.set(-vx, -vy);
+          fogLayerInstance.scale.set(1 / scaleX, 1 / scaleY);
+          const fogSpriteInstance = fogSpriteRef.current;
+          if (fogSpriteInstance) {
+            const renderer = currentApp.renderer;
+            const fogWidth = renderer.width * 1.5;
+            const fogHeight = renderer.height * 1.5;
+            fogSpriteInstance.width = fogWidth;
+            fogSpriteInstance.height = fogHeight;
+            fogSpriteInstance.position.set(-fogWidth / 2, -fogHeight / 2);
+            fogSpriteInstance.tileScale.set(1 / scaleX, 1 / scaleY);
+          }
+        }
+      };
+
+      updateEnvironmentalLayers();
+
+      const tickerCallback = (delta) => {
+        const fogSpriteInstance = fogSpriteRef.current;
+        if (fogSpriteInstance) {
+          fogSpriteInstance.tilePosition.x += delta * 0.24;
+          fogSpriteInstance.tilePosition.y += delta * 0.18;
+        }
+        updateEnvironmentalLayers();
+      };
+
+      app.ticker.add(tickerCallback);
+      tickerCallbackRef.current = tickerCallback;
       viewport.on('pointerdown', (event) => {
         const tool = activeToolRef.current;
         if (event.target?.nodeId || event.target?.edgeId) return;
@@ -1506,6 +1816,11 @@ const RouteMapBuilder = ({ onBack }) => {
       nodesContainerRef.current = null;
       edgesContainerRef.current = null;
       selectionGraphicsRef.current = null;
+      backgroundLayersRef.current = { far: null, mid: null, near: null };
+      fxLayerRef.current = null;
+      fogLayerRef.current = null;
+      fogSpriteRef.current = null;
+      tickerCallbackRef.current = null;
     };
   }, []);
 
