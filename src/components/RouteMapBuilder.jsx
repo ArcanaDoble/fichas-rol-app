@@ -82,7 +82,10 @@ const ensurePixiViewportCompatibility = (() => {
 
     if (Viewport?.prototype && typeof Viewport.prototype.isInteractive !== 'function') {
       Viewport.prototype.isInteractive = function isInteractive() {
-        return this.eventMode !== 'none' && this.renderable !== false;
+        if (typeof this.eventMode !== 'undefined') {
+          return this.eventMode !== 'none' && this.renderable !== false;
+        }
+        return this.interactive !== false && this.renderable !== false;
       };
     }
 
