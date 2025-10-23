@@ -2691,7 +2691,6 @@ const RouteMapBuilder = ({ onBack }) => {
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          backgroundBlendMode: backgroundImage ? 'soft-light' : undefined,
         }}
       >
         <div
