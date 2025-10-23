@@ -32,12 +32,13 @@ const ensurePixiViewportCompatibility = (() => {
   let patched = false;
   return () => {
     if (patched) return;
-    const prototypes = new Set();
+
+    const containerPrototypes = new Set();
     if (Container?.prototype) {
-      prototypes.add(Container.prototype);
+      containerPrototypes.add(Container.prototype);
       const parentProto = Object.getPrototypeOf(Container.prototype);
       if (parentProto) {
-        prototypes.add(parentProto);
+        containerPrototypes.add(parentProto);
       }
     }
 
@@ -73,11 +74,17 @@ const ensurePixiViewportCompatibility = (() => {
       }
     };
 
-    prototypes.forEach((proto) => {
+    containerPrototypes.forEach((proto) => {
       if (proto && typeof proto.updateLocalTransform !== 'function') {
         proto.updateLocalTransform = updateLocalTransformFallback;
       }
     });
+
+    if (Viewport?.prototype && typeof Viewport.prototype.isInteractive !== 'function') {
+      Viewport.prototype.isInteractive = function isInteractive() {
+        return this.eventMode !== 'none' && this.renderable !== false;
+      };
+    }
 
     patched = true;
   };
@@ -1178,17 +1185,27 @@ const RouteMapBuilder = ({ onBack }) => {
     if (!containerRef.current) return;
     let destroyed = false;
     const initPixi = async () => {
-      const app = new Application();
-      await app.init({
+      const options = {
         backgroundAlpha: 0,
         antialias: true,
         resizeTo: containerRef.current,
-      });
+      };
+
+      let app;
+      if (typeof Application.prototype?.init === 'function') {
+        app = new Application();
+        await app.init(options);
+      } else {
+        app = new Application(options);
+      }
       if (destroyed) {
         app.destroy(true);
         return;
       }
-      containerRef.current.appendChild(app.canvas);
+      const canvas = app.canvas ?? app.view;
+      if (canvas) {
+        containerRef.current.appendChild(canvas);
+      }
       const viewport = new Viewport({
         ticker: app.ticker,
         events: app.renderer.events,
@@ -1297,11 +1314,19 @@ const RouteMapBuilder = ({ onBack }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      if (viewportRef.current) {
-        viewportRef.current.removeAllListeners();
+      const viewport = viewportRef.current;
+      if (viewport) {
+        viewport.removeAllListeners();
+        viewport.destroy({ children: true });
       }
-      if (appRef.current) {
-        appRef.current.destroy(true, true);
+      const app = appRef.current;
+      if (app) {
+        const canvas = app.canvas ?? app.view;
+        if (canvas?.parentNode === containerRef.current) {
+          canvas.parentNode.removeChild(canvas);
+        }
+        app.stage?.removeChildren();
+        app.destroy(true, { children: false });
       }
       viewportRef.current = null;
       appRef.current = null;
