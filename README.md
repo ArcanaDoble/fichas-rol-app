@@ -29,6 +29,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.
 - **Corrección de color**: se restauró la utilidad `darkenHex` para evitar errores al renderizar nodos bloqueados.
 - **Textura de brillo procedimental**: se regeneró el gloss de los nodos directamente en Pixi para mantener los reflejos sin errores en tiempo de ejecución.
+- **Fondo totalmente personalizable**: se eliminaron las capas decorativas predeterminadas para que el color o imagen elegidos se muestren sin interferencias.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
