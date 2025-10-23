@@ -22,6 +22,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Conexiones dirigidas editables** con etiquetas y requisitos OR/AND para controlar la lógica de desbloqueo.
 - **Conexiones animadas** con guiones en marcha basados en sprites repetidos para visualizar el flujo de ruta.
 - **Textura procedural** de guiones generada en tiempo real sin depender de archivos binarios adicionales.
+- **Fondos procedurales** con gradientes y niebla generados en canvas para asegurar parallax y ambientación coherente en Pixi v8.
 - **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
 - **Historial y atajos** con deshacer/rehacer, Delete, Ctrl+C y Ctrl+V para mantener el flujo de trabajo del máster.
 - **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.
