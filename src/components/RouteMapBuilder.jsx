@@ -2699,7 +2699,8 @@ const RouteMapBuilder = ({ onBack }) => {
         const coreSize = radius * 2 - 6;
         const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
         coreSprite.scale.set(coreScale);
-        const coreTintHex = isLocked ? mixHex(fillHex, '#1f2937', 0.55) : fillHex;
+        const coreDarkenAmount = isLocked ? 0.6 : 0.22;
+        const coreTintHex = darkenHex(fillHex, coreDarkenAmount);
         coreSprite.tint = hexToInt(coreTintHex);
         coreSprite.alpha = isLocked ? 0.85 : 1;
         nodeContainer.addChild(coreSprite);
