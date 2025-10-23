@@ -579,12 +579,46 @@ const getCustomIconTexture = (url) => {
     return texture;
   };
 
-  const ensureTextureReady = (texture) => {
-    if (!texture?.baseTexture) {
-      return Promise.resolve(texture);
+  const validateCustomTexture = (texture) => {
+    if (!texture || texture.destroyed) {
+      throw new Error('La textura del icono personalizado no existe o está destruida');
     }
+    const width =
+      texture?.width ??
+      texture?.baseTexture?.realWidth ??
+      texture?.baseTexture?.width ??
+      0;
+    const height =
+      texture?.height ??
+      texture?.baseTexture?.realHeight ??
+      texture?.baseTexture?.height ??
+      0;
+    if (!texture?.valid || width <= 0 || height <= 0) {
+      throw new Error('La textura del icono personalizado no es válida o carece de dimensiones utilizables');
+    }
+    return texture;
+  };
+
+  const ensureTextureReady = (texture) => {
+    const finalizeTexture = (preparedTexture) => {
+      const textureWithSettings = applyTextureSettings(preparedTexture);
+      return validateCustomTexture(textureWithSettings);
+    };
+
+    if (!texture?.baseTexture) {
+      try {
+        return Promise.resolve(finalizeTexture(texture));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
     if (texture.baseTexture.valid) {
-      return Promise.resolve(applyTextureSettings(texture));
+      try {
+        return Promise.resolve(finalizeTexture(texture));
+      } catch (error) {
+        return Promise.reject(error);
+      }
     }
     return new Promise((resolve, reject) => {
       const cleanup = () => {
@@ -595,7 +629,11 @@ const getCustomIconTexture = (url) => {
       };
       const handleLoaded = () => {
         cleanup();
-        resolve(applyTextureSettings(texture));
+        try {
+          resolve(finalizeTexture(texture));
+        } catch (error) {
+          reject(error);
+        }
       };
       const handleError = (error) => {
         cleanup();
@@ -2647,25 +2685,32 @@ const RouteMapBuilder = ({ onBack }) => {
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
         const customIconUrl = typeof node.iconUrl === 'string' ? node.iconUrl.trim() : '';
-        const applyIconTexture = (texture, alpha = 1) => {
+        const applyIconTexture = (texture, alpha = 1, options = {}) => {
           if (!texture || iconSprite.destroyed) return;
+          const { skipFallback = false } = options;
+          const iconDiameter = Math.max(coreSize - 12, 0);
+          const baseWidth =
+            texture?.width ??
+            texture?.baseTexture?.realWidth ??
+            texture?.baseTexture?.width ??
+            0;
+          const baseHeight =
+            texture?.height ??
+            texture?.baseTexture?.realHeight ??
+            texture?.baseTexture?.height ??
+            0;
+          if (!texture?.valid || baseWidth <= 0 || baseHeight <= 0) {
+            if (!skipFallback) {
+              applyFallbackEmoji();
+            }
+            return;
+          }
           iconSprite.texture = texture;
           iconSprite.anchor.set(0.5);
           iconSprite.position.set(0, 0);
           iconSprite.tint = 0xffffff;
           iconSprite.alpha = alpha;
-          const iconDiameter = Math.max(coreSize - 12, 0);
-          const baseWidth =
-            texture?.width ||
-            texture?.baseTexture?.realWidth ||
-            texture?.baseTexture?.width ||
-            EMOJI_TEXTURE_SIZE;
-          const baseHeight =
-            texture?.height ||
-            texture?.baseTexture?.realHeight ||
-            texture?.baseTexture?.height ||
-            EMOJI_TEXTURE_SIZE;
-          const baseMaxDimension = Math.max(baseWidth || 0, baseHeight || 0) || 1;
+          const baseMaxDimension = Math.max(baseWidth, baseHeight) || 1;
           const uniformScale = iconDiameter / baseMaxDimension;
           iconSprite.scale.set(uniformScale);
           iconSprite.position.set(0, 0);
@@ -2676,12 +2721,12 @@ const RouteMapBuilder = ({ onBack }) => {
           const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
           const targetAlpha = isLocked ? 0.78 : 1;
           if (iconTextureResult instanceof Texture) {
-            applyIconTexture(iconTextureResult, targetAlpha);
+            applyIconTexture(iconTextureResult, targetAlpha, { skipFallback: true });
           } else if (iconTextureResult && typeof iconTextureResult.then === 'function') {
             iconTextureResult
               .then((texture) => {
                 if (!iconSprite.destroyed) {
-                  applyIconTexture(texture, targetAlpha);
+                  applyIconTexture(texture, targetAlpha, { skipFallback: true });
                 }
               })
               .catch((error) => {
