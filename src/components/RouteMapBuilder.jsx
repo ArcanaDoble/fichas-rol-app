@@ -28,6 +28,70 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import Boton from './Boton';
 import Input from './Input';
 
+const ensurePixiViewportCompatibility = (() => {
+  let patched = false;
+  return () => {
+    if (patched) return;
+
+    const containerPrototypes = new Set();
+    if (Container?.prototype) {
+      containerPrototypes.add(Container.prototype);
+      const parentProto = Object.getPrototypeOf(Container.prototype);
+      if (parentProto) {
+        containerPrototypes.add(parentProto);
+      }
+    }
+
+    const updateLocalTransformFallback = function updateLocalTransformFallback() {
+      const transform = this.transform;
+      if (!transform) {
+        return;
+      }
+
+      const matrix = transform.matrix;
+      let localTransform = this.localTransform;
+
+      if (!localTransform) {
+        this.localTransform = matrix;
+        return;
+      }
+
+      if (localTransform !== matrix) {
+        if (typeof localTransform.copyFrom === 'function') {
+          localTransform.copyFrom(matrix);
+        } else {
+          localTransform.a = matrix.a;
+          localTransform.b = matrix.b;
+          localTransform.c = matrix.c;
+          localTransform.d = matrix.d;
+          localTransform.tx = matrix.tx;
+          localTransform.ty = matrix.ty;
+        }
+      }
+
+      if (typeof this._didContainerChangeTick === 'number') {
+        this._didLocalTransformChangeId = this._didContainerChangeTick;
+      }
+    };
+
+    containerPrototypes.forEach((proto) => {
+      if (proto && typeof proto.updateLocalTransform !== 'function') {
+        proto.updateLocalTransform = updateLocalTransformFallback;
+      }
+    });
+
+    if (Viewport?.prototype && typeof Viewport.prototype.isInteractive !== 'function') {
+      Viewport.prototype.isInteractive = function isInteractive() {
+        return this.eventMode !== 'none' && this.renderable !== false;
+      };
+    }
+
+    patched = true;
+  };
+})();
+
+ensurePixiViewportCompatibility();
+
 const NODE_TYPES = [
   {
     id: 'start',
