@@ -555,6 +555,35 @@ const getEmojiTexture = (emoji, color) => {
   return texture;
 };
 
+const getTextureDimensions = (texture) => {
+  const pickNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  if (!texture) {
+    return { width: 0, height: 0 };
+  }
+  const width = Math.max(
+    0,
+    pickNumber(texture.width),
+    pickNumber(texture?.orig?.width),
+    pickNumber(texture?.frame?.width),
+    pickNumber(texture?.baseTexture?.realWidth),
+    pickNumber(texture?.baseTexture?.width),
+  );
+  const height = Math.max(
+    0,
+    pickNumber(texture.height),
+    pickNumber(texture?.orig?.height),
+    pickNumber(texture?.frame?.height),
+    pickNumber(texture?.baseTexture?.realHeight),
+    pickNumber(texture?.baseTexture?.height),
+  );
+  return { width, height };
+};
+
+const hasPositiveTextureDimensions = (texture) => {
+  const { width, height } = getTextureDimensions(texture);
+  return width > 0 && height > 0;
+};
+
 const getCustomIconTexture = (url) => {
   const source = typeof url === 'string' ? url.trim() : '';
   if (!source) {
@@ -562,7 +591,7 @@ const getCustomIconTexture = (url) => {
   }
   const cached = customIconTextureCache.get(source);
   if (cached instanceof Texture) {
-    if (!cached.destroyed && cached.valid) {
+    if (!cached.destroyed && !cached.baseTexture?.destroyed && hasPositiveTextureDimensions(cached)) {
       return cached;
     }
     customIconTextureCache.delete(source);
@@ -580,25 +609,11 @@ const getCustomIconTexture = (url) => {
   };
 
   const validateCustomTexture = (texture) => {
-    if (!texture || texture.destroyed) {
+    if (!texture || texture.destroyed || texture?.baseTexture?.destroyed) {
       throw new Error('La textura del icono personalizado no existe o está destruida');
     }
-    const width = Math.max(
-      texture?.width ?? 0,
-      texture?.orig?.width ?? 0,
-      texture?.frame?.width ?? 0,
-      texture?.baseTexture?.realWidth ?? 0,
-      texture?.baseTexture?.width ?? 0,
-    );
-    const height = Math.max(
-      texture?.height ?? 0,
-      texture?.orig?.height ?? 0,
-      texture?.frame?.height ?? 0,
-      texture?.baseTexture?.realHeight ?? 0,
-      texture?.baseTexture?.height ?? 0,
-    );
-    const isTextureValid = texture?.valid ?? texture?.baseTexture?.valid ?? false;
-    if (!isTextureValid || width <= 0 || height <= 0) {
+    const { width, height } = getTextureDimensions(texture);
+    if (width <= 0 || height <= 0) {
       throw new Error('La textura del icono personalizado no es válida o carece de dimensiones utilizables');
     }
     return texture;
@@ -618,7 +633,9 @@ const getCustomIconTexture = (url) => {
       }
     }
 
-    if (texture.baseTexture.valid) {
+    const baseTexture = texture.baseTexture;
+    const hasValidFlag = typeof baseTexture.valid === 'boolean';
+    if ((hasValidFlag && baseTexture.valid) || hasPositiveTextureDimensions(texture)) {
       try {
         return Promise.resolve(finalizeTexture(texture));
       } catch (error) {
@@ -628,11 +645,12 @@ const getCustomIconTexture = (url) => {
     return new Promise((resolve, reject) => {
       const cleanup = () => {
         try {
-          texture.baseTexture.off('loaded', handleLoaded);
-          texture.baseTexture.off('error', handleError);
+          baseTexture.off('loaded', handleReady);
+          baseTexture.off('update', handleReady);
+          baseTexture.off('error', handleError);
         } catch {}
       };
-      const handleLoaded = () => {
+      const settleWithTexture = () => {
         cleanup();
         try {
           resolve(finalizeTexture(texture));
@@ -640,13 +658,27 @@ const getCustomIconTexture = (url) => {
           reject(error);
         }
       };
+      const handleReady = () => {
+        if (!hasPositiveTextureDimensions(texture)) {
+          return;
+        }
+        settleWithTexture();
+      };
       const handleError = (error) => {
         cleanup();
         reject(error);
       };
       try {
-        texture.baseTexture.once('loaded', handleLoaded);
-        texture.baseTexture.once('error', handleError);
+        if (typeof baseTexture.once === 'function') {
+          if (hasValidFlag) {
+            baseTexture.once('loaded', handleReady);
+          }
+          baseTexture.once('update', handleReady);
+          baseTexture.once('error', handleError);
+        } else {
+          // If the event emitter API is not available, attempt immediate validation.
+          handleReady();
+        }
       } catch (error) {
         cleanup();
         reject(error);
@@ -2694,22 +2726,13 @@ const RouteMapBuilder = ({ onBack }) => {
           if (!texture || iconSprite.destroyed) return;
           const { skipFallback = false } = options;
           const iconDiameter = Math.max(coreSize - 12, 0);
-          const baseWidth = Math.max(
-            texture?.width ?? 0,
-            texture?.orig?.width ?? 0,
-            texture?.frame?.width ?? 0,
-            texture?.baseTexture?.realWidth ?? 0,
-            texture?.baseTexture?.width ?? 0,
-          );
-          const baseHeight = Math.max(
-            texture?.height ?? 0,
-            texture?.orig?.height ?? 0,
-            texture?.frame?.height ?? 0,
-            texture?.baseTexture?.realHeight ?? 0,
-            texture?.baseTexture?.height ?? 0,
-          );
-          const isTextureValid = texture?.valid ?? texture?.baseTexture?.valid ?? false;
-          if (!isTextureValid || baseWidth <= 0 || baseHeight <= 0) {
+          const { width: baseWidth, height: baseHeight } = getTextureDimensions(texture);
+          if (
+            texture.destroyed ||
+            texture?.baseTexture?.destroyed ||
+            baseWidth <= 0 ||
+            baseHeight <= 0
+          ) {
             if (!skipFallback) {
               applyFallbackEmoji();
             }
