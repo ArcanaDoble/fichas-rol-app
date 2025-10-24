@@ -2775,13 +2775,14 @@ const RouteMapBuilder = ({ onBack }) => {
           nodeContainer.addChild(completionAura);
         }
 
-        const baseHaloScale = isBoss ? 0.46 : 0.42;
-        const currentBoost = node.state === 'current' ? 1.05 : 1;
+        const baseHaloScale = isBoss ? 0.4 : 0.35;
+        const currentBoost = node.state === 'current' ? 1.03 : 1;
         const haloBaseScale = baseHaloScale * currentBoost;
         const haloSprite = new Sprite(haloTexture);
         haloSprite.anchor.set(0.5);
         haloSprite.scale.set(haloBaseScale);
-        haloSprite.alpha = isLocked ? 0.42 : 0.82;
+        const haloBaseAlpha = isLocked ? 0.35 : 0.6;
+        haloSprite.alpha = node.state === 'current' ? Math.min(1, haloBaseAlpha + 0.08) : haloBaseAlpha;
         haloSprite.tint = hexToInt(lightenHex(accentHex, 0.15));
         nodeContainer.addChild(haloSprite);
 
