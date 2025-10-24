@@ -2775,11 +2775,34 @@ const RouteMapBuilder = ({ onBack }) => {
           nodeContainer.addChild(completionAura);
         }
 
-        const baseHaloScale = isBoss ? 0.4 : 0.35;
         const currentBoost = node.state === 'current' ? 1.03 : 1;
-        const haloBaseScale = baseHaloScale * currentBoost;
+
+        const frameSprite = new Sprite(frameTexture);
+        frameSprite.anchor.set(0.5);
+        const frameSize = radius * 2 + (isBoss ? 30 : 24);
+        const { width: rawFrameTextureWidth } = getTextureDimensions(frameTexture);
+        const frameTextureWidth = rawFrameTextureWidth > 0 ? rawFrameTextureWidth : 320;
+        const frameScale = frameTextureWidth > 0 ? frameSize / frameTextureWidth : 1;
+        frameSprite.scale.set(frameScale);
+        const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
+        frameSprite.alpha = frameBaseAlpha;
+        const baseFrameTint = isLocked ? mixHex(borderHex, '#1f2937', 0.55) : borderHex;
+        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : baseFrameTint;
+        frameSprite.tint = hexToInt(frameTintHex);
+
         const haloSprite = new Sprite(haloTexture);
         haloSprite.anchor.set(0.5);
+        const { width: rawHaloTextureWidth } = getTextureDimensions(haloTexture);
+        const haloTextureWidth = rawHaloTextureWidth > 0 ? rawHaloTextureWidth : 420;
+        const haloMargin = Math.max(frameSize * 0.02, 2);
+        const maxInteractiveScale = 1.1;
+        const effectiveBoost = Math.max(currentBoost, 1);
+        const haloAvailableDiameter = Math.max(frameSize - haloMargin, 0);
+        const baseHaloScale =
+          haloTextureWidth > 0
+            ? Math.max(haloAvailableDiameter / (haloTextureWidth * maxInteractiveScale * effectiveBoost), 0)
+            : 0;
+        const haloBaseScale = baseHaloScale * currentBoost;
         haloSprite.scale.set(haloBaseScale);
         const haloBaseAlpha = isLocked ? 0.35 : 0.6;
         haloSprite.alpha = node.state === 'current' ? Math.min(1, haloBaseAlpha + 0.08) : haloBaseAlpha;
@@ -2796,16 +2819,6 @@ const RouteMapBuilder = ({ onBack }) => {
         coreSprite.alpha = isLocked ? 0.85 : 1;
         nodeContainer.addChild(coreSprite);
 
-        const frameSprite = new Sprite(frameTexture);
-        frameSprite.anchor.set(0.5);
-        const frameSize = radius * 2 + (isBoss ? 30 : 24);
-        const frameScale = frameSprite.texture?.width ? frameSize / frameSprite.texture.width : frameSize / 320;
-        frameSprite.scale.set(frameScale);
-        const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
-        frameSprite.alpha = frameBaseAlpha;
-        const baseFrameTint = isLocked ? mixHex(borderHex, '#1f2937', 0.55) : borderHex;
-        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : baseFrameTint;
-        frameSprite.tint = hexToInt(frameTintHex);
         nodeContainer.addChild(frameSprite);
 
         const iconSprite = new Sprite(Texture.WHITE);
