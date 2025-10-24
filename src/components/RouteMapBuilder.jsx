@@ -1166,31 +1166,48 @@ const createHaloTexture = (id, { innerAlpha = 0.6, outerAlpha = 0 }) =>
   createCanvasTexture(id, 420, (ctx, size) => {
     const center = size / 2;
     const baseOuterRadius = center * 0.8;
+    const haloRadius = baseOuterRadius - 2;
 
     const baseGradient = ctx.createRadialGradient(
       center,
       center,
-      baseOuterRadius * 0.12,
+      haloRadius * 0.05,
       center,
       center,
-      baseOuterRadius,
+      haloRadius,
     );
-    const midAlpha = innerAlpha * 0.55 + outerAlpha * 0.45;
-    const fadeAlpha = innerAlpha * 0.18 + outerAlpha * 0.82;
-    baseGradient.addColorStop(0, `rgba(255, 255, 255, ${innerAlpha})`);
-    baseGradient.addColorStop(0.35, `rgba(255, 255, 255, ${midAlpha})`);
-    baseGradient.addColorStop(0.65, `rgba(255, 255, 255, ${fadeAlpha})`);
+    baseGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    baseGradient.addColorStop(0.65, `rgba(255, 255, 255, ${innerAlpha})`);
+    baseGradient.addColorStop(0.9, `rgba(255, 255, 255, ${innerAlpha})`);
     baseGradient.addColorStop(1, `rgba(255, 255, 255, ${outerAlpha})`);
     ctx.fillStyle = baseGradient;
     ctx.beginPath();
-    ctx.arc(center, center, baseOuterRadius, 0, Math.PI * 2);
+    ctx.arc(center, center, haloRadius, 0, Math.PI * 2);
     ctx.fill();
 
     const previousComposite = ctx.globalCompositeOperation;
     ctx.globalCompositeOperation = 'lighter';
 
-    const ringInnerRadius = baseOuterRadius * 0.92;
-    const ringOuterRadius = center * 0.98;
+    const softenOuterRadius = haloRadius - 4;
+    if (softenOuterRadius > 0) {
+      const softenGradient = ctx.createRadialGradient(
+        center,
+        center,
+        softenOuterRadius * 0.82,
+        center,
+        center,
+        softenOuterRadius,
+      );
+      softenGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      softenGradient.addColorStop(1, `rgba(255, 255, 255, ${innerAlpha * 0.55})`);
+      ctx.fillStyle = softenGradient;
+      ctx.beginPath();
+      ctx.arc(center, center, softenOuterRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const ringInnerRadius = haloRadius * 0.92;
+    const ringOuterRadius = Math.min(center * 0.98, haloRadius - 1);
     const ringGradient = ctx.createRadialGradient(
       center,
       center,
