@@ -1730,10 +1730,14 @@ const RouteMapBuilder = ({ onBack }) => {
     viewport.plugins.resume('drag');
   }, []);
 
-  const releaseViewportDrag = useCallback(() => {
+  const resumeDragAfterInteraction = useCallback(() => {
     shouldResumeDragRef.current = false;
     resumeViewportDrag();
   }, [resumeViewportDrag]);
+
+  const releaseViewportDrag = useCallback(() => {
+    resumeDragAfterInteraction();
+  }, [resumeDragAfterInteraction]);
 
   const saveToLocalStorage = useCallback((nodes, edges) => {
     try {
@@ -3100,7 +3104,10 @@ const RouteMapBuilder = ({ onBack }) => {
             if (!connectOriginId) {
               setConnectOriginId(node.id);
               setSelectedNodeIds([node.id]);
-            } else if (connectOriginId !== node.id) {
+              resumeDragAfterInteraction();
+              return;
+            }
+            if (connectOriginId !== node.id) {
               dispatch({
                 type: 'UPDATE',
                 updater: (nodes, edges) => {
@@ -3115,9 +3122,10 @@ const RouteMapBuilder = ({ onBack }) => {
               });
               setConnectOriginId(null);
               setSelectedNodeIds([node.id]);
+              resumeDragAfterInteraction();
+              return;
             }
-            shouldResumeDragRef.current = false;
-            resumeViewportDrag();
+            resumeDragAfterInteraction();
             return;
           }
           if (activeTool !== 'select') {
@@ -3263,6 +3271,7 @@ const RouteMapBuilder = ({ onBack }) => {
     pauseViewportDrag,
     releaseViewportDrag,
     resumeViewportDrag,
+    resumeDragAfterInteraction,
     dashTexture,
   ]);
 
