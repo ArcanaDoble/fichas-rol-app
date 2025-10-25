@@ -364,8 +364,9 @@ const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
 const EDGE_DASH_SPEED = 4.5;
-const EDGE_STROKE_WIDTH = 20;
-const EDGE_STROKE_WIDTH_SELECTED = 24;
+const EDGE_PREVIEW_STROKE_WIDTH = 28;
+const EDGE_STROKE_WIDTH = EDGE_PREVIEW_STROKE_WIDTH;
+const EDGE_STROKE_WIDTH_SELECTED = EDGE_PREVIEW_STROKE_WIDTH + 4;
 const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
@@ -2647,7 +2648,7 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesLayer.addChild(grid);
     }
 
-    const previewStrokeWidth = EDGE_STROKE_WIDTH_SELECTED + 4;
+    const previewStrokeWidth = EDGE_PREVIEW_STROKE_WIDTH;
 
     const drawConnectPreview = (targetPoint) => {
       const originNode = connectOriginId ? nodesMap.get(connectOriginId) : null;
@@ -2772,12 +2773,13 @@ const RouteMapBuilder = ({ onBack }) => {
       edgeContainer.edgeId = edge.id;
       edgeContainer.eventMode = 'static';
       edgeContainer.cursor = 'pointer';
+      const hitPadding = strokeWidth + 4;
       edgeContainer.hitArea = {
         contains: (x, y) => {
-          const minX = Math.min(from.x, to.x, control.x) - 24;
-          const maxX = Math.max(from.x, to.x, control.x) + 24;
-          const minY = Math.min(from.y, to.y, control.y) - 24;
-          const maxY = Math.max(from.y, to.y, control.y) + 24;
+          const minX = Math.min(from.x, to.x, control.x) - hitPadding;
+          const maxX = Math.max(from.x, to.x, control.x) + hitPadding;
+          const minY = Math.min(from.y, to.y, control.y) - hitPadding;
+          const maxY = Math.max(from.y, to.y, control.y) + hitPadding;
           return x >= minX && x <= maxX && y >= minY && y <= maxY;
         },
       };
