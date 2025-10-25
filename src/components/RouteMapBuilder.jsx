@@ -364,9 +364,8 @@ const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
 const EDGE_DASH_SPEED = 4.5;
-const EDGE_PREVIEW_STROKE_WIDTH = 28;
-const EDGE_STROKE_WIDTH = EDGE_PREVIEW_STROKE_WIDTH;
-const EDGE_STROKE_WIDTH_SELECTED = EDGE_PREVIEW_STROKE_WIDTH + 4;
+const EDGE_STROKE_WIDTH = 28;
+const EDGE_STROKE_WIDTH_SELECTED = EDGE_STROKE_WIDTH + 4;
 const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
@@ -2653,7 +2652,7 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesLayer.addChild(grid);
     }
 
-    const previewStrokeWidth = EDGE_PREVIEW_STROKE_WIDTH;
+    const previewStrokeWidth = EDGE_STROKE_WIDTH;
 
     const drawConnectPreview = (targetPoint) => {
       const originNode = connectOriginId ? nodesMap.get(connectOriginId) : null;
