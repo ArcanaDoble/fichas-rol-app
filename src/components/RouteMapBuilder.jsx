@@ -366,6 +366,7 @@ const EDGE_SEGMENT_MIN_STEPS = 8;
 const EDGE_DASH_SPEED = 4.5;
 const EDGE_STROKE_WIDTH = 28;
 const EDGE_STROKE_WIDTH_SELECTED = EDGE_STROKE_WIDTH + 4;
+const EDGE_STROKE_WIDTH_SELECTED_OFFSET = EDGE_STROKE_WIDTH_SELECTED - EDGE_STROKE_WIDTH;
 const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
@@ -2653,6 +2654,7 @@ const RouteMapBuilder = ({ onBack }) => {
     }
 
     const previewStrokeWidth = EDGE_STROKE_WIDTH;
+    const selectedStrokeWidth = previewStrokeWidth + EDGE_STROKE_WIDTH_SELECTED_OFFSET;
 
     const drawConnectPreview = (targetPoint) => {
       const originNode = connectOriginId ? nodesMap.get(connectOriginId) : null;
@@ -2742,7 +2744,7 @@ const RouteMapBuilder = ({ onBack }) => {
       };
       const selected = selectedEdgeIds.includes(edge.id);
       const color = selected ? 0xfbbf24 : 0x38bdf8;
-      const strokeWidth = selected ? EDGE_STROKE_WIDTH_SELECTED : EDGE_STROKE_WIDTH;
+      const strokeWidth = selected ? selectedStrokeWidth : previewStrokeWidth;
       const edgeContainer = new Container();
       edgeContainer.sortableChildren = true;
       const segmentsContainer = new Container();
