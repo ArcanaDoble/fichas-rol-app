@@ -1729,6 +1729,11 @@ const RouteMapBuilder = ({ onBack }) => {
     viewport.plugins.resume('drag');
   }, []);
 
+  const releaseViewportDrag = useCallback(() => {
+    shouldResumeDragRef.current = false;
+    resumeViewportDrag();
+  }, [resumeViewportDrag]);
+
   const saveToLocalStorage = useCallback((nodes, edges) => {
     try {
       const payload = JSON.stringify({ nodes, edges });
@@ -3108,6 +3113,7 @@ const RouteMapBuilder = ({ onBack }) => {
               setConnectOriginId(null);
               setSelectedNodeIds([node.id]);
             }
+            releaseViewportDrag();
             return;
           }
           if (activeTool !== 'select') {
@@ -3251,12 +3257,14 @@ const RouteMapBuilder = ({ onBack }) => {
     toggleNodeLock,
     applyDragDelta,
     pauseViewportDrag,
+    releaseViewportDrag,
     resumeViewportDrag,
     dashTexture,
   ]);
 
   useEffect(() => {
     if (activeTool !== 'connect' || !connectOriginId) {
+      releaseViewportDrag();
       const container = connectPreviewRef.current;
       if (container) {
         container.removeChildren().forEach((child) => {
@@ -3268,7 +3276,7 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       connectPointerRef.current = null;
     }
-  }, [activeTool, connectOriginId]);
+  }, [activeTool, connectOriginId, releaseViewportDrag]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
