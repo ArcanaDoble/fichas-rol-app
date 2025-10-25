@@ -2415,6 +2415,7 @@ const RouteMapBuilder = ({ onBack }) => {
       dashTickerRef.current = dashTicker;
       const edgesLayer = new Container();
       edgesLayer.eventMode = 'none';
+      edgesLayer.sortableChildren = true;
       const nodesLayer = new Container();
       nodesLayer.eventMode = 'static';
 
@@ -2585,6 +2586,9 @@ const RouteMapBuilder = ({ onBack }) => {
       });
     }
     connectPreviewContainer.visible = false;
+    if (!connectPreviewContainer.parent) {
+      edgesLayer.addChild(connectPreviewContainer);
+    }
 
     const clearConnectPreview = () => {
       if (!connectPreviewContainer) return;
@@ -2714,8 +2718,6 @@ const RouteMapBuilder = ({ onBack }) => {
         segmentContainer.addChild(tilingSprite);
         connectPreviewContainer.addChild(segmentContainer);
       });
-
-      edgesLayer.addChild(connectPreviewContainer);
     };
 
     const handleConnectPointerMove = (event) => {
