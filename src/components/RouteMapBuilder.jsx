@@ -364,8 +364,8 @@ const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
 const EDGE_DASH_SPEED = 4.5;
-const EDGE_STROKE_WIDTH = 12;
-const EDGE_STROKE_WIDTH_SELECTED = 14;
+const EDGE_STROKE_WIDTH = 20;
+const EDGE_STROKE_WIDTH_SELECTED = 24;
 const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
@@ -2736,7 +2736,7 @@ const RouteMapBuilder = ({ onBack }) => {
         y: Math.min(from.y, to.y) - Math.abs(from.x - to.x) * 0.2,
       };
       const selected = selectedEdgeIds.includes(edge.id);
-      const color = selected ? 0xfbbf24 : 0x5f6b8d;
+      const color = selected ? 0xfbbf24 : 0x38bdf8;
       const strokeWidth = selected ? EDGE_STROKE_WIDTH_SELECTED : EDGE_STROKE_WIDTH;
       const edgeContainer = new Container();
       edgeContainer.sortableChildren = true;
