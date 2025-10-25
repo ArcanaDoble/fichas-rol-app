@@ -3114,7 +3114,8 @@ const RouteMapBuilder = ({ onBack }) => {
               setConnectOriginId(null);
               setSelectedNodeIds([node.id]);
             }
-            releaseViewportDrag();
+            shouldResumeDragRef.current = false;
+            resumeViewportDrag();
             return;
           }
           if (activeTool !== 'select') {
