@@ -364,8 +364,8 @@ const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
 const EDGE_DASH_SPEED = 4.5;
-const EDGE_STROKE_WIDTH = 12;
-const EDGE_STROKE_WIDTH_SELECTED = 14;
+const EDGE_STROKE_WIDTH = 20;
+const EDGE_STROKE_WIDTH_SELECTED = 24;
 const DASH_TEXTURE_TOTAL_WIDTH = 96;
 const DASH_TEXTURE_DASH_WIDTH = 52;
 const DASH_TEXTURE_HEIGHT = 12;
@@ -1579,6 +1579,8 @@ const RouteMapBuilder = ({ onBack }) => {
   const dashSpritesRef = useRef(new Set());
   const dashTickerRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
+  const connectPreviewRef = useRef(null);
+  const connectPointerRef = useRef(null);
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const initialCustomIcons = useMemo(() => {
     const routeMapIcons = readLocalCustomIcons();
@@ -2558,6 +2560,32 @@ const RouteMapBuilder = ({ onBack }) => {
     edgesLayer.removeChildren();
     nodesLayer.removeChildren();
 
+    let connectPreviewContainer = connectPreviewRef.current;
+    if (!connectPreviewContainer) {
+      connectPreviewContainer = new Container();
+      connectPreviewContainer.eventMode = 'none';
+      connectPreviewContainer.interactiveChildren = false;
+      connectPreviewContainer.zIndex = 9999;
+      connectPreviewRef.current = connectPreviewContainer;
+    } else {
+      connectPreviewContainer.removeChildren().forEach((child) => {
+        if (typeof child.destroy === 'function') {
+          child.destroy({ children: true });
+        }
+      });
+    }
+    connectPreviewContainer.visible = false;
+
+    const clearConnectPreview = () => {
+      if (!connectPreviewContainer) return;
+      connectPreviewContainer.removeChildren().forEach((child) => {
+        if (typeof child.destroy === 'function') {
+          child.destroy({ children: true });
+        }
+      });
+      connectPreviewContainer.visible = false;
+    };
+
     const commitDrag = () => {
       if (!dragStateRef.current) return;
       if (dragStateRef.current.moved && !dragStateRef.current.committed) {
@@ -2619,6 +2647,86 @@ const RouteMapBuilder = ({ onBack }) => {
       edgesLayer.addChild(grid);
     }
 
+    const previewStrokeWidth = EDGE_STROKE_WIDTH_SELECTED + 4;
+
+    const drawConnectPreview = (targetPoint) => {
+      const originNode = connectOriginId ? nodesMap.get(connectOriginId) : null;
+      if (!connectPreviewContainer || !originNode || activeTool !== 'connect') {
+        clearConnectPreview();
+        return;
+      }
+
+      const point = targetPoint || connectPointerRef.current;
+      if (!point) {
+        clearConnectPreview();
+        return;
+      }
+
+      const from = { x: originNode.x, y: originNode.y };
+      const to = { x: point.x, y: point.y };
+
+      if (Math.hypot(to.x - from.x, to.y - from.y) < 8) {
+        clearConnectPreview();
+        return;
+      }
+
+      clearConnectPreview();
+      connectPreviewContainer.visible = true;
+
+      const control = {
+        x: (from.x + to.x) / 2,
+        y: Math.min(from.y, to.y) - Math.abs(from.x - to.x) * 0.18,
+      };
+
+      const previewSegments = createQuadraticSegments(from, control, to);
+      previewSegments.forEach((segment) => {
+        const segmentContainer = new Container();
+        segmentContainer.position.set(segment.midpoint.x, segment.midpoint.y);
+        segmentContainer.rotation = segment.angle;
+        segmentContainer.eventMode = 'none';
+        segmentContainer.interactiveChildren = false;
+
+        const tilingSprite = new TilingSprite({
+          texture: dashTexture ?? Texture.WHITE,
+          width: segment.length + previewStrokeWidth,
+          height: previewStrokeWidth,
+        });
+        tilingSprite.anchor.set(0.5);
+        tilingSprite.tint = 0x38bdf8;
+        tilingSprite.alpha = 0.95;
+        tilingSprite.eventMode = 'none';
+        if (dashTexture) {
+          const yScale = previewStrokeWidth / DASH_TEXTURE_HEIGHT;
+          tilingSprite.tileScale.set(1, yScale);
+        }
+
+        segmentContainer.addChild(tilingSprite);
+        connectPreviewContainer.addChild(segmentContainer);
+      });
+
+      edgesLayer.addChild(connectPreviewContainer);
+    };
+
+    const handleConnectPointerMove = (event) => {
+      if (activeTool !== 'connect') return;
+      const world = pointerToWorld(viewport, event);
+      if (!world) return;
+      connectPointerRef.current = world;
+      drawConnectPreview(world);
+    };
+
+    const handleConnectPointerLeave = () => {
+      clearConnectPreview();
+    };
+
+    viewport.on('pointermove', handleConnectPointerMove);
+    viewport.on('pointerup', handleConnectPointerLeave);
+    viewport.on('pointerupoutside', handleConnectPointerLeave);
+
+    if (connectOriginId && activeTool === 'connect') {
+      drawConnectPreview(connectPointerRef.current);
+    }
+
     state.edges.forEach((edge) => {
       const from = nodesMap.get(edge.from);
       const to = nodesMap.get(edge.to);
@@ -2628,7 +2736,7 @@ const RouteMapBuilder = ({ onBack }) => {
         y: Math.min(from.y, to.y) - Math.abs(from.x - to.x) * 0.2,
       };
       const selected = selectedEdgeIds.includes(edge.id);
-      const color = selected ? 0xfbbf24 : 0x5f6b8d;
+      const color = selected ? 0xfbbf24 : 0x38bdf8;
       const strokeWidth = selected ? EDGE_STROKE_WIDTH_SELECTED : EDGE_STROKE_WIDTH;
       const edgeContainer = new Container();
       edgeContainer.sortableChildren = true;
@@ -3045,6 +3153,23 @@ const RouteMapBuilder = ({ onBack }) => {
             committed: false,
           };
         });
+        nodeContainer.on('pointerenter', () => {
+          if (activeTool === 'connect' && connectOriginId && connectOriginId !== node.id) {
+            drawConnectPreview({ x: node.x, y: node.y });
+          }
+        });
+        nodeContainer.on('pointerleave', () => {
+          if (activeTool === 'connect') {
+            drawConnectPreview(connectPointerRef.current);
+          }
+        });
+        nodeContainer.on('pointermove', (event) => {
+          if (activeTool !== 'connect') return;
+          const world = pointerToWorld(viewport, event);
+          if (!world) return;
+          connectPointerRef.current = world;
+          drawConnectPreview(world);
+        });
         nodeContainer.on('pointerup', (event) => {
           event.stopPropagation();
           handleViewportDragEnd();
@@ -3108,6 +3233,9 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.off('pointermove', handleViewportDragMove);
       viewport.off('pointerup', handleViewportDragEnd);
       viewport.off('pointerupoutside', handleViewportDragEnd);
+      viewport.off('pointermove', handleConnectPointerMove);
+      viewport.off('pointerup', handleConnectPointerLeave);
+      viewport.off('pointerupoutside', handleConnectPointerLeave);
     };
   }, [
     state.nodes,
@@ -3126,6 +3254,21 @@ const RouteMapBuilder = ({ onBack }) => {
     resumeViewportDrag,
     dashTexture,
   ]);
+
+  useEffect(() => {
+    if (activeTool !== 'connect' || !connectOriginId) {
+      const container = connectPreviewRef.current;
+      if (container) {
+        container.removeChildren().forEach((child) => {
+          if (typeof child.destroy === 'function') {
+            child.destroy({ children: true });
+          }
+        });
+        container.visible = false;
+      }
+      connectPointerRef.current = null;
+    }
+  }, [activeTool, connectOriginId]);
 
   const handleBackgroundInput = useCallback((event) => {
     setBackgroundImage(event.target.value);
