@@ -25,7 +25,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Halos y candados sincronizados**: slider de intensidad para el destello y uso automático del icono personalizado 15 cuando el nodo está bloqueado.
 - **Formas personalizables**: cambia cada nodo entre panel suavizado, círculo, triángulo con iconografía centrada, diamante u hexágono desde el panel lateral o el menú flotante, con estilos y resaltados adaptados a cada figura.
 - **Formas poligonales refinadas**: triángulos, diamantes y hexágonos ajustan su centro óptico, degradados y contornos de selección para mantener iconografía y resaltados equilibrados.
-- **Edición contextual ultra rápida**: al seleccionar un nodo se despliega un panel flotante con controles táctiles para renombrar, cambiar tipo y estado, ajustar notas, destello y acceder a acciones de bloqueo, duplicado o eliminación sin abandonar el mapa.
+- **Edición contextual ultra rápida**: haz doble clic sobre un nodo para desplegar el panel flotante con controles táctiles para renombrar, cambiar tipo y estado, ajustar notas, destello y acceder a acciones de bloqueo, duplicado o eliminación sin abandonar el mapa.
+- **Nodos circulares renovados**: el estilo base ahora replica los nodos luminosos de la campaña, con aro exterior en degradado frío, brillo interior y cápsula para iconos que resaltan tanto los estados normales como los bloqueados.
 - **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
