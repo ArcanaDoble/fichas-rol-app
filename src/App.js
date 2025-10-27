@@ -49,6 +49,7 @@ import Collapsible from './components/Collapsible';
 import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
+import ClassList from './components/ClassList';
 import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
@@ -5982,6 +5983,11 @@ function App() {
         glossary={glossary}
         onBack={() => setChosenView(null)}
       />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'classes') {
+    return withTooltips(
+      <ClassList onBack={() => setChosenView(null)} />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {

@@ -86,7 +86,16 @@ const Boton = ({
 
 Boton.propTypes = {
   children: PropTypes.node,
-  color: PropTypes.oneOf(['gray', 'red', 'green', 'blue', 'purple']),
+  color: PropTypes.oneOf([
+    'gray',
+    'red',
+    'green',
+    'blue',
+    'purple',
+    'yellow',
+    'indigo',
+    'pink',
+  ]),
   onClick: PropTypes.func,
   className: PropTypes.string,
 };
