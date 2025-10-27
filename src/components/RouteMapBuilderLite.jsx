@@ -1244,6 +1244,13 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const panelWidth = 90;
       const panelHeight = 96;
       const panelRadius = 18;
+      const completionSparkles = isCompleted
+        ? [
+            { x: -panelWidth / 2 - 8, y: -panelHeight / 2 - 16, scale: 0.9, rotation: 18 },
+            { x: panelWidth / 2 + 10, y: -panelHeight / 2 + 6, scale: 0.7, rotation: -16 },
+            { x: panelWidth / 2 + 14, y: panelHeight / 2 + 10, scale: 0.85, rotation: 28 },
+          ]
+        : [];
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
       const completionNameFill = '#e2e8f0';
@@ -1280,6 +1287,23 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.18 0" />
               <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
             </filter>
+            {isCompleted && (
+              <>
+                <radialGradient id={completionAuraId} cx="50%" cy="50%" r="70%">
+                  <stop offset="0%" stopColor={mixHex(baseFill, '#fefce8', 0.75)} stopOpacity="0.95" />
+                  <stop offset="55%" stopColor={mixHex(baseBorder, '#fde68a', 0.55)} stopOpacity="0.5" />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.25)} stopOpacity="0" />
+                </radialGradient>
+                <linearGradient id={completionBadgeGradientId} x1="0%" x2="0%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fef08a', 0.2)} />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.6)} />
+                </linearGradient>
+                <linearGradient id={completionShineGradientId} x1="0%" x2="100%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fefce8', 0.55)} stopOpacity="0.85" />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#f59e0b', 0.35)} stopOpacity="0.55" />
+                </linearGradient>
+              </>
+            )}
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
             {isCompleted && (
