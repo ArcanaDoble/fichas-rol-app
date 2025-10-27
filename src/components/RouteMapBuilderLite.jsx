@@ -24,6 +24,8 @@ import {
   loadDraft,
   exportRouteMap,
   parseRouteMapFile,
+  DEFAULT_GLOW_INTENSITY,
+  normalizeGlowIntensity,
 } from './routeMap/shared';
 
 const TOOLBAR_ICON_COMPONENTS = {
@@ -38,6 +40,9 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.8;
 const ZOOM_STEP = 0.12;
+const EDGE_DASH_LENGTH = 26;
+const EDGE_DASH_GAP = 18;
+const LOCK_ICON_INDEX = 14;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
   <div className="relative inline-block">
@@ -183,6 +188,10 @@ const RouteMapBuilderLite = ({ onBack }) => {
     () => sanitizeCustomIcons(customIcons),
     [customIcons],
   );
+  const lockIconUrl = useMemo(
+    () => (sanitizedCustomIcons.length > LOCK_ICON_INDEX ? sanitizedCustomIcons[LOCK_ICON_INDEX] : null),
+    [sanitizedCustomIcons],
+  );
 
   const selectedNodes = useMemo(
     () => selectedNodeIds.map((id) => nodesMap.get(id)).filter(Boolean),
@@ -197,6 +206,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         fillColor: defaults.fill,
         borderColor: defaults.border,
         iconColor: defaults.icon,
+        glowIntensity: DEFAULT_GLOW_INTENSITY,
       };
     }
     const reference = selectedNodes[0];
@@ -206,6 +216,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
       fillColor: normalizeHex(reference.fillColor) || defaults.fill,
       borderColor: normalizeHex(reference.borderColor) || defaults.border,
       iconColor: normalizeHex(reference.iconColor) || defaults.icon,
+      glowIntensity: normalizeGlowIntensity(reference.glowIntensity),
     };
   }, [selectedNodes]);
 
@@ -216,6 +227,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         fillColor: false,
         borderColor: false,
         iconColor: false,
+        glowIntensity: false,
       };
     }
     const reference = selectedNodes[0];
@@ -225,6 +237,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
       fillColor: compare('fillColor'),
       borderColor: compare('borderColor'),
       iconColor: compare('iconColor'),
+      glowIntensity: selectedNodes.some(
+        (node) => normalizeGlowIntensity(node.glowIntensity) !== normalizeGlowIntensity(reference.glowIntensity),
+      ),
     };
   }, [selectedNodes]);
 
@@ -269,7 +284,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
             type: typeDef.id,
             x: snappedX,
             y: snappedY,
-            state: typeDef.id === 'start' ? 'current' : 'locked',
+            state: 'locked',
             unlockMode: 'or',
             loot: '',
             event: '',
@@ -279,6 +294,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
             borderColor: palette.border,
             iconColor: palette.icon,
             iconUrl: null,
+            glowIntensity: DEFAULT_GLOW_INTENSITY,
           }),
         );
       });
@@ -371,6 +387,23 @@ const RouteMapBuilderLite = ({ onBack }) => {
     [applyNodeUpdates, selectedNodeIds],
   );
 
+  const handleGlowIntensityChange = useCallback(
+    (rawValue) => {
+      if (selectedNodeIds.length === 0) return;
+      const numeric = Number(rawValue);
+      if (!Number.isFinite(numeric)) return;
+      const normalized = normalizeGlowIntensity(numeric / 100);
+      applyNodeUpdates((nodes) => {
+        nodes.forEach((node) => {
+          if (selectedNodeIds.includes(node.id)) {
+            node.glowIntensity = normalized;
+          }
+        });
+      });
+    },
+    [applyNodeUpdates, selectedNodeIds],
+  );
+
   const handleResetAppearance = useCallback(() => {
     if (selectedNodeIds.length === 0) return;
     applyNodeUpdates((nodes) => {
@@ -381,6 +414,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         node.fillColor = defaults.fill;
         node.borderColor = defaults.border;
         node.iconColor = defaults.icon;
+        node.glowIntensity = DEFAULT_GLOW_INTENSITY;
       });
     });
   }, [applyNodeUpdates, selectedNodeIds]);
@@ -970,7 +1004,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
             y2={to.y}
             stroke={isSelected ? '#38bdf8' : '#94a3b8'}
             strokeWidth={isSelected ? 6 : 4}
-            strokeDasharray={edge.type === 'conditional' ? '10 8' : undefined}
+            strokeDasharray={`${EDGE_DASH_LENGTH} ${EDGE_DASH_GAP}`}
+            strokeLinecap="round"
             opacity={edge.state === 'hidden' ? 0.5 : 1}
           />
         </g>
@@ -982,7 +1017,24 @@ const RouteMapBuilderLite = ({ onBack }) => {
     state.nodes.map((node) => {
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
-      const iconComponent = node.iconUrl ? null : null;
+      const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
+      const glowBlur = 6 + glowIntensity * 18;
+      const glowColor = node.state === 'locked' ? '#1f2937' : node.accentColor || palette.accent;
+      const circleStyle =
+        glowIntensity > 0.01
+          ? {
+              filter: `drop-shadow(0 0 ${glowBlur}px ${glowColor}) drop-shadow(0 0 ${Math.max(
+                2,
+                glowBlur * 0.4,
+              )}px ${glowColor})`,
+            }
+          : undefined;
+      const displayIconUrl =
+        node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
+      const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
+      const iconFill = node.state === 'locked'
+        ? '#e2e8f0'
+        : node.iconColor || palette.icon;
       return (
         <g
           key={node.id}
@@ -996,26 +1048,28 @@ const RouteMapBuilderLite = ({ onBack }) => {
             fill={node.fillColor || palette.fill}
             stroke={isSelected ? '#38bdf8' : node.borderColor || palette.border}
             strokeWidth={isSelected ? 6 : 4}
-            opacity={node.state === 'locked' ? 0.65 : 1}
+            opacity={node.state === 'locked' ? 0.7 : 1}
+            style={circleStyle}
           />
-          {node.iconUrl ? (
+          {displayIconUrl ? (
             <image
-              href={node.iconUrl}
+              href={displayIconUrl}
               x={-24}
               y={-24}
               width={48}
               height={48}
               preserveAspectRatio="xMidYMid meet"
+              opacity={node.state === 'locked' && lockIconUrl ? 0.95 : 1}
             />
           ) : (
             <text
               textAnchor="middle"
               dominantBaseline="central"
-              fill={node.iconColor || palette.icon}
+              fill={iconFill}
               fontSize={24}
               fontWeight="600"
             >
-              {node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase()}
+              {iconFallback}
             </text>
           )}
           <text
@@ -1123,6 +1177,26 @@ const RouteMapBuilderLite = ({ onBack }) => {
                   />
                   {mixedAppearance.iconColor && <span className="text-[10px] text-amber-300">Valores mixtos</span>}
                 </label>
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Intensidad destello</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round(appearanceValues.glowIntensity * 100)}
+                      onChange={(event) => handleGlowIntensityChange(event.target.value)}
+                      className="h-2 w-full cursor-pointer accent-sky-500"
+                    />
+                    <span className="w-12 text-right text-[11px] text-slate-400">
+                      {`${Math.round(appearanceValues.glowIntensity * 100)}%`}
+                    </span>
+                  </div>
+                  {mixedAppearance.glowIntensity && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </div>
               </div>
               <div className="space-y-2 rounded-xl border border-slate-800/60 bg-slate-900/60 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1429,6 +1503,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
                         fillColor: defaults.fill,
                         borderColor: defaults.border,
                         iconColor: defaults.icon,
+                        glowIntensity: DEFAULT_GLOW_INTENSITY,
                       });
                     }}
                     className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
@@ -1463,6 +1538,28 @@ const RouteMapBuilderLite = ({ onBack }) => {
                     className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
                   />
                 </label>
+                <div className="flex flex-col gap-2 text-sm">
+                  <span>Intensidad del destello</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}
+                      onChange={(event) =>
+                        setNodeEditor({
+                          ...nodeEditor,
+                          glowIntensity: Number(event.target.value) / 100,
+                        })
+                      }
+                      className="h-2 w-full cursor-pointer accent-sky-500"
+                    />
+                    <span className="w-12 text-right text-xs text-slate-300">
+                      {`${Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}%`}
+                    </span>
+                  </div>
+                </div>
                 <div className="flex justify-end gap-3">
                   <Boton onClick={() => setNodeEditor(null)} className="border border-slate-700 bg-slate-900/80">
                     Cancelar
