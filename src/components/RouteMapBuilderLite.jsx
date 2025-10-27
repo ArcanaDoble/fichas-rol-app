@@ -1045,11 +1045,17 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const baseBorder = node.borderColor || palette.border;
       const gradientId = `node-fill-${node.id}`;
       const strokeGradientId = `node-stroke-${node.id}`;
+      const noiseId = `node-noise-${node.id}`;
+      const carveGradientId = `node-carve-${node.id}`;
       const fillLight = lightenHex(baseFill, 0.22);
-      const fillDark = darkenHex(baseFill, 0.18);
+      const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
-      const strokeDark = darkenHex(baseBorder, 0.28);
-      const innerTransform = isHovered ? 'scale(1.06)' : 'scale(1)';
+      const strokeDark = darkenHex(baseBorder, 0.36);
+      const innerTransform = isHovered ? 'scale(1.05)' : 'scale(1)';
+      const panelWidth = 90;
+      const panelHeight = 96;
+      const panelRadius = 18;
+      const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       return (
         <g
           key={node.id}
@@ -1063,40 +1069,88 @@ const RouteMapBuilderLite = ({ onBack }) => {
           <defs>
             <radialGradient id={gradientId} cx="50%" cy="40%" r="75%">
               <stop offset="0%" stopColor={fillLight} stopOpacity="0.95" />
-              <stop offset="65%" stopColor={baseFill} stopOpacity="0.98" />
-              <stop offset="100%" stopColor={fillDark} stopOpacity="0.9" />
+              <stop offset="60%" stopColor={baseFill} stopOpacity="0.95" />
+              <stop offset="100%" stopColor={fillDark} stopOpacity="0.98" />
             </radialGradient>
             <linearGradient id={strokeGradientId} x1="0%" x2="100%" y1="0%" y2="100%">
               <stop offset="0%" stopColor={strokeLight} />
               <stop offset="100%" stopColor={strokeDark} />
             </linearGradient>
+            <linearGradient id={carveGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
+              <stop offset="0%" stopColor={lightenHex(baseFill, 0.35)} stopOpacity="0.6" />
+              <stop offset="50%" stopColor="transparent" stopOpacity="0" />
+              <stop offset="100%" stopColor={darkenHex(baseFill, 0.35)} stopOpacity="0.55" />
+            </linearGradient>
+            <filter id={noiseId} x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+              <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed={node.id.length} result="noise" />
+              <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.18 0" />
+              <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
+            </filter>
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
-            <circle
-              r={36}
+            <rect
+              x={-panelWidth / 2}
+              y={-panelHeight / 2}
+              width={panelWidth}
+              height={panelHeight}
+              rx={panelRadius}
+              ry={panelRadius}
               fill={isSelected ? baseFill : `url(#${gradientId})`}
               stroke={isSelected ? '#38bdf8' : `url(#${strokeGradientId})`}
-              strokeWidth={isSelected ? 6 : 4}
-              opacity={node.state === 'locked' ? 0.7 : 1}
+              strokeWidth={isSelected ? 5 : 4}
+              opacity={node.state === 'locked' ? 0.75 : 1}
               style={circleStyle}
+              filter={`url(#${noiseId})`}
+            />
+            <rect
+              x={-panelWidth / 2 + 4}
+              y={-panelHeight / 2 + 4}
+              width={panelWidth - 8}
+              height={panelHeight - 8}
+              rx={panelRadius - 6}
+              ry={panelRadius - 6}
+              fill="none"
+              stroke={isSelected ? lightenHex('#0f172a', 0.6) : ornamentStroke}
+              strokeWidth={1.6}
+              strokeDasharray="6 8"
+              opacity={node.state === 'locked' ? 0.55 : 0.8}
+            />
+            <path
+              d={`M ${-panelWidth / 2 + 10} ${panelHeight / 2 - 18} L ${panelWidth / 2 - 10} ${panelHeight / 2 - 22}`}
+              stroke={`url(#${carveGradientId})`}
+              strokeWidth={2}
+              strokeLinecap="round"
+              opacity={node.state === 'locked' ? 0.25 : 0.45}
+            />
+            <path
+              d={`M ${-panelWidth / 2 + 12} ${-panelHeight / 2 + 14} L ${panelWidth / 2 - 12} ${-panelHeight / 2 + 10}`}
+              stroke={lightenHex(baseFill, 0.45)}
+              strokeWidth={2}
+              strokeLinecap="round"
+              opacity={node.state === 'locked' ? 0.2 : 0.55}
             />
             {isSelected && (
-              <circle
-                r={36}
+              <rect
+                x={-panelWidth / 2 - 3}
+                y={-panelHeight / 2 - 3}
+                width={panelWidth + 6}
+                height={panelHeight + 6}
+                rx={panelRadius}
+                ry={panelRadius}
                 fill="none"
                 stroke="#0ea5e9"
-                strokeWidth={1.5}
-                opacity={0.35}
+                strokeWidth={1.4}
+                opacity={0.4}
                 style={{ transition: 'opacity 200ms ease' }}
               />
             )}
             {displayIconUrl ? (
               <image
                 href={displayIconUrl}
-                x={-24}
-                y={-24}
-                width={48}
-                height={48}
+                x={-26}
+                y={-30}
+                width={52}
+                height={56}
                 preserveAspectRatio="xMidYMid meet"
                 opacity={node.state === 'locked' && lockIconUrl ? 0.95 : 1}
               />
@@ -1105,19 +1159,21 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill={iconFill}
-                fontSize={24}
-                fontWeight="600"
+                fontSize={26}
+                fontWeight="700"
+                letterSpacing="0.08em"
               >
                 {iconFallback}
               </text>
             )}
           </g>
           <text
-            y={52}
+            y={panelHeight / 2 + 18}
             textAnchor="middle"
             fill="#e2e8f0"
             fontSize={12}
-            fontWeight="600"
+            fontWeight="700"
+            letterSpacing="0.06em"
           >
             {node.name}
           </text>
