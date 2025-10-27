@@ -211,6 +211,8 @@ export const NODE_SHAPE_OPTIONS = [
   { id: 'panel', label: 'Panel suave' },
   { id: 'circle', label: 'Círculo' },
   { id: 'triangle', label: 'Triángulo' },
+  { id: 'diamond', label: 'Diamante' },
+  { id: 'hexagon', label: 'Hexágono' },
 ];
 
 export const normalizeNodeShape = (value) => {

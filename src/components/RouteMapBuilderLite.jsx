@@ -68,6 +68,21 @@ const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
 const NODE_MENU_OFFSET = 32;
 
+const buildPolygonPath = (points) => {
+  if (!Array.isArray(points) || points.length === 0) {
+    return '';
+  }
+  const [first, ...rest] = points;
+  return [
+    `M ${first[0]} ${first[1]}`,
+    ...rest.map(([x, y]) => `L ${x} ${y}`),
+    'Z',
+  ].join(' ');
+};
+
+const scalePolygonPoints = (points, scaleX, scaleY) =>
+  points.map(([x, y]) => [x * scaleX, y * scaleY]);
+
 const NODE_SHAPE_RENDER_INFO = {
   panel: {
     width: 90,
@@ -90,14 +105,34 @@ const NODE_SHAPE_RENDER_INFO = {
     iconFontSize: 24,
   },
   triangle: {
-    width: 100,
+    width: 108,
+    height: 96,
+    radius: 0,
+    labelOffset: 74,
+    selectionPadding: 5,
+    completionBadgePosition: { x: 34, y: -96 / 2 + 20 },
+    iconFrame: { x: -22, y: -6, width: 44, height: 44 },
+    iconFontSize: 22,
+  },
+  diamond: {
+    width: 96,
+    height: 96,
+    radius: 0,
+    labelOffset: 74,
+    selectionPadding: 5,
+    completionBadgePosition: { x: 32, y: -96 / 2 + 22 },
+    iconFrame: { x: -22, y: -22, width: 44, height: 44 },
+    iconFontSize: 22,
+  },
+  hexagon: {
+    width: 108,
     height: 94,
     radius: 0,
-    labelOffset: 94 / 2 + 28,
+    labelOffset: 72,
     selectionPadding: 5,
-    completionBadgePosition: { x: 32, y: -94 / 2 + 18 },
-    iconFrame: { x: -24, y: -20, width: 48, height: 48 },
-    iconFontSize: 24,
+    completionBadgePosition: { x: 36, y: -94 / 2 + 18 },
+    iconFrame: { x: -22, y: -22, width: 44, height: 44 },
+    iconFontSize: 22,
   },
 };
 
@@ -1406,9 +1441,14 @@ const RouteMapBuilderLite = ({ onBack }) => {
           );
         }
       } else if (shapeId === 'triangle') {
-        const trianglePath = `M 0 ${-halfHeight} L ${halfWidth} ${halfHeight} L ${-halfWidth} ${halfHeight} Z`;
-        const inset = 6;
-        const innerPath = `M 0 ${-halfHeight + inset} L ${halfWidth - inset} ${halfHeight - inset} L ${-halfWidth + inset} ${halfHeight - inset} Z`;
+        const trianglePoints = [
+          [0, -halfHeight],
+          [halfWidth, halfHeight],
+          [-halfWidth, halfHeight],
+        ];
+        const trianglePath = buildPolygonPath(trianglePoints);
+        const innerTrianglePoints = trianglePoints.map(([x, y]) => [x * 0.82, y * 0.78 + halfHeight * 0.08]);
+        const innerPath = buildPolygonPath(innerTrianglePoints);
         baseShape = (
           <path
             d={trianglePath}
@@ -1434,7 +1474,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
         bottomHighlight = (
           <path
-            d={`M ${-halfWidth + 12} ${halfHeight - 16} L 0 ${halfHeight - 10} L ${halfWidth - 12} ${halfHeight - 16}`}
+            d={`M ${-halfWidth * 0.55} ${halfHeight - 14} L 0 ${halfHeight - 8} L ${halfWidth * 0.55} ${halfHeight - 14}`}
             stroke={`url(#${carveGradientId})`}
             strokeWidth={2}
             strokeLinecap="round"
@@ -1444,7 +1484,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
         topHighlight = (
           <path
-            d={`M ${-halfWidth + 14} ${-halfHeight + 18} L 0 ${-halfHeight + 6} L ${halfWidth - 14} ${-halfHeight + 18}`}
+            d={`M ${-halfWidth * 0.48} ${-halfHeight + 14} L 0 ${-halfHeight + 4} L ${halfWidth * 0.48} ${-halfHeight + 14}`}
             stroke={lightenHex(baseFill, 0.45)}
             strokeWidth={2}
             strokeLinecap="round"
@@ -1457,6 +1497,150 @@ const RouteMapBuilderLite = ({ onBack }) => {
           selectionShape = (
             <path
               d={trianglePath}
+              fill="none"
+              stroke={`url(#${selectionStrokeId})`}
+              strokeWidth={2}
+              strokeDasharray="18 12"
+              opacity={0.75}
+              pointerEvents="none"
+              style={{ transition: 'opacity 200ms ease' }}
+              transform={`scale(${selectionScale})`}
+              strokeLinejoin="round"
+            />
+          );
+        }
+      } else if (shapeId === 'diamond') {
+        const diamondPoints = [
+          [0, -halfHeight],
+          [halfWidth, 0],
+          [0, halfHeight],
+          [-halfWidth, 0],
+        ];
+        const diamondPath = buildPolygonPath(diamondPoints);
+        const innerDiamondPoints = scalePolygonPoints(diamondPoints, 0.78, 0.78);
+        const innerPath = buildPolygonPath(innerDiamondPoints);
+        baseShape = (
+          <path
+            d={diamondPath}
+            fill={`url(#${gradientId})`}
+            stroke={`url(#${strokeGradientId})`}
+            strokeWidth={4}
+            strokeLinejoin="round"
+            opacity={baseOpacity}
+            style={shapeStyle}
+            filter={`url(#${noiseId})`}
+          />
+        );
+        ornamentShape = (
+          <path
+            d={innerPath}
+            fill="none"
+            stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
+            strokeWidth={1.6}
+            strokeDasharray="6 8"
+            opacity={ornamentOpacity}
+            strokeLinejoin="round"
+          />
+        );
+        bottomHighlight = (
+          <path
+            d={`M ${-halfWidth * 0.35} ${halfHeight - 10} L 0 ${halfHeight - 4} L ${halfWidth * 0.35} ${halfHeight - 10}`}
+            stroke={`url(#${carveGradientId})`}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={bottomHighlightOpacity}
+            fill="none"
+          />
+        );
+        topHighlight = (
+          <path
+            d={`M ${-halfWidth * 0.3} ${-halfHeight + 12} L 0 ${-halfHeight + 2} L ${halfWidth * 0.3} ${-halfHeight + 12}`}
+            stroke={lightenHex(baseFill, 0.45)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={topHighlightOpacity}
+            fill="none"
+          />
+        );
+        if (isSelected) {
+          const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          selectionShape = (
+            <path
+              d={diamondPath}
+              fill="none"
+              stroke={`url(#${selectionStrokeId})`}
+              strokeWidth={2}
+              strokeDasharray="18 12"
+              opacity={0.75}
+              pointerEvents="none"
+              style={{ transition: 'opacity 200ms ease' }}
+              transform={`scale(${selectionScale})`}
+              strokeLinejoin="round"
+            />
+          );
+        }
+      } else if (shapeId === 'hexagon') {
+        const sideX = halfWidth * 0.78;
+        const midY = halfHeight * 0.58;
+        const hexagonPoints = [
+          [0, -halfHeight],
+          [sideX, -midY],
+          [sideX, midY],
+          [0, halfHeight],
+          [-sideX, midY],
+          [-sideX, -midY],
+        ];
+        const hexagonPath = buildPolygonPath(hexagonPoints);
+        const innerHexagonPoints = scalePolygonPoints(hexagonPoints, 0.82, 0.82);
+        const innerPath = buildPolygonPath(innerHexagonPoints);
+        baseShape = (
+          <path
+            d={hexagonPath}
+            fill={`url(#${gradientId})`}
+            stroke={`url(#${strokeGradientId})`}
+            strokeWidth={4}
+            strokeLinejoin="round"
+            opacity={baseOpacity}
+            style={shapeStyle}
+            filter={`url(#${noiseId})`}
+          />
+        );
+        ornamentShape = (
+          <path
+            d={innerPath}
+            fill="none"
+            stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
+            strokeWidth={1.6}
+            strokeDasharray="6 8"
+            opacity={ornamentOpacity}
+            strokeLinejoin="round"
+          />
+        );
+        bottomHighlight = (
+          <path
+            d={`M ${-sideX * 0.7} ${halfHeight - 12} L 0 ${halfHeight - 6} L ${sideX * 0.7} ${halfHeight - 12}`}
+            stroke={`url(#${carveGradientId})`}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={bottomHighlightOpacity}
+            fill="none"
+          />
+        );
+        topHighlight = (
+          <path
+            d={`M ${-sideX * 0.65} ${-halfHeight + 12} L 0 ${-halfHeight + 4} L ${sideX * 0.65} ${-halfHeight + 12}`}
+            stroke={lightenHex(baseFill, 0.45)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={topHighlightOpacity}
+            fill="none"
+          />
+        );
+        if (isSelected) {
+          const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          selectionShape = (
+            <path
+              d={hexagonPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
