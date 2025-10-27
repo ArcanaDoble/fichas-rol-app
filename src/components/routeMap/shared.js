@@ -207,6 +207,20 @@ export const mixHex = (hexA, hexB, amount) => {
   return rgbToHex(mix(colorA.r, colorB.r), mix(colorA.g, colorB.g), mix(colorA.b, colorB.b));
 };
 
+export const NODE_SHAPE_OPTIONS = [
+  { id: 'panel', label: 'Panel suave' },
+  { id: 'circle', label: 'Círculo' },
+  { id: 'triangle', label: 'Triángulo' },
+];
+
+export const normalizeNodeShape = (value) => {
+  if (typeof value !== 'string') {
+    return 'panel';
+  }
+  const normalized = value.trim().toLowerCase();
+  return NODE_SHAPE_OPTIONS.some((option) => option.id === normalized) ? normalized : 'panel';
+};
+
 const DEFAULT_APPEARANCE = {
   accent: '#38bdf8',
   fill: '#0f172a',
@@ -259,6 +273,7 @@ export const applyAppearanceDefaults = (node) => {
     borderColor: normalizeHex(node.borderColor) || palette.border,
     iconColor: normalizeHex(node.iconColor) || palette.icon,
     glowIntensity: normalizeGlowIntensity(node.glowIntensity),
+    shape: normalizeNodeShape(node.shape),
     iconUrl:
       typeof node.iconUrl === 'string' && node.iconUrl.trim()
         ? node.iconUrl.trim()
@@ -285,6 +300,7 @@ export const DEFAULT_NODE = () =>
     loot: '',
     event: '',
     notes: '',
+    shape: 'panel',
     iconUrl: null,
     glowIntensity: DEFAULT_GLOW_INTENSITY,
   });
