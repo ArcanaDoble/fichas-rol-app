@@ -27,6 +27,7 @@ import {
   NODE_STATES,
   TOOLBAR_ACTIONS,
   GRID_SIZES,
+  NODE_SHAPE_OPTIONS,
   sanitizeCustomIcons,
   readLocalCustomIcons,
   readMinimapLocalCustomIcons,
@@ -42,6 +43,7 @@ import {
   parseRouteMapFile,
   DEFAULT_GLOW_INTENSITY,
   normalizeGlowIntensity,
+  normalizeNodeShape,
 } from './routeMap/shared';
 
 const TOOLBAR_ICON_COMPONENTS = {
@@ -65,6 +67,41 @@ const EDGE_BASE_WIDTH = 3.6;
 const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
 const NODE_MENU_OFFSET = 32;
+
+const NODE_SHAPE_RENDER_INFO = {
+  panel: {
+    width: 90,
+    height: 96,
+    radius: 18,
+    labelOffset: 66,
+    selectionPadding: 3.5,
+    completionBadgePosition: { x: 90 / 2 - 18, y: -96 / 2 + 18 },
+    iconFrame: { x: -26, y: -30, width: 52, height: 56 },
+    iconFontSize: 26,
+  },
+  circle: {
+    width: 92,
+    height: 92,
+    radius: 46,
+    labelOffset: 46 + 24,
+    selectionPadding: 5,
+    completionBadgePosition: { x: 46 * 0.78, y: -46 * 0.78 },
+    iconFrame: { x: -24, y: -24, width: 48, height: 48 },
+    iconFontSize: 24,
+  },
+  triangle: {
+    width: 100,
+    height: 94,
+    radius: 0,
+    labelOffset: 94 / 2 + 28,
+    selectionPadding: 5,
+    completionBadgePosition: { x: 32, y: -94 / 2 + 18 },
+    iconFrame: { x: -24, y: -20, width: 48, height: 48 },
+    iconFontSize: 24,
+  },
+};
+
+const getShapeRenderInfo = (shapeId) => NODE_SHAPE_RENDER_INFO[shapeId] || NODE_SHAPE_RENDER_INFO.panel;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
   <div className="relative inline-block">
@@ -136,6 +173,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   });
   const [activeTool, setActiveTool] = useState('select');
   const [nodeTypeToCreate, setNodeTypeToCreate] = useState('normal');
+  const [nodeShapeToCreate, setNodeShapeToCreate] = useState('panel');
   const [connectOriginId, setConnectOriginId] = useState(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
@@ -300,6 +338,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
     };
   }, [selectedNodes]);
 
+  const shapeSelection = useMemo(() => {
+    if (selectedNodes.length === 0) {
+      return { value: 'panel', mixed: false };
+    }
+    const shapes = selectedNodes.map((node) => normalizeNodeShape(node.shape));
+    const unique = Array.from(new Set(shapes));
+    return { value: shapes[0], mixed: unique.length > 1 };
+  }, [selectedNodes]);
+
   const mixedAppearance = useMemo(() => {
     if (selectedNodes.length <= 1) {
       return {
@@ -369,6 +416,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
             loot: '',
             event: '',
             notes: '',
+            shape: nodeShapeToCreate,
             accentColor: palette.accent,
             fillColor: palette.fill,
             borderColor: palette.border,
@@ -379,7 +427,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
       });
     },
-    [applyNodeUpdates, gridSize, nodeTypeToCreate, snapToGrid],
+    [applyNodeUpdates, gridSize, nodeShapeToCreate, nodeTypeToCreate, snapToGrid],
   );
 
   const deleteSelection = useCallback(() => {
@@ -460,6 +508,21 @@ const RouteMapBuilderLite = ({ onBack }) => {
         nodes.forEach((node) => {
           if (selectedNodeIds.includes(node.id)) {
             node[key] = normalized;
+          }
+        });
+      });
+    },
+    [applyNodeUpdates, selectedNodeIds],
+  );
+
+  const handleShapeSelectionChange = useCallback(
+    (event) => {
+      if (selectedNodeIds.length === 0) return;
+      const nextShape = normalizeNodeShape(event.target.value);
+      applyNodeUpdates((nodes) => {
+        nodes.forEach((node) => {
+          if (selectedNodeIds.includes(node.id)) {
+            node.shape = nextShape;
           }
         });
       });
@@ -1027,6 +1090,16 @@ const RouteMapBuilderLite = ({ onBack }) => {
     [updateNodeMenu],
   );
 
+  const handleNodeMenuShapeChange = useCallback(
+    (event) => {
+      updateNodeMenu((prev) => ({
+        ...prev,
+        shape: normalizeNodeShape(event.target.value),
+      }));
+    },
+    [updateNodeMenu],
+  );
+
   const handleNodeMenuStateChange = useCallback(
     (event) => {
       const value = event.target.value;
@@ -1201,7 +1274,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const glowColorBase = node.state === 'locked' ? '#1f2937' : node.accentColor || palette.accent;
       const glowHighlight = mixHex(glowColorBase, '#f8fafc', 0.65);
       const glowShadow = mixHex(glowColorBase, '#020617', 0.6);
-      const circleStyle = {
+      const shapeStyle = {
         transition: 'filter 200ms ease, opacity 200ms ease',
       };
       const filterParts = [];
@@ -1233,7 +1306,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionGlow})`);
       }
       if (filterParts.length > 0) {
-        circleStyle.filter = filterParts.join(' ');
+        shapeStyle.filter = filterParts.join(' ');
       }
       const gradientId = `node-fill-${node.id}`;
       const strokeGradientId = `node-stroke-${node.id}`;
@@ -1246,20 +1319,226 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
       const strokeDark = darkenHex(baseBorder, 0.36);
+      const shapeId = normalizeNodeShape(node.shape);
+      const metrics = getShapeRenderInfo(shapeId);
+      const {
+        width,
+        height,
+        radius,
+        labelOffset,
+        selectionPadding,
+        completionBadgePosition,
+        iconFrame: metricsIconFrame,
+        iconFontSize,
+      } = metrics;
+      const iconFrame = metricsIconFrame || { x: -26, y: -30, width: 52, height: 56 };
+      const halfWidth = width / 2;
+      const halfHeight = height / 2;
+      const mainRadius = radius || Math.min(width, height) / 2;
       const innerTransform = isHovered ? 'scale(1.05)' : 'scale(1)';
-      const panelWidth = 90;
-      const panelHeight = 96;
-      const panelRadius = 18;
-      const completionSparkles = isCompleted
-        ? [
-            { x: -panelWidth / 2 - 8, y: -panelHeight / 2 - 16, scale: 0.9, rotation: 18 },
-            { x: panelWidth / 2 + 10, y: -panelHeight / 2 + 6, scale: 0.7, rotation: -16 },
-            { x: panelWidth / 2 + 14, y: panelHeight / 2 + 10, scale: 0.85, rotation: 28 },
-          ]
-        : [];
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
       const completionNameFill = '#e2e8f0';
+      const badgePosition = completionBadgePosition || { x: halfWidth - 18, y: -halfHeight + 18 };
+      const baseOpacity = node.state === 'locked' ? 0.75 : 1;
+      const ornamentOpacity = node.state === 'locked' ? 0.55 : 0.8;
+      const bottomHighlightOpacity = node.state === 'locked' ? 0.25 : 0.45;
+      const topHighlightOpacity = node.state === 'locked' ? 0.2 : 0.55;
+      let baseShape = null;
+      let ornamentShape = null;
+      let bottomHighlight = null;
+      let topHighlight = null;
+      let selectionShape = null;
+      if (shapeId === 'circle') {
+        baseShape = (
+          <circle
+            r={mainRadius}
+            fill={`url(#${gradientId})`}
+            stroke={`url(#${strokeGradientId})`}
+            strokeWidth={4}
+            opacity={baseOpacity}
+            style={shapeStyle}
+            filter={`url(#${noiseId})`}
+          />
+        );
+        ornamentShape = (
+          <circle
+            r={Math.max(0, mainRadius - 6)}
+            fill="none"
+            stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
+            strokeWidth={1.6}
+            strokeDasharray="6 8"
+            opacity={ornamentOpacity}
+          />
+        );
+        bottomHighlight = (
+          <path
+            d={`M ${-mainRadius * 0.7} ${mainRadius * 0.55} A ${mainRadius * 0.85} ${mainRadius * 0.85} 0 0 0 ${mainRadius * 0.7} ${mainRadius * 0.5}`}
+            stroke={`url(#${carveGradientId})`}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={bottomHighlightOpacity}
+            fill="none"
+          />
+        );
+        topHighlight = (
+          <path
+            d={`M ${-mainRadius * 0.65} ${-mainRadius * 0.55} A ${mainRadius * 0.95} ${mainRadius * 0.95} 0 0 1 ${mainRadius * 0.65} ${-mainRadius * 0.7}`}
+            stroke={lightenHex(baseFill, 0.45)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={topHighlightOpacity}
+            fill="none"
+          />
+        );
+        if (isSelected) {
+          selectionShape = (
+            <circle
+              r={mainRadius + selectionPadding}
+              fill="none"
+              stroke={`url(#${selectionStrokeId})`}
+              strokeWidth={2}
+              strokeDasharray="18 12"
+              opacity={0.75}
+              pointerEvents="none"
+              style={{ transition: 'opacity 200ms ease' }}
+            />
+          );
+        }
+      } else if (shapeId === 'triangle') {
+        const trianglePath = `M 0 ${-halfHeight} L ${halfWidth} ${halfHeight} L ${-halfWidth} ${halfHeight} Z`;
+        const inset = 6;
+        const innerPath = `M 0 ${-halfHeight + inset} L ${halfWidth - inset} ${halfHeight - inset} L ${-halfWidth + inset} ${halfHeight - inset} Z`;
+        baseShape = (
+          <path
+            d={trianglePath}
+            fill={`url(#${gradientId})`}
+            stroke={`url(#${strokeGradientId})`}
+            strokeWidth={4}
+            strokeLinejoin="round"
+            opacity={baseOpacity}
+            style={shapeStyle}
+            filter={`url(#${noiseId})`}
+          />
+        );
+        ornamentShape = (
+          <path
+            d={innerPath}
+            fill="none"
+            stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
+            strokeWidth={1.6}
+            strokeDasharray="6 8"
+            opacity={ornamentOpacity}
+            strokeLinejoin="round"
+          />
+        );
+        bottomHighlight = (
+          <path
+            d={`M ${-halfWidth + 12} ${halfHeight - 16} L 0 ${halfHeight - 10} L ${halfWidth - 12} ${halfHeight - 16}`}
+            stroke={`url(#${carveGradientId})`}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={bottomHighlightOpacity}
+            fill="none"
+          />
+        );
+        topHighlight = (
+          <path
+            d={`M ${-halfWidth + 14} ${-halfHeight + 18} L 0 ${-halfHeight + 6} L ${halfWidth - 14} ${-halfHeight + 18}`}
+            stroke={lightenHex(baseFill, 0.45)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={topHighlightOpacity}
+            fill="none"
+          />
+        );
+        if (isSelected) {
+          const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          selectionShape = (
+            <path
+              d={trianglePath}
+              fill="none"
+              stroke={`url(#${selectionStrokeId})`}
+              strokeWidth={2}
+              strokeDasharray="18 12"
+              opacity={0.75}
+              pointerEvents="none"
+              style={{ transition: 'opacity 200ms ease' }}
+              transform={`scale(${selectionScale})`}
+              strokeLinejoin="round"
+            />
+          );
+        }
+      } else {
+        baseShape = (
+          <rect
+            x={-halfWidth}
+            y={-halfHeight}
+            width={width}
+            height={height}
+            rx={radius}
+            ry={radius}
+            fill={`url(#${gradientId})`}
+            stroke={`url(#${strokeGradientId})`}
+            strokeWidth={4}
+            opacity={baseOpacity}
+            style={shapeStyle}
+            filter={`url(#${noiseId})`}
+          />
+        );
+        ornamentShape = (
+          <rect
+            x={-halfWidth + 4}
+            y={-halfHeight + 4}
+            width={width - 8}
+            height={height - 8}
+            rx={Math.max(0, radius - 6)}
+            ry={Math.max(0, radius - 6)}
+            fill="none"
+            stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
+            strokeWidth={1.6}
+            strokeDasharray="6 8"
+            opacity={ornamentOpacity}
+          />
+        );
+        bottomHighlight = (
+          <path
+            d={`M ${-halfWidth + 10} ${halfHeight - 18} L ${halfWidth - 10} ${halfHeight - 22}`}
+            stroke={`url(#${carveGradientId})`}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={bottomHighlightOpacity}
+          />
+        );
+        topHighlight = (
+          <path
+            d={`M ${-halfWidth + 12} ${-halfHeight + 14} L ${halfWidth - 12} ${-halfHeight + 10}`}
+            stroke={lightenHex(baseFill, 0.45)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            opacity={topHighlightOpacity}
+          />
+        );
+        if (isSelected) {
+          selectionShape = (
+            <rect
+              x={-halfWidth - selectionPadding}
+              y={-halfHeight - selectionPadding}
+              width={width + selectionPadding * 2}
+              height={height + selectionPadding * 2}
+              rx={radius + 2}
+              ry={radius + 2}
+              fill="none"
+              stroke={`url(#${selectionStrokeId})`}
+              strokeWidth={2}
+              strokeDasharray="18 12"
+              opacity={0.75}
+              pointerEvents="none"
+              style={{ transition: 'opacity 200ms ease' }}
+            />
+          );
+        }
+      }
       return (
         <g
           key={node.id}
@@ -1322,7 +1601,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <g
                 pointerEvents="none"
                 style={{ transition: 'opacity 180ms ease' }}
-                transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 + 18})`}
+                transform={`translate(${badgePosition.x}, ${badgePosition.y})`}
                 filter={`url(#${completionAuraId})`}
               >
                 <circle
@@ -1341,71 +1620,18 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 />
               </g>
             )}
-            <rect
-              x={-panelWidth / 2}
-              y={-panelHeight / 2}
-              width={panelWidth}
-              height={panelHeight}
-              rx={panelRadius}
-              ry={panelRadius}
-              fill={`url(#${gradientId})`}
-              stroke={`url(#${strokeGradientId})`}
-              strokeWidth={4}
-              opacity={node.state === 'locked' ? 0.75 : 1}
-              style={circleStyle}
-              filter={`url(#${noiseId})`}
-            />
-            <rect
-              x={-panelWidth / 2 + 4}
-              y={-panelHeight / 2 + 4}
-              width={panelWidth - 8}
-              height={panelHeight - 8}
-              rx={panelRadius - 6}
-              ry={panelRadius - 6}
-              fill="none"
-              stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
-              strokeWidth={1.6}
-              strokeDasharray="6 8"
-              opacity={node.state === 'locked' ? 0.55 : 0.8}
-            />
-            <path
-              d={`M ${-panelWidth / 2 + 10} ${panelHeight / 2 - 18} L ${panelWidth / 2 - 10} ${panelHeight / 2 - 22}`}
-              stroke={`url(#${carveGradientId})`}
-              strokeWidth={2}
-              strokeLinecap="round"
-              opacity={node.state === 'locked' ? 0.25 : 0.45}
-            />
-            <path
-              d={`M ${-panelWidth / 2 + 12} ${-panelHeight / 2 + 14} L ${panelWidth / 2 - 12} ${-panelHeight / 2 + 10}`}
-              stroke={lightenHex(baseFill, 0.45)}
-              strokeWidth={2}
-              strokeLinecap="round"
-              opacity={node.state === 'locked' ? 0.2 : 0.55}
-            />
-            {isSelected && (
-              <rect
-                x={-panelWidth / 2 - 3.5}
-                y={-panelHeight / 2 - 3.5}
-                width={panelWidth + 7}
-                height={panelHeight + 7}
-                rx={panelRadius + 2}
-                ry={panelRadius + 2}
-                fill="none"
-                stroke={`url(#${selectionStrokeId})`}
-                strokeWidth={2}
-                strokeDasharray="18 12"
-                opacity={0.75}
-                pointerEvents="none"
-                style={{ transition: 'opacity 200ms ease' }}
-              />
-            )}
+            {baseShape}
+            {ornamentShape}
+            {bottomHighlight}
+            {topHighlight}
+            {selectionShape}
             {displayIconUrl ? (
               <image
                 href={displayIconUrl}
-                x={-26}
-                y={-30}
-                width={52}
-                height={56}
+                x={iconFrame.x}
+                y={iconFrame.y}
+                width={iconFrame.width}
+                height={iconFrame.height}
                 preserveAspectRatio="xMidYMid meet"
                 opacity={node.state === 'locked' && lockIconUrl ? 0.95 : 1}
               />
@@ -1414,7 +1640,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill={iconFill}
-                fontSize={26}
+                fontSize={iconFontSize}
                 fontWeight="700"
                 letterSpacing="0.08em"
               >
@@ -1423,7 +1649,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
             )}
           </g>
           <text
-            y={panelHeight / 2 + 18}
+            y={labelOffset}
             textAnchor="middle"
             fill={completionNameFill}
             fontSize={12}
@@ -1434,6 +1660,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           </text>
         </g>
       );
+
     });
 
   const nodeMenuNode = nodeMenuDraft ? nodesMap.get(nodeMenuDraft.id) : null;
@@ -1445,6 +1672,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
     : null;
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
+  const nodeMenuShape = nodeMenuDraft
+    ? NODE_SHAPE_OPTIONS.find((shape) => shape.id === normalizeNodeShape(nodeMenuDraft.shape))
+    : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
   const nodeMenuIsCompleted = nodeMenuDraft?.state === 'completed';
   const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
@@ -1549,6 +1779,21 @@ const RouteMapBuilderLite = ({ onBack }) => {
                   />
                   {mixedAppearance.iconColor && <span className="text-[10px] text-amber-300">Valores mixtos</span>}
                 </label>
+                <label className="col-span-2 flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Forma</span>
+                  <select
+                    value={shapeSelection.value}
+                    onChange={handleShapeSelectionChange}
+                    className="rounded-xl border border-slate-800/70 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+                  >
+                    {NODE_SHAPE_OPTIONS.map((shapeOption) => (
+                      <option key={shapeOption.id} value={shapeOption.id}>
+                        {shapeOption.label}
+                      </option>
+                    ))}
+                  </select>
+                  {shapeSelection.mixed && <span className="text-[10px] text-amber-300">Valores mixtos</span>}
+                </label>
                 <div className="col-span-2 flex flex-col gap-1.5">
                   <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Intensidad destello</span>
                   <div className="flex items-center gap-3">
@@ -1643,6 +1888,20 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 {NODE_TYPES.map((type) => (
                   <option key={type.id} value={type.id}>
                     {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm">
+              <span className="text-slate-400">Forma de nodo</span>
+              <select
+                value={nodeShapeToCreate}
+                onChange={(event) => setNodeShapeToCreate(normalizeNodeShape(event.target.value))}
+                className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
+              >
+                {NODE_SHAPE_OPTIONS.map((shapeOption) => (
+                  <option key={shapeOption.id} value={shapeOption.id}>
+                    {shapeOption.label}
                   </option>
                 ))}
               </select>
@@ -1931,8 +2190,10 @@ const RouteMapBuilderLite = ({ onBack }) => {
                     <h3 className="max-w-[14rem] truncate text-lg font-semibold text-slate-100 sm:max-w-[16rem]">
                       {nodeMenuDraft.name || 'Sin nombre'}
                     </h3>
-                    <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                       <span>{nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'}</span>
+                      <span className="text-slate-600">·</span>
+                      <span>{nodeMenuShape ? nodeMenuShape.label : 'Forma estándar'}</span>
                       <span className="text-slate-600">·</span>
                       <span className="inline-flex items-center gap-2">
                         <span>{nodeMenuState ? nodeMenuState.label : 'Sin estado'}</span>
@@ -1986,6 +2247,20 @@ const RouteMapBuilderLite = ({ onBack }) => {
                         {Object.keys(NODE_STATES).map((stateKey) => (
                           <option key={stateKey} value={stateKey}>
                             {NODE_STATES[stateKey].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs sm:col-span-2">
+                      <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Forma</span>
+                      <select
+                        value={normalizeNodeShape(nodeMenuDraft.shape)}
+                        onChange={handleNodeMenuShapeChange}
+                        className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+                      >
+                        {NODE_SHAPE_OPTIONS.map((shapeOption) => (
+                          <option key={shapeOption.id} value={shapeOption.id}>
+                            {shapeOption.label}
                           </option>
                         ))}
                       </select>
