@@ -1212,6 +1212,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
       }
       const completionBadgeFill = mixHex(baseFill, '#f8fafc', 0.35);
+      const completionBadgeHighlight = mixHex(completionBadgeFill, '#f8fafc', 0.55);
+      const completionBadgeShadow = mixHex(completionBadgeFill, '#020617', 0.45);
       const completionBadgeStroke = mixHex(baseBorder, '#020617', 0.35);
       const completionCheckStroke = mixHex(baseBorder, '#f8fafc', 0.5);
       const displayIconUrl =
@@ -1236,6 +1238,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const noiseId = `node-noise-${node.id}`;
       const carveGradientId = `node-carve-${node.id}`;
       const selectionStrokeId = `node-selection-${node.id}`;
+      const completionAuraId = `node-completion-aura-${node.id}`;
+      const completionBadgeGradientId = `node-completion-badge-${node.id}`;
       const fillLight = lightenHex(baseFill, 0.22);
       const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
@@ -1289,19 +1293,25 @@ const RouteMapBuilderLite = ({ onBack }) => {
             </filter>
             {isCompleted && (
               <>
-                <radialGradient id={completionAuraId} cx="50%" cy="50%" r="70%">
-                  <stop offset="0%" stopColor={mixHex(baseFill, '#fefce8', 0.75)} stopOpacity="0.95" />
-                  <stop offset="55%" stopColor={mixHex(baseBorder, '#fde68a', 0.55)} stopOpacity="0.5" />
-                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.25)} stopOpacity="0" />
+                <radialGradient id={completionBadgeGradientId} cx="50%" cy="50%" r="65%">
+                  <stop offset="0%" stopColor={completionBadgeHighlight} stopOpacity="0.95" />
+                  <stop offset="85%" stopColor={completionBadgeFill} stopOpacity="0.9" />
+                  <stop offset="100%" stopColor={completionBadgeShadow} stopOpacity="0.85" />
                 </radialGradient>
-                <linearGradient id={completionBadgeGradientId} x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fef08a', 0.2)} />
-                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.6)} />
-                </linearGradient>
-                <linearGradient id={completionShineGradientId} x1="0%" x2="100%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fefce8', 0.55)} stopOpacity="0.85" />
-                  <stop offset="100%" stopColor={mixHex(baseBorder, '#f59e0b', 0.35)} stopOpacity="0.55" />
-                </linearGradient>
+                <filter
+                  id={completionAuraId}
+                  x="-40%"
+                  y="-40%"
+                  width="180%"
+                  height="180%"
+                  colorInterpolationFilters="sRGB"
+                >
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="badge-blur" />
+                  <feMerge>
+                    <feMergeNode in="badge-blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </>
             )}
           </defs>
@@ -1311,8 +1321,14 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 pointerEvents="none"
                 style={{ transition: 'opacity 180ms ease' }}
                 transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 + 18})`}
+                filter={`url(#${completionAuraId})`}
               >
-                <circle r={12} fill={completionBadgeFill} stroke={completionBadgeStroke} strokeWidth={2} />
+                <circle
+                  r={12}
+                  fill={`url(#${completionBadgeGradientId})`}
+                  stroke={completionBadgeStroke}
+                  strokeWidth={2}
+                />
                 <path
                   d="M -4 0 L -1 3.5 L 5 -3.5"
                   stroke={completionCheckStroke}
