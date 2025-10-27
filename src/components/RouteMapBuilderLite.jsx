@@ -81,6 +81,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const svgRef = useRef(null);
   const panStateRef = useRef(null);
   const dragStateRef = useRef(null);
+  const hasAutoCenteredRef = useRef(false);
   const [state, dispatch] = useReducer(routeMapReducer, undefined, initialState);
   const initialCustomIcons = useMemo(() => {
     const routeMapIcons = readLocalCustomIcons();
@@ -121,6 +122,42 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [nodeEditor, setNodeEditor] = useState(null);
   const [edgeEditor, setEdgeEditor] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
+
+  const centerViewportOnNodes = useCallback(
+    (nodes, options = {}) => {
+      const container = containerRef.current;
+      if (!container || !Array.isArray(nodes) || nodes.length === 0) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return;
+      }
+      let minX = nodes[0].x;
+      let maxX = nodes[0].x;
+      let minY = nodes[0].y;
+      let maxY = nodes[0].y;
+      nodes.forEach((node) => {
+        if (node.x < minX) minX = node.x;
+        if (node.x > maxX) maxX = node.x;
+        if (node.y < minY) minY = node.y;
+        if (node.y > maxY) maxY = node.y;
+      });
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const desiredScale =
+        typeof options.scale === 'number' ? clamp(options.scale, MIN_ZOOM, MAX_ZOOM) : null;
+      setViewport((prev) => {
+        const nextScale = desiredScale ?? prev.scale;
+        return {
+          scale: nextScale,
+          x: rect.width / 2 - centerX * nextScale,
+          y: rect.height / 2 - centerY * nextScale,
+        };
+      });
+    },
+    [setViewport],
+  );
 
   const nodesMap = useMemo(() => {
     const map = new Map();
@@ -584,9 +621,19 @@ const RouteMapBuilderLite = ({ onBack }) => {
   useEffect(() => {
     const draft = loadDraft();
     if (draft) {
+      hasAutoCenteredRef.current = false;
       dispatch({ type: 'LOAD', nodes: draft.nodes, edges: draft.edges });
+    } else {
+      hasAutoCenteredRef.current = false;
     }
   }, []);
+
+  useEffect(() => {
+    if (!state.nodes.length) return;
+    if (hasAutoCenteredRef.current) return;
+    centerViewportOnNodes(state.nodes, { scale: 1 });
+    hasAutoCenteredRef.current = true;
+  }, [centerViewportOnNodes, state.nodes]);
 
   useEffect(() => {
     saveDraft(state.nodes, state.edges);
@@ -858,6 +905,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
       if (!file) return;
       try {
         const parsed = await parseRouteMapFile(file);
+        hasAutoCenteredRef.current = false;
         dispatch({ type: 'LOAD', nodes: parsed.nodes, edges: parsed.edges });
         ensureVisibleMessage('Mapa importado correctamente');
       } catch (error) {
@@ -1347,6 +1395,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
             ref={svgRef}
             className="absolute inset-0"
             style={{
+              overflow: 'visible',
               transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
               transformOrigin: '0 0',
             }}
