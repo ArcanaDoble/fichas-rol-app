@@ -298,9 +298,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
 
   const nodesMap = useMemo(() => {
     const map = new Map();
-    state.nodes.forEach((node) => map.set(node.id, node));
+    state.nodes.forEach((node) => {
+      const previewedNode =
+        nodeMenuDraft && nodeMenuDraft.id === node.id
+          ? applyAppearanceDefaults({ ...node, ...nodeMenuDraft })
+          : node;
+      map.set(node.id, previewedNode);
+    });
     return map;
-  }, [state.nodes]);
+  }, [state.nodes, nodeMenuDraft]);
 
   useEffect(() => {
     if (selectedNodeIds.length !== 1) {
@@ -1331,7 +1337,11 @@ const RouteMapBuilderLite = ({ onBack }) => {
   };
 
   const renderNodes = () =>
-    state.nodes.map((node) => {
+    state.nodes.map((nodeOriginal) => {
+      const node =
+        nodeMenuDraft && nodeMenuDraft.id === nodeOriginal.id
+          ? applyAppearanceDefaults({ ...nodeOriginal, ...nodeMenuDraft })
+          : nodeOriginal;
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
       const baseFill = node.fillColor || palette.fill;
@@ -1803,41 +1813,62 @@ const RouteMapBuilderLite = ({ onBack }) => {
               >
                 <div
                   style={{
-                    maxWidth: '220px',
+                    maxWidth: '240px',
                     width: '100%',
                     position: 'relative',
-                    background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
-                    border: '1px solid rgba(148,163,184,0.35)',
-                    borderRadius: '14px',
-                    padding: '12px 14px',
-                    color: '#e2e8f0',
-                    fontSize: '0.8rem',
-                    lineHeight: '1.2rem',
-                    boxShadow:
-                      '0 12px 30px rgba(15, 23, 42, 0.32), inset 0 0 12px rgba(148, 163, 184, 0.22)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
+                    background: 'linear-gradient(180deg, rgba(245,231,208,0.95), rgba(231,214,187,0.95))',
+                    border: '1px solid rgba(120, 95, 64, 0.38)',
+                    borderRadius: '16px',
+                    padding: '14px 18px',
+                    color: '#2f2415',
+                    fontSize: '0.84rem',
+                    lineHeight: '1.4rem',
+                    boxShadow: '0 18px 34px rgba(44, 35, 24, 0.28)',
                     textAlign: 'center',
                     whiteSpace: 'pre-wrap',
+                    letterSpacing: '0.012em',
+                    fontWeight: 500,
                   }}
                 >
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '-8px',
+                      bottom: '-16px',
                       left: '50%',
-                      transform: 'translate(-50%, 50%) rotate(45deg)',
-                      width: '16px',
+                      transform: 'translateX(-50%)',
+                      display: 'flex',
+                      alignItems: 'flex-end',
                       height: '16px',
-                      background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
-                      borderLeft: '1px solid rgba(148,163,184,0.35)',
-                      borderBottom: '1px solid rgba(148,163,184,0.35)',
-                      borderRadius: '3px',
-                      boxShadow: '0 8px 18px rgba(15, 23, 42, 0.32)',
                       pointerEvents: 'none',
-                      opacity: 0.92,
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '14px solid transparent',
+                        borderRight: '14px solid transparent',
+                        borderTop: '14px solid rgba(120, 95, 64, 0.28)',
+                        filter: 'blur(0.5px)',
+                        opacity: 0.8,
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '12px solid transparent',
+                        borderRight: '12px solid transparent',
+                        borderTop: '12px solid rgba(240, 225, 200, 0.96)',
+                        filter: 'drop-shadow(0 10px 16px rgba(44, 35, 24, 0.24))',
+                      }}
+                    />
+                  </div>
                   <span>{noteContent}</span>
                 </div>
               </div>
