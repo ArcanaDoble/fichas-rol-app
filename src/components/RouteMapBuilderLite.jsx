@@ -258,6 +258,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [edgeEditor, setEdgeEditor] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const [openNodeMenuId, setOpenNodeMenuId] = useState(null);
   const nodeMenuDirtyRef = useRef(false);
 
   const centerViewportOnNodes = useCallback(
@@ -309,26 +310,32 @@ const RouteMapBuilderLite = ({ onBack }) => {
   }, [state.nodes, nodeMenuDraft]);
 
   useEffect(() => {
-    if (selectedNodeIds.length !== 1) {
+    if (!openNodeMenuId) {
       setNodeMenuDraft(null);
       nodeMenuDirtyRef.current = false;
       return;
     }
-    const nodeId = selectedNodeIds[0];
-    const target = nodesMap.get(nodeId);
+    const target = nodesMap.get(openNodeMenuId);
     if (!target) {
       setNodeMenuDraft(null);
       nodeMenuDirtyRef.current = false;
+      setOpenNodeMenuId(null);
       return;
     }
     setNodeMenuDraft((prev) => {
-      if (prev?.id === nodeId && nodeMenuDirtyRef.current) {
+      if (prev?.id === openNodeMenuId && nodeMenuDirtyRef.current) {
         return prev;
       }
       nodeMenuDirtyRef.current = false;
       return { ...target };
     });
-  }, [nodesMap, selectedNodeIds]);
+  }, [nodesMap, openNodeMenuId]);
+
+  useEffect(() => {
+    if (openNodeMenuId && !selectedNodeIds.includes(openNodeMenuId)) {
+      setOpenNodeMenuId(null);
+    }
+  }, [openNodeMenuId, selectedNodeIds]);
 
   const toolbarActions = useMemo(
       () =>
@@ -1015,10 +1022,30 @@ const RouteMapBuilderLite = ({ onBack }) => {
     return () => container.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
+  const handleNodeDoubleClick = useCallback(
+    (event, node) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (activeTool !== 'select') {
+        setActiveTool('select');
+      }
+      setSelectedNodeIds([node.id]);
+      setSelectedEdgeIds([]);
+      setOpenNodeMenuId(node.id);
+      nodeMenuDirtyRef.current = false;
+      dragStateRef.current = null;
+    },
+    [activeTool, setActiveTool],
+  );
+
   const handleNodePointerDown = useCallback(
     (event, node) => {
       event.stopPropagation();
       event.preventDefault();
+      if (event.detail >= 2) {
+        handleNodeDoubleClick(event, node);
+        return;
+      }
       if (containerRef.current?.setPointerCapture) {
         try {
           containerRef.current.setPointerCapture(event.pointerId);
@@ -1096,8 +1123,10 @@ const RouteMapBuilderLite = ({ onBack }) => {
       screenToWorld,
       selectedNodeIds,
       toggleNodeLock,
+      handleNodeDoubleClick,
     ],
   );
+
 
   const handleEdgeClick = useCallback(
     (edge, event) => {
@@ -1134,6 +1163,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   }, [applyNodeUpdates, nodeMenuDraft]);
 
   const handleNodeMenuClose = useCallback(() => {
+    setOpenNodeMenuId(null);
     setNodeMenuDraft(null);
     setSelectedNodeIds([]);
     nodeMenuDirtyRef.current = false;
@@ -1394,12 +1424,25 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const strokeGradientId = `node-stroke-${node.id}`;
       const noiseId = `node-noise-${node.id}`;
       const selectionStrokeId = `node-selection-${node.id}`;
+      const ringGradientId = `node-ring-${node.id}`;
+      const innerHighlightId = `node-inner-highlight-${node.id}`;
+      const iconBackdropGradientId = `node-icon-backdrop-${node.id}`;
       const completionAuraId = `node-completion-aura-${node.id}`;
       const completionBadgeGradientId = `node-completion-badge-${node.id}`;
       const fillLight = lightenHex(baseFill, 0.22);
       const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
       const strokeDark = darkenHex(baseBorder, 0.36);
+      const accentBase =
+        node.state === 'locked' ? mixHex(baseBorder, '#1e293b', 0.55) : node.accentColor || palette.accent;
+      const ringStart = mixHex(accentBase, '#dbeafe', 0.6);
+      const ringEnd = mixHex(accentBase, '#1e3a8a', 0.4);
+      const innerHighlightStart = mixHex(baseFill, '#f8fafc', 0.72);
+      const innerHighlightMid = mixHex(baseFill, '#e2e8f0', 0.35);
+      const innerHighlightEnd = mixHex(baseFill, '#020617', 0.4);
+      const iconBackdropCenter = mixHex(baseFill, '#ffffff', 0.65);
+      const iconBackdropMiddle = mixHex(baseFill, accentBase, 0.35);
+      const iconBackdropEdge = mixHex(accentBase, '#020617', 0.55);
       const shapeId = normalizeNodeShape(node.shape);
       const metrics = getShapeRenderInfo(shapeId);
       const {
@@ -1431,32 +1474,73 @@ const RouteMapBuilderLite = ({ onBack }) => {
       let baseShape = null;
       let ornamentShape = null;
       let selectionShape = null;
+      let outerRingShape = null;
+      let highlightOverlay = null;
+      let iconBackdrop = null;
       if (shapeId === 'circle') {
+        const ringRadius = mainRadius + 4;
+        const innerRadius = Math.max(0, mainRadius - 2);
+        const ornamentRadius = Math.max(0, innerRadius - 6);
+        const highlightRadius = Math.max(0, innerRadius - 10);
+        const iconBackdropRadius = Math.max(0, innerRadius - 14);
+        const ringOpacity = node.state === 'locked' ? 0.55 : 0.92;
+        const highlightOpacity = node.state === 'locked' ? 0.22 : 0.55;
+        const iconBackdropOpacity = node.state === 'locked' ? 0.35 : 0.72;
+        outerRingShape = (
+          <circle
+            r={ringRadius}
+            fill="none"
+            stroke={`url(#${ringGradientId})`}
+            strokeWidth={6}
+            opacity={ringOpacity}
+            style={shapeStyle}
+            pointerEvents="none"
+          />
+        );
         baseShape = (
           <circle
-            r={mainRadius}
+            r={innerRadius}
             fill={`url(#${gradientId})`}
             stroke={`url(#${strokeGradientId})`}
-            strokeWidth={4}
+            strokeWidth={3}
             opacity={baseOpacity}
             style={shapeStyle}
             filter={`url(#${noiseId})`}
           />
         );
+        if (highlightRadius > 0) {
+          highlightOverlay = (
+            <circle
+              r={highlightRadius}
+              fill={`url(#${innerHighlightId})`}
+              opacity={highlightOpacity}
+              pointerEvents="none"
+            />
+          );
+        }
+        if (iconBackdropRadius > 0) {
+          iconBackdrop = (
+            <circle
+              r={iconBackdropRadius}
+              fill={`url(#${iconBackdropGradientId})`}
+              opacity={iconBackdropOpacity}
+              pointerEvents="none"
+            />
+          );
+        }
         ornamentShape = (
           <circle
-            r={Math.max(0, mainRadius - 6)}
+            r={ornamentRadius}
             fill="none"
             stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
-            strokeWidth={1.6}
-            strokeDasharray="6 8"
+            strokeWidth={2.4}
             opacity={ornamentOpacity}
           />
         );
         if (isSelected) {
           selectionShape = (
             <circle
-              r={mainRadius + selectionPadding}
+              r={ringRadius + selectionPadding}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1684,6 +1768,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           transform={`translate(${node.x}, ${node.y})`}
           className="cursor-pointer"
           onPointerDown={(event) => handleNodePointerDown(event, node)}
+          onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
           onPointerEnter={() => setHoveredNodeId(node.id)}
           onPointerLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
         >
@@ -1701,6 +1786,28 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <stop offset="0%" stopColor={lightenHex(baseBorder, 0.5)} stopOpacity="0.85" />
               <stop offset="100%" stopColor={darkenHex(baseBorder, 0.35)} stopOpacity="0.65" />
             </linearGradient>
+            <linearGradient id={ringGradientId} x1="15%" x2="85%" y1="0%" y2="100%">
+              <stop
+                offset="0%"
+                stopColor={ringStart}
+                stopOpacity={node.state === 'locked' ? 0.7 : 0.95}
+              />
+              <stop
+                offset="100%"
+                stopColor={ringEnd}
+                stopOpacity={node.state === 'locked' ? 0.85 : 1}
+              />
+            </linearGradient>
+            <radialGradient id={innerHighlightId} cx="50%" cy="32%" r="75%">
+              <stop offset="0%" stopColor={innerHighlightStart} stopOpacity="0.85" />
+              <stop offset="55%" stopColor={innerHighlightMid} stopOpacity="0.45" />
+              <stop offset="100%" stopColor={innerHighlightEnd} stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id={iconBackdropGradientId} cx="50%" cy="45%" r="65%">
+              <stop offset="0%" stopColor={iconBackdropCenter} stopOpacity="0.9" />
+              <stop offset="70%" stopColor={iconBackdropMiddle} stopOpacity="0.78" />
+              <stop offset="100%" stopColor={iconBackdropEdge} stopOpacity="0.85" />
+            </radialGradient>
             <filter id={noiseId} x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
               <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed={node.id.length} result="noise" />
               <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.18 0" />
@@ -1731,7 +1838,10 @@ const RouteMapBuilderLite = ({ onBack }) => {
             )}
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
+            {outerRingShape}
             {baseShape}
+            {highlightOverlay}
+            {iconBackdrop}
             {ornamentShape}
             {selectionShape}
             {displayIconUrl ? (
