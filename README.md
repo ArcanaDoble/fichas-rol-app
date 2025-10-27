@@ -14,38 +14,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).
 
-### 🧭 **Mapa de Rutas (Roguelike) — NUEVO**
-
-- **Lienzo interactivo** con Pixi v7 y pixi-viewport v5 para pan, zoom y fondo personalizable.
-- **Capas ambientales** con fondos en paralaje (lejano/medio/cercano), contenedor de FX dedicado y niebla animada mediante tiling sprites reutilizables.
-- **Tipos de nodo configurables** (Inicio, Combate, Evento, Tienda, Élite, Curación y Jefe) con estados bloqueado, visible, desbloqueado, completado y actual.
-- **Conexiones dirigidas editables** con etiquetas y requisitos OR/AND para controlar la lógica de desbloqueo.
-- **Conexiones discontinuas** con trazos segmentados y extremos redondeados que destacan la dirección de avance.
-- **Segmentos vectoriales suaves** en lugar de texturas generadas, garantizando nitidez sin penalizar el rendimiento.
-- **Fondo personalizable** que respeta íntegramente el color o imagen elegidos para ambientar el mapa.
-- **Profundidad atmosférica sutil** mediante viñetas y brillos suaves que recuperan el relieve clásico sin reintroducir las capas pesadas anteriores.
-- **Nodos renovados** con halo luminoso, un único aro exterior robusto y núcleo oscuro amplio inspirado en la referencia proporcionada, ahora con iconografía basada en emojis centrada matemáticamente gracias al anclaje en el núcleo y escalada protagonista ajustada para permanecer dentro del aro según el tipo.
-- **Candado visual integrado**: al bloquear un nodo se aplica automáticamente el icono personalizado 15 (candado) para reconocer su estado de un vistazo.
-- **Intensidad del destello ajustable** mediante controles en el panel lateral y en el editor de nodos, modulando halo y brillo base.
-- **Iconos de nodos personalizables**: reemplaza los emojis por imágenes propias desde el editor, sincronizadas vía Firebase para que toda la mesa y el minimapa compartan el mismo catálogo.
-- **Carga robusta de iconos personalizados**: las imágenes subidas al minimapa o al mapa de rutas se descargan con soporte CORS anónimo y reemplazan de inmediato a los emojis incluso cuando provienen de Firebase Storage.
-- **Herramientas avanzadas**: selección múltiple, creación rápida, conexiones desde el borde, bloqueo, borrado, duplicado, auto-layout y snap opcional a la cuadrícula.
-- **Historial y atajos** con deshacer/rehacer, Delete, Ctrl+C y Ctrl+V para mantener el flujo de trabajo del máster.
-- **Persistencia sencilla** mediante guardado automático en navegador, exportación/importación JSON y personalización de grid.
-- **Corrección de color**: se restauró la utilidad `darkenHex` para evitar errores al renderizar nodos bloqueados.
-- **Reflejos suavizados en nodos**: se retiraron las capas de brillo blanco para recuperar el acabado mate clásico sin artefactos.
-- **Fondo personalizable restaurado**: se retiraron las capas internas de Pixi que velaban el lienzo, recuperando el comportamiento de las versiones anteriores con la nueva ambientación ligera.
-
 ### 🧭 **Mapa de Rutas (Lite SVG)**
 
 - **Versión sin Pixi** enfocada a dispositivos modestos o sesiones rápidas. Renderiza el grafo con SVG y estilos Tailwind.
-- **Pan, zoom y snap al grid** implementados con transformaciones CSS, manteniendo la misma estructura de nodos y conexiones que la versión Pixi.
-- **Sincronización de iconos**: comparte el catálogo de iconos personalizados con el minimapa y el constructor completo mediante Firestore y `localStorage`.
+ - **Pan, zoom y snap al grid** implementados con transformaciones CSS, manteniendo la misma estructura de nodos y conexiones del constructor original.
+ - **Sincronización de iconos**: comparte el catálogo de iconos personalizados con el minimapa mediante Firestore y `localStorage`.
 - **Herramientas equivalentes**: selección, creación, conexión, duplicado, bloqueo/desbloqueo, deshacer/rehacer y auto-layout.
-- **Persistencia idéntica**: guarda automáticamente en el navegador y permite importar/exportar mapas JSON compatibles entre ambas versiones.
-- **Conexiones discontinuas** con guiones SVG y remates redondeados para replicar el estilo visual del constructor principal.
+ - **Persistencia optimizada**: guarda automáticamente en el navegador y permite importar/exportar mapas en JSON reutilizable entre campañas.
+ - **Conexiones discontinuas** con guiones SVG y remates redondeados que mantienen el estilo visual original del proyecto.
 - **Halos y candados sincronizados**: slider de intensidad para el destello y uso automático del icono personalizado 15 cuando el nodo está bloqueado.
-- **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG. Usa «Mapa de Rutas (Roguelike)» para la versión acelerada con Pixi.
+- **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
