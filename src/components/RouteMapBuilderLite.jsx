@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
   ArrowLeft,
+  Check,
   Compass,
   Copy,
   FileDown,
@@ -1211,11 +1212,12 @@ const RouteMapBuilderLite = ({ onBack }) => {
           `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
         );
       }
-      const completionBadgeFill = mixHex(baseFill, '#f8fafc', 0.35);
-      const completionBadgeHighlight = mixHex(completionBadgeFill, '#f8fafc', 0.55);
-      const completionBadgeShadow = mixHex(completionBadgeFill, '#020617', 0.45);
-      const completionBadgeStroke = mixHex(baseBorder, '#020617', 0.35);
-      const completionCheckStroke = mixHex(baseBorder, '#f8fafc', 0.5);
+      const completionBadgeBase = '#10b981';
+      const completionBadgeFill = mixHex(completionBadgeBase, '#047857', 0.35);
+      const completionBadgeHighlight = mixHex(completionBadgeFill, '#bbf7d0', 0.65);
+      const completionBadgeShadow = mixHex(completionBadgeFill, '#064e3b', 0.55);
+      const completionBadgeStroke = mixHex('#047857', baseBorder, 0.45);
+      const completionCheckStroke = '#f0fdf4';
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
@@ -1227,8 +1229,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
         filterParts.push(`drop-shadow(0 0 ${Math.max(3, glowBlur * 0.4)}px ${selectionHalo})`);
       }
       if (isCompleted) {
-        const completionHalo = mixHex(baseBorder, '#fef08a', 0.5);
-        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionHalo})`);
+        const completionGlow = mixHex(completionBadgeBase, '#bbf7d0', 0.45);
+        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionGlow})`);
       }
       if (filterParts.length > 0) {
         circleStyle.filter = filterParts.join(' ');
@@ -1444,6 +1446,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
+  const nodeMenuIsCompleted = nodeMenuDraft?.state === 'completed';
   const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
   const nodeMenuTransform = nodeMenuIsBelow
     ? `translate(-50%, ${NODE_MENU_OFFSET}px)`
@@ -1928,9 +1931,20 @@ const RouteMapBuilderLite = ({ onBack }) => {
                     <h3 className="max-w-[14rem] truncate text-lg font-semibold text-slate-100 sm:max-w-[16rem]">
                       {nodeMenuDraft.name || 'Sin nombre'}
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      {nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'} ·{' '}
-                      {nodeMenuState ? nodeMenuState.label : 'Sin estado'}
+                    <p className="flex items-center gap-2 text-xs text-slate-400">
+                      <span>{nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="inline-flex items-center gap-2">
+                        <span>{nodeMenuState ? nodeMenuState.label : 'Sin estado'}</span>
+                        {nodeMenuIsCompleted && (
+                          <span
+                            title="Nodo completado"
+                            className="relative inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-300/70 bg-gradient-to-br from-emerald-300 via-emerald-400 to-teal-500 text-slate-900 shadow-[0_0_12px_rgba(16,185,129,0.45)]"
+                          >
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />
+                          </span>
+                        )}
+                      </span>
                     </p>
                   </div>
                   <button
