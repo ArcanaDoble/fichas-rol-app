@@ -23,6 +23,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
  - **Persistencia optimizada**: guarda automáticamente en el navegador y permite importar/exportar mapas en JSON reutilizable entre campañas.
  - **Conexiones discontinuas** con guiones SVG y remates redondeados que mantienen el estilo visual original del proyecto.
 - **Halos y candados sincronizados**: slider de intensidad para el destello y uso automático del icono personalizado 15 cuando el nodo está bloqueado.
+- **Edición contextual ultra rápida**: al seleccionar un nodo se despliega un panel flotante con controles táctiles para renombrar, cambiar tipo y estado, ajustar notas, destello y acceder a acciones de bloqueo, duplicado o eliminación sin abandonar el mapa.
 - **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
