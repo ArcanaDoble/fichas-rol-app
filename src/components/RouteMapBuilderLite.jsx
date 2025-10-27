@@ -16,6 +16,7 @@ import {
   readLocalCustomIcons,
   readMinimapLocalCustomIcons,
   normalizeHex,
+  mixHex,
   getTypeDefaults,
   applyAppearanceDefaults,
   routeMapReducer,
@@ -37,6 +38,8 @@ const TOOLBAR_ICON_COMPONENTS = {
 };
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
+const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.8;
 const ZOOM_STEP = 0.12;
@@ -119,7 +122,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridSize, setGridSize] = useState(40);
-  const [showGrid, setShowGrid] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#0f172a');
   const [backgroundImage, setBackgroundImage] = useState('');
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
@@ -127,6 +130,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [nodeEditor, setNodeEditor] = useState(null);
   const [edgeEditor, setEdgeEditor] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
 
   const centerViewportOnNodes = useCallback(
     (nodes, options = {}) => {
@@ -1018,23 +1022,34 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
       const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
-      const glowBlur = 6 + glowIntensity * 18;
+      const isHovered = hoveredNodeId === node.id;
+      const effectiveGlow = clamp(glowIntensity + (isHovered ? 0.35 : 0), 0, 1);
+      const glowBlur = 6 + effectiveGlow * 18;
       const glowColor = node.state === 'locked' ? '#1f2937' : node.accentColor || palette.accent;
-      const circleStyle =
-        glowIntensity > 0.01
-          ? {
-              filter: `drop-shadow(0 0 ${glowBlur}px ${glowColor}) drop-shadow(0 0 ${Math.max(
-                2,
-                glowBlur * 0.4,
-              )}px ${glowColor})`,
-            }
-          : undefined;
+      const circleStyle = {
+        transition: 'filter 200ms ease, opacity 200ms ease',
+      };
+      if (effectiveGlow > 0.01) {
+        circleStyle.filter = `drop-shadow(0 0 ${glowBlur}px ${glowColor}) drop-shadow(0 0 ${Math.max(
+          2,
+          glowBlur * 0.45,
+        )}px ${glowColor})`;
+      }
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
       const iconFill = node.state === 'locked'
         ? '#e2e8f0'
         : node.iconColor || palette.icon;
+      const baseFill = node.fillColor || palette.fill;
+      const baseBorder = node.borderColor || palette.border;
+      const gradientId = `node-fill-${node.id}`;
+      const strokeGradientId = `node-stroke-${node.id}`;
+      const fillLight = lightenHex(baseFill, 0.22);
+      const fillDark = darkenHex(baseFill, 0.18);
+      const strokeLight = lightenHex(baseBorder, 0.32);
+      const strokeDark = darkenHex(baseBorder, 0.28);
+      const innerTransform = isHovered ? 'scale(1.06)' : 'scale(1)';
       return (
         <g
           key={node.id}
@@ -1042,36 +1057,61 @@ const RouteMapBuilderLite = ({ onBack }) => {
           className="cursor-pointer"
           onPointerDown={(event) => handleNodePointerDown(event, node)}
           onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
+          onPointerEnter={() => setHoveredNodeId(node.id)}
+          onPointerLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
         >
-          <circle
-            r={36}
-            fill={node.fillColor || palette.fill}
-            stroke={isSelected ? '#38bdf8' : node.borderColor || palette.border}
-            strokeWidth={isSelected ? 6 : 4}
-            opacity={node.state === 'locked' ? 0.7 : 1}
-            style={circleStyle}
-          />
-          {displayIconUrl ? (
-            <image
-              href={displayIconUrl}
-              x={-24}
-              y={-24}
-              width={48}
-              height={48}
-              preserveAspectRatio="xMidYMid meet"
-              opacity={node.state === 'locked' && lockIconUrl ? 0.95 : 1}
+          <defs>
+            <radialGradient id={gradientId} cx="50%" cy="40%" r="75%">
+              <stop offset="0%" stopColor={fillLight} stopOpacity="0.95" />
+              <stop offset="65%" stopColor={baseFill} stopOpacity="0.98" />
+              <stop offset="100%" stopColor={fillDark} stopOpacity="0.9" />
+            </radialGradient>
+            <linearGradient id={strokeGradientId} x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor={strokeLight} />
+              <stop offset="100%" stopColor={strokeDark} />
+            </linearGradient>
+          </defs>
+          <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
+            <circle
+              r={36}
+              fill={isSelected ? baseFill : `url(#${gradientId})`}
+              stroke={isSelected ? '#38bdf8' : `url(#${strokeGradientId})`}
+              strokeWidth={isSelected ? 6 : 4}
+              opacity={node.state === 'locked' ? 0.7 : 1}
+              style={circleStyle}
             />
-          ) : (
-            <text
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill={iconFill}
-              fontSize={24}
-              fontWeight="600"
-            >
-              {iconFallback}
-            </text>
-          )}
+            {isSelected && (
+              <circle
+                r={36}
+                fill="none"
+                stroke="#0ea5e9"
+                strokeWidth={1.5}
+                opacity={0.35}
+                style={{ transition: 'opacity 200ms ease' }}
+              />
+            )}
+            {displayIconUrl ? (
+              <image
+                href={displayIconUrl}
+                x={-24}
+                y={-24}
+                width={48}
+                height={48}
+                preserveAspectRatio="xMidYMid meet"
+                opacity={node.state === 'locked' && lockIconUrl ? 0.95 : 1}
+              />
+            ) : (
+              <text
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={iconFill}
+                fontSize={24}
+                fontWeight="600"
+              >
+                {iconFallback}
+              </text>
+            )}
+          </g>
           <text
             y={52}
             textAnchor="middle"
@@ -1420,10 +1460,21 @@ const RouteMapBuilderLite = ({ onBack }) => {
         className="flex-1 relative overflow-hidden"
         style={{
           backgroundColor,
-          backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
-          backgroundSize: 'cover',
+          backgroundImage: [
+            'radial-gradient(circle at top, rgba(56, 189, 248, 0.18), rgba(8, 47, 73, 0) 60%)',
+            'radial-gradient(circle at bottom, rgba(14, 165, 233, 0.14), rgba(15, 23, 42, 0) 55%)',
+            backgroundImage ? `url(${backgroundImage})` : null,
+          ]
+            .filter(Boolean)
+            .join(', '),
+          backgroundSize: backgroundImage
+            ? '120% 120%, 140% 140%, cover'
+            : '120% 120%, 140% 140%',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
+          borderLeft: '1px solid transparent',
+          borderImage: 'linear-gradient(180deg, rgba(56,189,248,0.45), rgba(15,118,110,0.25), rgba(8,47,73,0.4)) 1',
+          borderImageSlice: 1,
         }}
       >
         <div
