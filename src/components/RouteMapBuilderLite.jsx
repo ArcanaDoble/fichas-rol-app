@@ -1,7 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { ArrowLeft, Compass, Copy, FileDown, Link2, LockKeyhole, MousePointer2, Redo2, Save, Trash2, Undo2, Wand2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Compass,
+  Copy,
+  FileDown,
+  Link2,
+  LockKeyhole,
+  MousePointer2,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2,
+  Wand2,
+  X,
+} from 'lucide-react';
 import { nanoid } from 'nanoid';
 import Boton from './Boton';
 import Input from './Input';
@@ -130,10 +144,11 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [backgroundImage, setBackgroundImage] = useState('');
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
   const [statusMessage, setStatusMessage] = useState('');
-  const [nodeEditor, setNodeEditor] = useState(null);
+  const [nodeMenuDraft, setNodeMenuDraft] = useState(null);
   const [edgeEditor, setEdgeEditor] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const nodeMenuDirtyRef = useRef(false);
 
   const centerViewportOnNodes = useCallback(
     (nodes, options = {}) => {
@@ -176,6 +191,28 @@ const RouteMapBuilderLite = ({ onBack }) => {
     state.nodes.forEach((node) => map.set(node.id, node));
     return map;
   }, [state.nodes]);
+
+  useEffect(() => {
+    if (selectedNodeIds.length !== 1) {
+      setNodeMenuDraft(null);
+      nodeMenuDirtyRef.current = false;
+      return;
+    }
+    const nodeId = selectedNodeIds[0];
+    const target = nodesMap.get(nodeId);
+    if (!target) {
+      setNodeMenuDraft(null);
+      nodeMenuDirtyRef.current = false;
+      return;
+    }
+    setNodeMenuDraft((prev) => {
+      if (prev?.id === nodeId && nodeMenuDirtyRef.current) {
+        return prev;
+      }
+      nodeMenuDirtyRef.current = false;
+      return { ...target };
+    });
+  }, [nodesMap, selectedNodeIds]);
 
   const toolbarActions = useMemo(
       () =>
@@ -921,14 +958,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
     ],
   );
 
-  const handleNodeDoubleClick = useCallback(
-    (event, node) => {
-      event.stopPropagation();
-      setNodeEditor({ ...node });
-    },
-    [],
-  );
-
   const handleEdgeClick = useCallback(
     (edge, event) => {
       event.stopPropagation();
@@ -944,15 +973,80 @@ const RouteMapBuilderLite = ({ onBack }) => {
     [activeTool, deleteSelection],
   );
 
-  const handleNodeEditorSave = useCallback(() => {
-    if (!nodeEditor) return;
-    applyNodeUpdates((nodes) => {
-      const target = nodes.find((node) => node.id === nodeEditor.id);
-      if (!target) return;
-      Object.assign(target, applyAppearanceDefaults(nodeEditor));
+  const updateNodeMenu = useCallback((updater) => {
+    setNodeMenuDraft((prev) => {
+      if (!prev) return prev;
+      const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
+      nodeMenuDirtyRef.current = true;
+      return next;
     });
-    setNodeEditor(null);
-  }, [applyNodeUpdates, nodeEditor]);
+  }, []);
+
+  const handleNodeMenuSave = useCallback(() => {
+    if (!nodeMenuDraft) return;
+    applyNodeUpdates((nodes) => {
+      const target = nodes.find((node) => node.id === nodeMenuDraft.id);
+      if (!target) return;
+      Object.assign(target, applyAppearanceDefaults(nodeMenuDraft));
+    });
+    nodeMenuDirtyRef.current = false;
+  }, [applyNodeUpdates, nodeMenuDraft]);
+
+  const handleNodeMenuClose = useCallback(() => {
+    setNodeMenuDraft(null);
+    setSelectedNodeIds([]);
+    nodeMenuDirtyRef.current = false;
+  }, []);
+
+  const handleNodeMenuNameChange = useCallback(
+    (event) => {
+      const value = event.target.value;
+      updateNodeMenu((prev) => ({ ...prev, name: value }));
+    },
+    [updateNodeMenu],
+  );
+
+  const handleNodeMenuTypeChange = useCallback(
+    (event) => {
+      const nextType = event.target.value;
+      updateNodeMenu((prev) => {
+        const defaults = getTypeDefaults(nextType);
+        return {
+          ...prev,
+          type: nextType,
+          accentColor: defaults.accent,
+          fillColor: defaults.fill,
+          borderColor: defaults.border,
+          iconColor: defaults.icon,
+          glowIntensity: DEFAULT_GLOW_INTENSITY,
+        };
+      });
+    },
+    [updateNodeMenu],
+  );
+
+  const handleNodeMenuStateChange = useCallback(
+    (event) => {
+      const value = event.target.value;
+      updateNodeMenu({ state: value });
+    },
+    [updateNodeMenu],
+  );
+
+  const handleNodeMenuNotesChange = useCallback(
+    (event) => {
+      updateNodeMenu({ notes: event.target.value });
+    },
+    [updateNodeMenu],
+  );
+
+  const handleNodeMenuGlowChange = useCallback(
+    (event) => {
+      const value = Number(event.target.value) / 100;
+      updateNodeMenu({ glowIntensity: value });
+    },
+    [updateNodeMenu],
+  );
 
   const handleEdgeEditorSave = useCallback(() => {
     if (!edgeEditor) return;
@@ -1119,7 +1213,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
           transform={`translate(${node.x}, ${node.y})`}
           className="cursor-pointer"
           onPointerDown={(event) => handleNodePointerDown(event, node)}
-          onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
           onPointerEnter={() => setHoveredNodeId(node.id)}
           onPointerLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
         >
@@ -1243,6 +1336,23 @@ const RouteMapBuilderLite = ({ onBack }) => {
         </g>
       );
     });
+
+  const nodeMenuNode = nodeMenuDraft ? nodesMap.get(nodeMenuDraft.id) : null;
+  const nodeMenuCoords = nodeMenuNode
+    ? {
+        x: nodeMenuNode.x * viewport.scale + viewport.x,
+        y: nodeMenuNode.y * viewport.scale + viewport.y,
+      }
+    : null;
+  const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
+  const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
+  const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
+  const nodeMenuTransform =
+    nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160
+      ? 'translate(-50%, 24px)'
+      : 'translate(-50%, calc(-100% - 24px))';
+  const nodeMenuLeft = nodeMenuCoords?.x ?? 0;
+  const nodeMenuTop = nodeMenuCoords?.y ?? 0;
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1675,99 +1785,143 @@ const RouteMapBuilderLite = ({ onBack }) => {
             {renderEdges()}
             {renderNodes()}
           </svg>
-        </div>
-      </div>
-      {(nodeEditor || edgeEditor) && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl space-y-6">
-            {nodeEditor && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-100">Editar nodo</h3>
-                <label className="flex flex-col gap-2 text-sm">
-                  <span>Nombre</span>
-                  <Input value={nodeEditor.name} onChange={(event) => setNodeEditor({ ...nodeEditor, name: event.target.value })} />
-                </label>
-                <label className="flex flex-col gap-2 text-sm">
-                  <span>Tipo</span>
-                  <select
-                    value={nodeEditor.type}
-                    onChange={(event) => {
-                      const nextType = event.target.value;
-                      const defaults = getTypeDefaults(nextType);
-                      setNodeEditor({
-                        ...nodeEditor,
-                        type: nextType,
-                        accentColor: defaults.accent,
-                        fillColor: defaults.fill,
-                        borderColor: defaults.border,
-                        iconColor: defaults.icon,
-                        glowIntensity: DEFAULT_GLOW_INTENSITY,
-                      });
-                    }}
-                    className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
+          {shouldShowNodeMenu && nodeMenuCoords && (
+            <div
+              className="pointer-events-none absolute z-30 w-[min(90vw,20rem)] sm:w-[22rem]"
+              style={{
+                left: nodeMenuLeft,
+                top: nodeMenuTop,
+                transform: nodeMenuTransform,
+              }}
+            >
+              <div className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Nodo seleccionado</span>
+                    <h3 className="max-w-[14rem] truncate text-lg font-semibold text-slate-100 sm:max-w-[16rem]">
+                      {nodeMenuDraft.name || 'Sin nombre'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'} ·{' '}
+                      {nodeMenuState ? nodeMenuState.label : 'Sin estado'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNodeMenuClose}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/70 text-slate-300 transition hover:border-slate-500/70 hover:text-white"
+                    aria-label="Cerrar menú de nodo"
                   >
-                    {NODE_TYPES.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-2 text-sm">
-                  <span>Estado</span>
-                  <select
-                    value={nodeEditor.state}
-                    onChange={(event) => setNodeEditor({ ...nodeEditor, state: event.target.value })}
-                    className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
-                  >
-                    {Object.keys(NODE_STATES).map((stateKey) => (
-                      <option key={stateKey} value={stateKey}>
-                        {NODE_STATES[stateKey].label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-2 text-sm">
-                  <span>Notas</span>
-                  <textarea
-                    value={nodeEditor.notes}
-                    onChange={(event) => setNodeEditor({ ...nodeEditor, notes: event.target.value })}
-                    rows={3}
-                    className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 focus:border-sky-500 focus:outline-none"
-                  />
-                </label>
-                <div className="flex flex-col gap-2 text-sm">
-                  <span>Intensidad del destello</span>
-                  <div className="flex items-center gap-3">
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3 text-sm">
+                  <label className="flex flex-col gap-1.5 text-xs">
+                    <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Nombre</span>
+                    <Input value={nodeMenuDraft.name} onChange={handleNodeMenuNameChange} placeholder="Nombre del nodo" />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5 text-xs">
+                      <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Tipo</span>
+                      <select
+                        value={nodeMenuDraft.type}
+                        onChange={handleNodeMenuTypeChange}
+                        className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+                      >
+                        {NODE_TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs">
+                      <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Estado</span>
+                      <select
+                        value={nodeMenuDraft.state}
+                        onChange={handleNodeMenuStateChange}
+                        className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+                      >
+                        {Object.keys(NODE_STATES).map((stateKey) => (
+                          <option key={stateKey} value={stateKey}>
+                            {NODE_STATES[stateKey].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-1.5 text-xs">
+                    <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Notas</span>
+                    <textarea
+                      value={nodeMenuDraft.notes || ''}
+                      onChange={handleNodeMenuNotesChange}
+                      rows={3}
+                      className="resize-none rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+                    />
+                  </label>
+                  <div className="flex flex-col gap-2 text-xs">
+                    <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">
+                      <span>Destello</span>
+                      <span className="text-[0.65rem] text-slate-500">
+                        {`${Math.round(normalizeGlowIntensity(nodeMenuDraft.glowIntensity) * 100)}%`}
+                      </span>
+                    </div>
                     <input
                       type="range"
                       min="0"
                       max="100"
                       step="1"
-                      value={Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}
-                      onChange={(event) =>
-                        setNodeEditor({
-                          ...nodeEditor,
-                          glowIntensity: Number(event.target.value) / 100,
-                        })
-                      }
+                      value={Math.round(normalizeGlowIntensity(nodeMenuDraft.glowIntensity) * 100)}
+                      onChange={handleNodeMenuGlowChange}
                       className="h-2 w-full cursor-pointer accent-sky-500"
                     />
-                    <span className="w-12 text-right text-xs text-slate-300">
-                      {`${Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}%`}
-                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={toggleNodeLock}
+                      className="flex flex-col items-center gap-1 rounded-2xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-slate-200 transition hover:border-sky-500/70 hover:bg-slate-800/80"
+                    >
+                      <LockKeyhole className="h-4 w-4" aria-hidden />
+                      <span className="text-[0.65rem] tracking-[0.2em] uppercase">
+                        {nodeMenuDraft.state === 'locked' ? 'Abrir' : 'Bloquear'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={duplicateSelection}
+                      className="flex flex-col items-center gap-1 rounded-2xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-slate-200 transition hover:border-sky-500/70 hover:bg-slate-800/80"
+                    >
+                      <Copy className="h-4 w-4" aria-hidden />
+                      <span className="text-[0.65rem] tracking-[0.2em] uppercase">Duplicar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteSelection}
+                      className="flex flex-col items-center gap-1 rounded-2xl border border-red-500/70 bg-red-500/20 px-3 py-2 text-red-100 transition hover:border-red-400/70 hover:bg-red-500/30"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                      <span className="text-[0.65rem] tracking-[0.2em] uppercase">Eliminar</span>
+                    </button>
+                  </div>
+                  <div className="flex justify-end">
+                    <Boton
+                      onClick={handleNodeMenuSave}
+                      className="flex items-center gap-2 rounded-2xl border border-sky-500/70 bg-sky-500/20 px-4 py-2 text-sm text-sky-100 hover:border-sky-400/80 hover:bg-sky-500/25"
+                    >
+                      <Save className="h-4 w-4" aria-hidden />
+                      Guardar cambios
+                    </Boton>
                   </div>
                 </div>
-                <div className="flex justify-end gap-3">
-                  <Boton onClick={() => setNodeEditor(null)} className="border border-slate-700 bg-slate-900/80">
-                    Cancelar
-                  </Boton>
-                  <Boton onClick={handleNodeEditorSave} className="border border-sky-500 bg-sky-500/20">
-                    Guardar
-                  </Boton>
-                </div>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+      {edgeEditor && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl space-y-6">
             {edgeEditor && (
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-slate-100">Editar conexión</h3>
