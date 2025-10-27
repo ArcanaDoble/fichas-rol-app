@@ -1347,6 +1347,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const shapeStyle = {
         transition: 'filter 200ms ease, opacity 200ms ease',
       };
+      const noteContent = node.notes?.trim();
+      const hasNote = Boolean(noteContent);
       const filterParts = [];
       if (effectiveGlow > 0.01) {
         filterParts.push(
@@ -1411,6 +1413,11 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const badgePosition = completionBadgePosition || { x: halfWidth - 18, y: -halfHeight + 18 };
       const baseOpacity = node.state === 'locked' ? 0.75 : 1;
       const ornamentOpacity = node.state === 'locked' ? 0.55 : 0.8;
+      const tooltipWidth = 220;
+      const tooltipHeight = 120;
+      const tooltipX = -tooltipWidth / 2;
+      const tooltipY = -halfHeight - tooltipHeight - 16;
+      const shouldShowTooltip = hasNote && isHovered;
       let baseShape = null;
       let ornamentShape = null;
       let selectionShape = null;
@@ -1714,29 +1721,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
             )}
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
-            {isCompleted && (
-              <g
-                pointerEvents="none"
-                style={{ transition: 'opacity 180ms ease' }}
-                transform={`translate(${badgePosition.x}, ${badgePosition.y})`}
-                filter={`url(#${completionAuraId})`}
-              >
-                <circle
-                  r={12}
-                  fill={`url(#${completionBadgeGradientId})`}
-                  stroke={completionBadgeStroke}
-                  strokeWidth={2}
-                />
-                <path
-                  d="M -4 0 L -1 3.5 L 5 -3.5"
-                  stroke={completionCheckStroke}
-                  strokeWidth={2.6}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              </g>
-            )}
             {baseShape}
             {ornamentShape}
             {selectionShape}
@@ -1762,6 +1746,29 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 {iconFallback}
               </text>
             )}
+            {isCompleted && (
+              <g
+                pointerEvents="none"
+                style={{ transition: 'opacity 180ms ease' }}
+                transform={`translate(${badgePosition.x}, ${badgePosition.y})`}
+                filter={`url(#${completionAuraId})`}
+              >
+                <circle
+                  r={12}
+                  fill={`url(#${completionBadgeGradientId})`}
+                  stroke={completionBadgeStroke}
+                  strokeWidth={2}
+                />
+                <path
+                  d="M -4 0 L -1 3.5 L 5 -3.5"
+                  stroke={completionCheckStroke}
+                  strokeWidth={2.6}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </g>
+            )}
           </g>
           <text
             y={labelOffset}
@@ -1773,6 +1780,69 @@ const RouteMapBuilderLite = ({ onBack }) => {
           >
             {node.name}
           </text>
+          {hasNote && (
+            <foreignObject
+              x={tooltipX}
+              y={tooltipY}
+              width={tooltipWidth}
+              height={tooltipHeight}
+              pointerEvents="none"
+              style={{ overflow: 'visible' }}
+            >
+              <div
+                style={{
+                  opacity: shouldShowTooltip ? 1 : 0,
+                  transform: shouldShowTooltip
+                    ? 'translateY(-6px) scale(1)'
+                    : 'translateY(0px) scale(0.96)',
+                  transition: 'opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: '220px',
+                    width: '100%',
+                    position: 'relative',
+                    background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
+                    border: '1px solid rgba(148,163,184,0.35)',
+                    borderRadius: '14px',
+                    padding: '12px 14px',
+                    color: '#e2e8f0',
+                    fontSize: '0.8rem',
+                    lineHeight: '1.2rem',
+                    boxShadow:
+                      '0 12px 30px rgba(15, 23, 42, 0.32), inset 0 0 12px rgba(148, 163, 184, 0.22)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    textAlign: 'center',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '-8px',
+                      left: '50%',
+                      transform: 'translate(-50%, 50%) rotate(45deg)',
+                      width: '16px',
+                      height: '16px',
+                      background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
+                      borderLeft: '1px solid rgba(148,163,184,0.35)',
+                      borderBottom: '1px solid rgba(148,163,184,0.35)',
+                      borderRadius: '3px',
+                      boxShadow: '0 8px 18px rgba(15, 23, 42, 0.32)',
+                      pointerEvents: 'none',
+                      opacity: 0.92,
+                    }}
+                  />
+                  <span>{noteContent}</span>
+                </div>
+              </div>
+            </foreignObject>
+          )}
         </g>
       );
 
