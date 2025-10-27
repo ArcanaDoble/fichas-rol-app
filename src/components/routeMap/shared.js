@@ -214,6 +214,30 @@ const DEFAULT_APPEARANCE = {
   icon: '#f8fafc',
 };
 
+export const DEFAULT_GLOW_INTENSITY = 0.75;
+
+const clamp01 = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 0;
+  }
+  if (value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value;
+};
+
+export const normalizeGlowIntensity = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return clamp01(value);
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return clamp01(parsed);
+    }
+  }
+  return DEFAULT_GLOW_INTENSITY;
+};
+
 export const getTypeDefaults = (typeId) => {
   const type = NODE_TYPES.find((item) => item.id === typeId);
   if (!type || !type.defaults) return DEFAULT_APPEARANCE;
@@ -234,6 +258,7 @@ export const applyAppearanceDefaults = (node) => {
     fillColor: normalizeHex(node.fillColor) || palette.fill,
     borderColor: normalizeHex(node.borderColor) || palette.border,
     iconColor: normalizeHex(node.iconColor) || palette.icon,
+    glowIntensity: normalizeGlowIntensity(node.glowIntensity),
     iconUrl:
       typeof node.iconUrl === 'string' && node.iconUrl.trim()
         ? node.iconUrl.trim()
@@ -255,12 +280,13 @@ export const DEFAULT_NODE = () =>
     type: 'start',
     x: 0,
     y: 0,
-    state: 'current',
+    state: 'locked',
     unlockMode: 'or',
     loot: '',
     event: '',
     notes: '',
     iconUrl: null,
+    glowIntensity: DEFAULT_GLOW_INTENSITY,
   });
 
 export const initialState = () => {

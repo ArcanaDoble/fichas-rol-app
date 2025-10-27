@@ -11,9 +11,6 @@ import {
   Sprite,
   Text,
   Texture,
-  TilingSprite,
-  WRAP_MODES,
-  Rectangle,
 } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { nanoid } from 'nanoid';
@@ -58,6 +55,8 @@ import {
   saveDraft,
   exportRouteMap,
   parseRouteMapFile,
+  DEFAULT_GLOW_INTENSITY,
+  normalizeGlowIntensity,
 } from './routeMap/shared';
 
 const ensurePixiViewportCompatibility = (() => {
@@ -142,41 +141,41 @@ const TOOLBAR_ICON_COMPONENTS = {
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
-const EDGE_DASH_SPEED = 4.5;
 const EDGE_STROKE_WIDTH = 28;
 const EDGE_STROKE_WIDTH_SELECTED = EDGE_STROKE_WIDTH + 4;
 const EDGE_STROKE_WIDTH_SELECTED_OFFSET = EDGE_STROKE_WIDTH_SELECTED - EDGE_STROKE_WIDTH;
-const DASH_TEXTURE_TOTAL_WIDTH = 96;
-const DASH_TEXTURE_DASH_WIDTH = 52;
-const DASH_TEXTURE_HEIGHT = 12;
-const DASH_TEXTURE_CORE_HEIGHT = 6;
+const EDGE_DASH_LENGTH = 64;
+const EDGE_DASH_GAP = 40;
+const LOCK_ICON_INDEX = 14;
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
-const createDashTexture = (renderer) => {
-  if (!renderer) return null;
-  const dashGraphic = new Graphics();
-  dashGraphic.beginFill(0xffffff, 0);
-  dashGraphic.drawRect(0, 0, DASH_TEXTURE_TOTAL_WIDTH, DASH_TEXTURE_HEIGHT);
-  dashGraphic.endFill();
-  const dashStartY = (DASH_TEXTURE_HEIGHT - DASH_TEXTURE_CORE_HEIGHT) / 2;
-  dashGraphic.beginFill(0xffffff, 1);
-  dashGraphic.drawRoundedRect(
-    0,
-    dashStartY,
-    DASH_TEXTURE_DASH_WIDTH,
-    DASH_TEXTURE_CORE_HEIGHT,
-    DASH_TEXTURE_CORE_HEIGHT / 2,
-  );
-  dashGraphic.endFill();
-  const texture = renderer.generateTexture(dashGraphic, {
-    resolution: 1,
-    region: new Rectangle(0, 0, DASH_TEXTURE_TOTAL_WIDTH, DASH_TEXTURE_HEIGHT),
-  });
-  dashGraphic.destroy(true);
-  if (texture?.baseTexture) {
-    texture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+const createDashedStrokeGraphics = (segmentLength, strokeWidth, color, alpha, options = {}) => {
+  const { dashLength = EDGE_DASH_LENGTH, gapLength = EDGE_DASH_GAP } = options;
+  const safeDashLength = Math.max(8, dashLength);
+  const safeGapLength = Math.max(6, gapLength);
+  const halfLength = segmentLength / 2;
+  const graphics = new Graphics();
+  graphics.beginFill(color, alpha);
+  const cornerRadius = Math.max(strokeWidth * 0.45, 6);
+  let cursor = -halfLength;
+  let guard = 0;
+  while (cursor < halfLength && guard < 2000) {
+    guard += 1;
+    const dashStart = cursor;
+    const dashEnd = Math.min(dashStart + safeDashLength, halfLength);
+    const width = dashEnd - dashStart;
+    if (width > 0.5) {
+      graphics.drawRoundedRect(dashStart, -strokeWidth / 2, width, strokeWidth, cornerRadius);
+    }
+    cursor = dashEnd + safeGapLength;
+    if (safeDashLength <= 0) {
+      break;
+    }
   }
-  return texture;
+  graphics.endFill();
+  graphics.eventMode = 'none';
+  graphics.interactiveChildren = false;
+  return graphics;
 };
 
 const getQuadraticPoint = (from, control, to, t) => {
@@ -1212,9 +1211,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const edgesContainerRef = useRef(null);
   const selectionGraphicsRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const dashTextureRef = useRef(null);
-  const dashSpritesRef = useRef(new Set());
-  const dashTickerRef = useRef(null);
   const shouldResumeDragRef = useRef(false);
   const connectPreviewRef = useRef(null);
   const connectPointerRef = useRef(null);
@@ -1249,7 +1245,6 @@ const RouteMapBuilder = ({ onBack }) => {
   const [showGrid, setShowGrid] = useState(true);
   const [backgroundColor, setBackgroundColor] = useState('#0f172a');
   const [backgroundImage, setBackgroundImage] = useState('');
-  const [dashTexture, setDashTexture] = useState(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
   const [nodeTypeToCreate, setNodeTypeToCreate] = useState('normal');
@@ -1277,6 +1272,10 @@ const RouteMapBuilder = ({ onBack }) => {
     () => sanitizeCustomIcons(customIcons),
     [customIcons]
   );
+  const lockIconUrl = useMemo(
+    () => (sanitizedCustomIcons.length > LOCK_ICON_INDEX ? sanitizedCustomIcons[LOCK_ICON_INDEX] : null),
+    [sanitizedCustomIcons],
+  );
   const appearanceValues = useMemo(() => {
     if (selectedNodes.length === 0) {
       const defaults = getTypeDefaults('start');
@@ -1285,6 +1284,7 @@ const RouteMapBuilder = ({ onBack }) => {
         fillColor: defaults.fill,
         borderColor: defaults.border,
         iconColor: defaults.icon,
+        glowIntensity: DEFAULT_GLOW_INTENSITY,
       };
     }
     const reference = selectedNodes[0];
@@ -1294,6 +1294,7 @@ const RouteMapBuilder = ({ onBack }) => {
       fillColor: normalizeHex(reference.fillColor) || defaults.fill,
       borderColor: normalizeHex(reference.borderColor) || defaults.border,
       iconColor: normalizeHex(reference.iconColor) || defaults.icon,
+      glowIntensity: normalizeGlowIntensity(reference.glowIntensity),
     };
   }, [selectedNodes]);
 
@@ -1304,6 +1305,7 @@ const RouteMapBuilder = ({ onBack }) => {
         fillColor: false,
         borderColor: false,
         iconColor: false,
+        glowIntensity: false,
       };
     }
     const reference = selectedNodes[0];
@@ -1314,6 +1316,9 @@ const RouteMapBuilder = ({ onBack }) => {
       fillColor: compare('fillColor'),
       borderColor: compare('borderColor'),
       iconColor: compare('iconColor'),
+      glowIntensity: selectedNodes.some(
+        (node) => normalizeGlowIntensity(node.glowIntensity) !== normalizeGlowIntensity(reference.glowIntensity),
+      ),
     };
   }, [selectedNodes]);
   const customIconSelection = useMemo(() => {
@@ -1429,7 +1434,7 @@ const RouteMapBuilder = ({ onBack }) => {
           type: typeDef.id,
           x: snappedX,
           y: snappedY,
-          state: typeDef.id === 'start' ? 'current' : 'locked',
+          state: 'locked',
           unlockMode: 'or',
           loot: '',
           event: '',
@@ -1439,6 +1444,7 @@ const RouteMapBuilder = ({ onBack }) => {
           borderColor: palette.border,
           iconColor: palette.icon,
           iconUrl: null,
+          glowIntensity: DEFAULT_GLOW_INTENSITY,
         });
       },
     });
@@ -1529,6 +1535,26 @@ const RouteMapBuilder = ({ onBack }) => {
     [selectedNodeIds],
   );
 
+  const handleGlowIntensityChange = useCallback(
+    (rawValue) => {
+      if (selectedNodeIds.length === 0) return;
+      const numeric = Number(rawValue);
+      if (!Number.isFinite(numeric)) return;
+      const normalized = normalizeGlowIntensity(numeric / 100);
+      dispatch({
+        type: 'UPDATE',
+        updater: (nodes) => {
+          nodes.forEach((node) => {
+            if (selectedNodeIds.includes(node.id)) {
+              node.glowIntensity = normalized;
+            }
+          });
+        },
+      });
+    },
+    [selectedNodeIds],
+  );
+
   const handleResetAppearance = useCallback(() => {
     if (selectedNodeIds.length === 0) return;
     dispatch({
@@ -1541,6 +1567,7 @@ const RouteMapBuilder = ({ onBack }) => {
           node.fillColor = defaults.fill;
           node.borderColor = defaults.border;
           node.iconColor = defaults.icon;
+          node.glowIntensity = DEFAULT_GLOW_INTENSITY;
         });
       },
     });
@@ -2020,14 +2047,6 @@ const RouteMapBuilder = ({ onBack }) => {
       viewport.clampZoom({ minScale: 0.2, maxScale: 3 });
       viewport.sortableChildren = true;
       app.stage.addChild(viewport);
-      const dashTicker = (delta) => {
-        dashSpritesRef.current.forEach((sprite) => {
-          if (!sprite || sprite.destroyed) return;
-          sprite.tilePosition.x -= delta * EDGE_DASH_SPEED;
-        });
-      };
-      app.ticker.add(dashTicker);
-      dashTickerRef.current = dashTicker;
       const edgesLayer = new Container();
       edgesLayer.eventMode = 'none';
       edgesLayer.sortableChildren = true;
@@ -2047,15 +2066,6 @@ const RouteMapBuilder = ({ onBack }) => {
       nodesContainerRef.current = nodesLayer;
       edgesContainerRef.current = edgesLayer;
       selectionGraphicsRef.current = selectionGraphics;
-      if (dashTextureRef.current) {
-        setDashTexture(dashTextureRef.current);
-      } else {
-        const generatedTexture = createDashTexture(app.renderer);
-        if (generatedTexture) {
-          dashTextureRef.current = generatedTexture;
-          setDashTexture(generatedTexture);
-        }
-      }
       viewport.eventMode = 'static';
 
       viewport.on('pointerdown', (event) => {
@@ -2144,7 +2154,6 @@ const RouteMapBuilder = ({ onBack }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      dashSpritesRef.current.clear();
       const viewport = viewportRef.current;
       if (viewport) {
         viewport.removeAllListeners();
@@ -2152,9 +2161,6 @@ const RouteMapBuilder = ({ onBack }) => {
       }
       const app = appRef.current;
       if (app) {
-        if (dashTickerRef.current) {
-          app.ticker?.remove(dashTickerRef.current);
-        }
         const canvas = app.canvas ?? app.view;
         if (canvas?.parentNode === containerRef.current) {
           canvas.parentNode.removeChild(canvas);
@@ -2162,11 +2168,6 @@ const RouteMapBuilder = ({ onBack }) => {
         app.stage?.removeChildren();
         app.destroy(true, { children: false });
       }
-      if (dashTextureRef.current) {
-        dashTextureRef.current.destroy(true);
-        dashTextureRef.current = null;
-      }
-      dashTickerRef.current = null;
       viewportRef.current = null;
       appRef.current = null;
       tickerRef.current = null;
@@ -2182,7 +2183,6 @@ const RouteMapBuilder = ({ onBack }) => {
     const viewport = viewportRef.current;
     const edgesLayer = edgesContainerRef.current;
     const nodesLayer = nodesContainerRef.current;
-    dashSpritesRef.current.clear();
     edgesLayer.removeChildren();
     nodesLayer.removeChildren();
 
@@ -2316,21 +2316,10 @@ const RouteMapBuilder = ({ onBack }) => {
         segmentContainer.eventMode = 'none';
         segmentContainer.interactiveChildren = false;
 
-        const tilingSprite = new TilingSprite({
-          texture: dashTexture ?? Texture.WHITE,
-          width: segment.length + previewStrokeWidth,
-          height: previewStrokeWidth,
-        });
-        tilingSprite.anchor.set(0.5);
-        tilingSprite.tint = 0x38bdf8;
-        tilingSprite.alpha = 0.95;
-        tilingSprite.eventMode = 'none';
-        if (dashTexture) {
-          const yScale = previewStrokeWidth / DASH_TEXTURE_HEIGHT;
-          tilingSprite.tileScale.set(1, yScale);
-        }
-
-        segmentContainer.addChild(tilingSprite);
+        const dashedStroke = createDashedStrokeGraphics(segment.length, previewStrokeWidth, 0x38bdf8, 0.95);
+        dashedStroke.pivot.set(0, 0);
+        dashedStroke.position.set(0, 0);
+        segmentContainer.addChild(dashedStroke);
         connectPreviewContainer.addChild(segmentContainer);
       });
     };
@@ -2380,21 +2369,8 @@ const RouteMapBuilder = ({ onBack }) => {
         segmentContainer.rotation = segment.angle;
         segmentContainer.eventMode = 'none';
         segmentContainer.interactiveChildren = false;
-        const tilingSprite = new TilingSprite({
-          texture: dashTexture ?? Texture.WHITE,
-          width: segment.length + strokeWidth,
-          height: strokeWidth,
-        });
-        tilingSprite.anchor.set(0.5);
-        tilingSprite.tint = color;
-        tilingSprite.alpha = selected ? 1 : 0.92;
-        tilingSprite.eventMode = 'none';
-        if (dashTexture) {
-          const yScale = strokeWidth / DASH_TEXTURE_HEIGHT;
-          tilingSprite.tileScale.set(1, yScale);
-          dashSpritesRef.current.add(tilingSprite);
-        }
-        segmentContainer.addChild(tilingSprite);
+        const dashedStroke = createDashedStrokeGraphics(segment.length, strokeWidth, color, selected ? 1 : 0.92);
+        segmentContainer.addChild(dashedStroke);
         segmentsContainer.addChild(segmentContainer);
       });
       edgeContainer.edgeId = edge.id;
@@ -2517,7 +2493,6 @@ const RouteMapBuilder = ({ onBack }) => {
         const frameTexture = textures[isVisited ? activeFrameKey : baseFrameKey] || Texture.WHITE;
         const haloTexture = textures[isBoss ? 'haloBoss' : 'halo'] || Texture.WHITE;
         const coreTexture = textures.core || Texture.WHITE;
-        const glossTexture = textures.gloss || Texture.WHITE;
 
         if (isCompleted && textures.haloComplete) {
           const completionAura = new Sprite(textures.haloComplete);
@@ -2531,6 +2506,11 @@ const RouteMapBuilder = ({ onBack }) => {
 
         const currentBoost = node.state === 'current' ? 1.03 : 1;
 
+        const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
+        const glowScaleFactor = 0.85 + glowIntensity * 0.45;
+        const glowAlphaFactor = 0.4 + glowIntensity * 0.6;
+        const frameAlphaFactor = 0.7 + glowIntensity * 0.3;
+
         const frameSprite = new Sprite(frameTexture);
         frameSprite.anchor.set(0.5);
         const frameSize = radius * 2 + (isBoss ? 30 : 24);
@@ -2538,10 +2518,11 @@ const RouteMapBuilder = ({ onBack }) => {
         const frameTextureWidth = rawFrameTextureWidth > 0 ? rawFrameTextureWidth : 320;
         const frameScale = frameTextureWidth > 0 ? frameSize / frameTextureWidth : 1;
         frameSprite.scale.set(frameScale);
-        const frameBaseAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
+        const baseFrameAlpha = selected ? 1 : isLocked ? 0.7 : 0.92;
+        const frameBaseAlpha = Math.min(1, baseFrameAlpha * frameAlphaFactor);
         frameSprite.alpha = frameBaseAlpha;
         const baseFrameTint = isLocked ? mixHex(borderHex, '#1f2937', 0.55) : borderHex;
-        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : baseFrameTint;
+        const frameTintHex = selected ? lightenHex(baseFrameTint, 0.18) : mixHex(baseFrameTint, borderHex, glowIntensity * 0.15);
         frameSprite.tint = hexToInt(frameTintHex);
 
         const haloSprite = new Sprite(haloTexture);
@@ -2556,11 +2537,13 @@ const RouteMapBuilder = ({ onBack }) => {
           haloTextureWidth > 0
             ? Math.max(haloAvailableDiameter / (haloTextureWidth * maxInteractiveScale * effectiveBoost), 0)
             : 0;
-        const haloBaseScale = baseHaloScale * currentBoost;
+        const haloBaseScale = baseHaloScale * currentBoost * glowScaleFactor;
         haloSprite.scale.set(haloBaseScale);
-        const haloBaseAlpha = isLocked ? 0.35 : 0.6;
-        haloSprite.alpha = node.state === 'current' ? Math.min(1, haloBaseAlpha + 0.08) : haloBaseAlpha;
-        haloSprite.tint = hexToInt(lightenHex(accentHex, 0.15));
+        const baseHaloAlpha = (isLocked ? 0.25 : 0.55) * glowAlphaFactor;
+        const haloBaseAlpha = node.state === 'current' ? Math.min(1, baseHaloAlpha + 0.12) : baseHaloAlpha;
+        haloSprite.alpha = haloBaseAlpha;
+        const haloTintHex = lightenHex(accentHex, 0.12 + glowIntensity * 0.12);
+        haloSprite.tint = hexToInt(haloTintHex);
         nodeContainer.addChild(haloSprite);
 
         const coreSprite = new Sprite(coreTexture);
@@ -2568,9 +2551,10 @@ const RouteMapBuilder = ({ onBack }) => {
         const coreSize = radius * 2 - 6;
         const coreScale = coreSprite.texture?.width ? coreSize / coreSprite.texture.width : coreSize / 320;
         coreSprite.scale.set(coreScale);
-        const coreTintHex = isLocked ? darkenHex(fillHex, 0.8) : darkenHex(fillHex, 0.6);
+        const coreTintAmount = isLocked ? 0.82 : clamp01(0.45 + (1 - glowIntensity) * 0.25);
+        const coreTintHex = darkenHex(fillHex, coreTintAmount);
         coreSprite.tint = hexToInt(coreTintHex);
-        coreSprite.alpha = isLocked ? 0.85 : 1;
+        coreSprite.alpha = isLocked ? 0.82 : 1;
         nodeContainer.addChild(coreSprite);
 
         nodeContainer.addChild(frameSprite);
@@ -2580,7 +2564,8 @@ const RouteMapBuilder = ({ onBack }) => {
         iconSprite.position.set(0, 0);
         iconSprite.alpha = 0;
         nodeContainer.addChild(iconSprite);
-        const customIconUrl = typeof node.iconUrl === 'string' ? node.iconUrl.trim() : '';
+        const userIconUrl = typeof node.iconUrl === 'string' ? node.iconUrl.trim() : '';
+        const effectiveIconUrl = isLocked && lockIconUrl ? lockIconUrl : userIconUrl;
         const applyIconTexture = (texture, alpha = 1, options = {}) => {
           if (!texture || iconSprite.destroyed) return;
           const { skipFallback = false } = options;
@@ -2608,10 +2593,10 @@ const RouteMapBuilder = ({ onBack }) => {
           iconSprite.position.set(0, 0);
         };
         const applyFallbackEmoji = () => {
-          const iconSymbol = NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
-          const iconColorValue = isLocked ? mixHex(iconHex, '#94a3b8', 0.6) : iconHex;
+          const iconSymbol = isLocked ? '🔒' : NODE_ICON_EMOJIS[typeDef.id] || NODE_ICON_EMOJIS.normal;
+          const iconColorValue = isLocked ? mixHex('#f8fafc', '#94a3b8', 0.4) : iconHex;
           const iconTextureResult = getEmojiTexture(iconSymbol, iconColorValue);
-          const targetAlpha = isLocked ? 0.78 : 1;
+          const targetAlpha = isLocked ? 0.92 : 1;
           if (iconTextureResult instanceof Texture) {
             applyIconTexture(iconTextureResult, targetAlpha, { skipFallback: true });
           } else if (iconTextureResult && typeof iconTextureResult.then === 'function') {
@@ -2626,9 +2611,9 @@ const RouteMapBuilder = ({ onBack }) => {
               });
           }
         };
-        if (customIconUrl) {
-          const customTextureResult = getCustomIconTexture(customIconUrl);
-          const targetAlpha = isLocked ? 0.75 : 1;
+        if (effectiveIconUrl) {
+          const customTextureResult = getCustomIconTexture(effectiveIconUrl);
+          const targetAlpha = isLocked && lockIconUrl ? 0.96 : isLocked ? 0.82 : 1;
           if (customTextureResult instanceof Texture) {
             applyIconTexture(customTextureResult, targetAlpha);
           } else if (customTextureResult && typeof customTextureResult.then === 'function') {
@@ -2649,15 +2634,6 @@ const RouteMapBuilder = ({ onBack }) => {
           }
         } else {
           applyFallbackEmoji();
-        }
-
-        if (isLocked) {
-          const lockSprite = new Sprite(textures.lock || Texture.WHITE);
-          lockSprite.anchor.set(0.5);
-          const lockScale = lockSprite.texture?.width ? 26 / lockSprite.texture.width : 0.22;
-          lockSprite.scale.set(lockScale);
-          lockSprite.alpha = 0.92;
-          nodeContainer.addChild(lockSprite);
         }
 
         if (isCompleted) {
@@ -2889,7 +2865,7 @@ const RouteMapBuilder = ({ onBack }) => {
     releaseViewportDrag,
     resumeViewportDrag,
     resumeDragAfterInteraction,
-    dashTexture,
+    lockIconUrl,
   ]);
 
   useEffect(() => {
@@ -3112,6 +3088,26 @@ const RouteMapBuilder = ({ onBack }) => {
                     <span className="text-[10px] text-amber-300">Valores mixtos</span>
                   )}
                 </label>
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Intensidad destello</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round(appearanceValues.glowIntensity * 100)}
+                      onChange={(event) => handleGlowIntensityChange(event.target.value)}
+                      className="h-2 w-full cursor-pointer accent-sky-500"
+                    />
+                    <span className="w-12 text-right text-[11px] text-slate-400">
+                      {`${Math.round(appearanceValues.glowIntensity * 100)}%`}
+                    </span>
+                  </div>
+                  {mixedAppearance.glowIntensity && (
+                    <span className="text-[10px] text-amber-300">Valores mixtos</span>
+                  )}
+                </div>
               </div>
               <div className="space-y-2 rounded-xl border border-slate-800/60 bg-slate-900/60 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3370,6 +3366,7 @@ const RouteMapBuilder = ({ onBack }) => {
                         fillColor: defaults.fill,
                         borderColor: defaults.border,
                         iconColor: defaults.icon,
+                        glowIntensity: DEFAULT_GLOW_INTENSITY,
                       });
                     }}
                     className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
@@ -3436,6 +3433,28 @@ const RouteMapBuilder = ({ onBack }) => {
                       className="h-10 w-full rounded border border-slate-700 bg-slate-800"
                     />
                   </label>
+                  <div className="col-span-2 flex flex-col gap-2 text-sm">
+                    <span>Intensidad del destello</span>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}
+                        onChange={(event) =>
+                          setNodeEditor({
+                            ...nodeEditor,
+                            glowIntensity: Number(event.target.value) / 100,
+                          })
+                        }
+                        className="h-2 w-full cursor-pointer accent-sky-500"
+                      />
+                      <span className="w-12 text-right text-xs text-slate-300">
+                        {`${Math.round(normalizeGlowIntensity(nodeEditor.glowIntensity) * 100)}%`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <Boton
                   className="w-full border border-slate-700 bg-slate-800 hover:bg-slate-700"
@@ -3447,6 +3466,7 @@ const RouteMapBuilder = ({ onBack }) => {
                       fillColor: defaults.fill,
                       borderColor: defaults.border,
                       iconColor: defaults.icon,
+                      glowIntensity: DEFAULT_GLOW_INTENSITY,
                     });
                   }}
                 >
