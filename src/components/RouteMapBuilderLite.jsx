@@ -1212,11 +1212,12 @@ const RouteMapBuilderLite = ({ onBack }) => {
           `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
         );
       }
-      const completionBadgeFill = mixHex(baseFill, '#f8fafc', 0.35);
-      const completionBadgeHighlight = mixHex(completionBadgeFill, '#f8fafc', 0.55);
-      const completionBadgeShadow = mixHex(completionBadgeFill, '#020617', 0.45);
-      const completionBadgeStroke = mixHex(baseBorder, '#020617', 0.35);
-      const completionCheckStroke = mixHex(baseBorder, '#f8fafc', 0.5);
+      const completionBadgeBase = '#10b981';
+      const completionBadgeFill = mixHex(completionBadgeBase, '#047857', 0.35);
+      const completionBadgeHighlight = mixHex(completionBadgeFill, '#bbf7d0', 0.65);
+      const completionBadgeShadow = mixHex(completionBadgeFill, '#064e3b', 0.55);
+      const completionBadgeStroke = mixHex('#047857', baseBorder, 0.45);
+      const completionCheckStroke = '#f0fdf4';
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
@@ -1228,8 +1229,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
         filterParts.push(`drop-shadow(0 0 ${Math.max(3, glowBlur * 0.4)}px ${selectionHalo})`);
       }
       if (isCompleted) {
-        const completionHalo = mixHex(baseBorder, '#fef08a', 0.5);
-        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionHalo})`);
+        const completionGlow = mixHex(completionBadgeBase, '#bbf7d0', 0.45);
+        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionGlow})`);
       }
       if (filterParts.length > 0) {
         circleStyle.filter = filterParts.join(' ');
