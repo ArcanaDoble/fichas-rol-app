@@ -41,6 +41,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: false,
     },
     {
+      id: 'classes',
+      title: 'Lista de Clases',
+      description: 'Colección de clases estilo D&D con retratos personalizados y filtros',
+      color: 'yellow',
+      features: ['Clases', 'Retratos', 'Filtros', 'DnD'],
+      isNew: true,
+    },
+    {
       id: 'canvas',
       title: 'Mapa de Batalla',
       description: 'Tablero virtual sencillo con grid y tokens',

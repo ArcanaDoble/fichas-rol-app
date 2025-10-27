@@ -17,7 +17,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 ### 🧭 **Mapa de Rutas (Lite SVG)**
 
 - **Versión sin Pixi** enfocada a dispositivos modestos o sesiones rápidas. Renderiza el grafo con SVG y estilos Tailwind.
- - **Pan, zoom y snap al grid** implementados con transformaciones CSS, manteniendo la misma estructura de nodos y conexiones del constructor original.
+- **Pan, zoom y snap al grid** implementados con transformaciones CSS, manteniendo la misma estructura de nodos y conexiones del constructor original.
  - **Sincronización de iconos**: comparte el catálogo de iconos personalizados con el minimapa mediante Firestore y `localStorage`.
 - **Herramientas equivalentes**: selección, creación, conexión, duplicado, bloqueo/desbloqueo, deshacer/rehacer y auto-layout.
  - **Persistencia optimizada**: guarda automáticamente en el navegador y permite importar/exportar mapas en JSON reutilizable entre campañas.
@@ -28,6 +28,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Edición contextual ultra rápida**: haz doble clic sobre un nodo para desplegar el panel flotante con controles táctiles para renombrar, cambiar tipo y estado, ajustar notas, destello y acceder a acciones de bloqueo, duplicado o eliminación sin abandonar el mapa.
 - **Nodos circulares renovados**: el estilo base ahora replica los nodos luminosos de la campaña, con aro exterior en degradado frío, brillo interior y cápsula para iconos que resaltan tanto los estados normales como los bloqueados.
 - **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG.
+
+### 🧙‍♂️ **Lista de Clases estilo D&D (NUEVO)**
+
+- **Tarjetas coleccionables** con estética inspirada en D&D y contadores de estado (disponible, progreso, bloqueada).
+- **Buscador y orden dinámico** para filtrar por nombre, rol o dificultad y reorganizar la cuadrícula al instante.
+- **Editor de retratos integrado** con recorte y zoom para ajustar la miniatura de cada clase antes de guardarla.
+- **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
