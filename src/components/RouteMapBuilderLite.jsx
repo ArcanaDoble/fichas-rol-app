@@ -1023,17 +1023,21 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const palette = getTypeDefaults(node.type);
       const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
       const isHovered = hoveredNodeId === node.id;
-      const effectiveGlow = clamp(glowIntensity + (isHovered ? 0.35 : 0), 0, 1);
-      const glowBlur = 6 + effectiveGlow * 18;
-      const glowColor = node.state === 'locked' ? '#1f2937' : node.accentColor || palette.accent;
+      const effectiveGlow = clamp(glowIntensity + (isHovered ? 0.18 : 0), 0, 1);
+      const glowBlur = 4 + effectiveGlow * 12;
+      const glowColorBase = node.state === 'locked' ? '#1f2937' : node.accentColor || palette.accent;
+      const glowHighlight = mixHex(glowColorBase, '#f8fafc', 0.65);
+      const glowShadow = mixHex(glowColorBase, '#020617', 0.6);
       const circleStyle = {
         transition: 'filter 200ms ease, opacity 200ms ease',
       };
+      const filterParts = [];
       if (effectiveGlow > 0.01) {
-        circleStyle.filter = `drop-shadow(0 0 ${glowBlur}px ${glowColor}) drop-shadow(0 0 ${Math.max(
-          2,
-          glowBlur * 0.45,
-        )}px ${glowColor})`;
+        filterParts.push(
+          `drop-shadow(0 0 ${Math.max(2, glowBlur * 0.3)}px ${glowHighlight})`,
+          `drop-shadow(0 ${Math.max(1, glowBlur * 0.25)}px ${glowBlur * 0.75}px ${glowShadow})`,
+          `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
+        );
       }
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
@@ -1043,10 +1047,18 @@ const RouteMapBuilderLite = ({ onBack }) => {
         : node.iconColor || palette.icon;
       const baseFill = node.fillColor || palette.fill;
       const baseBorder = node.borderColor || palette.border;
+      if (isSelected) {
+        const selectionHalo = mixHex(baseBorder, '#f8fafc', 0.6);
+        filterParts.push(`drop-shadow(0 0 ${Math.max(3, glowBlur * 0.4)}px ${selectionHalo})`);
+      }
+      if (filterParts.length > 0) {
+        circleStyle.filter = filterParts.join(' ');
+      }
       const gradientId = `node-fill-${node.id}`;
       const strokeGradientId = `node-stroke-${node.id}`;
       const noiseId = `node-noise-${node.id}`;
       const carveGradientId = `node-carve-${node.id}`;
+      const selectionStrokeId = `node-selection-${node.id}`;
       const fillLight = lightenHex(baseFill, 0.22);
       const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
@@ -1056,6 +1068,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const panelHeight = 96;
       const panelRadius = 18;
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
+      const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
       return (
         <g
           key={node.id}
@@ -1076,6 +1089,10 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <stop offset="0%" stopColor={strokeLight} />
               <stop offset="100%" stopColor={strokeDark} />
             </linearGradient>
+            <linearGradient id={selectionStrokeId} x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor={lightenHex(baseBorder, 0.5)} stopOpacity="0.85" />
+              <stop offset="100%" stopColor={darkenHex(baseBorder, 0.35)} stopOpacity="0.65" />
+            </linearGradient>
             <linearGradient id={carveGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
               <stop offset="0%" stopColor={lightenHex(baseFill, 0.35)} stopOpacity="0.6" />
               <stop offset="50%" stopColor="transparent" stopOpacity="0" />
@@ -1095,9 +1112,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
               height={panelHeight}
               rx={panelRadius}
               ry={panelRadius}
-              fill={isSelected ? baseFill : `url(#${gradientId})`}
-              stroke={isSelected ? '#38bdf8' : `url(#${strokeGradientId})`}
-              strokeWidth={isSelected ? 5 : 4}
+              fill={`url(#${gradientId})`}
+              stroke={`url(#${strokeGradientId})`}
+              strokeWidth={4}
               opacity={node.state === 'locked' ? 0.75 : 1}
               style={circleStyle}
               filter={`url(#${noiseId})`}
@@ -1110,7 +1127,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
               rx={panelRadius - 6}
               ry={panelRadius - 6}
               fill="none"
-              stroke={isSelected ? lightenHex('#0f172a', 0.6) : ornamentStroke}
+              stroke={isSelected ? selectedOrnamentStroke : ornamentStroke}
               strokeWidth={1.6}
               strokeDasharray="6 8"
               opacity={node.state === 'locked' ? 0.55 : 0.8}
@@ -1131,16 +1148,18 @@ const RouteMapBuilderLite = ({ onBack }) => {
             />
             {isSelected && (
               <rect
-                x={-panelWidth / 2 - 3}
-                y={-panelHeight / 2 - 3}
-                width={panelWidth + 6}
-                height={panelHeight + 6}
-                rx={panelRadius}
-                ry={panelRadius}
+                x={-panelWidth / 2 - 3.5}
+                y={-panelHeight / 2 - 3.5}
+                width={panelWidth + 7}
+                height={panelHeight + 7}
+                rx={panelRadius + 2}
+                ry={panelRadius + 2}
                 fill="none"
-                stroke="#0ea5e9"
-                strokeWidth={1.4}
-                opacity={0.4}
+                stroke={`url(#${selectionStrokeId})`}
+                strokeWidth={2}
+                strokeDasharray="18 12"
+                opacity={0.75}
+                pointerEvents="none"
                 style={{ transition: 'opacity 200ms ease' }}
               />
             )}
