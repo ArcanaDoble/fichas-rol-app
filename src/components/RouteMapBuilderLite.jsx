@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
   ArrowLeft,
+  Check,
   Compass,
   Copy,
   FileDown,
@@ -1444,6 +1445,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
+  const nodeMenuIsCompleted = nodeMenuDraft?.state === 'completed';
   const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
   const nodeMenuTransform = nodeMenuIsBelow
     ? `translate(-50%, ${NODE_MENU_OFFSET}px)`
@@ -1928,9 +1930,20 @@ const RouteMapBuilderLite = ({ onBack }) => {
                     <h3 className="max-w-[14rem] truncate text-lg font-semibold text-slate-100 sm:max-w-[16rem]">
                       {nodeMenuDraft.name || 'Sin nombre'}
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      {nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'} ·{' '}
-                      {nodeMenuState ? nodeMenuState.label : 'Sin estado'}
+                    <p className="flex items-center gap-2 text-xs text-slate-400">
+                      <span>{nodeMenuType ? nodeMenuType.label : 'Tipo personalizado'}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="inline-flex items-center gap-2">
+                        <span>{nodeMenuState ? nodeMenuState.label : 'Sin estado'}</span>
+                        {nodeMenuIsCompleted && (
+                          <span
+                            title="Nodo completado"
+                            className="relative inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-300/70 bg-gradient-to-br from-emerald-300 via-emerald-400 to-teal-500 text-slate-900 shadow-[0_0_12px_rgba(16,185,129,0.45)]"
+                          >
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />
+                          </span>
+                        )}
+                      </span>
                     </p>
                   </div>
                   <button
