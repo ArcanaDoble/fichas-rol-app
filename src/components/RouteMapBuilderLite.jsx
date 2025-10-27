@@ -298,9 +298,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
 
   const nodesMap = useMemo(() => {
     const map = new Map();
-    state.nodes.forEach((node) => map.set(node.id, node));
+    state.nodes.forEach((node) => {
+      const previewedNode =
+        nodeMenuDraft && nodeMenuDraft.id === node.id
+          ? applyAppearanceDefaults({ ...node, ...nodeMenuDraft })
+          : node;
+      map.set(node.id, previewedNode);
+    });
     return map;
-  }, [state.nodes]);
+  }, [state.nodes, nodeMenuDraft]);
 
   useEffect(() => {
     if (selectedNodeIds.length !== 1) {
@@ -1331,7 +1337,11 @@ const RouteMapBuilderLite = ({ onBack }) => {
   };
 
   const renderNodes = () =>
-    state.nodes.map((node) => {
+    state.nodes.map((nodeOriginal) => {
+      const node =
+        nodeMenuDraft && nodeMenuDraft.id === nodeOriginal.id
+          ? applyAppearanceDefaults({ ...nodeOriginal, ...nodeMenuDraft })
+          : nodeOriginal;
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
       const baseFill = node.fillColor || palette.fill;
@@ -1806,19 +1816,19 @@ const RouteMapBuilderLite = ({ onBack }) => {
                     maxWidth: '220px',
                     width: '100%',
                     position: 'relative',
-                    background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
-                    border: '1px solid rgba(148,163,184,0.35)',
-                    borderRadius: '14px',
-                    padding: '12px 14px',
-                    color: '#e2e8f0',
+                    background: 'linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,15,28,0.92))',
+                    border: '1px solid rgba(71,85,105,0.45)',
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                    color: '#dbeafe',
                     fontSize: '0.8rem',
-                    lineHeight: '1.2rem',
-                    boxShadow:
-                      '0 12px 30px rgba(15, 23, 42, 0.32), inset 0 0 12px rgba(148, 163, 184, 0.22)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
+                    lineHeight: '1.25rem',
+                    boxShadow: '0 14px 32px rgba(2, 6, 23, 0.55)',
+                    backdropFilter: 'blur(5px)',
+                    WebkitBackdropFilter: 'blur(5px)',
                     textAlign: 'center',
                     whiteSpace: 'pre-wrap',
+                    letterSpacing: '0.01em',
                   }}
                 >
                   <div
@@ -1829,13 +1839,13 @@ const RouteMapBuilderLite = ({ onBack }) => {
                       transform: 'translate(-50%, 50%) rotate(45deg)',
                       width: '16px',
                       height: '16px',
-                      background: 'linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,64,175,0.92))',
-                      borderLeft: '1px solid rgba(148,163,184,0.35)',
-                      borderBottom: '1px solid rgba(148,163,184,0.35)',
+                      background: 'rgba(15,23,42,0.96)',
+                      borderLeft: '1px solid rgba(71,85,105,0.45)',
+                      borderBottom: '1px solid rgba(71,85,105,0.45)',
                       borderRadius: '3px',
-                      boxShadow: '0 8px 18px rgba(15, 23, 42, 0.32)',
+                      boxShadow: '0 10px 22px rgba(2, 6, 23, 0.5)',
                       pointerEvents: 'none',
-                      opacity: 0.92,
+                      opacity: 0.88,
                     }}
                   />
                   <span>{noteContent}</span>
