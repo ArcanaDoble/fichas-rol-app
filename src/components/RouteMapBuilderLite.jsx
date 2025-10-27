@@ -260,6 +260,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
   const [openNodeMenuId, setOpenNodeMenuId] = useState(null);
   const nodeMenuDirtyRef = useRef(false);
+  const lastNodePressRef = useRef({ id: null, timeStamp: 0, pointerType: null });
 
   const centerViewportOnNodes = useCallback(
     (nodes, options = {}) => {
@@ -1041,6 +1042,24 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const handleNodePointerDown = useCallback(
     (event, node) => {
       event.stopPropagation();
+
+      const isPrimaryPointer =
+        event.button === 0 || event.button === -1 || event.pointerType === 'touch' || event.pointerType === 'pen';
+      const { id: lastId, timeStamp: lastTimeStamp, pointerType: lastPointerType } = lastNodePressRef.current;
+      const now = event.timeStamp;
+      const pointerType = event.pointerType || 'mouse';
+      const isSamePointerType = lastPointerType ? lastPointerType === pointerType : true;
+      const isDoubleActivation =
+        isPrimaryPointer && lastId === node.id && isSamePointerType && now - lastTimeStamp < 350;
+
+      if (isDoubleActivation) {
+        lastNodePressRef.current = { id: null, timeStamp: 0, pointerType: null };
+        handleNodeDoubleClick(event, node);
+        return;
+      }
+
+      lastNodePressRef.current = { id: node.id, timeStamp: now, pointerType };
+
       event.preventDefault();
       if (event.detail >= 2) {
         handleNodeDoubleClick(event, node);
