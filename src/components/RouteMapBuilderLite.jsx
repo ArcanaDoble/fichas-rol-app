@@ -1813,41 +1813,62 @@ const RouteMapBuilderLite = ({ onBack }) => {
               >
                 <div
                   style={{
-                    maxWidth: '220px',
+                    maxWidth: '240px',
                     width: '100%',
                     position: 'relative',
-                    background: 'linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,15,28,0.92))',
-                    border: '1px solid rgba(71,85,105,0.45)',
-                    borderRadius: '12px',
-                    padding: '12px 16px',
-                    color: '#dbeafe',
-                    fontSize: '0.8rem',
-                    lineHeight: '1.25rem',
-                    boxShadow: '0 14px 32px rgba(2, 6, 23, 0.55)',
-                    backdropFilter: 'blur(5px)',
-                    WebkitBackdropFilter: 'blur(5px)',
+                    background: 'linear-gradient(180deg, rgba(245,231,208,0.95), rgba(231,214,187,0.95))',
+                    border: '1px solid rgba(120, 95, 64, 0.38)',
+                    borderRadius: '16px',
+                    padding: '14px 18px',
+                    color: '#2f2415',
+                    fontSize: '0.84rem',
+                    lineHeight: '1.4rem',
+                    boxShadow: '0 18px 34px rgba(44, 35, 24, 0.28)',
                     textAlign: 'center',
                     whiteSpace: 'pre-wrap',
-                    letterSpacing: '0.01em',
+                    letterSpacing: '0.012em',
+                    fontWeight: 500,
                   }}
                 >
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '-8px',
+                      bottom: '-16px',
                       left: '50%',
-                      transform: 'translate(-50%, 50%) rotate(45deg)',
-                      width: '16px',
+                      transform: 'translateX(-50%)',
+                      display: 'flex',
+                      alignItems: 'flex-end',
                       height: '16px',
-                      background: 'rgba(15,23,42,0.96)',
-                      borderLeft: '1px solid rgba(71,85,105,0.45)',
-                      borderBottom: '1px solid rgba(71,85,105,0.45)',
-                      borderRadius: '3px',
-                      boxShadow: '0 10px 22px rgba(2, 6, 23, 0.5)',
                       pointerEvents: 'none',
-                      opacity: 0.88,
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '14px solid transparent',
+                        borderRight: '14px solid transparent',
+                        borderTop: '14px solid rgba(120, 95, 64, 0.28)',
+                        filter: 'blur(0.5px)',
+                        opacity: 0.8,
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '12px solid transparent',
+                        borderRight: '12px solid transparent',
+                        borderTop: '12px solid rgba(240, 225, 200, 0.96)',
+                        filter: 'drop-shadow(0 10px 16px rgba(44, 35, 24, 0.24))',
+                      }}
+                    />
+                  </div>
                   <span>{noteContent}</span>
                 </div>
               </div>
