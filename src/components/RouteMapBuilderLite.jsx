@@ -63,6 +63,7 @@ const EDGE_DASH_OFFSET = 8;
 const EDGE_BASE_WIDTH = 3.6;
 const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
+const NODE_MENU_OFFSET = 32;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
   <div className="relative inline-block">
@@ -1087,6 +1088,36 @@ const RouteMapBuilderLite = ({ onBack }) => {
 
   const handleKeyDown = useCallback(
     (event) => {
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const isHtmlElement = (value) =>
+        typeof HTMLElement !== 'undefined' && value instanceof HTMLElement;
+      let shouldIgnore = false;
+      if (path.length > 0) {
+        shouldIgnore = path.some((node) => {
+          if (!isHtmlElement(node)) return false;
+          const tagName = node.tagName?.toLowerCase();
+          return (
+            node.isContentEditable ||
+            tagName === 'input' ||
+            tagName === 'textarea' ||
+            tagName === 'select'
+          );
+        });
+      }
+      if (!shouldIgnore && typeof document !== 'undefined') {
+        const activeElement = document.activeElement;
+        if (isHtmlElement(activeElement)) {
+          const tagName = activeElement.tagName?.toLowerCase();
+          shouldIgnore =
+            activeElement.isContentEditable ||
+            tagName === 'input' ||
+            tagName === 'textarea' ||
+            tagName === 'select';
+        }
+      }
+      if (shouldIgnore) {
+        return;
+      }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedNodeIds.length || selectedEdgeIds.length) {
           event.preventDefault();
@@ -1159,6 +1190,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
     state.nodes.map((node) => {
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
+      const baseFill = node.fillColor || palette.fill;
+      const baseBorder = node.borderColor || palette.border;
+      const isCompleted = node.state === 'completed';
       const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
       const isHovered = hoveredNodeId === node.id;
       const effectiveGlow = clamp(glowIntensity + (isHovered ? 0.18 : 0), 0, 1);
@@ -1177,17 +1211,22 @@ const RouteMapBuilderLite = ({ onBack }) => {
           `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
         );
       }
+      const completionAuraId = `node-completed-aura-${node.id}`;
+      const completionBadgeGradientId = `node-completed-badge-${node.id}`;
+      const completionShineGradientId = `node-completed-shine-${node.id}`;
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
       const iconFill = node.state === 'locked'
         ? '#e2e8f0'
         : node.iconColor || palette.icon;
-      const baseFill = node.fillColor || palette.fill;
-      const baseBorder = node.borderColor || palette.border;
       if (isSelected) {
         const selectionHalo = mixHex(baseBorder, '#f8fafc', 0.6);
         filterParts.push(`drop-shadow(0 0 ${Math.max(3, glowBlur * 0.4)}px ${selectionHalo})`);
+      }
+      if (isCompleted) {
+        const completionHalo = mixHex(baseBorder, '#fef08a', 0.5);
+        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionHalo})`);
       }
       if (filterParts.length > 0) {
         circleStyle.filter = filterParts.join(' ');
@@ -1205,8 +1244,16 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const panelWidth = 90;
       const panelHeight = 96;
       const panelRadius = 18;
+      const completionSparkles = isCompleted
+        ? [
+            { x: -panelWidth / 2 - 8, y: -panelHeight / 2 - 16, scale: 0.9, rotation: 18 },
+            { x: panelWidth / 2 + 10, y: -panelHeight / 2 + 6, scale: 0.7, rotation: -16 },
+            { x: panelWidth / 2 + 14, y: panelHeight / 2 + 10, scale: 0.85, rotation: 28 },
+          ]
+        : [];
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
+      const completionNameFill = isCompleted ? mixHex(baseBorder, '#fef3c7', 0.6) : '#e2e8f0';
       return (
         <g
           key={node.id}
@@ -1240,8 +1287,79 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.18 0" />
               <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
             </filter>
+            {isCompleted && (
+              <>
+                <radialGradient id={completionAuraId} cx="50%" cy="50%" r="70%">
+                  <stop offset="0%" stopColor={mixHex(baseFill, '#fefce8', 0.75)} stopOpacity="0.95" />
+                  <stop offset="55%" stopColor={mixHex(baseBorder, '#fde68a', 0.55)} stopOpacity="0.5" />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.25)} stopOpacity="0" />
+                </radialGradient>
+                <linearGradient id={completionBadgeGradientId} x1="0%" x2="0%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fef08a', 0.2)} />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#facc15', 0.6)} />
+                </linearGradient>
+                <linearGradient id={completionShineGradientId} x1="0%" x2="100%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor={mixHex(baseBorder, '#fefce8', 0.55)} stopOpacity="0.85" />
+                  <stop offset="100%" stopColor={mixHex(baseBorder, '#f59e0b', 0.35)} stopOpacity="0.55" />
+                </linearGradient>
+              </>
+            )}
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
+            {isCompleted && (
+              <g pointerEvents="none" style={{ transition: 'opacity 220ms ease' }}>
+                <rect
+                  x={-panelWidth / 2 - 12}
+                  y={-panelHeight / 2 - 12}
+                  width={panelWidth + 24}
+                  height={panelHeight + 24}
+                  rx={panelRadius + 12}
+                  ry={panelRadius + 12}
+                  fill={`url(#${completionAuraId})`}
+                  opacity={0.95}
+                />
+                <rect
+                  x={-panelWidth / 2 - 6}
+                  y={-panelHeight / 2 - 6}
+                  width={panelWidth + 12}
+                  height={panelHeight + 12}
+                  rx={panelRadius + 6}
+                  ry={panelRadius + 6}
+                  fill="none"
+                  stroke={`url(#${completionShineGradientId})`}
+                  strokeWidth={2.6}
+                  strokeDasharray="12 10"
+                  opacity={0.75}
+                />
+                <g transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 - 6})`}>
+                  <circle
+                    r={14}
+                    fill={`url(#${completionBadgeGradientId})`}
+                    stroke={lightenHex(baseBorder, 0.55)}
+                    strokeWidth={2}
+                  />
+                  <path
+                    d="M -5 0 L -1 4 L 6 -4"
+                    stroke={mixHex(baseBorder, '#fefce8', 0.35)}
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </g>
+                {completionSparkles.map((sparkle, index) => (
+                  <path
+                    key={`sparkle-${node.id}-${index}`}
+                    d="M 0 -6 L 1.8 -1.8 L 6 0 L 1.8 1.8 L 0 6 L -1.8 1.8 L -6 0 L -1.8 -1.8 Z"
+                    fill={mixHex(baseBorder, '#fefce8', 0.6)}
+                    stroke={mixHex(baseBorder, '#fde68a', 0.3)}
+                    strokeWidth={0.6}
+                    opacity={0.7}
+                    transform={`translate(${sparkle.x}, ${sparkle.y}) scale(${sparkle.scale}) rotate(${sparkle.rotation})`}
+                  />
+                ))}
+              </g>
+            )}
             <rect
               x={-panelWidth / 2}
               y={-panelHeight / 2}
@@ -1326,7 +1444,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           <text
             y={panelHeight / 2 + 18}
             textAnchor="middle"
-            fill="#e2e8f0"
+            fill={completionNameFill}
             fontSize={12}
             fontWeight="700"
             letterSpacing="0.06em"
@@ -1347,12 +1465,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
-  const nodeMenuTransform =
-    nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160
-      ? 'translate(-50%, 24px)'
-      : 'translate(-50%, calc(-100% - 24px))';
+  const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
+  const nodeMenuTransform = nodeMenuIsBelow
+    ? `translate(-50%, ${NODE_MENU_OFFSET}px)`
+    : `translate(-50%, calc(-100% - ${NODE_MENU_OFFSET}px))`;
   const nodeMenuLeft = nodeMenuCoords?.x ?? 0;
   const nodeMenuTop = nodeMenuCoords?.y ?? 0;
+  const nodeMenuConnectorStyle = nodeMenuIsBelow
+    ? { top: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET }
+    : { bottom: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET };
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1794,7 +1915,34 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 transform: nodeMenuTransform,
               }}
             >
-              <div className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl">
+              <div
+                className={`pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center ${
+                  nodeMenuIsBelow ? 'flex-col-reverse' : 'flex-col'
+                }`}
+                style={{
+                  ...nodeMenuConnectorStyle,
+                }}
+              >
+                <div
+                  className={`w-[2px] flex-1 rounded-full ${
+                    nodeMenuIsBelow
+                      ? 'bg-gradient-to-b from-transparent via-sky-400/60 to-sky-500/70'
+                      : 'bg-gradient-to-t from-transparent via-sky-400/60 to-sky-500/70'
+                  }`}
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(56,189,248,0.45))' }}
+                />
+                <div
+                  className={`h-3 w-3 rotate-45 border border-sky-400/60 bg-slate-900/95 shadow-[0_0_12px_rgba(56,189,248,0.45)] ${
+                    nodeMenuIsBelow ? '-mb-1' : '-mt-1'
+                  }`}
+                />
+              </div>
+              <div
+                className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Nodo seleccionado</span>
