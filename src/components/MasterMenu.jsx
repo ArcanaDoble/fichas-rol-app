@@ -57,14 +57,6 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: true,
     },
     {
-      id: 'routeMap',
-      title: 'Mapa de Rutas (Roguelike)',
-      description: 'Define rutas ramificadas con nodos, estados y conexiones dinámicas',
-      color: 'blue',
-      features: ['Pixi', 'Pan & Zoom', 'Desbloqueos', 'Guardado'],
-      isNew: true,
-    },
-    {
       id: 'routeMapLite',
       title: 'Mapa de Rutas (Lite)',
       description: 'Versión sin Pixi basada en SVG para ediciones rápidas y dispositivos modestos',
