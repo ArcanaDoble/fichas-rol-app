@@ -63,6 +63,7 @@ const EDGE_DASH_OFFSET = 8;
 const EDGE_BASE_WIDTH = 3.6;
 const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
+const NODE_MENU_OFFSET = 32;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
   <div className="relative inline-block">
@@ -1347,12 +1348,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
-  const nodeMenuTransform =
-    nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160
-      ? 'translate(-50%, 24px)'
-      : 'translate(-50%, calc(-100% - 24px))';
+  const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
+  const nodeMenuTransform = nodeMenuIsBelow
+    ? `translate(-50%, ${NODE_MENU_OFFSET}px)`
+    : `translate(-50%, calc(-100% - ${NODE_MENU_OFFSET}px))`;
   const nodeMenuLeft = nodeMenuCoords?.x ?? 0;
   const nodeMenuTop = nodeMenuCoords?.y ?? 0;
+  const nodeMenuConnectorStyle = nodeMenuIsBelow
+    ? { top: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET }
+    : { bottom: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET };
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1794,7 +1798,34 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 transform: nodeMenuTransform,
               }}
             >
-              <div className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl">
+              <div
+                className={`pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center ${
+                  nodeMenuIsBelow ? 'flex-col-reverse' : 'flex-col'
+                }`}
+                style={{
+                  ...nodeMenuConnectorStyle,
+                }}
+              >
+                <div
+                  className={`w-[2px] flex-1 rounded-full ${
+                    nodeMenuIsBelow
+                      ? 'bg-gradient-to-b from-transparent via-sky-400/60 to-sky-500/70'
+                      : 'bg-gradient-to-t from-transparent via-sky-400/60 to-sky-500/70'
+                  }`}
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(56,189,248,0.45))' }}
+                />
+                <div
+                  className={`h-3 w-3 rotate-45 border border-sky-400/60 bg-slate-900/95 shadow-[0_0_12px_rgba(56,189,248,0.45)] ${
+                    nodeMenuIsBelow ? '-mb-1' : '-mt-1'
+                  }`}
+                />
+              </div>
+              <div
+                className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Nodo seleccionado</span>
