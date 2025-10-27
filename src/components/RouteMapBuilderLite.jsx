@@ -43,8 +43,11 @@ const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.8;
 const ZOOM_STEP = 0.12;
-const EDGE_DASH_LENGTH = 26;
-const EDGE_DASH_GAP = 18;
+const EDGE_DASH_LENGTH = 18;
+const EDGE_DASH_GAP = 14;
+const EDGE_DASH_OFFSET = 8;
+const EDGE_BASE_WIDTH = 3.6;
+const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
@@ -175,7 +178,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
   }, [state.nodes]);
 
   const toolbarActions = useMemo(
-    () =>
+      () =>
       TOOLBAR_ACTIONS.map((action) => ({
         ...action,
         icon: TOOLBAR_ICON_COMPONENTS[action.id] || MousePointer2,
@@ -196,6 +199,40 @@ const RouteMapBuilderLite = ({ onBack }) => {
     () => (sanitizedCustomIcons.length > LOCK_ICON_INDEX ? sanitizedCustomIcons[LOCK_ICON_INDEX] : null),
     [sanitizedCustomIcons],
   );
+
+  const edgeVisuals = useMemo(() => {
+    return state.edges
+      .map((edge) => {
+        const from = nodesMap.get(edge.from);
+        const to = nodesMap.get(edge.to);
+        if (!from || !to) return null;
+        const fromPalette = getTypeDefaults(from.type);
+        const toPalette = getTypeDefaults(to.type);
+        const fromAccent = normalizeHex(from.accentColor) || fromPalette.accent;
+        const toAccent = normalizeHex(to.accentColor) || toPalette.accent;
+        const startColor = lightenHex(fromAccent, 0.16);
+        const endColor = lightenHex(toAccent, 0.16);
+        const midTone = mixHex(startColor, endColor, 0.5);
+        return {
+          id: edge.id,
+          from,
+          to,
+          startColor,
+          endColor,
+          glowColor: lightenHex(midTone, 0.24),
+          shadowColor: darkenHex(midTone, 0.55),
+        };
+      })
+      .filter(Boolean);
+  }, [nodesMap, state.edges]);
+
+  const edgeVisualMap = useMemo(() => {
+    const map = new Map();
+    edgeVisuals.forEach((visual) => {
+      map.set(visual.id, visual);
+    });
+    return map;
+  }, [edgeVisuals]);
 
   const selectedNodes = useMemo(
     () => selectedNodeIds.map((id) => nodesMap.get(id)).filter(Boolean),
@@ -999,6 +1036,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const to = nodesMap.get(edge.to);
       if (!from || !to) return null;
       const isSelected = selectedEdgeIds.includes(edge.id);
+      const visual = edgeVisualMap.get(edge.id);
+      const strokeColor = visual ? `url(#edge-gradient-${edge.id})` : isSelected ? '#38bdf8' : '#94a3b8';
+      const edgeOpacity = edge.state === 'hidden' ? 0.38 : 0.92;
       return (
         <g key={edge.id} onPointerDown={(event) => handleEdgeClick(edge, event)} className="cursor-pointer">
           <line
@@ -1006,11 +1046,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
             y1={from.y}
             x2={to.x}
             y2={to.y}
-            stroke={isSelected ? '#38bdf8' : '#94a3b8'}
-            strokeWidth={isSelected ? 6 : 4}
+            stroke={strokeColor}
+            strokeWidth={isSelected ? EDGE_SELECTED_WIDTH : EDGE_BASE_WIDTH}
             strokeDasharray={`${EDGE_DASH_LENGTH} ${EDGE_DASH_GAP}`}
+            strokeDashoffset={EDGE_DASH_OFFSET}
             strokeLinecap="round"
-            opacity={edge.state === 'hidden' ? 0.5 : 1}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            opacity={edgeOpacity}
+            filter={visual ? `url(#edge-glow-${edge.id})` : undefined}
           />
         </g>
       );
@@ -1600,6 +1644,34 @@ const RouteMapBuilderLite = ({ onBack }) => {
               transformOrigin: '0 0',
             }}
           >
+            <defs>
+              {edgeVisuals.map((visual) => (
+                <React.Fragment key={visual.id}>
+                  <linearGradient
+                    id={`edge-gradient-${visual.id}`}
+                    x1={visual.from.x}
+                    y1={visual.from.y}
+                    x2={visual.to.x}
+                    y2={visual.to.y}
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop offset="0%" stopColor={visual.startColor} stopOpacity="0.95" />
+                    <stop offset="100%" stopColor={visual.endColor} stopOpacity="0.95" />
+                  </linearGradient>
+                  <filter
+                    id={`edge-glow-${visual.id}`}
+                    x="-40%"
+                    y="-40%"
+                    width="180%"
+                    height="180%"
+                    colorInterpolationFilters="sRGB"
+                  >
+                    <feDropShadow dx="0" dy="0" stdDeviation="2.4" floodColor={visual.glowColor} floodOpacity="0.75" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={visual.shadowColor} floodOpacity="0.3" />
+                  </filter>
+                </React.Fragment>
+              ))}
+            </defs>
             {renderEdges()}
             {renderNodes()}
           </svg>
