@@ -34,6 +34,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tarjetas coleccionables** con estética inspirada en D&D y contadores de estado (disponible, progreso, bloqueada).
 - **Buscador y orden dinámico** para filtrar por nombre, rol o dificultad y reorganizar la cuadrícula al instante.
 - **Editor de retratos integrado** con recorte y zoom para ajustar la miniatura de cada clase antes de guardarla.
+- **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
