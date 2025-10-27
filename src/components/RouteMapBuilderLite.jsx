@@ -1248,6 +1248,13 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const panelWidth = 90;
       const panelHeight = 96;
       const panelRadius = 18;
+      const completionSparkles = isCompleted
+        ? [
+            { x: -panelWidth / 2 - 8, y: -panelHeight / 2 - 16, scale: 0.9, rotation: 18 },
+            { x: panelWidth / 2 + 10, y: -panelHeight / 2 + 6, scale: 0.7, rotation: -16 },
+            { x: panelWidth / 2 + 14, y: panelHeight / 2 + 10, scale: 0.85, rotation: 28 },
+          ]
+        : [];
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
       const completionNameFill = '#e2e8f0';
