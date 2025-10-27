@@ -1211,9 +1211,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
           `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
         );
       }
-      const completionAuraId = `node-completed-aura-${node.id}`;
-      const completionBadgeGradientId = `node-completed-badge-${node.id}`;
-      const completionShineGradientId = `node-completed-shine-${node.id}`;
+      const completionBadgeFill = mixHex(baseFill, '#f8fafc', 0.35);
+      const completionBadgeStroke = mixHex(baseBorder, '#020617', 0.35);
+      const completionCheckStroke = mixHex(baseBorder, '#f8fafc', 0.5);
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
@@ -1253,7 +1253,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
         : [];
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
-      const completionNameFill = isCompleted ? mixHex(baseBorder, '#fef3c7', 0.6) : '#e2e8f0';
+      const completionNameFill = '#e2e8f0';
       return (
         <g
           key={node.id}
@@ -1307,57 +1307,20 @@ const RouteMapBuilderLite = ({ onBack }) => {
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
             {isCompleted && (
-              <g pointerEvents="none" style={{ transition: 'opacity 220ms ease' }}>
-                <rect
-                  x={-panelWidth / 2 - 12}
-                  y={-panelHeight / 2 - 12}
-                  width={panelWidth + 24}
-                  height={panelHeight + 24}
-                  rx={panelRadius + 12}
-                  ry={panelRadius + 12}
-                  fill={`url(#${completionAuraId})`}
-                  opacity={0.95}
-                />
-                <rect
-                  x={-panelWidth / 2 - 6}
-                  y={-panelHeight / 2 - 6}
-                  width={panelWidth + 12}
-                  height={panelHeight + 12}
-                  rx={panelRadius + 6}
-                  ry={panelRadius + 6}
-                  fill="none"
-                  stroke={`url(#${completionShineGradientId})`}
+              <g
+                pointerEvents="none"
+                style={{ transition: 'opacity 180ms ease' }}
+                transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 + 18})`}
+              >
+                <circle r={12} fill={completionBadgeFill} stroke={completionBadgeStroke} strokeWidth={2} />
+                <path
+                  d="M -4 0 L -1 3.5 L 5 -3.5"
+                  stroke={completionCheckStroke}
                   strokeWidth={2.6}
-                  strokeDasharray="12 10"
-                  opacity={0.75}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
                 />
-                <g transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 - 6})`}>
-                  <circle
-                    r={14}
-                    fill={`url(#${completionBadgeGradientId})`}
-                    stroke={lightenHex(baseBorder, 0.55)}
-                    strokeWidth={2}
-                  />
-                  <path
-                    d="M -5 0 L -1 4 L 6 -4"
-                    stroke={mixHex(baseBorder, '#fefce8', 0.35)}
-                    strokeWidth={2.2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                </g>
-                {completionSparkles.map((sparkle, index) => (
-                  <path
-                    key={`sparkle-${node.id}-${index}`}
-                    d="M 0 -6 L 1.8 -1.8 L 6 0 L 1.8 1.8 L 0 6 L -1.8 1.8 L -6 0 L -1.8 -1.8 Z"
-                    fill={mixHex(baseBorder, '#fefce8', 0.6)}
-                    stroke={mixHex(baseBorder, '#fde68a', 0.3)}
-                    strokeWidth={0.6}
-                    opacity={0.7}
-                    transform={`translate(${sparkle.x}, ${sparkle.y}) scale(${sparkle.scale}) rotate(${sparkle.rotation})`}
-                  />
-                ))}
               </g>
             )}
             <rect
