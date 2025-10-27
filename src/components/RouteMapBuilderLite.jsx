@@ -80,8 +80,43 @@ const buildPolygonPath = (points) => {
   ].join(' ');
 };
 
-const scalePolygonPoints = (points, scaleX, scaleY) =>
-  points.map(([x, y]) => [x * scaleX, y * scaleY]);
+const getPolygonCentroid = (points) => {
+  if (!Array.isArray(points) || points.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  let twiceArea = 0;
+  let centroidX = 0;
+  let centroidY = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const [x0, y0] = points[index];
+    const [x1, y1] = points[(index + 1) % points.length];
+    const cross = x0 * y1 - x1 * y0;
+    twiceArea += cross;
+    centroidX += (x0 + x1) * cross;
+    centroidY += (y0 + y1) * cross;
+  }
+
+  if (Math.abs(twiceArea) < 1e-5) {
+    return { x: 0, y: 0 };
+  }
+
+  const areaFactor = twiceArea * 3;
+
+  return {
+    x: centroidX / areaFactor,
+    y: centroidY / areaFactor,
+  };
+};
+
+const scalePolygonPoints = (points, scaleX, scaleY = scaleX) => {
+  const { x: cx, y: cy } = getPolygonCentroid(points);
+  return points.map(([x, y]) => [
+    (x - cx) * scaleX + cx,
+    (y - cy) * scaleY + cy,
+  ]);
+};
 
 const NODE_SHAPE_RENDER_INFO = {
   panel: {
@@ -1346,7 +1381,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const gradientId = `node-fill-${node.id}`;
       const strokeGradientId = `node-stroke-${node.id}`;
       const noiseId = `node-noise-${node.id}`;
-      const carveGradientId = `node-carve-${node.id}`;
       const selectionStrokeId = `node-selection-${node.id}`;
       const completionAuraId = `node-completion-aura-${node.id}`;
       const completionBadgeGradientId = `node-completion-badge-${node.id}`;
@@ -1377,12 +1411,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const badgePosition = completionBadgePosition || { x: halfWidth - 18, y: -halfHeight + 18 };
       const baseOpacity = node.state === 'locked' ? 0.75 : 1;
       const ornamentOpacity = node.state === 'locked' ? 0.55 : 0.8;
-      const bottomHighlightOpacity = node.state === 'locked' ? 0.25 : 0.45;
-      const topHighlightOpacity = node.state === 'locked' ? 0.2 : 0.55;
       let baseShape = null;
       let ornamentShape = null;
-      let bottomHighlight = null;
-      let topHighlight = null;
       let selectionShape = null;
       if (shapeId === 'circle') {
         baseShape = (
@@ -1406,26 +1436,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
             opacity={ornamentOpacity}
           />
         );
-        bottomHighlight = (
-          <path
-            d={`M ${-mainRadius * 0.7} ${mainRadius * 0.55} A ${mainRadius * 0.85} ${mainRadius * 0.85} 0 0 0 ${mainRadius * 0.7} ${mainRadius * 0.5}`}
-            stroke={`url(#${carveGradientId})`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={bottomHighlightOpacity}
-            fill="none"
-          />
-        );
-        topHighlight = (
-          <path
-            d={`M ${-mainRadius * 0.65} ${-mainRadius * 0.55} A ${mainRadius * 0.95} ${mainRadius * 0.95} 0 0 1 ${mainRadius * 0.65} ${-mainRadius * 0.7}`}
-            stroke={lightenHex(baseFill, 0.45)}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={topHighlightOpacity}
-            fill="none"
-          />
-        );
         if (isSelected) {
           selectionShape = (
             <circle
@@ -1447,7 +1457,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           [-halfWidth, halfHeight],
         ];
         const trianglePath = buildPolygonPath(trianglePoints);
-        const innerTrianglePoints = trianglePoints.map(([x, y]) => [x * 0.82, y * 0.78 + halfHeight * 0.08]);
+        const innerTrianglePoints = scalePolygonPoints(trianglePoints, 0.82, 0.78);
         const innerPath = buildPolygonPath(innerTrianglePoints);
         baseShape = (
           <path
@@ -1472,31 +1482,14 @@ const RouteMapBuilderLite = ({ onBack }) => {
             strokeLinejoin="round"
           />
         );
-        bottomHighlight = (
-          <path
-            d={`M ${-halfWidth * 0.55} ${halfHeight - 14} L 0 ${halfHeight - 8} L ${halfWidth * 0.55} ${halfHeight - 14}`}
-            stroke={`url(#${carveGradientId})`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={bottomHighlightOpacity}
-            fill="none"
-          />
-        );
-        topHighlight = (
-          <path
-            d={`M ${-halfWidth * 0.48} ${-halfHeight + 14} L 0 ${-halfHeight + 4} L ${halfWidth * 0.48} ${-halfHeight + 14}`}
-            stroke={lightenHex(baseFill, 0.45)}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={topHighlightOpacity}
-            fill="none"
-          />
-        );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(trianglePoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={trianglePath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1504,7 +1497,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
@@ -1542,31 +1534,14 @@ const RouteMapBuilderLite = ({ onBack }) => {
             strokeLinejoin="round"
           />
         );
-        bottomHighlight = (
-          <path
-            d={`M ${-halfWidth * 0.35} ${halfHeight - 10} L 0 ${halfHeight - 4} L ${halfWidth * 0.35} ${halfHeight - 10}`}
-            stroke={`url(#${carveGradientId})`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={bottomHighlightOpacity}
-            fill="none"
-          />
-        );
-        topHighlight = (
-          <path
-            d={`M ${-halfWidth * 0.3} ${-halfHeight + 12} L 0 ${-halfHeight + 2} L ${halfWidth * 0.3} ${-halfHeight + 12}`}
-            stroke={lightenHex(baseFill, 0.45)}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={topHighlightOpacity}
-            fill="none"
-          />
-        );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(diamondPoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={diamondPath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1574,7 +1549,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
@@ -1616,31 +1590,14 @@ const RouteMapBuilderLite = ({ onBack }) => {
             strokeLinejoin="round"
           />
         );
-        bottomHighlight = (
-          <path
-            d={`M ${-sideX * 0.7} ${halfHeight - 12} L 0 ${halfHeight - 6} L ${sideX * 0.7} ${halfHeight - 12}`}
-            stroke={`url(#${carveGradientId})`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={bottomHighlightOpacity}
-            fill="none"
-          />
-        );
-        topHighlight = (
-          <path
-            d={`M ${-sideX * 0.65} ${-halfHeight + 12} L 0 ${-halfHeight + 4} L ${sideX * 0.65} ${-halfHeight + 12}`}
-            stroke={lightenHex(baseFill, 0.45)}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={topHighlightOpacity}
-            fill="none"
-          />
-        );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(hexagonPoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={hexagonPath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1648,7 +1605,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
@@ -1683,24 +1639,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
             strokeWidth={1.6}
             strokeDasharray="6 8"
             opacity={ornamentOpacity}
-          />
-        );
-        bottomHighlight = (
-          <path
-            d={`M ${-halfWidth + 10} ${halfHeight - 18} L ${halfWidth - 10} ${halfHeight - 22}`}
-            stroke={`url(#${carveGradientId})`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={bottomHighlightOpacity}
-          />
-        );
-        topHighlight = (
-          <path
-            d={`M ${-halfWidth + 12} ${-halfHeight + 14} L ${halfWidth - 12} ${-halfHeight + 10}`}
-            stroke={lightenHex(baseFill, 0.45)}
-            strokeWidth={2}
-            strokeLinecap="round"
-            opacity={topHighlightOpacity}
           />
         );
         if (isSelected) {
@@ -1745,11 +1683,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
             <linearGradient id={selectionStrokeId} x1="0%" x2="100%" y1="0%" y2="100%">
               <stop offset="0%" stopColor={lightenHex(baseBorder, 0.5)} stopOpacity="0.85" />
               <stop offset="100%" stopColor={darkenHex(baseBorder, 0.35)} stopOpacity="0.65" />
-            </linearGradient>
-            <linearGradient id={carveGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
-              <stop offset="0%" stopColor={lightenHex(baseFill, 0.35)} stopOpacity="0.6" />
-              <stop offset="50%" stopColor="transparent" stopOpacity="0" />
-              <stop offset="100%" stopColor={darkenHex(baseFill, 0.35)} stopOpacity="0.55" />
             </linearGradient>
             <filter id={noiseId} x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
               <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed={node.id.length} result="noise" />
@@ -1806,8 +1739,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
             )}
             {baseShape}
             {ornamentShape}
-            {bottomHighlight}
-            {topHighlight}
             {selectionShape}
             {displayIconUrl ? (
               <image
