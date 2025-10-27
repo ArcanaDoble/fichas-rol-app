@@ -80,8 +80,43 @@ const buildPolygonPath = (points) => {
   ].join(' ');
 };
 
-const scalePolygonPoints = (points, scaleX, scaleY) =>
-  points.map(([x, y]) => [x * scaleX, y * scaleY]);
+const getPolygonCentroid = (points) => {
+  if (!Array.isArray(points) || points.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  let twiceArea = 0;
+  let centroidX = 0;
+  let centroidY = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const [x0, y0] = points[index];
+    const [x1, y1] = points[(index + 1) % points.length];
+    const cross = x0 * y1 - x1 * y0;
+    twiceArea += cross;
+    centroidX += (x0 + x1) * cross;
+    centroidY += (y0 + y1) * cross;
+  }
+
+  if (Math.abs(twiceArea) < 1e-5) {
+    return { x: 0, y: 0 };
+  }
+
+  const areaFactor = twiceArea * 3;
+
+  return {
+    x: centroidX / areaFactor,
+    y: centroidY / areaFactor,
+  };
+};
+
+const scalePolygonPoints = (points, scaleX, scaleY = scaleX) => {
+  const { x: cx, y: cy } = getPolygonCentroid(points);
+  return points.map(([x, y]) => [
+    (x - cx) * scaleX + cx,
+    (y - cy) * scaleY + cy,
+  ]);
+};
 
 const NODE_SHAPE_RENDER_INFO = {
   panel: {
@@ -1447,7 +1482,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           [-halfWidth, halfHeight],
         ];
         const trianglePath = buildPolygonPath(trianglePoints);
-        const innerTrianglePoints = trianglePoints.map(([x, y]) => [x * 0.82, y * 0.78 + halfHeight * 0.08]);
+        const innerTrianglePoints = scalePolygonPoints(trianglePoints, 0.82, 0.78);
         const innerPath = buildPolygonPath(innerTrianglePoints);
         baseShape = (
           <path
@@ -1494,9 +1529,12 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(trianglePoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={trianglePath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1504,7 +1542,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
@@ -1564,9 +1601,12 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(diamondPoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={diamondPath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1574,7 +1614,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
@@ -1638,9 +1677,12 @@ const RouteMapBuilderLite = ({ onBack }) => {
         );
         if (isSelected) {
           const selectionScale = 1 + selectionPadding / Math.max(width, height);
+          const selectionPath = buildPolygonPath(
+            scalePolygonPoints(hexagonPoints, selectionScale, selectionScale),
+          );
           selectionShape = (
             <path
-              d={hexagonPath}
+              d={selectionPath}
               fill="none"
               stroke={`url(#${selectionStrokeId})`}
               strokeWidth={2}
@@ -1648,7 +1690,6 @@ const RouteMapBuilderLite = ({ onBack }) => {
               opacity={0.75}
               pointerEvents="none"
               style={{ transition: 'opacity 200ms ease' }}
-              transform={`scale(${selectionScale})`}
               strokeLinejoin="round"
             />
           );
