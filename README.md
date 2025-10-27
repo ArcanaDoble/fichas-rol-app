@@ -34,6 +34,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Reflejos suavizados en nodos**: se retiraron las capas de brillo blanco para recuperar el acabado mate clásico sin artefactos.
 - **Fondo personalizable restaurado**: se retiraron las capas internas de Pixi que velaban el lienzo, recuperando el comportamiento de las versiones anteriores con la nueva ambientación ligera.
 
+### 🧭 **Mapa de Rutas (Lite SVG)**
+
+- **Versión sin Pixi** enfocada a dispositivos modestos o sesiones rápidas. Renderiza el grafo con SVG y estilos Tailwind.
+- **Pan, zoom y snap al grid** implementados con transformaciones CSS, manteniendo la misma estructura de nodos y conexiones que la versión Pixi.
+- **Sincronización de iconos**: comparte el catálogo de iconos personalizados con el minimapa y el constructor completo mediante Firestore y `localStorage`.
+- **Herramientas equivalentes**: selección, creación, conexión, duplicado, bloqueo/desbloqueo, deshacer/rehacer y auto-layout.
+- **Persistencia idéntica**: guarda automáticamente en el navegador y permite importar/exportar mapas JSON compatibles entre ambas versiones.
+- **Cómo acceder**: desde el menú Máster elige «Mapa de Rutas (Lite)» para abrir esta vista basada en SVG. Usa «Mapa de Rutas (Roguelike)» para la versión acelerada con Pixi.
+
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
 - **Línea de sucesos en tiempo real** - Seguimiento visual del orden de actuación

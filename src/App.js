@@ -65,6 +65,7 @@ import { applyIconConversions } from './utils/iconConversions';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 const RouteMapBuilder = React.lazy(() => import('./components/RouteMapBuilder'));
+const RouteMapBuilderLite = React.lazy(() => import('./components/RouteMapBuilderLite'));
 import { nanoid } from 'nanoid';
 import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
 import {
@@ -7430,6 +7431,13 @@ function App() {
     return withTooltips(
       <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando mapa de rutas…</div>}>
         <RouteMapBuilder onBack={() => setChosenView(null)} />
+      </React.Suspense>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'routeMapLite') {
+    return withTooltips(
+      <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando mapa de rutas (Lite)…</div>}>
+        <RouteMapBuilderLite onBack={() => setChosenView(null)} />
       </React.Suspense>
     );
   }

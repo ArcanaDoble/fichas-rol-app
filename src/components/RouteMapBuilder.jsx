@@ -36,6 +36,29 @@ import Boton from './Boton';
 import Input from './Input';
 import { db } from '../firebase';
 import { getOrUploadFile } from '../utils/storage';
+import {
+  NODE_TYPES,
+  NODE_STATES,
+  TOOLBAR_ACTIONS,
+  GRID_SIZES,
+  sanitizeCustomIcons,
+  readLocalCustomIcons,
+  readMinimapLocalCustomIcons,
+  normalizeHex,
+  mixHex,
+  hexToRgb,
+  getTypeDefaults,
+  applyAppearanceDefaults,
+  normalizeNodesCollection,
+  cloneState,
+  DEFAULT_NODE,
+  initialState,
+  routeMapReducer,
+  loadDraft,
+  saveDraft,
+  exportRouteMap,
+  parseRouteMapFile,
+} from './routeMap/shared';
 
 const ensurePixiViewportCompatibility = (() => {
   let patched = false;
@@ -104,262 +127,18 @@ const ensurePixiViewportCompatibility = (() => {
 
 ensurePixiViewportCompatibility();
 
-const ROUTE_MAP_CUSTOM_ICONS_KEY = 'routeMapCustomIcons';
-const MINIMAP_CUSTOM_ICONS_KEY = 'minimapCustomIcons';
-
-function IconThumb({ src, selected, onClick, label, onDelete }) {
-  return (
-    <div className="relative inline-block">
-      <button
-        type="button"
-        title={label || ''}
-        onClick={onClick}
-        className={`relative h-14 w-14 overflow-hidden rounded-lg border bg-slate-900/80 transition ${
-          selected
-            ? 'border-sky-400 ring-2 ring-sky-400'
-            : 'border-slate-700/80 hover:border-slate-500/80'
-        }`}
-      >
-        <img
-          loading="lazy"
-          src={src}
-          alt={label || 'icon'}
-          className="h-full w-full object-contain"
-        />
-      </button>
-      {onDelete && (
-        <button
-          type="button"
-          aria-label="Eliminar icono"
-          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-1 ring-black/40 transition hover:bg-red-500"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 className="h-3 w-3" aria-hidden />
-        </button>
-      )}
-    </div>
-  );
-}
-
-IconThumb.propTypes = {
-  src: PropTypes.string.isRequired,
-  selected: PropTypes.bool,
-  onClick: PropTypes.func,
-  label: PropTypes.string,
-  onDelete: PropTypes.func,
-};
-
-const sanitizeCustomIcons = (icons) => {
-  if (!Array.isArray(icons)) return [];
-  const seen = new Set();
-  return icons
-    .map((icon) => (typeof icon === 'string' ? icon.trim() : ''))
-    .filter((icon) => {
-      if (!icon || seen.has(icon)) {
-        return false;
-      }
-      seen.add(icon);
-      return true;
-    });
-};
-
-const readLocalCustomIcons = () => {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(ROUTE_MAP_CUSTOM_ICONS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return sanitizeCustomIcons(parsed);
-  } catch {
-    return [];
-  }
-};
-
-const readMinimapLocalCustomIcons = () => {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(MINIMAP_CUSTOM_ICONS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return sanitizeCustomIcons(parsed);
-  } catch {
-    return [];
-  }
-};
-
-const NODE_TYPES = [
-  {
-    id: 'start',
-    label: 'Inicio',
-    iconLabel: 'Casa',
-    defaults: {
-      accent: '#38bdf8',
-      fill: '#0c1a2e',
-      border: '#7dd3fc',
-      icon: '#f8fafc',
-    },
-  },
-  {
-    id: 'normal',
-    label: 'Normal',
-    iconLabel: 'Combate',
-    defaults: {
-      accent: '#a855f7',
-      fill: '#180d2b',
-      border: '#c084fc',
-      icon: '#f5f3ff',
-    },
-  },
-  {
-    id: 'event',
-    label: 'Evento',
-    iconLabel: 'Evento',
-    defaults: {
-      accent: '#fbbf24',
-      fill: '#2a1705',
-      border: '#fcd34d',
-      icon: '#fef3c7',
-    },
-  },
-  {
-    id: 'shop',
-    label: 'Tienda',
-    iconLabel: 'Mercader',
-    defaults: {
-      accent: '#f97316',
-      fill: '#2a1305',
-      border: '#fb923c',
-      icon: '#fff7ed',
-    },
-  },
-  {
-    id: 'elite',
-    label: 'Elite',
-    iconLabel: 'Élite',
-    defaults: {
-      accent: '#fb7185',
-      fill: '#2a0f16',
-      border: '#fda4af',
-      icon: '#ffe4e6',
-    },
-  },
-  {
-    id: 'heal',
-    label: 'Curación',
-    iconLabel: 'Curación',
-    defaults: {
-      accent: '#34d399',
-      fill: '#052015',
-      border: '#6ee7b7',
-      icon: '#ecfdf5',
-    },
-  },
-  {
-    id: 'boss',
-    label: 'Jefe',
-    iconLabel: 'Jefe',
-    defaults: {
-      accent: '#f59e0b',
-      fill: '#2b1503',
-      border: '#fbbf24',
-      icon: '#fef3c7',
-    },
-  },
-];
-
-const NODE_STATES = {
-  locked: {
-    label: 'Bloqueado',
-    stroke: '#1f2937',
-    fillAlpha: 0.48,
-    aura: '#0f172a',
-    badge: 'lock',
-    badgeColor: '#f8fafc',
-  },
-  visible: {
-    label: 'Visible',
-    stroke: '#334155',
-    fillAlpha: 0.6,
-    aura: '#1e293b',
-    badge: 'lockOpen',
-    badgeColor: '#fbbf24',
-  },
-  unlocked: {
-    label: 'Desbloqueado',
-    stroke: '#38bdf8',
-    fillAlpha: 0.92,
-    aura: '#0ea5e9',
-  },
-  completed: {
-    label: 'Completado',
-    stroke: '#facc15',
-    fillAlpha: 0.96,
-    aura: '#facc15',
-  },
-  current: {
-    label: 'Actual',
-    stroke: '#22d3ee',
-    fillAlpha: 0.98,
-    aura: '#38bdf8',
-  },
-};
-
-const TOOLBAR_ACTIONS = [
-  { id: 'select', label: 'Seleccionar / Mover', icon: MousePointer2 },
-  { id: 'create', label: 'Crear Nodo', icon: Wand2 },
-  { id: 'connect', label: 'Conectar', icon: Link2 },
-  { id: 'delete', label: 'Borrar', icon: Trash2 },
-  { id: 'toggleLock', label: 'Bloquear / Desbloquear', icon: LockKeyhole },
-];
-
-const GRID_SIZES = [20, 32, 40, 48, 64];
-
 const hexToInt = (hex) => parseInt(hex.replace('#', ''), 16);
-
-const normalizeHex = (hex) => {
-  if (typeof hex !== 'string') return null;
-  const trimmed = hex.trim();
-  if (!trimmed) return null;
-  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  return /^#[0-9a-fA-F]{6}$/.test(prefixed) ? prefixed.toLowerCase() : null;
-};
-
-const hexToRgb = (hex) => {
-  const normalized = normalizeHex(hex);
-  if (!normalized) return null;
-  const value = normalized.replace('#', '');
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  return { r, g, b };
-};
-
-const rgbToHex = (r, g, b) => {
-  const clamp = (num) => Math.min(255, Math.max(0, Math.round(num)));
-  return `#${[clamp(r), clamp(g), clamp(b)]
-    .map((channel) => channel.toString(16).padStart(2, '0'))
-    .join('')}`;
-};
-
-const mixHex = (hexA, hexB, amount) => {
-  const colorA = hexToRgb(hexA);
-  const colorB = hexToRgb(hexB);
-  if (!colorA || !colorB) return normalizeHex(hexA) || normalizeHex(hexB);
-  const t = Math.min(1, Math.max(0, amount));
-  const mix = (a, b) => a + (b - a) * t;
-  return rgbToHex(mix(colorA.r, colorB.r), mix(colorA.g, colorB.g), mix(colorA.b, colorB.b));
-};
 
 const lightenHex = (hex, amount) => mixHex(hex, '#ffffff', amount);
 const darkenHex = (hex, amount) => mixHex(hex, '#000000', amount);
+
+const TOOLBAR_ICON_COMPONENTS = {
+  select: MousePointer2,
+  create: Wand2,
+  connect: Link2,
+  delete: Trash2,
+  toggleLock: LockKeyhole,
+};
 
 const EDGE_SEGMENT_BASE_LENGTH = 48;
 const EDGE_SEGMENT_MIN_STEPS = 8;
@@ -427,47 +206,6 @@ const createQuadraticSegments = (from, control, to) => {
   }
   return segments;
 };
-
-const cloneState = (nodes, edges) => ({
-  nodes: nodes.map((node) => ({ ...node })),
-  edges: edges.map((edge) => ({ ...edge })),
-});
-
-const DEFAULT_APPEARANCE = {
-  accent: '#38bdf8',
-  fill: '#0f172a',
-  border: '#38bdf8',
-  icon: '#f8fafc',
-};
-
-const getTypeDefaults = (typeId) => {
-  const type = NODE_TYPES.find((item) => item.id === typeId);
-  if (!type || !type.defaults) return DEFAULT_APPEARANCE;
-  return {
-    accent: normalizeHex(type.defaults.accent) || DEFAULT_APPEARANCE.accent,
-    fill: normalizeHex(type.defaults.fill) || DEFAULT_APPEARANCE.fill,
-    border: normalizeHex(type.defaults.border) || DEFAULT_APPEARANCE.border,
-    icon: normalizeHex(type.defaults.icon) || DEFAULT_APPEARANCE.icon,
-  };
-};
-
-const applyAppearanceDefaults = (node) => {
-  if (!node) return node;
-  const palette = getTypeDefaults(node.type);
-  return {
-    ...node,
-    accentColor: normalizeHex(node.accentColor) || palette.accent,
-    fillColor: normalizeHex(node.fillColor) || palette.fill,
-    borderColor: normalizeHex(node.borderColor) || palette.border,
-    iconColor: normalizeHex(node.iconColor) || palette.icon,
-    iconUrl:
-      typeof node.iconUrl === 'string' && node.iconUrl.trim()
-        ? node.iconUrl.trim()
-        : null,
-  };
-};
-
-const normalizeNodesCollection = (nodes) => nodes.map((node) => applyAppearanceDefaults(node));
 
 const emojiTextureCache = new Map();
 const customIconTextureCache = new Map();
@@ -1458,108 +1196,6 @@ const attachSelectionPulse = ({ container, texture, baseScale, ticker }) => {
   };
 };
 
-const DEFAULT_NODE = () =>
-  applyAppearanceDefaults({
-    id: nanoid(),
-    name: 'Inicio',
-    type: 'start',
-    x: 0,
-    y: 0,
-    state: 'current',
-  unlockMode: 'or',
-  loot: '',
-  event: '',
-  notes: '',
-  iconUrl: null,
-});
-
-const initialState = () => {
-  const starter = DEFAULT_NODE();
-  const snapshot = cloneState([starter], []);
-  return {
-    nodes: snapshot.nodes,
-    edges: snapshot.edges,
-    history: [snapshot],
-    historyIndex: 0,
-  };
-};
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'LOAD': {
-      const { nodes, edges } = action;
-      const normalizedNodes = normalizeNodesCollection(nodes);
-      const snapshot = cloneState(normalizedNodes, edges);
-      return {
-        nodes: snapshot.nodes,
-        edges: snapshot.edges,
-        history: [snapshot],
-        historyIndex: 0,
-      };
-    }
-    case 'UPDATE': {
-      const draftNodes = state.nodes.map((node) => ({ ...node }));
-      const draftEdges = state.edges.map((edge) => ({ ...edge }));
-      action.updater(draftNodes, draftEdges);
-      const normalizedNodes = normalizeNodesCollection(draftNodes);
-      if (action.skipHistory) {
-        return {
-          ...state,
-          nodes: normalizedNodes,
-          edges: draftEdges,
-        };
-      }
-      const snapshot = cloneState(normalizedNodes, draftEdges);
-      const trimmed = state.history.slice(0, state.historyIndex + 1);
-      trimmed.push(snapshot);
-      const limited = trimmed.length > 10 ? trimmed.slice(trimmed.length - 10) : trimmed;
-      return {
-        nodes: normalizedNodes,
-        edges: snapshot.edges,
-        history: limited,
-        historyIndex: limited.length - 1,
-      };
-    }
-    case 'PUSH_HISTORY': {
-      const snapshot = cloneState(state.nodes, state.edges);
-      const trimmed = state.history.slice(0, state.historyIndex + 1);
-      trimmed.push(snapshot);
-      const limited = trimmed.length > 10 ? trimmed.slice(trimmed.length - 10) : trimmed;
-      return {
-        ...state,
-        history: limited,
-        historyIndex: limited.length - 1,
-      };
-    }
-    case 'UNDO': {
-      if (state.historyIndex <= 0) {
-        return state;
-      }
-      const snapshot = state.history[state.historyIndex - 1];
-      return {
-        ...state,
-        nodes: snapshot.nodes.map((node) => ({ ...node })),
-        edges: snapshot.edges.map((edge) => ({ ...edge })),
-        historyIndex: state.historyIndex - 1,
-      };
-    }
-    case 'REDO': {
-      if (state.historyIndex >= state.history.length - 1) {
-        return state;
-      }
-      const snapshot = state.history[state.historyIndex + 1];
-      return {
-        ...state,
-        nodes: snapshot.nodes.map((node) => ({ ...node })),
-        edges: snapshot.edges.map((edge) => ({ ...edge })),
-        historyIndex: state.historyIndex + 1,
-      };
-    }
-    default:
-      return state;
-  }
-}
-
 const pointerToWorld = (viewport, event) => {
   if (!viewport) return { x: 0, y: 0 };
   const global = event.data?.global ?? event.global;
@@ -1582,7 +1218,7 @@ const RouteMapBuilder = ({ onBack }) => {
   const shouldResumeDragRef = useRef(false);
   const connectPreviewRef = useRef(null);
   const connectPointerRef = useRef(null);
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const [state, dispatch] = useReducer(routeMapReducer, undefined, initialState);
   const initialCustomIcons = useMemo(() => {
     const routeMapIcons = readLocalCustomIcons();
     const minimapIcons = readMinimapLocalCustomIcons();
@@ -1740,57 +1376,36 @@ const RouteMapBuilder = ({ onBack }) => {
   }, [resumeDragAfterInteraction]);
 
   const saveToLocalStorage = useCallback((nodes, edges) => {
-    try {
-      const payload = JSON.stringify({ nodes, edges });
-      window.localStorage.setItem('routeMapDraft', payload);
-    } catch (error) {
-      console.error('No se pudo guardar el mapa en localStorage', error);
-    }
+    saveDraft(nodes, edges);
   }, []);
 
   const loadFromLocalStorage = useCallback(() => {
-    try {
-      const payload = window.localStorage.getItem('routeMapDraft');
-      if (!payload) return;
-      const parsed = JSON.parse(payload);
-      if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-        dispatch({ type: 'LOAD', nodes: normalizeNodesCollection(parsed.nodes), edges: parsed.edges });
-        ensureVisibleMessage('Mapa cargado desde el navegador');
-      }
-    } catch (error) {
-      console.error('No se pudo cargar el mapa en localStorage', error);
+    const draft = loadDraft();
+    if (draft) {
+      dispatch({ type: 'LOAD', nodes: draft.nodes, edges: draft.edges });
+      ensureVisibleMessage('Mapa cargado desde el navegador');
     }
   }, [ensureVisibleMessage]);
 
   const exportToFile = useCallback(() => {
-    const data = JSON.stringify({ nodes: state.nodes, edges: state.edges }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `route-map-${Date.now()}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    exportRouteMap(state.nodes, state.edges);
     ensureVisibleMessage('Mapa exportado como JSON');
   }, [state.nodes, state.edges, ensureVisibleMessage]);
 
-  const importFromFile = useCallback((event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  const importFromFile = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
       try {
-        const parsed = JSON.parse(e.target?.result);
-        if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-          dispatch({ type: 'LOAD', nodes: normalizeNodesCollection(parsed.nodes), edges: parsed.edges });
-          ensureVisibleMessage('Mapa importado correctamente');
-        }
+        const parsed = await parseRouteMapFile(file);
+        dispatch({ type: 'LOAD', nodes: parsed.nodes, edges: parsed.edges });
+        ensureVisibleMessage('Mapa importado correctamente');
       } catch (error) {
         console.error('Archivo inválido', error);
       }
-    };
-    reader.readAsText(file);
-  }, [ensureVisibleMessage]);
+    },
+    [ensureVisibleMessage],
+  );
 
   const handleUndo = useCallback(() => {
     dispatch({ type: 'UNDO' });
@@ -3326,9 +2941,18 @@ const RouteMapBuilder = ({ onBack }) => {
     setEdgeEditor(null);
   }, [edgeEditor]);
 
+  const toolbarActions = useMemo(
+    () =>
+      TOOLBAR_ACTIONS.map((action) => ({
+        ...action,
+        icon: TOOLBAR_ICON_COMPONENTS[action.id] || MousePointer2,
+      })),
+    [],
+  );
+
   const currentTool = useMemo(
-    () => TOOLBAR_ACTIONS.find((item) => item.id === activeTool),
-    [activeTool],
+    () => toolbarActions.find((item) => item.id === activeTool),
+    [activeTool, toolbarActions],
   );
 
   return (
@@ -3351,7 +2975,7 @@ const RouteMapBuilder = ({ onBack }) => {
           <section className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 shadow-lg shadow-sky-900/20">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">Herramientas</h3>
             <div className="mt-3 space-y-2">
-              {TOOLBAR_ACTIONS.map((action) => (
+              {toolbarActions.map((action) => (
                 <button
                   key={action.id}
                   type="button"

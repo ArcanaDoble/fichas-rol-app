@@ -65,6 +65,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: true,
     },
     {
+      id: 'routeMapLite',
+      title: 'Mapa de Rutas (Lite)',
+      description: 'Versión sin Pixi basada en SVG para ediciones rápidas y dispositivos modestos',
+      color: 'cyan',
+      features: ['Sin Pixi', 'SVG', 'Pan & Zoom', 'Sincronizado'],
+      isNew: true,
+    },
+    {
       id: 'default',
       title: 'Herramientas Tradicionales',
       description: 'Gestión de catálogo, habilidades y glosario',
