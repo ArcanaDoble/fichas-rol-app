@@ -63,6 +63,7 @@ const EDGE_DASH_OFFSET = 8;
 const EDGE_BASE_WIDTH = 3.6;
 const EDGE_SELECTED_WIDTH = 5.4;
 const LOCK_ICON_INDEX = 14;
+const NODE_MENU_OFFSET = 32;
 
 const IconThumb = ({ src, selected, onClick, label, onDelete }) => (
   <div className="relative inline-block">
@@ -1087,6 +1088,36 @@ const RouteMapBuilderLite = ({ onBack }) => {
 
   const handleKeyDown = useCallback(
     (event) => {
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const isHtmlElement = (value) =>
+        typeof HTMLElement !== 'undefined' && value instanceof HTMLElement;
+      let shouldIgnore = false;
+      if (path.length > 0) {
+        shouldIgnore = path.some((node) => {
+          if (!isHtmlElement(node)) return false;
+          const tagName = node.tagName?.toLowerCase();
+          return (
+            node.isContentEditable ||
+            tagName === 'input' ||
+            tagName === 'textarea' ||
+            tagName === 'select'
+          );
+        });
+      }
+      if (!shouldIgnore && typeof document !== 'undefined') {
+        const activeElement = document.activeElement;
+        if (isHtmlElement(activeElement)) {
+          const tagName = activeElement.tagName?.toLowerCase();
+          shouldIgnore =
+            activeElement.isContentEditable ||
+            tagName === 'input' ||
+            tagName === 'textarea' ||
+            tagName === 'select';
+        }
+      }
+      if (shouldIgnore) {
+        return;
+      }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedNodeIds.length || selectedEdgeIds.length) {
           event.preventDefault();
@@ -1159,6 +1190,9 @@ const RouteMapBuilderLite = ({ onBack }) => {
     state.nodes.map((node) => {
       const isSelected = selectedNodeIds.includes(node.id);
       const palette = getTypeDefaults(node.type);
+      const baseFill = node.fillColor || palette.fill;
+      const baseBorder = node.borderColor || palette.border;
+      const isCompleted = node.state === 'completed';
       const glowIntensity = normalizeGlowIntensity(node.glowIntensity);
       const isHovered = hoveredNodeId === node.id;
       const effectiveGlow = clamp(glowIntensity + (isHovered ? 0.18 : 0), 0, 1);
@@ -1177,17 +1211,24 @@ const RouteMapBuilderLite = ({ onBack }) => {
           `drop-shadow(0 0 ${Math.max(1.5, glowBlur * 0.2)}px ${glowHighlight})`,
         );
       }
+      const completionBadgeFill = mixHex(baseFill, '#f8fafc', 0.35);
+      const completionBadgeHighlight = mixHex(completionBadgeFill, '#f8fafc', 0.55);
+      const completionBadgeShadow = mixHex(completionBadgeFill, '#020617', 0.45);
+      const completionBadgeStroke = mixHex(baseBorder, '#020617', 0.35);
+      const completionCheckStroke = mixHex(baseBorder, '#f8fafc', 0.5);
       const displayIconUrl =
         node.state === 'locked' && lockIconUrl ? lockIconUrl : typeof node.iconUrl === 'string' ? node.iconUrl : null;
       const iconFallback = node.state === 'locked' ? '🔒' : node.name?.slice(0, 2) || node.type.slice(0, 2).toUpperCase();
       const iconFill = node.state === 'locked'
         ? '#e2e8f0'
         : node.iconColor || palette.icon;
-      const baseFill = node.fillColor || palette.fill;
-      const baseBorder = node.borderColor || palette.border;
       if (isSelected) {
         const selectionHalo = mixHex(baseBorder, '#f8fafc', 0.6);
         filterParts.push(`drop-shadow(0 0 ${Math.max(3, glowBlur * 0.4)}px ${selectionHalo})`);
+      }
+      if (isCompleted) {
+        const completionHalo = mixHex(baseBorder, '#fef08a', 0.5);
+        filterParts.push(`drop-shadow(0 0 ${Math.max(4, glowBlur * 0.55)}px ${completionHalo})`);
       }
       if (filterParts.length > 0) {
         circleStyle.filter = filterParts.join(' ');
@@ -1197,6 +1238,8 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const noiseId = `node-noise-${node.id}`;
       const carveGradientId = `node-carve-${node.id}`;
       const selectionStrokeId = `node-selection-${node.id}`;
+      const completionAuraId = `node-completion-aura-${node.id}`;
+      const completionBadgeGradientId = `node-completion-badge-${node.id}`;
       const fillLight = lightenHex(baseFill, 0.22);
       const fillDark = darkenHex(baseFill, 0.24);
       const strokeLight = lightenHex(baseBorder, 0.32);
@@ -1207,6 +1250,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
       const panelRadius = 18;
       const ornamentStroke = node.state === 'locked' ? '#1f2937' : lightenHex(baseBorder, 0.55);
       const selectedOrnamentStroke = mixHex(baseBorder, '#f8fafc', 0.4);
+      const completionNameFill = '#e2e8f0';
       return (
         <g
           key={node.id}
@@ -1240,8 +1284,54 @@ const RouteMapBuilderLite = ({ onBack }) => {
               <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.18 0" />
               <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
             </filter>
+            {isCompleted && (
+              <>
+                <radialGradient id={completionBadgeGradientId} cx="50%" cy="50%" r="65%">
+                  <stop offset="0%" stopColor={completionBadgeHighlight} stopOpacity="0.95" />
+                  <stop offset="85%" stopColor={completionBadgeFill} stopOpacity="0.9" />
+                  <stop offset="100%" stopColor={completionBadgeShadow} stopOpacity="0.85" />
+                </radialGradient>
+                <filter
+                  id={completionAuraId}
+                  x="-40%"
+                  y="-40%"
+                  width="180%"
+                  height="180%"
+                  colorInterpolationFilters="sRGB"
+                >
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="badge-blur" />
+                  <feMerge>
+                    <feMergeNode in="badge-blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </>
+            )}
           </defs>
           <g transform={innerTransform} style={{ transition: 'transform 180ms ease' }}>
+            {isCompleted && (
+              <g
+                pointerEvents="none"
+                style={{ transition: 'opacity 180ms ease' }}
+                transform={`translate(${panelWidth / 2 - 18}, ${-panelHeight / 2 + 18})`}
+                filter={`url(#${completionAuraId})`}
+              >
+                <circle
+                  r={12}
+                  fill={`url(#${completionBadgeGradientId})`}
+                  stroke={completionBadgeStroke}
+                  strokeWidth={2}
+                />
+                <path
+                  d="M -4 0 L -1 3.5 L 5 -3.5"
+                  stroke={completionCheckStroke}
+                  strokeWidth={2.6}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </g>
+            )}
             <rect
               x={-panelWidth / 2}
               y={-panelHeight / 2}
@@ -1326,7 +1416,7 @@ const RouteMapBuilderLite = ({ onBack }) => {
           <text
             y={panelHeight / 2 + 18}
             textAnchor="middle"
-            fill="#e2e8f0"
+            fill={completionNameFill}
             fontSize={12}
             fontWeight="700"
             letterSpacing="0.06em"
@@ -1347,12 +1437,15 @@ const RouteMapBuilderLite = ({ onBack }) => {
   const shouldShowNodeMenu = Boolean(nodeMenuDraft && nodeMenuNode && activeTool === 'select');
   const nodeMenuType = nodeMenuDraft ? NODE_TYPES.find((type) => type.id === nodeMenuDraft.type) : null;
   const nodeMenuState = nodeMenuDraft ? NODE_STATES[nodeMenuDraft.state] : null;
-  const nodeMenuTransform =
-    nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160
-      ? 'translate(-50%, 24px)'
-      : 'translate(-50%, calc(-100% - 24px))';
+  const nodeMenuIsBelow = Boolean(nodeMenuCoords && containerRef.current && nodeMenuCoords.y < 160);
+  const nodeMenuTransform = nodeMenuIsBelow
+    ? `translate(-50%, ${NODE_MENU_OFFSET}px)`
+    : `translate(-50%, calc(-100% - ${NODE_MENU_OFFSET}px))`;
   const nodeMenuLeft = nodeMenuCoords?.x ?? 0;
   const nodeMenuTop = nodeMenuCoords?.y ?? 0;
+  const nodeMenuConnectorStyle = nodeMenuIsBelow
+    ? { top: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET }
+    : { bottom: -NODE_MENU_OFFSET, height: NODE_MENU_OFFSET };
 
   return (
     <div className="w-full h-screen flex bg-[#050b18] text-slate-100">
@@ -1794,7 +1887,34 @@ const RouteMapBuilderLite = ({ onBack }) => {
                 transform: nodeMenuTransform,
               }}
             >
-              <div className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl">
+              <div
+                className={`pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center ${
+                  nodeMenuIsBelow ? 'flex-col-reverse' : 'flex-col'
+                }`}
+                style={{
+                  ...nodeMenuConnectorStyle,
+                }}
+              >
+                <div
+                  className={`w-[2px] flex-1 rounded-full ${
+                    nodeMenuIsBelow
+                      ? 'bg-gradient-to-b from-transparent via-sky-400/60 to-sky-500/70'
+                      : 'bg-gradient-to-t from-transparent via-sky-400/60 to-sky-500/70'
+                  }`}
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(56,189,248,0.45))' }}
+                />
+                <div
+                  className={`h-3 w-3 rotate-45 border border-sky-400/60 bg-slate-900/95 shadow-[0_0_12px_rgba(56,189,248,0.45)] ${
+                    nodeMenuIsBelow ? '-mb-1' : '-mt-1'
+                  }`}
+                />
+              </div>
+              <div
+                className="pointer-events-auto overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl shadow-sky-900/40 backdrop-blur-xl"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Nodo seleccionado</span>
