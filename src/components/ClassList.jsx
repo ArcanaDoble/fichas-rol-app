@@ -2680,6 +2680,23 @@ const ClassList = ({
       const downloadURL = await getDownloadURL(storageRef);
       const normalizedUrl = normalizeImageValue(downloadURL);
 
+      if (normalizedUrl) {
+        try {
+          await setDoc(
+            doc(db, 'classes', classId),
+            { image: normalizedUrl },
+            { merge: true },
+          );
+        } catch (firestoreError) {
+          console.error('Error al guardar la URL del retrato en Firestore', firestoreError);
+          setSaveStatus({
+            type: 'error',
+            message: 'El retrato se subió a Storage, pero no se pudo guardar en Firestore.',
+          });
+          return;
+        }
+      }
+
       setClasses((prevClasses) =>
         prevClasses.map((classItem) =>
           classItem.id === classId ? { ...classItem, image: normalizedUrl } : classItem,
@@ -2696,7 +2713,10 @@ const ClassList = ({
         prevEditing && prevEditing.id === classId ? { ...prevEditing, image: normalizedUrl } : prevEditing,
       );
 
-      setSaveStatus({ type: 'success', message: 'Retrato actualizado en Firebase Storage.' });
+      setSaveStatus({
+        type: 'success',
+        message: 'Retrato actualizado y guardado en Firebase.',
+      });
       handleCropCancel();
     } catch (error) {
       console.error('Error al subir la imagen recortada a Firebase Storage', error);
