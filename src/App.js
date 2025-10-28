@@ -5987,7 +5987,12 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'classes') {
     return withTooltips(
-      <ClassList onBack={() => setChosenView(null)} />
+      <ClassList
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        onBack={() => setChosenView(null)}
+      />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {

@@ -30,6 +30,19 @@ const defaultEquipment = {
   abilities: [],
 };
 
+const toArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const joinTraits = (value) => toArray(value).join(', ');
+
 const categorizeEquipment = (items = []) => {
   const grouped = deepClone(defaultEquipment);
 
@@ -66,6 +79,106 @@ const categorizeEquipment = (items = []) => {
   });
 
   return grouped;
+};
+
+const formatOrigin = (value) => {
+  if (!value) return 'Catálogo';
+  const label = value.toString().trim();
+  return label.length > 0 ? label : 'Catálogo';
+};
+
+const buildWeaponEntry = (weapon) => {
+  if (!weapon) return null;
+
+  const name = weapon.nombre || weapon.name || '';
+  if (!name) return null;
+
+  const description = weapon.descripcion || weapon.description || '';
+  const traits = joinTraits(weapon.rasgos || weapon.traits || '');
+  const category =
+    weapon.tecnologia ||
+    weapon.tipo ||
+    weapon.tipoDano ||
+    weapon.category ||
+    'Arma';
+
+  return {
+    id: weapon.id || name,
+    name,
+    category,
+    preview: description || traits || `${weapon.dano || ''} ${weapon.alcance || ''}`.trim(),
+    origin: formatOrigin(weapon.fuente || weapon.source),
+    payload: {
+      name,
+      category,
+      damage: weapon.dano || weapon.damage || '',
+      range: weapon.alcance || weapon.range || '',
+      properties: traits,
+      description,
+    },
+  };
+};
+
+const buildArmorEntry = (armor) => {
+  if (!armor) return null;
+
+  const name = armor.nombre || armor.name || '';
+  if (!name) return null;
+
+  const description = armor.descripcion || armor.description || '';
+  const traits = joinTraits(armor.rasgos || armor.traits || '');
+  const category = armor.tipo || armor.categoria || armor.category || 'Armadura';
+
+  return {
+    id: armor.id || name,
+    name,
+    category,
+    preview: description || traits || `${armor.defensa || ''} ${armor.carga || ''}`.trim(),
+    origin: formatOrigin(armor.fuente || armor.source),
+    payload: {
+      name,
+      category,
+      defense: armor.defensa || armor.defense || '',
+      weight: armor.cargaFisica || armor.peso || armor.carga || '',
+      traits,
+      description,
+    },
+  };
+};
+
+const buildAbilityEntry = (ability) => {
+  if (!ability) return null;
+
+  const name = ability.nombre || ability.name || '';
+  if (!name) return null;
+
+  const description = ability.descripcion || ability.description || '';
+  const traits = joinTraits(ability.rasgos || ability.traits || '');
+  const category = ability.poder || ability.tipo || ability.category || 'Habilidad';
+  const metaChunks = [];
+
+  if (ability.alcance) {
+    metaChunks.push(`Alcance: ${ability.alcance}`);
+  }
+  if (traits) {
+    metaChunks.push(`Rasgos: ${traits}`);
+  }
+  const meta = metaChunks.join(' • ');
+
+  return {
+    id: ability.id || name,
+    name,
+    category,
+    preview: description || meta,
+    origin: formatOrigin(ability.fuente || ability.source),
+    payload: {
+      name,
+      category,
+      cost: ability.consumo || ability.cost || '',
+      cooldown: ability.recarga || ability.cooldown || '',
+      description: meta ? `${description}${description ? '\n' : ''}${meta}` : description,
+    },
+  };
 };
 
 const EditableField = ({
@@ -171,6 +284,8 @@ const ensureClassDefaults = (classItem) => {
     ...deepClone(base),
     ...deepClone(classItem),
   };
+
+  merged.status = merged.status || 'available';
 
   merged.inspiration = (merged.inspiration || []).map((entry) => ({
     completed: false,
@@ -730,7 +845,7 @@ const RatingStars = ({ rating, onChange, size = 'md' }) => {
   );
 };
 
-const ClassList = ({ onBack }) => {
+const ClassList = ({ onBack, armas = [], armaduras = [], habilidades = [] }) => {
   const [classes, setClasses] = useState(initialClasses);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphaAsc');
@@ -740,14 +855,28 @@ const ClassList = ({ onBack }) => {
     classId: null,
     imageSrc: '',
     crop: { x: 0, y: 0 },
-    zoom: 1.4,
+    zoom: 0.9,
     croppedAreaPixels: null,
   });
   const [isCropping, setIsCropping] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
   const [levelSliderLimit, setLevelSliderLimit] = useState(12);
+  const [equipmentSearchTerms, setEquipmentSearchTerms] = useState({
+    weapons: '',
+    armor: '',
+    abilities: '',
+  });
 
   const fileInputRef = useRef(null);
+
+  const equipmentCatalog = useMemo(
+    () => ({
+      weapons: (armas || []).map(buildWeaponEntry).filter(Boolean),
+      armor: (armaduras || []).map(buildArmorEntry).filter(Boolean),
+      abilities: (habilidades || []).map(buildAbilityEntry).filter(Boolean),
+    }),
+    [armas, armaduras, habilidades],
+  );
 
   const handleSearchChange = (event) => setSearchTerm(event.target.value);
 
@@ -786,6 +915,55 @@ const ClassList = ({ onBack }) => {
       mutator(draft);
       return draft;
     });
+  };
+
+  const handleEquipmentSearchChange = (category, value) => {
+    setEquipmentSearchTerms((prev) => ({ ...prev, [category]: value }));
+  };
+
+  const importEquipmentFromCatalog = (category, payload) => {
+    if (!payload) return;
+
+    const normalized = (() => {
+      switch (category) {
+        case 'weapons':
+          return {
+            name: payload.name || 'Arma sin nombre',
+            category: payload.category || 'Arma',
+            damage: payload.damage || '',
+            range: payload.range || '',
+            properties: payload.properties || '',
+            description: payload.description || '',
+          };
+        case 'armor':
+          return {
+            name: payload.name || 'Armadura sin nombre',
+            category: payload.category || 'Armadura',
+            defense: payload.defense || '',
+            weight: payload.weight || '',
+            traits: payload.traits || '',
+            description: payload.description || '',
+          };
+        case 'abilities':
+        default:
+          return {
+            name: payload.name || 'Habilidad sin nombre',
+            category: payload.category || 'Habilidad',
+            cost: payload.cost || '',
+            cooldown: payload.cooldown || '',
+            description: payload.description || '',
+          };
+      }
+    })();
+
+    updateEditingClass((draft) => {
+      draft.equipment = draft.equipment || deepClone(defaultEquipment);
+      const list = draft.equipment[category] || [];
+      list.push(normalized);
+      draft.equipment[category] = list;
+    });
+
+    setEquipmentSearchTerms((prev) => ({ ...prev, [category]: '' }));
   };
 
   const handleGeneralFieldChange = (field, value) => {
@@ -1361,26 +1539,109 @@ const ClassList = ({ onBack }) => {
       case 'equipment': {
         const { weapons = [], armor = [], abilities = [] } = equipment || defaultEquipment;
 
-        const renderEquipmentSection = (category, title, items, fields) => (
-          <div key={category} className="space-y-3 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-[0.35em] text-slate-500">{title}</div>
-              <button
-                type="button"
-                onClick={() => addEquipmentItem(category)}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
-              >
-                <FiPlus className="h-4 w-4" />
-                Añadir
-              </button>
-            </div>
-            {items.length > 0 ? (
-              <div className="space-y-4">
-                {items.map((item, index) => (
-                  <div
-                    key={`${category}-${index}`}
-                    className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
-                  >
+        const renderEquipmentSection = (category, title, items, fields) => {
+          const searchValue = equipmentSearchTerms[category] || '';
+          const normalizedSearch = searchValue.trim().toLowerCase();
+          const catalog = equipmentCatalog[category] || [];
+          const catalogMatches =
+            normalizedSearch.length > 0
+              ? catalog.filter((entry) =>
+                  [entry.name, entry.category, entry.preview]
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(normalizedSearch)
+                )
+              : [];
+          const limitedMatches = catalogMatches.slice(0, 8);
+
+          return (
+            <div key={category} className="space-y-3 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs uppercase tracking-[0.35em] text-slate-500">{title}</div>
+                <button
+                  type="button"
+                  onClick={() => addEquipmentItem(category)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+                >
+                  <FiPlus className="h-4 w-4" />
+                  Añadir
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">
+                  Importar desde el repositorio
+                </label>
+                <div className="relative">
+                  <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(event) => handleEquipmentSearchChange(category, event.target.value)}
+                    placeholder={`Buscar ${title.toLowerCase()}`}
+                    className="w-full rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 pl-9 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                  />
+                  {searchValue && (
+                    <button
+                      type="button"
+                      onClick={() => handleEquipmentSearchChange(category, '')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 text-slate-500 transition hover:text-rose-300"
+                      aria-label={`Borrar búsqueda de ${title.toLowerCase()}`}
+                    >
+                      <FiX className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {searchValue && (
+                  <div className="mt-1 max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-slate-800/70 bg-slate-950/90 p-3 [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
+                    {limitedMatches.length > 0 ? (
+                      limitedMatches.map((option) => (
+                        <button
+                          key={`${category}-catalog-${option.id}`}
+                          type="button"
+                          onClick={() => importEquipmentFromCatalog(category, option.payload)}
+                          className="group flex w-full flex-col gap-1 rounded-2xl border border-transparent px-3 py-2 text-left transition hover:border-sky-500/40 hover:bg-sky-500/10"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">
+                                {option.category || 'Sin categoría'}
+                              </div>
+                              <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-100">
+                                {option.name}
+                              </div>
+                            </div>
+                            <FiArrowRight className="mt-1 h-4 w-4 text-sky-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
+                          </div>
+                          {option.preview && (
+                            <p className="text-xs leading-relaxed text-slate-400">{option.preview}</p>
+                          )}
+                          {option.origin && (
+                            <div className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-600">
+                              {option.origin}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-slate-400">
+                        No se encontraron coincidencias en el catálogo.
+                      </div>
+                    )}
+                    <div className="mt-2 text-[0.55rem] uppercase tracking-[0.35em] text-slate-600">
+                      Selecciona una entrada para agregarla a la lista.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {items.length > 0 ? (
+                <div className="space-y-4">
+                  {items.map((item, index) => (
+                    <div
+                      key={`${category}-${index}`}
+                      className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
+                    >
                     <div className="flex items-start justify-between gap-3">
                       <EditableField
                         value={item.name}
@@ -1424,15 +1685,16 @@ const ClassList = ({ onBack }) => {
                       />
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/50 p-4 text-sm text-slate-500">
-                No hay elementos registrados todavía.
-              </div>
-            )}
-          </div>
-        );
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/50 p-4 text-sm text-slate-500">
+                  No hay elementos registrados todavía.
+                </div>
+              )}
+            </div>
+          );
+        };
 
         const renderPreviewCards = (title, items, accent) => (
           <div className="space-y-3">
@@ -1600,7 +1862,7 @@ const ClassList = ({ onBack }) => {
   }, [classes, searchTerm, sortBy]);
 
   const openFileDialogForClass = (classId) => {
-    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.5, croppedAreaPixels: null });
+    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1, croppedAreaPixels: null });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
@@ -1625,7 +1887,7 @@ const ClassList = ({ onBack }) => {
 
   const handleCropCancel = () => {
     setIsCropping(false);
-    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.4, croppedAreaPixels: null });
+    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 0.9, croppedAreaPixels: null });
   };
 
   const handleCropSave = async () => {
@@ -1912,13 +2174,36 @@ const ClassList = ({ onBack }) => {
                         <span>Valoración</span>
                         <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
                       </div>
-                      {statusConfig[editingClass.status] && (
+                      <div className="flex flex-col items-end gap-2">
+                        <label className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-500">Estado</label>
+                        <div className="relative">
+                          <select
+                            value={editingClass.status || 'available'}
+                            onChange={(event) => handleGeneralFieldChange('status', event.target.value)}
+                            className="appearance-none rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1.5 pr-10 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                          >
+                            {Object.entries(statusConfig).map(([value, config]) => (
+                              <option key={`status-${value}`} value={value}>
+                                {config.label}
+                              </option>
+                            ))}
+                          </select>
+                          <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        </div>
+                      </div>
+                      {statusConfig[editingClass.status] ? (
                         <div
                           className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}
                         >
                           {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
                           <span>{statusConfig[editingClass.status].label}</span>
                         </div>
+                      ) : (
+                        editingClass.status && (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
+                            {editingClass.status}
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
@@ -2002,7 +2287,11 @@ const ClassList = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                  {renderDetailContent()}
+                  <div className="max-h-[520px] overflow-y-auto pr-3 md:max-h-[620px] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
+                    <div className="space-y-6 pb-2">
+                      {renderDetailContent()}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2171,6 +2460,8 @@ const ClassList = ({ onBack }) => {
                 crop={cropperState.crop}
                 zoom={cropperState.zoom}
                 aspect={4 / 5}
+                minZoom={0.3}
+                maxZoom={6}
                 onCropChange={(crop) => setCropperState((prev) => ({ ...prev, crop }))}
                 onZoomChange={(zoom) => setCropperState((prev) => ({ ...prev, zoom }))}
                 onCropComplete={handleCropComplete}
@@ -2190,7 +2481,7 @@ const ClassList = ({ onBack }) => {
             <input
               id="zoom"
               type="range"
-              min={1}
+              min={0.3}
               max={6}
               step={0.05}
               value={cropperState.zoom}
@@ -2208,6 +2499,9 @@ const ClassList = ({ onBack }) => {
 
 ClassList.propTypes = {
   onBack: PropTypes.func.isRequired,
+  armas: PropTypes.arrayOf(PropTypes.object),
+  armaduras: PropTypes.arrayOf(PropTypes.object),
+  habilidades: PropTypes.arrayOf(PropTypes.object),
 };
 
 export default ClassList;
