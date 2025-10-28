@@ -21,6 +21,8 @@ import {
 import Cropper from 'react-easy-crop';
 import Boton from './Boton';
 import Modal from './Modal';
+import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
+import { convertNumericStringToIcons } from '../utils/iconConversions';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -30,6 +32,19 @@ const defaultEquipment = {
   abilities: [],
 };
 
+const toArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const joinTraits = (value) => toArray(value).join(', ');
+
 const categorizeEquipment = (items = []) => {
   const grouped = deepClone(defaultEquipment);
 
@@ -38,6 +53,7 @@ const categorizeEquipment = (items = []) => {
       name: item.name || '',
       category: item.type || '',
       description: item.detail || '',
+      rareza: item.rareza || item.rarity || '',
     };
 
     const typeLabel = (item.type || '').toLowerCase();
@@ -46,26 +62,288 @@ const categorizeEquipment = (items = []) => {
       grouped.weapons.push({
         damage: item.damage || '',
         range: item.range || '',
-        properties: '',
+        consumption: item.consumo || item.cost || '',
+        physicalLoad: item.cargaFisica || item.carga || '',
+        mentalLoad: item.cargaMental || '',
+        traits: joinTraits(item.rasgos || item.traits || item.properties || ''),
         ...baseEntry,
       });
     } else if (typeLabel.includes('armadura') || typeLabel.includes('escudo')) {
       grouped.armor.push({
-        defense: '',
-        weight: '',
-        traits: '',
+        defense: item.defensa || item.defense || '',
+        physicalLoad: item.cargaFisica || item.carga || '',
+        mentalLoad: item.cargaMental || '',
+        traits: joinTraits(item.rasgos || item.traits || ''),
         ...baseEntry,
       });
     } else {
       grouped.abilities.push({
-        cost: '',
-        cooldown: '',
+        damage: item.dano || item.damage || '',
+        range: item.alcance || item.range || '',
+        consumption: item.consumo || item.cost || '',
+        body: item.cuerpo || '',
+        mind: item.mente || '',
+        trait: joinTraits(item.rasgo || item.rasgos || item.traits || ''),
         ...baseEntry,
       });
     }
   });
 
   return grouped;
+};
+
+const formatOrigin = (value) => {
+  if (!value) return 'Catálogo';
+  const label = value.toString().trim();
+  return label.length > 0 ? label : 'Catálogo';
+};
+
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') {
+    return `rgba(148, 163, 184, ${alpha})`;
+  }
+
+  let normalized = hex.trim().replace('#', '');
+  if (normalized.length === 3) {
+    normalized = normalized
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('');
+  }
+
+  if (normalized.length !== 6) {
+    return `rgba(148, 163, 184, ${alpha})`;
+  }
+
+  const bigint = parseInt(normalized, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const buildRarityStyle = (color) => {
+  if (!color) {
+    return null;
+  }
+
+  const border = hexToRgba(color, 0.55);
+  const borderHover = hexToRgba(color, 0.85);
+  const background = `linear-gradient(140deg, ${hexToRgba(color, 0.16)} 0%, transparent 75%)`;
+  const shadow = `0 18px 45px -24px ${hexToRgba(color, 0.45)}`;
+  const shadowHover = `0 22px 55px -20px ${hexToRgba(color, 0.65)}`;
+
+  return {
+    border,
+    borderHover,
+    background,
+    shadow,
+    shadowHover,
+  };
+};
+
+const sanitizeCategoryCandidate = (value) => {
+  if (!value) return '';
+  const label = value.toString().trim();
+  if (!label) return '';
+
+  if (/^[\d\s]*[🛠️🧠🔲🟡⚫⚪]+$/u.test(label)) {
+    return '';
+  }
+
+  if (/^[\d]+d\d+/i.test(label)) {
+    return '';
+  }
+
+  return label;
+};
+
+const extractCategory = (candidates, fallback) => {
+  for (const candidate of candidates) {
+    const sanitized = sanitizeCategoryCandidate(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return fallback;
+};
+
+const looksLikeDiceValue = (value) => {
+  if (!value) return false;
+  return /^[\d]+d\d+(\s*[+-]\s*\d+)?$/i.test(value.toString().trim());
+};
+
+const toDisplayString = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return value.toString();
+};
+
+const buildWeaponEntry = (weapon) => {
+  if (!weapon) return null;
+
+  const name = weapon.nombre || weapon.name || '';
+  if (!name) return null;
+
+  const description = weapon.descripcion || weapon.description || '';
+  const traits = joinTraits(weapon.rasgos || weapon.traits || '');
+  const category = extractCategory(
+    [weapon.tipo, weapon.tipoDano, weapon.category, weapon.clase, weapon.origen],
+    'Arma',
+  );
+
+  const consumption = convertNumericStringToIcons(
+    weapon.consumo || weapon.cost || '',
+    '🟡',
+    ['Consumo', 'Velocidad'],
+  );
+  const physicalLoad = convertNumericStringToIcons(
+    weapon.cargaFisica || weapon.carga || '',
+    '🔲',
+    ['Carga física', 'Carga fisica'],
+  );
+  const mentalLoad = convertNumericStringToIcons(
+    weapon.cargaMental || '',
+    '🧠',
+    ['Carga mental'],
+  );
+  const rarity = (weapon.rareza || weapon.rarity || '').toString().trim();
+
+  const payload = {
+    id: weapon.id || name,
+    name,
+    category,
+    preview: description || traits || `${weapon.dano || ''} ${weapon.alcance || ''}`.trim(),
+    origin: formatOrigin(weapon.fuente || weapon.source),
+    payload: {
+      name,
+      category,
+      damage: weapon.dano || weapon.damage || '',
+      range: weapon.alcance || weapon.range || '',
+      consumption,
+      physicalLoad,
+      mentalLoad,
+      traits,
+      rareza: rarity,
+      description,
+    },
+  };
+
+  if (!payload.payload.damage && looksLikeDiceValue(category)) {
+    payload.payload.damage = category;
+    payload.payload.category = 'Arma';
+    payload.category = 'Arma';
+  }
+
+  return payload;
+};
+
+const buildArmorEntry = (armor) => {
+  if (!armor) return null;
+
+  const name = armor.nombre || armor.name || '';
+  if (!name) return null;
+
+  const description = armor.descripcion || armor.description || '';
+  const traits = joinTraits(armor.rasgos || armor.traits || '');
+  const category = extractCategory(
+    [armor.tipo, armor.categoria, armor.category, armor.clase],
+    'Armadura',
+  );
+
+  const physicalLoad = convertNumericStringToIcons(
+    armor.cargaFisica || armor.carga || armor.peso || '',
+    '🔲',
+    ['Carga física', 'Carga fisica'],
+  );
+  const mentalLoad = convertNumericStringToIcons(
+    armor.cargaMental || '',
+    '🧠',
+    ['Carga mental'],
+  );
+  const rarity = (armor.rareza || armor.rarity || '').toString().trim();
+
+  return {
+    id: armor.id || name,
+    name,
+    category,
+    preview: description || traits || `${armor.defensa || ''} ${armor.carga || ''}`.trim(),
+    origin: formatOrigin(armor.fuente || armor.source),
+    payload: {
+      name,
+      category,
+      defense: armor.defensa || armor.defense || '',
+      physicalLoad,
+      mentalLoad,
+      traits,
+      rareza: rarity,
+      description,
+    },
+  };
+};
+
+const buildAbilityEntry = (ability) => {
+  if (!ability) return null;
+
+  const name = ability.nombre || ability.name || '';
+  if (!name) return null;
+
+  const description = ability.descripcion || ability.description || '';
+  const traits = joinTraits(ability.rasgos || ability.traits || '');
+  let category = extractCategory(
+    [ability.poder, ability.tipo, ability.category],
+    'Habilidad',
+  );
+  const metaChunks = [];
+
+  if (ability.alcance) {
+    metaChunks.push(`Alcance: ${ability.alcance}`);
+  }
+  if (traits) {
+    metaChunks.push(`Rasgos: ${traits}`);
+  }
+
+  const consumption = convertNumericStringToIcons(
+    ability.consumo || ability.cost || '',
+    '🟡',
+    ['Consumo', 'Velocidad'],
+  );
+  const body = convertNumericStringToIcons(ability.cuerpo || '', '🔲', ['Cuerpo']);
+  const mind = convertNumericStringToIcons(ability.mente || '', '🧠', ['Mente']);
+  const trait = joinTraits(ability.rasgo || ability.etiqueta || ability.keyword || '');
+  const rarity = (ability.rareza || ability.rarity || '').toString().trim();
+
+  const meta = metaChunks.join(' • ');
+
+  const payload = {
+    id: ability.id || name,
+    name,
+    category,
+    preview: description || meta,
+    origin: formatOrigin(ability.fuente || ability.source),
+    payload: {
+      name,
+      category,
+      damage: ability.dano || ability.damage || '',
+      range: ability.alcance || ability.range || '',
+      consumption,
+      body,
+      mind,
+      trait: trait || traits,
+      rareza: rarity,
+      description: meta ? `${description}${description ? '\n' : ''}${meta}` : description,
+    },
+  };
+
+  if (!payload.payload.damage && looksLikeDiceValue(category)) {
+    payload.payload.damage = category;
+    payload.payload.category = 'Habilidad';
+    payload.category = 'Habilidad';
+  }
+
+  return payload;
 };
 
 const EditableField = ({
@@ -172,12 +450,28 @@ const ensureClassDefaults = (classItem) => {
     ...deepClone(classItem),
   };
 
+  merged.status = merged.status || 'available';
+
   merged.inspiration = (merged.inspiration || []).map((entry) => ({
     completed: false,
     ...entry,
   }));
 
-  merged.classLevels = merged.classLevels || [];
+  merged.classLevels = (merged.classLevels || []).map((level, index) => {
+    if (level && typeof level === 'object') {
+      return {
+        title: level.title || `Nivel ${index + 1} — Nuevo avance`,
+        description: level.description || '',
+        completed: Boolean(level.completed),
+      };
+    }
+
+    return {
+      title: `Nivel ${index + 1} — Nuevo avance`,
+      description: typeof level === 'string' ? level : '',
+      completed: false,
+    };
+  });
   merged.rules = merged.rules || [];
 
   merged.equipment = {
@@ -185,34 +479,101 @@ const ensureClassDefaults = (classItem) => {
     ...(merged.equipment || {}),
   };
 
-  merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => ({
-    name: '',
-    category: '',
-    damage: '',
-    range: '',
-    properties: '',
-    description: '',
-    ...weapon,
-  }));
+  merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => {
+    const consumption = toDisplayString(
+      weapon.consumption ?? weapon.cost ?? weapon.consumo ?? '',
+    );
+    const physicalLoad = toDisplayString(
+      weapon.physicalLoad ??
+        weapon.weight ??
+        weapon.cargaFisica ??
+        weapon.carga ??
+        '',
+    );
+    const mentalLoad = toDisplayString(
+      weapon.mentalLoad ?? weapon.cargaMental ?? '',
+    );
+    const traitsValue = joinTraits(
+      weapon.traits || weapon.properties || weapon.rasgos || '',
+    );
 
-  merged.equipment.armor = (merged.equipment.armor || []).map((armor) => ({
-    name: '',
-    category: '',
-    defense: '',
-    weight: '',
-    traits: '',
-    description: '',
-    ...armor,
-  }));
+    return {
+      name: '',
+      category: '',
+      damage: toDisplayString(weapon.damage ?? weapon.dano ?? ''),
+      range: toDisplayString(weapon.range ?? weapon.alcance ?? ''),
+      consumption,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+      rareza: toDisplayString(weapon.rareza || ''),
+      description: '',
+      ...weapon,
+      damage: toDisplayString(weapon.damage ?? weapon.dano ?? ''),
+      range: toDisplayString(weapon.range ?? weapon.alcance ?? ''),
+      consumption,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+    };
+  });
 
-  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => ({
-    name: '',
-    category: '',
-    cost: '',
-    cooldown: '',
-    description: '',
-    ...ability,
-  }));
+  merged.equipment.armor = (merged.equipment.armor || []).map((armor) => {
+    const physicalLoad = toDisplayString(
+      armor.physicalLoad ??
+        armor.weight ??
+        armor.cargaFisica ??
+        armor.carga ??
+        '',
+    );
+    const mentalLoad = toDisplayString(armor.mentalLoad ?? armor.cargaMental ?? '');
+    const traitsValue = joinTraits(armor.traits || armor.rasgos || '');
+
+    return {
+      name: '',
+      category: '',
+      defense: toDisplayString(armor.defense ?? armor.defensa ?? ''),
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+      rareza: toDisplayString(armor.rareza || ''),
+      description: '',
+      ...armor,
+      defense: toDisplayString(armor.defense ?? armor.defensa ?? ''),
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+    };
+  });
+
+  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => {
+    const consumption = toDisplayString(
+      ability.consumption ?? ability.cost ?? ability.consumo ?? '',
+    );
+    const body = toDisplayString(ability.body ?? ability.cuerpo ?? '');
+    const mind = toDisplayString(ability.mind ?? ability.mente ?? '');
+    const traitValue = joinTraits(ability.trait || ability.rasgo || ability.rasgos || '');
+
+    return {
+      name: '',
+      category: '',
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+      rareza: toDisplayString(ability.rareza || ''),
+      description: '',
+      ...ability,
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+    };
+  });
 
   merged.tags = merged.tags || [];
 
@@ -730,7 +1091,14 @@ const RatingStars = ({ rating, onChange, size = 'md' }) => {
   );
 };
 
-const ClassList = ({ onBack }) => {
+const ClassList = ({
+  onBack,
+  armas = [],
+  armaduras = [],
+  habilidades = [],
+  glossary = [],
+  rarityColorMap = {},
+}) => {
   const [classes, setClasses] = useState(initialClasses);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphaAsc');
@@ -740,14 +1108,150 @@ const ClassList = ({ onBack }) => {
     classId: null,
     imageSrc: '',
     crop: { x: 0, y: 0 },
-    zoom: 1.4,
+    zoom: 0.9,
     croppedAreaPixels: null,
   });
   const [isCropping, setIsCropping] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
   const [levelSliderLimit, setLevelSliderLimit] = useState(12);
+  const [equipmentSearchTerms, setEquipmentSearchTerms] = useState({
+    weapons: '',
+    armor: '',
+    abilities: '',
+  });
 
   const fileInputRef = useRef(null);
+
+  const equipmentCatalog = useMemo(
+    () => ({
+      weapons: (armas || []).map(buildWeaponEntry).filter(Boolean),
+      armor: (armaduras || []).map(buildArmorEntry).filter(Boolean),
+      abilities: (habilidades || []).map(buildAbilityEntry).filter(Boolean),
+    }),
+    [armas, armaduras, habilidades],
+  );
+
+  const highlightText = useCallback(
+    (rawValue) => {
+      if (rawValue === null || rawValue === undefined) return '';
+
+      const text = Array.isArray(rawValue)
+        ? rawValue.join(', ')
+        : rawValue.toString();
+
+      if (!text || !glossary || glossary.length === 0) {
+        return text;
+      }
+
+      let parts = [text];
+
+      glossary.forEach((term) => {
+        if (!term?.word) return;
+
+        const tooltipId = getGlossaryTooltipId(term.word);
+        const escapedWord = escapeGlossaryWord(term.word);
+
+        if (!escapedWord) return;
+
+        const regex = new RegExp(`(${escapedWord})`, 'gi');
+        let matchIndex = 0;
+
+        parts = parts.flatMap((part) => {
+          if (typeof part !== 'string') return [part];
+
+          return part.split(regex).map((segment) => {
+            if (
+              segment &&
+              segment.toLowerCase() === term.word.toLowerCase()
+            ) {
+              const key = `${tooltipId}-${matchIndex++}`;
+
+              const style = term.color
+                ? { color: term.color }
+                : undefined;
+
+              return (
+                <span
+                  key={key}
+                  style={style}
+                  className="font-semibold cursor-help underline decoration-dotted decoration-2 underline-offset-4"
+                  data-tooltip-id={tooltipId}
+                  data-tooltip-content={term.info}
+                >
+                  {segment}
+                </span>
+              );
+            }
+
+            return segment;
+          });
+        });
+      });
+
+      return parts;
+    },
+    [glossary],
+  );
+
+  const normalizeStatIcons = useCallback((value, type) => {
+    if (value === null || value === undefined) return value;
+
+    let normalizedValue = value;
+    if (typeof normalizedValue === 'number') {
+      normalizedValue = normalizedValue.toString();
+    }
+
+    if (Array.isArray(normalizedValue)) {
+      normalizedValue = normalizedValue.join(', ');
+    }
+
+    if (typeof normalizedValue !== 'string') {
+      return normalizedValue;
+    }
+
+    const trimmed = normalizedValue.trim();
+    if (!trimmed) return '';
+
+    switch (type) {
+      case 'consumption':
+        return convertNumericStringToIcons(trimmed, '🟡', ['Consumo', 'Velocidad']);
+      case 'physical':
+        return convertNumericStringToIcons(trimmed, '🔲', [
+          'Carga física',
+          'Carga fisica',
+          'Cuerpo',
+        ]);
+      case 'mental':
+        return convertNumericStringToIcons(trimmed, '🧠', ['Carga mental', 'Mente']);
+      default:
+        return trimmed;
+    }
+  }, []);
+
+  const renderHighlightedValue = useCallback(
+    (value, { placeholder = '—', className = 'font-semibold text-slate-100', statType } = {}) => {
+      const normalized = statType ? normalizeStatIcons(value, statType) : value;
+      const content =
+        normalized !== null && normalized !== undefined
+          ? normalized.toString().trim()
+          : '';
+
+      if (!content) {
+        return <span className="text-slate-500">{placeholder}</span>;
+      }
+
+      return <span className={className}>{highlightText(content)}</span>;
+    },
+    [highlightText, normalizeStatIcons],
+  );
+
+  const getRarityStyle = useCallback(
+    (rarity) => {
+      const color = rarity ? rarityColorMap?.[rarity] : null;
+      return buildRarityStyle(color);
+    },
+    [rarityColorMap],
+  );
 
   const handleSearchChange = (event) => setSearchTerm(event.target.value);
 
@@ -786,6 +1290,66 @@ const ClassList = ({ onBack }) => {
       mutator(draft);
       return draft;
     });
+  };
+
+  const handleEquipmentSearchChange = (category, value) => {
+    setEquipmentSearchTerms((prev) => ({ ...prev, [category]: value }));
+  };
+
+  const importEquipmentFromCatalog = (category, payload) => {
+    if (!payload) return;
+
+    const normalized = (() => {
+      switch (category) {
+        case 'weapons':
+          return {
+            name: payload.name || 'Arma sin nombre',
+            category: payload.category || 'Arma',
+            damage: payload.damage || '',
+            range: payload.range || '',
+            consumption: payload.consumption || '',
+            physicalLoad: payload.physicalLoad || '',
+            mentalLoad: payload.mentalLoad || '',
+            traits: payload.traits || payload.properties || '',
+            rareza: payload.rareza || '',
+            description: payload.description || '',
+          };
+        case 'armor':
+          return {
+            name: payload.name || 'Armadura sin nombre',
+            category: payload.category || 'Armadura',
+            defense: payload.defense || '',
+            physicalLoad: payload.physicalLoad || payload.weight || '',
+            mentalLoad: payload.mentalLoad || '',
+            traits: payload.traits || '',
+            rareza: payload.rareza || '',
+            description: payload.description || '',
+          };
+        case 'abilities':
+        default:
+          return {
+            name: payload.name || 'Habilidad sin nombre',
+            category: payload.category || 'Habilidad',
+            damage: payload.damage || '',
+            range: payload.range || '',
+            consumption: payload.consumption || payload.cost || '',
+            body: payload.body || '',
+            mind: payload.mind || '',
+            trait: payload.trait || payload.traits || '',
+            rareza: payload.rareza || '',
+            description: payload.description || '',
+          };
+      }
+    })();
+
+    updateEditingClass((draft) => {
+      draft.equipment = draft.equipment || deepClone(defaultEquipment);
+      const list = draft.equipment[category] || [];
+      list.push(normalized);
+      draft.equipment[category] = list;
+    });
+
+    setEquipmentSearchTerms((prev) => ({ ...prev, [category]: '' }));
   };
 
   const handleGeneralFieldChange = (field, value) => {
@@ -927,6 +1491,15 @@ const ClassList = ({ onBack }) => {
     });
   };
 
+  const toggleLevelCompleted = (index) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[index]) return;
+      levels[index].completed = !levels[index].completed;
+      draft.classLevels = levels;
+    });
+  };
+
   const setLevelCount = (count) => {
     updateEditingClass((draft) => {
       const target = Math.max(0, count);
@@ -934,8 +1507,9 @@ const ClassList = ({ onBack }) => {
       if (target > levels.length) {
         for (let i = levels.length; i < target; i += 1) {
           levels.push({
-            title: `Nivel ${i} — Nuevo avance`,
+            title: `Nivel ${i + 1} — Nuevo avance`,
             description: 'Describe el beneficio de este nivel.',
+            completed: false,
           });
         }
       } else if (target < levels.length) {
@@ -979,22 +1553,33 @@ const ClassList = ({ onBack }) => {
         category: 'Categoría',
         damage: '',
         range: '',
-        properties: '',
+        consumption: '',
+        physicalLoad: '',
+        mentalLoad: '',
+        traits: '',
+        rareza: '',
         description: 'Describe los rasgos principales del arma.',
       },
       armor: {
         name: 'Nueva armadura',
         category: 'Categoría',
         defense: '',
-        weight: '',
+        physicalLoad: '',
+        mentalLoad: '',
         traits: '',
+        rareza: '',
         description: 'Describe la protección o ventajas especiales.',
       },
       abilities: {
         name: 'Nueva habilidad',
         category: 'Tipo',
-        cost: '',
-        cooldown: '',
+        damage: '',
+        range: '',
+        consumption: '',
+        body: '',
+        mind: '',
+        trait: '',
+        rareza: '',
         description: 'Detalla el efecto de la habilidad.',
       },
     };
@@ -1272,39 +1857,75 @@ const ClassList = ({ onBack }) => {
             </div>
             {levelCount > 0 ? (
               <div className="space-y-4">
-                {classLevels.map((level, index) => (
-                  <div
-                    key={`level-${index}`}
-                    className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-5 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
+                {classLevels.map((level, index) => {
+                  const isCompleted = Boolean(level.completed);
+                  const cardTone = isCompleted
+                    ? 'border-emerald-400/50 bg-emerald-500/10 shadow-[0_12px_28px_-18px_rgba(16,185,129,0.6)]'
+                    : 'border-indigo-400/30 bg-indigo-500/10 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]';
+
+                  return (
+                    <div
+                      key={`level-${index}`}
+                      className={`rounded-2xl p-5 transition ${cardTone}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-1 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleLevelCompleted(index)}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm transition ${
+                              isCompleted
+                                ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300'
+                                : 'border-indigo-400/40 bg-indigo-500/10 text-indigo-200 hover:border-emerald-300 hover:text-emerald-200'
+                            }`}
+                            aria-pressed={isCompleted}
+                            aria-label={
+                              isCompleted
+                                ? `Marcar nivel ${index + 1} como pendiente`
+                                : `Marcar nivel ${index + 1} como completado`
+                            }
+                          >
+                            {isCompleted ? (
+                              <FiCheckSquare className="h-4 w-4" />
+                            ) : (
+                              <FiSquare className="h-4 w-4" />
+                            )}
+                          </button>
+                          <EditableField
+                            value={level.title}
+                            onChange={(value) => handleLevelFieldChange(index, 'title', value)}
+                            placeholder={`Nivel ${index + 1} — Define el avance`}
+                            displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
+                            textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${
+                              isCompleted
+                                ? 'text-emerald-100 line-through decoration-emerald-300/60 decoration-2'
+                                : 'text-indigo-100'
+                            }`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeLevel(index)}
+                          className="rounded-full border border-transparent p-2 text-indigo-200/80 transition hover:border-indigo-300 hover:text-rose-200"
+                          aria-label="Eliminar nivel"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                       <EditableField
-                        value={level.title}
-                        onChange={(value) => handleLevelFieldChange(index, 'title', value)}
-                        placeholder={`Nivel ${index} — Define el avance`}
-                        displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
-                        textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-100"
+                        value={level.description}
+                        onChange={(value) => handleLevelFieldChange(index, 'description', value)}
+                        multiline
+                        placeholder="Detalla el beneficio de alcanzar este nivel."
+                        displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
+                        textClassName={`text-sm leading-relaxed ${
+                          isCompleted ? 'text-emerald-100/90' : 'text-indigo-50/90'
+                        }`}
+                        inputClassName="bg-indigo-950/40 border-indigo-400/30"
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeLevel(index)}
-                        className="rounded-full border border-transparent p-2 text-indigo-200/80 transition hover:border-indigo-300 hover:text-rose-200"
-                        aria-label="Eliminar nivel"
-                      >
-                        <FiTrash2 className="h-4 w-4" />
-                      </button>
                     </div>
-                    <EditableField
-                      value={level.description}
-                      onChange={(value) => handleLevelFieldChange(index, 'description', value)}
-                      multiline
-                      placeholder="Detalla el beneficio de alcanzar este nivel."
-                      displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
-                      textClassName="text-sm leading-relaxed text-indigo-50/90"
-                      inputClassName="bg-indigo-950/40 border-indigo-400/30"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-indigo-400/30 bg-indigo-500/5 p-5 text-sm text-indigo-100/70">
@@ -1361,26 +1982,109 @@ const ClassList = ({ onBack }) => {
       case 'equipment': {
         const { weapons = [], armor = [], abilities = [] } = equipment || defaultEquipment;
 
-        const renderEquipmentSection = (category, title, items, fields) => (
-          <div key={category} className="space-y-3 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-[0.35em] text-slate-500">{title}</div>
-              <button
-                type="button"
-                onClick={() => addEquipmentItem(category)}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
-              >
-                <FiPlus className="h-4 w-4" />
-                Añadir
-              </button>
-            </div>
-            {items.length > 0 ? (
-              <div className="space-y-4">
-                {items.map((item, index) => (
-                  <div
-                    key={`${category}-${index}`}
-                    className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
-                  >
+        const renderEquipmentSection = (category, title, items, fields) => {
+          const searchValue = equipmentSearchTerms[category] || '';
+          const normalizedSearch = searchValue.trim().toLowerCase();
+          const catalog = equipmentCatalog[category] || [];
+          const catalogMatches =
+            normalizedSearch.length > 0
+              ? catalog.filter((entry) =>
+                  [entry.name, entry.category, entry.preview]
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(normalizedSearch)
+                )
+              : [];
+          const limitedMatches = catalogMatches.slice(0, 8);
+
+          return (
+            <div key={category} className="space-y-3 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs uppercase tracking-[0.35em] text-slate-500">{title}</div>
+                <button
+                  type="button"
+                  onClick={() => addEquipmentItem(category)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+                >
+                  <FiPlus className="h-4 w-4" />
+                  Añadir
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">
+                  Importar desde el repositorio
+                </label>
+                <div className="relative">
+                  <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(event) => handleEquipmentSearchChange(category, event.target.value)}
+                    placeholder={`Buscar ${title.toLowerCase()}`}
+                    className="w-full rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 pl-9 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                  />
+                  {searchValue && (
+                    <button
+                      type="button"
+                      onClick={() => handleEquipmentSearchChange(category, '')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 text-slate-500 transition hover:text-rose-300"
+                      aria-label={`Borrar búsqueda de ${title.toLowerCase()}`}
+                    >
+                      <FiX className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {searchValue && (
+                  <div className="mt-1 max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-slate-800/70 bg-slate-950/90 p-3 [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
+                    {limitedMatches.length > 0 ? (
+                      limitedMatches.map((option) => (
+                        <button
+                          key={`${category}-catalog-${option.id}`}
+                          type="button"
+                          onClick={() => importEquipmentFromCatalog(category, option.payload)}
+                          className="group flex w-full flex-col gap-1 rounded-2xl border border-transparent px-3 py-2 text-left transition hover:border-sky-500/40 hover:bg-sky-500/10"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">
+                                {option.category || 'Sin categoría'}
+                              </div>
+                              <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-100">
+                                {option.name}
+                              </div>
+                            </div>
+                            <FiArrowRight className="mt-1 h-4 w-4 text-sky-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
+                          </div>
+                          {option.preview && (
+                            <p className="text-xs leading-relaxed text-slate-400">{option.preview}</p>
+                          )}
+                          {option.origin && (
+                            <div className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-600">
+                              {option.origin}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-slate-400">
+                        No se encontraron coincidencias en el catálogo.
+                      </div>
+                    )}
+                    <div className="mt-2 text-[0.55rem] uppercase tracking-[0.35em] text-slate-600">
+                      Selecciona una entrada para agregarla a la lista.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {items.length > 0 ? (
+                <div className="space-y-4">
+                  {items.map((item, index) => (
+                    <div
+                      key={`${category}-${index}`}
+                      className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
+                    >
                     <div className="flex items-start justify-between gap-3">
                       <EditableField
                         value={item.name}
@@ -1424,39 +2128,166 @@ const ClassList = ({ onBack }) => {
                       />
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/50 p-4 text-sm text-slate-500">
-                No hay elementos registrados todavía.
-              </div>
-            )}
-          </div>
-        );
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/50 p-4 text-sm text-slate-500">
+                  No hay elementos registrados todavía.
+                </div>
+              )}
+            </div>
+          );
+        };
 
-        const renderPreviewCards = (title, items, accent) => (
-          <div className="space-y-3">
-            <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{title}</div>
-            {items.length > 0 ? (
-              <div className="space-y-3">
-                {items.map((item, index) => (
-                  <div
-                    key={`${title}-${index}`}
-                    className={`rounded-2xl border ${accent.border} ${accent.background} p-4 ${accent.shadow}`}
+        const renderPreviewCards = (title, items, config) => {
+          const baseCardClass =
+            'group relative overflow-hidden rounded-3xl border px-5 py-5 transition-all duration-300 [border-color:var(--card-border-color,_rgba(148,163,184,0.35))] hover:[border-color:var(--card-border-hover-color,_rgba(148,163,184,0.55))] [box-shadow:var(--card-shadow,_0_15px_30px_-20px_rgba(15,23,42,0.6))] hover:[box-shadow:var(--card-shadow-hover,_0_20px_50px_-20px_rgba(56,189,248,0.45))] [background:var(--card-background,_rgba(15,23,42,0.85))] hover:-translate-y-1';
+          const renderStatRow = (label, value, { statType, placeholder, labelClassName, valueClassName } = {}) => (
+            <div className="flex items-start justify-between gap-3">
+              <span
+                className={`text-[0.6rem] uppercase tracking-[0.35em] ${
+                  labelClassName || config.statLabelClass
+                }`}
+              >
+                {label}
+              </span>
+              {renderHighlightedValue(value, {
+                statType,
+                placeholder,
+                className: valueClassName || config.statValueClass,
+              })}
+            </div>
+          );
+
+          const renderTraitsList = (traits, emptyLabel = 'Sin rasgos destacados.') => {
+            const raw = traits ? traits.toString() : '';
+            const pieces = raw
+              .split(',')
+              .map((entry) => entry.trim())
+              .filter(Boolean);
+
+            if (pieces.length === 0) {
+              return (
+                <p className="text-[0.7rem] text-slate-500">{emptyLabel}</p>
+              );
+            }
+
+            return (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pieces.map((trait, index) => (
+                  <span
+                    key={`trait-${trait}-${index}`}
+                    className={`rounded-full border px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.35em] ${config.traitClass}`}
                   >
-                    <div className={`text-xs uppercase tracking-[0.35em] ${accent.text}`}>{item.category || 'Sin categoría'}</div>
-                    <h4 className="mt-1 text-sm font-semibold uppercase tracking-[0.3em] text-white">
-                      {item.name || 'Sin nombre'}
-                    </h4>
-                    {accent.body(item)}
-                  </div>
+                    {renderHighlightedValue(trait, {
+                      className: config.traitValueClass,
+                    })}
+                  </span>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-slate-500">Sin {title.toLowerCase()} definidas.</p>
-            )}
-          </div>
-        );
+            );
+          };
+
+          const renderDescription = (description, placeholder = 'Sin descripción definida.') => (
+            <div className="mt-3">
+              {renderHighlightedValue(description, {
+                placeholder,
+                className: config.descriptionClass,
+              })}
+            </div>
+          );
+
+          return (
+            <div className="space-y-3">
+              <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{title}</div>
+              {items.length > 0 ? (
+                <div className="space-y-4">
+                  {items.map((item, index) => {
+                    const rarityStyle = getRarityStyle(item.rareza);
+                    const rarityColor = item.rareza ? rarityColorMap?.[item.rareza] : null;
+                    const rarityBadgeStyle = rarityColor
+                      ? {
+                          color: rarityColor,
+                          borderColor: hexToRgba(rarityColor, 0.55),
+                          backgroundColor: hexToRgba(rarityColor, 0.18),
+                        }
+                      : undefined;
+
+                    const palette = config.palette || {};
+                    const effectivePalette = {
+                      border: rarityStyle?.border || palette.border,
+                      borderHover:
+                        rarityStyle?.borderHover ||
+                        palette.borderHover ||
+                        rarityStyle?.border ||
+                        palette.border,
+                      shadow: rarityStyle?.shadow || palette.shadow,
+                      shadowHover:
+                        rarityStyle?.shadowHover ||
+                        palette.shadowHover ||
+                        rarityStyle?.shadow ||
+                        palette.shadow,
+                      background: rarityStyle?.background || palette.background,
+                    };
+
+                    return (
+                      <div
+                        key={`${title}-${index}`}
+                        className={`${baseCardClass} ${config.cardClass || ''}`}
+                        style={{
+                          '--card-border-color': effectivePalette.border,
+                          '--card-border-hover-color': effectivePalette.borderHover,
+                          '--card-shadow': effectivePalette.shadow,
+                          '--card-shadow-hover': effectivePalette.shadowHover,
+                          '--card-background': effectivePalette.background,
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div
+                              className={`text-[0.55rem] uppercase tracking-[0.35em] ${config.categoryLabelClass}`}
+                            >
+                              {renderHighlightedValue(item.category || 'Sin categoría', {
+                                className: config.categoryValueClass,
+                                placeholder: 'Sin categoría',
+                              })}
+                            </div>
+                            <h4 className="mt-1 text-lg font-semibold uppercase tracking-[0.25em] text-white">
+                              {renderHighlightedValue(item.name || 'Sin nombre', {
+                                className:
+                                  'text-lg font-semibold uppercase tracking-[0.25em] text-white drop-shadow-[0_0_20px_rgba(148,163,184,0.3)]',
+                                placeholder: 'Sin nombre',
+                              })}
+                            </h4>
+                          </div>
+                          {item.rareza && (
+                            <span
+                              className="inline-flex items-center rounded-full border px-3 py-1 text-[0.55rem] font-semibold uppercase tracking-[0.35em]"
+                              style={rarityBadgeStyle}
+                            >
+                              {renderHighlightedValue(item.rareza, {
+                                className: 'font-semibold uppercase tracking-[0.35em]',
+                                placeholder: '—',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                        {config.renderContent({
+                          item,
+                          renderStatRow,
+                          renderTraitsList,
+                          renderDescription,
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">Sin {title.toLowerCase()} definidas.</p>
+              )}
+            </div>
+          );
+        };
 
         return (
           <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -1465,85 +2296,158 @@ const ClassList = ({ onBack }) => {
                 { key: 'category', label: 'Categoría', placeholder: 'Arma pesada, ligera...' },
                 { key: 'damage', label: 'Daño', placeholder: '2d8 + modificador' },
                 { key: 'range', label: 'Alcance', placeholder: 'Cuerpo a cuerpo, 6 casillas...' },
-                { key: 'properties', label: 'Propiedades', placeholder: 'Perforante, versátil...' },
+                { key: 'consumption', label: 'Consumo', placeholder: '2 = 🟡🟡' },
+                { key: 'physicalLoad', label: 'Carga física', placeholder: '1 = 🔲' },
+                { key: 'mentalLoad', label: 'Carga mental', placeholder: '0 = 🧠' },
+                { key: 'traits', label: 'Rasgos', placeholder: 'Afilada, demoledora...' },
+                { key: 'rareza', label: 'Rareza', placeholder: 'Común, Épica...' },
               ])}
               {renderEquipmentSection('armor', 'Armaduras', armor, [
                 { key: 'category', label: 'Categoría', placeholder: 'Ligera, media, pesada...' },
                 { key: 'defense', label: 'Defensa', placeholder: '+2 defensa, resistencia...' },
-                { key: 'weight', label: 'Peso', placeholder: 'Ligera, pesada...' },
+                { key: 'physicalLoad', label: 'Carga física', placeholder: '1 = 🔲' },
+                { key: 'mentalLoad', label: 'Carga mental', placeholder: '0 = 🧠' },
                 { key: 'traits', label: 'Rasgos', placeholder: 'Ventaja en tiradas, resistencia...' },
+                { key: 'rareza', label: 'Rareza', placeholder: 'Común, Legendaria...' },
               ])}
               {renderEquipmentSection('abilities', 'Habilidades', abilities, [
                 { key: 'category', label: 'Tipo', placeholder: 'Ritual, táctica...' },
-                { key: 'cost', label: 'Coste', placeholder: 'Acción, reacción...' },
-                { key: 'cooldown', label: 'Recarga', placeholder: 'Ronda, encuentro...' },
+                { key: 'damage', label: 'Daño', placeholder: '3d6, 12 radiante...' },
+                { key: 'range', label: 'Alcance', placeholder: 'Cercano, 12 m...' },
+                { key: 'consumption', label: 'Consumo', placeholder: '1 = 🟡' },
+                { key: 'body', label: 'Cuerpo', placeholder: '1 = 🔲' },
+                { key: 'mind', label: 'Mente', placeholder: '1 = 🧠' },
+                { key: 'trait', label: 'Rasgo', placeholder: 'Palabra clave principal' },
+                { key: 'rareza', label: 'Rareza', placeholder: 'Rara, Épica...' },
               ])}
             </div>
             <div className="space-y-5 rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6">
               <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Vista previa recopilada</div>
               {renderPreviewCards('Armas preparadas', weapons, {
-                border: 'border-sky-400/40',
-                background: 'bg-sky-400/10',
-                text: 'text-sky-200/80',
-                shadow: 'shadow-[0_10px_25px_-15px_rgba(56,189,248,0.6)]',
-                body: (item) => (
-                  <div className="mt-3 space-y-2 text-xs text-sky-50/90">
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Daño</span>
-                      <span>{item.damage || '—'}</span>
+                cardClass: 'text-sky-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(56, 189, 248, 0.4)',
+                  borderHover: 'rgba(125, 211, 252, 0.65)',
+                  shadow: '0 15px 30px -20px rgba(56, 189, 248, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(56, 189, 248, 0.65)',
+                  background:
+                    'linear-gradient(160deg, rgba(8, 47, 73, 0.82) 0%, rgba(12, 74, 110, 0.55) 100%)',
+                },
+                categoryLabelClass: 'text-sky-300/70',
+                categoryValueClass:
+                  'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-sky-100/80',
+                statLabelClass: 'text-sky-200/70',
+                statValueClass: 'text-right font-semibold text-sky-50',
+                traitClass: 'border-sky-400/40 bg-sky-500/10 text-sky-100/80',
+                traitValueClass: 'font-semibold',
+                descriptionClass:
+                  'block whitespace-pre-line text-[0.75rem] leading-relaxed text-slate-200',
+                renderContent: ({ item, renderStatRow, renderTraitsList, renderDescription }) => (
+                  <>
+                    <div className="mt-3 space-y-2 text-xs text-sky-50/90">
+                      {renderStatRow('Daño', item.damage)}
+                      {renderStatRow('Alcance', item.range)}
+                      {renderStatRow('Consumo', item.consumption, {
+                        statType: 'consumption',
+                      })}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Alcance</span>
-                      <span>{item.range || '—'}</span>
+                    <div className="mt-3 grid gap-2 text-[0.7rem] text-sky-100/80 sm:grid-cols-2">
+                      {renderStatRow('Carga física', item.physicalLoad, {
+                        statType: 'physical',
+                        labelClassName: 'text-sky-200/70',
+                        valueClassName: 'font-semibold text-sky-100',
+                      })}
+                      {renderStatRow('Carga mental', item.mentalLoad, {
+                        statType: 'mental',
+                        labelClassName: 'text-sky-200/70',
+                        valueClassName: 'font-semibold text-sky-100',
+                      })}
                     </div>
-                    <div>
-                      <div className="text-[0.55rem] uppercase tracking-[0.3em] text-sky-100/80">Propiedades</div>
-                      <p className="text-[0.7rem] leading-relaxed">{item.properties || '—'}</p>
-                    </div>
-                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
-                  </div>
+                    {renderTraitsList(item.traits)}
+                    {renderDescription(item.description)}
+                  </>
                 ),
               })}
               {renderPreviewCards('Defensas listas', armor, {
-                border: 'border-emerald-400/40',
-                background: 'bg-emerald-400/10',
-                text: 'text-emerald-200/80',
-                shadow: 'shadow-[0_10px_25px_-15px_rgba(16,185,129,0.6)]',
-                body: (item) => (
-                  <div className="mt-3 space-y-2 text-xs text-emerald-50/90">
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Defensa</span>
-                      <span>{item.defense || '—'}</span>
+                cardClass: 'text-emerald-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(16, 185, 129, 0.4)',
+                  borderHover: 'rgba(110, 231, 183, 0.65)',
+                  shadow: '0 15px 30px -20px rgba(16, 185, 129, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(16, 185, 129, 0.65)',
+                  background:
+                    'linear-gradient(160deg, rgba(6, 78, 59, 0.8) 0%, rgba(4, 47, 46, 0.55) 100%)',
+                },
+                categoryLabelClass: 'text-emerald-300/70',
+                categoryValueClass:
+                  'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-emerald-100/80',
+                statLabelClass: 'text-emerald-200/70',
+                statValueClass: 'text-right font-semibold text-emerald-50',
+                traitClass: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100/80',
+                traitValueClass: 'font-semibold',
+                descriptionClass:
+                  'block whitespace-pre-line text-[0.75rem] leading-relaxed text-emerald-100/90',
+                renderContent: ({ item, renderStatRow, renderTraitsList, renderDescription }) => (
+                  <>
+                    <div className="mt-3 space-y-2 text-xs text-emerald-50/90">
+                      {renderStatRow('Defensa', item.defense)}
+                      {renderStatRow('Carga física', item.physicalLoad, {
+                        statType: 'physical',
+                        labelClassName: 'text-emerald-200/70',
+                        valueClassName: 'font-semibold text-emerald-100',
+                      })}
+                      {renderStatRow('Carga mental', item.mentalLoad, {
+                        statType: 'mental',
+                        labelClassName: 'text-emerald-200/70',
+                        valueClassName: 'font-semibold text-emerald-100',
+                      })}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Peso</span>
-                      <span>{item.weight || '—'}</span>
-                    </div>
-                    <div>
-                      <div className="text-[0.55rem] uppercase tracking-[0.3em] text-emerald-100/80">Rasgos</div>
-                      <p className="text-[0.7rem] leading-relaxed">{item.traits || '—'}</p>
-                    </div>
-                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
-                  </div>
+                    {renderTraitsList(item.traits, 'Sin rasgos defensivos definidos.')}
+                    {renderDescription(item.description)}
+                  </>
                 ),
               })}
               {renderPreviewCards('Habilidades disponibles', abilities, {
-                border: 'border-amber-400/40',
-                background: 'bg-amber-400/10',
-                text: 'text-amber-200/80',
-                shadow: 'shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)]',
-                body: (item) => (
-                  <div className="mt-3 space-y-2 text-xs text-amber-50/90">
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Coste</span>
-                      <span>{item.cost || '—'}</span>
+                cardClass: 'text-amber-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(245, 158, 11, 0.45)',
+                  borderHover: 'rgba(251, 191, 36, 0.7)',
+                  shadow: '0 15px 30px -20px rgba(245, 158, 11, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(245, 158, 11, 0.7)',
+                  background:
+                    'linear-gradient(160deg, rgba(120, 53, 15, 0.82) 0%, rgba(69, 26, 3, 0.55) 100%)',
+                },
+                categoryLabelClass: 'text-amber-300/70',
+                categoryValueClass:
+                  'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100/80',
+                statLabelClass: 'text-amber-200/70',
+                statValueClass: 'text-right font-semibold text-amber-50',
+                traitClass: 'border-amber-400/40 bg-amber-500/10 text-amber-100/90',
+                traitValueClass: 'font-semibold',
+                descriptionClass:
+                  'block whitespace-pre-line text-[0.75rem] leading-relaxed text-amber-100/90',
+                renderContent: ({ item, renderStatRow, renderTraitsList, renderDescription }) => (
+                  <>
+                    <div className="mt-3 space-y-2 text-xs text-amber-50/90">
+                      {renderStatRow('Daño', item.damage)}
+                      {renderStatRow('Alcance', item.range)}
+                      {renderStatRow('Consumo', item.consumption, {
+                        statType: 'consumption',
+                      })}
+                      {renderStatRow('Cuerpo', item.body, {
+                        statType: 'physical',
+                        labelClassName: 'text-amber-200/70',
+                        valueClassName: 'font-semibold text-amber-100',
+                      })}
+                      {renderStatRow('Mente', item.mind, {
+                        statType: 'mental',
+                        labelClassName: 'text-amber-200/70',
+                        valueClassName: 'font-semibold text-amber-100',
+                      })}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold uppercase tracking-[0.25em]">Recarga</span>
-                      <span>{item.cooldown || '—'}</span>
-                    </div>
-                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
-                  </div>
+                    {renderTraitsList(item.trait || item.traits, 'Sin rasgo asignado.')}
+                    {renderDescription(item.description)}
+                  </>
                 ),
               })}
             </div>
@@ -1600,7 +2504,7 @@ const ClassList = ({ onBack }) => {
   }, [classes, searchTerm, sortBy]);
 
   const openFileDialogForClass = (classId) => {
-    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.5, croppedAreaPixels: null });
+    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1, croppedAreaPixels: null });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
@@ -1625,7 +2529,7 @@ const ClassList = ({ onBack }) => {
 
   const handleCropCancel = () => {
     setIsCropping(false);
-    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.4, croppedAreaPixels: null });
+    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 0.9, croppedAreaPixels: null });
   };
 
   const handleCropSave = async () => {
@@ -1872,14 +2776,15 @@ const ClassList = ({ onBack }) => {
         onClose={closeClassDetails}
         size="full"
         overlayClassName="bg-slate-950/80 backdrop-blur-xl"
-        className="max-h-[90vh] overflow-hidden border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
+        className="max-h-[95vh] overflow-y-auto border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
       >
         {selectedClass && editingClass && (
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="flex flex-col gap-8">
-              <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
-                <div className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-h-0 flex-col gap-8">
+            <div className="grid min-h-0 gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
+              <div className="flex min-h-0 flex-col gap-8">
+                <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
+                  <div className="flex flex-col gap-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div className="inline-flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-slate-300">
                         <span className="text-sky-300">Clase</span>
@@ -1912,13 +2817,36 @@ const ClassList = ({ onBack }) => {
                         <span>Valoración</span>
                         <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
                       </div>
-                      {statusConfig[editingClass.status] && (
+                      <div className="flex flex-col items-end gap-2">
+                        <label className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-500">Estado</label>
+                        <div className="relative">
+                          <select
+                            value={editingClass.status || 'available'}
+                            onChange={(event) => handleGeneralFieldChange('status', event.target.value)}
+                            className="appearance-none rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1.5 pr-10 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                          >
+                            {Object.entries(statusConfig).map(([value, config]) => (
+                              <option key={`status-${value}`} value={value}>
+                                {config.label}
+                              </option>
+                            ))}
+                          </select>
+                          <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        </div>
+                      </div>
+                      {statusConfig[editingClass.status] ? (
                         <div
                           className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}
                         >
                           {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
                           <span>{statusConfig[editingClass.status].label}</span>
                         </div>
+                      ) : (
+                        editingClass.status && (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
+                            {editingClass.status}
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
@@ -2002,12 +2930,16 @@ const ClassList = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                  {renderDetailContent()}
+                  <div className="max-h-[520px] overflow-y-auto pr-3 md:max-h-[620px] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
+                    <div className="space-y-6 pb-2">
+                      {renderDetailContent()}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-6">
+            <div className="flex min-h-0 flex-col gap-6">
               <div className="flex flex-wrap justify-end gap-3">
                 <Boton
                   color="indigo"
@@ -2029,7 +2961,9 @@ const ClassList = ({ onBack }) => {
                 </Boton>
               </div>
               <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
-                <div className="relative aspect-[4/5] overflow-hidden">
+                <div
+                  className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]"
+                >
                   {editingClass.image ? (
                     <img
                       src={editingClass.image}
@@ -2144,7 +3078,8 @@ const ClassList = ({ onBack }) => {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
       </Modal>
 
       <Modal
@@ -2171,6 +3106,8 @@ const ClassList = ({ onBack }) => {
                 crop={cropperState.crop}
                 zoom={cropperState.zoom}
                 aspect={4 / 5}
+                minZoom={0.3}
+                maxZoom={6}
                 onCropChange={(crop) => setCropperState((prev) => ({ ...prev, crop }))}
                 onZoomChange={(zoom) => setCropperState((prev) => ({ ...prev, zoom }))}
                 onCropComplete={handleCropComplete}
@@ -2190,7 +3127,7 @@ const ClassList = ({ onBack }) => {
             <input
               id="zoom"
               type="range"
-              min={1}
+              min={0.3}
               max={6}
               step={0.05}
               value={cropperState.zoom}
@@ -2208,6 +3145,17 @@ const ClassList = ({ onBack }) => {
 
 ClassList.propTypes = {
   onBack: PropTypes.func.isRequired,
+  armas: PropTypes.arrayOf(PropTypes.object),
+  armaduras: PropTypes.arrayOf(PropTypes.object),
+  habilidades: PropTypes.arrayOf(PropTypes.object),
+  glossary: PropTypes.arrayOf(
+    PropTypes.shape({
+      word: PropTypes.string.isRequired,
+      color: PropTypes.string,
+      info: PropTypes.string,
+    }),
+  ),
+  rarityColorMap: PropTypes.objectOf(PropTypes.string),
 };
 
 export default ClassList;
