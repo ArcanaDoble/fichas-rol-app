@@ -125,18 +125,60 @@ const hexToRgba = (hex, alpha = 1) => {
 
 const buildRarityStyle = (color) => {
   if (!color) {
-    return {};
+    return null;
   }
 
   const border = hexToRgba(color, 0.55);
-  const background = hexToRgba(color, 0.16);
-  const glow = hexToRgba(color, 0.45);
+  const borderHover = hexToRgba(color, 0.85);
+  const background = `linear-gradient(140deg, ${hexToRgba(color, 0.16)} 0%, transparent 75%)`;
+  const shadow = `0 18px 45px -24px ${hexToRgba(color, 0.45)}`;
+  const shadowHover = `0 22px 55px -20px ${hexToRgba(color, 0.65)}`;
 
   return {
-    borderColor: border,
-    background: `linear-gradient(140deg, ${background} 0%, transparent 75%)`,
-    boxShadow: `0 18px 45px -24px ${glow}`,
+    border,
+    borderHover,
+    background,
+    shadow,
+    shadowHover,
   };
+};
+
+const sanitizeCategoryCandidate = (value) => {
+  if (!value) return '';
+  const label = value.toString().trim();
+  if (!label) return '';
+
+  if (/^[\d\s]*[🛠️🧠🔲🟡⚫⚪]+$/u.test(label)) {
+    return '';
+  }
+
+  if (/^[\d]+d\d+/i.test(label)) {
+    return '';
+  }
+
+  return label;
+};
+
+const extractCategory = (candidates, fallback) => {
+  for (const candidate of candidates) {
+    const sanitized = sanitizeCategoryCandidate(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return fallback;
+};
+
+const looksLikeDiceValue = (value) => {
+  if (!value) return false;
+  return /^[\d]+d\d+(\s*[+-]\s*\d+)?$/i.test(value.toString().trim());
+};
+
+const toDisplayString = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return value.toString();
 };
 
 const buildWeaponEntry = (weapon) => {
@@ -147,12 +189,10 @@ const buildWeaponEntry = (weapon) => {
 
   const description = weapon.descripcion || weapon.description || '';
   const traits = joinTraits(weapon.rasgos || weapon.traits || '');
-  const category =
-    weapon.tecnologia ||
-    weapon.tipo ||
-    weapon.tipoDano ||
-    weapon.category ||
-    'Arma';
+  const category = extractCategory(
+    [weapon.tipo, weapon.tipoDano, weapon.category, weapon.clase, weapon.origen],
+    'Arma',
+  );
 
   const consumption = convertNumericStringToIcons(
     weapon.consumo || weapon.cost || '',
@@ -171,7 +211,7 @@ const buildWeaponEntry = (weapon) => {
   );
   const rarity = (weapon.rareza || weapon.rarity || '').toString().trim();
 
-  return {
+  const payload = {
     id: weapon.id || name,
     name,
     category,
@@ -190,6 +230,14 @@ const buildWeaponEntry = (weapon) => {
       description,
     },
   };
+
+  if (!payload.payload.damage && looksLikeDiceValue(category)) {
+    payload.payload.damage = category;
+    payload.payload.category = 'Arma';
+    payload.category = 'Arma';
+  }
+
+  return payload;
 };
 
 const buildArmorEntry = (armor) => {
@@ -200,7 +248,10 @@ const buildArmorEntry = (armor) => {
 
   const description = armor.descripcion || armor.description || '';
   const traits = joinTraits(armor.rasgos || armor.traits || '');
-  const category = armor.tipo || armor.categoria || armor.category || 'Armadura';
+  const category = extractCategory(
+    [armor.tipo, armor.categoria, armor.category, armor.clase],
+    'Armadura',
+  );
 
   const physicalLoad = convertNumericStringToIcons(
     armor.cargaFisica || armor.carga || armor.peso || '',
@@ -241,7 +292,10 @@ const buildAbilityEntry = (ability) => {
 
   const description = ability.descripcion || ability.description || '';
   const traits = joinTraits(ability.rasgos || ability.traits || '');
-  const category = ability.poder || ability.tipo || ability.category || 'Habilidad';
+  let category = extractCategory(
+    [ability.poder, ability.tipo, ability.category],
+    'Habilidad',
+  );
   const metaChunks = [];
 
   if (ability.alcance) {
@@ -263,7 +317,7 @@ const buildAbilityEntry = (ability) => {
 
   const meta = metaChunks.join(' • ');
 
-  return {
+  const payload = {
     id: ability.id || name,
     name,
     category,
@@ -282,6 +336,14 @@ const buildAbilityEntry = (ability) => {
       description: meta ? `${description}${description ? '\n' : ''}${meta}` : description,
     },
   };
+
+  if (!payload.payload.damage && looksLikeDiceValue(category)) {
+    payload.payload.damage = category;
+    payload.payload.category = 'Habilidad';
+    payload.category = 'Habilidad';
+  }
+
+  return payload;
 };
 
 const EditableField = ({
@@ -395,7 +457,21 @@ const ensureClassDefaults = (classItem) => {
     ...entry,
   }));
 
-  merged.classLevels = merged.classLevels || [];
+  merged.classLevels = (merged.classLevels || []).map((level, index) => {
+    if (level && typeof level === 'object') {
+      return {
+        title: level.title || `Nivel ${index + 1} — Nuevo avance`,
+        description: level.description || '',
+        completed: Boolean(level.completed),
+      };
+    }
+
+    return {
+      title: `Nivel ${index + 1} — Nuevo avance`,
+      description: typeof level === 'string' ? level : '',
+      completed: false,
+    };
+  });
   merged.rules = merged.rules || [];
 
   merged.equipment = {
@@ -403,68 +479,101 @@ const ensureClassDefaults = (classItem) => {
     ...(merged.equipment || {}),
   };
 
-  merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => ({
-    name: '',
-    category: '',
-    damage: '',
-    range: '',
-    consumption:
-      weapon.consumption || weapon.cost || weapon.consumo || '',
-    physicalLoad:
-      weapon.physicalLoad || weapon.weight || weapon.cargaFisica || weapon.carga || '',
-    mentalLoad:
-      weapon.mentalLoad || weapon.cargaMental || '',
-    traits:
+  merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => {
+    const consumption = toDisplayString(
+      weapon.consumption ?? weapon.cost ?? weapon.consumo ?? '',
+    );
+    const physicalLoad = toDisplayString(
+      weapon.physicalLoad ??
+        weapon.weight ??
+        weapon.cargaFisica ??
+        weapon.carga ??
+        '',
+    );
+    const mentalLoad = toDisplayString(
+      weapon.mentalLoad ?? weapon.cargaMental ?? '',
+    );
+    const traitsValue = joinTraits(
       weapon.traits || weapon.properties || weapon.rasgos || '',
-    rareza: weapon.rareza || '',
-    description: '',
-    ...weapon,
-    consumption:
-      weapon.consumption || weapon.cost || weapon.consumo || '',
-    physicalLoad:
-      weapon.physicalLoad || weapon.weight || weapon.cargaFisica || weapon.carga || '',
-    mentalLoad:
-      weapon.mentalLoad || weapon.cargaMental || '',
-    traits:
-      weapon.traits || weapon.properties || weapon.rasgos || '',
-  }));
+    );
 
-  merged.equipment.armor = (merged.equipment.armor || []).map((armor) => ({
-    name: '',
-    category: '',
-    defense: '',
-    physicalLoad:
-      armor.physicalLoad || armor.weight || armor.cargaFisica || armor.carga || '',
-    mentalLoad: armor.mentalLoad || armor.cargaMental || '',
-    traits: armor.traits || armor.rasgos || '',
-    rareza: armor.rareza || '',
-    description: '',
-    ...armor,
-    physicalLoad:
-      armor.physicalLoad || armor.weight || armor.cargaFisica || armor.carga || '',
-    mentalLoad: armor.mentalLoad || armor.cargaMental || '',
-    traits: armor.traits || armor.rasgos || '',
-  }));
+    return {
+      name: '',
+      category: '',
+      damage: toDisplayString(weapon.damage ?? weapon.dano ?? ''),
+      range: toDisplayString(weapon.range ?? weapon.alcance ?? ''),
+      consumption,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+      rareza: toDisplayString(weapon.rareza || ''),
+      description: '',
+      ...weapon,
+      damage: toDisplayString(weapon.damage ?? weapon.dano ?? ''),
+      range: toDisplayString(weapon.range ?? weapon.alcance ?? ''),
+      consumption,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+    };
+  });
 
-  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => ({
-    name: '',
-    category: '',
-    damage: ability.damage || ability.dano || '',
-    range: ability.range || ability.alcance || '',
-    consumption:
-      ability.consumption || ability.cost || ability.consumo || '',
-    body: ability.body || ability.cuerpo || '',
-    mind: ability.mind || ability.mente || '',
-    trait: ability.trait || ability.rasgo || ability.rasgos || '',
-    rareza: ability.rareza || '',
-    description: '',
-    ...ability,
-    consumption:
-      ability.consumption || ability.cost || ability.consumo || '',
-    body: ability.body || ability.cuerpo || '',
-    mind: ability.mind || ability.mente || '',
-    trait: ability.trait || ability.rasgo || ability.rasgos || '',
-  }));
+  merged.equipment.armor = (merged.equipment.armor || []).map((armor) => {
+    const physicalLoad = toDisplayString(
+      armor.physicalLoad ??
+        armor.weight ??
+        armor.cargaFisica ??
+        armor.carga ??
+        '',
+    );
+    const mentalLoad = toDisplayString(armor.mentalLoad ?? armor.cargaMental ?? '');
+    const traitsValue = joinTraits(armor.traits || armor.rasgos || '');
+
+    return {
+      name: '',
+      category: '',
+      defense: toDisplayString(armor.defense ?? armor.defensa ?? ''),
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+      rareza: toDisplayString(armor.rareza || ''),
+      description: '',
+      ...armor,
+      defense: toDisplayString(armor.defense ?? armor.defensa ?? ''),
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+    };
+  });
+
+  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => {
+    const consumption = toDisplayString(
+      ability.consumption ?? ability.cost ?? ability.consumo ?? '',
+    );
+    const body = toDisplayString(ability.body ?? ability.cuerpo ?? '');
+    const mind = toDisplayString(ability.mind ?? ability.mente ?? '');
+    const traitValue = joinTraits(ability.trait || ability.rasgo || ability.rasgos || '');
+
+    return {
+      name: '',
+      category: '',
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+      rareza: toDisplayString(ability.rareza || ''),
+      description: '',
+      ...ability,
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+    };
+  });
 
   merged.tags = merged.tags || [];
 
@@ -1085,20 +1194,37 @@ const ClassList = ({
   );
 
   const normalizeStatIcons = useCallback((value, type) => {
-    if (!value) return value;
+    if (value === null || value === undefined) return value;
+
+    let normalizedValue = value;
+    if (typeof normalizedValue === 'number') {
+      normalizedValue = normalizedValue.toString();
+    }
+
+    if (Array.isArray(normalizedValue)) {
+      normalizedValue = normalizedValue.join(', ');
+    }
+
+    if (typeof normalizedValue !== 'string') {
+      return normalizedValue;
+    }
+
+    const trimmed = normalizedValue.trim();
+    if (!trimmed) return '';
+
     switch (type) {
       case 'consumption':
-        return convertNumericStringToIcons(value, '🟡', ['Consumo', 'Velocidad']);
+        return convertNumericStringToIcons(trimmed, '🟡', ['Consumo', 'Velocidad']);
       case 'physical':
-        return convertNumericStringToIcons(value, '🔲', [
+        return convertNumericStringToIcons(trimmed, '🔲', [
           'Carga física',
           'Carga fisica',
           'Cuerpo',
         ]);
       case 'mental':
-        return convertNumericStringToIcons(value, '🧠', ['Carga mental', 'Mente']);
+        return convertNumericStringToIcons(trimmed, '🧠', ['Carga mental', 'Mente']);
       default:
-        return value;
+        return trimmed;
     }
   }, []);
 
@@ -1365,6 +1491,15 @@ const ClassList = ({
     });
   };
 
+  const toggleLevelCompleted = (index) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[index]) return;
+      levels[index].completed = !levels[index].completed;
+      draft.classLevels = levels;
+    });
+  };
+
   const setLevelCount = (count) => {
     updateEditingClass((draft) => {
       const target = Math.max(0, count);
@@ -1372,8 +1507,9 @@ const ClassList = ({
       if (target > levels.length) {
         for (let i = levels.length; i < target; i += 1) {
           levels.push({
-            title: `Nivel ${i} — Nuevo avance`,
+            title: `Nivel ${i + 1} — Nuevo avance`,
             description: 'Describe el beneficio de este nivel.',
+            completed: false,
           });
         }
       } else if (target < levels.length) {
@@ -1721,39 +1857,75 @@ const ClassList = ({
             </div>
             {levelCount > 0 ? (
               <div className="space-y-4">
-                {classLevels.map((level, index) => (
-                  <div
-                    key={`level-${index}`}
-                    className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-5 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
+                {classLevels.map((level, index) => {
+                  const isCompleted = Boolean(level.completed);
+                  const cardTone = isCompleted
+                    ? 'border-emerald-400/50 bg-emerald-500/10 shadow-[0_12px_28px_-18px_rgba(16,185,129,0.6)]'
+                    : 'border-indigo-400/30 bg-indigo-500/10 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]';
+
+                  return (
+                    <div
+                      key={`level-${index}`}
+                      className={`rounded-2xl p-5 transition ${cardTone}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-1 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleLevelCompleted(index)}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm transition ${
+                              isCompleted
+                                ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300'
+                                : 'border-indigo-400/40 bg-indigo-500/10 text-indigo-200 hover:border-emerald-300 hover:text-emerald-200'
+                            }`}
+                            aria-pressed={isCompleted}
+                            aria-label={
+                              isCompleted
+                                ? `Marcar nivel ${index + 1} como pendiente`
+                                : `Marcar nivel ${index + 1} como completado`
+                            }
+                          >
+                            {isCompleted ? (
+                              <FiCheckSquare className="h-4 w-4" />
+                            ) : (
+                              <FiSquare className="h-4 w-4" />
+                            )}
+                          </button>
+                          <EditableField
+                            value={level.title}
+                            onChange={(value) => handleLevelFieldChange(index, 'title', value)}
+                            placeholder={`Nivel ${index + 1} — Define el avance`}
+                            displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
+                            textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${
+                              isCompleted
+                                ? 'text-emerald-100 line-through decoration-emerald-300/60 decoration-2'
+                                : 'text-indigo-100'
+                            }`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeLevel(index)}
+                          className="rounded-full border border-transparent p-2 text-indigo-200/80 transition hover:border-indigo-300 hover:text-rose-200"
+                          aria-label="Eliminar nivel"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                       <EditableField
-                        value={level.title}
-                        onChange={(value) => handleLevelFieldChange(index, 'title', value)}
-                        placeholder={`Nivel ${index} — Define el avance`}
-                        displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
-                        textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-100"
+                        value={level.description}
+                        onChange={(value) => handleLevelFieldChange(index, 'description', value)}
+                        multiline
+                        placeholder="Detalla el beneficio de alcanzar este nivel."
+                        displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
+                        textClassName={`text-sm leading-relaxed ${
+                          isCompleted ? 'text-emerald-100/90' : 'text-indigo-50/90'
+                        }`}
+                        inputClassName="bg-indigo-950/40 border-indigo-400/30"
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeLevel(index)}
-                        className="rounded-full border border-transparent p-2 text-indigo-200/80 transition hover:border-indigo-300 hover:text-rose-200"
-                        aria-label="Eliminar nivel"
-                      >
-                        <FiTrash2 className="h-4 w-4" />
-                      </button>
                     </div>
-                    <EditableField
-                      value={level.description}
-                      onChange={(value) => handleLevelFieldChange(index, 'description', value)}
-                      multiline
-                      placeholder="Detalla el beneficio de alcanzar este nivel."
-                      displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
-                      textClassName="text-sm leading-relaxed text-indigo-50/90"
-                      inputClassName="bg-indigo-950/40 border-indigo-400/30"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-indigo-400/30 bg-indigo-500/5 p-5 text-sm text-indigo-100/70">
@@ -1968,6 +2140,8 @@ const ClassList = ({
         };
 
         const renderPreviewCards = (title, items, config) => {
+          const baseCardClass =
+            'group relative overflow-hidden rounded-3xl border px-5 py-5 transition-all duration-300 [border-color:var(--card-border-color,_rgba(148,163,184,0.35))] hover:[border-color:var(--card-border-hover-color,_rgba(148,163,184,0.55))] [box-shadow:var(--card-shadow,_0_15px_30px_-20px_rgba(15,23,42,0.6))] hover:[box-shadow:var(--card-shadow-hover,_0_20px_50px_-20px_rgba(56,189,248,0.45))] [background:var(--card-background,_rgba(15,23,42,0.85))] hover:-translate-y-1';
           const renderStatRow = (label, value, { statType, placeholder, labelClassName, valueClassName } = {}) => (
             <div className="flex items-start justify-between gap-3">
               <span
@@ -2039,11 +2213,34 @@ const ClassList = ({
                         }
                       : undefined;
 
+                    const palette = config.palette || {};
+                    const effectivePalette = {
+                      border: rarityStyle?.border || palette.border,
+                      borderHover:
+                        rarityStyle?.borderHover ||
+                        palette.borderHover ||
+                        rarityStyle?.border ||
+                        palette.border,
+                      shadow: rarityStyle?.shadow || palette.shadow,
+                      shadowHover:
+                        rarityStyle?.shadowHover ||
+                        palette.shadowHover ||
+                        rarityStyle?.shadow ||
+                        palette.shadow,
+                      background: rarityStyle?.background || palette.background,
+                    };
+
                     return (
                       <div
                         key={`${title}-${index}`}
-                        className={`rounded-3xl border p-5 transition ${config.cardClass}`}
-                        style={rarityStyle}
+                        className={`${baseCardClass} ${config.cardClass || ''}`}
+                        style={{
+                          '--card-border-color': effectivePalette.border,
+                          '--card-border-hover-color': effectivePalette.borderHover,
+                          '--card-shadow': effectivePalette.shadow,
+                          '--card-shadow-hover': effectivePalette.shadowHover,
+                          '--card-background': effectivePalette.background,
+                        }}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -2127,8 +2324,15 @@ const ClassList = ({
             <div className="space-y-5 rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6">
               <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Vista previa recopilada</div>
               {renderPreviewCards('Armas preparadas', weapons, {
-                cardClass:
-                  'border-sky-400/40 bg-sky-950/70 shadow-[0_15px_30px_-20px_rgba(56,189,248,0.55)] hover:border-sky-300/60',
+                cardClass: 'text-sky-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(56, 189, 248, 0.4)',
+                  borderHover: 'rgba(125, 211, 252, 0.65)',
+                  shadow: '0 15px 30px -20px rgba(56, 189, 248, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(56, 189, 248, 0.65)',
+                  background:
+                    'linear-gradient(160deg, rgba(8, 47, 73, 0.82) 0%, rgba(12, 74, 110, 0.55) 100%)',
+                },
                 categoryLabelClass: 'text-sky-300/70',
                 categoryValueClass:
                   'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-sky-100/80',
@@ -2165,8 +2369,15 @@ const ClassList = ({
                 ),
               })}
               {renderPreviewCards('Defensas listas', armor, {
-                cardClass:
-                  'border-emerald-400/40 bg-emerald-950/70 shadow-[0_15px_30px_-20px_rgba(16,185,129,0.55)] hover:border-emerald-300/60',
+                cardClass: 'text-emerald-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(16, 185, 129, 0.4)',
+                  borderHover: 'rgba(110, 231, 183, 0.65)',
+                  shadow: '0 15px 30px -20px rgba(16, 185, 129, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(16, 185, 129, 0.65)',
+                  background:
+                    'linear-gradient(160deg, rgba(6, 78, 59, 0.8) 0%, rgba(4, 47, 46, 0.55) 100%)',
+                },
                 categoryLabelClass: 'text-emerald-300/70',
                 categoryValueClass:
                   'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-emerald-100/80',
@@ -2197,8 +2408,15 @@ const ClassList = ({
                 ),
               })}
               {renderPreviewCards('Habilidades disponibles', abilities, {
-                cardClass:
-                  'border-amber-400/40 bg-amber-950/60 shadow-[0_15px_30px_-20px_rgba(245,158,11,0.55)] hover:border-amber-300/60',
+                cardClass: 'text-amber-50/90 backdrop-blur-sm',
+                palette: {
+                  border: 'rgba(245, 158, 11, 0.45)',
+                  borderHover: 'rgba(251, 191, 36, 0.7)',
+                  shadow: '0 15px 30px -20px rgba(245, 158, 11, 0.55)',
+                  shadowHover: '0 22px 50px -20px rgba(245, 158, 11, 0.7)',
+                  background:
+                    'linear-gradient(160deg, rgba(120, 53, 15, 0.82) 0%, rgba(69, 26, 3, 0.55) 100%)',
+                },
                 categoryLabelClass: 'text-amber-300/70',
                 categoryValueClass:
                   'text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-amber-100/80',
@@ -2743,7 +2961,9 @@ const ClassList = ({
                 </Boton>
               </div>
               <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
-                <div className="relative aspect-[4/5] overflow-hidden">
+                <div
+                  className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]"
+                >
                   {editingClass.image ? (
                     <img
                       src={editingClass.image}
