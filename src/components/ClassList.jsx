@@ -28,6 +28,30 @@ import { db } from '../firebase';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
+const pruneUndefined = (value) => {
+  if (Array.isArray(value)) {
+    return value.reduce((accumulator, item) => {
+      const prunedItem = pruneUndefined(item);
+      if (prunedItem !== undefined) {
+        accumulator.push(prunedItem);
+      }
+      return accumulator;
+    }, []);
+  }
+
+  if (value && Object.prototype.toString.call(value) === '[object Object]') {
+    return Object.entries(value).reduce((accumulator, [key, entryValue]) => {
+      const prunedValue = pruneUndefined(entryValue);
+      if (prunedValue !== undefined) {
+        accumulator[key] = prunedValue;
+      }
+      return accumulator;
+    }, {});
+  }
+
+  return value === undefined ? undefined : value;
+};
+
 const defaultEquipment = {
   weapons: [],
   armor: [],
@@ -1646,7 +1670,7 @@ const ClassList = ({
   const handleSaveChanges = useCallback(async () => {
     if (!editingClass) return;
 
-    const sanitized = ensureClassDefaults(editingClass);
+    let sanitized = ensureClassDefaults(editingClass);
     let classId = sanitized.id?.toString().trim();
 
     if (!classId) {
@@ -1665,6 +1689,8 @@ const ClassList = ({
     setSaveStatus(null);
 
     try {
+      sanitized = pruneUndefined(sanitized);
+
       await setDoc(doc(db, 'classes', classId), sanitized, { merge: true });
 
       setClasses((prevClasses) => {
