@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   FiChevronDown,
@@ -9,10 +9,215 @@ import {
   FiX,
   FiArrowRight,
   FiTarget,
+  FiEdit2,
+  FiPlus,
+  FiCheckSquare,
+  FiSquare,
+  FiSave,
+  FiRefreshCw,
+  FiTrash2,
+  FiSliders,
 } from 'react-icons/fi';
 import Cropper from 'react-easy-crop';
 import Boton from './Boton';
 import Modal from './Modal';
+
+const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
+const defaultEquipment = {
+  weapons: [],
+  armor: [],
+  abilities: [],
+};
+
+const categorizeEquipment = (items = []) => {
+  const grouped = deepClone(defaultEquipment);
+
+  items.forEach((item) => {
+    const baseEntry = {
+      name: item.name || '',
+      category: item.type || '',
+      description: item.detail || '',
+    };
+
+    const typeLabel = (item.type || '').toLowerCase();
+
+    if (typeLabel.includes('arma') || typeLabel.includes('implemento') || typeLabel.includes('báculo')) {
+      grouped.weapons.push({
+        damage: item.damage || '',
+        range: item.range || '',
+        properties: '',
+        ...baseEntry,
+      });
+    } else if (typeLabel.includes('armadura') || typeLabel.includes('escudo')) {
+      grouped.armor.push({
+        defense: '',
+        weight: '',
+        traits: '',
+        ...baseEntry,
+      });
+    } else {
+      grouped.abilities.push({
+        cost: '',
+        cooldown: '',
+        ...baseEntry,
+      });
+    }
+  });
+
+  return grouped;
+};
+
+const EditableField = ({
+  value,
+  onChange,
+  placeholder = 'Haz clic para editar',
+  multiline = false,
+  displayClassName = '',
+  inputClassName = '',
+  buttonClassName = '',
+  textClassName = '',
+  type = 'text',
+  autoSelect = true,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      if (autoSelect && typeof inputRef.current.select === 'function') {
+        inputRef.current.select();
+      }
+    }
+  }, [isEditing, autoSelect]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !multiline) {
+      event.preventDefault();
+      setIsEditing(false);
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsEditing(false);
+    }
+  };
+
+  const baseInputClasses =
+    'w-full rounded-2xl border border-slate-700/60 bg-slate-950/80 px-4 py-2 text-sm text-slate-100 shadow-inner shadow-black/40 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40';
+
+  const displayValue = value && value.length > 0 ? value : placeholder;
+  const isPlaceholder = !value || value.length === 0;
+
+  return (
+    <div className={`relative ${buttonClassName}`}>
+      {isEditing ? (
+        multiline ? (
+          <textarea
+            ref={inputRef}
+            value={value || ''}
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={`${baseInputClasses} min-h-[120px] resize-y ${inputClassName}`}
+            placeholder={placeholder}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type={type}
+            value={value || ''}
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={`${baseInputClasses} ${inputClassName}`}
+            placeholder={placeholder}
+          />
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className={`group inline-flex w-full items-center gap-2 text-left transition hover:text-slate-100/90 ${displayClassName}`}
+        >
+          <span
+            className={`${
+              textClassName || ''
+            } ${isPlaceholder ? 'text-slate-500/70 italic' : ''}`.trim()}
+          >
+            {displayValue}
+          </span>
+          <FiEdit2 className="h-3.5 w-3.5 text-slate-500 opacity-0 transition group-hover:opacity-100" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+const ensureClassDefaults = (classItem) => {
+  const base = {
+    summary: { battleRole: '', combo: '', difficultyNote: '', highlights: [] },
+    inspiration: [],
+    classLevels: [],
+    rules: [],
+    equipment: deepClone(defaultEquipment),
+  };
+
+  const merged = {
+    ...deepClone(base),
+    ...deepClone(classItem),
+  };
+
+  merged.inspiration = (merged.inspiration || []).map((entry) => ({
+    completed: false,
+    ...entry,
+  }));
+
+  merged.classLevels = merged.classLevels || [];
+  merged.rules = merged.rules || [];
+
+  merged.equipment = {
+    ...deepClone(defaultEquipment),
+    ...(merged.equipment || {}),
+  };
+
+  merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => ({
+    name: '',
+    category: '',
+    damage: '',
+    range: '',
+    properties: '',
+    description: '',
+    ...weapon,
+  }));
+
+  merged.equipment.armor = (merged.equipment.armor || []).map((armor) => ({
+    name: '',
+    category: '',
+    defense: '',
+    weight: '',
+    traits: '',
+    description: '',
+    ...armor,
+  }));
+
+  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => ({
+    name: '',
+    category: '',
+    cost: '',
+    cooldown: '',
+    description: '',
+    ...ability,
+  }));
+
+  merged.tags = merged.tags || [];
+
+  return merged;
+};
 
 const difficultyOrder = {
   Baja: 0,
@@ -48,12 +253,12 @@ const sortOptions = [
 const detailTabs = [
   { id: 'overview', label: 'Resumen' },
   { id: 'inspiration', label: 'Inspiración (Hitos)' },
-  { id: 'levels', label: 'Nivel de Campeón' },
+  { id: 'levels', label: 'Nivel de clase' },
   { id: 'rules', label: 'Reglas' },
   { id: 'equipment', label: 'Equipación' },
 ];
 
-const initialClasses = [
+const rawClassData = [
   {
     id: 'berserker',
     name: 'Berserker de Guerra',
@@ -320,7 +525,7 @@ const initialClasses = [
     subtitle: 'Invocadora Primal',
     description:
       'Invoca espíritus antiguos y molda la flora del entorno para controlar la batalla.',
-    tags: ['Naturaleza', 'Invocador', 'Apoyo'],
+    tags: ['Naturaleza', 'Invocaciones', 'Control'],
     difficulty: 'Media',
     rating: 5,
     status: 'available',
@@ -443,6 +648,19 @@ const initialClasses = [
   },
 ];
 
+const initialClasses = rawClassData.map((classItem) => {
+  const { championLevels, equipment, inspiration, ...rest } = classItem;
+
+  const groupedEquipment = categorizeEquipment(equipment);
+
+  return ensureClassDefaults({
+    ...rest,
+    inspiration: (inspiration || []).map((entry) => ({ completed: false, ...entry })),
+    classLevels: classItem.classLevels || championLevels || [],
+    equipment: groupedEquipment,
+  });
+});
+
 const createImage = (url) =>
   new Promise((resolve, reject) => {
     const image = new Image();
@@ -475,15 +693,41 @@ const getCroppedImage = async (imageSrc, crop) => {
   return canvas.toDataURL('image/png');
 };
 
-const renderStars = (rating) => {
-  return Array.from({ length: 5 }).map((_, index) => (
-    <FiStar
-      key={index}
-      className={`h-4 w-4 transition-colors ${
-        index < rating ? 'text-yellow-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]' : 'text-slate-600'
-      }`}
-    />
-  ));
+const RatingStars = ({ rating, onChange, size = 'md' }) => {
+  const starSize = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5';
+
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const filled = index < rating;
+        const star = (
+          <FiStar
+            className={`${starSize} transition-transform transition-colors ${
+              filled
+                ? 'text-yellow-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]'
+                : 'text-slate-600'
+            }`}
+          />
+        );
+
+        if (!onChange) {
+          return <span key={index}>{star}</span>;
+        }
+
+        return (
+          <button
+            key={index}
+            type="button"
+            onClick={() => onChange(index + 1)}
+            className="rounded-full p-0.5 transition hover:scale-110 hover:bg-slate-800/80"
+            aria-label={`Asignar ${index + 1} estrellas`}
+          >
+            {star}
+          </button>
+        );
+      })}
+    </div>
+  );
 };
 
 const ClassList = ({ onBack }) => {
@@ -496,10 +740,12 @@ const ClassList = ({ onBack }) => {
     classId: null,
     imageSrc: '',
     crop: { x: 0, y: 0 },
-    zoom: 1.1,
+    zoom: 1.4,
     croppedAreaPixels: null,
   });
   const [isCropping, setIsCropping] = useState(false);
+  const [editingClass, setEditingClass] = useState(null);
+  const [levelSliderLimit, setLevelSliderLimit] = useState(12);
 
   const fileInputRef = useRef(null);
 
@@ -507,142 +753,803 @@ const ClassList = ({ onBack }) => {
 
   const handleSortChange = (event) => setSortBy(event.target.value);
 
+  useEffect(() => {
+    if (selectedClass) {
+      const sanitized = ensureClassDefaults(selectedClass);
+      setEditingClass(deepClone(sanitized));
+      const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
+      setLevelSliderLimit(targetLimit);
+    } else {
+      setEditingClass(null);
+    }
+  }, [selectedClass]);
+
   const openClassDetails = (classItem) => {
-    setSelectedClass(classItem);
+    const sanitized = ensureClassDefaults(classItem);
+    setSelectedClass(sanitized);
+    setEditingClass(deepClone(sanitized));
+    const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
+    setLevelSliderLimit(targetLimit);
     setActiveDetailTab('overview');
   };
 
   const closeClassDetails = () => {
     setSelectedClass(null);
     setActiveDetailTab('overview');
+    setEditingClass(null);
   };
 
+  const updateEditingClass = (mutator) => {
+    setEditingClass((prev) => {
+      if (!prev) return prev;
+      const draft = deepClone(prev);
+      mutator(draft);
+      return draft;
+    });
+  };
+
+  const handleGeneralFieldChange = (field, value) => {
+    updateEditingClass((draft) => {
+      draft[field] = value;
+    });
+  };
+
+  const handleSummaryFieldChange = (field, value) => {
+    updateEditingClass((draft) => {
+      draft.summary = draft.summary || {};
+      draft.summary[field] = value;
+    });
+  };
+
+  const handleHighlightChange = (index, value) => {
+    updateEditingClass((draft) => {
+      draft.summary = draft.summary || {};
+      const highlights = draft.summary.highlights || [];
+      highlights[index] = value;
+      draft.summary.highlights = highlights;
+    });
+  };
+
+  const addHighlight = () => {
+    updateEditingClass((draft) => {
+      draft.summary = draft.summary || {};
+      const highlights = draft.summary.highlights || [];
+      highlights.push('Nuevo punto clave');
+      draft.summary.highlights = highlights;
+    });
+  };
+
+  const removeHighlight = (index) => {
+    updateEditingClass((draft) => {
+      draft.summary = draft.summary || {};
+      const highlights = draft.summary.highlights || [];
+      highlights.splice(index, 1);
+      draft.summary.highlights = highlights;
+    });
+  };
+
+  const toggleInspirationCompleted = (index) => {
+    updateEditingClass((draft) => {
+      const entries = draft.inspiration || [];
+      if (!entries[index]) return;
+      entries[index].completed = !entries[index].completed;
+    });
+  };
+
+  const handleInspirationFieldChange = (index, field, value) => {
+    updateEditingClass((draft) => {
+      const entries = draft.inspiration || [];
+      if (!entries[index]) return;
+      entries[index][field] = value;
+    });
+  };
+
+  const addInspirationEntry = () => {
+    updateEditingClass((draft) => {
+      const entries = draft.inspiration || [];
+      entries.push({
+        title: 'Nuevo hito',
+        description: 'Describe el objetivo para completarlo.',
+        completed: false,
+      });
+      draft.inspiration = entries;
+    });
+  };
+
+  const removeInspirationEntry = (index) => {
+    updateEditingClass((draft) => {
+      const entries = draft.inspiration || [];
+      entries.splice(index, 1);
+      draft.inspiration = entries;
+    });
+  };
+
+  const handleRuleChange = (index, value) => {
+    updateEditingClass((draft) => {
+      const rules = draft.rules || [];
+      rules[index] = value;
+      draft.rules = rules;
+    });
+  };
+
+  const addRule = () => {
+    updateEditingClass((draft) => {
+      const rules = draft.rules || [];
+      rules.push('Nueva regla especial.');
+      draft.rules = rules;
+    });
+  };
+
+  const removeRule = (index) => {
+    updateEditingClass((draft) => {
+      const rules = draft.rules || [];
+      rules.splice(index, 1);
+      draft.rules = rules;
+    });
+  };
+
+  const handleTagChange = (index, value) => {
+    updateEditingClass((draft) => {
+      const tags = draft.tags || [];
+      tags[index] = value;
+      draft.tags = tags;
+    });
+  };
+
+  const addTag = () => {
+    updateEditingClass((draft) => {
+      const tags = draft.tags || [];
+      tags.push('Nueva etiqueta');
+      draft.tags = tags;
+    });
+  };
+
+  const removeTag = (index) => {
+    updateEditingClass((draft) => {
+      const tags = draft.tags || [];
+      tags.splice(index, 1);
+      draft.tags = tags;
+    });
+  };
+
+  const handleRatingChange = (value) => {
+    updateEditingClass((draft) => {
+      draft.rating = value;
+    });
+  };
+
+  const handleLevelFieldChange = (index, field, value) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[index]) return;
+      levels[index][field] = value;
+      draft.classLevels = levels;
+    });
+  };
+
+  const setLevelCount = (count) => {
+    updateEditingClass((draft) => {
+      const target = Math.max(0, count);
+      const levels = draft.classLevels || [];
+      if (target > levels.length) {
+        for (let i = levels.length; i < target; i += 1) {
+          levels.push({
+            title: `Nivel ${i} — Nuevo avance`,
+            description: 'Describe el beneficio de este nivel.',
+          });
+        }
+      } else if (target < levels.length) {
+        levels.length = target;
+      }
+      draft.classLevels = levels;
+    });
+  };
+
+  const addLevel = () => {
+    const currentCount = editingClass?.classLevels?.length || 0;
+    const nextCount = currentCount + 1;
+    if (nextCount > levelSliderLimit) {
+      setLevelSliderLimit(nextCount);
+    }
+    setLevelCount(nextCount);
+  };
+
+  const removeLevel = (index) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      levels.splice(index, 1);
+      draft.classLevels = levels;
+    });
+  };
+
+  const handleEquipmentChange = (category, index, field, value) => {
+    updateEditingClass((draft) => {
+      draft.equipment = draft.equipment || deepClone(defaultEquipment);
+      const list = draft.equipment[category] || [];
+      if (!list[index]) return;
+      list[index][field] = value;
+      draft.equipment[category] = list;
+    });
+  };
+
+  const addEquipmentItem = (category) => {
+    const templates = {
+      weapons: {
+        name: 'Nueva arma',
+        category: 'Categoría',
+        damage: '',
+        range: '',
+        properties: '',
+        description: 'Describe los rasgos principales del arma.',
+      },
+      armor: {
+        name: 'Nueva armadura',
+        category: 'Categoría',
+        defense: '',
+        weight: '',
+        traits: '',
+        description: 'Describe la protección o ventajas especiales.',
+      },
+      abilities: {
+        name: 'Nueva habilidad',
+        category: 'Tipo',
+        cost: '',
+        cooldown: '',
+        description: 'Detalla el efecto de la habilidad.',
+      },
+    };
+
+    updateEditingClass((draft) => {
+      draft.equipment = draft.equipment || deepClone(defaultEquipment);
+      const list = draft.equipment[category] || [];
+      list.push(deepClone(templates[category]));
+      draft.equipment[category] = list;
+    });
+  };
+
+  const removeEquipmentItem = (category, index) => {
+    updateEditingClass((draft) => {
+      draft.equipment = draft.equipment || deepClone(defaultEquipment);
+      const list = draft.equipment[category] || [];
+      list.splice(index, 1);
+      draft.equipment[category] = list;
+    });
+  };
+
+  const handleSaveChanges = () => {
+    if (!editingClass) return;
+    const sanitized = ensureClassDefaults(editingClass);
+    setClasses((prevClasses) =>
+      prevClasses.map((classItem) => (classItem.id === sanitized.id ? sanitized : classItem))
+    );
+    setSelectedClass(sanitized);
+    setEditingClass(deepClone(sanitized));
+    const targetLimit = Math.max(levelSliderLimit, (sanitized.classLevels?.length || 0) + 2);
+    setLevelSliderLimit(targetLimit);
+  };
+
+  const handleDiscardChanges = () => {
+    if (selectedClass) {
+      const reset = ensureClassDefaults(selectedClass);
+      setEditingClass(deepClone(reset));
+      const targetLimit = Math.max(levelSliderLimit, (reset.classLevels?.length || 0) + 2);
+      setLevelSliderLimit(targetLimit);
+    }
+  };
+
+  const hasChanges = useMemo(() => {
+    if (!selectedClass || !editingClass) return false;
+    return JSON.stringify(selectedClass) !== JSON.stringify(editingClass);
+  }, [selectedClass, editingClass]);
+
   const renderDetailContent = () => {
-    if (!selectedClass) return null;
+    if (!editingClass) return null;
 
     const {
       summary = {},
       inspiration = [],
-      championLevels = [],
+      classLevels = [],
       rules = [],
-      equipment = [],
-    } = selectedClass;
+      equipment = defaultEquipment,
+    } = editingClass;
 
     switch (activeDetailTab) {
-      case 'overview':
+      case 'overview': {
+        const highlights = summary.highlights || [];
         return (
           <div className="space-y-6">
             <div>
               <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Rol en combate</div>
-              <div className="text-lg font-semibold text-slate-100">
-                {summary.battleRole || 'No definido'}
-              </div>
+              <EditableField
+                value={summary.battleRole}
+                onChange={(value) => handleSummaryFieldChange('battleRole', value)}
+                placeholder="Define el rol principal de esta clase."
+                displayClassName="rounded-2xl border border-slate-700/40 bg-slate-900/60 px-4 py-2"
+                textClassName="text-lg font-semibold text-slate-100"
+              />
             </div>
-            {summary.combo && (
-              <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
-                <div className="text-[0.65rem] uppercase tracking-[0.35em] text-sky-200/80">Combo recomendado</div>
-                <p className="mt-2 text-sm leading-relaxed text-sky-50/90">{summary.combo}</p>
-              </div>
-            )}
-            {summary.difficultyNote && (
-              <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4">
-                <div className="text-[0.65rem] uppercase tracking-[0.35em] text-purple-200/80">Consejo de dificultad</div>
-                <p className="mt-2 text-sm leading-relaxed text-purple-50/90">{summary.difficultyNote}</p>
-              </div>
-            )}
-            {summary.highlights && summary.highlights.length > 0 && (
-              <div>
-                <div className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-500">Puntos clave</div>
-                <ul className="mt-3 space-y-3">
-                  {summary.highlights.map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-sm text-slate-300">
+            <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
+              <div className="text-[0.65rem] uppercase tracking-[0.35em] text-sky-200/80">Combo recomendado</div>
+              <EditableField
+                value={summary.combo}
+                onChange={(value) => handleSummaryFieldChange('combo', value)}
+                multiline
+                placeholder="Describe cómo se combinan las habilidades clave."
+                displayClassName="mt-2 w-full"
+                textClassName="block text-sm leading-relaxed text-sky-50/90"
+                inputClassName="bg-sky-950/60 border-sky-500/40 focus:ring-sky-400"
+              />
+            </div>
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4">
+              <div className="text-[0.65rem] uppercase tracking-[0.35em] text-purple-200/80">Consejo de dificultad</div>
+              <EditableField
+                value={summary.difficultyNote}
+                onChange={(value) => handleSummaryFieldChange('difficultyNote', value)}
+                multiline
+                placeholder="Ofrece una pista estratégica para dominar la clase."
+                displayClassName="mt-2 w-full"
+                textClassName="block text-sm leading-relaxed text-purple-50/90"
+                inputClassName="bg-purple-950/50 border-purple-500/40 focus:ring-purple-400"
+              />
+            </div>
+            <div>
+              <div className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-500">Puntos clave</div>
+              <ul className="mt-3 space-y-3">
+                {highlights.length > 0 ? (
+                  highlights.map((item, index) => (
+                    <li
+                      key={`highlight-${index}`}
+                      className="flex items-start gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3 text-sm text-slate-300"
+                    >
                       <FiTarget className="mt-1 h-4 w-4 text-sky-300" />
-                      <span>{item}</span>
+                      <div className="flex flex-1 items-start gap-3">
+                        <EditableField
+                          value={item}
+                          onChange={(value) => handleHighlightChange(index, value)}
+                          multiline
+                          placeholder="Describe un rasgo o fortaleza."
+                          displayClassName="flex-1"
+                          textClassName="text-left text-sm leading-relaxed text-slate-300"
+                          inputClassName="bg-slate-950/70 border-slate-700/60"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeHighlight(index)}
+                          className="rounded-full border border-transparent p-2 text-slate-500 transition hover:border-slate-600 hover:text-rose-300"
+                          aria-label="Eliminar punto clave"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                  ))
+                ) : (
+                  <li className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/40 p-4 text-sm text-slate-500">
+                    Agrega los aspectos que quieres destacar de la clase.
+                  </li>
+                )}
+              </ul>
+              <button
+                type="button"
+                onClick={addHighlight}
+                className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+              >
+                <FiPlus className="h-4 w-4" />
+                Agregar punto clave
+              </button>
+            </div>
           </div>
         );
-      case 'inspiration':
+      }
+      case 'inspiration': {
         return (
           <div className="space-y-4">
             {inspiration.length > 0 ? (
-              inspiration.map((entry) => (
-                <div
-                  key={entry.title}
-                  className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)]"
-                >
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-amber-100">
-                    {entry.title}
-                  </h4>
-                  <p className="mt-2 text-sm leading-relaxed text-amber-50/90">{entry.description}</p>
-                </div>
-              ))
+              inspiration.map((entry, index) => {
+                const completed = Boolean(entry.completed);
+                return (
+                  <div
+                    key={`inspiration-${index}`}
+                    className={`group rounded-2xl border p-4 shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)] transition ${
+                      completed
+                        ? 'border-emerald-400/50 bg-emerald-500/10 ring-1 ring-emerald-400/40'
+                        : 'border-amber-400/30 bg-amber-400/10'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleInspirationCompleted(index)}
+                        className={`mt-1 rounded-full border border-transparent p-2 transition ${
+                          completed
+                            ? 'bg-emerald-500/20 text-emerald-200 hover:text-emerald-100'
+                            : 'bg-slate-900/50 text-amber-200 hover:text-amber-100'
+                        }`}
+                        aria-label={completed ? 'Marcar hito como pendiente' : 'Marcar hito como completado'}
+                      >
+                        {completed ? (
+                          <FiCheckSquare className="h-4 w-4" />
+                        ) : (
+                          <FiSquare className="h-4 w-4" />
+                        )}
+                      </button>
+                      <div className="flex-1 space-y-3">
+                        <EditableField
+                          value={entry.title}
+                          onChange={(value) => handleInspirationFieldChange(index, 'title', value)}
+                          placeholder="Título del hito"
+                          displayClassName="rounded-2xl border border-transparent bg-slate-900/40 px-3 py-2"
+                          textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${
+                            completed ? 'text-emerald-100' : 'text-amber-100'
+                          }`}
+                        />
+                        <EditableField
+                          value={entry.description}
+                          onChange={(value) => handleInspirationFieldChange(index, 'description', value)}
+                          multiline
+                          placeholder="Describe qué se necesita para completar el hito."
+                          displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                          textClassName="text-sm leading-relaxed text-slate-200"
+                          inputClassName="bg-slate-950/70 border-slate-700/60"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeInspirationEntry(index)}
+                        className="rounded-full border border-transparent p-2 text-slate-500 transition hover:border-slate-600 hover:text-rose-300"
+                        aria-label="Eliminar hito"
+                      >
+                        <FiTrash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
-              <p className="text-sm text-slate-400">
-                Aún no hay hitos de inspiración registrados para esta clase.
-              </p>
+              <div className="rounded-2xl border border-dashed border-amber-400/30 bg-amber-400/5 p-5 text-sm text-amber-100/70">
+                Añade tus primeros hitos de inspiración para guiar la progresión narrativa de la clase.
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={addInspirationEntry}
+              className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-100 transition hover:border-emerald-400 hover:text-emerald-200"
+            >
+              <FiPlus className="h-4 w-4" />
+              Agregar hito
+            </button>
+          </div>
+        );
+      }
+      case 'levels': {
+        const levelCount = classLevels.length;
+        return (
+          <div className="space-y-5">
+            <div className="space-y-3 rounded-3xl border border-indigo-400/20 bg-indigo-500/5 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-indigo-200/80">
+                  <FiSliders className="h-4 w-4" />
+                  <span>Niveles configurados</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-slate-300">
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(levelSliderLimit, levelCount)}
+                    value={levelCount}
+                    onChange={(event) => setLevelCount(Number(event.target.value))}
+                    className="w-40 accent-indigo-400"
+                  />
+                  <span className="rounded-full border border-indigo-400/40 bg-indigo-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-100">
+                    {levelCount} niveles
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <label className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-400/5 px-3 py-1">
+                  <span>Máximo</span>
+                  <input
+                    type="number"
+                    min={Math.max(levelCount, 1)}
+                    value={Math.max(levelSliderLimit, levelCount)}
+                    onChange={(event) => {
+                      const value = Number(event.target.value) || levelSliderLimit;
+                      const resolved = Math.max(levelCount, value);
+                      setLevelSliderLimit(resolved);
+                    }}
+                    className="w-16 rounded-full border border-indigo-400/40 bg-slate-950/70 px-2 py-1 text-right text-xs text-indigo-100 focus:border-indigo-300 focus:outline-none"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={addLevel}
+                  className="inline-flex items-center gap-2 rounded-full border border-indigo-400/40 bg-indigo-400/10 px-3 py-1 font-semibold uppercase tracking-[0.3em] text-indigo-100 transition hover:border-indigo-200"
+                >
+                  <FiPlus className="h-4 w-4" />
+                  Añadir nivel
+                </button>
+              </div>
+            </div>
+            {levelCount > 0 ? (
+              <div className="space-y-4">
+                {classLevels.map((level, index) => (
+                  <div
+                    key={`level-${index}`}
+                    className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-5 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <EditableField
+                        value={level.title}
+                        onChange={(value) => handleLevelFieldChange(index, 'title', value)}
+                        placeholder={`Nivel ${index} — Define el avance`}
+                        displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
+                        textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeLevel(index)}
+                        className="rounded-full border border-transparent p-2 text-indigo-200/80 transition hover:border-indigo-300 hover:text-rose-200"
+                        aria-label="Eliminar nivel"
+                      >
+                        <FiTrash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <EditableField
+                      value={level.description}
+                      onChange={(value) => handleLevelFieldChange(index, 'description', value)}
+                      multiline
+                      placeholder="Detalla el beneficio de alcanzar este nivel."
+                      displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
+                      textClassName="text-sm leading-relaxed text-indigo-50/90"
+                      inputClassName="bg-indigo-950/40 border-indigo-400/30"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-indigo-400/30 bg-indigo-500/5 p-5 text-sm text-indigo-100/70">
+                Usa la barra deslizante para establecer los niveles disponibles de esta clase.
+              </div>
             )}
           </div>
         );
-      case 'levels':
+      }
+      case 'rules': {
         return (
           <div className="space-y-4">
-            {championLevels.length > 0 ? (
-              championLevels.map((level) => (
-                <div
-                  key={level.title}
-                  className="rounded-2xl border border-indigo-400/30 bg-indigo-400/10 p-4 shadow-[0_10px_25px_-15px_rgba(129,140,248,0.6)]"
-                >
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-100">
-                    {level.title}
-                  </h4>
-                  <p className="mt-2 text-sm leading-relaxed text-indigo-50/90">{level.description}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-400">No se han definido niveles de campeón especiales.</p>
-            )}
-          </div>
-        );
-      case 'rules':
-        return (
-          <div className="space-y-3">
             {rules.length > 0 ? (
-              rules.map((rule) => (
+              rules.map((rule, index) => (
                 <div
-                  key={rule}
-                  className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-50/90"
+                  key={`rule-${index}`}
+                  className="flex items-start gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4"
                 >
-                  {rule}
+                  <EditableField
+                    value={rule}
+                    onChange={(value) => handleRuleChange(index, value)}
+                    multiline
+                    placeholder="Describe una regla o modificación especial."
+                    displayClassName="flex-1"
+                    textClassName="text-sm leading-relaxed text-emerald-50/90"
+                    inputClassName="bg-emerald-950/40 border-emerald-400/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRule(index)}
+                    className="rounded-full border border-transparent p-2 text-emerald-200/80 transition hover:border-emerald-300 hover:text-rose-200"
+                    aria-label="Eliminar regla"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400">No hay reglas adicionales para esta clase.</p>
+              <div className="rounded-2xl border border-dashed border-emerald-400/30 bg-emerald-500/5 p-5 text-sm text-emerald-100/70">
+                Añade reglas especiales para personalizar la experiencia de juego de la clase.
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={addRule}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-100 transition hover:border-emerald-200"
+            >
+              <FiPlus className="h-4 w-4" />
+              Agregar regla
+            </button>
+          </div>
+        );
+      }
+      case 'equipment': {
+        const { weapons = [], armor = [], abilities = [] } = equipment || defaultEquipment;
+
+        const renderEquipmentSection = (category, title, items, fields) => (
+          <div key={category} className="space-y-3 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase tracking-[0.35em] text-slate-500">{title}</div>
+              <button
+                type="button"
+                onClick={() => addEquipmentItem(category)}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+              >
+                <FiPlus className="h-4 w-4" />
+                Añadir
+              </button>
+            </div>
+            {items.length > 0 ? (
+              <div className="space-y-4">
+                {items.map((item, index) => (
+                  <div
+                    key={`${category}-${index}`}
+                    className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <EditableField
+                        value={item.name}
+                        onChange={(value) => handleEquipmentChange(category, index, 'name', value)}
+                        placeholder={`Nombre de ${title.toLowerCase()}`}
+                        displayClassName="flex-1 rounded-2xl border border-transparent bg-slate-900/50 px-3 py-2"
+                        textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-slate-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEquipmentItem(category, index)}
+                        className="rounded-full border border-transparent p-2 text-slate-500 transition hover:border-slate-600 hover:text-rose-300"
+                        aria-label={`Eliminar ${title.toLowerCase()}`}
+                      >
+                        <FiTrash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {fields.map(({ key, label, placeholder: fieldPlaceholder }) => (
+                        <div key={`${category}-${index}-${key}`} className="space-y-2">
+                          <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{label}</div>
+                          <EditableField
+                            value={item[key]}
+                            onChange={(value) => handleEquipmentChange(category, index, key, value)}
+                            placeholder={fieldPlaceholder}
+                            displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                            textClassName="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Descripción</div>
+                      <EditableField
+                        value={item.description}
+                        onChange={(value) => handleEquipmentChange(category, index, 'description', value)}
+                        multiline
+                        placeholder="Describe rasgos o efectos relevantes."
+                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                        textClassName="text-sm leading-relaxed text-slate-300"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/50 p-4 text-sm text-slate-500">
+                No hay elementos registrados todavía.
+              </div>
             )}
           </div>
         );
-      case 'equipment':
+
+        const renderPreviewCards = (title, items, accent) => (
+          <div className="space-y-3">
+            <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{title}</div>
+            {items.length > 0 ? (
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <div
+                    key={`${title}-${index}`}
+                    className={`rounded-2xl border ${accent.border} ${accent.background} p-4 ${accent.shadow}`}
+                  >
+                    <div className={`text-xs uppercase tracking-[0.35em] ${accent.text}`}>{item.category || 'Sin categoría'}</div>
+                    <h4 className="mt-1 text-sm font-semibold uppercase tracking-[0.3em] text-white">
+                      {item.name || 'Sin nombre'}
+                    </h4>
+                    {accent.body(item)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Sin {title.toLowerCase()} definidas.</p>
+            )}
+          </div>
+        );
+
         return (
-          <div className="space-y-4">
-            {equipment.length > 0 ? (
-              equipment.map((item) => (
-                <div
-                  key={item.name}
-                  className="rounded-2xl border border-sky-400/30 bg-sky-400/10 p-4 shadow-[0_10px_25px_-15px_rgba(56,189,248,0.6)]"
-                >
-                  <div className="text-xs uppercase tracking-[0.35em] text-sky-200/80">{item.type}</div>
-                  <h4 className="mt-1 text-sm font-semibold uppercase tracking-[0.3em] text-sky-100">{item.name}</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-sky-50/90">{item.detail}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-400">Sin equipación inicial asignada.</p>
-            )}
+          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-6">
+              {renderEquipmentSection('weapons', 'Armas', weapons, [
+                { key: 'category', label: 'Categoría', placeholder: 'Arma pesada, ligera...' },
+                { key: 'damage', label: 'Daño', placeholder: '2d8 + modificador' },
+                { key: 'range', label: 'Alcance', placeholder: 'Cuerpo a cuerpo, 6 casillas...' },
+                { key: 'properties', label: 'Propiedades', placeholder: 'Perforante, versátil...' },
+              ])}
+              {renderEquipmentSection('armor', 'Armaduras', armor, [
+                { key: 'category', label: 'Categoría', placeholder: 'Ligera, media, pesada...' },
+                { key: 'defense', label: 'Defensa', placeholder: '+2 defensa, resistencia...' },
+                { key: 'weight', label: 'Peso', placeholder: 'Ligera, pesada...' },
+                { key: 'traits', label: 'Rasgos', placeholder: 'Ventaja en tiradas, resistencia...' },
+              ])}
+              {renderEquipmentSection('abilities', 'Habilidades', abilities, [
+                { key: 'category', label: 'Tipo', placeholder: 'Ritual, táctica...' },
+                { key: 'cost', label: 'Coste', placeholder: 'Acción, reacción...' },
+                { key: 'cooldown', label: 'Recarga', placeholder: 'Ronda, encuentro...' },
+              ])}
+            </div>
+            <div className="space-y-5 rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6">
+              <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Vista previa recopilada</div>
+              {renderPreviewCards('Armas preparadas', weapons, {
+                border: 'border-sky-400/40',
+                background: 'bg-sky-400/10',
+                text: 'text-sky-200/80',
+                shadow: 'shadow-[0_10px_25px_-15px_rgba(56,189,248,0.6)]',
+                body: (item) => (
+                  <div className="mt-3 space-y-2 text-xs text-sky-50/90">
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Daño</span>
+                      <span>{item.damage || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Alcance</span>
+                      <span>{item.range || '—'}</span>
+                    </div>
+                    <div>
+                      <div className="text-[0.55rem] uppercase tracking-[0.3em] text-sky-100/80">Propiedades</div>
+                      <p className="text-[0.7rem] leading-relaxed">{item.properties || '—'}</p>
+                    </div>
+                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
+                  </div>
+                ),
+              })}
+              {renderPreviewCards('Defensas listas', armor, {
+                border: 'border-emerald-400/40',
+                background: 'bg-emerald-400/10',
+                text: 'text-emerald-200/80',
+                shadow: 'shadow-[0_10px_25px_-15px_rgba(16,185,129,0.6)]',
+                body: (item) => (
+                  <div className="mt-3 space-y-2 text-xs text-emerald-50/90">
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Defensa</span>
+                      <span>{item.defense || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Peso</span>
+                      <span>{item.weight || '—'}</span>
+                    </div>
+                    <div>
+                      <div className="text-[0.55rem] uppercase tracking-[0.3em] text-emerald-100/80">Rasgos</div>
+                      <p className="text-[0.7rem] leading-relaxed">{item.traits || '—'}</p>
+                    </div>
+                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
+                  </div>
+                ),
+              })}
+              {renderPreviewCards('Habilidades disponibles', abilities, {
+                border: 'border-amber-400/40',
+                background: 'bg-amber-400/10',
+                text: 'text-amber-200/80',
+                shadow: 'shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)]',
+                body: (item) => (
+                  <div className="mt-3 space-y-2 text-xs text-amber-50/90">
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Coste</span>
+                      <span>{item.cost || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold uppercase tracking-[0.25em]">Recarga</span>
+                      <span>{item.cooldown || '—'}</span>
+                    </div>
+                    <p className="text-[0.7rem] leading-relaxed">{item.description || 'Sin descripción definida.'}</p>
+                  </div>
+                ),
+              })}
+            </div>
           </div>
         );
+      }
       default:
         return null;
     }
@@ -693,7 +1600,7 @@ const ClassList = ({ onBack }) => {
   }, [classes, searchTerm, sortBy]);
 
   const openFileDialogForClass = (classId) => {
-    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.2, croppedAreaPixels: null });
+    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.5, croppedAreaPixels: null });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
@@ -718,7 +1625,7 @@ const ClassList = ({ onBack }) => {
 
   const handleCropCancel = () => {
     setIsCropping(false);
-    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.1, croppedAreaPixels: null });
+    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1.4, croppedAreaPixels: null });
   };
 
   const handleCropSave = async () => {
@@ -915,7 +1822,7 @@ const ClassList = ({ onBack }) => {
                           {classItem.subtitle}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">{renderStars(classItem.rating)}</div>
+                      <RatingStars rating={classItem.rating} size="sm" />
                     </div>
                     <p className="text-sm leading-relaxed text-slate-300">
                       {classItem.description}
@@ -967,7 +1874,7 @@ const ClassList = ({ onBack }) => {
         overlayClassName="bg-slate-950/80 backdrop-blur-xl"
         className="max-h-[90vh] overflow-hidden border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
       >
-        {selectedClass && (
+        {selectedClass && editingClass && (
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.2fr_0.8fr]">
             <div className="flex flex-col gap-8">
               <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
@@ -979,42 +1886,89 @@ const ClassList = ({ onBack }) => {
                         <span className="text-slate-600">/</span>
                         <span>Detalle</span>
                       </div>
-                      <div>
-                        <h2 className="text-3xl font-bold uppercase tracking-[0.2em] text-white drop-shadow-[0_0_25px_rgba(56,189,248,0.45)]">
-                          {selectedClass.name}
-                        </h2>
-                        <p className="mt-1 text-xs uppercase tracking-[0.35em] text-slate-500">
-                          {selectedClass.subtitle}
-                        </p>
+                      <div className="space-y-2">
+                        <EditableField
+                          value={editingClass.name}
+                          onChange={(value) => handleGeneralFieldChange('name', value)}
+                          placeholder="Nombre de la clase"
+                          displayClassName="block rounded-2xl border border-transparent px-3 py-2"
+                          textClassName="text-3xl font-bold uppercase tracking-[0.2em] text-white drop-shadow-[0_0_25px_rgba(56,189,248,0.45)]"
+                          inputClassName="bg-slate-900/80 text-2xl font-bold uppercase tracking-[0.2em]"
+                          autoSelect={false}
+                        />
+                        <EditableField
+                          value={editingClass.subtitle}
+                          onChange={(value) => handleGeneralFieldChange('subtitle', value)}
+                          placeholder="Define un subtítulo inspirador"
+                          displayClassName="block"
+                          textClassName="mt-1 text-xs uppercase tracking-[0.35em] text-slate-500"
+                          inputClassName="bg-slate-900/70 text-xs uppercase tracking-[0.35em]"
+                          autoSelect={false}
+                        />
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-3 text-right">
                       <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs uppercase tracking-[0.35em] text-slate-300">
                         <span>Valoración</span>
-                        <span className="flex items-center gap-1">{renderStars(selectedClass.rating)}</span>
+                        <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
                       </div>
-                      {statusConfig[selectedClass.status] && (
+                      {statusConfig[editingClass.status] && (
                         <div
-                          className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[selectedClass.status].badgeClass}`}
+                          className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}
                         >
-                          {selectedClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
-                          <span>{statusConfig[selectedClass.status].label}</span>
+                          {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
+                          <span>{statusConfig[editingClass.status].label}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                  <p className="text-sm leading-relaxed text-slate-300 lg:max-w-3xl">
-                    {selectedClass.description}
-                  </p>
+                  <EditableField
+                    value={editingClass.description}
+                    onChange={(value) => handleGeneralFieldChange('description', value)}
+                    multiline
+                    placeholder="Describe a la clase para presentarla al grupo."
+                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-3"
+                    textClassName="block text-sm leading-relaxed text-slate-300 lg:max-w-3xl"
+                  />
                   <div className="flex flex-wrap gap-2">
-                    {selectedClass.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-100"
-                      >
-                        {tag}
+                    {editingClass.tags && editingClass.tags.length > 0 ? (
+                      editingClass.tags.map((tag, index) => (
+                        <div
+                          key={`tag-${index}`}
+                          className="group inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1"
+                        >
+                          <EditableField
+                            value={tag}
+                            onChange={(value) => handleTagChange(index, value)}
+                            placeholder="Etiqueta"
+                            displayClassName="flex-1 text-left"
+                            textClassName="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-sky-100"
+                            inputClassName="bg-slate-950/80 border-slate-700/60 text-[0.65rem] uppercase tracking-[0.3em]"
+                            autoSelect={false}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeTag(index)}
+                            className="rounded-full border border-transparent p-1 text-slate-400 transition hover:border-slate-500 hover:text-rose-300"
+                            aria-label="Eliminar etiqueta"
+                          >
+                            <FiX className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="rounded-full border border-dashed border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
+                        Añade etiquetas temáticas para clasificarla.
                       </span>
-                    ))}
+                    )}
+                    <button
+                      type="button"
+                      onClick={addTag}
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-sky-100 transition hover:border-sky-300 hover:text-sky-200"
+                    >
+                      <FiPlus className="h-3.5 w-3.5" />
+                      Nueva etiqueta
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1054,12 +2008,32 @@ const ClassList = ({ onBack }) => {
             </div>
 
             <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap justify-end gap-3">
+                <Boton
+                  color="indigo"
+                  onClick={handleDiscardChanges}
+                  disabled={!hasChanges}
+                  className="uppercase tracking-[0.3em]"
+                  icon={<FiRefreshCw className="h-4 w-4" />}
+                >
+                  Restablecer
+                </Boton>
+                <Boton
+                  color="blue"
+                  onClick={handleSaveChanges}
+                  disabled={!hasChanges}
+                  className="uppercase tracking-[0.3em]"
+                  icon={<FiSave className="h-4 w-4" />}
+                >
+                  Guardar cambios
+                </Boton>
+              </div>
               <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
                 <div className="relative aspect-[4/5] overflow-hidden">
-                  {selectedClass.image ? (
+                  {editingClass.image ? (
                     <img
-                      src={selectedClass.image}
-                      alt={`Retrato de ${selectedClass.name}`}
+                      src={editingClass.image}
+                      alt={`Retrato de ${editingClass.name}`}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -1070,12 +2044,12 @@ const ClassList = ({ onBack }) => {
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-lg font-semibold text-white">{selectedClass.name}</h3>
+                        <h3 className="text-lg font-semibold text-white">{editingClass.name}</h3>
                         <p className="text-xs uppercase tracking-[0.35em] text-slate-400">
-                          {selectedClass.subtitle}
+                          {editingClass.subtitle}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">{renderStars(selectedClass.rating)}</div>
+                      <RatingStars rating={editingClass.rating || 0} size="sm" onChange={handleRatingChange} />
                     </div>
                   </div>
                 </div>
@@ -1083,39 +2057,89 @@ const ClassList = ({ onBack }) => {
                   <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
                     <div className="space-y-1">
                       <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dificultad</div>
-                      <div className="text-sm font-semibold text-slate-100">{selectedClass.difficulty}</div>
+                      <EditableField
+                        value={editingClass.difficulty}
+                        onChange={(value) => handleGeneralFieldChange('difficulty', value)}
+                        placeholder="Nivel de dificultad"
+                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                        textClassName="text-sm font-semibold text-slate-100"
+                        inputClassName="text-sm font-semibold text-slate-100"
+                        autoSelect={false}
+                      />
                     </div>
                     <div className="space-y-1">
                       <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dominio</div>
-                      <div className="text-sm font-semibold text-slate-100">{selectedClass.mastery}</div>
+                      <EditableField
+                        value={editingClass.mastery}
+                        onChange={(value) => handleGeneralFieldChange('mastery', value)}
+                        placeholder="Progreso de dominio"
+                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                        textClassName="text-sm font-semibold text-slate-100"
+                        inputClassName="text-sm font-semibold text-slate-100"
+                        autoSelect={false}
+                      />
                     </div>
                     <div className="space-y-1">
                       <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Enfoque</div>
-                      <div className="text-sm font-semibold text-slate-100">{selectedClass.focus}</div>
+                      <EditableField
+                        value={editingClass.focus}
+                        onChange={(value) => handleGeneralFieldChange('focus', value)}
+                        placeholder="Atributos clave"
+                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                        textClassName="text-sm font-semibold text-slate-100"
+                        inputClassName="text-sm font-semibold text-slate-100"
+                        autoSelect={false}
+                      />
                     </div>
                     <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Requisitos</div>
-                      <div className="text-sm font-semibold text-amber-200">
-                        {selectedClass.xp} XP • {selectedClass.shards} fragmentos
-                      </div>
+                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Experiencia</div>
+                      <EditableField
+                        value={editingClass.xp !== undefined ? String(editingClass.xp) : ''}
+                        onChange={(value) => handleGeneralFieldChange('xp', value)}
+                        placeholder="XP requerida"
+                        displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
+                        textClassName="text-sm font-semibold text-amber-200"
+                        inputClassName="text-sm font-semibold text-amber-200"
+                        autoSelect={false}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Fragmentos</div>
+                      <EditableField
+                        value={editingClass.shards !== undefined ? String(editingClass.shards) : ''}
+                        onChange={(value) => handleGeneralFieldChange('shards', value)}
+                        placeholder="Coste en fragmentos"
+                        displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
+                        textClassName="text-sm font-semibold text-amber-200"
+                        inputClassName="text-sm font-semibold text-amber-200"
+                        autoSelect={false}
+                      />
                     </div>
                   </div>
                   <div className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 text-xs text-slate-400">
                     <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Etiquetas</div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedClass.tags.map((tag) => (
-                        <span
-                          key={`detail-${tag}`}
-                          className="rounded-full border border-slate-700/60 bg-slate-900/80 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-200"
-                        >
-                          {tag}
+                      {editingClass.tags && editingClass.tags.length > 0 ? (
+                        editingClass.tags.map((tag, index) => (
+                          <span
+                            key={`detail-${index}`}
+                            className="rounded-full border border-slate-700/60 bg-slate-900/80 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-200"
+                          >
+                            {tag || 'Sin etiqueta'}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
+                          Aún no hay etiquetas asignadas.
                         </span>
-                      ))}
+                      )}
                     </div>
                   </div>
-                  <Boton color="blue" onClick={closeClassDetails} className="justify-center uppercase tracking-[0.3em]">
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <Boton color="gray" onClick={closeClassDetails} className="uppercase tracking-[0.3em]">
                     Cerrar panel
-                  </Boton>
+                    </Boton>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1167,7 +2191,7 @@ const ClassList = ({ onBack }) => {
               id="zoom"
               type="range"
               min={1}
-              max={3.5}
+              max={6}
               step={0.05}
               value={cropperState.zoom}
               onChange={(event) =>
