@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import {
   FiChevronDown,
   FiImage,
@@ -23,6 +24,7 @@ import Boton from './Boton';
 import Modal from './Modal';
 import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 import { convertNumericStringToIcons } from '../utils/iconConversions';
+import { db } from '../firebase';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -181,6 +183,17 @@ const toDisplayString = (value) => {
   return value.toString();
 };
 
+const slugifyId = (value) => {
+  if (!value) return '';
+  return value
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+};
+
 const buildWeaponEntry = (weapon) => {
   if (!weapon) return null;
 
@@ -190,7 +203,7 @@ const buildWeaponEntry = (weapon) => {
   const description = weapon.descripcion || weapon.description || '';
   const traits = joinTraits(weapon.rasgos || weapon.traits || '');
   const category = extractCategory(
-    [weapon.tipo, weapon.tipoDano, weapon.category, weapon.clase, weapon.origen],
+    [weapon.category, weapon.tipo, weapon.clase, weapon.origen, weapon.tipoDano],
     'Arma',
   );
 
@@ -1100,6 +1113,8 @@ const ClassList = ({
   rarityColorMap = {},
 }) => {
   const [classes, setClasses] = useState(initialClasses);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphaAsc');
   const [selectedClass, setSelectedClass] = useState(null);
@@ -1130,6 +1145,31 @@ const ClassList = ({
     }),
     [armas, armaduras, habilidades],
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchClasses = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'classes'));
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const loaded = snapshot.docs.map((docSnap) =>
+            ensureClassDefaults({ id: docSnap.id, ...docSnap.data() }),
+          );
+          setClasses(loaded);
+        }
+      } catch (error) {
+        console.error('Error al cargar las clases desde Firebase', error);
+      }
+    };
+
+    fetchClasses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const highlightText = useCallback(
     (rawValue) => {
@@ -1269,6 +1309,7 @@ const ClassList = ({
   }, [selectedClass]);
 
   const openClassDetails = (classItem) => {
+    setSaveStatus(null);
     const sanitized = ensureClassDefaults(classItem);
     setSelectedClass(sanitized);
     setEditingClass(deepClone(sanitized));
@@ -1278,6 +1319,7 @@ const ClassList = ({
   };
 
   const closeClassDetails = () => {
+    setSaveStatus(null);
     setSelectedClass(null);
     setActiveDetailTab('overview');
     setEditingClass(null);
@@ -1601,19 +1643,67 @@ const ClassList = ({
     });
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = useCallback(async () => {
     if (!editingClass) return;
+
     const sanitized = ensureClassDefaults(editingClass);
-    setClasses((prevClasses) =>
-      prevClasses.map((classItem) => (classItem.id === sanitized.id ? sanitized : classItem))
-    );
-    setSelectedClass(sanitized);
-    setEditingClass(deepClone(sanitized));
-    const targetLimit = Math.max(levelSliderLimit, (sanitized.classLevels?.length || 0) + 2);
-    setLevelSliderLimit(targetLimit);
-  };
+    let classId = sanitized.id?.toString().trim();
+
+    if (!classId) {
+      classId = slugifyId(sanitized.name);
+      if (!classId) {
+        setSaveStatus({
+          type: 'error',
+          message: 'La clase necesita un nombre o identificador antes de guardarse.',
+        });
+        return;
+      }
+      sanitized.id = classId;
+    }
+
+    setIsSaving(true);
+    setSaveStatus(null);
+
+    try {
+      await setDoc(doc(db, 'classes', classId), sanitized, { merge: true });
+
+      setClasses((prevClasses) => {
+        const exists = prevClasses.some((classItem) => classItem.id === sanitized.id);
+        if (exists) {
+          return prevClasses.map((classItem) =>
+            classItem.id === sanitized.id ? sanitized : classItem,
+          );
+        }
+        return [...prevClasses, sanitized];
+      });
+
+      setSelectedClass(sanitized);
+      setEditingClass(deepClone(sanitized));
+      const targetLimit = Math.max(levelSliderLimit, (sanitized.classLevels?.length || 0) + 2);
+      setLevelSliderLimit(targetLimit);
+      setSaveStatus({ type: 'success', message: 'Cambios guardados en Firebase.' });
+    } catch (error) {
+      console.error('Error al guardar la clase en Firebase', error);
+      setSaveStatus({
+        type: 'error',
+        message: 'No se pudo guardar en Firebase. Intenta de nuevo.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    editingClass,
+    levelSliderLimit,
+    setClasses,
+    setEditingClass,
+    setIsSaving,
+    setLevelSliderLimit,
+    setSaveStatus,
+    setSelectedClass,
+  ]);
 
   const handleDiscardChanges = () => {
+    setSaveStatus(null);
     if (selectedClass) {
       const reset = ensureClassDefaults(selectedClass);
       setEditingClass(deepClone(reset));
@@ -1626,6 +1716,12 @@ const ClassList = ({
     if (!selectedClass || !editingClass) return false;
     return JSON.stringify(selectedClass) !== JSON.stringify(editingClass);
   }, [selectedClass, editingClass]);
+
+  useEffect(() => {
+    if (hasChanges && saveStatus?.type === 'success') {
+      setSaveStatus(null);
+    }
+  }, [hasChanges, saveStatus]);
 
   const renderDetailContent = () => {
     if (!editingClass) return null;
@@ -2953,13 +3049,24 @@ const ClassList = ({
                 <Boton
                   color="blue"
                   onClick={handleSaveChanges}
-                  disabled={!hasChanges}
+                  disabled={!hasChanges || isSaving}
+                  loading={isSaving}
                   className="uppercase tracking-[0.3em]"
                   icon={<FiSave className="h-4 w-4" />}
                 >
                   Guardar cambios
                 </Boton>
               </div>
+              {saveStatus?.message && (
+                <p
+                  className={`text-sm ${
+                    saveStatus.type === 'error' ? 'text-rose-400' : 'text-emerald-400'
+                  }`}
+                  role="status"
+                >
+                  {saveStatus.message}
+                </p>
+              )}
               <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
                 <div
                   className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]"
