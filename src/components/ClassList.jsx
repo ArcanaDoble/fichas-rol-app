@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
   FiImage,
@@ -24,7 +25,7 @@ import Boton from './Boton';
 import Modal from './Modal';
 import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 import { convertNumericStringToIcons } from '../utils/iconConversions';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -56,6 +57,13 @@ const defaultEquipment = {
   weapons: [],
   armor: [],
   abilities: [],
+};
+
+const normalizeImageValue = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('data:')) return null;
+  return trimmed;
 };
 
 const toArray = (value) => {
@@ -515,6 +523,8 @@ const ensureClassDefaults = (classItem) => {
     ...deepClone(defaultEquipment),
     ...(merged.equipment || {}),
   };
+
+  merged.image = normalizeImageValue(merged.image);
 
   merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => {
     const consumption = toDisplayString(
@@ -1689,6 +1699,7 @@ const ClassList = ({
     setSaveStatus(null);
 
     try {
+      sanitized.image = normalizeImageValue(sanitized.image);
       sanitized = pruneUndefined(sanitized);
 
       await setDoc(doc(db, 'classes', classId), sanitized, { merge: true });
@@ -2659,12 +2670,61 @@ const ClassList = ({
     const croppedImage = await getCroppedImage(cropperState.imageSrc, cropperState.croppedAreaPixels);
     if (!croppedImage) return;
 
-    setClasses((prevClasses) =>
-      prevClasses.map((classItem) =>
-        classItem.id === cropperState.classId ? { ...classItem, image: croppedImage } : classItem
-      )
-    );
-    handleCropCancel();
+    const classId = cropperState.classId;
+    const filePath = `class-images/${classId}.png`;
+
+    try {
+      setSaveStatus(null);
+      const storageRef = ref(storage, filePath);
+      await uploadString(storageRef, croppedImage, 'data_url');
+      const downloadURL = await getDownloadURL(storageRef);
+      const normalizedUrl = normalizeImageValue(downloadURL);
+
+      if (normalizedUrl) {
+        try {
+          await setDoc(
+            doc(db, 'classes', classId),
+            { image: normalizedUrl },
+            { merge: true },
+          );
+        } catch (firestoreError) {
+          console.error('Error al guardar la URL del retrato en Firestore', firestoreError);
+          setSaveStatus({
+            type: 'error',
+            message: 'El retrato se subió a Storage, pero no se pudo guardar en Firestore.',
+          });
+          return;
+        }
+      }
+
+      setClasses((prevClasses) =>
+        prevClasses.map((classItem) =>
+          classItem.id === classId ? { ...classItem, image: normalizedUrl } : classItem,
+        ),
+      );
+
+      setSelectedClass((prevSelected) =>
+        prevSelected && prevSelected.id === classId
+          ? { ...prevSelected, image: normalizedUrl }
+          : prevSelected,
+      );
+
+      setEditingClass((prevEditing) =>
+        prevEditing && prevEditing.id === classId ? { ...prevEditing, image: normalizedUrl } : prevEditing,
+      );
+
+      setSaveStatus({
+        type: 'success',
+        message: 'Retrato actualizado y guardado en Firebase.',
+      });
+      handleCropCancel();
+    } catch (error) {
+      console.error('Error al subir la imagen recortada a Firebase Storage', error);
+      setSaveStatus({
+        type: 'error',
+        message: 'No se pudo subir la imagen recortada. Intenta nuevamente.',
+      });
+    }
   };
 
   return (
