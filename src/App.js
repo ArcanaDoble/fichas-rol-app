@@ -5991,6 +5991,8 @@ function App() {
         armas={armas}
         armaduras={armaduras}
         habilidades={habilidades}
+        glossary={glossary}
+        rarityColorMap={rarityColorMap}
         onBack={() => setChosenView(null)}
       />
     );
