@@ -36,6 +36,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Editor de retratos integrado** con recorte y zoom para ajustar la miniatura de cada clase antes de guardarla.
 - **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
+- **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
+- **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
+- **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
+- **Equipación categorizada**: arma, armadura y habilidad cuentan con formularios propios y una vista previa sincronizada que refleja de inmediato los datos introducidos.
+- **Recorte de retratos mejorado** con mayor rango de zoom para ajustar imágenes verticales sin perder la estética de las cartas.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
