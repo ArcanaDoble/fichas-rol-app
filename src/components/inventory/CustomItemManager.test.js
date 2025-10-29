@@ -85,3 +85,15 @@ test('deletes an item', async () => {
   await waitFor(() => expect(screen.queryByText('Gema')).toBeNull());
   expect(deleteDoc).toHaveBeenCalled();
 });
+
+test('renders uploaded icon URLs as images', async () => {
+  const iconUrl = 'https://example.com/icon.png';
+  getDocs.mockResolvedValueOnce({
+    docs: [
+      { data: () => ({ name: 'Foto', type: 'foto', icon: iconUrl, description: 'Imagen', color: '#fff' }) },
+    ],
+  });
+  render(<CustomItemManager />);
+  const img = await screen.findByRole('img', { name: 'Foto' });
+  expect(img).toHaveAttribute('src', iconUrl);
+});

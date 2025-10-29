@@ -113,7 +113,7 @@ const ItemToken = ({ id, type = 'remedio', count = 1, fromSlot = null }) => {
         data-tooltip-id={`item-${id}`}
         data-tooltip-content={custom.description}
       >
-        {custom.icon?.startsWith('data:') ? (
+        {custom.icon?.startsWith('data:') || custom.icon?.startsWith('http://') || custom.icon?.startsWith('https://') ? (
           <img
             src={custom.icon}
             alt={type}
