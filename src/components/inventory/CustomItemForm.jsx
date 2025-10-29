@@ -5,6 +5,7 @@ import Boton from '../Boton';
 import EmojiPicker from 'emoji-picker-react';
 import LucideIconPicker from '../LucideIconPicker';
 import { Search } from 'lucide-react';
+import { uploadDataUrl } from '../../utils/storage';
 
 const toSlug = (str) =>
   str
@@ -45,11 +46,16 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name) return;
     const type = toSlug(name);
-    onSave({ name, type, icon, description, color });
+    let finalIcon = icon;
+    if (icon?.startsWith('data:')) {
+      finalIcon = await uploadDataUrl(icon, `custom-item-icons/${type}`);
+      setIcon(finalIcon);
+    }
+    onSave({ name, type, icon: finalIcon, description, color });
     if (!initial) {
       setName('');
       setDescription('');

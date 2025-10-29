@@ -143,7 +143,7 @@ const CustomItemManager = () => {
             key={item.type}
             className="flex items-center gap-2 p-2 border border-gray-600 rounded"
           >
-            {item.icon?.startsWith('data:') ? (
+            {item.icon?.startsWith('data:') || item.icon?.startsWith('http://') || item.icon?.startsWith('https://') ? (
               <img
                 src={item.icon}
                 alt={item.name}

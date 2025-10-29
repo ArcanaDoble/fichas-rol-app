@@ -28,14 +28,15 @@ test('supports new polvora type', async () => {
   await screen.findByText('1');
 });
 
-test('custom image is not draggable', async () => {
+test('custom image URL renders as <img> and is not draggable', async () => {
+  const iconUrl = 'https://example.com/icon.png';
   getDocs.mockResolvedValue({
     docs: [
       {
         data: () => ({
           name: 'Foto',
           type: 'foto',
-          icon: 'data:image/png;base64,abc',
+          icon: iconUrl,
           description: 'Una foto',
           color: '#ffffff',
         }),
@@ -45,6 +46,7 @@ test('custom image is not draggable', async () => {
   render(<ItemToken id="4" type="foto" count={1} />);
   const img = await screen.findByAltText('foto');
   expect(img).toHaveAttribute('draggable', 'false');
+  expect(img).toHaveAttribute('src', iconUrl);
 });
 
 test('renders custom item from firestore', async () => {
