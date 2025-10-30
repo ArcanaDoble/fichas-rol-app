@@ -1,10 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
 import { collection, getDocs, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { isValidHexColor, normalizeHexColor } from '../utils/color';
+
+const DEFAULT_TERM_COLOR = '#ffff00';
+
+const createEmptyTerm = () => ({
+  word: '',
+  color: DEFAULT_TERM_COLOR,
+  colorInput: DEFAULT_TERM_COLOR,
+  info: '',
+});
 
 export default function useGlossary() {
   const [glossary, setGlossary] = useState([]);
-  const [newTerm, setNewTerm] = useState({ word: '', color: '#ffff00', info: '' });
+  const [newTerm, setNewTerm] = useState(createEmptyTerm);
   const [editingTerm, setEditingTerm] = useState(null);
   const [newTermError, setNewTermError] = useState('');
 
@@ -22,18 +32,28 @@ export default function useGlossary() {
   }, [fetchGlossary]);
 
   const saveTerm = async () => {
-    const { word, color, info } = newTerm;
-    if (!word.trim()) {
+    const { word, color, colorInput, info } = newTerm;
+    const trimmedWord = word.trim();
+    if (!trimmedWord) {
       setNewTermError('Palabra requerida');
       return;
     }
+    const normalizedColor = normalizeHexColor(colorInput || color);
+    if (!isValidHexColor(normalizedColor)) {
+      setNewTermError('Color inválido. Usa formato #RRGGBB o #RGB');
+      return;
+    }
     try {
-      if (editingTerm && editingTerm !== word.trim()) {
+      if (editingTerm && editingTerm !== trimmedWord) {
         await deleteDoc(doc(db, 'glossary', editingTerm));
       }
-      await setDoc(doc(db, 'glossary', word.trim()), { word: word.trim(), color, info });
+      await setDoc(doc(db, 'glossary', trimmedWord), {
+        word: trimmedWord,
+        color: normalizedColor,
+        info,
+      });
       setEditingTerm(null);
-      setNewTerm({ word: '', color: '#ffff00', info: '' });
+      setNewTerm(createEmptyTerm());
       setNewTermError('');
       fetchGlossary();
     } catch (e) {
@@ -43,7 +63,8 @@ export default function useGlossary() {
   };
 
   const startEditTerm = term => {
-    setNewTerm(term);
+    setNewTerm({ ...term, colorInput: term.color || DEFAULT_TERM_COLOR });
+    setNewTermError('');
     setEditingTerm(term.word);
   };
 
@@ -59,6 +80,7 @@ export default function useGlossary() {
     editingTerm,
     setEditingTerm,
     newTermError,
+    setNewTermError,
     saveTerm,
     startEditTerm,
     deleteTerm,

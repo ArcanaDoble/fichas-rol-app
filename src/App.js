@@ -63,6 +63,10 @@ import sanitize from './utils/sanitize';
 import { DEFAULT_SHOP_CONFIG, normalizeShopConfig } from './utils/shop';
 import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
 import { applyIconConversions } from './utils/iconConversions';
+import {
+  isValidHexColor as isValidGlossaryHexColor,
+  normalizeHexColor as normalizeGlossaryHexColor,
+} from './utils/color';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 const RouteMapBuilderLite = React.lazy(() => import('./components/RouteMapBuilderLite'));
@@ -1261,6 +1265,7 @@ function App() {
     editingTerm,
     setEditingTerm,
     newTermError,
+    setNewTermError,
     saveTerm,
     startEditTerm,
     deleteTerm,
@@ -7632,25 +7637,48 @@ function App() {
             <Input
               placeholder="Palabra"
               value={newTerm.word}
-              onChange={(e) =>
-                setNewTerm((t) => ({ ...t, word: e.target.value }))
-              }
+              onChange={(e) => {
+                setNewTermError('');
+                setNewTerm((t) => ({ ...t, word: e.target.value }));
+              }}
             />
             <input
               type="color"
               value={newTerm.color}
-              onChange={(e) =>
-                setNewTerm((t) => ({ ...t, color: e.target.value }))
-              }
+              onChange={(e) => {
+                setNewTermError('');
+                setNewTerm((t) => ({
+                  ...t,
+                  color: e.target.value,
+                  colorInput: e.target.value,
+                }));
+              }}
               className="w-10 h-8 border-none p-0 rounded"
+            />
+            <Input
+              placeholder="#RRGGBB"
+              value={newTerm.colorInput ?? newTerm.color}
+              onChange={(e) => {
+                const { value } = e.target;
+                setNewTermError('');
+                setNewTerm((t) => {
+                  const normalized = normalizeGlossaryHexColor(value);
+                  if (isValidGlossaryHexColor(normalized)) {
+                    return { ...t, color: normalized, colorInput: normalized };
+                  }
+                  return { ...t, colorInput: value };
+                });
+              }}
+              className="sm:col-span-1"
             />
             <textarea
               className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
               placeholder="Descripción"
               value={newTerm.info}
-              onChange={(e) =>
-                setNewTerm((t) => ({ ...t, info: e.target.value }))
-              }
+              onChange={(e) => {
+                setNewTermError('');
+                setNewTerm((t) => ({ ...t, info: e.target.value }));
+              }}
             />
             <div className="sm:col-span-2 flex justify-between items-center">
               {editingTerm && (
@@ -7658,7 +7686,13 @@ function App() {
                   color="gray"
                   onClick={() => {
                     setEditingTerm(null);
-                    setNewTerm({ word: '', color: '#ffff00', info: '' });
+                    setNewTerm({
+                      word: '',
+                      color: '#ffff00',
+                      colorInput: '#ffff00',
+                      info: '',
+                    });
+                    setNewTermError('');
                   }}
                 >
                   Cancelar
