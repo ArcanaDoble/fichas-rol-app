@@ -1152,6 +1152,8 @@ const ClassList = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphaAsc');
   const [selectedClass, setSelectedClass] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileActiveView, setMobileActiveView] = useState('list');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const [cropperState, setCropperState] = useState({
     classId: null,
@@ -1332,6 +1334,35 @@ const ClassList = ({
   const handleSortChange = (event) => setSortBy(event.target.value);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(max-width: 1023px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+
+    setIsMobile(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileActiveView('list');
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!selectedClass) {
+      setMobileActiveView('list');
+    }
+  }, [selectedClass]);
+
+  useEffect(() => {
     if (selectedClass) {
       const sanitized = ensureClassDefaults(selectedClass);
       setEditingClass(deepClone(sanitized));
@@ -1350,6 +1381,9 @@ const ClassList = ({
     const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
     setLevelSliderLimit(targetLimit);
     setActiveDetailTab('overview');
+    if (isMobile) {
+      setMobileActiveView('details');
+    }
   };
 
   const closeClassDetails = () => {
@@ -1357,6 +1391,9 @@ const ClassList = ({
     setSelectedClass(null);
     setActiveDetailTab('overview');
     setEditingClass(null);
+    if (isMobile) {
+      setMobileActiveView('list');
+    }
   };
 
   const updateEditingClass = (mutator) => {
@@ -1536,7 +1573,7 @@ const ClassList = ({
     });
   };
 
-  const addTag = () => {
+  const handleAddTag = () => {
     updateEditingClass((draft) => {
       const tags = draft.tags || [];
       tags.push('Nueva etiqueta');
@@ -1544,7 +1581,7 @@ const ClassList = ({
     });
   };
 
-  const removeTag = (index) => {
+  const handleRemoveTag = (index) => {
     updateEditingClass((draft) => {
       const tags = draft.tags || [];
       tags.splice(index, 1);
@@ -2727,6 +2764,317 @@ const ClassList = ({
     }
   };
 
+  const renderClassDetailContent = () => {
+    if (!selectedClass || !editingClass) {
+      return null;
+    }
+
+    return (
+      <div className="flex min-h-0 flex-col gap-8">
+        <div className="grid min-h-0 gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
+          <div className="flex min-h-0 flex-col gap-8">
+            <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-slate-300">
+                      <span className="text-sky-300">Clase</span>
+                      <span className="text-slate-600">/</span>
+                      <span>Detalle</span>
+                    </div>
+                    <div className="space-y-2">
+                      <EditableField
+                        value={editingClass.name}
+                        onChange={(value) => handleGeneralFieldChange('name', value)}
+                        placeholder="Nombre de la clase"
+                        displayClassName="block rounded-2xl border border-transparent px-3 py-2"
+                        textClassName="text-3xl font-bold uppercase tracking-[0.2em] text-white drop-shadow-[0_0_25px_rgba(56,189,248,0.45)]"
+                        inputClassName="bg-slate-900/80 text-2xl font-bold uppercase tracking-[0.2em]"
+                        autoSelect={false}
+                      />
+                      <EditableField
+                        value={editingClass.subtitle}
+                        onChange={(value) => handleGeneralFieldChange('subtitle', value)}
+                        placeholder="Define un subtítulo inspirador"
+                        displayClassName="block"
+                        textClassName="mt-1 text-xs uppercase tracking-[0.35em] text-slate-500"
+                        inputClassName="bg-slate-900/70 text-xs uppercase tracking-[0.35em]"
+                        autoSelect={false}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-3 text-right">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs uppercase tracking-[0.35em] text-slate-300">
+                      <span>Valoración</span>
+                      <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <label className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-500">Estado</label>
+                      <div className="relative">
+                        <select
+                          value={editingClass.status || 'available'}
+                          onChange={(event) => handleGeneralFieldChange('status', event.target.value)}
+                          className="appearance-none rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1.5 pr-10 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                        >
+                          {Object.entries(statusConfig).map(([value, config]) => (
+                            <option key={`status-${value}`} value={value}>
+                              {config.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      </div>
+                    </div>
+                    {statusConfig[editingClass.status] ? (
+                      <div className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}>
+                        {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
+                        <span>{statusConfig[editingClass.status].label}</span>
+                      </div>
+                    ) : (
+                      editingClass.status && (
+                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
+                          {editingClass.status}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+                <EditableField
+                  value={editingClass.description}
+                  onChange={(value) => handleGeneralFieldChange('description', value)}
+                  multiline
+                  placeholder="Describe a la clase para presentarla al grupo."
+                  displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-3"
+                  textClassName="block text-sm leading-relaxed text-slate-300 lg:max-w-3xl"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {editingClass.tags && editingClass.tags.length > 0 ? (
+                    editingClass.tags.map((tag, index) => (
+                      <div
+                        key={`tag-${index}`}
+                        className="group inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1"
+                      >
+                        <EditableField
+                          value={tag}
+                          onChange={(value) => handleTagChange(index, value)}
+                          placeholder="Añade un rasgo"
+                          displayClassName="inline-flex items-center gap-2"
+                          textClassName="text-xs font-semibold uppercase tracking-[0.3em] text-sky-100"
+                          inputClassName="text-xs font-semibold uppercase tracking-[0.3em] text-slate-900"
+                          autoSelect={false}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(index)}
+                          className="rounded-full bg-slate-900/60 p-1 text-slate-400 transition hover:bg-slate-800/80 hover:text-slate-100"
+                          aria-label="Eliminar etiqueta"
+                        >
+                          <FiX className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                      Aún no hay etiquetas asignadas. Añade algunas para identificarlas rápidamente.
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    Añadir etiqueta
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-6 lg:grid-cols-[0.38fr_1fr] xl:grid-cols-[0.32fr_1fr]">
+              <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
+                <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Secciones</div>
+                <div className="mt-4 flex flex-col gap-3">
+                  {detailTabs.map((tab) => {
+                    const isActive = tab.id === activeDetailTab;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveDetailTab(tab.id)}
+                        className={`group flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-[0.7rem] font-semibold uppercase tracking-[0.3em] transition ${
+                          isActive
+                            ? 'border-sky-400/60 bg-sky-500/10 text-sky-100 shadow-[0_0_25px_rgba(56,189,248,0.35)]'
+                            : 'border-slate-700/60 bg-slate-900/60 text-slate-400 hover:border-slate-500/60 hover:text-slate-200'
+                        }`}
+                      >
+                        <span className="flex-1">{tab.label}</span>
+                        <FiArrowRight
+                          className={`h-4 w-4 transition-transform ${
+                            isActive ? 'translate-x-1 text-sky-200' : 'text-slate-500 group-hover:translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
+                <div className="max-h-[520px] overflow-y-auto pr-3 md:max-h-[620px] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
+                  <div className="space-y-6 pb-2">{renderDetailContent()}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-col gap-6">
+          <div className="flex flex-wrap justify-end gap-3">
+            <Boton
+              color="indigo"
+              onClick={handleDiscardChanges}
+              disabled={!hasChanges}
+              className="uppercase tracking-[0.3em]"
+              icon={<FiRefreshCw className="h-4 w-4" />}
+            >
+              Restablecer
+            </Boton>
+            <Boton
+              color="blue"
+              onClick={handleSaveChanges}
+              disabled={!hasChanges || isSaving}
+              loading={isSaving}
+              className="uppercase tracking-[0.3em]"
+              icon={<FiSave className="h-4 w-4" />}
+            >
+              Guardar cambios
+            </Boton>
+          </div>
+          {saveStatus?.message && (
+            <p
+              className={`text-sm ${saveStatus.type === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}
+              role="status"
+            >
+              {saveStatus.message}
+            </p>
+          )}
+          <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
+            <div className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]">
+              {editingClass.image ? (
+                <img
+                  src={editingClass.image}
+                  alt={`Retrato de ${editingClass.name}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-slate-950/80">
+                  <FiImage className="h-16 w-16 text-slate-700" />
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{editingClass.name}</h3>
+                    <p className="text-xs uppercase tracking-[0.35em] text-slate-400">{editingClass.subtitle}</p>
+                  </div>
+                  <RatingStars rating={editingClass.rating || 0} size="sm" onChange={handleRatingChange} />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4 p-6">
+              <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
+                <div className="space-y-1">
+                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dificultad</div>
+                  <EditableField
+                    value={editingClass.difficulty}
+                    onChange={(value) => handleGeneralFieldChange('difficulty', value)}
+                    placeholder="Nivel de dificultad"
+                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                    textClassName="text-sm font-semibold text-slate-100"
+                    inputClassName="text-sm font-semibold text-slate-100"
+                    autoSelect={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dominio</div>
+                  <EditableField
+                    value={editingClass.mastery}
+                    onChange={(value) => handleGeneralFieldChange('mastery', value)}
+                    placeholder="Progreso de dominio"
+                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                    textClassName="text-sm font-semibold text-slate-100"
+                    inputClassName="text-sm font-semibold text-slate-100"
+                    autoSelect={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Enfoque</div>
+                  <EditableField
+                    value={editingClass.focus}
+                    onChange={(value) => handleGeneralFieldChange('focus', value)}
+                    placeholder="Atributos clave"
+                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                    textClassName="text-sm font-semibold text-slate-100"
+                    inputClassName="text-sm font-semibold text-slate-100"
+                    autoSelect={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Experiencia</div>
+                  <EditableField
+                    value={editingClass.xp !== undefined ? String(editingClass.xp) : ''}
+                    onChange={(value) => handleGeneralFieldChange('xp', value)}
+                    placeholder="XP requerida"
+                    displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
+                    textClassName="text-sm font-semibold text-amber-200"
+                    inputClassName="text-sm font-semibold text-amber-200"
+                    autoSelect={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Fragmentos</div>
+                  <EditableField
+                    value={editingClass.shards !== undefined ? String(editingClass.shards) : ''}
+                    onChange={(value) => handleGeneralFieldChange('shards', value)}
+                    placeholder="Coste en fragmentos"
+                    displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
+                    textClassName="text-sm font-semibold text-amber-200"
+                    inputClassName="text-sm font-semibold text-amber-200"
+                    autoSelect={false}
+                  />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 text-xs text-slate-400">
+                <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Etiquetas</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {editingClass.tags && editingClass.tags.length > 0 ? (
+                    editingClass.tags.map((tag, index) => (
+                      <span
+                        key={`detail-${index}`}
+                        className="rounded-full border border-slate-700/60 bg-slate-900/80 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-200"
+                      >
+                        {tag || 'Sin etiqueta'}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
+                      Aún no hay etiquetas asignadas.
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-3">
+                <Boton color="gray" onClick={closeClassDetails} className="uppercase tracking-[0.3em]">
+                  Cerrar panel
+                </Boton>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const detailContent = renderClassDetailContent();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 p-4 md:p-8">
       <input
@@ -2793,6 +3141,39 @@ const ClassList = ({
           </div>
         </div>
 
+        {isMobile && (
+          <div className="rounded-full border border-slate-800/60 bg-slate-900/70 p-1 shadow-[0_8px_20px_rgba(8,7,21,0.55)]">
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => setMobileActiveView('list')}
+                className={`rounded-full px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.35em] transition ${
+                  mobileActiveView === 'list'
+                    ? 'bg-sky-500/10 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
+                    : 'text-slate-400 hover:text-sky-100'
+                }`}
+                aria-pressed={mobileActiveView === 'list'}
+              >
+                Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => selectedClass && setMobileActiveView('details')}
+                disabled={!selectedClass}
+                className={`rounded-full px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.35em] transition ${
+                  mobileActiveView === 'details'
+                    ? 'bg-sky-500/10 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
+                    : 'text-slate-400 hover:text-sky-100'
+                } ${selectedClass ? '' : 'opacity-40'}`}
+                aria-pressed={mobileActiveView === 'details'}
+                aria-disabled={!selectedClass}
+              >
+                Detalle
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-4 rounded-3xl border border-slate-800/60 bg-slate-900/80 p-4 shadow-[0_10px_30px_rgba(8,7,21,0.55)] md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
@@ -2835,7 +3216,12 @@ const ClassList = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 ${
+            isMobile && mobileActiveView === 'details' ? 'hidden' : ''
+          }`}
+          aria-hidden={isMobile && mobileActiveView === 'details'}
+        >
           {filteredClasses.map((classItem) => {
             const status = statusConfig[classItem.status];
             return (
@@ -2953,327 +3339,53 @@ const ClassList = ({
         </div>
       </div>
 
-      <Modal
-        isOpen={Boolean(selectedClass)}
-        onClose={closeClassDetails}
-        size="full"
-        overlayClassName="bg-slate-950/80 backdrop-blur-xl"
-        className="max-h-[95vh] overflow-y-auto border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
-      >
-        {selectedClass && editingClass && (
-          <div className="flex min-h-0 flex-col gap-8">
-            <div className="grid min-h-0 gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
-              <div className="flex min-h-0 flex-col gap-8">
-                <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
-                  <div className="flex flex-col gap-6">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <div className="inline-flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-slate-300">
-                        <span className="text-sky-300">Clase</span>
-                        <span className="text-slate-600">/</span>
-                        <span>Detalle</span>
-                      </div>
-                      <div className="space-y-2">
-                        <EditableField
-                          value={editingClass.name}
-                          onChange={(value) => handleGeneralFieldChange('name', value)}
-                          placeholder="Nombre de la clase"
-                          displayClassName="block rounded-2xl border border-transparent px-3 py-2"
-                          textClassName="text-3xl font-bold uppercase tracking-[0.2em] text-white drop-shadow-[0_0_25px_rgba(56,189,248,0.45)]"
-                          inputClassName="bg-slate-900/80 text-2xl font-bold uppercase tracking-[0.2em]"
-                          autoSelect={false}
-                        />
-                        <EditableField
-                          value={editingClass.subtitle}
-                          onChange={(value) => handleGeneralFieldChange('subtitle', value)}
-                          placeholder="Define un subtítulo inspirador"
-                          displayClassName="block"
-                          textClassName="mt-1 text-xs uppercase tracking-[0.35em] text-slate-500"
-                          inputClassName="bg-slate-900/70 text-xs uppercase tracking-[0.35em]"
-                          autoSelect={false}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-3 text-right">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs uppercase tracking-[0.35em] text-slate-300">
-                        <span>Valoración</span>
-                        <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <label className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-500">Estado</label>
-                        <div className="relative">
-                          <select
-                            value={editingClass.status || 'available'}
-                            onChange={(event) => handleGeneralFieldChange('status', event.target.value)}
-                            className="appearance-none rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1.5 pr-10 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-                          >
-                            {Object.entries(statusConfig).map(([value, config]) => (
-                              <option key={`status-${value}`} value={value}>
-                                {config.label}
-                              </option>
-                            ))}
-                          </select>
-                          <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                        </div>
-                      </div>
-                      {statusConfig[editingClass.status] ? (
-                        <div
-                          className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}
-                        >
-                          {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
-                          <span>{statusConfig[editingClass.status].label}</span>
-                        </div>
-                      ) : (
-                        editingClass.status && (
-                          <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
-                            {editingClass.status}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                  <EditableField
-                    value={editingClass.description}
-                    onChange={(value) => handleGeneralFieldChange('description', value)}
-                    multiline
-                    placeholder="Describe a la clase para presentarla al grupo."
-                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-3"
-                    textClassName="block text-sm leading-relaxed text-slate-300 lg:max-w-3xl"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    {editingClass.tags && editingClass.tags.length > 0 ? (
-                      editingClass.tags.map((tag, index) => (
-                        <div
-                          key={`tag-${index}`}
-                          className="group inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1"
-                        >
-                          <EditableField
-                            value={tag}
-                            onChange={(value) => handleTagChange(index, value)}
-                            placeholder="Etiqueta"
-                            displayClassName="flex-1 text-left"
-                            textClassName="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-sky-100"
-                            inputClassName="bg-slate-950/80 border-slate-700/60 text-[0.65rem] uppercase tracking-[0.3em]"
-                            autoSelect={false}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeTag(index)}
-                            className="rounded-full border border-transparent p-1 text-slate-400 transition hover:border-slate-500 hover:text-rose-300"
-                            aria-label="Eliminar etiqueta"
-                          >
-                            <FiX className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <span className="rounded-full border border-dashed border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
-                        Añade etiquetas temáticas para clasificarla.
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={addTag}
-                      className="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-sky-100 transition hover:border-sky-300 hover:text-sky-200"
-                    >
-                      <FiPlus className="h-3.5 w-3.5" />
-                      Nueva etiqueta
-                    </button>
-                  </div>
-                </div>
-              </div>
+      {!isMobile && (
+        <Modal
+          isOpen={Boolean(selectedClass)}
+          onClose={closeClassDetails}
+          size="full"
+          overlayClassName="bg-slate-950/80 backdrop-blur-xl"
+          className="max-h-[95vh] overflow-y-auto border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
+        >
+          {detailContent}
+        </Modal>
+      )}
 
-              <div className="grid gap-6 lg:grid-cols-[0.38fr_1fr] xl:grid-cols-[0.32fr_1fr]">
-                <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                  <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Secciones</div>
-                  <div className="mt-4 flex flex-col gap-3">
-                    {detailTabs.map((tab) => {
-                      const isActive = tab.id === activeDetailTab;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => setActiveDetailTab(tab.id)}
-                          className={`group flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-[0.7rem] font-semibold uppercase tracking-[0.3em] transition ${
-                            isActive
-                              ? 'border-sky-400/60 bg-sky-500/10 text-sky-100 shadow-[0_0_25px_rgba(56,189,248,0.35)]'
-                              : 'border-slate-700/60 bg-slate-900/60 text-slate-400 hover:border-slate-500/60 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="flex-1">{tab.label}</span>
-                          <FiArrowRight
-                            className={`h-4 w-4 transition-transform ${
-                              isActive ? 'translate-x-1 text-sky-200' : 'text-slate-500 group-hover:translate-x-1'
-                            }`}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                  <div className="max-h-[520px] overflow-y-auto pr-3 md:max-h-[620px] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
-                    <div className="space-y-6 pb-2">
-                      {renderDetailContent()}
-                    </div>
-                  </div>
-                </div>
+      {isMobile && detailContent && (
+        <div
+          className={`mt-6 transition-all duration-200 ${
+            mobileActiveView === 'details' ? 'opacity-100' : 'pointer-events-none opacity-0 hidden'
+          }`}
+          aria-hidden={mobileActiveView !== 'details'}
+        >
+          <div className="rounded-3xl border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 shadow-[0_25px_60px_-30px_rgba(56,189,248,0.65)]">
+            <div className="flex h-full max-h-[calc(100vh-7rem)] flex-col overflow-hidden">
+              <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 bg-slate-950/90 px-4 py-3 text-[0.6rem] uppercase tracking-[0.35em] text-slate-300">
+                <button
+                  type="button"
+                  onClick={() => setMobileActiveView('list')}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-800/60 bg-slate-900/70 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400/40 hover:text-sky-100"
+                >
+                  <FiChevronDown className="h-3.5 w-3.5 -rotate-90" />
+                  Lista
+                </button>
+                <span>Detalle</span>
+                <button
+                  type="button"
+                  onClick={closeClassDetails}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-800/60 bg-slate-900/70 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-rose-400/40 hover:text-rose-100"
+                >
+                  Cerrar
+                  <FiX className="h-3.5 w-3.5" />
+                </button>
               </div>
-            </div>
-
-            <div className="flex min-h-0 flex-col gap-6">
-              <div className="flex flex-wrap justify-end gap-3">
-                <Boton
-                  color="indigo"
-                  onClick={handleDiscardChanges}
-                  disabled={!hasChanges}
-                  className="uppercase tracking-[0.3em]"
-                  icon={<FiRefreshCw className="h-4 w-4" />}
-                >
-                  Restablecer
-                </Boton>
-                <Boton
-                  color="blue"
-                  onClick={handleSaveChanges}
-                  disabled={!hasChanges || isSaving}
-                  loading={isSaving}
-                  className="uppercase tracking-[0.3em]"
-                  icon={<FiSave className="h-4 w-4" />}
-                >
-                  Guardar cambios
-                </Boton>
-              </div>
-              {saveStatus?.message && (
-                <p
-                  className={`text-sm ${
-                    saveStatus.type === 'error' ? 'text-rose-400' : 'text-emerald-400'
-                  }`}
-                  role="status"
-                >
-                  {saveStatus.message}
-                </p>
-              )}
-              <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
-                <div
-                  className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]"
-                >
-                  {editingClass.image ? (
-                    <img
-                      src={editingClass.image}
-                      alt={`Retrato de ${editingClass.name}`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-slate-950/80">
-                      <FiImage className="h-16 w-16 text-slate-700" />
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent p-6">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{editingClass.name}</h3>
-                        <p className="text-xs uppercase tracking-[0.35em] text-slate-400">
-                          {editingClass.subtitle}
-                        </p>
-                      </div>
-                      <RatingStars rating={editingClass.rating || 0} size="sm" onChange={handleRatingChange} />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4 p-6">
-                  <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
-                    <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dificultad</div>
-                      <EditableField
-                        value={editingClass.difficulty}
-                        onChange={(value) => handleGeneralFieldChange('difficulty', value)}
-                        placeholder="Nivel de dificultad"
-                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                        textClassName="text-sm font-semibold text-slate-100"
-                        inputClassName="text-sm font-semibold text-slate-100"
-                        autoSelect={false}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dominio</div>
-                      <EditableField
-                        value={editingClass.mastery}
-                        onChange={(value) => handleGeneralFieldChange('mastery', value)}
-                        placeholder="Progreso de dominio"
-                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                        textClassName="text-sm font-semibold text-slate-100"
-                        inputClassName="text-sm font-semibold text-slate-100"
-                        autoSelect={false}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Enfoque</div>
-                      <EditableField
-                        value={editingClass.focus}
-                        onChange={(value) => handleGeneralFieldChange('focus', value)}
-                        placeholder="Atributos clave"
-                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                        textClassName="text-sm font-semibold text-slate-100"
-                        inputClassName="text-sm font-semibold text-slate-100"
-                        autoSelect={false}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Experiencia</div>
-                      <EditableField
-                        value={editingClass.xp !== undefined ? String(editingClass.xp) : ''}
-                        onChange={(value) => handleGeneralFieldChange('xp', value)}
-                        placeholder="XP requerida"
-                        displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
-                        textClassName="text-sm font-semibold text-amber-200"
-                        inputClassName="text-sm font-semibold text-amber-200"
-                        autoSelect={false}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Fragmentos</div>
-                      <EditableField
-                        value={editingClass.shards !== undefined ? String(editingClass.shards) : ''}
-                        onChange={(value) => handleGeneralFieldChange('shards', value)}
-                        placeholder="Coste en fragmentos"
-                        displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
-                        textClassName="text-sm font-semibold text-amber-200"
-                        inputClassName="text-sm font-semibold text-amber-200"
-                        autoSelect={false}
-                      />
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 text-xs text-slate-400">
-                    <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Etiquetas</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {editingClass.tags && editingClass.tags.length > 0 ? (
-                        editingClass.tags.map((tag, index) => (
-                          <span
-                            key={`detail-${index}`}
-                            className="rounded-full border border-slate-700/60 bg-slate-900/80 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-200"
-                          >
-                            {tag || 'Sin etiqueta'}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
-                          Aún no hay etiquetas asignadas.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <Boton color="gray" onClick={closeClassDetails} className="uppercase tracking-[0.3em]">
-                    Cerrar panel
-                    </Boton>
-                  </div>
-                </div>
+              <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+                {detailContent}
               </div>
             </div>
           </div>
         </div>
       )}
-      </Modal>
 
       <Modal
         isOpen={isCropping}
