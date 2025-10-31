@@ -1573,7 +1573,7 @@ const ClassList = ({
     });
   };
 
-  const addTag = () => {
+  const handleAddTag = () => {
     updateEditingClass((draft) => {
       const tags = draft.tags || [];
       tags.push('Nueva etiqueta');
@@ -1581,7 +1581,7 @@ const ClassList = ({
     });
   };
 
-  const removeTag = (index) => {
+  const handleRemoveTag = (index) => {
     updateEditingClass((draft) => {
       const tags = draft.tags || [];
       tags.splice(index, 1);

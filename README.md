@@ -45,6 +45,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Ficha de configuración responsiva** que aprovecha todo el ancho disponible, evita recortes en pantallas ultrapanorámicas, ajusta el retrato a un ancho máximo seguro y mantiene contenedores desplazables dentro de cada bloque para conservar el layout compacto.
 - **Seguimiento de niveles completados** mediante casillas activables por nivel con resaltado esmeralda que conservan el progreso dentro de la ficha.
 - **Vista previa de equipación refinada** con iconos automáticos para consumos y cargas, categorías saneadas y paneles de rareza que conservan el efecto hover incluso en armas especiales.
+- **Edición de etiquetas corregida en móvil** para que el botón «Añadir etiqueta» vuelva a funcionar tras los ajustes responsive.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 
