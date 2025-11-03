@@ -357,6 +357,18 @@ const DEFAULT_ENEMY_THEME = {
       glow: 'rgba(56, 189, 248, 0.24)',
       iconGlow: 'rgba(56, 189, 248, 0.5)',
     },
+    encounter: {
+      from: 'rgba(74, 222, 128, 0.22)',
+      via: 'rgba(16, 185, 129, 0.24)',
+      to: 'rgba(15, 23, 42, 0.82)',
+      hoverFrom: 'rgba(74, 222, 128, 0.3)',
+      hoverVia: 'rgba(16, 185, 129, 0.32)',
+      hoverTo: 'rgba(15, 23, 42, 0.9)',
+      border: 'rgba(16, 185, 129, 0.5)',
+      hoverBorder: 'rgba(16, 185, 129, 0.7)',
+      glow: 'rgba(74, 222, 128, 0.24)',
+      iconGlow: 'rgba(16, 185, 129, 0.45)',
+    },
   },
   buttonText: '#fefce8',
   buttonHoverText: '#fefce8',
@@ -375,6 +387,7 @@ const cloneDefaultEnemyTheme = () => ({
     edit: { ...DEFAULT_ENEMY_THEME.button.edit },
     delete: { ...DEFAULT_ENEMY_THEME.button.delete },
     view: { ...DEFAULT_ENEMY_THEME.button.view },
+    encounter: { ...DEFAULT_ENEMY_THEME.button.encounter },
   },
 });
 const ENEMY_THEME_PRESETS = [
@@ -580,6 +593,7 @@ const buildEnemyTheme = (color) => {
   const xpColor = accent;
   const oroColor = shiftHue(accent, -28);
   const infoColor = shiftHue(accent, 40);
+  const supportColor = shiftHue(accent, 28);
   const dangerColor = shiftHue(accent, -65);
   const cardShadow = `0 18px 36px ${toRgba(mixColors(shadowTint, '#080715', 0.65), 0.65)}`;
 
@@ -654,6 +668,18 @@ const buildEnemyTheme = (color) => {
         hoverBorder: toRgba(adjustLightness(infoColor, 14), 0.65),
         glow: toRgba(infoColor, 0.2),
         iconGlow: toRgba(infoColor, 0.4),
+      },
+      encounter: {
+        from: toRgba(supportColor, 0.22),
+        via: toRgba(shiftHue(supportColor, -18), 0.26),
+        to: toRgba(mixColors(lightTint, supportColor, 0.35), 0.9),
+        hoverFrom: toRgba(supportColor, 0.3),
+        hoverVia: toRgba(shiftHue(supportColor, -12), 0.34),
+        hoverTo: toRgba(mixColors(lightTint, supportColor, 0.48), 0.96),
+        border: toRgba(adjustLightness(supportColor, 10), 0.5),
+        hoverBorder: toRgba(adjustLightness(supportColor, 14), 0.65),
+        glow: toRgba(supportColor, 0.22),
+        iconGlow: toRgba(supportColor, 0.42),
       },
     },
     buttonText: textPrimary,
@@ -6576,6 +6602,7 @@ function App() {
                 palette: theme.statPalette[3],
               },
             ];
+            const encounterButtonTheme = theme.button.encounter || theme.button.view;
 
             return (
               <Tarjeta
@@ -6744,6 +6771,28 @@ function App() {
                         background: theme.backgroundGradient,
                       }}
                     >
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => setEncounterAddTarget(enemy)}
+                        className="enemy-action-button enemy-action-encounter flex-1 min-w-[120px]"
+                        icon={<FiPlus className="text-lg" />}
+                        style={{
+                          '--enemy-button-from': encounterButtonTheme.from,
+                          '--enemy-button-via': encounterButtonTheme.via,
+                          '--enemy-button-to': encounterButtonTheme.to,
+                          '--enemy-button-hover-from': encounterButtonTheme.hoverFrom,
+                          '--enemy-button-hover-via': encounterButtonTheme.hoverVia,
+                          '--enemy-button-hover-to': encounterButtonTheme.hoverTo,
+                          '--enemy-button-border': encounterButtonTheme.border,
+                          '--enemy-button-hover-border': encounterButtonTheme.hoverBorder,
+                          '--enemy-button-text': theme.buttonText,
+                          '--enemy-button-glow': encounterButtonTheme.glow,
+                          '--enemy-button-icon-glow': encounterButtonTheme.iconGlow,
+                        }}
+                      >
+                        Al encuentro
+                      </Boton>
                       <Boton
                         color="gray"
                         size="sm"
