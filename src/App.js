@@ -35,6 +35,7 @@ import {
   FiTrash2,
   FiCrop,
   FiCheck,
+  FiUserPlus,
 } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
@@ -85,6 +86,7 @@ import {
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
+import useEnemyInstances from './hooks/useEnemyInstances';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
@@ -1100,6 +1102,41 @@ function App() {
   const [enemySort, setEnemySort] = useState('name'); // 'name' | 'nivel'
   const [enemySortDir, setEnemySortDir] = useState('asc'); // 'asc' | 'desc'
   const [enemyFiltersOpen, setEnemyFiltersOpen] = useState(false);
+
+  const {
+    activeEncounter,
+    addEnemiesToEncounter,
+    updateInstanceStats,
+    removeInstance,
+    resetEncounter,
+  } = useEnemyInstances(enemies, ensureEnemyDefaults);
+
+  const handleAddEnemyToEncounter = useCallback(
+    (enemy) => {
+      addEnemiesToEncounter(enemy);
+    },
+    [addEnemiesToEncounter],
+  );
+
+  const handleRemoveInstanceFromEncounter = useCallback(
+    (instanceId) => {
+      removeInstance(instanceId);
+    },
+    [removeInstance],
+  );
+
+  const handleResetEncounter = useCallback(() => {
+    resetEncounter();
+  }, [resetEncounter]);
+
+  const handleInstanceStatChange = useCallback(
+    (instanceId, statKey, field, value) => {
+      const numeric = Number(value);
+      const parsed = Number.isFinite(numeric) ? numeric : 0;
+      updateInstanceStats(instanceId, statKey, { [field]: parsed });
+    },
+    [updateInstanceStats],
+  );
 
   const normalizeText = (t) =>
     (t || '')
@@ -6223,6 +6260,128 @@ function App() {
             )}
           </button>
         </div>
+        {/* Encuentro activo */}
+        {activeEncounter.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 p-5 shadow-inner shadow-purple-900/40">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-purple-100">
+                  Encuentro activo
+                </h2>
+                <p className="text-sm text-purple-200/70">
+                  {activeEncounter.length} instancia
+                  {activeEncounter.length === 1 ? '' : 's'} preparadas para combate
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-2 rounded-full border border-purple-400/40 bg-purple-900/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                  {activeEncounter.length} enemigo
+                  {activeEncounter.length === 1 ? '' : 's'}
+                </span>
+                <Boton
+                  color="gray"
+                  size="sm"
+                  onClick={handleResetEncounter}
+                  className="flex items-center gap-2 rounded-lg border border-purple-400/40 bg-purple-900/50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-purple-100 hover:bg-purple-900/70"
+                  icon={<FiXCircle className="text-base" />}
+                >
+                  Vaciar encuentro
+                </Boton>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {activeEncounter.map((instance) => {
+                const statEntries = Object.entries(instance.stats || {});
+                return (
+                  <div
+                    key={instance.id}
+                    className="rounded-xl border border-purple-500/30 bg-black/30 p-4 shadow-sm shadow-black/40"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-purple-100">
+                          {instance.alias}
+                        </p>
+                        <p className="text-xs text-purple-200/70">
+                          {instance.baseName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {statEntries.length > 0 && (
+                          <span className="rounded-full border border-purple-400/30 bg-purple-500/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-purple-100">
+                            {statEntries.length} stat
+                            {statEntries.length === 1 ? '' : 's'}
+                          </span>
+                        )}
+                        <Boton
+                          color="gray"
+                          size="sm"
+                          onClick={() => handleRemoveInstanceFromEncounter(instance.id)}
+                          className="flex items-center gap-2 rounded-lg border border-red-400/40 bg-red-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 hover:bg-red-500/30"
+                          icon={<FiTrash2 className="text-sm" />}
+                        >
+                          Quitar
+                        </Boton>
+                      </div>
+                    </div>
+                    {statEntries.length > 0 && (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {statEntries.map(([statKey, statValue]) => (
+                          <div
+                            key={statKey}
+                            className="rounded-xl border border-purple-500/30 bg-purple-900/20 p-3"
+                          >
+                            <span className="text-xs font-semibold uppercase tracking-wide text-purple-200">
+                              {statKey}
+                            </span>
+                            <div className="mt-2 flex items-center gap-2 text-purple-100">
+                              <label className="text-[10px] uppercase tracking-wide text-purple-300">
+                                Act
+                              </label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={statValue?.actual ?? 0}
+                                onChange={(event) =>
+                                  handleInstanceStatChange(
+                                    instance.id,
+                                    statKey,
+                                    'actual',
+                                    event.target.value,
+                                  )
+                                }
+                                className="h-8 w-16 rounded-md border border-purple-500/40 bg-purple-950/60 px-2 text-sm font-semibold text-purple-100 focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                              />
+                              <span className="text-xs text-purple-300">/</span>
+                              <label className="text-[10px] uppercase tracking-wide text-purple-300">
+                                Max
+                              </label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={statValue?.total ?? 0}
+                                onChange={(event) =>
+                                  handleInstanceStatChange(
+                                    instance.id,
+                                    statKey,
+                                    'total',
+                                    event.target.value,
+                                  )
+                                }
+                                className="h-8 w-16 rounded-md border border-purple-500/40 bg-purple-950/60 px-2 text-sm font-semibold text-purple-100 focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Lista de enemigos */}
         <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
           <span
@@ -6500,6 +6659,28 @@ function App() {
                         background: theme.backgroundGradient,
                       }}
                     >
+                      <Boton
+                        color="gray"
+                        size="sm"
+                        onClick={() => handleAddEnemyToEncounter(enemy)}
+                        className="enemy-action-button enemy-action-add flex-1 min-w-[120px]"
+                        icon={<FiUserPlus className="text-lg" />}
+                        style={{
+                          '--enemy-button-from': theme.button.view.from,
+                          '--enemy-button-via': theme.button.view.via,
+                          '--enemy-button-to': theme.button.view.to,
+                          '--enemy-button-hover-from': theme.button.view.hoverFrom,
+                          '--enemy-button-hover-via': theme.button.view.hoverVia,
+                          '--enemy-button-hover-to': theme.button.view.hoverTo,
+                          '--enemy-button-border': theme.button.view.border,
+                          '--enemy-button-hover-border': theme.button.view.hoverBorder,
+                          '--enemy-button-text': theme.buttonText,
+                          '--enemy-button-glow': theme.button.view.glow,
+                          '--enemy-button-icon-glow': theme.button.view.iconGlow,
+                        }}
+                      >
+                        Añadir al encuentro
+                      </Boton>
                       <Boton
                         color="gray"
                         size="sm"
