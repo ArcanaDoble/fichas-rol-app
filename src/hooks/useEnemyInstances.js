@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
 
+const ENCOUNTER_STORAGE_KEY = 'activeEncounter:v1';
+const MAX_HISTORY_ENTRIES = 3;
+
 const slugify = (value) => {
   if (value === undefined || value === null) return 'item';
   return String(value)
@@ -123,6 +126,45 @@ const mergeEquipment = (runtimeEquipment = [], baseEquipment = []) => {
   return Array.from(map.values());
 };
 
+const sanitizeHistory = (history = []) => {
+  if (!Array.isArray(history)) return [];
+  const normalized = [];
+  history.forEach((entry) => {
+    if (!entry) return;
+    const id = entry.id ? String(entry.id) : nanoid();
+    const label = entry.label ? String(entry.label) : 'Acción registrada';
+    const type = entry.type ? String(entry.type) : 'custom';
+    const timestampRaw = entry.timestamp;
+    const timestampNumeric = Number(timestampRaw);
+    const timestamp = Number.isFinite(timestampNumeric)
+      ? timestampNumeric
+      : Date.now();
+    const payload =
+      entry.payload && typeof entry.payload === 'object'
+        ? { ...entry.payload }
+        : {};
+    normalized.push({ id, label, type, timestamp, payload });
+  });
+  return normalized.slice(-MAX_HISTORY_ENTRIES);
+};
+
+const mergeHistory = (current = [], next = []) => {
+  const combined = [...(Array.isArray(current) ? current : []), ...(Array.isArray(next) ? next : [])];
+  const map = new Map();
+  combined.forEach((entry) => {
+    if (!entry) return;
+    const id = entry.id ? String(entry.id) : nanoid();
+    const timestampRaw = entry.timestamp;
+    const timestampNumeric = Number(timestampRaw);
+    const timestamp = Number.isFinite(timestampNumeric)
+      ? timestampNumeric
+      : Date.now();
+    map.set(id, { ...entry, id, timestamp });
+  });
+  const sorted = Array.from(map.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  return sorted.slice(-MAX_HISTORY_ENTRIES);
+};
+
 const ensureRuntime = (runtime, enemy) => {
   const enemyStates = sanitizeStates(enemy?.estados || []);
   const hasRuntimeStates = runtime && Object.prototype.hasOwnProperty.call(runtime, 'states');
@@ -135,10 +177,12 @@ const ensureRuntime = (runtime, enemy) => {
   const states = sanitizeStates(combinedStates);
   const baseEquipment = buildEquipmentFromEnemy(enemy);
   const equipment = mergeEquipment(runtime?.equipment, baseEquipment);
+  const history = sanitizeHistory(runtime?.history || []);
   return {
     states,
     customStates,
     equipment,
+    history,
   };
 };
 
@@ -151,9 +195,11 @@ const mergeRuntime = (currentRuntime, nextRuntime, enemy) => {
     { ...ensuredCurrent, ...nextRuntime },
     enemy,
   );
+  const history = mergeHistory(ensuredCurrent.history, ensuredNext.history);
   return {
     ...ensuredCurrent,
     ...ensuredNext,
+    history,
   };
 };
 
@@ -195,6 +241,7 @@ const resolveAliasBase = (enemy) => enemy?.alias || enemy?.name || 'Enemigo';
 const useEnemyInstances = (enemies = [], ensureEnemyDefaults) => {
   const [activeEncounter, setActiveEncounter] = useState([]);
   const aliasCounters = useRef({});
+  const isHydrated = useRef(false);
   const ensureEnemy = useMemo(() => ensureFunction(ensureEnemyDefaults), [ensureEnemyDefaults]);
 
   const findEnemyById = useCallback(
@@ -404,6 +451,80 @@ const useEnemyInstances = (enemies = [], ensureEnemyDefaults) => {
     },
     [ensureEnemy, resolveEnemy],
   );
+
+  useEffect(() => {
+    if (isHydrated.current) return;
+    if (typeof window === 'undefined') {
+      isHydrated.current = true;
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(ENCOUNTER_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setEncounter(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Error cargando encuentro activo', error);
+    } finally {
+      isHydrated.current = true;
+    }
+  }, [setEncounter]);
+
+  useEffect(() => {
+    if (!isHydrated.current || typeof window === 'undefined') return;
+    try {
+      if (activeEncounter.length === 0) {
+        window.localStorage.removeItem(ENCOUNTER_STORAGE_KEY);
+        return;
+      }
+      const serialized = JSON.stringify(
+        activeEncounter.map((instance) => {
+          const payload = {
+            id: instance.id,
+            enemyId: instance.enemyId,
+            alias: instance.alias,
+            baseName: instance.baseName,
+            stats: instance.stats,
+            runtime: instance.runtime,
+            createdAt: instance.createdAt,
+          };
+          if (instance.data?.id) {
+            payload.data = { id: instance.data.id };
+          } else if (instance.data) {
+            payload.data = instance.data;
+          }
+          return payload;
+        }),
+      );
+      window.localStorage.setItem(ENCOUNTER_STORAGE_KEY, serialized);
+    } catch (error) {
+      console.error('Error guardando encuentro activo', error);
+    }
+  }, [activeEncounter]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStorage = (event) => {
+      if (event.key !== ENCOUNTER_STORAGE_KEY) return;
+      if (!event.newValue) {
+        resetEncounter();
+        return;
+      }
+      try {
+        const parsed = JSON.parse(event.newValue);
+        if (Array.isArray(parsed)) {
+          setEncounter(parsed);
+        }
+      } catch (error) {
+        console.error('Error sincronizando encuentro activo', error);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [resetEncounter, setEncounter]);
 
   useEffect(() => {
     setActiveEncounter((prev) =>

@@ -55,6 +55,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tarjetas táctiles con barras dinámicas**: cada enemigo muestra recursos con barras visuales y controles grandes `+`/`−` que actualizan vida, postura, cordura y karma en grupo o individualmente.
 - **Chips de estados y equipo**: activa o desactiva condiciones con un toque, añade estados personalizados desde un menú contextual y gestiona equipamiento equipado o inactivo desde píldoras interactivas.
 - **Acciones grupales inmediatas**: duplica o elimina grupos enteros y alterna un modo "Aplicar a todos" que sincroniza cualquier ajuste en segundos, con acceso rápido a la ficha completa de cada enemigo mediante `EnemyViewModal`.
+- **Selector táctil de cantidades**: añade enemigos al encuentro con un modal ligero que propone cantidades rápidas (×1, ×3, ×5, ×10) y permite introducir cifras personalizadas antes de clonar cada instancia numerada automáticamente.
+- **Persistencia automática**: el estado completo del encuentro (stats, estados, equipo) se guarda en `localStorage` para recuperar la sesión al recargar y se sincroniza entre pestañas del navegador.
+- **Historial por instancia con deshacer**: cada enemigo conserva las tres últimas acciones (daños, estados, equipo o estados personalizados) con botón «Deshacer» para revertir errores en segundos sin abandonar la vista móvil.
+- **Sincronización con tokens activos**: los cambios de recursos se reflejan en las barras de los tokens vinculados (`tokenSheetId`) mediante guardado inmediato del `tokenSheet`, manteniendo alineadas las hojas del tablero y el panel táctil.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
 

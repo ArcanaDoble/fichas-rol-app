@@ -12,6 +12,7 @@ import {
   FiEye,
   FiMinus,
   FiPlus,
+  FiRotateCcw,
   FiTrash2,
   FiUsers,
 } from 'react-icons/fi';
@@ -23,6 +24,7 @@ import KarmaBar from './KarmaBar';
 import EstadoSelector, { ESTADOS } from './EstadoSelector';
 import Modal from './Modal';
 import EnemyViewModal from './EnemyViewModal';
+import { nanoid } from 'nanoid';
 
 const STAT_COLORS = {
   vida: '#f87171',
@@ -33,6 +35,22 @@ const STAT_COLORS = {
 };
 
 const PRIORITY_STATS = ['vida', 'postura', 'cordura', 'ingenio', 'armadura', 'karma'];
+const MAX_HISTORY_ENTRIES = 3;
+
+const pushHistoryEntry = (runtime = {}, entry) => {
+  if (!entry) {
+    return Array.isArray(runtime?.history) ? runtime.history : [];
+  }
+  const history = Array.isArray(runtime?.history) ? runtime.history : [];
+  const normalized = {
+    id: entry.id || nanoid(),
+    timestamp: entry.timestamp || Date.now(),
+    type: entry.type || 'custom',
+    label: entry.label || 'Acción aplicada',
+    payload: entry.payload || {},
+  };
+  return [...history.slice(-(MAX_HISTORY_ENTRIES - 1)), normalized];
+};
 
 const formatStatLabel = (key) => {
   if (!key) return 'Recurso';
@@ -79,6 +97,7 @@ const EncounterPanel = ({
   onUpdateInstanceStat,
   onUpdateInstance,
   onDuplicateInstance,
+  onSyncInstance,
   headerActions = null,
   title = 'Encuentro activo',
   subtitle,
@@ -218,6 +237,40 @@ const EncounterPanel = ({
     updateHighlightTimeouts.current.set(key, timeoutId);
   }, []);
 
+  const recordStatHistory = useCallback(
+    (instanceId, statKey, previousActual, nextActual, total) => {
+      if (!onUpdateInstance) return;
+      if (!instanceId || !statKey) return;
+      const prevValue = Number(previousActual);
+      const nextValue = Number(nextActual);
+      if (!Number.isFinite(prevValue) || !Number.isFinite(nextValue) || prevValue === nextValue) {
+        return;
+      }
+      const totalValue = Number(total);
+      onUpdateInstance(instanceId, (prev) => {
+        const runtime = prev.runtime || {};
+        const history = pushHistoryEntry(runtime, {
+          type: 'stat',
+          label: `${formatStatLabel(statKey)}: ${prevValue} → ${nextValue}`,
+          payload: {
+            statKey,
+            prevActual: prevValue,
+            prevTotal: Number.isFinite(totalValue) ? totalValue : undefined,
+            nextActual: nextValue,
+            nextTotal: Number.isFinite(totalValue) ? totalValue : undefined,
+          },
+        });
+        return {
+          runtime: {
+            ...runtime,
+            history,
+          },
+        };
+      });
+    },
+    [onUpdateInstance],
+  );
+
   useEffect(() => () => {
     updateHighlightTimeouts.current.forEach((timeoutId) => {
       clearTimeout(timeoutId);
@@ -231,20 +284,36 @@ const EncounterPanel = ({
       onUpdateInstance(instance.id, (prev) => {
         const runtime = prev.runtime || {};
         const currentStates = new Set(runtime.states || []);
-        if (currentStates.has(stateId)) {
+        const wasActive = currentStates.has(stateId);
+        if (wasActive) {
           currentStates.delete(stateId);
         } else {
           currentStates.add(stateId);
         }
+        const custom = (runtime.customStates || []).find((state) => state.id === stateId);
+        const estado = estadoMap[stateId];
+        const label =
+          estado?.name || custom?.label || stateId.replace(/^custom:/, '');
+        const history = pushHistoryEntry(runtime, {
+          type: 'state',
+          label: `${wasActive ? 'Estado retirado' : 'Estado aplicado'}: ${label}`,
+          payload: {
+            stateId,
+            prevActive: wasActive,
+            nextActive: !wasActive,
+          },
+        });
         return {
           runtime: {
             ...runtime,
             states: Array.from(currentStates),
+            history,
           },
         };
       });
+      onSyncInstance?.(instance.id);
     },
-    [onUpdateInstance],
+    [estadoMap, onSyncInstance, onUpdateInstance],
   );
 
   const handleToggleEquipment = useCallback(
@@ -252,18 +321,34 @@ const EncounterPanel = ({
       if (!instance?.id || !equipmentId || !onUpdateInstance) return;
       onUpdateInstance(instance.id, (prev) => {
         const runtime = prev.runtime || {};
-        const equipment = (runtime.equipment || []).map((item) =>
-          item.id === equipmentId ? { ...item, active: !item.active } : item,
+        const previousEquipment = runtime.equipment || [];
+        const targetItem = previousEquipment.find((item) => item.id === equipmentId);
+        const wasActive = targetItem ? targetItem.active !== false : true;
+        const updatedEquipment = previousEquipment.map((item) =>
+          item.id === equipmentId ? { ...item, active: !wasActive } : item,
         );
+        const history = pushHistoryEntry(runtime, {
+          type: 'equipment',
+          label: `${wasActive ? 'Equipo desactivado' : 'Equipo activado'}: ${
+            targetItem?.label || equipmentId
+          }`,
+          payload: {
+            equipmentId,
+            prevActive: wasActive,
+            nextActive: !wasActive,
+          },
+        });
         return {
           runtime: {
             ...runtime,
-            equipment,
+            equipment: updatedEquipment,
+            history,
           },
         };
       });
+      onSyncInstance?.(instance.id);
     },
-    [onUpdateInstance],
+    [onSyncInstance, onUpdateInstance],
   );
 
   const slugifyLabel = useCallback((value) => {
@@ -297,6 +382,14 @@ const EncounterPanel = ({
           counter += 1;
           uniqueId = `${baseId}-${counter}`;
         }
+        const history = pushHistoryEntry(runtime, {
+          type: 'customState',
+          label: `Estado creado: ${trimmed}`,
+          payload: {
+            stateId: uniqueId,
+            label: trimmed,
+          },
+        });
         return {
           runtime: {
             ...runtime,
@@ -308,11 +401,13 @@ const EncounterPanel = ({
               },
             ],
             states: Array.from(new Set([...(runtime.states || []), uniqueId])),
+            history,
           },
         };
       });
+      onSyncInstance?.(instance.id);
     },
-    [onUpdateInstance, slugifyLabel],
+    [onSyncInstance, onUpdateInstance, slugifyLabel],
   );
 
   const closeCustomStateMenu = useCallback(() => {
@@ -351,6 +446,100 @@ const EncounterPanel = ({
     handleAddCustomState,
     closeCustomStateMenu,
   ]);
+
+  const handleUndoHistory = useCallback(
+    (instance, entry) => {
+      if (!instance?.id || !entry) return;
+      const { type, payload } = entry;
+      if (type === 'stat' && payload?.statKey) {
+        if (payload.prevActual !== undefined) {
+          onUpdateInstanceStat?.(
+            instance.id,
+            payload.statKey,
+            'actual',
+            payload.prevActual,
+          );
+          registerStatUpdate(instance.id, payload.statKey);
+        }
+        if (payload.prevTotal !== undefined) {
+          onUpdateInstanceStat?.(
+            instance.id,
+            payload.statKey,
+            'total',
+            payload.prevTotal,
+          );
+        }
+      } else if (type === 'state' && payload?.stateId) {
+        onUpdateInstance?.(instance.id, (prev) => {
+          const runtime = prev.runtime || {};
+          const states = new Set(runtime.states || []);
+          if (payload.prevActive) {
+            states.add(payload.stateId);
+          } else {
+            states.delete(payload.stateId);
+          }
+          return {
+            runtime: {
+              ...runtime,
+              states: Array.from(states),
+            },
+          };
+        });
+      } else if (type === 'equipment' && payload?.equipmentId) {
+        onUpdateInstance?.(instance.id, (prev) => {
+          const runtime = prev.runtime || {};
+          const equipment = (runtime.equipment || []).map((item) =>
+            item.id === payload.equipmentId
+              ? { ...item, active: payload.prevActive }
+              : item,
+          );
+          return {
+            runtime: {
+              ...runtime,
+              equipment,
+            },
+          };
+        });
+      } else if (type === 'customState' && payload?.stateId) {
+        onUpdateInstance?.(instance.id, (prev) => {
+          const runtime = prev.runtime || {};
+          const customStates = (runtime.customStates || []).filter(
+            (state) => state.id !== payload.stateId,
+          );
+          const states = (runtime.states || []).filter(
+            (stateId) => stateId !== payload.stateId,
+          );
+          return {
+            runtime: {
+              ...runtime,
+              customStates,
+              states,
+            },
+          };
+        });
+      }
+
+      onUpdateInstance?.(instance.id, (prev) => {
+        const runtime = prev.runtime || {};
+        const history = Array.isArray(runtime.history)
+          ? runtime.history.filter((item) => item.id !== entry.id)
+          : [];
+        return {
+          runtime: {
+            ...runtime,
+            history,
+          },
+        };
+      });
+      onSyncInstance?.(instance.id);
+    },
+    [
+      onSyncInstance,
+      onUpdateInstance,
+      onUpdateInstanceStat,
+      registerStatUpdate,
+    ],
+  );
 
   useEffect(() => {
     if (!customStateMenu.open) return undefined;
@@ -601,6 +790,14 @@ const EncounterPanel = ({
                                                     next,
                                                   );
                                                   registerStatUpdate(target.id, statKey);
+                                                  recordStatHistory(
+                                                    target.id,
+                                                    statKey,
+                                                    current.actual,
+                                                    next,
+                                                    current.total,
+                                                  );
+                                                  onSyncInstance?.(target.id);
                                                 });
                                               }}
                                               className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/40 bg-purple-900/40 text-purple-100 transition hover:border-purple-300 hover:text-white"
@@ -627,6 +824,14 @@ const EncounterPanel = ({
                                                     next,
                                                   );
                                                   registerStatUpdate(target.id, statKey);
+                                                  recordStatHistory(
+                                                    target.id,
+                                                    statKey,
+                                                    current.actual,
+                                                    next,
+                                                    current.total,
+                                                  );
+                                                  onSyncInstance?.(target.id);
                                                 });
                                               }}
                                               className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/40 bg-purple-900/40 text-purple-100 transition hover:border-purple-300 hover:text-white"
@@ -672,6 +877,7 @@ const EncounterPanel = ({
                                                   event.target.value,
                                                 );
                                                 registerStatUpdate(instance.id, statKey);
+                                                onSyncInstance?.(instance.id);
                                               }}
                                               className="h-8 w-20 rounded-lg border border-purple-500/40 bg-purple-950/60 px-2 text-sm font-semibold text-purple-100 focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                                             />
@@ -687,6 +893,7 @@ const EncounterPanel = ({
                                                   'total',
                                                   event.target.value,
                                                 );
+                                                onSyncInstance?.(instance.id);
                                               }}
                                               className="h-8 w-20 rounded-lg border border-purple-500/40 bg-purple-950/60 px-2 text-sm font-semibold text-purple-100 focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                                             />
@@ -788,6 +995,42 @@ const EncounterPanel = ({
                                   ))}
                                 </div>
                               </div>
+
+                              {Array.isArray(runtime.history) && runtime.history.length > 0 && (
+                                <div className="rounded-xl border border-purple-500/30 bg-purple-900/20 p-3">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-purple-200">
+                                    Historial reciente
+                                  </p>
+                                  <ul className="mt-3 space-y-2">
+                                    {[...runtime.history]
+                                      .slice()
+                                      .reverse()
+                                      .map((entry) => (
+                                        <li
+                                          key={entry.id}
+                                          className="flex items-start justify-between gap-3 rounded-lg border border-purple-500/30 bg-purple-950/40 px-3 py-2 text-left"
+                                        >
+                                          <div className="flex-1">
+                                            <p className="text-xs font-semibold text-purple-100">
+                                              {entry.label}
+                                            </p>
+                                            <p className="text-[10px] text-purple-300/70">
+                                              {new Date(entry.timestamp).toLocaleTimeString()}
+                                            </p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUndoHistory(instance, entry)}
+                                            className="flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-900/40 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-purple-100 transition hover:border-purple-300 hover:text-white"
+                                          >
+                                            <FiRotateCcw className="text-sm" />
+                                            Deshacer
+                                          </button>
+                                        </li>
+                                      ))}
+                                  </ul>
+                                </div>
+                              )}
                             </article>
                           );
                         })}
@@ -913,6 +1156,7 @@ EncounterPanel.propTypes = {
   onUpdateInstanceStat: PropTypes.func,
   onUpdateInstance: PropTypes.func,
   onDuplicateInstance: PropTypes.func,
+  onSyncInstance: PropTypes.func,
   headerActions: PropTypes.node,
   title: PropTypes.string,
   subtitle: PropTypes.string,
