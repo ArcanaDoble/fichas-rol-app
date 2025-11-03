@@ -1108,7 +1108,9 @@ function App() {
     activeEncounter,
     addEnemiesToEncounter,
     updateInstanceStats,
+    updateInstance,
     removeInstance,
+    duplicateInstance,
     resetEncounter,
   } = useEnemyInstances(enemies, ensureEnemyDefaults);
 
@@ -1137,6 +1139,20 @@ function App() {
       updateInstanceStats(instanceId, statKey, { [field]: parsed });
     },
     [updateInstanceStats],
+  );
+
+  const handleInstanceUpdate = useCallback(
+    (instanceId, updater) => {
+      updateInstance(instanceId, updater);
+    },
+    [updateInstance],
+  );
+
+  const handleDuplicateInstance = useCallback(
+    (instanceId) => {
+      duplicateInstance(instanceId);
+    },
+    [duplicateInstance],
   );
 
   const normalizeText = (t) =>
@@ -6064,6 +6080,8 @@ function App() {
             onRemoveInstance={handleRemoveInstanceFromEncounter}
             onResetEncounter={handleResetEncounter}
             onUpdateInstanceStat={handleInstanceStatChange}
+            onUpdateInstance={handleInstanceUpdate}
+            onDuplicateInstance={handleDuplicateInstance}
             headerActions={
               activeEncounter.length > 0 ? (
                 <Boton
@@ -6077,6 +6095,7 @@ function App() {
               ) : null
             }
             showEmptyState
+            rarityColorMap={rarityColorMap}
           />
         </div>
       </div>
@@ -6322,6 +6341,8 @@ function App() {
             onRemoveInstance={handleRemoveInstanceFromEncounter}
             onResetEncounter={handleResetEncounter}
             onUpdateInstanceStat={handleInstanceStatChange}
+            onUpdateInstance={handleInstanceUpdate}
+            onDuplicateInstance={handleDuplicateInstance}
             compact
             className="mt-6"
             headerActions={
@@ -6335,6 +6356,7 @@ function App() {
               </Boton>
             }
             showEmptyState={false}
+            rarityColorMap={rarityColorMap}
           />
         )}
 
