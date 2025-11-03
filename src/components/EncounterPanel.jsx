@@ -974,16 +974,8 @@ const EncounterPanel = ({
                                       const quickStats = getEquipmentPrimaryStats(key, details);
                                       const traits = normalizeTraitList(details.traits);
                                       const rows = [];
-                                      if (details.body)
-                                        rows.push({ label: 'Cuerpo', value: details.body });
-                                      if (details.mind)
-                                        rows.push({ label: 'Mente', value: details.mind });
                                       if (details.type && key !== 'armors')
                                         rows.push({ label: 'Tipo', value: details.type });
-                                      if (details.value)
-                                        rows.push({ label: 'Valor', value: details.value });
-                                      if (details.technology)
-                                        rows.push({ label: 'Tecnología', value: details.technology });
                                       if (details.weight)
                                         rows.push({ label: 'Carga', value: details.weight });
                                       return (
