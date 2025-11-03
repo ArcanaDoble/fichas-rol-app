@@ -50,6 +50,7 @@ import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import ClassList from './components/ClassList';
+import EncounterPanel from './components/EncounterPanel';
 import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
@@ -90,6 +91,7 @@ import {
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
+import useEnemyInstances from './hooks/useEnemyInstances';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
@@ -1106,6 +1108,27 @@ function App() {
   const [enemySort, setEnemySort] = useState('name'); // 'name' | 'nivel'
   const [enemySortDir, setEnemySortDir] = useState('asc'); // 'asc' | 'desc'
   const [enemyFiltersOpen, setEnemyFiltersOpen] = useState(false);
+  const [enemyTab, setEnemyTab] = useState('catalog');
+  const [encounterAddTarget, setEncounterAddTarget] = useState(null);
+  const [encounterAddCount, setEncounterAddCount] = useState(1);
+  const encounterSyncRef = useRef(null);
+  const {
+    instances: activeEncounter,
+    addEnemyInstances,
+    updateInstance: updateEncounterInstance,
+    removeInstance: removeEncounterInstance,
+    duplicateInstance: duplicateEncounterInstance,
+    clearEncounter: clearEncounterInstances,
+    applyToGroup: applyEncounterGroup,
+    refreshFromCatalog: refreshEncounterFromCatalog,
+  } = useEnemyInstances({
+    ensureEnemyDefaults,
+    onSyncInstance: (instance) => {
+      if (typeof encounterSyncRef.current === 'function') {
+        encounterSyncRef.current(instance);
+      }
+    },
+  });
 
   const normalizeText = (t) =>
     (t || '')
@@ -1263,6 +1286,157 @@ function App() {
     filteredEnemies.length !== enemies.length
       ? `${filteredEnemies.length} resultado${filteredEnemies.length === 1 ? '' : 's'}`
       : `${enemies.length} enemigo${enemies.length === 1 ? '' : 's'}`;
+
+  useEffect(() => {
+    if (encounterAddTarget) {
+      setEncounterAddCount(1);
+    }
+  }, [encounterAddTarget]);
+
+  useEffect(() => {
+    refreshEncounterFromCatalog(enemies);
+  }, [enemies, refreshEncounterFromCatalog]);
+
+  const handleAddEnemyToEncounter = useCallback(
+    (enemy, quantity) => {
+      if (!enemy || quantity <= 0) return;
+      addEnemyInstances(enemy, quantity);
+      setEncounterAddTarget(null);
+      setEnemyTab('encounter');
+    },
+    [addEnemyInstances]
+  );
+
+  const handleAdjustEncounterStat = useCallback(
+    (instanceId, statKey, delta) => {
+      const instance = activeEncounter.find((inst) => inst.id === instanceId);
+      if (!instance) return;
+      const label = (statKey || '').toString().toUpperCase();
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const currentStat = inst.stats?.[statKey] || { base: 0, buff: 0, total: 0, actual: 0 };
+          const total = Number.isFinite(currentStat.total)
+            ? currentStat.total
+            : (currentStat.base || 0) + (currentStat.buff || 0);
+          let nextActual = (currentStat.actual ?? total ?? 0) + delta;
+          if (statKey === KARMA_KEY) {
+            nextActual = clampKarma(nextActual);
+          } else if (Number.isFinite(total) && total > 0) {
+            nextActual = Math.max(0, Math.min(total, nextActual));
+          } else {
+            nextActual = Math.max(0, nextActual);
+          }
+          return {
+            ...inst,
+            stats: {
+              ...inst.stats,
+              [statKey]: {
+                ...currentStat,
+                actual: nextActual,
+              },
+            },
+          };
+        },
+        `${label} ${delta > 0 ? '+' : ''}${delta}`
+      );
+    },
+    [activeEncounter, updateEncounterInstance]
+  );
+
+  const handleToggleEncounterState = useCallback(
+    (instanceId, state) => {
+      const instance = activeEncounter.find((inst) => inst.id === instanceId);
+      const wasActive = instance?.activeStates?.includes(state);
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const pool = Array.from(new Set([...(inst.statePool || []), state]));
+          const activeStates = wasActive
+            ? (inst.activeStates || []).filter((value) => value !== state)
+            : [...(inst.activeStates || []), state];
+          return {
+            ...inst,
+            statePool: pool,
+            activeStates,
+          };
+        },
+        `${state} ${wasActive ? 'removido' : 'aplicado'}`
+      );
+    },
+    [activeEncounter, updateEncounterInstance]
+  );
+
+  const handleAddEncounterState = useCallback(
+    (instanceId, state) => {
+      const label = (state || '').trim();
+      if (!label) return;
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const pool = Array.from(new Set([...(inst.statePool || []), label]));
+          const activeStates = Array.from(new Set([...(inst.activeStates || []), label]));
+          return {
+            ...inst,
+            statePool: pool,
+            activeStates,
+          };
+        },
+        `Estado ${label} añadido`
+      );
+    },
+    [updateEncounterInstance]
+  );
+
+  const handleToggleEncounterEquipment = useCallback(
+    (instanceId, category, itemId) => {
+      const instance = activeEncounter.find((inst) => inst.id === instanceId);
+      const items = instance?.equipment?.[category] || [];
+      const item = items.find((entry) => entry.id === itemId);
+      const wasUsed = item?.used;
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const list = inst.equipment?.[category] || [];
+          const next = list.map((entry) =>
+            entry.id === itemId ? { ...entry, used: !entry.used } : entry
+          );
+          return {
+            ...inst,
+            equipment: {
+              ...inst.equipment,
+              [category]: next,
+            },
+          };
+        },
+        item ? `${item.name} ${wasUsed ? 'restaurado' : 'usado'}` : 'Equipo alternado'
+      );
+    },
+    [activeEncounter, updateEncounterInstance]
+  );
+
+  const handleApplyEncounterGroup = useCallback(
+    (groupId, updater, description) => {
+      applyEncounterGroup(groupId, updater, description);
+    },
+    [applyEncounterGroup]
+  );
+
+  const handleOpenInstanceSheet = useCallback(
+    (baseId) => {
+      if (!baseId) return;
+      const target = enemies.find((enemy) => enemy.id === baseId);
+      if (target) {
+        setSelectedEnemy(target);
+      }
+    },
+    [enemies]
+  );
+
+  const handleClearEncounter = useCallback(() => {
+    clearEncounterInstances();
+    setEnemyTab('catalog');
+  }, [clearEncounterInstances]);
   // Glosario de términos destacados
   const {
     glossary,
@@ -3806,6 +3980,40 @@ function App() {
     isRemoteTokenUpdate.current = false;
     isLocalTokenEdit.current = true;
   };
+
+  useEffect(() => {
+    encounterSyncRef.current = (instance) => {
+      if (!instance) return;
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('encounterInstanceUpdate', { detail: instance })
+          );
+        } catch (error) {
+          console.error('Error enviando actualización de encuentro', error);
+        }
+      }
+      const baseEnemy = enemies.find((enemy) => enemy.id === instance.baseId);
+      if (baseEnemy && (baseEnemy.tokenSheetId || baseEnemy.enemyId)) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('encounterTokenSync', {
+              detail: {
+                instance,
+                tokenSheetId: baseEnemy.tokenSheetId || null,
+                enemyId: baseEnemy.enemyId || baseEnemy.id,
+              },
+            })
+          );
+        } catch (error) {
+          console.error('Error notificando sincronización de token', error);
+        }
+      }
+    };
+    return () => {
+      encounterSyncRef.current = null;
+    };
+  }, [enemies]);
   const handleSaveEnemy = async () => {
     if (!newEnemy.name.trim()) {
       alert('El nombre del enemigo es requerido');
@@ -6047,190 +6255,220 @@ function App() {
               </Boton>
             </div>
           </div>
-          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 mb-3">
-            <Boton
-              color="green"
-              onClick={createNewEnemy}
-              className="w-full md:w-auto"
-            >
-              Crear Nuevo Enemigo
-            </Boton>
-            <Boton onClick={refreshCatalog} className="w-full md:w-auto">
-              Refrescar
-            </Boton>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
-              <div className="md:hidden inline-flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
-                  {enemyResultsLabel}
-                </span>
-              </div>
-              <button
-                type="button"
-                className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
-                  enemyFiltersOpen
-                    ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
-                    : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
-                }`}
-                onClick={() => setEnemyFiltersOpen((v) => !v)}
-                aria-expanded={enemyFiltersOpen}
-                aria-controls="enemy-filters"
-              >
-                <FiFilter />
-                <span>Filtros</span>
-                <FiChevronDown
-                  className={`transition-transform duration-200 ${
-                    enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-          <div
-            className="rounded-3xl border border-purple-500/20 bg-gray-900/80 p-4 md:p-6 shadow-[0_18px_40px_-18px_rgba(147,51,234,0.45)] backdrop-blur"
-            id="enemy-filters"
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="relative flex-1">
-                <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-purple-300/60" />
-                <input
-                  type="text"
-                  value={enemySearch}
-                  onChange={(e) => setEnemySearch(e.target.value)}
-                  placeholder="Buscar enemigos (nombre, descripción, equipo...)"
-                  className="w-full rounded-2xl border border-gray-700/60 bg-gray-800/70 pl-12 pr-12 py-3 text-sm md:text-base text-gray-100 shadow-inner shadow-black/40 transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/30"
-                />
-                {enemySearch && (
-                  <button
-                    type="button"
-                    onClick={() => setEnemySearch('')}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-lg text-gray-400 transition hover:text-gray-200"
-                    aria-label="Limpiar búsqueda"
-                  >
-                    <FiXCircle />
-                  </button>
-                )}
-              </div>
-              <div className="hidden lg:flex items-center gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
-                  {enemyResultsLabel}
-                </span>
-              </div>
-            </div>
-            <div
-              className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${
-                enemyFiltersOpen ? '' : 'hidden md:grid'
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setEnemyTab('catalog')}
+              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${
+                enemyTab === 'catalog'
+                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                  : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
               }`}
             >
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEnemyOnlyPortraits((v) => !v)}
-                  aria-pressed={enemyOnlyPortraits}
-                  className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
-                    enemyOnlyPortraits
-                      ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
-                      : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+              Catálogo
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnemyTab('encounter')}
+              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${
+                enemyTab === 'encounter'
+                  ? 'border-sky-400 bg-sky-500/20 text-sky-100'
+                  : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
+              }`}
+            >
+              Panel de Encuentro
+            </button>
+          </div>
+          {enemyTab === 'catalog' && (
+            <>
+              <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 mb-3">
+                <Boton
+                  color="green"
+                  onClick={createNewEnemy}
+                  className="w-full md:w-auto"
+                >
+                  Crear Nuevo Enemigo
+                </Boton>
+                <Boton onClick={refreshCatalog} className="w-full md:w-auto">
+                  Refrescar
+                </Boton>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
+                  <div className="md:hidden inline-flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                      {enemyResultsLabel}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                      enemyFiltersOpen
+                        ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                        : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                    }`}
+                    onClick={() => setEnemyFiltersOpen((v) => !v)}
+                    aria-expanded={enemyFiltersOpen}
+                    aria-controls="enemy-filters"
+                  >
+                    <FiFilter />
+                    <span>Filtros</span>
+                    <FiChevronDown
+                      className={`transition-transform duration-200 ${
+                        enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+              <div
+                className="rounded-3xl border border-purple-500/20 bg-gray-900/80 p-4 md:p-6 shadow-[0_18px_40px_-18px_rgba(147,51,234,0.45)] backdrop-blur"
+                id="enemy-filters"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <div className="relative flex-1">
+                    <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-purple-300/60" />
+                    <input
+                      type="text"
+                      value={enemySearch}
+                      onChange={(e) => setEnemySearch(e.target.value)}
+                      placeholder="Buscar enemigos (nombre, descripción, equipo...)"
+                      className="w-full rounded-2xl border border-gray-700/60 bg-gray-800/70 pl-12 pr-12 py-3 text-sm md:text-base text-gray-100 shadow-inner shadow-black/40 transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/30"
+                    />
+                    {enemySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setEnemySearch('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-lg text-gray-400 transition hover:text-gray-200"
+                        aria-label="Limpiar búsqueda"
+                      >
+                        <FiXCircle />
+                      </button>
+                    )}
+                  </div>
+                  <div className="hidden lg:flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                      {enemyResultsLabel}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${
+                    enemyFiltersOpen ? '' : 'hidden md:grid'
                   }`}
                 >
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
-                      enemyOnlyPortraits
-                        ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
-                        : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
-                    }`}
-                  >
-                    <FiImage />
-                  </span>
-                  <span>Solo con retrato</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEnemyOnlyPortraits((v) => !v)}
+                      aria-pressed={enemyOnlyPortraits}
+                      className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                        enemyOnlyPortraits
+                          ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                          : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
+                          enemyOnlyPortraits
+                            ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
+                            : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
+                        }`}
+                      >
+                        <FiImage />
+                      </span>
+                      <span>Solo con retrato</span>
+                    </button>
+                  </div>
+                  <div className="rounded-2xl border border-gray-700/70 bg-gray-800/70 px-4 py-3 text-sm text-gray-200 shadow-inner shadow-black/30">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400/80">
+                      Ordenar por
+                    </label>
+                    <select
+                      value={`${enemySort}:${enemySortDir}`}
+                      onChange={(e) => {
+                        const [s, d] = e.target.value.split(':');
+                        setEnemySort(s);
+                        setEnemySortDir(d);
+                      }}
+                      className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                    >
+                      <option value="name:asc">Nombre (A→Z)</option>
+                      <option value="name:desc">Nombre (Z→A)</option>
+                      <option value="nivel:asc">Nivel (menor→mayor)</option>
+                      <option value="nivel:desc">Nivel (mayor→menor)</option>
+                    </select>
+                  </div>
+                  <div className="hidden md:flex items-center justify-end">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
+                      {enemyResultsLabel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          </div>
+        {enemyTab === 'catalog' && (
+          <>
+            {/* Acciones flotantes (móvil) */}
+            {enemyActionsOpen && (
+              <div
+                className="fixed inset-0 bg-black/20 md:hidden z-40"
+                onClick={() => setEnemyActionsOpen(false)}
+              />
+            )}
+            <div className="fixed bottom-4 right-4 md:hidden z-50">
+              <div
+                className={`flex flex-col items-end gap-2 mb-2 transition-all ${
+                  enemyActionsOpen
+                    ? 'opacity-100 translate-y-0'
+                    : 'opacity-0 translate-y-2 pointer-events-none'
+                }`}
+              >
+                <button
+                  onClick={() => {
+                    setChosenView('canvas');
+                    setEnemyActionsOpen(false);
+                  }}
+                  aria-label="Abrir mapa de batalla"
+                  className="h-11 w-11 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center"
+                >
+                  <FiMap className="text-xl" />
+                </button>
+                <button
+                  onClick={() => {
+                    setChosenView('tools');
+                    setEnemyActionsOpen(false);
+                  }}
+                  aria-label="Abrir herramientas"
+                  className="h-11 w-11 rounded-full bg-purple-600 text-white shadow-lg flex items-center justify-center"
+                >
+                  <FiTool className="text-xl" />
+                </button>
+                <button
+                  onClick={() => {
+                    setChosenView(null);
+                    setEnemyActionsOpen(false);
+                  }}
+                  aria-label="Volver al menú"
+                  className="h-11 w-11 rounded-full bg-gray-700 text-white shadow-lg flex items-center justify-center"
+                >
+                  <FiArrowLeft className="text-xl" />
                 </button>
               </div>
-              <div className="rounded-2xl border border-gray-700/70 bg-gray-800/70 px-4 py-3 text-sm text-gray-200 shadow-inner shadow-black/30">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400/80">
-                  Ordenar por
-                </label>
-                <select
-                  value={`${enemySort}:${enemySortDir}`}
-                  onChange={(e) => {
-                    const [s, d] = e.target.value.split(':');
-                    setEnemySort(s);
-                    setEnemySortDir(d);
-                  }}
-                  className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
-                >
-                  <option value="name:asc">Nombre (A→Z)</option>
-                  <option value="name:desc">Nombre (Z→A)</option>
-                  <option value="nivel:asc">Nivel (menor→mayor)</option>
-                  <option value="nivel:desc">Nivel (mayor→menor)</option>
-                </select>
-              </div>
-              <div className="hidden md:flex items-center justify-end">
-                <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-100">
-                  {enemyResultsLabel}
-                </span>
-              </div>
+              <button
+                onClick={() => setEnemyActionsOpen((v) => !v)}
+                aria-label={enemyActionsOpen ? 'Cerrar acciones' : 'Abrir acciones'}
+                className="h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl flex items-center justify-center"
+              >
+                {enemyActionsOpen ? (
+                  <FiX className="text-2xl" />
+                ) : (
+                  <FiPlus className="text-2xl" />
+                )}
+              </button>
             </div>
-          </div>
-          </div>
-        {/* Acciones flotantes (móvil) */}
-        {enemyActionsOpen && (
-          <div
-            className="fixed inset-0 bg-black/20 md:hidden z-40"
-            onClick={() => setEnemyActionsOpen(false)}
-          />
-        )}
-        <div className="fixed bottom-4 right-4 md:hidden z-50">
-          <div
-            className={`flex flex-col items-end gap-2 mb-2 transition-all ${
-              enemyActionsOpen
-                ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-2 pointer-events-none'
-            }`}
-          >
-            <button
-              onClick={() => {
-                setChosenView('canvas');
-                setEnemyActionsOpen(false);
-              }}
-              aria-label="Abrir mapa de batalla"
-              className="h-11 w-11 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center"
-            >
-              <FiMap className="text-xl" />
-            </button>
-            <button
-              onClick={() => {
-                setChosenView('tools');
-                setEnemyActionsOpen(false);
-              }}
-              aria-label="Abrir herramientas"
-              className="h-11 w-11 rounded-full bg-purple-600 text-white shadow-lg flex items-center justify-center"
-            >
-              <FiTool className="text-xl" />
-            </button>
-            <button
-              onClick={() => {
-                setChosenView(null);
-                setEnemyActionsOpen(false);
-              }}
-              aria-label="Volver al menú"
-              className="h-11 w-11 rounded-full bg-gray-700 text-white shadow-lg flex items-center justify-center"
-            >
-              <FiArrowLeft className="text-xl" />
-            </button>
-          </div>
-          <button
-            onClick={() => setEnemyActionsOpen((v) => !v)}
-            aria-label={enemyActionsOpen ? 'Cerrar acciones' : 'Abrir acciones'}
-            className="h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl flex items-center justify-center"
-          >
-            {enemyActionsOpen ? (
-              <FiX className="text-2xl" />
-            ) : (
-              <FiPlus className="text-2xl" />
-            )}
-          </button>
-        </div>
-        {/* Lista de enemigos */}
-        <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
+            {/* Lista de enemigos */}
+            <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
@@ -6582,7 +6820,71 @@ function App() {
               </Tarjeta>
             );
           })}
-        </div>
+            </div>
+          </>
+        )}
+        {enemyTab === 'encounter' && (
+          <div className="mt-6">
+            <EncounterPanel
+              instances={activeEncounter}
+              onAdjustStat={handleAdjustEncounterStat}
+              onToggleState={handleToggleEncounterState}
+              onAddState={handleAddEncounterState}
+              onToggleEquipment={handleToggleEncounterEquipment}
+              onDuplicate={duplicateEncounterInstance}
+              onRemove={removeEncounterInstance}
+              onApplyGroup={handleApplyEncounterGroup}
+              onClearEncounter={handleClearEncounter}
+              onOpenSheet={handleOpenInstanceSheet}
+            />
+          </div>
+        )}
+        {encounterAddTarget && (
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+            onClick={() => setEncounterAddTarget(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-gray-900 p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-semibold text-gray-100">Añadir al encuentro</h3>
+              <p className="mt-1 text-sm text-gray-400">
+                Selecciona cuántas copias de <strong>{encounterAddTarget.name}</strong> quieres preparar.
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                {[1, 3, 5].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => handleAddEnemyToEncounter(encounterAddTarget, count)}
+                    className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 transition"
+                  >
+                    +{count}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  value={encounterAddCount}
+                  onChange={(e) => setEncounterAddCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-center text-gray-100"
+                />
+                <Boton
+                  color="green"
+                  onClick={() => handleAddEnemyToEncounter(encounterAddTarget, encounterAddCount)}
+                >
+                  Añadir {encounterAddCount}
+                </Boton>
+                <Boton color="gray" onClick={() => setEncounterAddTarget(null)}>
+                  Cancelar
+                </Boton>
+              </div>
+            </div>
+          </div>
+        )}
         {enemies.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-400 text-lg">No hay enemigos creados</p>
