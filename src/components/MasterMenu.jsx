@@ -33,6 +33,14 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
       isNew: false,
     },
     {
+      id: 'activeEncounter',
+      title: 'Encuentro activo',
+      description: 'Gestiona las instancias en combate con edición táctil optimizada',
+      color: 'pink',
+      features: ['Resumen táctico', 'Responsive', 'Edición en vivo', 'Táctil'],
+      isNew: true,
+    },
+    {
       id: 'enemies',
       title: 'Fichas de Enemigos',
       description: 'Crear y gestionar fichas de enemigos con retratos',
