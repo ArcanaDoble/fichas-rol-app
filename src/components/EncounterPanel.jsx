@@ -674,6 +674,18 @@ const hexToRgba = (hex, alpha = 1) => {
   return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
 };
 
+const hashToUnit = (input) => {
+  const str = String(input ?? '');
+  let hash = 0;
+  for (let index = 0; index < str.length; index += 1) {
+    hash = (hash << 5) - hash + str.charCodeAt(index);
+    hash |= 0; // eslint-disable-line no-bitwise
+  }
+  return (hash >>> 0) / 0xffffffff; // eslint-disable-line no-bitwise
+};
+
+const softenColor = (hex, amount = 0.25) => mixColors(hex, '#64748b', clamp01(amount));
+
 const getRelativeLuminance = (hex) => {
   const [r, g, b] = hexToRgb(hex).map((channel) => {
     const srgb = channel / 255;
@@ -684,20 +696,73 @@ const getRelativeLuminance = (hex) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
-const getGroupThemeStyles = (themeColor = '#4b5563') => {
+const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
   const base = normalizeHexColor(themeColor);
-  const lifted = lightenColor(base, 0.32);
-  const headerEnd = darkenColor(base, 0.1);
-  const containerStart = darkenColor(base, 0.25);
-  const containerEnd = darkenColor(base, 0.45);
-  const instanceStart = lightenColor(base, 0.08);
-  const instanceEnd = darkenColor(base, 0.25);
-  const chipStart = lightenColor(base, 0.35);
-  const chipEnd = lightenColor(base, 0.12);
-  const border = darkenColor(base, 0.35);
-  const headerBorder = darkenColor(base, 0.2);
-  const instanceBorder = darkenColor(base, 0.3);
-  const chipBorder = darkenColor(base, 0.15);
+  const defaultConfig = {
+    soften: 0.3,
+    lightenSpread: 0.06,
+    darkenSpread: 0.06,
+    headerLift: 0.16,
+    headerShade: 0.24,
+    containerShadeStart: 0.18,
+    containerShadeEnd: 0.32,
+    instanceLift: 0.12,
+    instanceShade: 0.26,
+    chipLift: 0.22,
+    chipEndLift: 0.1,
+    borderShade: 0.26,
+    headerBorderShade: 0.2,
+    instanceBorderShade: 0.22,
+    chipBorderShade: 0.16,
+    variantKey: 'group',
+    shadowOpacities: {
+      container: { base: 0.32, expanded: 0.44 },
+      header: { base: 0.28, expanded: 0.4 },
+      instance: 0.28,
+      chip: 0.2,
+    },
+  };
+
+  const config = {
+    ...defaultConfig,
+    ...overrides,
+    shadowOpacities: {
+      container: {
+        ...defaultConfig.shadowOpacities.container,
+        ...(overrides.shadowOpacities?.container || {}),
+      },
+      header: {
+        ...defaultConfig.shadowOpacities.header,
+        ...(overrides.shadowOpacities?.header || {}),
+      },
+      instance:
+        overrides.shadowOpacities?.instance ?? defaultConfig.shadowOpacities.instance,
+      chip: overrides.shadowOpacities?.chip ?? defaultConfig.shadowOpacities.chip,
+    },
+  };
+
+  const softenedBase = softenColor(base, config.soften);
+  const variantSeed = hashToUnit(`${softenedBase}-${config.variantKey}`);
+  const signedVariant = variantSeed * 2 - 1;
+
+  const adjustAmount = (amount, spread) =>
+    clamp01(amount + signedVariant * (spread ?? 0));
+  const lighten = (amount) => lightenColor(softenedBase, adjustAmount(amount, config.lightenSpread));
+  const darken = (amount) => darkenColor(softenedBase, adjustAmount(amount, config.darkenSpread));
+
+  const lifted = lighten(config.headerLift);
+  const headerEnd = darken(config.headerShade);
+  const containerStart = darken(config.containerShadeStart);
+  const containerEnd = darken(config.containerShadeEnd);
+  const instanceStart = lighten(config.instanceLift);
+  const instanceEnd = darken(config.instanceShade);
+  const chipStart = lighten(config.chipLift);
+  const chipEnd = lighten(config.chipEndLift);
+  const border = darken(config.borderShade);
+  const headerBorder = darken(config.headerBorderShade);
+  const instanceBorder = darken(config.instanceBorderShade);
+  const chipBorder = darken(config.chipBorderShade);
+
   const luminance = getRelativeLuminance(headerEnd);
   const tone = luminance > 0.55 ? 'light' : 'dark';
   const text =
@@ -739,15 +804,30 @@ const getGroupThemeStyles = (themeColor = '#4b5563') => {
     },
     shadows: {
       container: {
-        base: `0 18px 46px -28px ${hexToRgba(base, 0.55)}`,
-        expanded: `0 28px 70px -25px ${hexToRgba(base, 0.7)}`,
+        base: `0 18px 46px -28px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.container.base
+        )}`,
+        expanded: `0 28px 70px -25px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.container.expanded
+        )}`,
       },
       header: {
-        base: `0 14px 42px -28px ${hexToRgba(base, 0.5)}`,
-        expanded: `0 20px 48px -24px ${hexToRgba(base, 0.65)}`,
+        base: `0 14px 42px -28px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.header.base
+        )}`,
+        expanded: `0 20px 48px -24px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.header.expanded
+        )}`,
       },
-      instance: `0 16px 38px -30px ${hexToRgba(base, 0.55)}`,
-      chip: `0 12px 28px -24px ${hexToRgba(base, 0.4)}`,
+      instance: `0 16px 38px -30px ${hexToRgba(
+        softenedBase,
+        config.shadowOpacities.instance
+      )}`,
+      chip: `0 12px 28px -24px ${hexToRgba(softenedBase, config.shadowOpacities.chip)}`,
     },
   };
 };
@@ -1123,6 +1203,22 @@ const EncounterPanel = ({
                   const statePool = normalizeStateList(instance.statePool || []);
                   const activeStates = normalizeStateList(instance.activeStates || []);
                   const isCollapsed = collapsedInstances.has(instance.id);
+                  const instanceTheme = getGroupThemeStyles(group.themeColor, {
+                    variantKey: `instance-${instance.id}`,
+                    soften: 0.26,
+                    lightenSpread: 0.12,
+                    darkenSpread: 0.12,
+                    instanceLift: 0.18,
+                    instanceShade: 0.3,
+                    chipLift: 0.26,
+                    chipEndLift: 0.14,
+                    chipBorderShade: 0.18,
+                    borderShade: 0.24,
+                    shadowOpacities: {
+                      instance: 0.24,
+                      chip: 0.16,
+                    },
+                  });
                   const summaryChips = orderedStats
                     .filter((key) =>
                       ['vida', 'postura', 'cordura', 'ingenio', 'karma', 'armadura'].includes(key)
@@ -1141,23 +1237,23 @@ const EncounterPanel = ({
                   return (
                     <div
                       key={instance.id}
-                      className={`rounded-xl border p-4 space-y-4 transition-shadow duration-200 ${theme.text.body}`}
+                      className={`rounded-xl border p-4 space-y-4 transition-shadow duration-200 ${instanceTheme.text.body}`}
                       style={{
-                        ...theme.styles.instance,
-                        boxShadow: theme.shadows.instance,
+                        ...instanceTheme.styles.instance,
+                        boxShadow: instanceTheme.shadows.instance,
                       }}
                     >
                       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
                         <div className="space-y-2">
-                          <h3 className={`text-xl font-semibold ${theme.text.main}`}>
+                          <h3 className={`text-xl font-semibold ${instanceTheme.text.main}`}>
                             {instance.displayName}
                           </h3>
-                          <div className={`flex flex-wrap items-center gap-2 text-xs ${theme.text.subtle}`}>
+                          <div className={`flex flex-wrap items-center gap-2 text-xs ${instanceTheme.text.subtle}`}>
                             <span
-                              className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${theme.text.chip}`}
+                              className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
                               style={{
-                                ...theme.styles.chip,
-                                boxShadow: theme.shadows.chip,
+                                ...instanceTheme.styles.chip,
+                                boxShadow: instanceTheme.shadows.chip,
                               }}
                             >
                               Estados activos: {activeStates.length}
@@ -1165,13 +1261,13 @@ const EncounterPanel = ({
                             {summaryChips.map((chip) => (
                               <span
                                 key={`${instance.id}-${chip.label}`}
-                                className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${theme.text.chip}`}
+                                className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
                                 style={{
-                                  ...theme.styles.chip,
-                                  boxShadow: theme.shadows.chip,
+                                  ...instanceTheme.styles.chip,
+                                  boxShadow: instanceTheme.shadows.chip,
                                 }}
                               >
-                                <span className={`font-semibold ${theme.text.main}`}>
+                                <span className={`font-semibold ${instanceTheme.text.main}`}>
                                   {chip.label}:
                                 </span>{' '}
                                 {chip.value}
@@ -1249,7 +1345,7 @@ const EncounterPanel = ({
                           </div>
 
                           <div>
-                            <p className={`text-xs uppercase tracking-widest mb-2 ${theme.text.subtle}`}>
+                            <p className={`text-xs uppercase tracking-widest mb-2 ${instanceTheme.text.subtle}`}>
                               Estados rápidos
                             </p>
                             <div className="flex flex-wrap gap-2">
@@ -1383,10 +1479,10 @@ const EncounterPanel = ({
 
                           {instance.history && instance.history.length > 0 && (
                             <div>
-                              <p className={`text-xs uppercase tracking-widest mb-2 ${theme.text.subtle}`}>
+                              <p className={`text-xs uppercase tracking-widest mb-2 ${instanceTheme.text.subtle}`}>
                                 Últimas acciones
                               </p>
-                              <ul className={`space-y-1 text-xs ${theme.text.subtle}`}>
+                              <ul className={`space-y-1 text-xs ${instanceTheme.text.subtle}`}>
                                 {instance.history.map((entry) => (
                                   <li key={entry.id}>
                                     {new Date(entry.timestamp).toLocaleTimeString()} · {entry.description}
