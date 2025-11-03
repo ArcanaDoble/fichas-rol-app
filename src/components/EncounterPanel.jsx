@@ -617,6 +617,221 @@ StateManagerModal.propTypes = {
   onClose: PropTypes.func.isRequired,
 };
 
+const clamp01 = (value) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(value, 0), 1);
+};
+
+const normalizeHexColor = (value) => {
+  if (typeof value !== 'string') return '#4b5563';
+  let hex = value.trim();
+  if (!hex) return '#4b5563';
+  if (!hex.startsWith('#')) {
+    hex = `#${hex}`;
+  }
+  const shortHexMatch = hex.match(/^#([0-9a-fA-F]{3})$/);
+  if (shortHexMatch) {
+    const [r, g, b] = shortHexMatch[1].split('');
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  const fullHexMatch = hex.match(/^#([0-9a-fA-F]{6})$/);
+  if (fullHexMatch) {
+    return `#${fullHexMatch[1].toLowerCase()}`;
+  }
+  return '#4b5563';
+};
+
+const hexToRgb = (hex) => {
+  const normalized = normalizeHexColor(hex);
+  const value = normalized.slice(1);
+  const intValue = parseInt(value, 16);
+  return [
+    (intValue >> 16) & 255,
+    (intValue >> 8) & 255,
+    intValue & 255,
+  ];
+};
+
+const channelToHex = (value) => value.toString(16).padStart(2, '0');
+
+const mixColors = (hex, mixHex, amount = 0.5) => {
+  const mixAmount = clamp01(amount);
+  const [r1, g1, b1] = hexToRgb(hex);
+  const [r2, g2, b2] = hexToRgb(mixHex);
+  const r = Math.round(r1 + (r2 - r1) * mixAmount);
+  const g = Math.round(g1 + (g2 - g1) * mixAmount);
+  const b = Math.round(b1 + (b2 - b1) * mixAmount);
+  return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
+};
+
+const lightenColor = (hex, amount = 0.2) => mixColors(hex, '#ffffff', amount);
+
+const darkenColor = (hex, amount = 0.2) => mixColors(hex, '#000000', amount);
+
+const hexToRgba = (hex, alpha = 1) => {
+  const [r, g, b] = hexToRgb(hex);
+  const safeAlpha = Math.min(Math.max(alpha, 0), 1);
+  return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
+};
+
+const hashToUnit = (input) => {
+  const str = String(input ?? '');
+  let hash = 0;
+  for (let index = 0; index < str.length; index += 1) {
+    hash = (hash << 5) - hash + str.charCodeAt(index);
+    hash |= 0; // eslint-disable-line no-bitwise
+  }
+  return (hash >>> 0) / 0xffffffff; // eslint-disable-line no-bitwise
+};
+
+const softenColor = (hex, amount = 0.25) => mixColors(hex, '#64748b', clamp01(amount));
+
+const getRelativeLuminance = (hex) => {
+  const [r, g, b] = hexToRgb(hex).map((channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.03928
+      ? srgb / 12.92
+      : ((srgb + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
+  const base = normalizeHexColor(themeColor);
+  const defaultConfig = {
+    soften: 0.3,
+    lightenSpread: 0.06,
+    darkenSpread: 0.06,
+    headerLift: 0.16,
+    headerShade: 0.24,
+    containerShadeStart: 0.18,
+    containerShadeEnd: 0.32,
+    instanceLift: 0.12,
+    instanceShade: 0.26,
+    chipLift: 0.22,
+    chipEndLift: 0.1,
+    borderShade: 0.26,
+    headerBorderShade: 0.2,
+    instanceBorderShade: 0.22,
+    chipBorderShade: 0.16,
+    variantKey: 'group',
+    shadowOpacities: {
+      container: { base: 0.32, expanded: 0.44 },
+      header: { base: 0.28, expanded: 0.4 },
+      instance: 0.28,
+      chip: 0.2,
+    },
+  };
+
+  const config = {
+    ...defaultConfig,
+    ...overrides,
+    shadowOpacities: {
+      container: {
+        ...defaultConfig.shadowOpacities.container,
+        ...(overrides.shadowOpacities?.container || {}),
+      },
+      header: {
+        ...defaultConfig.shadowOpacities.header,
+        ...(overrides.shadowOpacities?.header || {}),
+      },
+      instance:
+        overrides.shadowOpacities?.instance ?? defaultConfig.shadowOpacities.instance,
+      chip: overrides.shadowOpacities?.chip ?? defaultConfig.shadowOpacities.chip,
+    },
+  };
+
+  const softenedBase = softenColor(base, config.soften);
+  const variantSeed = hashToUnit(`${softenedBase}-${config.variantKey}`);
+  const signedVariant = variantSeed * 2 - 1;
+
+  const adjustAmount = (amount, spread) =>
+    clamp01(amount + signedVariant * (spread ?? 0));
+  const lighten = (amount) => lightenColor(softenedBase, adjustAmount(amount, config.lightenSpread));
+  const darken = (amount) => darkenColor(softenedBase, adjustAmount(amount, config.darkenSpread));
+
+  const lifted = lighten(config.headerLift);
+  const headerEnd = darken(config.headerShade);
+  const containerStart = darken(config.containerShadeStart);
+  const containerEnd = darken(config.containerShadeEnd);
+  const instanceStart = lighten(config.instanceLift);
+  const instanceEnd = darken(config.instanceShade);
+  const chipStart = lighten(config.chipLift);
+  const chipEnd = lighten(config.chipEndLift);
+  const border = darken(config.borderShade);
+  const headerBorder = darken(config.headerBorderShade);
+  const instanceBorder = darken(config.instanceBorderShade);
+  const chipBorder = darken(config.chipBorderShade);
+
+  const luminance = getRelativeLuminance(headerEnd);
+  const tone = luminance > 0.55 ? 'light' : 'dark';
+  const text =
+    tone === 'light'
+      ? {
+          main: 'text-slate-900',
+          body: 'text-slate-900',
+          subtle: 'text-slate-600',
+          chip: 'text-slate-900',
+          icon: 'text-slate-700',
+        }
+      : {
+          main: 'text-slate-100',
+          body: 'text-slate-100',
+          subtle: 'text-slate-300',
+          chip: 'text-slate-100',
+          icon: 'text-slate-200',
+        };
+
+  return {
+    text,
+    styles: {
+      container: {
+        backgroundImage: `linear-gradient(155deg, ${containerStart}, ${containerEnd})`,
+        borderColor: border,
+      },
+      header: {
+        backgroundImage: `linear-gradient(135deg, ${lifted}, ${headerEnd})`,
+        borderColor: headerBorder,
+      },
+      instance: {
+        backgroundImage: `linear-gradient(150deg, ${instanceStart}, ${instanceEnd})`,
+        borderColor: instanceBorder,
+      },
+      chip: {
+        backgroundImage: `linear-gradient(135deg, ${chipStart}, ${chipEnd})`,
+        borderColor: chipBorder,
+      },
+    },
+    shadows: {
+      container: {
+        base: `0 18px 46px -28px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.container.base
+        )}`,
+        expanded: `0 28px 70px -25px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.container.expanded
+        )}`,
+      },
+      header: {
+        base: `0 14px 42px -28px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.header.base
+        )}`,
+        expanded: `0 20px 48px -24px ${hexToRgba(
+          softenedBase,
+          config.shadowOpacities.header.expanded
+        )}`,
+      },
+      instance: `0 16px 38px -30px ${hexToRgba(
+        softenedBase,
+        config.shadowOpacities.instance
+      )}`,
+      chip: `0 12px 28px -24px ${hexToRgba(softenedBase, config.shadowOpacities.chip)}`,
+    },
+  };
+};
+
 const EncounterPanel = ({
   instances,
   onAdjustStat,
@@ -905,17 +1120,35 @@ const EncounterPanel = ({
       {grouped.map((group) => {
         const isExpanded = expandedGroups.has(group.id);
         const vidaSummary = group.summary.vida;
+        const theme = getGroupThemeStyles(group.themeColor);
         return (
-          <div key={group.id} className="rounded-2xl border border-gray-700 bg-gray-900/80 overflow-hidden">
+          <div
+            key={group.id}
+            className="rounded-2xl border overflow-hidden transition-shadow duration-200"
+            style={{
+              ...theme.styles.container,
+              boxShadow: isExpanded
+                ? theme.shadows.container.expanded
+                : theme.shadows.container.base,
+            }}
+          >
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
-              className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 text-left hover:bg-gray-900/90 transition"
+              className={`w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 text-left border transition-all duration-200 hover:brightness-105 ${theme.text.body}`}
+              style={{
+                ...theme.styles.header,
+                boxShadow: isExpanded
+                  ? theme.shadows.header.expanded
+                  : theme.shadows.header.base,
+              }}
             >
               <div>
-                <p className="text-xs uppercase tracking-widest text-gray-400">{group.instances.length} criaturas</p>
-                <p className="text-2xl font-semibold text-gray-100">{group.baseName}</p>
-                <p className="text-sm text-gray-400 mt-1">
+                <p className={`text-xs uppercase tracking-widest ${theme.text.subtle}`}>
+                  {group.instances.length} criaturas
+                </p>
+                <p className={`text-2xl font-semibold ${theme.text.main}`}>{group.baseName}</p>
+                <p className={`text-sm mt-1 ${theme.text.subtle}`}>
                   Vida total restante: {vidaSummary.actual} / {vidaSummary.total}
                 </p>
               </div>
@@ -953,9 +1186,9 @@ const EncounterPanel = ({
                   </button>
                 </div>
                 {isExpanded ? (
-                  <FiChevronUp className="text-xl text-gray-400" />
+                  <FiChevronUp className={`text-xl ${theme.text.icon}`} />
                 ) : (
-                  <FiChevronDown className="text-xl text-gray-400" />
+                  <FiChevronDown className={`text-xl ${theme.text.icon}`} />
                 )}
               </div>
             </button>
@@ -970,6 +1203,22 @@ const EncounterPanel = ({
                   const statePool = normalizeStateList(instance.statePool || []);
                   const activeStates = normalizeStateList(instance.activeStates || []);
                   const isCollapsed = collapsedInstances.has(instance.id);
+                  const instanceTheme = getGroupThemeStyles(group.themeColor, {
+                    variantKey: `instance-${instance.id}`,
+                    soften: 0.26,
+                    lightenSpread: 0.12,
+                    darkenSpread: 0.12,
+                    instanceLift: 0.18,
+                    instanceShade: 0.3,
+                    chipLift: 0.26,
+                    chipEndLift: 0.14,
+                    chipBorderShade: 0.18,
+                    borderShade: 0.24,
+                    shadowOpacities: {
+                      instance: 0.24,
+                      chip: 0.16,
+                    },
+                  });
                   const summaryChips = orderedStats
                     .filter((key) =>
                       ['vida', 'postura', 'cordura', 'ingenio', 'karma', 'armadura'].includes(key)
@@ -988,21 +1237,40 @@ const EncounterPanel = ({
                   return (
                     <div
                       key={instance.id}
-                      className="rounded-xl border border-gray-700 bg-gray-900/90 p-4 space-y-4"
+                      className={`rounded-xl border p-4 space-y-4 transition-shadow duration-200 ${instanceTheme.text.body}`}
+                      style={{
+                        ...instanceTheme.styles.instance,
+                        boxShadow: instanceTheme.shadows.instance,
+                      }}
                     >
                       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
                         <div className="space-y-2">
-                          <h3 className="text-xl font-semibold text-gray-100">{instance.displayName}</h3>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                            <span className="rounded-full border border-gray-700 bg-gray-800/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-200">
+                          <h3 className={`text-xl font-semibold ${instanceTheme.text.main}`}>
+                            {instance.displayName}
+                          </h3>
+                          <div className={`flex flex-wrap items-center gap-2 text-xs ${instanceTheme.text.subtle}`}>
+                            <span
+                              className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
+                              style={{
+                                ...instanceTheme.styles.chip,
+                                boxShadow: instanceTheme.shadows.chip,
+                              }}
+                            >
                               Estados activos: {activeStates.length}
                             </span>
                             {summaryChips.map((chip) => (
                               <span
                                 key={`${instance.id}-${chip.label}`}
-                                className="rounded-full border border-gray-700 bg-gray-800/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-200"
+                                className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
+                                style={{
+                                  ...instanceTheme.styles.chip,
+                                  boxShadow: instanceTheme.shadows.chip,
+                                }}
                               >
-                                <span className="font-semibold text-gray-100">{chip.label}:</span> {chip.value}
+                                <span className={`font-semibold ${instanceTheme.text.main}`}>
+                                  {chip.label}:
+                                </span>{' '}
+                                {chip.value}
                               </span>
                             ))}
                           </div>
@@ -1077,7 +1345,9 @@ const EncounterPanel = ({
                           </div>
 
                           <div>
-                            <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Estados rápidos</p>
+                            <p className={`text-xs uppercase tracking-widest mb-2 ${instanceTheme.text.subtle}`}>
+                              Estados rápidos
+                            </p>
                             <div className="flex flex-wrap gap-2">
                               {statePool.map((state) => {
                                 const entry = normalizeStateEntry(state);
@@ -1209,8 +1479,10 @@ const EncounterPanel = ({
 
                           {instance.history && instance.history.length > 0 && (
                             <div>
-                              <p className="text-xs uppercase tracking-widest text-gray-500 mb-2">Últimas acciones</p>
-                              <ul className="space-y-1 text-xs text-gray-400">
+                              <p className={`text-xs uppercase tracking-widest mb-2 ${instanceTheme.text.subtle}`}>
+                                Últimas acciones
+                              </p>
+                              <ul className={`space-y-1 text-xs ${instanceTheme.text.subtle}`}>
                                 {instance.history.map((entry) => (
                                   <li key={entry.id}>
                                     {new Date(entry.timestamp).toLocaleTimeString()} · {entry.description}
