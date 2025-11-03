@@ -127,6 +127,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Nuevo **Panel de Encuentros** táctil dentro de las fichas de enemigos, con agrupaciones plegables, controles grandes para vida y estados, historial por criatura y persistencia automática en `localStorage` para retomar la sesión desde el móvil.
 - Botón **«Al encuentro»** en cada carta del catálogo que permite clonar varias copias de un enemigo en una sola acción, numerarlas automáticamente y gestionarlas desde la pestaña móvil.
 - Pestañas Catálogo/Encuentro en la vista del máster para alternar entre la edición tradicional y el control rápido de combate, con sincronización mediante eventos `encounterInstanceUpdate`/`encounterTokenSync` para integrarse con otros paneles.
+- Gestión táctil de estados con el selector visual oficial (iconos, descripciones y estados personalizados), tanto por criatura como en bloque para grupos completos, además de tarjetas individuales plegables para concentrarse en los enemigos relevantes.
+- Píldoras de equipo enriquecidas que muestran daño, alcance, consumo, bloques y rasgos de armas, armaduras y poderes, junto a un diálogo de **cambios personalizados** para aplicar ajustes numéricos, marcar equipo como usado y registrar notas rápidas durante el encuentro.
 
 **Resumen de cambios v2.4.69:**
 

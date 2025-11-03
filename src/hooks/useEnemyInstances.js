@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
+import { normalizeStateList } from '../utils/stateUtils';
 
 const DEFAULT_STORAGE_KEY = 'masterActiveEncounter';
 
@@ -34,33 +35,84 @@ const normalizeStat = (value) => {
   };
 };
 
-const normalizeStringArray = (input) => {
+const normalizeTraits = (input) => {
   if (!input) return [];
   if (Array.isArray(input)) {
-    return input
-      .map((item) =>
-        typeof item === 'string'
-          ? item.trim()
-          : item?.nombre || item?.name || ''
-      )
-      .filter(Boolean);
+    return input.map((value) => value && value.toString().trim()).filter(Boolean);
   }
   if (typeof input === 'string') {
     return input
       .split(',')
-      .map((item) => item.trim())
+      .map((value) => value.trim())
       .filter(Boolean);
   }
   return [];
 };
 
-const mapEquipment = (list = []) => {
-  return normalizeStringArray(list).map((name) => ({
-    id: nanoid(),
-    name,
-    used: false,
-  }));
+const normalizeEquipmentEntry = (entry) => {
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    const name = entry.trim();
+    if (!name) return null;
+    return {
+      id: nanoid(),
+      name,
+      used: false,
+      details: {
+        damage: '',
+        range: '',
+        cost: '',
+        traits: [],
+        blocks: '',
+        body: '',
+        mind: '',
+        type: '',
+        value: '',
+        description: '',
+        raw: null,
+      },
+    };
+  }
+
+  if (typeof entry === 'object') {
+    const name = entry.nombre || entry.name || '';
+    if (!name) return null;
+    const traits = normalizeTraits(entry.rasgos || entry.traits);
+    return {
+      id: entry.id || nanoid(),
+      name,
+      used: Boolean(entry.used),
+      details: {
+        damage: entry.dano || entry.daño || entry.damage || entry.poder || '',
+        range: entry.alcance || entry.range || '',
+        cost: entry.consumo || entry.cost || entry.coste || '',
+        traits,
+        blocks:
+          entry.bloques ||
+          entry.bloquesArmadura ||
+          entry.bloque ||
+          entry.bloqueo ||
+          entry.bloquesDefensa ||
+          '',
+        body: entry.cuerpo || entry.cargaFisica || entry.carga || '',
+        mind: entry.mente || entry.cargaMental || '',
+        type: entry.tipoDano || entry.tipo || '',
+        value: entry.valor || '',
+        description: entry.descripcion || entry.description || '',
+        technology: entry.tecnologia || entry.technology || '',
+        weight: entry.peso || '',
+        raw: entry,
+      },
+    };
+  }
+
+  return null;
 };
+
+const mapEquipment = (list = []) =>
+  list
+    .map((entry) => normalizeEquipmentEntry(entry))
+    .filter((item) => item && item.name);
 
 const pushHistoryEntry = (history, description) => {
   if (!description) return history || [];
@@ -75,10 +127,23 @@ const pushHistoryEntry = (history, description) => {
   return next.slice(0, 3);
 };
 
+const normalizeStatePool = (states = []) => normalizeStateList(states);
+
 const createStatePool = (enemy) => {
-  const fromEnemy = normalizeStringArray(enemy?.estados);
-  const base = new Set(fromEnemy);
-  return Array.from(base);
+  const states = [];
+  if (enemy?.estados) {
+    if (Array.isArray(enemy.estados)) {
+      states.push(...enemy.estados);
+    } else if (typeof enemy.estados === 'string') {
+      states.push(
+        ...enemy.estados
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
+      );
+    }
+  }
+  return normalizeStatePool(states);
 };
 
 const makeInstanceFromEnemy = ({ enemy, ensureEnemyDefaults, index = 0, existingCount = 0 }) => {
@@ -107,7 +172,7 @@ const makeInstanceFromEnemy = ({ enemy, ensureEnemyDefaults, index = 0, existing
     stats,
     statePool,
     activeStates: [...statePool],
-    customStates: [],
+    customStates: statePool.filter((state) => state?.source === 'custom'),
     equipment: {
       weapons: mapEquipment(normalized?.weapons),
       armors: mapEquipment(normalized?.armaduras),
@@ -124,33 +189,24 @@ const reviveInstance = (instance) => {
   return {
     ...instance,
     equipment: {
-      weapons: (instance.equipment?.weapons || []).map((item) => ({
-        ...item,
-        id: item.id || nanoid(),
-        name: item.name || item.nombre || '',
-        used: Boolean(item.used),
-      })),
-      armors: (instance.equipment?.armors || []).map((item) => ({
-        ...item,
-        id: item.id || nanoid(),
-        name: item.name || item.nombre || '',
-        used: Boolean(item.used),
-      })),
-      powers: (instance.equipment?.powers || []).map((item) => ({
-        ...item,
-        id: item.id || nanoid(),
-        name: item.name || item.nombre || '',
-        used: Boolean(item.used),
-      })),
+      weapons: (instance.equipment?.weapons || [])
+        .map((item) => normalizeEquipmentEntry(item))
+        .filter(Boolean),
+      armors: (instance.equipment?.armors || [])
+        .map((item) => normalizeEquipmentEntry(item))
+        .filter(Boolean),
+      powers: (instance.equipment?.powers || [])
+        .map((item) => normalizeEquipmentEntry(item))
+        .filter(Boolean),
     },
     stats: Object.entries(instance.stats || {}).reduce((acc, [key, value]) => {
       acc[key] = normalizeStat(value);
       return acc;
     }, {}),
     history: (instance.history || []).slice(0, 3),
-    statePool: Array.from(new Set(instance.statePool || [])),
-    activeStates: (instance.activeStates || []).filter(Boolean),
-    customStates: (instance.customStates || []).filter(Boolean),
+    statePool: normalizeStatePool(instance.statePool),
+    activeStates: normalizeStatePool(instance.activeStates),
+    customStates: normalizeStatePool(instance.customStates),
   };
 };
 

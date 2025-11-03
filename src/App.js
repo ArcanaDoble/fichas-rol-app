@@ -51,6 +51,7 @@ import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import ClassList from './components/ClassList';
 import EncounterPanel from './components/EncounterPanel';
+import { normalizeStateEntry, normalizeStateList } from './utils/stateUtils';
 import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
@@ -1334,10 +1335,21 @@ function App() {
   );
 
   const handleAdjustEncounterStat = useCallback(
-    (instanceId, statKey, delta) => {
+    (instanceId, statKey, change) => {
       const instance = activeEncounter.find((inst) => inst.id === instanceId);
       if (!instance) return;
+
+      const config =
+        typeof change === 'number'
+          ? { type: 'delta', value: change }
+          : change && typeof change === 'object'
+          ? change
+          : { type: 'delta', value: 0 };
+
+      const type = config.type === 'set' ? 'set' : 'delta';
+      const amount = Number(config.value) || 0;
       const label = (statKey || '').toString().toUpperCase();
+
       updateEncounterInstance(
         instanceId,
         (inst) => {
@@ -1345,7 +1357,12 @@ function App() {
           const total = Number.isFinite(currentStat.total)
             ? currentStat.total
             : (currentStat.base || 0) + (currentStat.buff || 0);
-          let nextActual = (currentStat.actual ?? total ?? 0) + delta;
+          let nextActual = currentStat.actual ?? total ?? 0;
+          if (type === 'set') {
+            nextActual = amount;
+          } else {
+            nextActual += amount;
+          }
           if (statKey === KARMA_KEY) {
             nextActual = clampKarma(nextActual);
           } else if (Number.isFinite(total) && total > 0) {
@@ -1364,7 +1381,9 @@ function App() {
             },
           };
         },
-        `${label} ${delta > 0 ? '+' : ''}${delta}`
+        type === 'set'
+          ? `${label} = ${amount}`
+          : `${label} ${amount > 0 ? '+' : ''}${amount}`
       );
     },
     [activeEncounter, updateEncounterInstance]
@@ -1372,22 +1391,27 @@ function App() {
 
   const handleToggleEncounterState = useCallback(
     (instanceId, state) => {
+      const targetState = normalizeStateEntry(state);
+      if (!targetState) return;
       const instance = activeEncounter.find((inst) => inst.id === instanceId);
-      const wasActive = instance?.activeStates?.includes(state);
+      const activeList = normalizeStateList(instance?.activeStates || []);
+      const wasActive = activeList.some((entry) => entry.id === targetState.id);
+
       updateEncounterInstance(
         instanceId,
         (inst) => {
-          const pool = Array.from(new Set([...(inst.statePool || []), state]));
-          const activeStates = wasActive
-            ? (inst.activeStates || []).filter((value) => value !== state)
-            : [...(inst.activeStates || []), state];
+          const pool = normalizeStateList([...(inst.statePool || []), targetState]);
+          const currentActive = normalizeStateList(inst.activeStates || []);
+          const nextActive = wasActive
+            ? currentActive.filter((entry) => entry.id !== targetState.id)
+            : normalizeStateList([...currentActive, targetState]);
           return {
             ...inst,
             statePool: pool,
-            activeStates,
+            activeStates: nextActive,
           };
         },
-        `${state} ${wasActive ? 'removido' : 'aplicado'}`
+        `${targetState.label} ${wasActive ? 'removido' : 'aplicado'}`
       );
     },
     [activeEncounter, updateEncounterInstance]
@@ -1395,20 +1419,22 @@ function App() {
 
   const handleAddEncounterState = useCallback(
     (instanceId, state) => {
-      const label = (state || '').trim();
-      if (!label) return;
+      const entry = normalizeStateEntry(state);
+      if (!entry) return;
       updateEncounterInstance(
         instanceId,
         (inst) => {
-          const pool = Array.from(new Set([...(inst.statePool || []), label]));
-          const activeStates = Array.from(new Set([...(inst.activeStates || []), label]));
+          const pool = normalizeStateList([...(inst.statePool || []), entry]);
+          const activeStates = normalizeStateList([...(inst.activeStates || []), entry]);
+          const customStates = normalizeStateList([...(inst.customStates || []), entry]);
           return {
             ...inst,
             statePool: pool,
             activeStates,
+            customStates,
           };
         },
-        `Estado ${label} añadido`
+        `Estado ${entry.label} añadido`
       );
     },
     [updateEncounterInstance]
@@ -1446,6 +1472,96 @@ function App() {
       applyEncounterGroup(groupId, updater, description);
     },
     [applyEncounterGroup]
+  );
+
+  const handleCustomEncounterChange = useCallback(
+    (instanceId, payload = {}) => {
+      const instance = activeEncounter.find((inst) => inst.id === instanceId);
+      if (!instance) return;
+
+      let next = { ...instance };
+      const parts = [];
+
+      if (payload.statChange && payload.statChange.statKey) {
+        const { statKey, type, value } = payload.statChange;
+        const current = next.stats?.[statKey] || { base: 0, buff: 0, total: 0, actual: 0 };
+        const total = Number.isFinite(current.total)
+          ? current.total
+          : (current.base || 0) + (current.buff || 0);
+        const operation = type === 'set' ? 'set' : 'delta';
+        const numericValue = Number(value) || 0;
+        let actual = current.actual ?? total ?? 0;
+        if (operation === 'set') {
+          actual = numericValue;
+        } else {
+          actual += numericValue;
+        }
+        if (statKey === KARMA_KEY) {
+          actual = clampKarma(actual);
+        } else if (Number.isFinite(total) && total > 0) {
+          actual = Math.max(0, Math.min(total, actual));
+        } else {
+          actual = Math.max(0, actual);
+        }
+        next = {
+          ...next,
+          stats: {
+            ...next.stats,
+            [statKey]: {
+              ...current,
+              actual,
+            },
+          },
+        };
+        parts.push(
+          `${statKey.toUpperCase()} ${
+            operation === 'set'
+              ? `= ${numericValue}`
+              : `${numericValue > 0 ? '+' : ''}${numericValue}`
+          }`
+        );
+      }
+
+      if (payload.equipmentChange && payload.equipmentChange.category && payload.equipmentChange.itemId) {
+        const { category, itemId, markUsed } = payload.equipmentChange;
+        const list = next.equipment?.[category] || [];
+        const updatedList = list.map((entry) => {
+          if (entry.id !== itemId) return entry;
+          if (typeof markUsed === 'boolean') {
+            return { ...entry, used: markUsed };
+          }
+          return { ...entry, used: !entry.used };
+        });
+        const target = list.find((entry) => entry.id === itemId);
+        const changed = target && updatedList.find((entry) => entry.id === itemId);
+        if (target && changed && target.used !== changed.used) {
+          next = {
+            ...next,
+            equipment: {
+              ...next.equipment,
+              [category]: updatedList,
+            },
+          };
+          const itemName = changed.name || 'Equipo';
+          const action = changed.used ? 'usado' : 'restaurado';
+          parts.push(`${itemName} ${action}`);
+        }
+      }
+
+      if (payload.note) {
+        const note = payload.note.trim();
+        if (note) {
+          parts.push(note);
+        }
+      }
+
+      const description = parts.length > 0
+        ? parts.join(' · ')
+        : payload.description || payload.note || 'Cambio personalizado';
+
+      updateEncounterInstance(instanceId, () => next, description);
+    },
+    [activeEncounter, updateEncounterInstance]
   );
 
   const handleOpenInstanceSheet = useCallback(
@@ -6885,6 +7001,7 @@ function App() {
               onApplyGroup={handleApplyEncounterGroup}
               onClearEncounter={handleClearEncounter}
               onOpenSheet={handleOpenInstanceSheet}
+              onCustomChange={handleCustomEncounterChange}
             />
           </div>
         )}
