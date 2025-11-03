@@ -63,6 +63,7 @@ const normalizeEquipmentEntry = (entry) => {
         range: '',
         cost: '',
         traits: [],
+        defense: '',
         blocks: '',
         body: '',
         mind: '',
@@ -90,6 +91,16 @@ const normalizeEquipmentEntry = (entry) => {
       }
       return '';
     };
+    const blockValue = getDetail(
+      'bloques',
+      'bloquesArmadura',
+      'bloque',
+      'bloqueo',
+      'bloquesDefensa',
+      'blocks'
+    );
+    const defenseValue = getDetail('defensa', 'defense') || blockValue;
+    const resolvedBlocks = blockValue || defenseValue;
     return {
       id: entry.id || nanoid(),
       name,
@@ -99,14 +110,8 @@ const normalizeEquipmentEntry = (entry) => {
         range: getDetail('alcance', 'range'),
         cost: getDetail('consumo', 'cost', 'coste'),
         traits,
-        blocks: getDetail(
-          'bloques',
-          'bloquesArmadura',
-          'bloque',
-          'bloqueo',
-          'bloquesDefensa',
-          'blocks'
-        ),
+        defense: defenseValue,
+        blocks: resolvedBlocks,
         body: getDetail('cuerpo', 'cargaFisica', 'carga', 'body'),
         mind: getDetail('mente', 'cargaMental', 'mind'),
         type: getDetail('tipoDano', 'tipo', 'type'),

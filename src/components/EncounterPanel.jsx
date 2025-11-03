@@ -107,7 +107,14 @@ const EQUIPMENT_PRIMARY_STATS = {
     { label: 'Alcance', key: 'range' },
     { label: 'Consumo', key: 'cost' },
   ],
-  armors: [{ label: 'Bloques', key: 'blocks' }],
+  armors: [
+    {
+      label: 'Defensa',
+      key: 'defense',
+      keys: ['defense', 'blocks'],
+      type: 'defenseBlocks',
+    },
+  ],
 };
 
 const toDisplayValue = (value) => {
@@ -121,13 +128,156 @@ const toDisplayValue = (value) => {
   return value.toString().trim();
 };
 
+const MAX_DEFENSE_BLOCKS = 20;
+
+const DEFENSE_FILLED_CHARS = new Set(['⬛', '■', '▪', '◼', '⚫']);
+const DEFENSE_EMPTY_CHARS = new Set(['⬜', '□', '▫', '◻', '⚪']);
+
+const clampBlockCount = (count) => {
+  if (!Number.isFinite(count)) return 0;
+  return Math.max(0, Math.min(count, MAX_DEFENSE_BLOCKS));
+};
+
+const buildBlockVisual = (states, accessibleLabel) => {
+  if (!states || states.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
+        {states.map((state, index) => (
+          <span
+            key={`defense-block-${index}`}
+            className={`inline-block h-3 w-3 rounded-[2px] border ${
+              state === 'filled'
+                ? 'bg-gray-200 border-gray-400 shadow-inner'
+                : 'bg-gray-900 border-gray-700'
+            }`}
+          />
+        ))}
+      </span>
+      <span className="sr-only">{accessibleLabel}</span>
+    </span>
+  );
+};
+
+const parseDefenseBlocks = (rawValue) => {
+  if (rawValue === null || rawValue === undefined) return null;
+
+  if (typeof rawValue === 'number') {
+    const count = clampBlockCount(Math.floor(rawValue));
+    const states = Array.from({ length: count }, () => 'filled');
+    return {
+      states,
+      accessibleLabel: count === 1 ? '1 bloque de defensa' : `${count} bloques de defensa`,
+    };
+  }
+
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return null;
+
+    const fractionMatch = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (fractionMatch) {
+      const current = clampBlockCount(parseInt(fractionMatch[1], 10));
+      const total = clampBlockCount(parseInt(fractionMatch[2], 10));
+      const limit = total || current;
+      if (limit <= 0) {
+        return {
+          states: [],
+          accessibleLabel: '0 bloques de defensa',
+        };
+      }
+      const states = Array.from({ length: limit }, (_, index) =>
+        index < Math.min(current, limit) ? 'filled' : 'empty'
+      );
+      return {
+        states,
+        accessibleLabel: `${Math.min(current, limit)} de ${limit} bloques de defensa`,
+      };
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const count = clampBlockCount(parseInt(trimmed, 10));
+      const states = Array.from({ length: count }, () => 'filled');
+      return {
+        states,
+        accessibleLabel: count === 1 ? '1 bloque de defensa' : `${count} bloques de defensa`,
+      };
+    }
+
+    const glyphs = Array.from(trimmed.replace(/\s+/g, ''));
+    if (
+      glyphs.length > 0 &&
+      glyphs.every((char) => DEFENSE_FILLED_CHARS.has(char) || DEFENSE_EMPTY_CHARS.has(char))
+    ) {
+      const states = glyphs.map((char) =>
+        DEFENSE_FILLED_CHARS.has(char) ? 'filled' : 'empty'
+      );
+      const filled = states.filter((state) => state === 'filled').length;
+      return {
+        states,
+        accessibleLabel: `${filled} de ${states.length} bloques de defensa`,
+      };
+    }
+
+    const firstNumber = trimmed.match(/(\d+)/);
+    if (firstNumber) {
+      const count = clampBlockCount(parseInt(firstNumber[1], 10));
+      const states = Array.from({ length: count }, () => 'filled');
+      return {
+        states,
+        accessibleLabel: count === 1 ? '1 bloque de defensa' : `${count} bloques de defensa`,
+      };
+    }
+
+    return {
+      states: [],
+      accessibleLabel: trimmed,
+    };
+  }
+
+  const description = toDisplayValue(rawValue);
+  return {
+    states: [],
+    accessibleLabel: description || 'Defensa',
+  };
+};
+
+const renderDefenseBlocks = (value) => {
+  const parsed = parseDefenseBlocks(value);
+  if (!parsed) return null;
+  const { states, accessibleLabel } = parsed;
+  if (!states || states.length === 0) {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value.toString();
+    return value;
+  }
+  return buildBlockVisual(states, accessibleLabel);
+};
+
 const getEquipmentPrimaryStats = (category, details = {}) => {
   const entries = EQUIPMENT_PRIMARY_STATS[category] || [];
   return entries
-    .map(({ label, key }) => {
-      const value = toDisplayValue(details[key]);
-      if (!value) return null;
-      return { label, value };
+    .map(({ label, key, keys, type }) => {
+      const searchKeys = Array.isArray(keys) && keys.length > 0 ? keys : key ? [key] : [];
+      let resolvedValue = '';
+      let resolvedKey = key;
+
+      for (const candidateKey of searchKeys) {
+        const candidateValue = toDisplayValue(details[candidateKey]);
+        if (candidateValue) {
+          resolvedValue = candidateValue;
+          resolvedKey = candidateKey;
+          break;
+        }
+      }
+
+      if (!resolvedValue) return null;
+      return {
+        label,
+        value: resolvedValue,
+        key: resolvedKey || key,
+        type: type || null,
+      };
     })
     .filter(Boolean);
 };
@@ -991,15 +1141,21 @@ const EncounterPanel = ({
                                             <div className="flex-1">
                                               <div className="flex flex-wrap items-center gap-2">
                                                 <p className="text-sm font-semibold text-gray-100">{item.name}</p>
-                                                {quickStats.map((stat) => (
-                                                  <span
-                                                    key={`${item.id}-${stat.label}`}
-                                                    className="rounded-full border border-gray-600 bg-gray-800/70 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-200"
-                                                  >
-                                                    <span className="font-semibold text-gray-100">{stat.label}:</span>{' '}
-                                                    {stat.value}
-                                                  </span>
-                                                ))}
+                                                {quickStats.map((stat) => {
+                                                  const content =
+                                                    stat.type === 'defenseBlocks'
+                                                      ? renderDefenseBlocks(stat.value) ?? stat.value
+                                                      : stat.value;
+                                                  return (
+                                                    <span
+                                                      key={`${item.id}-${stat.label}`}
+                                                      className="rounded-full border border-gray-600 bg-gray-800/70 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-200"
+                                                    >
+                                                      <span className="font-semibold text-gray-100">{stat.label}:</span>{' '}
+                                                      {content}
+                                                    </span>
+                                                  );
+                                                })}
                                               </div>
                                               {details.description ? (
                                                 <p className="mt-1 text-xs text-gray-300/80 italic">
