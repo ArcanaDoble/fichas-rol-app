@@ -35,7 +35,6 @@ import {
   FiTrash2,
   FiCrop,
   FiCheck,
-  FiUserPlus,
 } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
@@ -56,7 +55,6 @@ import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
-import EncounterPanel from './components/EncounterPanel';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import AssetSidebar from './components/AssetSidebar';
@@ -92,7 +90,6 @@ import {
 import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
-import useEnemyInstances from './hooks/useEnemyInstances';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
@@ -1102,9 +1099,6 @@ function App() {
   const [chosenView, setChosenView] = useState(null);
   // Acciones móviles (FAB) para la vista de Enemigos
   const [enemyActionsOpen, setEnemyActionsOpen] = useState(false);
-  const [isEncounterModalOpen, setIsEncounterModalOpen] = useState(false);
-  const [encounterModalEnemy, setEncounterModalEnemy] = useState(null);
-  const [encounterQuantity, setEncounterQuantity] = useState(1);
   // Buscador y filtros de Enemigos
   const [enemySearch, setEnemySearch] = useState('');
   const deferredEnemySearch = useDeferredValue(enemySearch);
@@ -1112,152 +1106,6 @@ function App() {
   const [enemySort, setEnemySort] = useState('name'); // 'name' | 'nivel'
   const [enemySortDir, setEnemySortDir] = useState('asc'); // 'asc' | 'desc'
   const [enemyFiltersOpen, setEnemyFiltersOpen] = useState(false);
-
-  const {
-    activeEncounter,
-    addEnemiesToEncounter,
-    updateInstanceStats,
-    updateInstance,
-    removeInstance,
-    duplicateInstance,
-    resetEncounter,
-  } = useEnemyInstances(enemies, ensureEnemyDefaults);
-
-  const handleAddEnemyToEncounter = useCallback((enemy) => {
-    if (!enemy) return;
-    setEncounterModalEnemy(enemy);
-    setEncounterQuantity(1);
-    setIsEncounterModalOpen(true);
-  }, []);
-
-  const closeEncounterModal = useCallback(() => {
-    setIsEncounterModalOpen(false);
-    setEncounterModalEnemy(null);
-    setEncounterQuantity(1);
-  }, []);
-
-  const handleConfirmEncounterAdd = useCallback(() => {
-    if (!encounterModalEnemy) {
-      closeEncounterModal();
-      return;
-    }
-    const numeric = Number(encounterQuantity);
-    const quantity =
-      Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 1;
-    addEnemiesToEncounter(encounterModalEnemy, quantity);
-    closeEncounterModal();
-    setChosenView('activeEncounter');
-  }, [
-    addEnemiesToEncounter,
-    closeEncounterModal,
-    encounterModalEnemy,
-    encounterQuantity,
-    setChosenView,
-  ]);
-
-  const handleRemoveInstanceFromEncounter = useCallback(
-    (instanceId) => {
-      removeInstance(instanceId);
-    },
-    [removeInstance],
-  );
-
-  const handleResetEncounter = useCallback(() => {
-    resetEncounter();
-  }, [resetEncounter]);
-
-  const handleInstanceStatChange = useCallback(
-    (instanceId, statKey, field, value) => {
-      const numeric = Number(value);
-      const parsed = Number.isFinite(numeric) ? numeric : 0;
-      updateInstanceStats(instanceId, statKey, { [field]: parsed });
-    },
-    [updateInstanceStats],
-  );
-
-  const handleInstanceUpdate = useCallback(
-    (instanceId, updater) => {
-      updateInstance(instanceId, updater);
-    },
-    [updateInstance],
-  );
-
-  const handleDuplicateInstance = useCallback(
-    (instanceId) => {
-      duplicateInstance(instanceId);
-    },
-    [duplicateInstance],
-  );
-
-  const encounterQuantityModal = (
-    <Modal
-      isOpen={isEncounterModalOpen}
-      onClose={closeEncounterModal}
-      title={
-        encounterModalEnemy
-          ? `Añadir ${encounterModalEnemy.name || 'enemigo'} al encuentro`
-          : 'Añadir al encuentro'
-      }
-      size="sm"
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-gray-200">
-          Selecciona cuántas copias quieres preparar para el Panel de Encuentros. Las instancias se
-          numerarán automáticamente.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {[1, 3, 5, 10].map((quantity) => (
-            <button
-              key={quantity}
-              type="button"
-              onClick={() => setEncounterQuantity(quantity)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                encounterQuantity === quantity
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
-                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
-              }`}
-            >
-              ×{quantity}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Cantidad personalizada
-          </label>
-          <Input
-            type="number"
-            min={1}
-            value={encounterQuantity}
-            onChange={(event) => {
-              const numeric = Number(event.target.value);
-              setEncounterQuantity(
-                Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 1,
-              );
-            }}
-          />
-        </div>
-        {encounterModalEnemy && (
-          <div className="rounded-xl border border-gray-700 bg-gray-800/80 p-3 text-sm text-gray-200">
-            <p className="font-semibold text-white">{encounterModalEnemy.name}</p>
-            {encounterModalEnemy.description && (
-              <p className="mt-1 text-xs text-gray-300">
-                {encounterModalEnemy.description}
-              </p>
-            )}
-          </div>
-        )}
-        <div className="flex justify-end gap-2">
-          <Boton color="gray" size="sm" onClick={closeEncounterModal}>
-            Cancelar
-          </Boton>
-          <Boton color="purple" size="sm" onClick={handleConfirmEncounterAdd}>
-            Añadir al encuentro
-          </Boton>
-        </div>
-      </div>
-    </Modal>
-  );
 
   const normalizeText = (t) =>
     (t || '')
@@ -1513,70 +1361,6 @@ function App() {
   const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
-
-  const handleSyncEncounterInstance = useCallback(
-    (instanceId) => {
-      if (typeof window === 'undefined') return;
-      const instance = activeEncounter.find((item) => item.id === instanceId);
-      if (!instance) return;
-      const baseEnemyId = instance.data?.id;
-      let tokenSheetId = instance.data?.tokenSheetId;
-      if (!tokenSheetId && baseEnemyId) {
-        const matchingToken = canvasTokens.find((token) => {
-          if (!token) return false;
-          if (token.tokenSheetId && token.tokenSheetId === instance.data?.tokenSheetId) {
-            return true;
-          }
-          return token.enemyId === baseEnemyId;
-        });
-        if (matchingToken?.tokenSheetId) {
-          tokenSheetId = matchingToken.tokenSheetId;
-        }
-      }
-      if (!tokenSheetId) return;
-      try {
-        const stored = window.localStorage.getItem('tokenSheets');
-        const sheets = stored ? JSON.parse(stored) : {};
-        const existing = sheets[tokenSheetId] || { id: tokenSheetId, stats: {} };
-        const stats = { ...(existing.stats || {}) };
-        Object.entries(instance.stats || {}).forEach(([key, value]) => {
-          if (value === undefined || value === null) return;
-          let actual = 0;
-          let total = 0;
-          if (typeof value === 'object') {
-            const numericActual = Number(
-              value.actual ?? value.value ?? value.base ?? value.total ?? 0,
-            );
-            const numericTotal = Number(
-              value.total ?? value.max ?? value.base ?? numericActual,
-            );
-            actual = Number.isFinite(numericActual) ? numericActual : 0;
-            total = Number.isFinite(numericTotal) ? numericTotal : actual;
-          } else {
-            const numeric = Number(value);
-            actual = Number.isFinite(numeric) ? numeric : 0;
-            total = actual;
-          }
-          stats[key] = {
-            ...(stats[key] || {}),
-            actual,
-            total,
-          };
-        });
-        const updatedSheet = {
-          ...existing,
-          id: tokenSheetId,
-          name: existing.name || instance.alias || instance.baseName || existing.name,
-          stats,
-        };
-        updateLocalTokenSheet(updatedSheet);
-        saveTokenSheet(updatedSheet);
-      } catch (error) {
-        console.error('Error sincronizando token del encuentro', error);
-      }
-    },
-    [activeEncounter, canvasTokens],
-  );
 
   const diffTokens = (prev, next) => {
     const prevMap = new Map(
@@ -6212,64 +5996,6 @@ function App() {
       />
     );
   }
-  if (userType === 'master' && authenticated && chosenView === 'activeEncounter') {
-    return withTooltips(
-      <div className="min-h-screen bg-gray-950 text-purple-100">
-        <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold text-white">Encuentro activo</h1>
-              <p className="text-sm text-purple-200/80">
-                Gestiona y actualiza cada instancia de combate con controles optimizados para pantallas táctiles.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Boton
-                color="purple"
-                size="sm"
-                className="whitespace-nowrap"
-                onClick={() => setChosenView('enemies')}
-              >
-                Abrir catálogo de enemigos
-              </Boton>
-              <Boton
-                color="gray"
-                size="sm"
-                className="whitespace-nowrap"
-                onClick={() => setChosenView(null)}
-              >
-                ← Volver al menú
-              </Boton>
-            </div>
-          </div>
-
-          <EncounterPanel
-            activeEncounter={activeEncounter}
-            onRemoveInstance={handleRemoveInstanceFromEncounter}
-            onResetEncounter={handleResetEncounter}
-            onUpdateInstanceStat={handleInstanceStatChange}
-            onUpdateInstance={handleInstanceUpdate}
-            onDuplicateInstance={handleDuplicateInstance}
-            onSyncInstance={handleSyncEncounterInstance}
-            headerActions={
-              activeEncounter.length > 0 ? (
-                <Boton
-                  color="blue"
-                  size="sm"
-                  className="whitespace-nowrap"
-                  onClick={() => setChosenView('enemies')}
-                >
-                  Añadir más enemigos
-                </Boton>
-              ) : null
-            }
-            showEmptyState
-            rarityColorMap={rarityColorMap}
-          />
-        </div>
-      </div>
-    );
-  }
   if (userType === 'master' && authenticated && chosenView === 'classes') {
     return withTooltips(
       <ClassList
@@ -6503,33 +6229,6 @@ function App() {
             )}
           </button>
         </div>
-        {/* Encuentro activo */}
-        {activeEncounter.length > 0 && (
-          <EncounterPanel
-            activeEncounter={activeEncounter}
-            onRemoveInstance={handleRemoveInstanceFromEncounter}
-            onResetEncounter={handleResetEncounter}
-            onUpdateInstanceStat={handleInstanceStatChange}
-            onUpdateInstance={handleInstanceUpdate}
-            onDuplicateInstance={handleDuplicateInstance}
-            onSyncInstance={handleSyncEncounterInstance}
-            compact
-            className="mt-6"
-            headerActions={
-              <Boton
-                color="indigo"
-                size="sm"
-                className="whitespace-nowrap"
-                onClick={() => setChosenView('activeEncounter')}
-              >
-                Vista completa
-              </Boton>
-            }
-            showEmptyState={false}
-            rarityColorMap={rarityColorMap}
-          />
-        )}
-
         {/* Lista de enemigos */}
         <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
           <span
@@ -6810,28 +6509,6 @@ function App() {
                       <Boton
                         color="gray"
                         size="sm"
-                        onClick={() => handleAddEnemyToEncounter(enemy)}
-                        className="enemy-action-button enemy-action-add flex-1 min-w-[120px]"
-                        icon={<FiUserPlus className="text-lg" />}
-                        style={{
-                          '--enemy-button-from': theme.button.view.from,
-                          '--enemy-button-via': theme.button.view.via,
-                          '--enemy-button-to': theme.button.view.to,
-                          '--enemy-button-hover-from': theme.button.view.hoverFrom,
-                          '--enemy-button-hover-via': theme.button.view.hoverVia,
-                          '--enemy-button-hover-to': theme.button.view.hoverTo,
-                          '--enemy-button-border': theme.button.view.border,
-                          '--enemy-button-hover-border': theme.button.view.hoverBorder,
-                          '--enemy-button-text': theme.buttonText,
-                          '--enemy-button-glow': theme.button.view.glow,
-                          '--enemy-button-icon-glow': theme.button.view.iconGlow,
-                        }}
-                      >
-                        Añadir al encuentro
-                      </Boton>
-                      <Boton
-                        color="gray"
-                        size="sm"
                         onClick={() => editEnemy(enemy)}
                         className="enemy-action-button enemy-action-edit flex-1 min-w-[120px]"
                         icon={<FiEdit2 className="text-lg" />}
@@ -6914,7 +6591,6 @@ function App() {
             </p>
           </div>
         )}
-        {encounterQuantityModal}
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
           <div
