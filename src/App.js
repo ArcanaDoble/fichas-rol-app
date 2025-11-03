@@ -73,7 +73,12 @@ import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
 const RouteMapBuilderLite = React.lazy(() => import('./components/RouteMapBuilderLite'));
 import { nanoid } from 'nanoid';
-import { saveTokenSheet, ensureSheetDefaults, mergeTokens } from './utils/token';
+import {
+  saveTokenSheet,
+  ensureSheetDefaults,
+  mergeTokens,
+  updateLocalTokenSheet,
+} from './utils/token';
 import {
   ensureKarmaStat,
   clampKarma,
@@ -91,6 +96,7 @@ import useEnemyInstances from './hooks/useEnemyInstances';
 import { uploadDataUrl, getOrUploadFile, releaseFile } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
+import Modal from './components/Modal';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -1096,6 +1102,9 @@ function App() {
   const [chosenView, setChosenView] = useState(null);
   // Acciones móviles (FAB) para la vista de Enemigos
   const [enemyActionsOpen, setEnemyActionsOpen] = useState(false);
+  const [isEncounterModalOpen, setIsEncounterModalOpen] = useState(false);
+  const [encounterModalEnemy, setEncounterModalEnemy] = useState(null);
+  const [encounterQuantity, setEncounterQuantity] = useState(1);
   // Buscador y filtros de Enemigos
   const [enemySearch, setEnemySearch] = useState('');
   const deferredEnemySearch = useDeferredValue(enemySearch);
@@ -1114,12 +1123,37 @@ function App() {
     resetEncounter,
   } = useEnemyInstances(enemies, ensureEnemyDefaults);
 
-  const handleAddEnemyToEncounter = useCallback(
-    (enemy) => {
-      addEnemiesToEncounter(enemy);
-    },
-    [addEnemiesToEncounter],
-  );
+  const handleAddEnemyToEncounter = useCallback((enemy) => {
+    if (!enemy) return;
+    setEncounterModalEnemy(enemy);
+    setEncounterQuantity(1);
+    setIsEncounterModalOpen(true);
+  }, []);
+
+  const closeEncounterModal = useCallback(() => {
+    setIsEncounterModalOpen(false);
+    setEncounterModalEnemy(null);
+    setEncounterQuantity(1);
+  }, []);
+
+  const handleConfirmEncounterAdd = useCallback(() => {
+    if (!encounterModalEnemy) {
+      closeEncounterModal();
+      return;
+    }
+    const numeric = Number(encounterQuantity);
+    const quantity =
+      Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 1;
+    addEnemiesToEncounter(encounterModalEnemy, quantity);
+    closeEncounterModal();
+    setChosenView('activeEncounter');
+  }, [
+    addEnemiesToEncounter,
+    closeEncounterModal,
+    encounterModalEnemy,
+    encounterQuantity,
+    setChosenView,
+  ]);
 
   const handleRemoveInstanceFromEncounter = useCallback(
     (instanceId) => {
@@ -1153,6 +1187,76 @@ function App() {
       duplicateInstance(instanceId);
     },
     [duplicateInstance],
+  );
+
+  const encounterQuantityModal = (
+    <Modal
+      isOpen={isEncounterModalOpen}
+      onClose={closeEncounterModal}
+      title={
+        encounterModalEnemy
+          ? `Añadir ${encounterModalEnemy.name || 'enemigo'} al encuentro`
+          : 'Añadir al encuentro'
+      }
+      size="sm"
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-200">
+          Selecciona cuántas copias quieres preparar para el Panel de Encuentros. Las instancias se
+          numerarán automáticamente.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {[1, 3, 5, 10].map((quantity) => (
+            <button
+              key={quantity}
+              type="button"
+              onClick={() => setEncounterQuantity(quantity)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                encounterQuantity === quantity
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
+                  : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+              }`}
+            >
+              ×{quantity}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Cantidad personalizada
+          </label>
+          <Input
+            type="number"
+            min={1}
+            value={encounterQuantity}
+            onChange={(event) => {
+              const numeric = Number(event.target.value);
+              setEncounterQuantity(
+                Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 1,
+              );
+            }}
+          />
+        </div>
+        {encounterModalEnemy && (
+          <div className="rounded-xl border border-gray-700 bg-gray-800/80 p-3 text-sm text-gray-200">
+            <p className="font-semibold text-white">{encounterModalEnemy.name}</p>
+            {encounterModalEnemy.description && (
+              <p className="mt-1 text-xs text-gray-300">
+                {encounterModalEnemy.description}
+              </p>
+            )}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Boton color="gray" size="sm" onClick={closeEncounterModal}>
+            Cancelar
+          </Boton>
+          <Boton color="purple" size="sm" onClick={handleConfirmEncounterAdd}>
+            Añadir al encuentro
+          </Boton>
+        </div>
+      </div>
+    </Modal>
   );
 
   const normalizeText = (t) =>
@@ -1409,6 +1513,70 @@ function App() {
   const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
   const [showVisionRanges, setShowVisionRanges] = useState(true);
+
+  const handleSyncEncounterInstance = useCallback(
+    (instanceId) => {
+      if (typeof window === 'undefined') return;
+      const instance = activeEncounter.find((item) => item.id === instanceId);
+      if (!instance) return;
+      const baseEnemyId = instance.data?.id;
+      let tokenSheetId = instance.data?.tokenSheetId;
+      if (!tokenSheetId && baseEnemyId) {
+        const matchingToken = canvasTokens.find((token) => {
+          if (!token) return false;
+          if (token.tokenSheetId && token.tokenSheetId === instance.data?.tokenSheetId) {
+            return true;
+          }
+          return token.enemyId === baseEnemyId;
+        });
+        if (matchingToken?.tokenSheetId) {
+          tokenSheetId = matchingToken.tokenSheetId;
+        }
+      }
+      if (!tokenSheetId) return;
+      try {
+        const stored = window.localStorage.getItem('tokenSheets');
+        const sheets = stored ? JSON.parse(stored) : {};
+        const existing = sheets[tokenSheetId] || { id: tokenSheetId, stats: {} };
+        const stats = { ...(existing.stats || {}) };
+        Object.entries(instance.stats || {}).forEach(([key, value]) => {
+          if (value === undefined || value === null) return;
+          let actual = 0;
+          let total = 0;
+          if (typeof value === 'object') {
+            const numericActual = Number(
+              value.actual ?? value.value ?? value.base ?? value.total ?? 0,
+            );
+            const numericTotal = Number(
+              value.total ?? value.max ?? value.base ?? numericActual,
+            );
+            actual = Number.isFinite(numericActual) ? numericActual : 0;
+            total = Number.isFinite(numericTotal) ? numericTotal : actual;
+          } else {
+            const numeric = Number(value);
+            actual = Number.isFinite(numeric) ? numeric : 0;
+            total = actual;
+          }
+          stats[key] = {
+            ...(stats[key] || {}),
+            actual,
+            total,
+          };
+        });
+        const updatedSheet = {
+          ...existing,
+          id: tokenSheetId,
+          name: existing.name || instance.alias || instance.baseName || existing.name,
+          stats,
+        };
+        updateLocalTokenSheet(updatedSheet);
+        saveTokenSheet(updatedSheet);
+      } catch (error) {
+        console.error('Error sincronizando token del encuentro', error);
+      }
+    },
+    [activeEncounter, canvasTokens],
+  );
 
   const diffTokens = (prev, next) => {
     const prevMap = new Map(
@@ -6082,6 +6250,7 @@ function App() {
             onUpdateInstanceStat={handleInstanceStatChange}
             onUpdateInstance={handleInstanceUpdate}
             onDuplicateInstance={handleDuplicateInstance}
+            onSyncInstance={handleSyncEncounterInstance}
             headerActions={
               activeEncounter.length > 0 ? (
                 <Boton
@@ -6343,6 +6512,7 @@ function App() {
             onUpdateInstanceStat={handleInstanceStatChange}
             onUpdateInstance={handleInstanceUpdate}
             onDuplicateInstance={handleDuplicateInstance}
+            onSyncInstance={handleSyncEncounterInstance}
             compact
             className="mt-6"
             headerActions={
@@ -6744,6 +6914,7 @@ function App() {
             </p>
           </div>
         )}
+        {encounterQuantityModal}
         {/* Modal para crear/editar enemigo */}
         {showEnemyForm && (
           <div
