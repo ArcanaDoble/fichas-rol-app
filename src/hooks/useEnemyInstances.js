@@ -63,6 +63,7 @@ const normalizeEquipmentEntry = (entry) => {
         range: '',
         cost: '',
         traits: [],
+        defense: '',
         blocks: '',
         body: '',
         mind: '',
@@ -75,32 +76,49 @@ const normalizeEquipmentEntry = (entry) => {
   }
 
   if (typeof entry === 'object') {
-    const name = entry.nombre || entry.name || '';
+    const rawDetails = entry.details && typeof entry.details === 'object' ? entry.details : {};
+    const name = entry.nombre || entry.name || rawDetails.name || '';
     if (!name) return null;
-    const traits = normalizeTraits(entry.rasgos || entry.traits);
+    const traits = normalizeTraits(entry.rasgos || entry.traits || rawDetails.rasgos || rawDetails.traits);
+    const getDetail = (...keys) => {
+      for (const key of keys) {
+        if (entry[key] !== undefined && entry[key] !== null && entry[key] !== '') {
+          return entry[key];
+        }
+        if (rawDetails[key] !== undefined && rawDetails[key] !== null && rawDetails[key] !== '') {
+          return rawDetails[key];
+        }
+      }
+      return '';
+    };
+    const blockValue = getDetail(
+      'bloques',
+      'bloquesArmadura',
+      'bloque',
+      'bloqueo',
+      'bloquesDefensa',
+      'blocks'
+    );
+    const defenseValue = getDetail('defensa', 'defense') || blockValue;
+    const resolvedBlocks = blockValue || defenseValue;
     return {
       id: entry.id || nanoid(),
       name,
       used: Boolean(entry.used),
       details: {
-        damage: entry.dano || entry.daño || entry.damage || entry.poder || '',
-        range: entry.alcance || entry.range || '',
-        cost: entry.consumo || entry.cost || entry.coste || '',
+        damage: getDetail('dano', 'daño', 'damage', 'poder'),
+        range: getDetail('alcance', 'range'),
+        cost: getDetail('consumo', 'cost', 'coste'),
         traits,
-        blocks:
-          entry.bloques ||
-          entry.bloquesArmadura ||
-          entry.bloque ||
-          entry.bloqueo ||
-          entry.bloquesDefensa ||
-          '',
-        body: entry.cuerpo || entry.cargaFisica || entry.carga || '',
-        mind: entry.mente || entry.cargaMental || '',
-        type: entry.tipoDano || entry.tipo || '',
-        value: entry.valor || '',
-        description: entry.descripcion || entry.description || '',
-        technology: entry.tecnologia || entry.technology || '',
-        weight: entry.peso || '',
+        defense: defenseValue,
+        blocks: resolvedBlocks,
+        body: getDetail('cuerpo', 'cargaFisica', 'carga', 'body'),
+        mind: getDetail('mente', 'cargaMental', 'mind'),
+        type: getDetail('tipoDano', 'tipo', 'type'),
+        value: getDetail('valor', 'value'),
+        description: getDetail('descripcion', 'description'),
+        technology: getDetail('tecnologia', 'technology'),
+        weight: getDetail('peso', 'weight'),
         raw: entry,
       },
     };
