@@ -845,6 +845,83 @@ const applyCargaPenalties = (
     cargaAcumulada: { fisica, mental },
   };
 };
+
+const parseTraitValues = (input) => {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input
+      .map((value) => (value !== undefined && value !== null ? value.toString().trim() : ''))
+      .filter(Boolean);
+  }
+  if (typeof input === 'string') {
+    return input
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const buildEncounterEquipmentEntry = (item, category) => {
+  if (!item) return null;
+  const rawDetails =
+    (item.detalles && typeof item.detalles === 'object' && item.detalles) ||
+    (item.details && typeof item.details === 'object' && item.details) ||
+    {};
+
+  const pickDetail = (...keys) => {
+    for (const key of keys) {
+      const direct = item[key];
+      if (direct !== undefined && direct !== null && `${direct}`.toString().trim() !== '') {
+        return direct;
+      }
+      const nested = rawDetails[key];
+      if (nested !== undefined && nested !== null && `${nested}`.toString().trim() !== '') {
+        return nested;
+      }
+    }
+    return '';
+  };
+
+  const name = (item.nombre || item.name || rawDetails.name || '').toString().trim();
+  if (!name) return null;
+
+  const traits = parseTraitValues(pickDetail('rasgos', 'traits'));
+
+  const entry = {
+    id: item.id || rawDetails.id || nanoid(),
+    name,
+    used: false,
+    details: {
+      damage: pickDetail('dano', 'daño', 'damage', 'poder'),
+      range: pickDetail('alcance', 'range'),
+      cost: pickDetail('consumo', 'cost', 'coste'),
+      traits,
+      defense: pickDetail('defensa', 'defense'),
+      blocks: pickDetail('bloques', 'blocks', 'defensa', 'defense'),
+      body: pickDetail('cuerpo', 'cargaFisica', 'carga', 'body'),
+      mind: pickDetail('mente', 'cargaMental', 'mind'),
+      type: pickDetail('tipoDano', 'tipo', 'type'),
+      value: pickDetail('valor', 'value'),
+      description: pickDetail('descripcion', 'description'),
+      technology: pickDetail('tecnologia', 'technology'),
+      weight: pickDetail('peso', 'weight', 'carga'),
+      raw: item,
+    },
+  };
+
+  if (category === 'armors' && !entry.details.blocks) {
+    entry.details.blocks = entry.details.defense;
+  }
+
+  return entry;
+};
+
+const EQUIPMENT_CATEGORY_HISTORY_LABEL = {
+  weapons: 'arma',
+  armors: 'armadura',
+  powers: 'habilidad',
+};
 function App() {
   // ───────────────────────────────────────────────────────────
   // STATES
@@ -1389,6 +1466,71 @@ function App() {
     [activeEncounter, updateEncounterInstance]
   );
 
+  const handleRenameEncounterInstance = useCallback(
+    (instanceId, nextName) => {
+      const instance = activeEncounter.find((inst) => inst.id === instanceId);
+      if (!instance) return;
+      const trimmed = (nextName || '').toString().trim();
+      const fallbackName = instance.baseName || instance.displayName || 'Enemigo';
+      const resolved = trimmed || fallbackName;
+      if (resolved === instance.displayName) return;
+      updateEncounterInstance(
+        instanceId,
+        { displayName: resolved },
+        `Nombre actualizado a ${resolved}`
+      );
+    },
+    [activeEncounter, updateEncounterInstance]
+  );
+
+  const handleSetEncounterStatTotal = useCallback(
+    (instanceId, statKey, total) => {
+      if (!statKey) return;
+      const numeric = Number(total);
+      if (!Number.isFinite(numeric)) return;
+      const rounded = Math.round(numeric);
+      const sanitized = statKey === KARMA_KEY ? clampKarma(rounded) : Math.max(0, rounded);
+      const label = (statKey || '').toString().toUpperCase();
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const currentStat = inst.stats?.[statKey] || { base: 0, buff: 0, total: 0, actual: 0 };
+          const nextBase = Number.isFinite(currentStat.base)
+            ? Math.min(currentStat.base, sanitized)
+            : currentStat.base;
+          const previousActual = currentStat.actual ?? sanitized;
+          const nextActual =
+            statKey === KARMA_KEY
+              ? clampKarma(Math.min(previousActual, sanitized))
+              : Math.max(0, Math.min(previousActual, sanitized));
+
+          if (
+            sanitized === (currentStat.total ?? currentStat.base ?? 0) &&
+            nextBase === currentStat.base &&
+            nextActual === currentStat.actual
+          ) {
+            return inst;
+          }
+
+          return {
+            ...inst,
+            stats: {
+              ...inst.stats,
+              [statKey]: {
+                ...currentStat,
+                base: nextBase,
+                total: sanitized,
+                actual: nextActual,
+              },
+            },
+          };
+        },
+        `${label} máximo = ${sanitized}`
+      );
+    },
+    [updateEncounterInstance]
+  );
+
   const handleToggleEncounterState = useCallback(
     (instanceId, state) => {
       const targetState = normalizeStateEntry(state);
@@ -1465,6 +1607,71 @@ function App() {
       );
     },
     [activeEncounter, updateEncounterInstance]
+  );
+
+  const handleAddEncounterEquipment = useCallback(
+    (instanceId, category, rawItem) => {
+      const entry = buildEncounterEquipmentEntry(rawItem, category);
+      if (!entry) return;
+      const label = EQUIPMENT_CATEGORY_HISTORY_LABEL[category] || 'ítem';
+      const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const list = inst.equipment?.[category] || [];
+          const exists = list.some(
+            (item) =>
+              (item.id && item.id === entry.id) ||
+              (item.name || '')
+                .toString()
+                .toLowerCase()
+                .trim() === entry.name.toLowerCase()
+          );
+          if (exists) return inst;
+          return {
+            ...inst,
+            equipment: {
+              ...inst.equipment,
+              [category]: [...list, entry],
+            },
+          };
+        },
+        `${capitalizedLabel} ${entry.name} añadido`
+      );
+    },
+    [updateEncounterInstance]
+  );
+
+  const handleRemoveEncounterEquipment = useCallback(
+    (instanceId, category, itemId) => {
+      if (!itemId) return;
+      const label = EQUIPMENT_CATEGORY_HISTORY_LABEL[category] || 'ítem';
+      const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      let removedName = '';
+      updateEncounterInstance(
+        instanceId,
+        (inst) => {
+          const list = inst.equipment?.[category] || [];
+          const next = list.filter((entry) => {
+            if (entry.id === itemId) {
+              removedName = entry.name || removedName;
+              return false;
+            }
+            return true;
+          });
+          if (next.length === list.length) return inst;
+          return {
+            ...inst,
+            equipment: {
+              ...inst.equipment,
+              [category]: next,
+            },
+          };
+        },
+        removedName ? `${capitalizedLabel} ${removedName} retirado` : `${capitalizedLabel} retirado`
+      );
+    },
+    [updateEncounterInstance]
   );
 
   const handleApplyEncounterGroup = useCallback(
@@ -6993,15 +7200,22 @@ function App() {
             <EncounterPanel
               instances={activeEncounter}
               onAdjustStat={handleAdjustEncounterStat}
+              onRenameInstance={handleRenameEncounterInstance}
+              onSetStatTotal={handleSetEncounterStatTotal}
               onToggleState={handleToggleEncounterState}
               onAddState={handleAddEncounterState}
               onToggleEquipment={handleToggleEncounterEquipment}
+              onAddEquipment={handleAddEncounterEquipment}
+              onRemoveEquipment={handleRemoveEncounterEquipment}
               onDuplicate={duplicateEncounterInstance}
               onRemove={removeEncounterInstance}
               onApplyGroup={handleApplyEncounterGroup}
               onClearEncounter={handleClearEncounter}
               onOpenSheet={handleOpenInstanceSheet}
               onCustomChange={handleCustomEncounterChange}
+              weaponCatalog={armas}
+              armorCatalog={armaduras}
+              powerCatalog={habilidades}
             />
           </div>
         )}
