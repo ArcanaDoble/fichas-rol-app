@@ -28,43 +28,97 @@ import {
 
 const RESOURCE_PRIORITY = ['vida', 'postura', 'cordura', 'ingenio', 'karma', 'armadura'];
 
-const StatControl = ({
-  label,
-  value,
-  onDecrease,
-  onIncrease,
-  accent,
-}) => {
+const StatControl = ({ label, value, onDecrease, onIncrease, accent }) => {
   const current = value?.actual ?? 0;
   const total = value?.total ?? value?.base ?? 0;
+  const percent = Number.isFinite(total) && total > 0 ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : null;
+
+  const theme = useMemo(() => {
+    if (typeof accent === 'string') {
+      return {
+        container: 'border-slate-700/60 bg-slate-900/60 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.65)]',
+        gradient: 'from-slate-400/15 via-slate-500/10 to-transparent',
+        label: 'text-slate-400',
+        value: 'text-slate-100',
+        total: 'text-slate-400',
+        track: 'bg-slate-800/70',
+        progress: 'bg-slate-300/80',
+        button: `${accent} border border-slate-600/50 shadow-[0_10px_25px_rgba(8,15,40,0.35)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-400/50`,
+      };
+    }
+    return accent;
+  }, [accent]);
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      onDecrease?.();
+    }
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      onIncrease?.();
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-800/70 border border-gray-700 px-3 py-2">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-gray-400">{label}</p>
-        <p className="text-lg font-semibold text-gray-100">
-          {current}
-          {Number.isFinite(total) && total > 0 ? (
-            <span className="text-sm text-gray-400"> / {total}</span>
-          ) : null}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onDecrease}
-          className={`h-10 w-10 rounded-full text-xl font-bold shadow-inner transition disabled:opacity-30 disabled:cursor-not-allowed ${accent}`}
-          aria-label={`Restar ${label}`}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          onClick={onIncrease}
-          className={`h-10 w-10 rounded-full text-xl font-bold shadow-inner transition disabled:opacity-30 disabled:cursor-not-allowed ${accent}`}
-          aria-label={`Sumar ${label}`}
-        >
-          +
-        </button>
+    <div
+      className={`group relative overflow-hidden rounded-2xl border px-4 py-4 transition-all duration-200 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-slate-950 ${
+        theme?.container || ''
+      }`}
+      tabIndex={0}
+      role="group"
+      onKeyDown={handleKeyDown}
+      aria-label={`Control de ${label}`}
+    >
+      <div
+        className={`pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${
+          theme?.gradient ? `bg-gradient-to-br ${theme.gradient}` : 'bg-gradient-to-br from-white/0 via-white/5 to-white/0'
+        }`}
+      />
+      <div className="relative z-10 flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className={`text-[11px] uppercase tracking-[0.28em] ${theme?.label || 'text-slate-400'}`}>{label}</p>
+            <div className="flex items-baseline gap-2">
+              <p className={`text-3xl font-semibold leading-none ${theme?.value || 'text-slate-100'}`}>{current}</p>
+              {Number.isFinite(total) && total > 0 ? (
+                <span className={`text-sm font-medium ${theme?.total || 'text-slate-400'}`}>
+                  / {total}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={onDecrease}
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 ${
+                theme?.button || ''
+              }`}
+              aria-label={`Restar ${label}`}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={onIncrease}
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 ${
+                theme?.button || ''
+              }`}
+              aria-label={`Sumar ${label}`}
+            >
+              +
+            </button>
+          </div>
+        </div>
+        {percent !== null ? (
+          <div className={`h-2 w-full overflow-hidden rounded-full ${theme?.track || 'bg-slate-800/70'}`} aria-hidden="true">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${theme?.progress || 'bg-slate-200/80'}`}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -80,24 +134,130 @@ StatControl.propTypes = {
   }),
   onDecrease: PropTypes.func.isRequired,
   onIncrease: PropTypes.func.isRequired,
-  accent: PropTypes.string,
+  accent: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.shape({
+      container: PropTypes.string,
+      gradient: PropTypes.string,
+      label: PropTypes.string,
+      value: PropTypes.string,
+      total: PropTypes.string,
+      track: PropTypes.string,
+      progress: PropTypes.string,
+      button: PropTypes.string,
+      chipBorder: PropTypes.string,
+      chipBackground: PropTypes.string,
+      chipText: PropTypes.string,
+      chipGlow: PropTypes.string,
+    }),
+  ]),
 };
 
 const getAccentClass = (key) => {
-  switch (key) {
-    case 'vida':
-      return 'bg-red-600/70 text-white hover:bg-red-500/80';
-    case 'postura':
-      return 'bg-emerald-600/70 text-white hover:bg-emerald-500/80';
-    case 'cordura':
-      return 'bg-purple-600/70 text-white hover:bg-purple-500/80';
-    case 'ingenio':
-      return 'bg-sky-600/70 text-white hover:bg-sky-500/80';
-    case 'karma':
-      return 'bg-amber-600/70 text-white hover:bg-amber-500/80';
-    default:
-      return 'bg-gray-600/70 text-white hover:bg-gray-500/80';
-  }
+  const base = {
+    container: 'border-slate-700/60 bg-slate-950/50 backdrop-blur-sm shadow-[0_18px_40px_-28px_rgba(15,23,42,0.75)]',
+    gradient: 'from-slate-500/25 via-slate-500/10 to-transparent',
+    label: 'text-slate-300',
+    value: 'text-slate-100',
+    total: 'text-slate-400',
+    track: 'bg-slate-800/80',
+    progress: 'bg-slate-300/80',
+    button:
+      'border border-slate-600/60 bg-slate-800/80 text-slate-100 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-slate-400/50 shadow-[0_8px_22px_rgba(15,23,42,0.45)]',
+    chipBorder: 'border-slate-600/60',
+    chipBackground: 'bg-slate-900/60',
+    chipText: 'text-slate-200',
+    chipGlow: 'shadow-[0_0_25px_rgba(148,163,184,0.28)]',
+  };
+
+  const map = {
+    vida: {
+      container: 'border-rose-400/40 bg-rose-950/40 shadow-[0_25px_60px_-35px_rgba(244,63,94,0.6)]',
+      gradient: 'from-rose-500/25 via-rose-500/10 to-transparent',
+      value: 'text-rose-50',
+      total: 'text-rose-200/90',
+      track: 'bg-rose-500/20',
+      progress: 'bg-rose-400/80',
+      button:
+        'border border-rose-400/50 bg-rose-500/30 text-rose-50 hover:bg-rose-500/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-rose-950 focus:ring-rose-300/60 shadow-[0_14px_35px_-18px_rgba(244,63,94,0.7)]',
+      chipBorder: 'border-rose-400/50',
+      chipBackground: 'bg-rose-500/15',
+      chipText: 'text-rose-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(244,63,94,0.35)]',
+    },
+    postura: {
+      container: 'border-emerald-400/40 bg-emerald-950/40 shadow-[0_25px_60px_-35px_rgba(16,185,129,0.55)]',
+      gradient: 'from-emerald-500/25 via-emerald-500/10 to-transparent',
+      value: 'text-emerald-50',
+      total: 'text-emerald-200/90',
+      track: 'bg-emerald-500/20',
+      progress: 'bg-emerald-400/80',
+      button:
+        'border border-emerald-400/50 bg-emerald-500/25 text-emerald-50 hover:bg-emerald-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-emerald-950 focus:ring-emerald-300/60 shadow-[0_14px_35px_-18px_rgba(16,185,129,0.65)]',
+      chipBorder: 'border-emerald-400/50',
+      chipBackground: 'bg-emerald-500/15',
+      chipText: 'text-emerald-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(16,185,129,0.32)]',
+    },
+    cordura: {
+      container: 'border-purple-400/40 bg-purple-950/40 shadow-[0_25px_60px_-35px_rgba(168,85,247,0.55)]',
+      gradient: 'from-purple-500/25 via-purple-500/10 to-transparent',
+      value: 'text-purple-50',
+      total: 'text-purple-200/90',
+      track: 'bg-purple-500/20',
+      progress: 'bg-purple-400/80',
+      button:
+        'border border-purple-400/50 bg-purple-500/25 text-purple-50 hover:bg-purple-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-purple-950 focus:ring-purple-300/60 shadow-[0_14px_35px_-18px_rgba(168,85,247,0.68)]',
+      chipBorder: 'border-purple-400/50',
+      chipBackground: 'bg-purple-500/15',
+      chipText: 'text-purple-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(168,85,247,0.32)]',
+    },
+    ingenio: {
+      container: 'border-sky-400/40 bg-sky-950/40 shadow-[0_25px_60px_-35px_rgba(56,189,248,0.55)]',
+      gradient: 'from-sky-500/25 via-sky-500/10 to-transparent',
+      value: 'text-sky-50',
+      total: 'text-sky-200/90',
+      track: 'bg-sky-500/20',
+      progress: 'bg-sky-400/80',
+      button:
+        'border border-sky-400/50 bg-sky-500/25 text-sky-50 hover:bg-sky-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-sky-950 focus:ring-sky-300/60 shadow-[0_14px_35px_-18px_rgba(56,189,248,0.62)]',
+      chipBorder: 'border-sky-400/50',
+      chipBackground: 'bg-sky-500/15',
+      chipText: 'text-sky-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(56,189,248,0.32)]',
+    },
+    karma: {
+      container: 'border-amber-400/40 bg-amber-950/40 shadow-[0_25px_60px_-35px_rgba(251,191,36,0.55)]',
+      gradient: 'from-amber-400/25 via-amber-400/10 to-transparent',
+      value: 'text-amber-50',
+      total: 'text-amber-200/90',
+      track: 'bg-amber-500/20',
+      progress: 'bg-amber-300/80',
+      button:
+        'border border-amber-400/50 bg-amber-500/25 text-amber-50 hover:bg-amber-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-amber-950 focus:ring-amber-300/60 shadow-[0_14px_35px_-18px_rgba(251,191,36,0.58)]',
+      chipBorder: 'border-amber-400/50',
+      chipBackground: 'bg-amber-500/15',
+      chipText: 'text-amber-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(251,191,36,0.32)]',
+    },
+    armadura: {
+      container: 'border-cyan-400/40 bg-cyan-950/40 shadow-[0_25px_60px_-35px_rgba(34,211,238,0.55)]',
+      gradient: 'from-cyan-400/25 via-cyan-400/10 to-transparent',
+      value: 'text-cyan-50',
+      total: 'text-cyan-200/90',
+      track: 'bg-cyan-500/20',
+      progress: 'bg-cyan-300/80',
+      button:
+        'border border-cyan-400/50 bg-cyan-500/25 text-cyan-50 hover:bg-cyan-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-cyan-950 focus:ring-cyan-300/60 shadow-[0_14px_35px_-18px_rgba(34,211,238,0.62)]',
+      chipBorder: 'border-cyan-400/50',
+      chipBackground: 'bg-cyan-500/15',
+      chipText: 'text-cyan-100',
+      chipGlow: 'shadow-[0_0_25px_rgba(34,211,238,0.32)]',
+    },
+  };
+
+  return { ...base, ...(map[key] || {}) };
 };
 
 const CATEGORY_LABELS = {
@@ -1496,7 +1656,7 @@ const EncounterPanel = ({
                       const total = stat.total ?? stat.base ?? 0;
                       const label = key.toUpperCase();
                       const value = Number.isFinite(total) && total > 0 ? `${current} / ${total}` : `${current}`;
-                      return { label, value };
+                      return { label, value, key, theme: getAccentClass(key) };
                     })
                     .filter(Boolean)
                     .slice(0, 4);
@@ -1510,33 +1670,35 @@ const EncounterPanel = ({
                       }}
                     >
                       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
-                        <div className="space-y-2">
-                          <h3 className={`text-xl font-semibold ${instanceTheme.text.main}`}>
-                            {instance.displayName}
-                          </h3>
-                          <div className={`flex flex-wrap items-center gap-2 text-xs ${instanceTheme.text.subtle}`}>
-                            <span
-                              className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
-                              style={{
-                                ...instanceTheme.styles.chip,
-                                boxShadow: instanceTheme.shadows.chip,
-                              }}
-                            >
-                              Estados activos: {activeStates.length}
+                        <div className="space-y-3">
+                          <div className="flex flex-col gap-1">
+                            <span className={`text-[11px] uppercase tracking-[0.42em] ${instanceTheme.text.subtle}`}>
+                              Enemigo en encuentro
+                            </span>
+                            <h3 className={`text-3xl font-semibold tracking-tight ${instanceTheme.text.main}`}>
+                              <span className="relative inline-flex items-center gap-3">
+                                <span className="absolute inset-x-0 bottom-0 h-2 rounded-full bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-50" />
+                                <span className="relative whitespace-pre-wrap leading-tight">
+                                  {instance.displayName}
+                                </span>
+                              </span>
+                            </h3>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="relative inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.3)]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.65)]" />
+                              {activeStates.length} estados activos
                             </span>
                             {summaryChips.map((chip) => (
                               <span
                                 key={`${instance.id}-${chip.label}`}
-                                className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${instanceTheme.text.chip}`}
-                                style={{
-                                  ...instanceTheme.styles.chip,
-                                  boxShadow: instanceTheme.shadows.chip,
-                                }}
+                                className={`relative inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] ${
+                                  chip.theme.chipBorder || ''
+                                } ${chip.theme.chipBackground || ''} ${chip.theme.chipText || ''} ${chip.theme.chipGlow || ''}`}
                               >
-                                <span className={`font-semibold ${instanceTheme.text.main}`}>
-                                  {chip.label}:
-                                </span>{' '}
-                                {chip.value}
+                                <span className="h-1.5 w-1.5 rounded-full bg-current/80 opacity-90" />
+                                <span>{chip.label}</span>
+                                <span className="text-[10px] font-normal uppercase tracking-[0.2em] opacity-80">{chip.value}</span>
                               </span>
                             ))}
                           </div>
