@@ -1,12 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
+  FiBatteryCharging,
   FiChevronDown,
   FiChevronUp,
   FiCopy,
   FiEdit3,
+  FiExternalLink,
+  FiInfo,
+  FiMoreHorizontal,
+  FiNavigation,
+  FiShield,
+  FiTarget,
+  FiToggleLeft,
+  FiToggleRight,
   FiTrash2,
   FiUsers,
+  FiZap,
 } from 'react-icons/fi';
 import Boton from './Boton';
 import EstadoSelector from './EstadoSelector';
@@ -94,6 +104,103 @@ const CATEGORY_LABELS = {
   weapons: 'Armas',
   armors: 'Armaduras',
   powers: 'Poderes',
+};
+
+const CATEGORY_ICONS = {
+  weapons: FiTarget,
+  armors: FiShield,
+  powers: FiZap,
+};
+
+const EnemyActions = ({
+  onManageStates,
+  onCustomChange,
+  onViewSheet,
+  onDuplicate,
+  onRemove,
+}) => {
+  const handleMenuAction = (callback) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (callback) {
+      callback();
+    }
+    const details = event.currentTarget.closest('details');
+    if (details) {
+      details.open = false;
+    }
+  };
+
+  return (
+    <div className="flex w-full justify-end">
+      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-gray-900/60 px-2 py-1.5 text-sm text-gray-200 shadow-lg backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={onManageStates}
+          className="flex items-center gap-2 rounded-full bg-emerald-500/80 px-3 py-1.5 font-semibold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+          title="Gestionar estados"
+        >
+          Gestionar estados
+        </button>
+        <details className="relative">
+          <summary
+            className="flex cursor-pointer items-center justify-center rounded-full p-2 text-gray-200 transition hover:bg-gray-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 [&::-webkit-details-marker]:hidden"
+            aria-label="Más acciones"
+            aria-haspopup="menu"
+            title="Más acciones"
+          >
+            <FiMoreHorizontal className="text-lg" />
+          </summary>
+          <div className="absolute right-0 top-full mt-2 flex items-center gap-1 rounded-2xl border border-gray-700/70 bg-gray-900/95 p-2 text-base shadow-2xl z-20">
+            <button
+              type="button"
+              onClick={handleMenuAction(onCustomChange)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Cambio personalizado"
+              title="Cambio personalizado"
+            >
+              <FiEdit3 className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onViewSheet)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Ver ficha completa"
+              title="Ver ficha completa"
+            >
+              <FiExternalLink className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onDuplicate)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Duplicar"
+              title="Duplicar"
+            >
+              <FiCopy className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onRemove)}
+              className="rounded-xl p-2 text-rose-200 transition hover:bg-rose-600/40 hover:text-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+              aria-label="Eliminar"
+              title="Eliminar"
+            >
+              <FiTrash2 className="text-lg" />
+            </button>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+};
+
+EnemyActions.propTypes = {
+  onManageStates: PropTypes.func.isRequired,
+  onCustomChange: PropTypes.func.isRequired,
+  onViewSheet: PropTypes.func.isRequired,
+  onDuplicate: PropTypes.func.isRequired,
+  onRemove: PropTypes.func.isRequired,
 };
 
 const EQUIPMENT_PRIMARY_STATS = {
@@ -280,6 +387,15 @@ const getEquipmentPrimaryStats = (category, details = {}) => {
       };
     })
     .filter(Boolean);
+};
+
+const STAT_ICON_MAP = {
+  damage: FiTarget,
+  range: FiNavigation,
+  cost: FiBatteryCharging,
+  defense: FiShield,
+  blocks: FiShield,
+  defenseBlocks: FiShield,
 };
 
 const normalizeTraitList = (input) => {
@@ -979,6 +1095,7 @@ const EncounterPanel = ({
 }) => {
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const [collapsedInstances, setCollapsedInstances] = useState(() => new Set());
+  const [expandedEquipment, setExpandedEquipment] = useState({});
   const [stateModal, setStateModal] = useState(null);
   const [customChangeTarget, setCustomChangeTarget] = useState(null);
 
@@ -1055,6 +1172,19 @@ const EncounterPanel = ({
       }
       return next;
     });
+  };
+
+  const equipmentExpansionKey = (instanceId, category) => `${instanceId}:${category}`;
+
+  const isEquipmentExpanded = (instanceId, category) =>
+    Boolean(expandedEquipment[equipmentExpansionKey(instanceId, category)]);
+
+  const toggleEquipmentSection = (instanceId, category) => {
+    const key = equipmentExpansionKey(instanceId, category);
+    setExpandedEquipment((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   };
 
   const handleBulkAction = (groupId, action) => {
@@ -1411,45 +1541,17 @@ const EncounterPanel = ({
                             ))}
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           {!isCollapsed && (
-                            <>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-emerald-600/60 text-white text-sm"
-                                onClick={() => setStateModal({ type: 'instance', instanceId: instance.id })}
-                              >
-                                Gestionar estados
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-indigo-600/60 text-white text-sm"
-                                onClick={() => setCustomChangeTarget(instance.id)}
-                              >
-                                <FiEdit3 className="inline mr-1" /> Cambio personalizado
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-sky-600/60 text-white text-sm"
-                                onClick={() => onOpenSheet(instance.baseId)}
-                              >
-                                Ver ficha completa
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-cyan-600/60 text-white text-sm"
-                                onClick={() => onDuplicate(instance.id)}
-                              >
-                                <FiCopy className="inline mr-1" /> Duplicar
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-rose-600/60 text-white text-sm"
-                                onClick={() => onRemove(instance.id)}
-                              >
-                                <FiTrash2 className="inline mr-1" /> Eliminar
-                              </button>
-                            </>
+                            <EnemyActions
+                              onManageStates={() =>
+                                setStateModal({ type: 'instance', instanceId: instance.id })
+                              }
+                              onCustomChange={() => setCustomChangeTarget(instance.id)}
+                              onViewSheet={() => onOpenSheet(instance.baseId)}
+                              onDuplicate={() => onDuplicate(instance.id)}
+                              onRemove={() => onRemove(instance.id)}
+                            />
                           )}
                           <button
                             type="button"
@@ -1517,96 +1619,220 @@ const EncounterPanel = ({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="space-y-6">
                             {['weapons', 'armors', 'powers'].map((key) => {
                               const items = instance.equipment?.[key] || [];
                               if (items.length === 0) return null;
+
+                              const normalizedItems = items.map((item) => {
+                                const details = item.details || {};
+                                const quickStats = getEquipmentPrimaryStats(key, details);
+                                const traits = normalizeTraitList(details.traits);
+                                const rows = [];
+                                if (details.type && key !== 'armors') {
+                                  rows.push({ label: 'Tipo', value: details.type });
+                                }
+                                if (details.weight) {
+                                  rows.push({ label: 'Carga', value: details.weight });
+                                }
+                                return {
+                                  ...item,
+                                  details,
+                                  quickStats,
+                                  traits,
+                                  rows,
+                                };
+                              });
+
+                              const sectionId = equipmentExpansionKey(instance.id, key);
+                              const isExpanded = isEquipmentExpanded(instance.id, key);
+                              const CategoryIcon = CATEGORY_ICONS[key] || FiInfo;
+
                               return (
-                                <div key={key}>
-                                  <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">{CATEGORY_LABELS[key]}</p>
-                                  <div className="space-y-2">
-                                    {items.map((item) => {
-                                      const details = item.details || {};
-                                      const quickStats = getEquipmentPrimaryStats(key, details);
-                                      const traits = normalizeTraitList(details.traits);
-                                      const rows = [];
-                                      if (details.type && key !== 'armors')
-                                        rows.push({ label: 'Tipo', value: details.type });
-                                      if (details.weight)
-                                        rows.push({ label: 'Carga', value: details.weight });
-                                      return (
+                                <div
+                                  key={key}
+                                  className="overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/40 shadow-2xl shadow-slate-950/30"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleEquipmentSection(instance.id, key)}
+                                    className="flex w-full flex-col gap-5 px-6 py-5 text-left transition hover:bg-slate-900/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                                    aria-expanded={isExpanded}
+                                    aria-controls={`${sectionId}-panel`}
+                                  >
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div className="flex items-center gap-4">
+                                        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300 shadow-inner shadow-emerald-500/10">
+                                          <CategoryIcon className="text-2xl" />
+                                        </span>
+                                        <div>
+                                          <p className="text-xs uppercase tracking-[0.32em] text-slate-400">{CATEGORY_LABELS[key]}</p>
+                                          <p className="text-lg font-semibold text-slate-100">
+                                            {items.length} {items.length === 1 ? 'ítem' : 'ítems'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/70 text-slate-300 shadow-inner">
+                                        {isExpanded ? <FiChevronUp /> : <FiChevronDown />}
+                                      </span>
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      {normalizedItems.map((itemData) => (
                                         <div
-                                          key={item.id}
-                                          className={`rounded-xl border px-3 py-3 transition ${
-                                            item.used
-                                              ? 'border-amber-400/70 bg-amber-500/10 text-amber-100'
-                                              : 'border-gray-700 bg-gray-800/40 text-gray-200'
+                                          key={`${itemData.id}-summary`}
+                                          className={`flex min-h-[100px] flex-col justify-between gap-2 rounded-2xl border px-4 py-3 shadow-inner transition ${
+                                            itemData.used
+                                              ? 'border-amber-300/60 bg-amber-500/10 text-amber-50'
+                                              : 'border-slate-700/70 bg-slate-950/60 text-slate-200'
                                           }`}
                                         >
-                                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                                            <div className="flex-1">
-                                              <div className="flex flex-wrap items-center gap-2">
-                                                <p className="text-sm font-semibold text-gray-100">{item.name}</p>
-                                                {quickStats.map((stat) => {
-                                                  const content =
+                                          <div className="flex items-start justify-between gap-3">
+                                            <p className="text-sm font-semibold text-slate-100 truncate">{itemData.name}</p>
+                                            {itemData.used ? (
+                                              <span className="rounded-full border border-amber-300/60 bg-amber-400/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-100">
+                                                En uso
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <div className="flex flex-wrap gap-2">
+                                            {itemData.quickStats.length > 0
+                                              ? itemData.quickStats.map((stat) => {
+                                                  const iconKey = stat.type === 'defenseBlocks' ? 'defenseBlocks' : stat.key;
+                                                  const StatIcon = STAT_ICON_MAP[iconKey] || FiInfo;
+                                                  const displayValue =
                                                     stat.type === 'defenseBlocks'
                                                       ? renderDefenseBlocks(stat.value) ?? stat.value
                                                       : stat.value;
                                                   return (
                                                     <span
-                                                      key={`${item.id}-${stat.label}`}
-                                                      className="rounded-full border border-gray-600 bg-gray-800/70 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-200"
+                                                      key={`${itemData.id}-${stat.label}-summary`}
+                                                      className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/80 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-slate-200"
                                                     >
-                                                      <span className="font-semibold text-gray-100">{stat.label}:</span>{' '}
-                                                      {content}
+                                                      <StatIcon className="text-sm text-emerald-300" />
+                                                      <span className="font-semibold text-slate-100">{stat.label}:</span>
+                                                      <span className="font-semibold text-slate-100">
+                                                        {React.isValidElement(displayValue) ? displayValue : displayValue || '—'}
+                                                      </span>
                                                     </span>
                                                   );
-                                                })}
-                                              </div>
-                                              {details.description ? (
-                                                <p className="mt-1 text-xs text-gray-300/80 italic">
-                                                  {details.description}
-                                                </p>
-                                              ) : null}
-                                              {traits.length > 0 && (
-                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                  {traits.map((trait) => (
-                                                    <span
-                                                      key={`${item.id}-${trait}`}
-                                                      className="rounded-full border border-gray-500 bg-gray-800 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-200"
-                                                    >
-                                                      {trait}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                            <div className="flex sm:flex-col items-start sm:items-end gap-2">
+                                                })
+                                              : (
+                                                  <span className="text-xs text-slate-400">Sin datos rápidos</span>
+                                                )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </button>
+                                  <div
+                                    id={`${sectionId}-panel`}
+                                    className={`grid border-t border-slate-800/60 transition-[grid-template-rows] duration-300 ${
+                                      isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                                    }`}
+                                  >
+                                    <div className="overflow-hidden">
+                                      <div className="space-y-6 px-6 py-6">
+                                        {normalizedItems.map((itemData) => {
+                                          const toggleTitle = itemData.used ? 'Marcar como disponible' : 'Marcar como usado';
+                                          return (
+                                            <div
+                                              key={itemData.id}
+                                              className={`relative overflow-hidden rounded-3xl border px-6 py-6 shadow-xl transition ${
+                                                itemData.used
+                                                  ? 'border-amber-300/70 bg-amber-500/15 text-amber-50 shadow-amber-500/20'
+                                                  : 'border-slate-700/70 bg-slate-950/55 text-slate-100 shadow-slate-950/40'
+                                              }`}
+                                            >
                                               <button
                                                 type="button"
-                                                onClick={() => onToggleEquipment(instance.id, key, item.id)}
-                                                className={`rounded-full px-3 py-1 text-xs font-semibold border ${
-                                                  item.used
-                                                    ? 'border-amber-300 bg-amber-400/20 text-amber-50'
-                                                    : 'border-gray-500 bg-gray-700/60 text-gray-200 hover:border-gray-400'
+                                                onClick={() => onToggleEquipment(instance.id, key, itemData.id)}
+                                                className={`absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border text-lg transition ${
+                                                  itemData.used
+                                                    ? 'border-amber-300/70 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30'
+                                                    : 'border-slate-600/70 bg-slate-950/70 text-slate-300 hover:border-slate-500 hover:bg-slate-900/70 hover:text-slate-100'
                                                 }`}
+                                                title={toggleTitle}
+                                                aria-label={toggleTitle}
                                               >
-                                                {item.used ? 'Usado' : 'Disponible'}
+                                                {itemData.used ? <FiToggleRight /> : <FiToggleLeft />}
                                               </button>
-                                            </div>
-                                          </div>
-                                          {rows.length > 0 && (
-                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-200">
-                                              {rows.map((row) => (
-                                                <div key={`${item.id}-${row.label}`}>
-                                                  <span className="font-semibold text-gray-100">{row.label}:</span> {row.value}
+                                              <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                                <div className="space-y-5">
+                                                  <div className="space-y-2">
+                                                    <p className="text-xl font-semibold text-slate-100">{itemData.name}</p>
+                                                    {itemData.details.description ? (
+                                                      <p className="text-sm text-slate-300/90">{itemData.details.description}</p>
+                                                    ) : null}
+                                                  </div>
+                                                  {itemData.traits.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                      {itemData.traits.map((trait) => (
+                                                        <span
+                                                          key={`${itemData.id}-${trait}`}
+                                                          className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-100 shadow-inner shadow-emerald-500/10"
+                                                        >
+                                                          {trait}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  ) : null}
+                                                  {itemData.rows.length > 0 ? (
+                                                    <div className="grid gap-3 rounded-2xl border border-slate-700/70 bg-slate-950/40 p-4 text-sm text-slate-200 shadow-inner">
+                                                      {itemData.rows.map((row) => (
+                                                        <div
+                                                          key={`${itemData.id}-${row.label}`}
+                                                          className="flex items-center justify-between gap-3"
+                                                        >
+                                                          <span className="text-xs uppercase tracking-[0.28em] text-slate-400">{row.label}</span>
+                                                          <span className="font-semibold text-slate-100">{row.value}</span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : null}
                                                 </div>
-                                              ))}
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                  {itemData.quickStats.length > 0 ? (
+                                                    itemData.quickStats.map((stat) => {
+                                                      const iconKey = stat.type === 'defenseBlocks' ? 'defenseBlocks' : stat.key;
+                                                      const StatIcon = STAT_ICON_MAP[iconKey] || FiInfo;
+                                                      const displayValue =
+                                                        stat.type === 'defenseBlocks'
+                                                          ? renderDefenseBlocks(stat.value) ?? stat.value
+                                                          : stat.value;
+                                                      return (
+                                                        <div
+                                                          key={`${itemData.id}-${stat.label}`}
+                                                          className="flex h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 text-center shadow-inner"
+                                                        >
+                                                          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300 shadow-inner shadow-emerald-500/20">
+                                                            <StatIcon className="text-2xl" />
+                                                          </span>
+                                                          <span className="text-[11px] uppercase tracking-[0.32em] text-slate-400">
+                                                            {stat.label}
+                                                          </span>
+                                                          <div className="text-sm font-semibold text-slate-100">
+                                                            {React.isValidElement(displayValue) ? (
+                                                              <span className="flex items-center justify-center gap-1">{displayValue}</span>
+                                                            ) : (
+                                                              displayValue || '—'
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })
+                                                  ) : (
+                                                    <div className="col-span-full flex h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 text-sm text-slate-400 shadow-inner">
+                                                      <FiInfo className="text-xl" />
+                                                      <span>Sin estadísticas rápidas</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
                                             </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               );
