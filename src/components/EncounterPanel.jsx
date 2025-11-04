@@ -780,6 +780,74 @@ const mixColors = (hex, mixHex, amount = 0.5) => {
   return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
 };
 
+const rgbToHsl = ([r, g, b]) => {
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const delta = max - min;
+
+  let hue = 0;
+  if (delta !== 0) {
+    switch (max) {
+      case rNorm:
+        hue = ((gNorm - bNorm) / delta + (gNorm < bNorm ? 6 : 0)) * 60;
+        break;
+      case gNorm:
+        hue = ((bNorm - rNorm) / delta + 2) * 60;
+        break;
+      default:
+        hue = ((rNorm - gNorm) / delta + 4) * 60;
+        break;
+    }
+  }
+
+  const lightness = (max + min) / 2;
+  let saturation = 0;
+  if (delta !== 0) {
+    saturation =
+      lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  }
+
+  return [hue, clamp01(saturation), clamp01(lightness)];
+};
+
+const normalizeHue = (degrees) => {
+  const normalized = degrees % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+};
+
+const hslToRgb = ([h, s, l]) => {
+  const hue = normalizeHue(h) / 360;
+  if (s === 0) {
+    const gray = Math.round(l * 255);
+    return [gray, gray, gray];
+  }
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hueToChannel = (t) => {
+    let channel = t;
+    if (channel < 0) channel += 1;
+    if (channel > 1) channel -= 1;
+    if (channel < 1 / 6) return p + (q - p) * 6 * channel;
+    if (channel < 1 / 2) return q;
+    if (channel < 2 / 3) return p + (q - p) * (2 / 3 - channel) * 6;
+    return p;
+  };
+
+  const r = Math.round(hueToChannel(hue + 1 / 3) * 255);
+  const g = Math.round(hueToChannel(hue) * 255);
+  const b = Math.round(hueToChannel(hue - 1 / 3) * 255);
+  return [r, g, b];
+};
+
+const hslToHex = (h, s, l) => {
+  const [r, g, b] = hslToRgb([h, clamp01(s), clamp01(l)]);
+  return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
+};
+
 const lightenColor = (hex, amount = 0.2) => mixColors(hex, '#ffffff', amount);
 
 const darkenColor = (hex, amount = 0.2) => mixColors(hex, '#000000', amount);
@@ -815,27 +883,39 @@ const getRelativeLuminance = (hex) => {
 const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
   const base = normalizeHexColor(themeColor);
   const defaultConfig = {
-    soften: 0.3,
-    lightenSpread: 0.06,
-    darkenSpread: 0.06,
-    headerLift: 0.16,
-    headerShade: 0.24,
-    containerShadeStart: 0.18,
-    containerShadeEnd: 0.32,
-    instanceLift: 0.12,
-    instanceShade: 0.26,
-    chipLift: 0.22,
-    chipEndLift: 0.1,
-    borderShade: 0.26,
-    headerBorderShade: 0.2,
-    instanceBorderShade: 0.22,
-    chipBorderShade: 0.16,
+    soften: 0.4,
+    ambientBlend: 0.45,
+    saturationScale: 0.65,
+    saturationOffset: 0.08,
+    minSaturation: 0.16,
+    maxSaturation: 0.5,
+    lightnessScale: 0.78,
+    lightnessOffset: -0.04,
+    minLightness: 0.18,
+    maxLightness: 0.42,
+    lightenSpread: 0.045,
+    darkenSpread: 0.05,
+    headerLift: 0.1,
+    headerShade: 0.26,
+    containerShadeStart: 0.2,
+    containerShadeEnd: 0.34,
+    instanceLift: 0.14,
+    instanceShade: 0.32,
+    chipLift: 0.2,
+    chipEndLift: 0.12,
+    borderShade: 0.28,
+    headerBorderShade: 0.22,
+    instanceBorderShade: 0.24,
+    chipBorderShade: 0.18,
+    variantHueShift: 10,
+    variantSaturationJitter: 0.08,
+    variantLightnessJitter: 0.06,
     variantKey: 'group',
     shadowOpacities: {
-      container: { base: 0.32, expanded: 0.44 },
-      header: { base: 0.28, expanded: 0.4 },
-      instance: 0.28,
-      chip: 0.2,
+      container: { base: 0.26, expanded: 0.35 },
+      header: { base: 0.25, expanded: 0.34 },
+      instance: 0.24,
+      chip: 0.16,
     },
   };
 
@@ -858,13 +938,65 @@ const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
   };
 
   const softenedBase = softenColor(base, config.soften);
-  const variantSeed = hashToUnit(`${softenedBase}-${config.variantKey}`);
-  const signedVariant = variantSeed * 2 - 1;
+  const ambientBase = mixColors(softenedBase, '#111827', config.ambientBlend);
 
-  const adjustAmount = (amount, spread) =>
-    clamp01(amount + signedVariant * (spread ?? 0));
-  const lighten = (amount) => lightenColor(softenedBase, adjustAmount(amount, config.lightenSpread));
-  const darken = (amount) => darkenColor(softenedBase, adjustAmount(amount, config.darkenSpread));
+  const tuneTone = (hex) => {
+    const [h, s, l] = rgbToHsl(hexToRgb(hex));
+    const tunedSaturation = clamp01(
+      Math.min(
+        config.maxSaturation,
+        Math.max(
+          config.minSaturation,
+          s * config.saturationScale + config.saturationOffset
+        )
+      )
+    );
+    const tunedLightness = clamp01(
+      Math.min(
+        config.maxLightness,
+        Math.max(
+          config.minLightness,
+          l * config.lightnessScale + config.lightnessOffset
+        )
+      )
+    );
+    return hslToHex(h, tunedSaturation, tunedLightness);
+  };
+
+  const tonedBase = tuneTone(ambientBase);
+
+  const variantHueSeed = hashToUnit(`${tonedBase}-${config.variantKey}-h`);
+  const variantSatSeed = hashToUnit(`${tonedBase}-${config.variantKey}-s`);
+  const variantLightSeed = hashToUnit(`${tonedBase}-${config.variantKey}-l`);
+
+  const variantBase = (() => {
+    const [h, s, l] = rgbToHsl(hexToRgb(tonedBase));
+    const hueShift = (variantHueSeed - 0.5) * config.variantHueShift;
+    const saturationShift = (variantSatSeed - 0.5) * config.variantSaturationJitter;
+    const lightnessShift = (variantLightSeed - 0.5) * config.variantLightnessJitter;
+    const nextSaturation = clamp01(
+      Math.min(
+        config.maxSaturation,
+        Math.max(config.minSaturation, s + saturationShift)
+      )
+    );
+    const nextLightness = clamp01(
+      Math.min(
+        config.maxLightness,
+        Math.max(config.minLightness, l + lightnessShift)
+      )
+    );
+    return hslToHex(h + hueShift, nextSaturation, nextLightness);
+  })();
+
+  const adjustAmount = (amount, spread) => {
+    const signedVariant = variantHueSeed * 2 - 1;
+    return clamp01(amount + signedVariant * (spread ?? 0));
+  };
+  const lighten = (amount) =>
+    lightenColor(variantBase, adjustAmount(amount, config.lightenSpread));
+  const darken = (amount) =>
+    darkenColor(variantBase, adjustAmount(amount, config.darkenSpread));
 
   const lifted = lighten(config.headerLift);
   const headerEnd = darken(config.headerShade);
@@ -880,7 +1012,7 @@ const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
   const chipBorder = darken(config.chipBorderShade);
 
   const luminance = getRelativeLuminance(headerEnd);
-  const tone = luminance > 0.55 ? 'light' : 'dark';
+  const tone = luminance > 0.4 ? 'light' : 'dark';
   const text =
     tone === 'light'
       ? {
@@ -902,7 +1034,7 @@ const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
     text,
     styles: {
       container: {
-        backgroundImage: `linear-gradient(155deg, ${containerStart}, ${containerEnd})`,
+        backgroundImage: `linear-gradient(160deg, ${containerStart}, ${containerEnd})`,
         borderColor: border,
       },
       header: {
@@ -920,30 +1052,30 @@ const getGroupThemeStyles = (themeColor = '#4b5563', overrides = {}) => {
     },
     shadows: {
       container: {
-        base: `0 18px 46px -28px ${hexToRgba(
-          softenedBase,
+        base: `0 20px 55px -32px ${hexToRgba(
+          variantBase,
           config.shadowOpacities.container.base
         )}`,
-        expanded: `0 28px 70px -25px ${hexToRgba(
-          softenedBase,
+        expanded: `0 32px 78px -30px ${hexToRgba(
+          variantBase,
           config.shadowOpacities.container.expanded
         )}`,
       },
       header: {
-        base: `0 14px 42px -28px ${hexToRgba(
-          softenedBase,
+        base: `0 18px 48px -32px ${hexToRgba(
+          variantBase,
           config.shadowOpacities.header.base
         )}`,
-        expanded: `0 20px 48px -24px ${hexToRgba(
-          softenedBase,
+        expanded: `0 26px 60px -28px ${hexToRgba(
+          variantBase,
           config.shadowOpacities.header.expanded
         )}`,
       },
-      instance: `0 16px 38px -30px ${hexToRgba(
-        softenedBase,
+      instance: `0 18px 40px -32px ${hexToRgba(
+        variantBase,
         config.shadowOpacities.instance
       )}`,
-      chip: `0 12px 28px -24px ${hexToRgba(softenedBase, config.shadowOpacities.chip)}`,
+      chip: `0 14px 32px -26px ${hexToRgba(variantBase, config.shadowOpacities.chip)}`,
     },
   };
 };
@@ -1338,6 +1470,10 @@ const EncounterPanel = ({
                     soften: 0.26,
                     lightenSpread: 0.12,
                     darkenSpread: 0.12,
+                    variantHueShift: 18,
+                    variantSaturationJitter: 0.12,
+                    variantLightnessJitter: 0.08,
+                    ambientBlend: 0.38,
                     instanceLift: 0.18,
                     instanceShade: 0.3,
                     chipLift: 0.26,
