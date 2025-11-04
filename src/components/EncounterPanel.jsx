@@ -5,6 +5,8 @@ import {
   FiChevronUp,
   FiCopy,
   FiEdit3,
+  FiExternalLink,
+  FiMoreHorizontal,
   FiTrash2,
   FiUsers,
 } from 'react-icons/fi';
@@ -94,6 +96,97 @@ const CATEGORY_LABELS = {
   weapons: 'Armas',
   armors: 'Armaduras',
   powers: 'Poderes',
+};
+
+const EnemyActions = ({
+  onManageStates,
+  onCustomChange,
+  onViewSheet,
+  onDuplicate,
+  onRemove,
+}) => {
+  const handleMenuAction = (callback) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (callback) {
+      callback();
+    }
+    const details = event.currentTarget.closest('details');
+    if (details) {
+      details.open = false;
+    }
+  };
+
+  return (
+    <div className="flex w-full justify-end">
+      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-gray-900/60 px-2 py-1.5 text-sm text-gray-200 shadow-lg backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={onManageStates}
+          className="flex items-center gap-2 rounded-full bg-emerald-500/80 px-3 py-1.5 font-semibold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+          title="Gestionar estados"
+        >
+          Gestionar estados
+        </button>
+        <details className="relative">
+          <summary
+            className="flex cursor-pointer items-center justify-center rounded-full p-2 text-gray-200 transition hover:bg-gray-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 [&::-webkit-details-marker]:hidden"
+            aria-label="Más acciones"
+            aria-haspopup="menu"
+            title="Más acciones"
+          >
+            <FiMoreHorizontal className="text-lg" />
+          </summary>
+          <div className="absolute right-0 top-full mt-2 flex items-center gap-1 rounded-2xl border border-gray-700/70 bg-gray-900/95 p-2 text-base shadow-2xl z-20">
+            <button
+              type="button"
+              onClick={handleMenuAction(onCustomChange)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Cambio personalizado"
+              title="Cambio personalizado"
+            >
+              <FiEdit3 className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onViewSheet)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Ver ficha completa"
+              title="Ver ficha completa"
+            >
+              <FiExternalLink className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onDuplicate)}
+              className="rounded-xl p-2 text-gray-200 transition hover:bg-gray-700/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              aria-label="Duplicar"
+              title="Duplicar"
+            >
+              <FiCopy className="text-lg" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMenuAction(onRemove)}
+              className="rounded-xl p-2 text-rose-200 transition hover:bg-rose-600/40 hover:text-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+              aria-label="Eliminar"
+              title="Eliminar"
+            >
+              <FiTrash2 className="text-lg" />
+            </button>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+};
+
+EnemyActions.propTypes = {
+  onManageStates: PropTypes.func.isRequired,
+  onCustomChange: PropTypes.func.isRequired,
+  onViewSheet: PropTypes.func.isRequired,
+  onDuplicate: PropTypes.func.isRequired,
+  onRemove: PropTypes.func.isRequired,
 };
 
 const EQUIPMENT_PRIMARY_STATS = {
@@ -1275,45 +1368,17 @@ const EncounterPanel = ({
                             ))}
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           {!isCollapsed && (
-                            <>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-emerald-600/60 text-white text-sm"
-                                onClick={() => setStateModal({ type: 'instance', instanceId: instance.id })}
-                              >
-                                Gestionar estados
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-indigo-600/60 text-white text-sm"
-                                onClick={() => setCustomChangeTarget(instance.id)}
-                              >
-                                <FiEdit3 className="inline mr-1" /> Cambio personalizado
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-sky-600/60 text-white text-sm"
-                                onClick={() => onOpenSheet(instance.baseId)}
-                              >
-                                Ver ficha completa
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-cyan-600/60 text-white text-sm"
-                                onClick={() => onDuplicate(instance.id)}
-                              >
-                                <FiCopy className="inline mr-1" /> Duplicar
-                              </button>
-                              <button
-                                type="button"
-                                className="px-3 py-1 rounded-full bg-rose-600/60 text-white text-sm"
-                                onClick={() => onRemove(instance.id)}
-                              >
-                                <FiTrash2 className="inline mr-1" /> Eliminar
-                              </button>
-                            </>
+                            <EnemyActions
+                              onManageStates={() =>
+                                setStateModal({ type: 'instance', instanceId: instance.id })
+                              }
+                              onCustomChange={() => setCustomChangeTarget(instance.id)}
+                              onViewSheet={() => onOpenSheet(instance.baseId)}
+                              onDuplicate={() => onDuplicate(instance.id)}
+                              onRemove={() => onRemove(instance.id)}
+                            />
                           )}
                           <button
                             type="button"
