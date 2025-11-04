@@ -1,17 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   FiBatteryCharging,
   FiChevronDown,
   FiChevronUp,
   FiCopy,
+  FiCheck,
   FiEdit3,
   FiExternalLink,
   FiInfo,
   FiMoreHorizontal,
   FiNavigation,
+  FiPlus,
+  FiSearch,
   FiShield,
   FiTarget,
+  FiX,
   FiToggleLeft,
   FiToggleRight,
   FiTrash2,
@@ -28,7 +32,7 @@ import {
 
 const RESOURCE_PRIORITY = ['vida', 'postura', 'cordura', 'ingenio', 'karma', 'armadura'];
 
-const StatControl = ({ label, value, onDecrease, onIncrease, accent }) => {
+const StatControl = ({ label, value, onDecrease, onIncrease, onSetTotal, accent }) => {
   const current = value?.actual ?? 0;
   const total = value?.total ?? value?.base ?? 0;
   const percent = Number.isFinite(total) && total > 0 ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : null;
@@ -43,11 +47,61 @@ const StatControl = ({ label, value, onDecrease, onIncrease, accent }) => {
         total: 'text-slate-400',
         track: 'bg-slate-800/70',
         progress: 'bg-slate-300/80',
+        segmentTrack: 'bg-slate-800/70',
+        segmentFill: 'bg-slate-300/80',
         button: `${accent} border border-slate-600/50 shadow-[0_10px_25px_rgba(8,15,40,0.35)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-400/50`,
       };
     }
     return accent;
   }, [accent]);
+
+  const [isEditingTotal, setIsEditingTotal] = useState(false);
+  const safeDisplayTotal = Number.isFinite(total) ? total : '';
+  const [draftTotal, setDraftTotal] = useState(safeDisplayTotal);
+
+  useEffect(() => {
+    if (!isEditingTotal) {
+      setDraftTotal(Number.isFinite(total) ? total : '');
+    }
+  }, [isEditingTotal, total]);
+
+  const handleTotalSave = () => {
+    if (!onSetTotal) {
+      setIsEditingTotal(false);
+      return;
+    }
+    const numeric = Number(draftTotal);
+    if (!Number.isFinite(numeric)) {
+      setDraftTotal(Number.isFinite(total) ? total : '');
+      setIsEditingTotal(false);
+      return;
+    }
+    const sanitized = Math.round(numeric);
+    if (sanitized !== total) {
+      onSetTotal(sanitized);
+    }
+    setIsEditingTotal(false);
+  };
+
+  const handleTotalCancel = () => {
+    setDraftTotal(Number.isFinite(total) ? total : '');
+    setIsEditingTotal(false);
+  };
+
+  const segments = useMemo(() => {
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const segmentCount = Math.min(16, Math.max(1, Math.round(total)));
+    const ratio = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
+    const filledSegments = Math.floor(ratio * segmentCount);
+    const partialProgress = ratio * segmentCount - filledSegments;
+    return Array.from({ length: segmentCount }, (_, index) => {
+      if (index < filledSegments) return 100;
+      if (index === filledSegments && partialProgress > 0 && filledSegments < segmentCount) {
+        return Math.max(0, Math.min(1, partialProgress)) * 100;
+      }
+      return 0;
+    });
+  }, [current, total]);
 
   const handleKeyDown = (event) => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
@@ -75,23 +129,67 @@ const StatControl = ({ label, value, onDecrease, onIncrease, accent }) => {
           theme?.gradient ? `bg-gradient-to-br ${theme.gradient}` : 'bg-gradient-to-br from-white/0 via-white/5 to-white/0'
         }`}
       />
-      <div className="relative z-10 flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className={`text-[11px] uppercase tracking-[0.28em] ${theme?.label || 'text-slate-400'}`}>{label}</p>
-            <div className="flex items-baseline gap-2">
-              <p className={`text-3xl font-semibold leading-none ${theme?.value || 'text-slate-100'}`}>{current}</p>
-              {Number.isFinite(total) && total > 0 ? (
-                <span className={`text-sm font-medium ${theme?.total || 'text-slate-400'}`}>
-                  / {total}
-                </span>
+        <div className="relative z-10 flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className={`text-[11px] uppercase tracking-[0.28em] ${theme?.label || 'text-slate-400'}`}>{label}</p>
+              <div className="flex items-baseline gap-2">
+                <p className={`text-3xl font-semibold leading-none ${theme?.value || 'text-slate-100'}`}>{current}</p>
+                {Number.isFinite(total) && total >= 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTotal(true)}
+                    className={`inline-flex items-center gap-1 rounded-full border border-transparent px-2 py-1 text-sm font-medium transition ${
+                      theme?.total || 'text-slate-400'
+                    } hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/30`}
+                    title="Editar máximo"
+                  >
+                    <span className="opacity-80">/ {total}</span>
+                    {onSetTotal ? <FiEdit3 className="text-xs opacity-60" /> : null}
+                  </button>
+                ) : null}
+              </div>
+              {isEditingTotal && onSetTotal ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={draftTotal}
+                    onChange={(event) => setDraftTotal(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleTotalSave();
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        handleTotalCancel();
+                      }
+                    }}
+                    className="w-24 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTotalSave}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/80 text-white shadow focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    aria-label="Guardar máximo"
+                  >
+                    <FiCheck />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTotalCancel}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-slate-500"
+                    aria-label="Cancelar"
+                  >
+                    <FiX />
+                  </button>
+                </div>
               ) : null}
             </div>
-          </div>
-          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={onDecrease}
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={onDecrease}
               className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 ${
                 theme?.button || ''
               }`}
@@ -111,7 +209,28 @@ const StatControl = ({ label, value, onDecrease, onIncrease, accent }) => {
             </button>
           </div>
         </div>
-        {percent !== null ? (
+        {segments && segments.length > 0 ? (
+          <div
+            className="grid h-3 w-full gap-[3px]"
+            style={{ gridTemplateColumns: `repeat(${segments.length}, minmax(0, 1fr))` }}
+            aria-hidden="true"
+          >
+            {segments.map((fill, index) => (
+              <div
+                // eslint-disable-next-line react/no-array-index-key
+                key={`segment-${index}`}
+                className={`relative overflow-hidden rounded-[2px] ${theme?.segmentTrack || theme?.track || 'bg-slate-800/70'}`}
+              >
+                <div
+                  className={`absolute inset-y-0 left-0 transition-all duration-300 ${
+                    theme?.segmentFill || theme?.progress || 'bg-slate-200/80'
+                  }`}
+                  style={{ width: `${fill}%` }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : percent !== null ? (
           <div className={`h-2 w-full overflow-hidden rounded-full ${theme?.track || 'bg-slate-800/70'}`} aria-hidden="true">
             <div
               className={`h-full rounded-full transition-all duration-300 ${theme?.progress || 'bg-slate-200/80'}`}
@@ -134,6 +253,7 @@ StatControl.propTypes = {
   }),
   onDecrease: PropTypes.func.isRequired,
   onIncrease: PropTypes.func.isRequired,
+  onSetTotal: PropTypes.func,
   accent: PropTypes.oneOfType([
     PropTypes.string,
     PropTypes.shape({
@@ -144,6 +264,8 @@ StatControl.propTypes = {
       total: PropTypes.string,
       track: PropTypes.string,
       progress: PropTypes.string,
+      segmentTrack: PropTypes.string,
+      segmentFill: PropTypes.string,
       button: PropTypes.string,
       chipBorder: PropTypes.string,
       chipBackground: PropTypes.string,
@@ -151,6 +273,79 @@ StatControl.propTypes = {
       chipGlow: PropTypes.string,
     }),
   ]),
+};
+
+StatControl.defaultProps = {
+  onSetTotal: undefined,
+};
+
+const normalizeCatalogText = (value) =>
+  (value || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const normalizeCatalogEntry = (entry, category) => {
+  if (!entry) return null;
+  const rawDetails =
+    (entry.detalles && typeof entry.detalles === 'object' && entry.detalles) ||
+    (entry.details && typeof entry.details === 'object' && entry.details) ||
+    {};
+  const pickDetail = (...keys) => {
+    for (const key of keys) {
+      const value = entry[key];
+      if (value !== undefined && value !== null && `${value}`.toString().trim() !== '') {
+        return value;
+      }
+      const nested = rawDetails[key];
+      if (nested !== undefined && nested !== null && `${nested}`.toString().trim() !== '') {
+        return nested;
+      }
+    }
+    return '';
+  };
+  const traitSource = pickDetail('rasgos', 'traits');
+  const traits = Array.isArray(traitSource)
+    ? traitSource.map((trait) => trait && trait.toString().trim()).filter(Boolean)
+    : typeof traitSource === 'string'
+    ? traitSource
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : [];
+
+  const name = (entry.nombre || entry.name || rawDetails.name || '').toString().trim();
+  if (!name) return null;
+  const damage = pickDetail('dano', 'daño', 'damage', 'poder');
+  const range = pickDetail('alcance', 'range');
+  const cost = pickDetail('consumo', 'cost', 'coste');
+  const defense = pickDetail('defensa', 'defense', 'bloques', 'blocks');
+  const type = pickDetail('tipoDano', 'tipo', 'type');
+  const description = pickDetail('descripcion', 'description');
+  const value = pickDetail('valor', 'value');
+
+  const subtitleParts = [];
+  if (damage && category !== 'armors') subtitleParts.push(`Daño ${damage}`);
+  if (defense && category === 'armors') subtitleParts.push(`Defensa ${defense}`);
+  if (range) subtitleParts.push(range);
+  if (type) subtitleParts.push(type);
+  const subtitle = subtitleParts.join(' · ');
+
+  const searchBundle = normalizeCatalogText(
+    [name, description, traits.join(' '), damage, range, cost, defense, type, value]
+      .filter(Boolean)
+      .join(' ')
+  );
+
+  return {
+    id: entry.id || `${category}-${name}`,
+    name,
+    subtitle,
+    traits,
+    searchText: searchBundle,
+    original: entry,
+  };
 };
 
 const getAccentClass = (key) => {
@@ -162,6 +357,8 @@ const getAccentClass = (key) => {
     total: 'text-slate-400',
     track: 'bg-slate-800/80',
     progress: 'bg-slate-300/80',
+    segmentTrack: 'bg-slate-800/80',
+    segmentFill: 'bg-slate-300/80',
     button:
       'border border-slate-600/60 bg-slate-800/80 text-slate-100 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-slate-400/50 shadow-[0_8px_22px_rgba(15,23,42,0.45)]',
     chipBorder: 'border-slate-600/60',
@@ -178,6 +375,8 @@ const getAccentClass = (key) => {
       total: 'text-rose-200/90',
       track: 'bg-rose-500/20',
       progress: 'bg-rose-400/80',
+      segmentTrack: 'bg-rose-500/20',
+      segmentFill: 'bg-rose-400/80',
       button:
         'border border-rose-400/50 bg-rose-500/30 text-rose-50 hover:bg-rose-500/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-rose-950 focus:ring-rose-300/60 shadow-[0_14px_35px_-18px_rgba(244,63,94,0.7)]',
       chipBorder: 'border-rose-400/50',
@@ -192,6 +391,8 @@ const getAccentClass = (key) => {
       total: 'text-emerald-200/90',
       track: 'bg-emerald-500/20',
       progress: 'bg-emerald-400/80',
+      segmentTrack: 'bg-emerald-500/20',
+      segmentFill: 'bg-emerald-400/80',
       button:
         'border border-emerald-400/50 bg-emerald-500/25 text-emerald-50 hover:bg-emerald-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-emerald-950 focus:ring-emerald-300/60 shadow-[0_14px_35px_-18px_rgba(16,185,129,0.65)]',
       chipBorder: 'border-emerald-400/50',
@@ -206,6 +407,8 @@ const getAccentClass = (key) => {
       total: 'text-purple-200/90',
       track: 'bg-purple-500/20',
       progress: 'bg-purple-400/80',
+      segmentTrack: 'bg-purple-500/20',
+      segmentFill: 'bg-purple-400/80',
       button:
         'border border-purple-400/50 bg-purple-500/25 text-purple-50 hover:bg-purple-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-purple-950 focus:ring-purple-300/60 shadow-[0_14px_35px_-18px_rgba(168,85,247,0.68)]',
       chipBorder: 'border-purple-400/50',
@@ -220,6 +423,8 @@ const getAccentClass = (key) => {
       total: 'text-sky-200/90',
       track: 'bg-sky-500/20',
       progress: 'bg-sky-400/80',
+      segmentTrack: 'bg-sky-500/20',
+      segmentFill: 'bg-sky-400/80',
       button:
         'border border-sky-400/50 bg-sky-500/25 text-sky-50 hover:bg-sky-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-sky-950 focus:ring-sky-300/60 shadow-[0_14px_35px_-18px_rgba(56,189,248,0.62)]',
       chipBorder: 'border-sky-400/50',
@@ -234,6 +439,8 @@ const getAccentClass = (key) => {
       total: 'text-amber-200/90',
       track: 'bg-amber-500/20',
       progress: 'bg-amber-300/80',
+      segmentTrack: 'bg-amber-500/20',
+      segmentFill: 'bg-amber-300/80',
       button:
         'border border-amber-400/50 bg-amber-500/25 text-amber-50 hover:bg-amber-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-amber-950 focus:ring-amber-300/60 shadow-[0_14px_35px_-18px_rgba(251,191,36,0.58)]',
       chipBorder: 'border-amber-400/50',
@@ -242,18 +449,21 @@ const getAccentClass = (key) => {
       chipGlow: 'shadow-[0_0_25px_rgba(251,191,36,0.32)]',
     },
     armadura: {
-      container: 'border-cyan-400/40 bg-cyan-950/40 shadow-[0_25px_60px_-35px_rgba(34,211,238,0.55)]',
-      gradient: 'from-cyan-400/25 via-cyan-400/10 to-transparent',
-      value: 'text-cyan-50',
-      total: 'text-cyan-200/90',
-      track: 'bg-cyan-500/20',
-      progress: 'bg-cyan-300/80',
+      container: 'border-slate-500/50 bg-slate-950/50 shadow-[0_25px_60px_-35px_rgba(148,163,184,0.55)]',
+      gradient: 'from-slate-400/25 via-slate-500/10 to-transparent',
+      label: 'text-slate-300',
+      value: 'text-slate-50',
+      total: 'text-slate-300/90',
+      track: 'bg-slate-700/40',
+      progress: 'bg-slate-200/85',
+      segmentTrack: 'bg-slate-700/45',
+      segmentFill: 'bg-slate-200/85',
       button:
-        'border border-cyan-400/50 bg-cyan-500/25 text-cyan-50 hover:bg-cyan-500/45 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-cyan-950 focus:ring-cyan-300/60 shadow-[0_14px_35px_-18px_rgba(34,211,238,0.62)]',
-      chipBorder: 'border-cyan-400/50',
-      chipBackground: 'bg-cyan-500/15',
-      chipText: 'text-cyan-100',
-      chipGlow: 'shadow-[0_0_25px_rgba(34,211,238,0.32)]',
+        'border border-slate-500/60 bg-slate-700/70 text-slate-100 hover:bg-slate-600/70 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-slate-300/60 shadow-[0_14px_35px_-18px_rgba(148,163,184,0.45)]',
+      chipBorder: 'border-slate-500/60',
+      chipBackground: 'bg-slate-800/60',
+      chipText: 'text-slate-200',
+      chipGlow: 'shadow-[0_0_25px_rgba(148,163,184,0.28)]',
     },
   };
 
@@ -361,6 +571,98 @@ EnemyActions.propTypes = {
   onViewSheet: PropTypes.func.isRequired,
   onDuplicate: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,
+};
+
+const InlineEditableName = ({ value, onSave, className = '' }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || '');
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value || '');
+    }
+  }, [editing, value]);
+
+  const handleSubmit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) {
+      onSave(trimmed);
+    }
+    if (!trimmed) {
+      setDraft(value || '');
+    }
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setDraft(value || '');
+    setEditing(false);
+  };
+
+  return (
+    <div className={`group inline-flex items-center gap-2 ${className}`}>
+      {editing ? (
+        <>
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleSubmit();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                handleCancel();
+              }
+            }}
+            className="max-w-[320px] rounded-lg border border-slate-600 bg-slate-900 px-3 py-1 text-lg font-semibold text-slate-100 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/80 text-white shadow focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            aria-label="Guardar nombre"
+          >
+            <FiCheck />
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-slate-500"
+            aria-label="Cancelar edición"
+          >
+            <FiX />
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="relative whitespace-pre-wrap leading-tight">{value}</span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent bg-white/5 text-slate-200 opacity-0 transition group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            aria-label="Editar nombre"
+            title="Editar nombre"
+          >
+            <FiEdit3 />
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+InlineEditableName.propTypes = {
+  value: PropTypes.string.isRequired,
+  onSave: PropTypes.func.isRequired,
+  className: PropTypes.string,
+};
+
+InlineEditableName.defaultProps = {
+  className: '',
 };
 
 const EQUIPMENT_PRIMARY_STATS = {
@@ -1252,12 +1554,20 @@ const EncounterPanel = ({
   onClearEncounter,
   onOpenSheet,
   onCustomChange,
+  onRenameInstance,
+  onSetStatTotal,
+  onAddEquipment,
+  onRemoveEquipment,
+  weaponCatalog,
+  armorCatalog,
+  powerCatalog,
 }) => {
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const [collapsedInstances, setCollapsedInstances] = useState(() => new Set());
   const [expandedEquipment, setExpandedEquipment] = useState({});
   const [stateModal, setStateModal] = useState(null);
   const [customChangeTarget, setCustomChangeTarget] = useState(null);
+  const [equipmentSearch, setEquipmentSearch] = useState({});
 
   const grouped = useMemo(() => {
     const groups = instances.reduce((acc, instance) => {
@@ -1309,6 +1619,17 @@ const EncounterPanel = ({
     });
     return map;
   }, [grouped]);
+
+  const catalogMap = useMemo(
+    () => ({
+      weapons: (weaponCatalog || []).map((entry) => normalizeCatalogEntry(entry, 'weapons')).filter(Boolean),
+      armors: (armorCatalog || []).map((entry) => normalizeCatalogEntry(entry, 'armors')).filter(Boolean),
+      powers: (powerCatalog || []).map((entry) => normalizeCatalogEntry(entry, 'powers')).filter(Boolean),
+    }),
+    [armorCatalog, powerCatalog, weaponCatalog]
+  );
+
+  const getEquipmentSearchKey = (instanceId, category) => `${instanceId}-${category}`;
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((prev) => {
@@ -1515,15 +1836,6 @@ const EncounterPanel = ({
     );
   }
 
-  if (instances.length === 0) {
-    return (
-      <div className="mt-10 text-center text-gray-400">
-        <p className="text-lg">Aún no hay enemigos activos en el encuentro.</p>
-        <p className="text-sm text-gray-500 mt-2">Añade enemigos desde el catálogo para gestionarlos desde aquí.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-800/70 border border-gray-700 rounded-xl p-4">
@@ -1678,9 +1990,11 @@ const EncounterPanel = ({
                             <h3 className={`text-3xl font-semibold tracking-tight ${instanceTheme.text.main}`}>
                               <span className="relative inline-flex items-center gap-3">
                                 <span className="absolute inset-x-0 bottom-0 h-2 rounded-full bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-50" />
-                                <span className="relative whitespace-pre-wrap leading-tight">
-                                  {instance.displayName}
-                                </span>
+                                <InlineEditableName
+                                  value={instance.displayName}
+                                  onSave={(next) => onRenameInstance(instance.id, next)}
+                                  className="relative whitespace-pre-wrap leading-tight"
+                                />
                               </span>
                             </h3>
                           </div>
@@ -1738,6 +2052,7 @@ const EncounterPanel = ({
                                   value={stat}
                                   onDecrease={() => onAdjustStat(instance.id, key, -1)}
                                   onIncrease={() => onAdjustStat(instance.id, key, 1)}
+                                  onSetTotal={(next) => onSetStatTotal(instance.id, key, next)}
                                   accent={getAccentClass(key)}
                                 />
                               );
@@ -1784,8 +2099,6 @@ const EncounterPanel = ({
                           <div className="space-y-6">
                             {['weapons', 'armors', 'powers'].map((key) => {
                               const items = instance.equipment?.[key] || [];
-                              if (items.length === 0) return null;
-
                               const normalizedItems = items.map((item) => {
                                 const details = item.details || {};
                                 const quickStats = getEquipmentPrimaryStats(key, details);
@@ -1809,6 +2122,33 @@ const EncounterPanel = ({
                               const sectionId = equipmentExpansionKey(instance.id, key);
                               const isExpanded = isEquipmentExpanded(instance.id, key);
                               const CategoryIcon = CATEGORY_ICONS[key] || FiInfo;
+                              const searchKey = getEquipmentSearchKey(instance.id, key);
+                              const searchValue = equipmentSearch[searchKey] || '';
+                              const normalizedSearch = normalizeCatalogText(searchValue);
+                              const tokens = normalizedSearch.split(/\s+/).filter(Boolean);
+                              const catalog = catalogMap[key] || [];
+                              const suggestions = tokens.length
+                                ? catalog
+                                    .filter((entry) =>
+                                      tokens.every((token) => entry.searchText.includes(token))
+                                    )
+                                    .filter(
+                                      (entry) =>
+                                        !items.some(
+                                          (existing) =>
+                                            (existing.name || '')
+                                              .toString()
+                                              .toLowerCase()
+                                              .trim() === entry.name.toLowerCase()
+                                        )
+                                    )
+                                    .slice(0, 5)
+                                : [];
+                              const handleSuggestionAdd = (suggestion) => {
+                                if (!suggestion) return;
+                                onAddEquipment(instance.id, key, suggestion.original);
+                                setEquipmentSearch((prev) => ({ ...prev, [searchKey]: '' }));
+                              };
 
                               return (
                                 <div
@@ -1894,22 +2234,115 @@ const EncounterPanel = ({
                                   >
                                     <div className="overflow-hidden">
                                       <div className="space-y-6 px-6 py-6">
-                                        {normalizedItems.map((itemData) => {
-                                          const toggleTitle = itemData.used ? 'Marcar como disponible' : 'Marcar como usado';
-                                          return (
-                                            <div
-                                              key={itemData.id}
-                                              className={`relative overflow-hidden rounded-3xl border px-6 py-6 shadow-xl transition ${
-                                                itemData.used
-                                                  ? 'border-amber-300/70 bg-amber-500/15 text-amber-50 shadow-amber-500/20'
-                                                  : 'border-slate-700/70 bg-slate-950/55 text-slate-100 shadow-slate-950/40'
-                                              }`}
-                                            >
-                                              <button
-                                                type="button"
-                                                onClick={() => onToggleEquipment(instance.id, key, itemData.id)}
-                                                className={`absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border text-lg transition ${
+                                        <div className="space-y-3">
+                                          <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
+                                            Buscar {CATEGORY_LABELS[key].toLowerCase()}
+                                            <div className="relative">
+                                              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                              <input
+                                                type="text"
+                                                value={searchValue}
+                                                onChange={(event) =>
+                                                  setEquipmentSearch((prev) => ({
+                                                    ...prev,
+                                                    [searchKey]: event.target.value,
+                                                  }))
+                                                }
+                                                onKeyDown={(event) => {
+                                                  if (event.key === 'Enter' && suggestions[0]) {
+                                                    event.preventDefault();
+                                                    handleSuggestionAdd(suggestions[0]);
+                                                  }
+                                                  if (event.key === 'Escape') {
+                                                    setEquipmentSearch((prev) => ({
+                                                      ...prev,
+                                                      [searchKey]: '',
+                                                    }));
+                                                  }
+                                                }}
+                                                placeholder={`Nombre, rasgo o estadística`}
+                                                className="w-full rounded-xl border border-slate-700 bg-slate-900/80 py-2 pl-9 pr-10 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                              />
+                                              {searchValue ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setEquipmentSearch((prev) => ({
+                                                      ...prev,
+                                                      [searchKey]: '',
+                                                    }))
+                                                  }
+                                                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-slate-800/80 p-1 text-slate-300 transition hover:bg-slate-700/80"
+                                                  aria-label="Limpiar búsqueda"
+                                                >
+                                                  <FiX />
+                                                </button>
+                                              ) : null}
+                                            </div>
+                                          </label>
+                                          {suggestions.length > 0 ? (
+                                            <div className="space-y-2">
+                                              {suggestions.map((suggestion) => (
+                                                <button
+                                                  type="button"
+                                                  key={suggestion.id}
+                                                  onClick={() => handleSuggestionAdd(suggestion)}
+                                                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-left text-sm text-emerald-100 shadow hover:bg-emerald-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                                                >
+                                                  <span>
+                                                    <span className="block text-sm font-semibold">{suggestion.name}</span>
+                                                    {suggestion.subtitle ? (
+                                                      <span className="block text-[11px] uppercase tracking-[0.28em] text-emerald-200/80">
+                                                        {suggestion.subtitle}
+                                                      </span>
+                                                    ) : null}
+                                                    {suggestion.traits.length > 0 ? (
+                                                      <span className="mt-1 flex flex-wrap gap-1 text-[10px] uppercase tracking-[0.28em] text-emerald-200/70">
+                                                        {suggestion.traits.map((trait) => (
+                                                          <span key={`${suggestion.id}-${trait}`} className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5">
+                                                            {trait}
+                                                          </span>
+                                                        ))}
+                                                      </span>
+                                                    ) : null}
+                                                  </span>
+                                                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-lg text-emerald-100">
+                                                    <FiPlus />
+                                                  </span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          ) : searchValue ? (
+                                            <p className="text-xs text-slate-500">Sin coincidencias en el catálogo.</p>
+                                          ) : null}
+                                        </div>
+                                        {normalizedItems.length > 0 ? (
+                                          normalizedItems.map((itemData) => {
+                                            const toggleTitle = itemData.used ? 'Marcar como disponible' : 'Marcar como usado';
+                                            return (
+                                              <div
+                                                key={itemData.id}
+                                                className={`relative overflow-hidden rounded-3xl border px-6 py-6 shadow-xl transition ${
                                                   itemData.used
+                                                    ? 'border-amber-300/70 bg-amber-500/15 text-amber-50 shadow-amber-500/20'
+                                                    : 'border-slate-700/70 bg-slate-950/55 text-slate-100 shadow-slate-950/40'
+                                                }`}
+                                              >
+                                                <div className="absolute left-5 top-5 flex items-center gap-2">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => onRemoveEquipment(instance.id, key, itemData.id)}
+                                                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/70 text-slate-300 transition hover:border-rose-400/60 hover:bg-rose-500/20 hover:text-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+                                                    title="Quitar del enemigo"
+                                                  >
+                                                    <FiTrash2 />
+                                                  </button>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => onToggleEquipment(instance.id, key, itemData.id)}
+                                                  className={`absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border text-lg transition ${
+                                                    itemData.used
                                                     ? 'border-amber-300/70 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30'
                                                     : 'border-slate-600/70 bg-slate-950/70 text-slate-300 hover:border-slate-500 hover:bg-slate-900/70 hover:text-slate-100'
                                                 }`}
@@ -1989,10 +2422,15 @@ const EncounterPanel = ({
                                                     </div>
                                                   )}
                                                 </div>
+                                                </div>
                                               </div>
-                                            </div>
-                                          );
-                                        })}
+                                            );
+                                          })
+                                        ) : (
+                                          <div className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-950/40 p-6 text-center text-sm text-slate-400">
+                                            Ningún ítem equipado todavía.
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -2061,6 +2499,19 @@ EncounterPanel.propTypes = {
   onClearEncounter: PropTypes.func.isRequired,
   onOpenSheet: PropTypes.func.isRequired,
   onCustomChange: PropTypes.func.isRequired,
+  onRenameInstance: PropTypes.func.isRequired,
+  onSetStatTotal: PropTypes.func.isRequired,
+  onAddEquipment: PropTypes.func.isRequired,
+  onRemoveEquipment: PropTypes.func.isRequired,
+  weaponCatalog: PropTypes.arrayOf(PropTypes.object),
+  armorCatalog: PropTypes.arrayOf(PropTypes.object),
+  powerCatalog: PropTypes.arrayOf(PropTypes.object),
+};
+
+EncounterPanel.defaultProps = {
+  weaponCatalog: [],
+  armorCatalog: [],
+  powerCatalog: [],
 };
 
 export default EncounterPanel;
