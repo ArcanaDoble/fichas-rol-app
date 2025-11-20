@@ -20,12 +20,17 @@ import {
   FiTrash2,
   FiSliders,
 } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
 import Boton from './Boton';
 import Modal from './Modal';
 import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 import { convertNumericStringToIcons } from '../utils/iconConversions';
 import { db, storage } from '../firebase';
+import Sidebar from './Sidebar';
+import ProgressionView from './ProgressionView';
+import LoadoutView from './LoadoutView';
+import HexIcon from './HexIcon';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -468,9 +473,8 @@ const EditableField = ({
           className={`group inline-flex w-full items-center gap-2 text-left transition hover:text-slate-100/90 ${displayClassName}`}
         >
           <span
-            className={`${
-              textClassName || ''
-            } ${isPlaceholder ? 'text-slate-500/70 italic' : ''}`.trim()}
+            className={`${textClassName || ''
+              } ${isPlaceholder ? 'text-slate-500/70 italic' : ''}`.trim()}
           >
             {displayValue}
           </span>
@@ -532,10 +536,10 @@ const ensureClassDefaults = (classItem) => {
     );
     const physicalLoad = toDisplayString(
       weapon.physicalLoad ??
-        weapon.weight ??
-        weapon.cargaFisica ??
-        weapon.carga ??
-        '',
+      weapon.weight ??
+      weapon.cargaFisica ??
+      weapon.carga ??
+      '',
     );
     const mentalLoad = toDisplayString(
       weapon.mentalLoad ?? weapon.cargaMental ?? '',
@@ -568,10 +572,10 @@ const ensureClassDefaults = (classItem) => {
   merged.equipment.armor = (merged.equipment.armor || []).map((armor) => {
     const physicalLoad = toDisplayString(
       armor.physicalLoad ??
-        armor.weight ??
-        armor.cargaFisica ??
-        armor.carga ??
-        '',
+      armor.weight ??
+      armor.cargaFisica ??
+      armor.carga ??
+      '',
     );
     const mentalLoad = toDisplayString(armor.mentalLoad ?? armor.cargaMental ?? '');
     const traitsValue = joinTraits(armor.traits || armor.rasgos || '');
@@ -1110,11 +1114,10 @@ const RatingStars = ({ rating, onChange, size = 'md' }) => {
         const filled = index < rating;
         const star = (
           <FiStar
-            className={`${starSize} transition-transform transition-colors ${
-              filled
-                ? 'text-yellow-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]'
-                : 'text-slate-600'
-            }`}
+            className={`${starSize} transition-transform transition-colors ${filled
+              ? 'text-yellow-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]'
+              : 'text-slate-600'
+              }`}
           />
         );
 
@@ -1134,6 +1137,139 @@ const RatingStars = ({ rating, onChange, size = 'md' }) => {
           </button>
         );
       })}
+    </div>
+  );
+};
+
+// Editable Text Component for inline editing
+const EditableText = ({ value, onChange, className = '', multiline = false, placeholder = 'Click para editar' }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value || '');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    setTempValue(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      if (!multiline) {
+        inputRef.current.select();
+      }
+    }
+  }, [isEditing, multiline]);
+
+  const handleSave = () => {
+    onChange(tempValue);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !multiline) {
+      e.preventDefault();
+      handleSave();
+    }
+    if (e.key === 'Escape') {
+      setTempValue(value || '');
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return multiline ? (
+      <textarea
+        ref={inputRef}
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={`${className} bg-slate-900/50 border border-[#c8aa6e]/50 rounded px-2 py-1 focus:outline-none focus:border-[#c8aa6e]`}
+        rows={3}
+      />
+    ) : (
+      <input
+        ref={inputRef}
+        type="text"
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={`${className} bg-slate-900/50 border border-[#c8aa6e]/50 rounded px-2 py-1 focus:outline-none focus:border-[#c8aa6e]`}
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className={`${className} cursor-pointer hover:opacity-80 transition-opacity group relative`}
+      title="Click para editar"
+    >
+      {value || placeholder}
+      <span className="ml-2 opacity-0 group-hover:opacity-50 text-xs">✏️</span>
+    </div>
+  );
+};
+
+const DiceSelector = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const diceOptions = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-center w-[60px] h-[60px] transition-transform hover:scale-110 focus:outline-none"
+      >
+        <img
+          src={`/dados/${value.toUpperCase()}.png`}
+          alt={value}
+          className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(200,170,110,0.5)]"
+        />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-3 grid grid-cols-3 gap-3 w-[180px] backdrop-blur-md"
+          >
+            {diceOptions.map((dice) => (
+              <button
+                key={dice}
+                onClick={() => {
+                  onChange(dice);
+                  setIsOpen(false);
+                }}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
+              >
+                <div className="w-8 h-8 mb-1 transition-transform group-hover:scale-110">
+                  <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
+                  {dice.toUpperCase()}
+                </span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1170,8 +1306,15 @@ const ClassList = ({
     armor: '',
     abilities: '',
   });
+  const [saveButtonState, setSaveButtonState] = useState('idle'); // 'idle', 'saving', 'success', 'error'
 
   const fileInputRef = useRef(null);
+
+  // Detectar si hay cambios entre editingClass y selectedClass
+  const hasUnsavedChanges = useMemo(() => {
+    if (!editingClass || !selectedClass) return false;
+    return JSON.stringify(editingClass) !== JSON.stringify(selectedClass);
+  }, [editingClass, selectedClass]);
 
   const equipmentCatalog = useMemo(
     () => ({
@@ -1405,6 +1548,76 @@ const ClassList = ({
     });
   };
 
+  // Funciones de actualización para campos editables
+  const handleUpdateClassField = (field, value) => {
+    updateEditingClass((draft) => {
+      draft[field] = value;
+    });
+  };
+
+  const handleUpdateLevel = (levelIndex, field, value) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[levelIndex]) return;
+      levels[levelIndex][field] = value;
+      draft.classLevels = levels;
+    });
+  };
+
+  const handleAddEquipment = (payload, category) => {
+    if (!payload) return;
+
+    // Determinar el tipo de ítem basado en la categoría del buscador
+    let itemType = 'general';
+    if (category === 'weapons') itemType = 'weapon';
+    else if (category === 'armor') itemType = 'armor';
+    else if (category === 'abilities') itemType = 'ability';
+
+    // Normalizar el item para asegurar que tiene todas las propiedades necesarias
+    const normalized = {
+      name: payload.name || 'Item sin nombre',
+      category: payload.category || 'General',
+      itemType: itemType, // Campo nuevo para identificar el tipo de ítem
+      damage: payload.damage || payload.dano || '',
+      range: payload.range || payload.alcance || '',
+      consumption: payload.consumption || payload.consumo || '',
+      physicalLoad: payload.physicalLoad || payload.cargaFisica || '',
+      mentalLoad: payload.mentalLoad || payload.cargaMental || '',
+      defense: payload.defense || payload.defensa || '',
+      traits: payload.traits || payload.rasgos || payload.trait || '',
+      rareza: payload.rareza || payload.rarity || '',
+      description: payload.description || payload.descripcion || '',
+      body: payload.body || '',
+      mind: payload.mind || '',
+    };
+
+    updateEditingClass((draft) => {
+      // Asegurar que equipment es un objeto con las categorías correctas
+      if (!draft.equipment || Array.isArray(draft.equipment)) {
+        draft.equipment = deepClone(defaultEquipment);
+      }
+
+      // Usar la categoría proporcionada o 'weapons' por defecto si no coincide
+      const targetCategory = ['weapons', 'armor', 'abilities'].includes(category) ? category : 'weapons';
+
+      if (!draft.equipment[targetCategory]) {
+        draft.equipment[targetCategory] = [];
+      }
+
+      draft.equipment[targetCategory].push(normalized);
+    });
+  };
+
+  const handleRemoveEquipment = (index, category) => {
+    updateEditingClass((draft) => {
+      if (!draft.equipment || Array.isArray(draft.equipment)) return;
+
+      if (category && draft.equipment[category]) {
+        draft.equipment[category].splice(index, 1);
+      }
+    });
+  };
+
   const handleEquipmentSearchChange = (category, value) => {
     setEquipmentSearchTerms((prev) => ({ ...prev, [category]: value }));
   };
@@ -1604,11 +1817,22 @@ const ClassList = ({
     });
   };
 
-  const toggleLevelCompleted = (index) => {
+  const toggleLevelCompleted = (levelIndex) => {
     updateEditingClass((draft) => {
       const levels = draft.classLevels || [];
-      if (!levels[index]) return;
-      levels[index].completed = !levels[index].completed;
+      // Asegurarse de que existen niveles hasta el índice deseado
+      while (levels.length <= levelIndex) {
+        levels.push({ title: `Nivel ${levels.length + 1}`, description: '', acquired: false });
+      }
+
+      // Toggle del estado acquired
+      const isAcquired = !levels[levelIndex].acquired;
+      levels[levelIndex].acquired = isAcquired;
+
+      // Contar cuántos niveles están marcados como acquired y actualizar el nivel actual
+      const acquiredCount = levels.filter(l => l.acquired).length;
+      draft.level = acquiredCount;
+
       draft.classLevels = levels;
     });
   };
@@ -1714,67 +1938,56 @@ const ClassList = ({
     });
   };
 
-  const handleSaveChanges = useCallback(async () => {
+  const handleSaveChanges = async () => {
     if (!editingClass) return;
 
-    let sanitized = ensureClassDefaults(editingClass);
-    let classId = sanitized.id?.toString().trim();
-
-    if (!classId) {
-      classId = slugifyId(sanitized.name);
-      if (!classId) {
-        setSaveStatus({
-          type: 'error',
-          message: 'La clase necesita un nombre o identificador antes de guardarse.',
-        });
-        return;
-      }
-      sanitized.id = classId;
-    }
-
-    setIsSaving(true);
-    setSaveStatus(null);
+    setSaveButtonState('saving');
 
     try {
+      // Preparar datos para Firebase
+      const sanitized = ensureClassDefaults(editingClass);
+      let classId = sanitized.id?.toString().trim();
+
+      if (!classId) {
+        classId = slugifyId(sanitized.name);
+        if (!classId) {
+          console.error('La clase necesita un nombre o identificador');
+          setSaveButtonState('error');
+          setTimeout(() => setSaveButtonState('idle'), 2000);
+          return;
+        }
+        sanitized.id = classId;
+      }
+
+      // Normalizar imagen
       sanitized.image = normalizeImageValue(sanitized.image);
-      sanitized = pruneUndefined(sanitized);
+      const cleanedData = pruneUndefined(sanitized);
 
-      await setDoc(doc(db, 'classes', classId), sanitized, { merge: true });
+      // Guardar en Firebase
+      await setDoc(doc(db, 'classes', classId), cleanedData, { merge: true });
 
+      // Actualizar el estado principal de clases
       setClasses((prevClasses) => {
-        const exists = prevClasses.some((classItem) => classItem.id === sanitized.id);
+        const exists = prevClasses.some((c) => c.id === sanitized.id);
         if (exists) {
-          return prevClasses.map((classItem) =>
-            classItem.id === sanitized.id ? sanitized : classItem,
-          );
+          return prevClasses.map((c) => (c.id === sanitized.id ? sanitized : c));
         }
         return [...prevClasses, sanitized];
       });
 
+      // Actualizar selectedClass para que hasUnsavedChanges sea false
       setSelectedClass(sanitized);
       setEditingClass(deepClone(sanitized));
-      const targetLimit = Math.max(levelSliderLimit, (sanitized.classLevels?.length || 0) + 2);
-      setLevelSliderLimit(targetLimit);
-      setSaveStatus({ type: 'success', message: 'Cambios guardados en Firebase.' });
+
+      // Mostrar éxito
+      setSaveButtonState('success');
+      setTimeout(() => setSaveButtonState('idle'), 2000);
     } catch (error) {
-      console.error('Error al guardar la clase en Firebase', error);
-      setSaveStatus({
-        type: 'error',
-        message: 'No se pudo guardar en Firebase. Intenta de nuevo.',
-      });
-    } finally {
-      setIsSaving(false);
+      console.error('Error al guardar en Firebase:', error);
+      setSaveButtonState('error');
+      setTimeout(() => setSaveButtonState('idle'), 2000);
     }
-  }, [
-    editingClass,
-    levelSliderLimit,
-    setClasses,
-    setEditingClass,
-    setIsSaving,
-    setLevelSliderLimit,
-    setSaveStatus,
-    setSelectedClass,
-  ]);
+  };
 
   const handleDiscardChanges = () => {
     setSaveStatus(null);
@@ -1905,21 +2118,19 @@ const ClassList = ({
                 return (
                   <div
                     key={`inspiration-${index}`}
-                    className={`group rounded-2xl border p-4 shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)] transition ${
-                      completed
-                        ? 'border-emerald-400/50 bg-emerald-500/10 ring-1 ring-emerald-400/40'
-                        : 'border-amber-400/30 bg-amber-400/10'
-                    }`}
+                    className={`group rounded-2xl border p-4 shadow-[0_10px_25px_-15px_rgba(251,191,36,0.6)] transition ${completed
+                      ? 'border-emerald-400/50 bg-emerald-500/10 ring-1 ring-emerald-400/40'
+                      : 'border-amber-400/30 bg-amber-400/10'
+                      }`}
                   >
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
                         onClick={() => toggleInspirationCompleted(index)}
-                        className={`mt-1 rounded-full border border-transparent p-2 transition ${
-                          completed
-                            ? 'bg-emerald-500/20 text-emerald-200 hover:text-emerald-100'
-                            : 'bg-slate-900/50 text-amber-200 hover:text-amber-100'
-                        }`}
+                        className={`mt-1 rounded-full border border-transparent p-2 transition ${completed
+                          ? 'bg-emerald-500/20 text-emerald-200 hover:text-emerald-100'
+                          : 'bg-slate-900/50 text-amber-200 hover:text-amber-100'
+                          }`}
                         aria-label={completed ? 'Marcar hito como pendiente' : 'Marcar hito como completado'}
                       >
                         {completed ? (
@@ -1934,9 +2145,8 @@ const ClassList = ({
                           onChange={(value) => handleInspirationFieldChange(index, 'title', value)}
                           placeholder="Título del hito"
                           displayClassName="rounded-2xl border border-transparent bg-slate-900/40 px-3 py-2"
-                          textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${
-                            completed ? 'text-emerald-100' : 'text-amber-100'
-                          }`}
+                          textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${completed ? 'text-emerald-100' : 'text-amber-100'
+                            }`}
                         />
                         <EditableField
                           value={entry.description}
@@ -2043,11 +2253,10 @@ const ClassList = ({
                           <button
                             type="button"
                             onClick={() => toggleLevelCompleted(index)}
-                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm transition ${
-                              isCompleted
-                                ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300'
-                                : 'border-indigo-400/40 bg-indigo-500/10 text-indigo-200 hover:border-emerald-300 hover:text-emerald-200'
-                            }`}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm transition ${isCompleted
+                              ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300'
+                              : 'border-indigo-400/40 bg-indigo-500/10 text-indigo-200 hover:border-emerald-300 hover:text-emerald-200'
+                              }`}
                             aria-pressed={isCompleted}
                             aria-label={
                               isCompleted
@@ -2066,11 +2275,10 @@ const ClassList = ({
                             onChange={(value) => handleLevelFieldChange(index, 'title', value)}
                             placeholder={`Nivel ${index + 1} — Define el avance`}
                             displayClassName="flex-1 rounded-2xl border border-transparent bg-indigo-500/10 px-3 py-2"
-                            textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${
-                              isCompleted
-                                ? 'text-emerald-100 line-through decoration-emerald-300/60 decoration-2'
-                                : 'text-indigo-100'
-                            }`}
+                            textClassName={`text-sm font-semibold uppercase tracking-[0.3em] ${isCompleted
+                              ? 'text-emerald-100 line-through decoration-emerald-300/60 decoration-2'
+                              : 'text-indigo-100'
+                              }`}
                           />
                         </div>
                         <button
@@ -2088,9 +2296,8 @@ const ClassList = ({
                         multiline
                         placeholder="Detalla el beneficio de alcanzar este nivel."
                         displayClassName="mt-3 rounded-2xl border border-indigo-400/30 bg-indigo-950/40 px-3 py-3"
-                        textClassName={`text-sm leading-relaxed ${
-                          isCompleted ? 'text-emerald-100/90' : 'text-indigo-50/90'
-                        }`}
+                        textClassName={`text-sm leading-relaxed ${isCompleted ? 'text-emerald-100/90' : 'text-indigo-50/90'
+                          }`}
                         inputClassName="bg-indigo-950/40 border-indigo-400/30"
                       />
                     </div>
@@ -2159,11 +2366,11 @@ const ClassList = ({
           const catalogMatches =
             normalizedSearch.length > 0
               ? catalog.filter((entry) =>
-                  [entry.name, entry.category, entry.preview]
-                    .join(' ')
-                    .toLowerCase()
-                    .includes(normalizedSearch)
-                )
+                [entry.name, entry.category, entry.preview]
+                  .join(' ')
+                  .toLowerCase()
+                  .includes(normalizedSearch)
+              )
               : [];
           const limitedMatches = catalogMatches.slice(0, 8);
 
@@ -2255,49 +2462,49 @@ const ClassList = ({
                       key={`${category}-${index}`}
                       className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4"
                     >
-                    <div className="flex items-start justify-between gap-3">
-                      <EditableField
-                        value={item.name}
-                        onChange={(value) => handleEquipmentChange(category, index, 'name', value)}
-                        placeholder={`Nombre de ${title.toLowerCase()}`}
-                        displayClassName="flex-1 rounded-2xl border border-transparent bg-slate-900/50 px-3 py-2"
-                        textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-slate-100"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeEquipmentItem(category, index)}
-                        className="rounded-full border border-transparent p-2 text-slate-500 transition hover:border-slate-600 hover:text-rose-300"
-                        aria-label={`Eliminar ${title.toLowerCase()}`}
-                      >
-                        <FiTrash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-start justify-between gap-3">
+                        <EditableField
+                          value={item.name}
+                          onChange={(value) => handleEquipmentChange(category, index, 'name', value)}
+                          placeholder={`Nombre de ${title.toLowerCase()}`}
+                          displayClassName="flex-1 rounded-2xl border border-transparent bg-slate-900/50 px-3 py-2"
+                          textClassName="text-sm font-semibold uppercase tracking-[0.3em] text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeEquipmentItem(category, index)}
+                          className="rounded-full border border-transparent p-2 text-slate-500 transition hover:border-slate-600 hover:text-rose-300"
+                          aria-label={`Eliminar ${title.toLowerCase()}`}
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {fields.map(({ key, label, placeholder: fieldPlaceholder }) => (
+                          <div key={`${category}-${index}-${key}`} className="space-y-2">
+                            <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{label}</div>
+                            <EditableField
+                              value={item[key]}
+                              onChange={(value) => handleEquipmentChange(category, index, key, value)}
+                              placeholder={fieldPlaceholder}
+                              displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                              textClassName="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Descripción</div>
+                        <EditableField
+                          value={item.description}
+                          onChange={(value) => handleEquipmentChange(category, index, 'description', value)}
+                          multiline
+                          placeholder="Describe rasgos o efectos relevantes."
+                          displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
+                          textClassName="text-sm leading-relaxed text-slate-300"
+                        />
+                      </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {fields.map(({ key, label, placeholder: fieldPlaceholder }) => (
-                        <div key={`${category}-${index}-${key}`} className="space-y-2">
-                          <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">{label}</div>
-                          <EditableField
-                            value={item[key]}
-                            onChange={(value) => handleEquipmentChange(category, index, key, value)}
-                            placeholder={fieldPlaceholder}
-                            displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                            textClassName="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Descripción</div>
-                      <EditableField
-                        value={item.description}
-                        onChange={(value) => handleEquipmentChange(category, index, 'description', value)}
-                        multiline
-                        placeholder="Describe rasgos o efectos relevantes."
-                        displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                        textClassName="text-sm leading-relaxed text-slate-300"
-                      />
-                    </div>
-                  </div>
                   ))}
                 </div>
               ) : (
@@ -2315,9 +2522,8 @@ const ClassList = ({
           const renderStatRow = (label, value, { statType, placeholder, labelClassName, valueClassName } = {}) => (
             <div className="flex items-start justify-between gap-3">
               <span
-                className={`text-[0.6rem] uppercase tracking-[0.35em] ${
-                  labelClassName || config.statLabelClass
-                }`}
+                className={`text-[0.6rem] uppercase tracking-[0.35em] ${labelClassName || config.statLabelClass
+                  }`}
               >
                 {label}
               </span>
@@ -2377,10 +2583,10 @@ const ClassList = ({
                     const rarityColor = item.rareza ? rarityColorMap?.[item.rareza] : null;
                     const rarityBadgeStyle = rarityColor
                       ? {
-                          color: rarityColor,
-                          borderColor: hexToRgba(rarityColor, 0.55),
-                          backgroundColor: hexToRgba(rarityColor, 0.18),
-                        }
+                        color: rarityColor,
+                        borderColor: hexToRgba(rarityColor, 0.55),
+                        backgroundColor: hexToRgba(rarityColor, 0.18),
+                      }
                       : undefined;
 
                     const palette = config.palette || {};
@@ -2769,305 +2975,267 @@ const ClassList = ({
       return null;
     }
 
-    return (
-      <div className="flex min-h-0 flex-col gap-8">
-        <div className="grid min-h-0 gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
-          <div className="flex min-h-0 flex-col gap-8">
-            <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-8 shadow-[0_20px_45px_-30px_rgba(56,189,248,0.65)]">
-              <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-3">
-                    <div className="inline-flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-slate-300">
-                      <span className="text-sky-300">Clase</span>
-                      <span className="text-slate-600">/</span>
-                      <span>Detalle</span>
-                    </div>
-                    <div className="space-y-2">
-                      <EditableField
-                        value={editingClass.name}
-                        onChange={(value) => handleGeneralFieldChange('name', value)}
-                        placeholder="Nombre de la clase"
-                        displayClassName="block rounded-2xl border border-transparent px-3 py-2"
-                        textClassName="text-3xl font-bold uppercase tracking-[0.2em] text-white drop-shadow-[0_0_25px_rgba(56,189,248,0.45)]"
-                        inputClassName="bg-slate-900/80 text-2xl font-bold uppercase tracking-[0.2em]"
-                        autoSelect={false}
-                      />
-                      <EditableField
-                        value={editingClass.subtitle}
-                        onChange={(value) => handleGeneralFieldChange('subtitle', value)}
-                        placeholder="Define un subtítulo inspirador"
-                        displayClassName="block"
-                        textClassName="mt-1 text-xs uppercase tracking-[0.35em] text-slate-500"
-                        inputClassName="bg-slate-900/70 text-xs uppercase tracking-[0.35em]"
-                        autoSelect={false}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-3 text-right">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs uppercase tracking-[0.35em] text-slate-300">
-                      <span>Valoración</span>
-                      <RatingStars rating={editingClass.rating || 0} onChange={handleRatingChange} />
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <label className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-500">Estado</label>
-                      <div className="relative">
-                        <select
-                          value={editingClass.status || 'available'}
-                          onChange={(event) => handleGeneralFieldChange('status', event.target.value)}
-                          className="appearance-none rounded-full border border-slate-700/60 bg-slate-900/70 px-4 py-1.5 pr-10 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-                        >
-                          {Object.entries(statusConfig).map(([value, config]) => (
-                            <option key={`status-${value}`} value={value}>
-                              {config.label}
-                            </option>
-                          ))}
-                        </select>
-                        <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                      </div>
-                    </div>
-                    {statusConfig[editingClass.status] ? (
-                      <div className={`inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${statusConfig[editingClass.status].badgeClass}`}>
-                        {editingClass.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
-                        <span>{statusConfig[editingClass.status].label}</span>
-                      </div>
-                    ) : (
-                      editingClass.status && (
-                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
-                          {editingClass.status}
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-                <EditableField
-                  value={editingClass.description}
-                  onChange={(value) => handleGeneralFieldChange('description', value)}
-                  multiline
-                  placeholder="Describe a la clase para presentarla al grupo."
-                  displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-3"
-                  textClassName="block text-sm leading-relaxed text-slate-300 lg:max-w-3xl"
-                />
-                <div className="flex flex-wrap gap-2">
-                  {editingClass.tags && editingClass.tags.length > 0 ? (
-                    editingClass.tags.map((tag, index) => (
-                      <div
-                        key={`tag-${index}`}
-                        className="group inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1"
-                      >
-                        <EditableField
-                          value={tag}
-                          onChange={(value) => handleTagChange(index, value)}
-                          placeholder="Añade un rasgo"
-                          displayClassName="inline-flex items-center gap-2"
-                          textClassName="text-xs font-semibold uppercase tracking-[0.3em] text-sky-100"
-                          inputClassName="text-xs font-semibold uppercase tracking-[0.3em] text-slate-900"
-                          autoSelect={false}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTag(index)}
-                          className="rounded-full bg-slate-900/60 p-1 text-slate-400 transition hover:bg-slate-800/80 hover:text-slate-100"
-                          aria-label="Eliminar etiqueta"
-                        >
-                          <FiX className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
-                      Aún no hay etiquetas asignadas. Añade algunas para identificarlas rápidamente.
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleAddTag}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200"
-                  >
-                    <FiPlus className="h-4 w-4" />
-                    Añadir etiqueta
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-6 lg:grid-cols-[0.38fr_1fr] xl:grid-cols-[0.32fr_1fr]">
-              <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                <div className="text-xs uppercase tracking-[0.35em] text-slate-500">Secciones</div>
-                <div className="mt-4 flex flex-col gap-3">
-                  {detailTabs.map((tab) => {
-                    const isActive = tab.id === activeDetailTab;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveDetailTab(tab.id)}
-                        className={`group flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-[0.7rem] font-semibold uppercase tracking-[0.3em] transition ${
-                          isActive
-                            ? 'border-sky-400/60 bg-sky-500/10 text-sky-100 shadow-[0_0_25px_rgba(56,189,248,0.35)]'
-                            : 'border-slate-700/60 bg-slate-900/60 text-slate-400 hover:border-slate-500/60 hover:text-slate-200'
-                        }`}
-                      >
-                        <span className="flex-1">{tab.label}</span>
-                        <FiArrowRight
-                          className={`h-4 w-4 transition-transform ${
-                            isActive ? 'translate-x-1 text-sky-200' : 'text-slate-500 group-hover:translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-6 shadow-inner shadow-slate-900/50">
-                <div className="max-h-[520px] overflow-y-auto pr-3 md:max-h-[620px] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.4)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-500/40 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-900/40">
-                  <div className="space-y-6 pb-2">{renderDetailContent()}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+    // Mapping editingClass to the structure expected by the new design
+    const dndClass = {
+      name: editingClass.name,
+      image: editingClass.image || '',
+      hitDie: editingClass.hitDie || 'd8',
+      subtitle: editingClass.subtitle || 'Clase de Héroe',
+      difficulty: editingClass.difficulty || 'Media',
+      role: editingClass.role || (editingClass.tags && editingClass.tags[0]) || 'Aventurero',
+      description: editingClass.description || 'Sin descripción disponible.',
+      primaryAbility: editingClass.primaryAbility || editingClass.focus || 'Principal',
+      saves: editingClass.saves || ['Fortaleza', 'Voluntad'],
+      rating: editingClass.rating || 0,
+      id: editingClass.id,
+      currentLevel: editingClass.level || 1,
+      features: editingClass.classLevels ? editingClass.classLevels.map((l, i) => ({
+        level: i + 1,
+        name: l.title,
+        description: l.description
+      })) : [],
+      equipment: editingClass.equipment || []
+    };
 
-        <div className="flex min-h-0 flex-col gap-6">
-          <div className="flex flex-wrap justify-end gap-3">
-            <Boton
-              color="indigo"
-              onClick={handleDiscardChanges}
-              disabled={!hasChanges}
-              className="uppercase tracking-[0.3em]"
-              icon={<FiRefreshCw className="h-4 w-4" />}
-            >
-              Restablecer
-            </Boton>
-            <Boton
-              color="blue"
-              onClick={handleSaveChanges}
-              disabled={!hasChanges || isSaving}
-              loading={isSaving}
-              className="uppercase tracking-[0.3em]"
-              icon={<FiSave className="h-4 w-4" />}
-            >
-              Guardar cambios
-            </Boton>
-          </div>
-          {saveStatus?.message && (
-            <p
-              className={`text-sm ${saveStatus.type === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}
-              role="status"
-            >
-              {saveStatus.message}
-            </p>
-          )}
-          <div className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/60 shadow-[0_25px_55px_-25px_rgba(56,189,248,0.55)]">
-            <div className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden sm:max-w-[400px] xl:max-w-[420px] 2xl:max-w-[440px] lg:max-h-[520px] 2xl:max-h-[560px]">
-              {editingClass.image ? (
-                <img
-                  src={editingClass.image}
-                  alt={`Retrato de ${editingClass.name}`}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-slate-950/80">
-                  <FiImage className="h-16 w-16 text-slate-700" />
-                </div>
-              )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{editingClass.name}</h3>
-                    <p className="text-xs uppercase tracking-[0.35em] text-slate-400">{editingClass.subtitle}</p>
+    const renderActiveView = () => {
+      switch (activeDetailTab) {
+        case 'overview':
+          return (
+            <div className="relative w-full h-full overflow-y-auto custom-scrollbar bg-[#09090b]">
+              {/* Dynamic Background based on class */}
+              <div className="absolute inset-0 z-0">
+                {/* Capa 1: Oscurecimiento base */}
+                <div className="absolute inset-0 bg-[#0b1120]/80 z-10"></div>
+
+                {/* Capa 2: Imagen del campeón desenfocada */}
+                {dndClass.image && (
+                  <img src={dndClass.image} className="w-full h-full object-cover opacity-40 blur-sm" alt="" />
+                )}
+
+                {/* Capa 3: Gradiente lateral para que el texto se lea mejor */}
+                <div className="absolute inset-0 bg-gradient-to-l from-[#0b1120] via-transparent to-[#0b1120] z-10"></div>
+
+                {/* Capa 4: Textura de polvo de estrellas (Stardust) */}
+                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-10"></div>
+              </div>
+
+              <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-center p-8 lg:p-16 gap-12 lg:gap-24">
+                {/* Left: Character Card Presentation */}
+                <div className="relative group w-full max-w-sm lg:max-w-md aspect-[2.5/3.5] shrink-0 perspective-1000">
+                  <div className="relative w-full h-full transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
+                    {/* Glowing aura behind card */}
+                    <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
+
+                    {/* Card Frame */}
+                    <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl">
+                      {dndClass.image ? (
+                        <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                          <FiImage className="h-24 w-24 opacity-20" />
+                        </div>
+                      )}
+
+                      {/* Card UI Overlays */}
+
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
+                        <EditableText
+                          value={dndClass.name}
+                          onChange={(val) => handleUpdateClassField('name', val)}
+                          className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
+                        />
+                        <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
+                        <EditableText
+                          value={dndClass.subtitle}
+                          onChange={(val) => handleUpdateClassField('subtitle', val)}
+                          className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Golden ornamental corners */}
+                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#c8aa6e] z-20 rounded-tl-lg"></div>
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#c8aa6e] z-20 rounded-br-lg"></div>
                   </div>
-                  <RatingStars rating={editingClass.rating || 0} size="sm" onChange={handleRatingChange} />
                 </div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-4 p-6">
-              <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
-                <div className="space-y-1">
-                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dificultad</div>
-                  <EditableField
-                    value={editingClass.difficulty}
-                    onChange={(value) => handleGeneralFieldChange('difficulty', value)}
-                    placeholder="Nivel de dificultad"
-                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                    textClassName="text-sm font-semibold text-slate-100"
-                    inputClassName="text-sm font-semibold text-slate-100"
-                    autoSelect={false}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Dominio</div>
-                  <EditableField
-                    value={editingClass.mastery}
-                    onChange={(value) => handleGeneralFieldChange('mastery', value)}
-                    placeholder="Progreso de dominio"
-                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                    textClassName="text-sm font-semibold text-slate-100"
-                    inputClassName="text-sm font-semibold text-slate-100"
-                    autoSelect={false}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Enfoque</div>
-                  <EditableField
-                    value={editingClass.focus}
-                    onChange={(value) => handleGeneralFieldChange('focus', value)}
-                    placeholder="Atributos clave"
-                    displayClassName="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2"
-                    textClassName="text-sm font-semibold text-slate-100"
-                    inputClassName="text-sm font-semibold text-slate-100"
-                    autoSelect={false}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Experiencia</div>
-                  <EditableField
-                    value={editingClass.xp !== undefined ? String(editingClass.xp) : ''}
-                    onChange={(value) => handleGeneralFieldChange('xp', value)}
-                    placeholder="XP requerida"
-                    displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
-                    textClassName="text-sm font-semibold text-amber-200"
-                    inputClassName="text-sm font-semibold text-amber-200"
-                    autoSelect={false}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Fragmentos</div>
-                  <EditableField
-                    value={editingClass.shards !== undefined ? String(editingClass.shards) : ''}
-                    onChange={(value) => handleGeneralFieldChange('shards', value)}
-                    placeholder="Coste en fragmentos"
-                    displayClassName="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-3 py-2"
-                    textClassName="text-sm font-semibold text-amber-200"
-                    inputClassName="text-sm font-semibold text-amber-200"
-                    autoSelect={false}
-                  />
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 text-xs text-slate-400">
-                <div className="text-[0.6rem] uppercase tracking-[0.4em] text-slate-500">Etiquetas</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {editingClass.tags && editingClass.tags.length > 0 ? (
-                    editingClass.tags.map((tag, index) => (
-                      <span
-                        key={`detail-${index}`}
-                        className="rounded-full border border-slate-700/60 bg-slate-900/80 px-3 py-1 text-[0.65rem] uppercase tracking-[0.3em] text-slate-200"
-                      >
-                        {tag || 'Sin etiqueta'}
+
+                {/* Right: Data & Stats */}
+                <div className="flex-1 w-full max-w-2xl flex flex-col gap-10">
+
+                  {/* Header / Title Section */}
+                  <div>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                        Dificultad:
+                        <EditableText
+                          value={dndClass.difficulty}
+                          onChange={(val) => handleUpdateClassField('difficulty', val)}
+                          className="inline text-[#c8aa6e]"
+                        />
+                      </div>
+                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                        Rol:
+                        <EditableText
+                          value={dndClass.role}
+                          onChange={(val) => handleUpdateClassField('role', val)}
+                          className="inline text-cyan-400"
+                        />
+                      </div>
+                    </div>
+
+                    <EditableText
+                      value={dndClass.name}
+                      onChange={(val) => handleUpdateClassField('name', val)}
+                      className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6 block"
+                    />
+
+                    <div className="relative pl-6 border-l-2 border-[#c8aa6e]/30">
+                      <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
+                        "<EditableText
+                          value={dndClass.description}
+                          onChange={(val) => handleUpdateClassField('description', val)}
+                          className="inline text-slate-300"
+                          multiline={true}
+                        />"
+                      </div>
+                      <div className="absolute top-0 -left-[5px] w-[8px] h-[8px] bg-[#c8aa6e] rotate-45"></div>
+                      <div className="absolute bottom-0 -left-[5px] w-[8px] h-[8px] bg-[#c8aa6e] rotate-45"></div>
+                    </div>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div>
+                    <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg mb-4 tracking-widest flex items-center gap-2">
+                      <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
+                      ATRIBUTOS DE CLASE
+                    </h4>
+                    <div className="flex flex-wrap justify-center gap-6">
+                      {[
+                        { key: 'dexterity', label: 'Destreza', icon: '🎯' },
+                        { key: 'vigor', label: 'Vigor', icon: '💪' },
+                        { key: 'intellect', label: 'Intelecto', icon: '🧠' },
+                        { key: 'willpower', label: 'Voluntad', icon: '✨' }
+                      ].map((attr) => {
+                        const diceValue = editingClass.attributes?.[attr.key] || 'd4';
+
+                        return (
+                          <div key={attr.key} className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-[140px]">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-3">{attr.label}</div>
+                            <DiceSelector
+                              value={diceValue}
+                              onChange={(newValue) => {
+                                updateEditingClass((draft) => {
+                                  if (!draft.attributes) draft.attributes = {};
+                                  draft.attributes[attr.key] = newValue;
+                                });
+                              }}
+                            />
+                            <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">{diceValue.toUpperCase()}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Call to Action */}
+                  <div className="mt-4">
+                    <button className="w-full md:w-auto group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right">
+                      {/* Contenido del botón (Texto + Icono) */}
+                      <span className="relative z-10 flex items-center justify-center gap-3">
+                        Jugar Aventura
+                        {/* Icono de flecha animado */}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
                       </span>
-                    ))
-                  ) : (
-                    <span className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
-                      Aún no hay etiquetas asignadas.
-                    </span>
-                  )}
+
+                      {/* El efecto de brillo (Flash) que cruza el botón al hacer hover */}
+                      <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out z-0" />
+                    </button>
+                  </div>
+
+                  {/* Botón Editar Retrato */}
+                  <div className="mt-4">
+                    <button
+                      onClick={() => openFileDialogForClass(dndClass.id)}
+                      className="px-6 py-4 border border-[#c8aa6e]/30 text-[#c8aa6e] font-['Cinzel'] font-bold uppercase tracking-widest hover:bg-[#c8aa6e]/10 transition-colors"
+                    >
+                      Editar Retrato
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-wrap justify-end gap-3">
-                <Boton color="gray" onClick={closeClassDetails} className="uppercase tracking-[0.3em]">
-                  Cerrar panel
-                </Boton>
+            </div >
+          );
+        case 'progression':
+          return (
+            <ProgressionView
+              dndClass={dndClass}
+              onUpdateLevel={handleUpdateLevel}
+              onToggleAcquired={toggleLevelCompleted}
+            />
+          );
+        case 'loadout':
+          return (
+            <LoadoutView
+              dndClass={dndClass}
+              equipmentCatalog={equipmentCatalog}
+              onAddEquipment={handleAddEquipment}
+              onRemoveEquipment={handleRemoveEquipment}
+            />
+          );
+        case 'feats':
+          return (
+            <div className="relative w-full h-full overflow-hidden bg-[#09090b]">
+              {/* Dynamic Background based on class */}
+              <div className="absolute inset-0 z-0">
+                {/* Capa 1: Oscurecimiento base */}
+                <div className="absolute inset-0 bg-[#0b1120]/80 z-10"></div>
+
+                {/* Capa 2: Imagen del campeón desenfocada */}
+                {dndClass.image && (
+                  <img src={dndClass.image} className="w-full h-full object-cover opacity-40 blur-sm" alt="" />
+                )}
+
+                {/* Capa 3: Gradiente lateral para que el texto se lea mejor */}
+                <div className="absolute inset-0 bg-gradient-to-l from-[#0b1120] via-transparent to-[#0b1120] z-10"></div>
+
+                {/* Capa 4: Textura de polvo de estrellas (Stardust) */}
+                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-10"></div>
+              </div>
+
+              <div className="relative z-20 w-full h-full flex items-center justify-center text-slate-500 font-['Cinzel']">
+                Sección de Talentos en construcción...
               </div>
             </div>
-          </div>
+          );
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <div className="flex h-full w-full overflow-hidden bg-[#09090b]">
+        <Sidebar
+          activeTab={activeDetailTab}
+          onTabChange={setActiveDetailTab}
+          characterName={dndClass.name}
+          characterLevel={dndClass.currentLevel}
+          characterImage={dndClass.image}
+          onSave={handleSaveChanges}
+          hasUnsavedChanges={hasUnsavedChanges}
+          saveButtonState={saveButtonState}
+        />
+        <div className="flex-1 relative overflow-hidden">
+          {renderActiveView()}
+
+          {/* Close Button Absolute Positioned */}
+          <button
+            onClick={closeClassDetails}
+            className="absolute top-6 right-6 z-50 p-2 rounded-full bg-black/40 text-slate-400 hover:text-white hover:bg-black/60 transition-colors border border-slate-700/50"
+          >
+            <FiX className="w-6 h-6" />
+          </button>
         </div>
       </div>
     );
@@ -3076,7 +3244,12 @@ const ClassList = ({
   const detailContent = renderClassDetailContent();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-[#09090b] text-[#e2e8f0] font-['Lato'] p-4 md:p-8 selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2]">
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Lato:wght@300;400;700&display=swap');
+        `}
+      </style>
       <input
         ref={fileInputRef}
         type="file"
@@ -3084,308 +3257,228 @@ const ClassList = ({
         className="hidden"
         onChange={handleFileChange}
       />
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1 text-xs uppercase tracking-[0.2em] text-slate-300/80">
-              <span className="text-amber-300">Modo Máster</span>
-              <span className="text-slate-600">/</span>
-              <span>Clases</span>
-            </div>
-            <h1 className="text-3xl font-bold uppercase tracking-wide text-white drop-shadow-[0_0_20px_rgba(96,165,250,0.35)]">
-              Lista de Clases
-            </h1>
-            <p className="max-w-xl text-sm text-slate-400">
-              Gestiona la biblioteca de clases disponibles para tus jugadores. Puedes personalizar el retrato de cada carta y prepararla antes de la sesión.
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-400">
-              <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1">
-                67 / 79 clases activas
-              </span>
-              <span className="rounded-full border border-indigo-400/40 bg-indigo-400/10 px-3 py-1">
-                200 / 415 esencias
-              </span>
-              <span className="rounded-full border border-purple-400/40 bg-purple-400/10 px-3 py-1">
-                1169 / 3950 reliquias
-              </span>
-              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1">
-                265 / 500 dominio
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 md:items-end">
-            <Boton color="gray" onClick={onBack} className="w-full md:w-auto">
-              ← Volver al menú
-            </Boton>
-            <div className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 shadow-[0_18px_40px_-18px_rgba(14,165,233,0.45)]">
-              <div className="text-xs uppercase tracking-widest text-slate-500">Resumen rápido</div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
-                <div>
-                  <div className="text-emerald-300/90 text-lg font-bold">12</div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Disponibles</div>
+
+      <AnimatePresence mode="wait">
+        {!selectedClass ? (
+          <motion.div
+            key="list-view"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+            className="mx-auto flex w-full max-w-[1600px] flex-col gap-8"
+          >
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between border-b border-[#c8aa6e]/20 pb-8">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
+                  <span className="opacity-70">DND 5E VAULT</span>
+                  <span className="h-px w-4 bg-[#c8aa6e]/40"></span>
+                  <span>CLASES</span>
                 </div>
-                <div>
-                  <div className="text-sky-300/90 text-lg font-bold">4</div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">En progreso</div>
-                </div>
-                <div>
-                  <div className="text-amber-300/90 text-lg font-bold">2</div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Legendarias</div>
-                </div>
-                <div>
-                  <div className="text-rose-300/90 text-lg font-bold">6</div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Bloqueadas</div>
+                <h1 className="font-['Cinzel'] text-4xl font-bold uppercase tracking-wider text-[#f0e6d2] drop-shadow-[0_2px_10px_rgba(200,170,110,0.2)] md:text-5xl">
+                  Lista de Clases
+                </h1>
+                <p className="max-w-2xl font-['Lato'] text-lg font-light leading-relaxed text-[#94a3b8]">
+                  Gestiona el archivo de héroes. Personaliza los retratos y estados para tu próxima sesión.
+                </p>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <div className="flex items-center gap-2 rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-3 py-1.5">
+                    <span className="font-['Cinzel'] text-lg font-bold text-[#c8aa6e]">67</span>
+                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Activas</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
+                    <span className="font-['Cinzel'] text-lg font-bold text-slate-400">200</span>
+                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Esencias</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
+                    <span className="font-['Cinzel'] text-lg font-bold text-slate-400">1.2k</span>
+                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Reliquias</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {isMobile && (
-          <div className="rounded-full border border-slate-800/60 bg-slate-900/70 p-1 shadow-[0_8px_20px_rgba(8,7,21,0.55)]">
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                onClick={() => setMobileActiveView('list')}
-                className={`rounded-full px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.35em] transition ${
-                  mobileActiveView === 'list'
-                    ? 'bg-sky-500/10 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
-                    : 'text-slate-400 hover:text-sky-100'
-                }`}
-                aria-pressed={mobileActiveView === 'list'}
-              >
-                Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => selectedClass && setMobileActiveView('details')}
-                disabled={!selectedClass}
-                className={`rounded-full px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.35em] transition ${
-                  mobileActiveView === 'details'
-                    ? 'bg-sky-500/10 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
-                    : 'text-slate-400 hover:text-sky-100'
-                } ${selectedClass ? '' : 'opacity-40'}`}
-                aria-pressed={mobileActiveView === 'details'}
-                aria-disabled={!selectedClass}
-              >
-                Detalle
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-800/60 bg-slate-900/80 p-4 shadow-[0_10px_30px_rgba(8,7,21,0.55)] md:flex-row md:items-center md:justify-between">
-          <div className="relative w-full md:max-w-md">
-            <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              placeholder="Buscar clase, rol o palabras clave"
-              className="w-full rounded-2xl border border-slate-700/70 bg-slate-950/80 py-3 pl-12 pr-4 text-sm text-slate-100 placeholder-slate-500 shadow-inner shadow-black/40 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
-                aria-label="Limpiar búsqueda"
-              >
-                <FiX className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="text-xs uppercase tracking-[0.3em] text-slate-500">Orden</span>
-              <div className="relative">
-                <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <select
-                  value={sortBy}
-                  onChange={handleSortChange}
-                  className="appearance-none rounded-2xl border border-slate-700/60 bg-slate-950/80 py-3 pl-4 pr-10 text-sm font-semibold text-slate-100 shadow-inner shadow-black/40 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+              <div className="flex flex-col gap-4 md:items-end">
+                <Boton
+                  color="gray"
+                  onClick={onBack}
+                  className="border-[#c8aa6e]/30 hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10 hover:text-[#c8aa6e] uppercase tracking-[0.25em] font-['Cinzel'] text-xs"
                 >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  Volver al menú
+                </Boton>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div
-          className={`grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 ${
-            isMobile && mobileActiveView === 'details' ? 'hidden' : ''
-          }`}
-          aria-hidden={isMobile && mobileActiveView === 'details'}
-        >
-          {filteredClasses.map((classItem) => {
-            const status = statusConfig[classItem.status];
-            return (
-              <div
-                key={classItem.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Abrir detalles de ${classItem.name}`}
-                className="group relative cursor-pointer overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-900/70 shadow-[0_18px_40px_-18px_rgba(56,189,248,0.45)] transition hover:border-sky-500/40 hover:shadow-[0_25px_50px_-20px_rgba(56,189,248,0.55)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
-                onClick={() => openClassDetails(classItem)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    openClassDetails(classItem);
-                  }
-                }}
-              >
-                <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
-                  <div className="relative aspect-[4/5] overflow-hidden">
-                    {classItem.image ? (
-                      <img
-                        src={classItem.image}
-                        alt={`Retrato de ${classItem.name}`}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-slate-900/80">
-                        <FiImage className="h-12 w-12 text-slate-600" />
+            <div className="sticky top-4 z-30 flex flex-col gap-4 rounded-xl border border-[#c8aa6e]/20 bg-[#0f172a]/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl md:flex-row md:items-center md:justify-between">
+              <div className="relative w-full md:max-w-md">
+                <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#c8aa6e]/70" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  placeholder="Buscar en el archivo..."
+                  className="w-full rounded-lg border border-[#c8aa6e]/20 bg-[#0b1120]/50 py-2.5 pl-10 pr-4 text-sm text-[#f0e6d2] placeholder-slate-600 transition-colors focus:border-[#c8aa6e]/60 focus:bg-[#0b1120]/80 focus:outline-none"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#c8aa6e]"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <FiX className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <div className="flex items-center gap-3">
+                  <span className="font-['Cinzel'] text-xs font-bold uppercase tracking-widest text-[#c8aa6e]">Orden</span>
+                  <div className="relative">
+                    <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#c8aa6e]/70" />
+                    <select
+                      value={sortBy}
+                      onChange={handleSortChange}
+                      className="appearance-none rounded-lg border border-[#c8aa6e]/20 bg-[#0b1120]/50 py-2 pl-3 pr-9 text-xs font-bold uppercase tracking-wider text-[#f0e6d2] focus:border-[#c8aa6e]/60 focus:outline-none"
+                    >
+                      {sortOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+            >
+              {filteredClasses.map((classItem) => {
+                const isLocked = classItem.status === 'locked';
+
+                return (
+                  <div
+                    key={classItem.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openClassDetails(classItem)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openClassDetails(classItem);
+                      }
+                    }}
+                    className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
+                  >
+                    {/* Main Frame Content */}
+                    <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
+                      {/* Background Image with Zoom effect */}
+                      <div className="absolute inset-0 overflow-hidden">
+                        {classItem.image ? (
+                          <img
+                            src={classItem.image}
+                            alt={classItem.name}
+                            className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                            <FiImage className="h-12 w-12 opacity-20" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/10 to-transparent" />
-                    {status && (
-                      <div
-                        className={`absolute left-4 top-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] backdrop-blur-sm transition group-hover:translate-y-[-2px] group-hover:shadow-[0_0_15px_rgba(56,189,248,0.4)] ${status.badgeClass}`}
-                      >
-                        {classItem.status === 'locked' && <FiLock className="h-3.5 w-3.5" />}
-                        <span>{status.label}</span>
+
+                      {/* Locked Overlay */}
+                      {isLocked && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
+                            <FiLock className="h-8 w-8 text-slate-400" />
+                          </div>
+                          <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
+                        </div>
+                      )}
+
+                      {/* Card Content */}
+                      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
+                        <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
+                          {classItem.name}
+                        </h3>
+
+                        {/* Stars */}
+                        <div className="mb-3 flex items-center justify-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <svg
+                              key={i}
+                              className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                          ))}
+                        </div>
+
+                        {/* Role/Level Badge */}
+                        {!isLocked && (
+                          <div className="flex w-full items-center justify-center gap-3">
+                            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
+                            <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                              Nvl {classItem.level || 1}
+                            </div>
+                            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Fancy Border Frame (Over everything) */}
+                    <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
+                      {/* Corner Accents */}
+                      <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
+                      <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
+                      <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
+                      <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
+                    </div>
+
+                    {/* Static Border for non-hover */}
+                    <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
+
+                    {/* Role Icon Badge (Top Right) */}
+                    <div className="absolute right-3 top-3 z-30">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full border bg-[#0b1120]/90 shadow-lg ${!isLocked ? 'border-[#c8aa6e] text-[#c8aa6e]' : 'border-slate-600 text-slate-600'}`}>
+                        <span className="text-xs font-bold">{classItem.name.charAt(0)}</span>
+                      </div>
+                    </div>
+
+                    {/* Edit Button (Top Left) */}
                     <button
                       type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
+                      onClick={(e) => {
+                        e.stopPropagation();
                         openFileDialogForClass(classItem.id);
                       }}
-                      className="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-full border border-slate-500/60 bg-slate-900/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 backdrop-blur transition hover:border-sky-400 hover:text-sky-200"
+                      className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
+                      title="Cambiar retrato"
                     >
-                      <FiImage className="h-4 w-4" />
-                      <span>Editar retrato</span>
+                      <FiImage className="h-3.5 w-3.5" />
                     </button>
-                    {classItem.status === 'locked' && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-                        <div className="flex items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-slate-300">
-                          <FiLock className="h-4 w-4" />
-                          <span>Contenido bloqueado</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </div>
-
-                <div className="flex flex-col gap-4 p-6">
-                  <div className="space-y-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-xl font-bold text-white drop-shadow-[0_0_16px_rgba(96,165,250,0.35)]">
-                          {classItem.name}
-                        </h2>
-                        <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
-                          {classItem.subtitle}
-                        </p>
-                      </div>
-                      <RatingStars rating={classItem.rating} size="sm" />
-                    </div>
-                    <p className="text-sm leading-relaxed text-slate-300">
-                      {classItem.description}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {classItem.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-100"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-800/60 bg-slate-950/60 p-4 text-xs text-slate-400">
-                    <div className="space-y-1">
-                      <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Dificultad</div>
-                      <div className="text-sm font-semibold text-slate-100">{classItem.difficulty}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Dominio</div>
-                      <div className="text-sm font-semibold text-slate-100">{classItem.mastery}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Enfoque</div>
-                      <div className="text-sm font-semibold text-slate-100">{classItem.focus}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">C. de desbloqueo</div>
-                      <div className="text-sm font-semibold text-amber-200">
-                        {classItem.xp} XP • {classItem.shards} fragmentos
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {!isMobile && (
-        <Modal
-          isOpen={Boolean(selectedClass)}
-          onClose={closeClassDetails}
-          size="full"
-          overlayClassName="bg-slate-950/80 backdrop-blur-xl"
-          className="max-h-[95vh] overflow-y-auto border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
-        >
-          {detailContent}
-        </Modal>
-      )}
-
-      {isMobile && detailContent && (
-        <div
-          className={`mt-6 transition-all duration-200 ${
-            mobileActiveView === 'details' ? 'opacity-100' : 'pointer-events-none opacity-0 hidden'
-          }`}
-          aria-hidden={mobileActiveView !== 'details'}
-        >
-          <div className="rounded-3xl border border-slate-800/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 shadow-[0_25px_60px_-30px_rgba(56,189,248,0.65)]">
-            <div className="flex h-full max-h-[calc(100vh-7rem)] flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 bg-slate-950/90 px-4 py-3 text-[0.6rem] uppercase tracking-[0.35em] text-slate-300">
-                <button
-                  type="button"
-                  onClick={() => setMobileActiveView('list')}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-800/60 bg-slate-900/70 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-sky-400/40 hover:text-sky-100"
-                >
-                  <FiChevronDown className="h-3.5 w-3.5 -rotate-90" />
-                  Lista
-                </button>
-                <span>Detalle</span>
-                <button
-                  type="button"
-                  onClick={closeClassDetails}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-800/60 bg-slate-900/70 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-rose-400/40 hover:text-rose-100"
-                >
-                  Cerrar
-                  <FiX className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-                {detailContent}
-              </div>
+                );
+              })}
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="detail-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#09090b]"
+          >
+            {detailContent}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Modal
         isOpen={isCropping}
