@@ -492,6 +492,11 @@ const ensureClassDefaults = (classItem) => {
     classLevels: [],
     rules: [],
     equipment: deepClone(defaultEquipment),
+    talent: {
+      title: 'Centinela',
+      description: 'Ataques de oportunidad reducen velocidad a 0.',
+      rarity: 'P. Común',
+    },
   };
 
   const merged = {
@@ -522,6 +527,12 @@ const ensureClassDefaults = (classItem) => {
     };
   });
   merged.rules = merged.rules || [];
+
+  merged.talent = {
+    title: merged.talent?.title || 'Centinela',
+    description: merged.talent?.description || 'Ataques de oportunidad reducen velocidad a 0.',
+    rarity: merged.talent?.rarity || merged.talent?.rareza || 'P. Común',
+  };
 
   merged.equipment = {
     ...deepClone(defaultEquipment),
@@ -1561,6 +1572,18 @@ const ClassList = ({
       if (!levels[levelIndex]) return;
       levels[levelIndex][field] = value;
       draft.classLevels = levels;
+    });
+  };
+
+  const handleUpdateTalent = (field, value) => {
+    updateEditingClass((draft) => {
+      draft.talent = {
+        title: draft.talent?.title || 'Centinela',
+        description: draft.talent?.description || 'Ataques de oportunidad reducen velocidad a 0.',
+        rarity: draft.talent?.rarity || 'P. Común',
+        ...draft.talent,
+        [field]: value,
+      };
     });
   };
 
@@ -3053,9 +3076,6 @@ const ClassList = ({
                       </div>
                     </div>
 
-                    {/* Golden ornamental corners */}
-                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#c8aa6e] z-20 rounded-tl-lg"></div>
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#c8aa6e] z-20 rounded-br-lg"></div>
                   </div>
                 </div>
 
@@ -3182,6 +3202,7 @@ const ClassList = ({
               equipmentCatalog={equipmentCatalog}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
+              onUpdateTalent={handleUpdateTalent}
             />
           );
         case 'feats':

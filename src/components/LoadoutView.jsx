@@ -4,7 +4,7 @@ import { FiShield, FiX } from 'react-icons/fi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
 
-const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment }) => {
+const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment, onUpdateTalent }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
 
@@ -31,6 +31,43 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
             )
             .slice(0, 5);
     }, [equipmentCatalog, selectedCategory, searchTerm]);
+
+    const rarityOptions = [
+        {
+            value: 'Común',
+            badge: 'bg-slate-600 border-slate-400 text-slate-100',
+            button: 'bg-slate-800/60 border-slate-600 text-slate-200',
+            ring: 'ring-slate-400/50',
+        },
+        {
+            value: 'P. Común',
+            badge: 'bg-emerald-600 border-emerald-400 text-emerald-50',
+            button: 'bg-emerald-900/40 border-emerald-600 text-emerald-100',
+            ring: 'ring-emerald-400/60',
+        },
+        {
+            value: 'Épica',
+            badge: 'bg-purple-700 border-purple-400 text-purple-50',
+            button: 'bg-purple-900/40 border-purple-600 text-purple-100',
+            ring: 'ring-purple-400/60',
+        },
+        {
+            value: 'Legendaria',
+            badge: 'bg-amber-500 border-amber-300 text-amber-950',
+            button: 'bg-amber-900/30 border-amber-500 text-amber-100',
+            ring: 'ring-amber-300/70',
+        },
+    ];
+
+    const activeTalent = dndClass.talent || {};
+    const currentRarity = rarityOptions.find((option) => option.value === activeTalent.rarity);
+    const fallbackRarity = {
+        value: activeTalent.rarity || 'Común',
+        badge: 'bg-blue-600 border-blue-400 text-white',
+        button: 'bg-blue-900/40 border-blue-600 text-blue-100',
+        ring: 'ring-blue-400/60',
+    };
+    const rarityDisplay = currentRarity || fallbackRarity;
 
     return (
         <div className="w-full h-full overflow-y-auto custom-scrollbar bg-[#09090b]">
@@ -286,22 +323,61 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
                         <div className="flex flex-col gap-8 items-center">
                             {/* Active Relic */}
-                            <div className="relative group w-full flex flex-col items-center">
+                            <div className="relative group w-full flex flex-col items-center gap-4">
                                 <div className="relative z-10">
                                     <HexIcon size="lg" active>
                                         <div className="w-full h-full bg-slate-800 flex items-center justify-center">
                                             <Shield className="w-10 h-10 text-[#c8aa6e]" />
                                         </div>
                                     </HexIcon>
-                                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow border border-blue-400">
-                                        RARA
+                                    <div
+                                        className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-0.5 rounded shadow border ${rarityDisplay.badge}`}
+                                    >
+                                        {activeTalent.rarity || 'Común'}
                                     </div>
                                 </div>
-                                <div className="mt-4 text-center">
-                                    <h5 className="text-[#c8aa6e] font-bold text-sm font-['Cinzel'] uppercase tracking-wider">Centinela</h5>
-                                    <p className="text-xs text-slate-400 mt-1 leading-snug max-w-[200px]">
-                                        Ataques de oportunidad reducen velocidad a 0.
-                                    </p>
+                                <div className="w-full space-y-3">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Título del talento</span>
+                                        <input
+                                            type="text"
+                                            value={activeTalent.title || ''}
+                                            onChange={(event) => onUpdateTalent && onUpdateTalent('title', event.target.value)}
+                                            placeholder="Ej. Centinela"
+                                            className="w-full rounded-lg border border-[#c8aa6e]/30 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-[#c8aa6e]/60 focus:outline-none focus:ring-1 focus:ring-[#c8aa6e]/50"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Descripción</span>
+                                        <textarea
+                                            value={activeTalent.description || ''}
+                                            onChange={(event) => onUpdateTalent && onUpdateTalent('description', event.target.value)}
+                                            placeholder="Explica el efecto de la reliquia"
+                                            className="w-full rounded-lg border border-[#c8aa6e]/30 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-[#c8aa6e]/60 focus:outline-none focus:ring-1 focus:ring-[#c8aa6e]/50 min-h-[96px] resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Rareza</span>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {rarityOptions.map((option) => {
+                                                const isSelected = option.value === activeTalent.rarity;
+                                                return (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        onClick={() => onUpdateTalent && onUpdateTalent('rarity', option.value)}
+                                                        className={`w-full rounded-lg border px-3 py-2 text-[11px] font-bold uppercase tracking-widest transition focus:outline-none focus:ring-2 ${isSelected
+                                                            ? `${option.button} ring-offset-2 ring-[#0b1120] ${option.ring}`
+                                                            : 'border-slate-700/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'}`}
+                                                    >
+                                                        {option.value}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -329,13 +405,25 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
 LoadoutView.propTypes = {
     dndClass: PropTypes.shape({
-        equipment: PropTypes.arrayOf(PropTypes.shape({
-            name: PropTypes.string,
-            type: PropTypes.string,
-            category: PropTypes.string,
-            detail: PropTypes.string,
-            description: PropTypes.string
-        }))
+        equipment: PropTypes.oneOfType([
+            PropTypes.arrayOf(PropTypes.shape({
+                name: PropTypes.string,
+                type: PropTypes.string,
+                category: PropTypes.string,
+                detail: PropTypes.string,
+                description: PropTypes.string
+            })),
+            PropTypes.shape({
+                weapons: PropTypes.array,
+                armor: PropTypes.array,
+                abilities: PropTypes.array,
+            }),
+        ]),
+        talent: PropTypes.shape({
+            title: PropTypes.string,
+            description: PropTypes.string,
+            rarity: PropTypes.string,
+        }),
     }).isRequired,
     equipmentCatalog: PropTypes.shape({
         weapons: PropTypes.array,
@@ -343,7 +431,8 @@ LoadoutView.propTypes = {
         abilities: PropTypes.array
     }),
     onAddEquipment: PropTypes.func,
-    onRemoveEquipment: PropTypes.func
+    onRemoveEquipment: PropTypes.func,
+    onUpdateTalent: PropTypes.func,
 };
 
 export default LoadoutView;
