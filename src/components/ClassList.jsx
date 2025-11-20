@@ -1618,6 +1618,15 @@ const ClassList = ({
     });
   };
 
+  const handleUpdateTalent = (field, value) => {
+    updateEditingClass((draft) => {
+      if (!draft.talents) {
+        draft.talents = {};
+      }
+      draft.talents[field] = value;
+    });
+  };
+
   const handleEquipmentSearchChange = (category, value) => {
     setEquipmentSearchTerms((prev) => ({ ...prev, [category]: value }));
   };
@@ -2994,7 +3003,8 @@ const ClassList = ({
         name: l.title,
         description: l.description
       })) : [],
-      equipment: editingClass.equipment || []
+      equipment: editingClass.equipment || [],
+      talents: editingClass.talents || {}
     };
 
     const renderActiveView = () => {
@@ -3053,9 +3063,6 @@ const ClassList = ({
                       </div>
                     </div>
 
-                    {/* Golden ornamental corners */}
-                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#c8aa6e] z-20 rounded-tl-lg"></div>
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#c8aa6e] z-20 rounded-br-lg"></div>
                   </div>
                 </div>
 
@@ -3182,6 +3189,7 @@ const ClassList = ({
               equipmentCatalog={equipmentCatalog}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
+              onUpdateTalent={handleUpdateTalent}
             />
           );
         case 'feats':

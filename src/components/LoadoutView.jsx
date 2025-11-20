@@ -1,12 +1,32 @@
 import React, { useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { FiShield, FiX } from 'react-icons/fi';
+import { FiShield, FiX, FiCheck } from 'react-icons/fi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
 
-const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment }) => {
+const RARITIES = [
+    { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
+    { id: 'poco-comun', label: 'Poco Común', color: 'bg-green-600 border-green-400 text-green-200' },
+    { id: 'rara', label: 'Rara', color: 'bg-blue-600 border-blue-400 text-blue-200' },
+    { id: 'epica', label: 'Épica', color: 'bg-purple-600 border-purple-400 text-purple-200' },
+    { id: 'legendaria', label: 'Legendaria', color: 'bg-orange-600 border-orange-400 text-orange-200' }
+];
+
+const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment, onUpdateTalent }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
+    const [showRarityDropdown, setShowRarityDropdown] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [isEditingDescription, setIsEditingDescription] = useState(false);
+
+    // Local editing state
+    const [editingTitle, setEditingTitle] = useState('');
+    const [editingDescription, setEditingDescription] = useState('');
+
+    // Get talent values from dndClass or use defaults
+    const talentTitle = dndClass.talents?.title || 'Centinela';
+    const talentDescription = dndClass.talents?.description || 'Ataques de oportunidad reducen velocidad a 0.';
+    const talentRarity = dndClass.talents?.rarity || 'rara';
 
     const rawEquipment = dndClass.equipment || {};
     const equipment = useMemo(() => {
@@ -31,6 +51,8 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
             )
             .slice(0, 5);
     }, [equipmentCatalog, selectedCategory, searchTerm]);
+
+    const selectedRarity = RARITIES.find(r => r.id === talentRarity) || RARITIES[2];
 
     return (
         <div className="w-full h-full overflow-y-auto custom-scrollbar bg-[#09090b]">
@@ -280,7 +302,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                     {/* Right Column: Relic Slots (Vertical Stack) */}
                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl h-fit">
                         <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
-                            <Shield className="w-5 h-5" />
+                            <FiShield className="w-5 h-5" />
                             TALENTOS
                         </h3>
 
@@ -290,18 +312,139 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                 <div className="relative z-10">
                                     <HexIcon size="lg" active>
                                         <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                                            <Shield className="w-10 h-10 text-[#c8aa6e]" />
+                                            <FiShield className="w-10 h-10 text-[#c8aa6e]" />
                                         </div>
                                     </HexIcon>
-                                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow border border-blue-400">
-                                        RARA
+                                    {/* Rarity Badge - Now clickable */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowRarityDropdown(!showRarityDropdown)}
+                                            className={`absolute -bottom-3 left-1/2 -translate-x-1/2 ${selectedRarity.color} text-[10px] font-bold px-2 py-0.5 rounded shadow hover:opacity-80 transition-opacity whitespace-nowrap`}
+                                        >
+                                            {selectedRarity.label.toUpperCase()}
+                                        </button>
+                                        {/* Rarity Dropdown */}
+                                        {showRarityDropdown && (
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 min-w-[120px] overflow-hidden">
+                                                {RARITIES.map((rarity) => (
+                                                    <button
+                                                        key={rarity.id}
+                                                        onClick={() => {
+                                                            if (onUpdateTalent) {
+                                                                onUpdateTalent('rarity', rarity.id);
+                                                            }
+                                                            setShowRarityDropdown(false);
+                                                        }}
+                                                        className={`w-full px-3 py-2 text-left text-xs font-bold hover:bg-slate-800 transition-colors ${rarity.color} ${talentRarity === rarity.id ? 'bg-slate-800' : ''
+                                                            }`}
+                                                    >
+                                                        {rarity.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="mt-4 text-center">
-                                    <h5 className="text-[#c8aa6e] font-bold text-sm font-['Cinzel'] uppercase tracking-wider">Centinela</h5>
-                                    <p className="text-xs text-slate-400 mt-1 leading-snug max-w-[200px]">
-                                        Ataques de oportunidad reducen velocidad a 0.
-                                    </p>
+                                <div className="mt-6 text-center w-full">
+                                    {/* Editable Title */}
+                                    {isEditingTitle ? (
+                                        <div className="flex items-center justify-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={editingTitle}
+                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                onBlur={() => {
+                                                    if (onUpdateTalent && editingTitle.trim()) {
+                                                        onUpdateTalent('title', editingTitle);
+                                                    }
+                                                    setIsEditingTitle(false);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        if (onUpdateTalent && editingTitle.trim()) {
+                                                            onUpdateTalent('title', editingTitle);
+                                                        }
+                                                        setIsEditingTitle(false);
+                                                    }
+                                                    if (e.key === 'Escape') {
+                                                        setIsEditingTitle(false);
+                                                    }
+                                                }}
+                                                autoFocus
+                                                className="bg-slate-900 border border-[#c8aa6e] rounded px-2 py-1 text-[#c8aa6e] font-bold text-sm font-['Cinzel'] uppercase tracking-wider text-center focus:outline-none focus:ring-2 focus:ring-[#c8aa6e]/50"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (onUpdateTalent && editingTitle.trim()) {
+                                                        onUpdateTalent('title', editingTitle);
+                                                    }
+                                                    setIsEditingTitle(false);
+                                                }}
+                                                className="p-1 text-green-400 hover:text-green-300"
+                                            >
+                                                <FiCheck className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setEditingTitle(talentTitle);
+                                                setIsEditingTitle(true);
+                                            }}
+                                            className="w-full hover:text-[#c8aa6e] transition-colors"
+                                        >
+                                            <h5 className="text-[#c8aa6e] font-bold text-sm font-['Cinzel'] uppercase tracking-wider text-center">
+                                                {talentTitle}
+                                            </h5>
+                                        </button>
+                                    )}
+
+                                    {/* Editable Description */}
+                                    {isEditingDescription ? (
+                                        <div className="mt-2">
+                                            <textarea
+                                                value={editingDescription}
+                                                onChange={(e) => setEditingDescription(e.target.value)}
+                                                onBlur={() => {
+                                                    if (onUpdateTalent && editingDescription.trim()) {
+                                                        onUpdateTalent('description', editingDescription);
+                                                    }
+                                                    setIsEditingDescription(false);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Escape') {
+                                                        setIsEditingDescription(false);
+                                                    }
+                                                }}
+                                                autoFocus
+                                                rows={3}
+                                                className="w-full max-w-[200px] bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 leading-snug focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (onUpdateTalent && editingDescription.trim()) {
+                                                        onUpdateTalent('description', editingDescription);
+                                                    }
+                                                    setIsEditingDescription(false);
+                                                }}
+                                                className="mt-1 p-1 text-green-400 hover:text-green-300"
+                                            >
+                                                <FiCheck className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setEditingDescription(talentDescription);
+                                                setIsEditingDescription(true);
+                                            }}
+                                            className="mt-1 w-full max-w-[200px] mx-auto hover:bg-slate-900/30 rounded px-2 py-1 transition-colors"
+                                        >
+                                            <p className="text-xs text-slate-400 leading-snug text-center">
+                                                {talentDescription}
+                                            </p>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -343,7 +486,8 @@ LoadoutView.propTypes = {
         abilities: PropTypes.array
     }),
     onAddEquipment: PropTypes.func,
-    onRemoveEquipment: PropTypes.func
+    onRemoveEquipment: PropTypes.func,
+    onUpdateTalent: PropTypes.func
 };
 
 export default LoadoutView;
