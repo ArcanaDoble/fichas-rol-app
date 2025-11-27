@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { FiUser, FiBarChart2, FiBriefcase, FiShield, FiBookOpen } from 'react-icons/fi';
+import { Coins } from 'lucide-react';
 
 const Sidebar = ({
     activeTab,
@@ -18,6 +19,7 @@ const Sidebar = ({
         { id: 'progression', label: 'CONSTELACIÓN', sub: 'Progresión', icon: <FiBarChart2 className="w-5 h-5" /> },
         { id: 'loadout', label: 'MAZO INICIAL', sub: 'Equipamiento', icon: <FiBriefcase className="w-5 h-5" /> },
         { id: 'feats', label: 'RELIQUIAS', sub: 'Talentos', icon: <FiShield className="w-5 h-5" /> },
+        { id: 'store', label: 'TIENDA', sub: 'Mejoras', icon: <Coins className="w-5 h-5" /> },
     ];
 
     return (
@@ -103,12 +105,12 @@ const Sidebar = ({
                             onClick={hasUnsavedChanges ? onSave : undefined}
                             disabled={!hasUnsavedChanges || saveButtonState === 'saving'}
                             className={`w-full flex items-center justify-center gap-2 px-4 py-3 border rounded transition-all duration-300 font-bold uppercase tracking-wider text-xs mb-2 ${saveButtonState === 'success'
-                                    ? 'bg-green-500/20 text-green-400 border-green-500/50'
-                                    : saveButtonState === 'error'
-                                        ? 'bg-red-500/20 text-red-400 border-red-500/50'
-                                        : hasUnsavedChanges
-                                            ? 'bg-[#c8aa6e]/10 hover:bg-[#c8aa6e]/20 text-[#c8aa6e] border-[#c8aa6e]/50 hover:shadow-[0_0_15px_rgba(200,170,110,0.2)] cursor-pointer'
-                                            : 'bg-slate-800/30 text-slate-500 border-slate-700/50 cursor-not-allowed opacity-60'
+                                ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                                : saveButtonState === 'error'
+                                    ? 'bg-red-500/20 text-red-400 border-red-500/50'
+                                    : hasUnsavedChanges
+                                        ? 'bg-[#c8aa6e]/10 hover:bg-[#c8aa6e]/20 text-[#c8aa6e] border-[#c8aa6e]/50 hover:shadow-[0_0_15px_rgba(200,170,110,0.2)] cursor-pointer'
+                                        : 'bg-slate-800/30 text-slate-500 border-slate-700/50 cursor-not-allowed opacity-60'
                                 }`}
                         >
                             {saveButtonState === 'saving' ? (

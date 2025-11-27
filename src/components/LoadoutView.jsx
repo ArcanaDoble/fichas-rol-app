@@ -237,7 +237,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                     {(item.consumption || item.consumo) && (
                                                         <div className="col-span-1 text-right">
                                                             <span className="text-slate-500 uppercase font-bold mr-1">Coste:</span>
-                                                            <span className="text-yellow-500">{item.consumption || item.consumo}</span>
+                                                            <span className="">{item.consumption || item.consumo}</span>
                                                         </div>
                                                     )}
                                                 </div>
