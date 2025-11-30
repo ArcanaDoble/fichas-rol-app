@@ -5,136 +5,37 @@ import { RefreshCw, Zap, Shield, Heart, Crosshair, Check, Upload, Edit2, Lock, S
 
 const CATEGORIES = ['ARSENAL', 'ARMADURAS', 'OBJETOS', 'OFERTA'];
 
-const INITIAL_STORE_ITEMS = [
-    // Arsenal (Weapons/Combat)
-    {
-        id: 'dmg1',
-        category: 'ARSENAL',
-        name: 'Espada Carbonizada',
-        price: 522,
-        description: 'Espada quemada hasta quedar gris y agrietada, pero su filo sigue ardiendo en silencio.',
-        icon: <Flame className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/dmg1/400/400',
-        isSold: false,
-        isVisible: true,
-        damage: "1d6 Fuego",
-        range: "Toque",
-        rareza: "Épica",
-        resourceCost: 2,
-        resourceType: 'action',
-        tags: ["CRÍTICO", "DESTREZA", "FUEGO"]
-    },
-    {
-        id: 'crit1',
-        category: 'ARSENAL',
-        name: 'Cuchillo de Hueso',
-        price: 391,
-        description: 'Herramienta pesada de filo recto, aún manchada con restos que no son de animal.',
-        icon: <Crosshair className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/crit1/400/400',
-        isSold: false,
-        isVisible: true,
-        damage: "1d4 Físico",
-        range: "20/60 pies",
-        rareza: "Común",
-        resourceCost: 1,
-        resourceType: 'bonus',
-        tags: ["ARROJADIZA", "SUTIL", "CRÍTICO"]
-    },
-    {
-        id: 'cool1',
-        category: 'ARSENAL',
-        name: 'Maestría Táctica',
-        price: 288,
-        description: 'Ganas ventaja en tiradas de iniciativa.',
-        icon: <Zap className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/cool1/400/400',
-        isSold: false,
-        isVisible: true,
-        rareza: "Rara",
-        tags: ["PASIVA", "COMBATE"]
-    },
+const INITIAL_STORE_ITEMS = [];
 
-    // Armaduras (Defense)
-    {
-        id: 'hp1',
-        category: 'ARMADURAS',
-        name: 'Armadura Bandeada',
-        price: 456,
-        description: 'Placas de metal reforzadas con cuero endurecido. Pesada, pero impenetrable.',
-        icon: <Shield className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/hp1/400/400',
-        isSold: false,
-        isVisible: true,
-        defense: "17 CA",
-        rareza: "Rara",
-        tags: ["PESADA", "DESVENTAJA SIGILO"]
-    },
-    {
-        id: 'res1',
-        category: 'ARMADURAS',
-        name: 'Reserva de Poder',
-        price: 404,
-        description: 'Un pequeño amuleto que vibra con energía residual.',
-        icon: <Sparkles className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/res1/400/400',
-        isSold: false,
-        isVisible: true,
-        rareza: "Común",
-        resourceCost: 0,
-        tags: ["RECUPERACIÓN", "MÁGICO"]
-    },
-
-    // Objetos (Utility/Misc)
-    {
-        id: 'speed1',
-        category: 'OBJETOS',
-        name: 'Olfato Agudo',
-        price: 654,
-        description: 'La rata posee una clave de olfato, en su defecto, tendrá ventaja en las pruebas de percepción.',
-        icon: <RefreshCw className="w-5 h-5" />,
-        image: 'https://picsum.photos/seed/speed1/400/400',
-        isSold: false,
-        isVisible: true,
-        range: "Extremo",
-        rareza: "Común",
-        tags: ["RASGO", "SENTIDOS"]
-    },
-];
-
-export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abilities: [] }, storeItems, onUpdateStoreItems }) => {
+export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abilities: [] }, storeItems, onUpdateStoreItems, money = 4697, onUpdateMoney }) => {
     // --- NAVIGATION STATE ---
     const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
     const currentCategory = CATEGORIES[currentCategoryIndex];
     const [slideDirection, setSlideDirection] = useState('right');
 
     // Data State
-    const [items, setItems] = useState(storeItems || INITIAL_STORE_ITEMS);
+    // Initialize with storeItems if defined (even if empty), otherwise use INITIAL_STORE_ITEMS
+    const [items, setItems] = useState(storeItems !== undefined ? storeItems : INITIAL_STORE_ITEMS);
 
-    // Persistence: Sync from parent (initial load or external update)
+    // Persistence: Sync from parent when external data changes
     useEffect(() => {
-        if (storeItems && JSON.stringify(storeItems) !== JSON.stringify(items)) {
+        if (storeItems !== undefined) {
             setItems(storeItems);
         }
     }, [storeItems]);
 
-    // Persistence: Sync to parent (save changes)
-    useEffect(() => {
-        if (onUpdateStoreItems) {
-            const timer = setTimeout(() => {
-                if (JSON.stringify(items) !== JSON.stringify(storeItems)) {
-                    onUpdateStoreItems(items);
-                }
-            }, 1000); // Debounce save
-            return () => clearTimeout(timer);
-        }
-    }, [items, onUpdateStoreItems, storeItems]);
     const [selectedItemId, setSelectedItemId] = useState(null);
 
     // Money State
-    const [actualMoney, setActualMoney] = useState(4697);
-    const [displayMoney, setDisplayMoney] = useState(4697);
+    const [actualMoney, setActualMoney] = useState(money);
+    const [displayMoney, setDisplayMoney] = useState(money);
     const [isEditingMoney, setIsEditingMoney] = useState(false);
+
+    // Sync money from prop
+    useEffect(() => {
+        setActualMoney(money);
+        setDisplayMoney(money);
+    }, [money]);
 
     // DM Form State
     const [newItemName, setNewItemName] = useState('');
@@ -192,20 +93,17 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
         if (selectedSearchCategory === 'weapons') {
             category = 'ARSENAL';
-            icon = <Zap className="w-5 h-5" />;
         } else if (selectedSearchCategory === 'armor') {
             category = 'ARMADURAS';
-            icon = <Shield className="w-5 h-5" />;
         } else if (selectedSearchCategory === 'abilities') {
             category = 'OBJETOS';
-            icon = <Heart className="w-5 h-5" />;
         }
 
         // Extract data source (payload or direct)
         const source = catalogItem.payload || catalogItem;
 
         // Map traits to tags
-        const traits = source.traits || source.rasgos || '';
+        const traits = source.traits || source.rasgos || source.trait || '';
         const traitTags = traits.split(',').map(t => t.trim()).filter(Boolean);
         const existingTags = source.tags || [];
         const mergedTags = [...new Set([...existingTags, ...traitTags])];
@@ -216,16 +114,15 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
             description: source.description || source.detail || source.descripcion || catalogItem.preview || 'Sin descripción',
             price: catalogItem.price || 100,
             category: category,
-            icon: icon,
             image: catalogItem.image || `https://picsum.photos/seed/${catalogItem.name}/400/400`,
             isVisible: true,
             isSold: false,
-            // Copiar datos de RPG si existen
-            damage: source.damage || source.dano,
-            defense: source.defense || source.defensa,
-            range: source.range || source.alcance,
+            // Copiar datos de RPG si existen (todas las variantes: minúsculas, mayúsculas, español, inglés)
+            damage: source.damage || source.dano || source.Damage || source.Dano || source.daño || source.Daño,
+            defense: source.defense || source.defensa || source.Defense || source.Defensa,
+            range: source.range || source.alcance || source.Range || source.Alcance,
             consumption: source.consumption || source.consumo,
-            rareza: source.rareza || source.rarity,
+            rareza: source.rareza || source.rarity || source.Rareza || source.Rarity,
             resourceCost: source.resourceCost,
             resourceType: source.resourceType,
             tags: mergedTags
@@ -234,7 +131,9 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
         // Verificar si ya existe un item con el mismo nombre
         const exists = items.find(item => item.name === catalogItem.name);
         if (!exists) {
-            setItems(prev => [...prev, newItem]);
+            const newItemsList = [...items, newItem];
+            setItems(newItemsList);
+            if (onUpdateStoreItems) onUpdateStoreItems(newItemsList);
         }
 
         setSearchQuery('');
@@ -265,8 +164,13 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
     const handlePurchase = () => {
         if (selectedItem && actualMoney >= selectedItem.price && !selectedItem.isSold) {
-            setActualMoney(prev => prev - selectedItem.price);
-            setItems(prev => prev.map(item => item.id === selectedItem.id ? { ...item, isSold: true } : item));
+            const newMoney = actualMoney - selectedItem.price;
+            setActualMoney(newMoney);
+            if (onUpdateMoney) onUpdateMoney(newMoney);
+
+            const newItemsList = items.map(item => item.id === selectedItem.id ? { ...item, isSold: true } : item);
+            setItems(newItemsList);
+            if (onUpdateStoreItems) onUpdateStoreItems(newItemsList);
         }
     };
 
@@ -300,6 +204,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
         if (!isNaN(val)) {
             setActualMoney(val);
             setDisplayMoney(val);
+            if (onUpdateMoney) onUpdateMoney(val);
         }
     };
 
@@ -307,12 +212,16 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
     const toggleItemVisibility = (e, id) => {
         e.stopPropagation();
-        setItems(prev => prev.map(item => item.id === id ? { ...item, isVisible: !item.isVisible } : item));
+        const newItemsList = items.map(item => item.id === id ? { ...item, isVisible: !item.isVisible } : item);
+        setItems(newItemsList);
+        if (onUpdateStoreItems) onUpdateStoreItems(newItemsList);
     };
 
     const handleDeleteItem = (e, id) => {
         e.stopPropagation();
-        setItems(prev => prev.filter(item => item.id !== id));
+        const newItemsList = items.filter(item => item.id !== id);
+        setItems(newItemsList);
+        if (onUpdateStoreItems) onUpdateStoreItems(newItemsList);
         if (selectedItemId === id) setSelectedItemId(null);
     };
 
@@ -328,22 +237,23 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
             isVisible: true,
             isSold: false,
             image: `https://picsum.photos/seed/${Date.now()}/400/400`,
-            icon: newItemType === 'ARSENAL' ? <Zap className="w-5 h-5" /> : newItemType === 'ARMADURAS' ? <Shield className="w-5 h-5" /> : <Box className="w-5 h-5" />,
             rareza: 'Común'
         };
 
-        setItems(prev => [...prev, newItem]);
+        const newItemsList = [...items, newItem];
+        setItems(newItemsList);
+        if (onUpdateStoreItems) onUpdateStoreItems(newItemsList);
         setNewItemName('');
         setNewItemPrice(0);
         setNewItemDesc('');
     };
 
-    const getCategoryIcon = (cat) => {
+    const getCategoryIcon = (cat, className = "w-6 h-6") => {
         switch (cat) {
-            case 'ARSENAL': return <Zap className="w-6 h-6" />;
-            case 'ARMADURAS': return <Shield className="w-6 h-6" />;
-            case 'OBJETOS': return <Box className="w-6 h-6" />;
-            default: return <Zap className="w-6 h-6" />;
+            case 'ARSENAL': return <Zap className={className} />;
+            case 'ARMADURAS': return <Shield className={className} />;
+            case 'OBJETOS': return <Box className={className} />;
+            default: return <Zap className={className} />;
         }
     };
 
@@ -629,7 +539,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                             <div className={`shrink-0 ${selectedItemId === item.id ? 'text-[#0b1120]' : 'text-slate-400'}`}>
-                                                {item.isSold ? <Lock className="w-5 h-5" /> : item.icon}
+                                                {item.isSold ? <Lock className="w-5 h-5" /> : getCategoryIcon(item.category, "w-5 h-5")}
                                             </div>
                                             <span className={`
                                         font-fantasy font-bold uppercase tracking-wider text-sm truncate
@@ -729,10 +639,10 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                                             <div className="grid grid-cols-2 gap-4 p-4 rounded border transition-all duration-500 bg-[#161f32]/50 border-[#c8aa6e]/10">
                                                 {/* Column 1: Damage / Defense */}
                                                 <div className="space-y-3 border-r border-[#c8aa6e]/10 pr-4">
-                                                    {selectedItem.damage && (
+                                                    {(selectedItem.damage || selectedItem.dano || selectedItem.Damage || selectedItem.Dano || selectedItem.daño || selectedItem.Daño) && (
                                                         <div>
                                                             <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">DAÑO</div>
-                                                            <div className="text-[#f0e6d2] font-fantasy font-bold text-lg">{selectedItem.damage}</div>
+                                                            <div className="text-[#f0e6d2] font-fantasy font-bold text-lg">{selectedItem.damage || selectedItem.dano || selectedItem.Damage || selectedItem.Dano || selectedItem.daño || selectedItem.Daño}</div>
                                                         </div>
                                                     )}
                                                     {selectedItem.defense && (

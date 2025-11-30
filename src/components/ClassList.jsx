@@ -112,18 +112,6 @@ const categorizeEquipment = (items = []) => {
       grouped.armor.push({
         defense: item.defensa || item.defense || '',
         physicalLoad: item.cargaFisica || item.carga || '',
-        mentalLoad: item.cargaMental || '',
-        traits: joinTraits(item.rasgos || item.traits || ''),
-        ...baseEntry,
-      });
-    } else {
-      grouped.abilities.push({
-        damage: item.dano || item.damage || '',
-        range: item.alcance || item.range || '',
-        consumption: item.consumo || item.cost || '',
-        body: item.cuerpo || '',
-        mind: item.mente || '',
-        trait: joinTraits(item.rasgo || item.rasgos || item.traits || ''),
         ...baseEntry,
       });
     }
@@ -377,7 +365,7 @@ const buildAbilityEntry = (ability) => {
     payload: {
       name,
       category,
-      damage: ability.dano || ability.damage || ability.Dano || ability.Damage || '',
+      damage: ability.dano || ability.damage || ability.Dano || ability.Damage || ability.daño || ability.Daño || ability.poder || ability.Poder || '',
       range: ability.alcance || ability.range || ability.Alcance || ability.Range || '',
       consumption,
       body,
@@ -529,7 +517,9 @@ const ensureClassDefaults = (classItem) => {
     ...(merged.equipment || {}),
   };
 
-  merged.storeItems = merged.storeItems || null; // Initialize as null to allow StoreView to use defaults if empty, or [] if we want to force empty. Let's use null to signal "not set".
+  // Initialize storeItems and money with defaults if not present
+  merged.storeItems = merged.storeItems !== undefined ? merged.storeItems : [];
+  merged.money = merged.money !== undefined ? merged.money : 4697;
 
   merged.image = normalizeImageValue(merged.image);
 
@@ -3026,7 +3016,9 @@ const ClassList = ({
         description: l.description
       })) : [],
       equipment: editingClass.equipment || [],
-      talents: editingClass.talents || {}
+      talents: editingClass.talents || {},
+      storeItems: editingClass.storeItems || [],
+      money: editingClass.money !== undefined ? editingClass.money : 4697
     };
 
     const renderActiveView = () => {
@@ -3706,10 +3698,18 @@ const ClassList = ({
             <StoreView
               equipmentCatalog={equipmentCatalog}
               storeItems={dndClass.storeItems}
+              money={dndClass.money !== undefined ? dndClass.money : 4697}
               onUpdateStoreItems={(newItems) => {
-                updateEditingClass((draft) => {
-                  draft.storeItems = newItems;
-                });
+                setEditingClass((prev) => ({
+                  ...prev,
+                  storeItems: newItems
+                }));
+              }}
+              onUpdateMoney={(newMoney) => {
+                setEditingClass((prev) => ({
+                  ...prev,
+                  money: newMoney
+                }));
               }}
             />
           );

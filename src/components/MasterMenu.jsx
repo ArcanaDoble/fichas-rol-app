@@ -66,10 +66,10 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
     },
     {
       id: 'routeMapLite',
-      title: 'Mapa de Rutas (Lite)',
-      description: 'Versión sin Pixi basada en SVG para ediciones rápidas y dispositivos modestos',
+      title: 'Mapa de Campaña',
+      description: 'Editor visual de rutas y nodos de campaña con integración de clases y guardado en la nube',
       color: 'cyan',
-      features: ['Sin Pixi', 'SVG', 'Pan & Zoom', 'Sincronizado'],
+      features: ['Nodos', 'Conexiones', 'Clases', 'Persistencia'],
       isNew: true,
     },
     {
