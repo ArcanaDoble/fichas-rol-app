@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, addDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
@@ -19,7 +19,10 @@ import {
   FiRefreshCw,
   FiTrash2,
   FiSliders,
+  FiMap,
+  FiChevronRight,
 } from 'react-icons/fi';
+import { ClassCreatorView } from './ClassCreatorView';
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
 import Boton from './Boton';
@@ -30,6 +33,7 @@ import { db, storage } from '../firebase';
 import Sidebar from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
+import { StoreView } from './StoreView';
 import HexIcon from './HexIcon';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
@@ -111,18 +115,6 @@ const categorizeEquipment = (items = []) => {
       grouped.armor.push({
         defense: item.defensa || item.defense || '',
         physicalLoad: item.cargaFisica || item.carga || '',
-        mentalLoad: item.cargaMental || '',
-        traits: joinTraits(item.rasgos || item.traits || ''),
-        ...baseEntry,
-      });
-    } else {
-      grouped.abilities.push({
-        damage: item.dano || item.damage || '',
-        range: item.alcance || item.range || '',
-        consumption: item.consumo || item.cost || '',
-        body: item.cuerpo || '',
-        mind: item.mente || '',
-        trait: joinTraits(item.rasgo || item.rasgos || item.traits || ''),
         ...baseEntry,
       });
     }
@@ -270,8 +262,8 @@ const buildWeaponEntry = (weapon) => {
     payload: {
       name,
       category,
-      damage: weapon.dano || weapon.damage || '',
-      range: weapon.alcance || weapon.range || '',
+      damage: weapon.dano || weapon.damage || weapon.Dano || weapon.Damage || '',
+      range: weapon.alcance || weapon.range || weapon.Alcance || weapon.Range || '',
       consumption,
       physicalLoad,
       mentalLoad,
@@ -324,7 +316,7 @@ const buildArmorEntry = (armor) => {
     payload: {
       name,
       category,
-      defense: armor.defensa || armor.defense || '',
+      defense: armor.defensa || armor.defense || armor.Defensa || armor.Defense || '',
       physicalLoad,
       mentalLoad,
       traits,
@@ -376,8 +368,8 @@ const buildAbilityEntry = (ability) => {
     payload: {
       name,
       category,
-      damage: ability.dano || ability.damage || '',
-      range: ability.alcance || ability.range || '',
+      damage: ability.dano || ability.damage || ability.Dano || ability.Damage || ability.daño || ability.Daño || ability.poder || ability.Poder || '',
+      range: ability.alcance || ability.range || ability.Alcance || ability.Range || '',
       consumption,
       body,
       mind,
@@ -528,11 +520,17 @@ const ensureClassDefaults = (classItem) => {
     ...(merged.equipment || {}),
   };
 
+  // Initialize storeItems and money with defaults if not present
+  merged.storeItems = merged.storeItems !== undefined ? merged.storeItems : [];
+  merged.money = merged.money !== undefined ? merged.money : 4697;
+
   merged.image = normalizeImageValue(merged.image);
 
   merged.equipment.weapons = (merged.equipment.weapons || []).map((weapon) => {
-    const consumption = toDisplayString(
+    const consumption = convertNumericStringToIcons(
       weapon.consumption ?? weapon.cost ?? weapon.consumo ?? '',
+      '🟡',
+      ['Consumo', 'Velocidad'],
     );
     const physicalLoad = toDisplayString(
       weapon.physicalLoad ??
@@ -580,6 +578,13 @@ const ensureClassDefaults = (classItem) => {
     const mentalLoad = toDisplayString(armor.mentalLoad ?? armor.cargaMental ?? '');
     const traitsValue = joinTraits(armor.traits || armor.rasgos || '');
 
+    // Convert defense to squares for "Coste" slot visualization
+    const defenseSquares = convertNumericStringToIcons(
+      armor.defense ?? armor.defensa ?? '',
+      '🟦',
+      ['Defensa'],
+    );
+
     return {
       name: '',
       category: '',
@@ -594,13 +599,23 @@ const ensureClassDefaults = (classItem) => {
       physicalLoad,
       mentalLoad,
       traits: traitsValue,
+      consumption: defenseSquares, // Map defense squares to consumption for LoadoutView
     };
   });
 
   merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => {
-    const consumption = toDisplayString(
+    const speed = convertNumericStringToIcons(
       ability.consumption ?? ability.cost ?? ability.consumo ?? '',
+      '🟡',
+      ['Consumo', 'Velocidad'],
     );
+    const mana = convertNumericStringToIcons(
+      ability.mana ?? ability.maná ?? '',
+      '🔵',
+      ['Mana'],
+    );
+    const consumption = `${speed} ${mana}`.trim();
+
     const body = toDisplayString(ability.body ?? ability.cuerpo ?? '');
     const mind = toDisplayString(ability.mind ?? ability.mente ?? '');
     const traitValue = joinTraits(ability.trait || ability.rasgo || ability.rasgos || '');
@@ -608,17 +623,17 @@ const ensureClassDefaults = (classItem) => {
     return {
       name: '',
       category: '',
-      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
-      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ability.Damage ?? ability.Dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ability.Range ?? ability.Alcance ?? ''),
       consumption,
       body,
       mind,
       trait: traitValue,
-      rareza: toDisplayString(ability.rareza || ''),
+      rareza: toDisplayString(ability.rareza || ability.rarity || ability.Rareza || ability.Rarity || ''),
       description: '',
       ...ability,
-      damage: toDisplayString(ability.damage ?? ability.dano ?? ''),
-      range: toDisplayString(ability.range ?? ability.alcance ?? ''),
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ability.Damage ?? ability.Dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ability.Range ?? ability.Alcance ?? ''),
       consumption,
       body,
       mind,
@@ -1307,6 +1322,8 @@ const ClassList = ({
     abilities: '',
   });
   const [saveButtonState, setSaveButtonState] = useState('idle'); // 'idle', 'saving', 'success', 'error'
+  const [isCreating, setIsCreating] = useState(false);
+
 
   const fileInputRef = useRef(null);
 
@@ -1785,6 +1802,30 @@ const ClassList = ({
       rules.splice(index, 1);
       draft.rules = rules;
     });
+  };
+
+  const handleSaveNewClass = async (newClass) => {
+    try {
+      let imageUrl = newClass.image;
+
+      // If image is a base64 string, upload it to Storage
+      if (imageUrl && imageUrl.startsWith('data:')) {
+        const imageRef = ref(storage, `class-images/${newClass.id}`);
+        await uploadString(imageRef, imageUrl, 'data_url');
+        imageUrl = await getDownloadURL(imageRef);
+      }
+
+      const classToSave = {
+        ...newClass,
+        image: imageUrl,
+      };
+
+      await setDoc(doc(db, 'classes', newClass.id), classToSave);
+      setClasses((prev) => [...prev, classToSave]);
+      setIsCreating(false);
+    } catch (error) {
+      console.error("Error creating class:", error);
+    }
   };
 
   const handleTagChange = (index, value) => {
@@ -3004,7 +3045,9 @@ const ClassList = ({
         description: l.description
       })) : [],
       equipment: editingClass.equipment || [],
-      talents: editingClass.talents || {}
+      talents: editingClass.talents || {},
+      storeItems: editingClass.storeItems || [],
+      money: editingClass.money !== undefined ? editingClass.money : 4697
     };
 
     const renderActiveView = () => {
@@ -3065,42 +3108,51 @@ const ClassList = ({
 
                   </div>
                 </div>
-
                 {/* Right: Data & Stats */}
-                <div className="flex-1 w-full max-w-2xl flex flex-col gap-10">
+                <div className="flex-1 w-full max-w-5xl flex flex-col gap-8">
 
                   {/* Header / Title Section */}
                   <div>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        Dificultad:
-                        <EditableText
-                          value={dndClass.difficulty}
-                          onChange={(val) => handleUpdateClassField('difficulty', val)}
-                          className="inline text-[#c8aa6e]"
-                        />
+                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Dificultad: {editingClass.difficulty}
                       </div>
-                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        Rol:
-                        <EditableText
-                          value={dndClass.role}
-                          onChange={(val) => handleUpdateClassField('role', val)}
-                          className="inline text-cyan-400"
-                        />
+                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Rol: {editingClass.role || 'N/A'}
                       </div>
+
+                      {/* UNLOCK/LOCK TOGGLE */}
+                      <button
+                        onClick={() => {
+                          const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
+                          updateEditingClass((draft) => {
+                            draft.status = newStatus;
+                          });
+                        }}
+                        className={`px-3 py-1 border rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${editingClass.status !== 'locked'
+                          ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
+                          : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
+                          }`}
+                        title={editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase"}
+                      >
+                        {editingClass.status !== 'locked' ? <FiLock className="w-3 h-3" /> : <FiLock className="w-3 h-3" />}
+                        {editingClass.status !== 'locked' ? 'DESBLOQUEADO' : 'BLOQUEADO'}
+                      </button>
                     </div>
 
-                    <EditableText
-                      value={dndClass.name}
-                      onChange={(val) => handleUpdateClassField('name', val)}
-                      className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6 block"
-                    />
+                    <h1 className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6">
+                      {editingClass.name}
+                    </h1>
 
                     <div className="relative pl-6 border-l-2 border-[#c8aa6e]/30">
                       <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
                         "<EditableText
-                          value={dndClass.description}
-                          onChange={(val) => handleUpdateClassField('description', val)}
+                          value={editingClass.description}
+                          onChange={(val) =>
+                            updateEditingClass((draft) => {
+                              draft.description = val;
+                            })
+                          }
                           className="inline text-slate-300"
                           multiline={true}
                         />"
@@ -3110,68 +3162,530 @@ const ClassList = ({
                     </div>
                   </div>
 
-                  {/* Stats Grid */}
-                  <div>
-                    <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg mb-4 tracking-widest flex items-center gap-2">
-                      <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
-                      ATRIBUTOS DE CLASE
-                    </h4>
-                    <div className="flex flex-wrap justify-center gap-6">
-                      {[
-                        { key: 'dexterity', label: 'Destreza', icon: '🎯' },
-                        { key: 'vigor', label: 'Vigor', icon: '💪' },
-                        { key: 'intellect', label: 'Intelecto', icon: '🧠' },
-                        { key: 'willpower', label: 'Voluntad', icon: '✨' }
-                      ].map((attr) => {
-                        const diceValue = editingClass.attributes?.[attr.key] || 'd4';
+                  {/* Content Grid: Attributes (Left) & Stats (Right) */}
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
 
-                        return (
-                          <div key={attr.key} className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-[140px]">
-                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-3">{attr.label}</div>
-                            <DiceSelector
-                              value={diceValue}
-                              onChange={(newValue) => {
-                                updateEditingClass((draft) => {
-                                  if (!draft.attributes) draft.attributes = {};
-                                  draft.attributes[attr.key] = newValue;
-                                });
-                              }}
-                            />
-                            <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">{diceValue.toUpperCase()}</div>
+                    {/* Left Column: Attributes & Actions */}
+                    <div className="flex flex-col gap-8">
+                      <div>
+                        <div className="mb-6 border-b border-[#c8aa6e]/30 pb-2">
+                          <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
+                            <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
+                            ATRIBUTOS DE CLASE
+                          </h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          {[
+                            { key: 'dexterity', label: 'Destreza', icon: '🎯' },
+                            { key: 'vigor', label: 'Vigor', icon: '💪' },
+                            { key: 'intellect', label: 'Intelecto', icon: '🧠' },
+                            { key: 'willpower', label: 'Voluntad', icon: '✨' }
+                          ].map((attr) => {
+                            const diceValue = editingClass.attributes?.[attr.key] || 'd4';
+
+                            return (
+                              <div key={attr.key} className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-full">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-3">{attr.label}</div>
+                                <DiceSelector
+                                  value={diceValue}
+                                  onChange={(newValue) => {
+                                    updateEditingClass((draft) => {
+                                      if (!draft.attributes) draft.attributes = {};
+                                      draft.attributes[attr.key] = newValue;
+                                    });
+                                  }}
+                                />
+                                <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">{diceValue.toUpperCase()}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="mt-auto space-y-4">
+                        <button className="w-full group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right">
+                          <span className="relative z-10 flex items-center justify-center gap-3">
+                            Jugar Aventura
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                          </span>
+                          <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out z-0" />
+                        </button>
+
+                        <button
+                          onClick={() => openFileDialogForClass(dndClass.id)}
+                          className="w-full px-6 py-4 border border-[#c8aa6e]/30 text-[#c8aa6e] font-['Cinzel'] font-bold uppercase tracking-widest hover:bg-[#c8aa6e]/10 transition-colors"
+                        >
+                          Editar Retrato
+                        </button>
+                      </div>
+                    </div >
+
+                    {/* Right Column: Stats */}
+                    < div >
+
+                      {/* STATS SECTION */}
+                      < div >
+                        <div className="flex items-center justify-between mb-6 border-b border-[#c8aa6e]/30 pb-2">
+                          <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
+                            <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
+                            ESTADÍSTICAS
+                          </h4>
+                          <button
+                            onClick={() => {
+                              // Toggle edit mode for stats
+                              const currentMode = editingClass.isEditingStats || false;
+                              updateEditingClass((draft) => {
+                                draft.isEditingStats = !currentMode;
+                              });
+                            }}
+                            className={`p-1.5 rounded transition-colors ${editingClass.isEditingStats
+                              ? 'text-[#c8aa6e] bg-[#c8aa6e]/10'
+                              : 'text-slate-600 hover:text-[#c8aa6e]'
+                              }`}
+                            title="Editar Estadísticas (Master)"
+                          >
+                            {editingClass.isEditingStats ? <FiCheckSquare className="w-4 h-4" /> : <FiEdit2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+
+                        {/* Vertical Stack Layout */}
+                        <div className="flex flex-col gap-5 px-1">
+                          {/* POSTURA */}
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-end justify-between mb-2">
+                              <span className="text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+                                <span className="w-1 h-1 bg-[#c8aa6e] rotate-45"></span>
+                                POSTURA
+                              </span>
+                              {editingClass.isEditingStats ? (
+                                <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
+                                          const newCurrent = Math.max(0, (draft.stats.postura.current || 3) - 1);
+                                          draft.stats.postura.current = Math.min(newCurrent, draft.stats.postura.max || 4);
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.postura?.current || 3}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
+                                          const newCurrent = Math.min((draft.stats.postura.max || 4), (draft.stats.postura.current || 3) + 1);
+                                          draft.stats.postura.current = newCurrent;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="w-[1px] h-3 bg-slate-700"></div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
+                                          const newMax = Math.max(1, (draft.stats.postura.max || 4) - 1);
+                                          draft.stats.postura.max = Math.min(10, newMax);
+                                          if (draft.stats.postura.current > newMax) draft.stats.postura.current = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.postura?.max || 4}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
+                                          const newMax = Math.min(10, (draft.stats.postura.max || 4) + 1);
+                                          draft.stats.postura.max = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+                                  {editingClass.stats?.postura?.current || 3} <span className="text-slate-600">/</span> {editingClass.stats?.postura?.max || 4}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+                              {Array.from({ length: editingClass.stats?.postura?.max || 4 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.postura?.current || 3)
+                                    ? 'bg-[#a3c9a8] border-green-900'
+                                    : 'bg-[#a3c9a8]/20 border-green-900/30'
+                                    }`}
+                                  style={{
+                                    clipPath: i === 0
+                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                    marginLeft: i === 0 ? '0' : '-6px',
+                                    zIndex: (editingClass.stats?.postura?.max || 4) - i,
+                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
 
-                  {/* Call to Action */}
-                  <div className="mt-4">
-                    <button className="w-full md:w-auto group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right">
-                      {/* Contenido del botón (Texto + Icono) */}
-                      <span className="relative z-10 flex items-center justify-center gap-3">
-                        Jugar Aventura
-                        {/* Icono de flecha animado */}
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                      </span>
+                          {/* VIDA */}
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-end justify-between mb-2">
+                              <span className="text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+                                <span className="w-1 h-1 bg-[#c8aa6e] rotate-45"></span>
+                                VIDA
+                              </span>
+                              {editingClass.isEditingStats ? (
+                                <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
+                                          const newCurrent = Math.max(0, (draft.stats.vida.current || 4) - 1);
+                                          draft.stats.vida.current = Math.min(newCurrent, draft.stats.vida.max || 4);
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.vida?.current || 4}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
+                                          const newCurrent = Math.min((draft.stats.vida.max || 4), (draft.stats.vida.current || 4) + 1);
+                                          draft.stats.vida.current = newCurrent;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="w-[1px] h-3 bg-slate-700"></div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
+                                          const newMax = Math.max(1, (draft.stats.vida.max || 4) - 1);
+                                          draft.stats.vida.max = Math.min(10, newMax);
+                                          if (draft.stats.vida.current > newMax) draft.stats.vida.current = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.vida?.max || 4}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
+                                          const newMax = Math.min(10, (draft.stats.vida.max || 4) + 1);
+                                          draft.stats.vida.max = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+                                  {editingClass.stats?.vida?.current || 4} <span className="text-slate-600">/</span> {editingClass.stats?.vida?.max || 4}
+                                </span>
+                              )}
+                            </div>
 
-                      {/* El efecto de brillo (Flash) que cruza el botón al hacer hover */}
-                      <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out z-0" />
-                    </button>
-                  </div>
+                            <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+                              {Array.from({ length: editingClass.stats?.vida?.max || 4 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.vida?.current || 4)
+                                    ? 'bg-[#e09f9f] border-red-900'
+                                    : 'bg-[#e09f9f]/20 border-red-900/30'
+                                    }`}
+                                  style={{
+                                    clipPath: i === 0
+                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                    marginLeft: i === 0 ? '0' : '-6px',
+                                    zIndex: (editingClass.stats?.vida?.max || 4) - i,
+                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                </div>
+                              ))}
+                            </div>
 
-                  {/* Botón Editar Retrato */}
-                  <div className="mt-4">
-                    <button
-                      onClick={() => openFileDialogForClass(dndClass.id)}
-                      className="px-6 py-4 border border-[#c8aa6e]/30 text-[#c8aa6e] font-['Cinzel'] font-bold uppercase tracking-widest hover:bg-[#c8aa6e]/10 transition-colors"
-                    >
-                      Editar Retrato
-                    </button>
-                  </div>
-                </div>
-              </div>
+                            <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
+                          </div>
+
+                          {/* INGENIO */}
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-end justify-between mb-2">
+                              <span className="text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+                                <span className="w-1 h-1 bg-[#c8aa6e] rotate-45"></span>
+                                INGENIO
+                              </span>
+                              {editingClass.isEditingStats ? (
+                                <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.max(0, (draft.stats.ingenio.current || 2) - 1); draft.stats.ingenio.current = Math.min(newCurrent, draft.stats.ingenio.max || 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.ingenio?.current || 2}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.min((draft.stats.ingenio.max || 3), (draft.stats.ingenio.current || 2) + 1); draft.stats.ingenio.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                  </div>
+                                  <div className="w-[1px] h-3 bg-slate-700"></div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.max(1, (draft.stats.ingenio.max || 3) - 1); draft.stats.ingenio.max = Math.min(10, newMax); if (draft.stats.ingenio.current > newMax) draft.stats.ingenio.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.ingenio?.max || 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.min(10, (draft.stats.ingenio.max || 3) + 1); draft.stats.ingenio.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+                                  {editingClass.stats?.ingenio?.current || 2} <span className="text-slate-600">/</span> {editingClass.stats?.ingenio?.max || 3}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+                              {Array.from({ length: editingClass.stats?.ingenio?.max || 3 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.ingenio?.current || 2)
+                                    ? 'bg-[#9face0] border-blue-900'
+                                    : 'bg-[#9face0]/20 border-blue-900/30'
+                                    }`}
+                                  style={{
+                                    clipPath: i === 0
+                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                    marginLeft: i === 0 ? '0' : '-6px',
+                                    zIndex: (editingClass.stats?.ingenio?.max || 3) - i,
+                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
+                          </div>
+
+                          {/* CORDURA */}
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-end justify-between mb-2">
+                              <span className="text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+                                <span className="w-1 h-1 bg-[#c8aa6e] rotate-45"></span>
+                                CORDURA
+                              </span>
+                              {editingClass.isEditingStats ? (
+                                <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.max(0, (draft.stats.cordura.current || 3) - 1); draft.stats.cordura.current = Math.min(newCurrent, draft.stats.cordura.max || 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.cordura?.current || 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.min((draft.stats.cordura.max || 3), (draft.stats.cordura.current || 3) + 1); draft.stats.cordura.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                  </div>
+                                  <div className="w-[1px] h-3 bg-slate-700"></div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.max(1, (draft.stats.cordura.max || 3) - 1); draft.stats.cordura.max = Math.min(10, newMax); if (draft.stats.cordura.current > newMax) draft.stats.cordura.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.cordura?.max || 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.min(10, (draft.stats.cordura.max || 3) + 1); draft.stats.cordura.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+                                  {editingClass.stats?.cordura?.current || 3} <span className="text-slate-600">/</span> {editingClass.stats?.cordura?.max || 3}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+                              {Array.from({ length: editingClass.stats?.cordura?.max || 3 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.cordura?.current || 3)
+                                    ? 'bg-[#c09fe0] border-purple-900'
+                                    : 'bg-[#c09fe0]/20 border-purple-900/30'
+                                    }`}
+                                  style={{
+                                    clipPath: i === 0
+                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                    marginLeft: i === 0 ? '0' : '-6px',
+                                    zIndex: (editingClass.stats?.cordura?.max || 3) - i,
+                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
+                          </div>
+
+                          {/* ARMADURA */}
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-end justify-between mb-2">
+                              <span className="text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+                                <span className="w-1 h-1 bg-[#c8aa6e] rotate-45"></span>
+                                ARMADURA
+                              </span>
+                              {editingClass.isEditingStats ? (
+                                <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
+                                          const newCurrent = Math.max(0, (draft.stats.armadura.current || 1) - 1);
+                                          draft.stats.armadura.current = Math.min(newCurrent, draft.stats.armadura.max || 2);
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.armadura?.current || 1}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
+                                          const newCurrent = Math.min((draft.stats.armadura.max || 2), (draft.stats.armadura.current || 1) + 1);
+                                          draft.stats.armadura.current = newCurrent;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="w-[1px] h-3 bg-slate-700"></div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
+                                          const newMax = Math.max(1, (draft.stats.armadura.max || 2) - 1);
+                                          draft.stats.armadura.max = Math.min(10, newMax);
+                                          if (draft.stats.armadura.current > newMax) draft.stats.armadura.current = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3 rotate-45" />
+                                    </button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.armadura?.max || 2}</span>
+                                    <button
+                                      onClick={() => {
+                                        updateEditingClass((draft) => {
+                                          if (!draft.stats) draft.stats = {};
+                                          if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
+                                          const newMax = Math.min(10, (draft.stats.armadura.max || 2) + 1);
+                                          draft.stats.armadura.max = newMax;
+                                        });
+                                      }}
+                                      className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
+                                    >
+                                      <FiPlus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+                                  {editingClass.stats?.armadura?.current || 1} <span className="text-slate-600">/</span> {editingClass.stats?.armadura?.max || 2}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+                              {Array.from({ length: editingClass.stats?.armadura?.max || 2 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.armadura?.current || 1)
+                                    ? 'bg-[#a0a0a0] border-slate-600'
+                                    : 'bg-[#a0a0a0]/20 border-slate-600/30'
+                                    }`}
+                                  style={{
+                                    clipPath: i === 0
+                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                    marginLeft: i === 0 ? '0' : '-6px',
+                                    zIndex: (editingClass.stats?.armadura?.max || 2) - i,
+                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
+                          </div>
+                        </div>
+                      </div >
+
+                    </div >
+                  </div >
+                </div >
+              </div >
             </div >
           );
         case 'progression':
@@ -3216,6 +3730,26 @@ const ClassList = ({
                 Sección de Talentos en construcción...
               </div>
             </div>
+          );
+        case 'store':
+          return (
+            <StoreView
+              equipmentCatalog={equipmentCatalog}
+              storeItems={dndClass.storeItems}
+              money={dndClass.money !== undefined ? dndClass.money : 4697}
+              onUpdateStoreItems={(newItems) => {
+                setEditingClass((prev) => ({
+                  ...prev,
+                  storeItems: newItems
+                }));
+              }}
+              onUpdateMoney={(newMoney) => {
+                setEditingClass((prev) => ({
+                  ...prev,
+                  money: newMoney
+                }));
+              }}
+            />
           );
         default:
           return null;
@@ -3358,121 +3892,145 @@ const ClassList = ({
               </div>
             </div>
 
-            <div
-              className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-            >
-              {filteredClasses.map((classItem) => {
-                const isLocked = classItem.status === 'locked';
+            {isCreating ? (
+              <ClassCreatorView
+                onBack={() => setIsCreating(false)}
+                onSave={handleSaveNewClass}
+              />
+            ) : (
+              <div className="flex flex-col gap-10 pb-12">
+                {/* Divider */}
+                <div className="flex items-center gap-4">
+                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
+                  <span className="font-['Cinzel'] text-[#c8aa6e] tracking-widest text-lg">CAMPEONES DISPONIBLES</span>
+                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
+                </div>
 
-                return (
+                <div
+                  className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                >
+                  {/* Create New Class Card */}
                   <div
-                    key={classItem.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openClassDetails(classItem)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openClassDetails(classItem);
-                      }
-                    }}
-                    className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
+                    onClick={() => setIsCreating(true)}
+                    className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4"
                   >
-                    {/* Main Frame Content */}
-                    <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
-                      {/* Background Image with Zoom effect */}
-                      <div className="absolute inset-0 overflow-hidden">
-                        {classItem.image ? (
-                          <img
-                            src={classItem.image}
-                            alt={classItem.name}
-                            className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
-                            <FiImage className="h-12 w-12 opacity-20" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
-                      </div>
-
-                      {/* Locked Overlay */}
-                      {isLocked && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
-                            <FiLock className="h-8 w-8 text-slate-400" />
-                          </div>
-                          <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
-                        </div>
-                      )}
-
-                      {/* Card Content */}
-                      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
-                        <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
-                          {classItem.name}
-                        </h3>
-
-                        {/* Stars */}
-                        <div className="mb-3 flex items-center justify-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <svg
-                              key={i}
-                              className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                          ))}
-                        </div>
-
-                        {/* Role/Level Badge */}
-                        {!isLocked && (
-                          <div className="flex w-full items-center justify-center gap-3">
-                            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
-                            <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
-                              Nvl {classItem.level || 1}
-                            </div>
-                            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
-                          </div>
-                        )}
-                      </div>
+                    <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
+                      <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
                     </div>
-
-                    {/* Fancy Border Frame (Over everything) */}
-                    <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
-                      {/* Corner Accents */}
-                      <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
-                      <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
-                      <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
-                      <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
+                    <div className="text-center">
+                      <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
+                      <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Campeón</p>
                     </div>
-
-                    {/* Static Border for non-hover */}
-                    <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
-
-                    {/* Role Icon Badge (Top Right) */}
-                    <div className="absolute right-3 top-3 z-30">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full border bg-[#0b1120]/90 shadow-lg ${!isLocked ? 'border-[#c8aa6e] text-[#c8aa6e]' : 'border-slate-600 text-slate-600'}`}>
-                        <span className="text-xs font-bold">{classItem.name.charAt(0)}</span>
-                      </div>
-                    </div>
-
-                    {/* Edit Button (Top Left) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFileDialogForClass(classItem.id);
-                      }}
-                      className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
-                      title="Cambiar retrato"
-                    >
-                      <FiImage className="h-3.5 w-3.5" />
-                    </button>
                   </div>
-                );
-              })}
-            </div>
+
+                  {filteredClasses.map((classItem) => {
+                    const isLocked = classItem.status === 'locked';
+
+                    return (
+                      <div
+                        key={classItem.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openClassDetails(classItem)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openClassDetails(classItem);
+                          }
+                        }}
+                        className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
+                      >
+                        {/* Main Frame Content */}
+                        <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
+                          {/* Background Image with Zoom effect */}
+                          <div className="absolute inset-0 overflow-hidden">
+                            {classItem.image ? (
+                              <img
+                                src={classItem.image}
+                                alt={classItem.name}
+                                className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                                <FiImage className="h-12 w-12 opacity-20" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
+                          </div>
+
+                          {/* Locked Overlay */}
+                          {isLocked && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
+                                <FiLock className="h-8 w-8 text-slate-400" />
+                              </div>
+                              <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
+                            </div>
+                          )}
+
+                          {/* Card Content */}
+                          <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
+                            <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
+                              {classItem.name}
+                            </h3>
+
+                            {/* Stars */}
+                            <div className="mb-3 flex items-center justify-center gap-0.5">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <svg
+                                  key={i}
+                                  className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                </svg>
+                              ))}
+                            </div>
+
+                            {/* Role/Level Badge */}
+                            {!isLocked && (
+                              <div className="flex w-full items-center justify-center gap-3">
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
+                                <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                                  Nvl {classItem.level || 1}
+                                </div>
+                                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Fancy Border Frame (Over everything) */}
+                        <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
+                          {/* Corner Accents */}
+                          <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
+                          <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
+                          <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
+                          <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
+                        </div>
+
+                        {/* Static Border for non-hover */}
+                        <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
+
+
+                        {/* Edit Button (Top Left) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openFileDialogForClass(classItem.id);
+                          }}
+                          className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
+                          title="Cambiar retrato"
+                        >
+                          <FiImage className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </motion.div>
         ) : (
           <motion.div

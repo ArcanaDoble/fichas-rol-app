@@ -71,7 +71,7 @@ import {
 } from './utils/color';
 import PageSelector from './components/PageSelector';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
-const RouteMapBuilderLite = React.lazy(() => import('./components/RouteMapBuilderLite'));
+const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
 import { nanoid } from 'nanoid';
 import {
   saveTokenSheet,
@@ -764,10 +764,10 @@ const cargaMentalIcon = (v) => {
 const normalizeName = (name) =>
   name
     ? name
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/\s+/g, '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
     : '';
 const ALVARO_KEY = 'alvaro';
 const applyCargaPenalties = (
@@ -1364,8 +1364,8 @@ function App() {
         ...(typeof e.etiquetas === 'string'
           ? e.etiquetas.split(',').map((t) => t.trim())
           : Array.isArray(e.etiquetas)
-          ? e.etiquetas
-          : []),
+            ? e.etiquetas
+            : []),
       ]
         .filter(Boolean)
         .join(' ');
@@ -1420,8 +1420,8 @@ function App() {
         typeof change === 'number'
           ? { type: 'delta', value: change }
           : change && typeof change === 'object'
-          ? change
-          : { type: 'delta', value: 0 };
+            ? change
+            : { type: 'delta', value: 0 };
 
       const type = config.type === 'set' ? 'set' : 'delta';
       const amount = Number(config.value) || 0;
@@ -1721,10 +1721,9 @@ function App() {
           },
         };
         parts.push(
-          `${statKey.toUpperCase()} ${
-            operation === 'set'
-              ? `= ${numericValue}`
-              : `${numericValue > 0 ? '+' : ''}${numericValue}`
+          `${statKey.toUpperCase()} ${operation === 'set'
+            ? `= ${numericValue}`
+            : `${numericValue > 0 ? '+' : ''}${numericValue}`
           }`
         );
       }
@@ -2666,14 +2665,14 @@ function App() {
         prevGridRef.current = {
           gridSize: data.gridSize || 1,
           gridCells: data.gridCells || 1,
-            gridOffsetX: data.gridOffsetX || 0,
-            gridOffsetY: data.gridOffsetY || 0,
-            showGrid: data.showGrid !== undefined ? data.showGrid : true,
-            gridColor: (data.gridColor || '#ffffff').toLowerCase(),
-            gridOpacity:
-              data.gridOpacity !== undefined
-                ? Math.max(0, Math.min(1, data.gridOpacity))
-                : 0.2,
+          gridOffsetX: data.gridOffsetX || 0,
+          gridOffsetY: data.gridOffsetY || 0,
+          showGrid: data.showGrid !== undefined ? data.showGrid : true,
+          gridColor: (data.gridColor || '#ffffff').toLowerCase(),
+          gridOpacity:
+            data.gridOpacity !== undefined
+              ? Math.max(0, Math.min(1, data.gridOpacity))
+              : 0.2,
         };
 
         // Actualizar metadatos de la página
@@ -3246,64 +3245,64 @@ function App() {
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
     ? armas
-        .filter(
-          (a) =>
-            a &&
-            a.nombre &&
-            a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (a) =>
+          a &&
+          a.nombre &&
+          a.nombre.toLowerCase().includes(playerInputArma.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   const armaduraSugerencias = playerInputArmadura
     ? armaduras
-        .filter(
-          (a) =>
-            a &&
-            a.nombre &&
-            a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (a) =>
+          a &&
+          a.nombre &&
+          a.nombre.toLowerCase().includes(playerInputArmadura.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   const poderSugerencias = playerInputPoder
     ? habilidades
-        .filter(
-          (h) =>
-            h &&
-            h.nombre &&
-            h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (h) =>
+          h &&
+          h.nombre &&
+          h.nombre.toLowerCase().includes(playerInputPoder.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   // Sugerencias dinámicas para inputs de equipo de enemigos
   const enemyArmaSugerencias = enemyInputArma
     ? armas
-        .filter(
-          (a) =>
-            a &&
-            a.nombre &&
-            a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (a) =>
+          a &&
+          a.nombre &&
+          a.nombre.toLowerCase().includes(enemyInputArma.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   const enemyArmaduraSugerencias = enemyInputArmadura
     ? armaduras
-        .filter(
-          (a) =>
-            a &&
-            a.nombre &&
-            a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (a) =>
+          a &&
+          a.nombre &&
+          a.nombre.toLowerCase().includes(enemyInputArmadura.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   const enemyPoderSugerencias = enemyInputPoder
     ? habilidades
-        .filter(
-          (h) =>
-            h &&
-            h.nombre &&
-            h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
-        )
-        .slice(0, 5)
+      .filter(
+        (h) =>
+          h &&
+          h.nombre &&
+          h.nombre.toLowerCase().includes(enemyInputPoder.toLowerCase())
+      )
+      .slice(0, 5)
     : [];
   // ───────────────────────────────────────────────────────────
   // NAVIGATION
@@ -3447,8 +3446,8 @@ function App() {
           datos = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
-                  s.replace(/[[\]]/g, '').trim()
-                )
+                s.replace(/[[\]]/g, '').trim()
+              )
               : [];
             return {
               nombre: obj.NOMBRE,
@@ -3495,7 +3494,7 @@ function App() {
           fuente: 'custom',
         }));
         datos = [...datos, ...custom];
-      } catch (e) {}
+      } catch (e) { }
       setArmas(
         datos.map((item) => ({
           ...item,
@@ -3524,8 +3523,8 @@ function App() {
           datos = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
-                  s.replace(/[[\]]/g, '').trim()
-                )
+                s.replace(/[[\]]/g, '').trim()
+              )
               : [];
             return {
               nombre: obj.NOMBRE,
@@ -3569,7 +3568,7 @@ function App() {
           fuente: 'custom',
         }));
         datos = [...datos, ...custom];
-      } catch (e) {}
+      } catch (e) { }
       setArmaduras(
         datos.map((item) => ({
           ...item,
@@ -4047,15 +4046,15 @@ function App() {
           cargaFisica: '',
           cargaMental: '',
           rasgos: '',
-        descripcion: '',
-        tipoDano: '',
-        valor: '',
-        tecnologia: '',
-        rareza: '',
-      });
+          descripcion: '',
+          tipoDano: '',
+          valor: '',
+          tecnologia: '',
+          rareza: '',
+        });
       }
       fetchArmas();
-    } catch (e) {}
+    } catch (e) { }
   };
   const agregarArmadura = async () => {
     const { nombre } = newArmorData;
@@ -4118,15 +4117,15 @@ function App() {
           defensa: '',
           cargaFisica: '',
           cargaMental: '',
-        rasgos: '',
-        descripcion: '',
-        valor: '',
-        tecnologia: '',
-        rareza: '',
-      });
+          rasgos: '',
+          descripcion: '',
+          valor: '',
+          tecnologia: '',
+          rareza: '',
+        });
       }
       fetchArmaduras();
-    } catch (e) {}
+    } catch (e) { }
   };
   const agregarHabilidad = async () => {
     const { nombre } = newAbility;
@@ -4189,14 +4188,14 @@ function App() {
           alcance: '',
           consumo: '',
           cuerpo: '',
-        mente: '',
-        poder: '',
-        descripcion: '',
-        rareza: '',
-      });
+          mente: '',
+          poder: '',
+          descripcion: '',
+          rareza: '',
+        });
       }
       fetchHabilidades();
-    } catch (e) {}
+    } catch (e) { }
   };
   // ───────────────────────────────────────────────────────────
   // FUNCIONES PARA ENEMIGOS
@@ -4226,7 +4225,7 @@ function App() {
       if (selectedEnemy?.id === enemyId) {
         setSelectedEnemy(null);
       }
-    } catch (e) {}
+    } catch (e) { }
   };
   const createNewEnemy = () => {
     const baseAtributos = {};
@@ -4309,7 +4308,7 @@ function App() {
           window.dispatchEvent(
             new CustomEvent('focusToken', { detail: { tokenId: docRef.id } })
           );
-        } catch {}
+        } catch { }
       }, 400);
     } catch (e) {
       console.error('Error enviando enemigo al mapa', e);
@@ -5467,106 +5466,106 @@ function App() {
         <div className="flex-1 overflow-hidden flex">
           <div className="flex-1 overflow-hidden">
             <MapCanvas
-            userType="player"
-            playerName={playerName}
-            playerViewMode={true}
-            simulatedPlayer={playerName}
-            tokens={effectivePage?.tokens || []}
-            onTokensChange={(updater) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                const prev = updatedPages[effectivePageIndex].tokens || [];
-                const next =
-                  typeof updater === 'function' ? updater(prev) : updater;
-                const changed = diffTokens(prev, next);
-                changed.forEach((tk) => {
-                  const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                  const resolvedUpdatedAt =
-                    normalizedUpdatedAt ??
-                    (typeof tk.updatedAt === 'number'
-                      ? tk.updatedAt
-                      : Timestamp.now().toMillis());
-                  pendingTokenChangesRef.current.set(String(tk.id), {
-                    ...tk,
-                    updatedAt: resolvedUpdatedAt,
+              userType="player"
+              playerName={playerName}
+              playerViewMode={true}
+              simulatedPlayer={playerName}
+              tokens={effectivePage?.tokens || []}
+              onTokensChange={(updater) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  const prev = updatedPages[effectivePageIndex].tokens || [];
+                  const next =
+                    typeof updater === 'function' ? updater(prev) : updater;
+                  const changed = diffTokens(prev, next);
+                  changed.forEach((tk) => {
+                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+                    const resolvedUpdatedAt =
+                      normalizedUpdatedAt ??
+                      (typeof tk.updatedAt === 'number'
+                        ? tk.updatedAt
+                        : Timestamp.now().toMillis());
+                    pendingTokenChangesRef.current.set(String(tk.id), {
+                      ...tk,
+                      updatedAt: resolvedUpdatedAt,
+                    });
                   });
-                });
-                updatedPages[effectivePageIndex].tokens = next;
-                setPages(updatedPages);
+                  updatedPages[effectivePageIndex].tokens = next;
+                  setPages(updatedPages);
+                }
+              }}
+              lines={effectivePage?.lines || []}
+              onLinesChange={(newLines) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  updatedPages[effectivePageIndex].lines = newLines;
+                  setPages(updatedPages);
+                }
+              }}
+              walls={effectivePage?.walls || []}
+              onWallsChange={(newWalls) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  updatedPages[effectivePageIndex].walls = newWalls;
+                  setPages(updatedPages);
+                }
+              }}
+              texts={effectivePage?.texts || []}
+              onTextsChange={(newTexts) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  updatedPages[effectivePageIndex].texts = newTexts;
+                  setPages(updatedPages);
+                }
+              }}
+              tiles={effectivePage?.tiles || []}
+              onTilesChange={(newTiles) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  updatedPages[effectivePageIndex].tiles = newTiles;
+                  setPages(updatedPages);
+                }
+              }}
+              ambientLights={effectivePage?.ambientLights || []}
+              onAmbientLightsChange={(newLights) => {
+                const updatedPages = [...pages];
+                if (updatedPages[effectivePageIndex]) {
+                  updatedPages[effectivePageIndex].ambientLights = newLights;
+                  setPages(updatedPages);
+                }
+              }}
+              backgroundImage={effectivePage?.background}
+              imageSize={effectivePage?.imageSize}
+              gridCells={effectivePage?.gridCells}
+              gridSize={effectivePage?.gridSize || 50}
+              gridOffsetX={effectivePage?.gridOffsetX || 0}
+              gridOffsetY={effectivePage?.gridOffsetY || 0}
+              showGrid={
+                effectivePage?.showGrid !== undefined
+                  ? effectivePage.showGrid
+                  : true
               }
-            }}
-            lines={effectivePage?.lines || []}
-            onLinesChange={(newLines) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].lines = newLines;
-                setPages(updatedPages);
+              gridColor={effectivePage?.gridColor || '#ffffff'}
+              gridOpacity={
+                effectivePage?.gridOpacity !== undefined
+                  ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
+                  : 0.2
               }
-            }}
-            walls={effectivePage?.walls || []}
-            onWallsChange={(newWalls) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].walls = newWalls;
-                setPages(updatedPages);
-              }
-            }}
-            texts={effectivePage?.texts || []}
-            onTextsChange={(newTexts) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].texts = newTexts;
-                setPages(updatedPages);
-              }
-            }}
-            tiles={effectivePage?.tiles || []}
-            onTilesChange={(newTiles) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].tiles = newTiles;
-                setPages(updatedPages);
-              }
-            }}
-            ambientLights={effectivePage?.ambientLights || []}
-            onAmbientLightsChange={(newLights) => {
-              const updatedPages = [...pages];
-              if (updatedPages[effectivePageIndex]) {
-                updatedPages[effectivePageIndex].ambientLights = newLights;
-                setPages(updatedPages);
-              }
-            }}
-            backgroundImage={effectivePage?.background}
-            imageSize={effectivePage?.imageSize}
-            gridCells={effectivePage?.gridCells}
-            gridSize={effectivePage?.gridSize || 50}
-            gridOffsetX={effectivePage?.gridOffsetX || 0}
-            gridOffsetY={effectivePage?.gridOffsetY || 0}
-            showGrid={
-              effectivePage?.showGrid !== undefined
-                ? effectivePage.showGrid
-                : true
-            }
-            gridColor={effectivePage?.gridColor || '#ffffff'}
-            gridOpacity={
-              effectivePage?.gridOpacity !== undefined
-                ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
-                : 0.2
-            }
-            enableDarkness={effectivePage?.enableDarkness || false}
-            darknessOpacity={effectivePage?.darknessOpacity || 0.8}
-            shopConfig={effectivePage?.shopConfig}
-            onShopConfigChange={handlePlayerShopConfigChange}
-            activeLayer="fichas"
-            enemies={enemies}
-            players={[playerName]}
-            armas={armas}
-            armaduras={armaduras}
-            habilidades={habilidades}
-            highlightText={highlightText}
-            rarityColorMap={rarityColorMap}
-            isPlayerView={true}
-            pageId={playerVisiblePageId}
-          />
+              enableDarkness={effectivePage?.enableDarkness || false}
+              darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+              shopConfig={effectivePage?.shopConfig}
+              onShopConfigChange={handlePlayerShopConfigChange}
+              activeLayer="fichas"
+              enemies={enemies}
+              players={[playerName]}
+              armas={armas}
+              armaduras={armaduras}
+              habilidades={habilidades}
+              highlightText={highlightText}
+              rarityColorMap={rarityColorMap}
+              isPlayerView={true}
+              pageId={playerVisiblePageId}
+            />
           </div>
           <ChatPanel playerName={playerName} isMaster={false} />
         </div>
@@ -5804,11 +5803,10 @@ function App() {
                       <button
                         onClick={() => moveStatUp(index)}
                         disabled={index === 0}
-                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
-                          index === 0
-                            ? 'text-gray-600 cursor-not-allowed'
-                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
-                        }`}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${index === 0
+                          ? 'text-gray-600 cursor-not-allowed'
+                          : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                          }`}
                         title="Mover hacia arriba"
                       >
                         ↑
@@ -5817,11 +5815,10 @@ function App() {
                       <button
                         onClick={() => moveStatDown(index)}
                         disabled={index === resourcesList.length - 1}
-                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${
-                          index === resourcesList.length - 1
-                            ? 'text-gray-600 cursor-not-allowed'
-                            : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
-                        }`}
+                        className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-all duration-200 ${index === resourcesList.length - 1
+                          ? 'text-gray-600 cursor-not-allowed'
+                          : 'text-blue-400 hover:text-blue-200 hover:bg-blue-900/30'
+                          }`}
                         title="Mover hacia abajo"
                       >
                         ↓
@@ -5923,13 +5920,12 @@ function App() {
                     Karma
                   </span>
                   <span
-                    className={`px-3 py-1 text-xs font-bold rounded-full ${
-                      karmaValue === 0
-                        ? 'border border-gray-500 text-gray-300'
-                        : karmaValue > 0
-                          ? 'bg-white text-gray-900'
-                          : 'bg-black text-gray-100'
-                    }`}
+                    className={`px-3 py-1 text-xs font-bold rounded-full ${karmaValue === 0
+                      ? 'border border-gray-500 text-gray-300'
+                      : karmaValue > 0
+                        ? 'bg-white text-gray-900'
+                        : 'bg-black text-gray-100'
+                      }`}
                   >
                     {getKarmaStatus(karmaValue)}
                   </span>
@@ -6258,11 +6254,10 @@ function App() {
             </p>
           ) : (
             <div
-              className={`${
-                playerData.weapons.length === 1
-                  ? 'grid grid-cols-1 place-items-center'
-                  : 'grid grid-cols-1 sm:grid-cols-2'
-              } gap-4 w-full`}
+              className={`${playerData.weapons.length === 1
+                ? 'grid grid-cols-1 place-items-center'
+                : 'grid grid-cols-1 sm:grid-cols-2'
+                } gap-4 w-full`}
             >
               {playerData.weapons.map((n, i) => {
                 const a = armas.find((x) => x.nombre === n);
@@ -6289,8 +6284,8 @@ function App() {
                         <strong>Carga física:</strong>{' '}
                         {parseCargaValue(a.cargaFisica ?? a.carga) > 0
                           ? '🔲'.repeat(
-                              parseCargaValue(a.cargaFisica ?? a.carga)
-                            )
+                            parseCargaValue(a.cargaFisica ?? a.carga)
+                          )
                           : '❌'}
                       </p>
                       <p>
@@ -6371,11 +6366,10 @@ function App() {
             </p>
           ) : (
             <div
-              className={`${
-                playerData.armaduras.length === 1
-                  ? 'grid grid-cols-1 place-items-center'
-                  : 'grid grid-cols-1 sm:grid-cols-2'
-              } gap-4 w-full`}
+              className={`${playerData.armaduras.length === 1
+                ? 'grid grid-cols-1 place-items-center'
+                : 'grid grid-cols-1 sm:grid-cols-2'
+                } gap-4 w-full`}
             >
               {playerData.armaduras.map((n, i) => {
                 const a = armaduras.find((x) => x.nombre === n);
@@ -6395,8 +6389,8 @@ function App() {
                         <strong>Carga física:</strong>{' '}
                         {parseCargaValue(a.cargaFisica ?? a.carga) > 0
                           ? '🔲'.repeat(
-                              parseCargaValue(a.cargaFisica ?? a.carga)
-                            )
+                            parseCargaValue(a.cargaFisica ?? a.carga)
+                          )
                           : '❌'}
                       </p>
                       <p>
@@ -6407,11 +6401,11 @@ function App() {
                         <strong>Rasgos:</strong>{' '}
                         {a.rasgos.length
                           ? a.rasgos.map((r, ri) => (
-                              <React.Fragment key={ri}>
-                                {highlightText(r)}
-                                {ri < a.rasgos.length - 1 ? ', ' : ''}
-                              </React.Fragment>
-                            ))
+                            <React.Fragment key={ri}>
+                              {highlightText(r)}
+                              {ri < a.rasgos.length - 1 ? ', ' : ''}
+                            </React.Fragment>
+                          ))
                           : '❌'}
                       </p>
                       {a.descripcion && (
@@ -6479,11 +6473,10 @@ function App() {
             </p>
           ) : (
             <div
-              className={`${
-                playerData.poderes.length === 1
-                  ? 'grid grid-cols-1 place-items-center'
-                  : 'grid grid-cols-1 sm:grid-cols-2'
-              } gap-4 w-full`}
+              className={`${playerData.poderes.length === 1
+                ? 'grid grid-cols-1 place-items-center'
+                : 'grid grid-cols-1 sm:grid-cols-2'
+                } gap-4 w-full`}
             >
               {playerData.poderes.map((n, i) => {
                 const p = habilidades.find((x) => x.nombre === n);
@@ -6574,8 +6567,8 @@ function App() {
       enemySort === 'alpha'
         ? [...filteredEnemies].sort((a, b) => a.name.localeCompare(b.name))
         : enemySort === 'level'
-        ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
-        : filteredEnemies;
+          ? [...filteredEnemies].sort((a, b) => (a.nivel || 0) - (b.nivel || 0))
+          : filteredEnemies;
     return withTooltips(
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
         <div className="sticky top-0 bg-gray-900 pb-2 z-10">
@@ -6608,22 +6601,20 @@ function App() {
             <button
               type="button"
               onClick={() => setEnemyTab('catalog')}
-              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${
-                enemyTab === 'catalog'
-                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
-                  : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
-              }`}
+              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${enemyTab === 'catalog'
+                ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
+                }`}
             >
               Catálogo
             </button>
             <button
               type="button"
               onClick={() => setEnemyTab('encounter')}
-              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${
-                enemyTab === 'encounter'
-                  ? 'border-sky-400 bg-sky-500/20 text-sky-100'
-                  : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
-              }`}
+              className={`px-4 py-2 rounded-full border text-sm font-semibold transition ${enemyTab === 'encounter'
+                ? 'border-sky-400 bg-sky-500/20 text-sky-100'
+                : 'border-gray-600 bg-gray-800/60 text-gray-300 hover:border-gray-500'
+                }`}
             >
               Panel de Encuentro
             </button>
@@ -6649,11 +6640,10 @@ function App() {
                   </div>
                   <button
                     type="button"
-                    className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
-                      enemyFiltersOpen
-                        ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
-                        : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
-                    }`}
+                    className={`md:hidden inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${enemyFiltersOpen
+                      ? 'border-purple-400 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                      : 'border-gray-700 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                      }`}
                     onClick={() => setEnemyFiltersOpen((v) => !v)}
                     aria-expanded={enemyFiltersOpen}
                     aria-controls="enemy-filters"
@@ -6661,9 +6651,8 @@ function App() {
                     <FiFilter />
                     <span>Filtros</span>
                     <FiChevronDown
-                      className={`transition-transform duration-200 ${
-                        enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
-                      }`}
+                      className={`transition-transform duration-200 ${enemyFiltersOpen ? 'rotate-180' : 'rotate-0'
+                        }`}
                     />
                   </button>
                 </div>
@@ -6700,27 +6689,24 @@ function App() {
                   </div>
                 </div>
                 <div
-                  className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${
-                    enemyFiltersOpen ? '' : 'hidden md:grid'
-                  }`}
+                  className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto] md:items-center ${enemyFiltersOpen ? '' : 'hidden md:grid'
+                    }`}
                 >
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setEnemyOnlyPortraits((v) => !v)}
                       aria-pressed={enemyOnlyPortraits}
-                      className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
-                        enemyOnlyPortraits
-                          ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
-                          : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
-                      }`}
+                      className={`group inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${enemyOnlyPortraits
+                        ? 'border-purple-400/70 bg-purple-500/20 text-purple-100 shadow-lg shadow-purple-900/30'
+                        : 'border-gray-700/80 bg-gray-800/70 text-gray-300 hover:border-purple-400/50 hover:text-purple-100'
+                        }`}
                     >
                       <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
-                          enemyOnlyPortraits
-                            ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
-                            : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
-                        }`}
+                        className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${enemyOnlyPortraits
+                          ? 'border-purple-300/70 bg-purple-500/40 text-purple-50'
+                          : 'border-gray-500/60 bg-gray-900/60 text-gray-300'
+                          }`}
                       >
                         <FiImage />
                       </span>
@@ -6755,7 +6741,7 @@ function App() {
               </div>
             </>
           )}
-          </div>
+        </div>
         {enemyTab === 'catalog' && (
           <>
             {/* Acciones flotantes (móvil) */}
@@ -6767,11 +6753,10 @@ function App() {
             )}
             <div className="fixed bottom-4 right-4 md:hidden z-50">
               <div
-                className={`flex flex-col items-end gap-2 mb-2 transition-all ${
-                  enemyActionsOpen
-                    ? 'opacity-100 translate-y-0'
-                    : 'opacity-0 translate-y-2 pointer-events-none'
-                }`}
+                className={`flex flex-col items-end gap-2 mb-2 transition-all ${enemyActionsOpen
+                  ? 'opacity-100 translate-y-0'
+                  : 'opacity-0 translate-y-2 pointer-events-none'
+                  }`}
               >
                 <button
                   onClick={() => {
@@ -6818,380 +6803,380 @@ function App() {
             </div>
             {/* Lista de enemigos */}
             <div className="enemy-grid relative mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-10 gap-x-6 lg:gap-x-10 mb-10 lg:justify-items-center">
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
-            style={{ left: '25%' }}
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
-            style={{ left: '50%' }}
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
-            style={{ left: '75%' }}
-          />
-          {filteredEnemies.map((enemy) => {
-            const asArray = (value) => {
-              if (!value) return [];
-              if (Array.isArray(value)) return value.filter(Boolean);
-              if (typeof value === 'string') {
-                return value
-                  .split(',')
-                  .map((item) => item.trim())
-                  .filter(Boolean);
-              }
-              return [];
-            };
-            const cleanText = (value) => (typeof value === 'string' ? value.trim() : '');
-            const normalizeNumber = (value) => {
-              if (value === null || value === undefined) return null;
-              if (typeof value === 'number' && Number.isFinite(value)) return value;
-              if (typeof value === 'string') {
-                const parsed = Number(value.replace(/[^0-9.+-]/g, ''));
-                return Number.isFinite(parsed) ? parsed : null;
-              }
-              return null;
-            };
-            const pickStat = (...values) => {
-              for (const value of values) {
-                const numeric = normalizeNumber(value);
-                if (numeric !== null) {
-                  return Math.max(0, Math.round(numeric));
-                }
-              }
-              return 0;
-            };
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+                style={{ left: '25%' }}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+                style={{ left: '50%' }}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-4 hidden border-r border-dashed border-amber-100/20 lg:block"
+                style={{ left: '75%' }}
+              />
+              {filteredEnemies.map((enemy) => {
+                const asArray = (value) => {
+                  if (!value) return [];
+                  if (Array.isArray(value)) return value.filter(Boolean);
+                  if (typeof value === 'string') {
+                    return value
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean);
+                  }
+                  return [];
+                };
+                const cleanText = (value) => (typeof value === 'string' ? value.trim() : '');
+                const normalizeNumber = (value) => {
+                  if (value === null || value === undefined) return null;
+                  if (typeof value === 'number' && Number.isFinite(value)) return value;
+                  if (typeof value === 'string') {
+                    const parsed = Number(value.replace(/[^0-9.+-]/g, ''));
+                    return Number.isFinite(parsed) ? parsed : null;
+                  }
+                  return null;
+                };
+                const pickStat = (...values) => {
+                  for (const value of values) {
+                    const numeric = normalizeNumber(value);
+                    if (numeric !== null) {
+                      return Math.max(0, Math.round(numeric));
+                    }
+                  }
+                  return 0;
+                };
 
-            const tagsFromData = sanitizeEnemyTags([
-              ...asArray(enemy.tags),
-              ...asArray(enemy.etiquetas),
-            ]);
-            const tags =
-              tagsFromData.length > 0
-                ? tagsFromData
-                : [...DEFAULT_ENEMY_TAGS];
-            const typePieces = [
-              cleanText(enemy.tipo),
-              cleanText(enemy.type),
-              cleanText(enemy.subtipo),
-              cleanText(enemy.subType),
-              cleanText(enemy.categoria),
-              cleanText(enemy.category),
-            ].filter(Boolean);
-            const typeLine =
-              typePieces.length > 0
-                ? typePieces.slice(0, 2).join(' — ')
-                : tags.length > 0
-                ? tags.slice(0, 2).join(' — ')
-                : 'Criatura — Enemigo';
-            const rarity = cleanText(enemy.rareza || enemy.rarity);
-            const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
-            const description = cleanText(enemy.description);
-            const abilityCount = pickStat(enemy.poderes?.length);
-            const statusCount = pickStat(enemy.estados?.length);
-            const weaponCount = pickStat(enemy.weapons?.length);
-            const armorCount = pickStat(enemy.armaduras?.length);
-            const theme = buildEnemyTheme(enemy.themeColor);
-            const statEntries = [
-              {
-                id: 'weapons',
-                label: 'Armas',
-                value: weaponCount,
-                icon: <GiCrossedSwords className="text-base" />,
-                palette: theme.statPalette[0],
-              },
-              {
-                id: 'armors',
-                label: 'Armaduras',
-                value: armorCount,
-                icon: <GiShield className="text-base" />,
-                palette: theme.statPalette[1],
-              },
-              {
-                id: 'powers',
-                label: 'Poderes',
-                value: abilityCount,
-                icon: <GiSpellBook className="text-base" />,
-                palette: theme.statPalette[2],
-              },
-              {
-                id: 'statuses',
-                label: 'Estados',
-                value: statusCount,
-                icon: <FaRadiationAlt className="text-base" />,
-                palette: theme.statPalette[3],
-              },
-            ];
-            const encounterButtonTheme = theme.button.encounter || theme.button.view;
+                const tagsFromData = sanitizeEnemyTags([
+                  ...asArray(enemy.tags),
+                  ...asArray(enemy.etiquetas),
+                ]);
+                const tags =
+                  tagsFromData.length > 0
+                    ? tagsFromData
+                    : [...DEFAULT_ENEMY_TAGS];
+                const typePieces = [
+                  cleanText(enemy.tipo),
+                  cleanText(enemy.type),
+                  cleanText(enemy.subtipo),
+                  cleanText(enemy.subType),
+                  cleanText(enemy.categoria),
+                  cleanText(enemy.category),
+                ].filter(Boolean);
+                const typeLine =
+                  typePieces.length > 0
+                    ? typePieces.slice(0, 2).join(' — ')
+                    : tags.length > 0
+                      ? tags.slice(0, 2).join(' — ')
+                      : 'Criatura — Enemigo';
+                const rarity = cleanText(enemy.rareza || enemy.rarity);
+                const levelValue = normalizeNumber(enemy.nivel ?? enemy.level ?? 1) || 1;
+                const description = cleanText(enemy.description);
+                const abilityCount = pickStat(enemy.poderes?.length);
+                const statusCount = pickStat(enemy.estados?.length);
+                const weaponCount = pickStat(enemy.weapons?.length);
+                const armorCount = pickStat(enemy.armaduras?.length);
+                const theme = buildEnemyTheme(enemy.themeColor);
+                const statEntries = [
+                  {
+                    id: 'weapons',
+                    label: 'Armas',
+                    value: weaponCount,
+                    icon: <GiCrossedSwords className="text-base" />,
+                    palette: theme.statPalette[0],
+                  },
+                  {
+                    id: 'armors',
+                    label: 'Armaduras',
+                    value: armorCount,
+                    icon: <GiShield className="text-base" />,
+                    palette: theme.statPalette[1],
+                  },
+                  {
+                    id: 'powers',
+                    label: 'Poderes',
+                    value: abilityCount,
+                    icon: <GiSpellBook className="text-base" />,
+                    palette: theme.statPalette[2],
+                  },
+                  {
+                    id: 'statuses',
+                    label: 'Estados',
+                    value: statusCount,
+                    icon: <FaRadiationAlt className="text-base" />,
+                    palette: theme.statPalette[3],
+                  },
+                ];
+                const encounterButtonTheme = theme.button.encounter || theme.button.view;
 
-            return (
-              <Tarjeta
-                key={enemy.id}
-                variant="magic"
-                className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)]"
-                style={{
-                  boxShadow: theme.cardShadow,
-                  '--enemy-button-from': theme.button.edit.from,
-                  '--enemy-button-via': theme.button.edit.via,
-                  '--enemy-button-to': theme.button.edit.to,
-                  '--enemy-button-hover-from': theme.button.edit.hoverFrom,
-                  '--enemy-button-hover-via': theme.button.edit.hoverVia,
-                  '--enemy-button-hover-to': theme.button.edit.hoverTo,
-                  '--enemy-button-border': theme.button.edit.border,
-                  '--enemy-button-hover-border': theme.button.edit.hoverBorder,
-                  '--enemy-button-text': theme.buttonText,
-                  '--enemy-button-glow': theme.button.edit.glow,
-                  '--enemy-button-icon-glow': theme.button.edit.iconGlow,
-                }}
-              >
-                <div
-                  className="relative flex h-full flex-col rounded-[1.25rem]"
-                  style={{
-                    background: theme.backgroundGradient,
-                    color: theme.textPrimary,
-                  }}
-                >
-                  <div
-                    className="pointer-events-none absolute inset-0 rounded-[1.25rem] border shadow-[0_0_32px_rgba(0,0,0,0.35)]"
-                    style={{ borderColor: theme.frameBorder }}
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-[6px] rounded-[1.05rem] border"
-                    style={{ borderColor: theme.innerBorder }}
-                  />
-                  <div className="relative z-10 flex h-full flex-col">
-                    <div className="px-5 pt-5 pb-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          {rarity && (
-                            <span
-                              className="text-[10px] uppercase tracking-[0.32em]"
-                              style={{ color: theme.rarityColor }}
-                            >
-                              {rarity}
-                            </span>
-                          )}
-                          <h3
-                            className="mt-1 text-xl font-extrabold uppercase tracking-[0.18em] drop-shadow-[0_6px_14px_rgba(0,0,0,0.75)]"
-                            style={{
-                              color: theme.textPrimary,
-                              textShadow: '0 8px 22px rgba(0,0,0,0.85)',
-                            }}
-                          >
-                            {enemy.name}
-                          </h3>
-                        </div>
-                        <div
-                          className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-base font-semibold shadow-[inset_0_0_18px_rgba(0,0,0,0.25)]"
-                          style={{
-                            backgroundImage: theme.levelBackground,
-                            borderColor: theme.levelBorder,
-                            color: theme.textPrimary,
-                          }}
-                        >
-                          {levelValue}
-                        </div>
-                      </div>
-                      <div
-                        className="mt-2 text-[10px] uppercase tracking-[0.26em] italic"
-                        style={{ color: theme.typeText }}
-                      >
-                        {typeLine}
-                      </div>
-                    </div>
+                return (
+                  <Tarjeta
+                    key={enemy.id}
+                    variant="magic"
+                    className="enemy-card group relative z-10 w-full max-w-full p-0 overflow-visible border-0 shadow-[0_18px_36px_rgba(8,7,21,0.55)]"
+                    style={{
+                      boxShadow: theme.cardShadow,
+                      '--enemy-button-from': theme.button.edit.from,
+                      '--enemy-button-via': theme.button.edit.via,
+                      '--enemy-button-to': theme.button.edit.to,
+                      '--enemy-button-hover-from': theme.button.edit.hoverFrom,
+                      '--enemy-button-hover-via': theme.button.edit.hoverVia,
+                      '--enemy-button-hover-to': theme.button.edit.hoverTo,
+                      '--enemy-button-border': theme.button.edit.border,
+                      '--enemy-button-hover-border': theme.button.edit.hoverBorder,
+                      '--enemy-button-text': theme.buttonText,
+                      '--enemy-button-glow': theme.button.edit.glow,
+                      '--enemy-button-icon-glow': theme.button.edit.iconGlow,
+                    }}
+                  >
                     <div
-                      className="relative mx-4 mt-1 mb-4 aspect-[3/4] overflow-hidden rounded-[1rem] border shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
-                      style={{ borderColor: theme.innerBorder }}
-                    >
-                      {enemy.portrait ? (
-                        <img
-                          src={enemy.portrait}
-                          alt={enemy.name}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-5xl text-amber-200/40">
-                          👹
-                        </div>
-                      )}
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    </div>
-                    <div className="flex flex-1 flex-col gap-3 px-5 pb-4 text-sm">
-                      <p
-                        className="min-h-[2.5rem] text-center leading-relaxed italic"
-                        style={{ color: theme.descriptionColor }}
-                      >
-                        {description || 'Una presencia misteriosa aguarda su turno en el campo de batalla.'}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.18em]">
-                        {statEntries.map(({ id, label, value, icon, palette }) => (
-                          <span
-                            key={id}
-                            className="flex items-center justify-between gap-2 rounded-full px-3 py-1 shadow-inner"
-                            style={{
-                              background: palette.bg,
-                              border: `1px solid ${palette.border}`,
-                              color: palette.text,
-                            }}
-                          >
-                            <span className="flex items-center gap-1 font-semibold">
-                              {icon} {label}
-                            </span>
-                            <span className="font-mono text-sm">{value}</span>
-                          </span>
-                        ))}
-                      </div>
-                      {tags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap justify-center gap-2 text-[9px] uppercase tracking-[0.25em]">
-                          {tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full px-3 py-1 shadow-inner"
-                              style={{
-                                background: theme.tagBackground,
-                                border: `1px solid ${theme.tagBorder}`,
-                                color: theme.tagText,
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="px-5 pb-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em]">
-                        <span
-                          className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
-                          style={{
-                            background: theme.xpBadge.bg,
-                            border: `1px solid ${theme.xpBadge.border}`,
-                            color: theme.xpBadge.text,
-                          }}
-                        >
-                          <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
-                        </span>
-                        <span
-                          className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
-                          style={{
-                            background: theme.oroBadge.bg,
-                            border: `1px solid ${theme.oroBadge.border}`,
-                            color: theme.oroBadge.text,
-                          }}
-                        >
-                          <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
-                        </span>
-                      </div>
-                    </div>
-                    <div
-                      className="mt-auto flex flex-wrap gap-2 border-t px-5 pb-5 pt-4"
+                      className="relative flex h-full flex-col rounded-[1.25rem]"
                       style={{
-                        borderColor: theme.innerBorder,
                         background: theme.backgroundGradient,
+                        color: theme.textPrimary,
                       }}
                     >
-                      <Boton
-                        color="gray"
-                        size="sm"
-                        onClick={() => setEncounterAddTarget(enemy)}
-                        className="enemy-action-button enemy-action-encounter flex-1 min-w-[120px]"
-                        icon={<FiPlus className="text-lg" />}
-                        style={{
-                          '--enemy-button-from': encounterButtonTheme.from,
-                          '--enemy-button-via': encounterButtonTheme.via,
-                          '--enemy-button-to': encounterButtonTheme.to,
-                          '--enemy-button-hover-from': encounterButtonTheme.hoverFrom,
-                          '--enemy-button-hover-via': encounterButtonTheme.hoverVia,
-                          '--enemy-button-hover-to': encounterButtonTheme.hoverTo,
-                          '--enemy-button-border': encounterButtonTheme.border,
-                          '--enemy-button-hover-border': encounterButtonTheme.hoverBorder,
-                          '--enemy-button-text': theme.buttonText,
-                          '--enemy-button-glow': encounterButtonTheme.glow,
-                          '--enemy-button-icon-glow': encounterButtonTheme.iconGlow,
-                        }}
-                      >
-                        Al encuentro
-                      </Boton>
-                      <Boton
-                        color="gray"
-                        size="sm"
-                        onClick={() => editEnemy(enemy)}
-                        className="enemy-action-button enemy-action-edit flex-1 min-w-[120px]"
-                        icon={<FiEdit2 className="text-lg" />}
-                        style={{
-                          '--enemy-button-from': theme.button.edit.from,
-                          '--enemy-button-via': theme.button.edit.via,
-                          '--enemy-button-to': theme.button.edit.to,
-                          '--enemy-button-hover-from': theme.button.edit.hoverFrom,
-                          '--enemy-button-hover-via': theme.button.edit.hoverVia,
-                          '--enemy-button-hover-to': theme.button.edit.hoverTo,
-                          '--enemy-button-border': theme.button.edit.border,
-                          '--enemy-button-hover-border': theme.button.edit.hoverBorder,
-                          '--enemy-button-text': theme.buttonText,
-                          '--enemy-button-glow': theme.button.edit.glow,
-                          '--enemy-button-icon-glow': theme.button.edit.iconGlow,
-                        }}
-                      >
-                        Editar
-                      </Boton>
-                      <Boton
-                        color="gray"
-                        size="sm"
-                        onClick={() => {
-                          if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
-                            deleteEnemy(enemy.id);
-                          }
-                        }}
-                        className="enemy-action-button enemy-action-delete flex-1 min-w-[120px]"
-                        icon={<FiTrash2 className="text-lg" />}
-                        style={{
-                          '--enemy-button-from': theme.button.delete.from,
-                          '--enemy-button-via': theme.button.delete.via,
-                          '--enemy-button-to': theme.button.delete.to,
-                          '--enemy-button-hover-from': theme.button.delete.hoverFrom,
-                          '--enemy-button-hover-via': theme.button.delete.hoverVia,
-                          '--enemy-button-hover-to': theme.button.delete.hoverTo,
-                          '--enemy-button-border': theme.button.delete.border,
-                          '--enemy-button-hover-border': theme.button.delete.hoverBorder,
-                          '--enemy-button-text': theme.buttonText,
-                          '--enemy-button-glow': theme.button.delete.glow,
-                          '--enemy-button-icon-glow': theme.button.delete.iconGlow,
-                        }}
-                      >
-                        Eliminar
-                      </Boton>
-                      <Boton
-                        color="gray"
-                        size="sm"
-                        onClick={() => setSelectedEnemy(enemy)}
-                        className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
-                        icon={<FiEye className="text-lg" />}
-                        style={{
-                          '--enemy-button-from': theme.button.view.from,
-                          '--enemy-button-via': theme.button.view.via,
-                          '--enemy-button-to': theme.button.view.to,
-                          '--enemy-button-hover-from': theme.button.view.hoverFrom,
-                          '--enemy-button-hover-via': theme.button.view.hoverVia,
-                          '--enemy-button-hover-to': theme.button.view.hoverTo,
-                          '--enemy-button-border': theme.button.view.border,
-                          '--enemy-button-hover-border': theme.button.view.hoverBorder,
-                          '--enemy-button-text': theme.buttonText,
-                          '--enemy-button-glow': theme.button.view.glow,
-                          '--enemy-button-icon-glow': theme.button.view.iconGlow,
-                        }}
-                      >
-                        Ver ficha
-                      </Boton>
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-[1.25rem] border shadow-[0_0_32px_rgba(0,0,0,0.35)]"
+                        style={{ borderColor: theme.frameBorder }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-[6px] rounded-[1.05rem] border"
+                        style={{ borderColor: theme.innerBorder }}
+                      />
+                      <div className="relative z-10 flex h-full flex-col">
+                        <div className="px-5 pt-5 pb-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              {rarity && (
+                                <span
+                                  className="text-[10px] uppercase tracking-[0.32em]"
+                                  style={{ color: theme.rarityColor }}
+                                >
+                                  {rarity}
+                                </span>
+                              )}
+                              <h3
+                                className="mt-1 text-xl font-extrabold uppercase tracking-[0.18em] drop-shadow-[0_6px_14px_rgba(0,0,0,0.75)]"
+                                style={{
+                                  color: theme.textPrimary,
+                                  textShadow: '0 8px 22px rgba(0,0,0,0.85)',
+                                }}
+                              >
+                                {enemy.name}
+                              </h3>
+                            </div>
+                            <div
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-base font-semibold shadow-[inset_0_0_18px_rgba(0,0,0,0.25)]"
+                              style={{
+                                backgroundImage: theme.levelBackground,
+                                borderColor: theme.levelBorder,
+                                color: theme.textPrimary,
+                              }}
+                            >
+                              {levelValue}
+                            </div>
+                          </div>
+                          <div
+                            className="mt-2 text-[10px] uppercase tracking-[0.26em] italic"
+                            style={{ color: theme.typeText }}
+                          >
+                            {typeLine}
+                          </div>
+                        </div>
+                        <div
+                          className="relative mx-4 mt-1 mb-4 aspect-[3/4] overflow-hidden rounded-[1rem] border shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
+                          style={{ borderColor: theme.innerBorder }}
+                        >
+                          {enemy.portrait ? (
+                            <img
+                              src={enemy.portrait}
+                              alt={enemy.name}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-5xl text-amber-200/40">
+                              👹
+                            </div>
+                          )}
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        </div>
+                        <div className="flex flex-1 flex-col gap-3 px-5 pb-4 text-sm">
+                          <p
+                            className="min-h-[2.5rem] text-center leading-relaxed italic"
+                            style={{ color: theme.descriptionColor }}
+                          >
+                            {description || 'Una presencia misteriosa aguarda su turno en el campo de batalla.'}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.18em]">
+                            {statEntries.map(({ id, label, value, icon, palette }) => (
+                              <span
+                                key={id}
+                                className="flex items-center justify-between gap-2 rounded-full px-3 py-1 shadow-inner"
+                                style={{
+                                  background: palette.bg,
+                                  border: `1px solid ${palette.border}`,
+                                  color: palette.text,
+                                }}
+                              >
+                                <span className="flex items-center gap-1 font-semibold">
+                                  {icon} {label}
+                                </span>
+                                <span className="font-mono text-sm">{value}</span>
+                              </span>
+                            ))}
+                          </div>
+                          {tags.length > 0 && (
+                            <div className="mt-1 flex flex-wrap justify-center gap-2 text-[9px] uppercase tracking-[0.25em]">
+                              {tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full px-3 py-1 shadow-inner"
+                                  style={{
+                                    background: theme.tagBackground,
+                                    border: `1px solid ${theme.tagBorder}`,
+                                    color: theme.tagText,
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-5 pb-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em]">
+                            <span
+                              className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
+                              style={{
+                                background: theme.xpBadge.bg,
+                                border: `1px solid ${theme.xpBadge.border}`,
+                                color: theme.xpBadge.text,
+                              }}
+                            >
+                              <FaBolt className="text-base" /> {pickStat(enemy.experiencia, enemy.xp)} XP
+                            </span>
+                            <span
+                              className="flex items-center gap-2 rounded-md px-3 py-1 shadow-inner"
+                              style={{
+                                background: theme.oroBadge.bg,
+                                border: `1px solid ${theme.oroBadge.border}`,
+                                color: theme.oroBadge.text,
+                              }}
+                            >
+                              <FaFire className="text-base" /> {pickStat(enemy.dinero)} Oro
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          className="mt-auto flex flex-wrap gap-2 border-t px-5 pb-5 pt-4"
+                          style={{
+                            borderColor: theme.innerBorder,
+                            background: theme.backgroundGradient,
+                          }}
+                        >
+                          <Boton
+                            color="gray"
+                            size="sm"
+                            onClick={() => setEncounterAddTarget(enemy)}
+                            className="enemy-action-button enemy-action-encounter flex-1 min-w-[120px]"
+                            icon={<FiPlus className="text-lg" />}
+                            style={{
+                              '--enemy-button-from': encounterButtonTheme.from,
+                              '--enemy-button-via': encounterButtonTheme.via,
+                              '--enemy-button-to': encounterButtonTheme.to,
+                              '--enemy-button-hover-from': encounterButtonTheme.hoverFrom,
+                              '--enemy-button-hover-via': encounterButtonTheme.hoverVia,
+                              '--enemy-button-hover-to': encounterButtonTheme.hoverTo,
+                              '--enemy-button-border': encounterButtonTheme.border,
+                              '--enemy-button-hover-border': encounterButtonTheme.hoverBorder,
+                              '--enemy-button-text': theme.buttonText,
+                              '--enemy-button-glow': encounterButtonTheme.glow,
+                              '--enemy-button-icon-glow': encounterButtonTheme.iconGlow,
+                            }}
+                          >
+                            Al encuentro
+                          </Boton>
+                          <Boton
+                            color="gray"
+                            size="sm"
+                            onClick={() => editEnemy(enemy)}
+                            className="enemy-action-button enemy-action-edit flex-1 min-w-[120px]"
+                            icon={<FiEdit2 className="text-lg" />}
+                            style={{
+                              '--enemy-button-from': theme.button.edit.from,
+                              '--enemy-button-via': theme.button.edit.via,
+                              '--enemy-button-to': theme.button.edit.to,
+                              '--enemy-button-hover-from': theme.button.edit.hoverFrom,
+                              '--enemy-button-hover-via': theme.button.edit.hoverVia,
+                              '--enemy-button-hover-to': theme.button.edit.hoverTo,
+                              '--enemy-button-border': theme.button.edit.border,
+                              '--enemy-button-hover-border': theme.button.edit.hoverBorder,
+                              '--enemy-button-text': theme.buttonText,
+                              '--enemy-button-glow': theme.button.edit.glow,
+                              '--enemy-button-icon-glow': theme.button.edit.iconGlow,
+                            }}
+                          >
+                            Editar
+                          </Boton>
+                          <Boton
+                            color="gray"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm(`¿Eliminar a ${enemy.name}?`)) {
+                                deleteEnemy(enemy.id);
+                              }
+                            }}
+                            className="enemy-action-button enemy-action-delete flex-1 min-w-[120px]"
+                            icon={<FiTrash2 className="text-lg" />}
+                            style={{
+                              '--enemy-button-from': theme.button.delete.from,
+                              '--enemy-button-via': theme.button.delete.via,
+                              '--enemy-button-to': theme.button.delete.to,
+                              '--enemy-button-hover-from': theme.button.delete.hoverFrom,
+                              '--enemy-button-hover-via': theme.button.delete.hoverVia,
+                              '--enemy-button-hover-to': theme.button.delete.hoverTo,
+                              '--enemy-button-border': theme.button.delete.border,
+                              '--enemy-button-hover-border': theme.button.delete.hoverBorder,
+                              '--enemy-button-text': theme.buttonText,
+                              '--enemy-button-glow': theme.button.delete.glow,
+                              '--enemy-button-icon-glow': theme.button.delete.iconGlow,
+                            }}
+                          >
+                            Eliminar
+                          </Boton>
+                          <Boton
+                            color="gray"
+                            size="sm"
+                            onClick={() => setSelectedEnemy(enemy)}
+                            className="enemy-action-button enemy-action-view flex-1 min-w-[120px]"
+                            icon={<FiEye className="text-lg" />}
+                            style={{
+                              '--enemy-button-from': theme.button.view.from,
+                              '--enemy-button-via': theme.button.view.via,
+                              '--enemy-button-to': theme.button.view.to,
+                              '--enemy-button-hover-from': theme.button.view.hoverFrom,
+                              '--enemy-button-hover-via': theme.button.view.hoverVia,
+                              '--enemy-button-hover-to': theme.button.view.hoverTo,
+                              '--enemy-button-border': theme.button.view.border,
+                              '--enemy-button-hover-border': theme.button.view.hoverBorder,
+                              '--enemy-button-text': theme.buttonText,
+                              '--enemy-button-glow': theme.button.view.glow,
+                              '--enemy-button-icon-glow': theme.button.view.iconGlow,
+                            }}
+                          >
+                            Ver ficha
+                          </Boton>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </Tarjeta>
-            );
-          })}
+                  </Tarjeta>
+                );
+              })}
             </div>
           </>
         )}
@@ -7309,443 +7294,442 @@ function App() {
               </div>
               {enemyEditorTab === 'ficha' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Columna izquierda: Información básica */}
-                <div className="space-y-4">
-                  {/* Nombre */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Nombre
-                    </label>
-                    <Input
-                      value={newEnemy.name}
-                      onChange={(e) =>
-                        setNewEnemy({ ...newEnemy, name: e.target.value })
-                      }
-                      placeholder="Nombre del enemigo"
-                      className="w-full"
-                    />
-                  </div>
-                  {/* Retrato */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Retrato
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                    />
-                    {newEnemy.portrait && (
-                      <div className="mt-2 flex w-full max-w-md flex-col items-center gap-3">
-                        <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800/80 shadow-inner">
-                          <img
-                            src={newEnemy.portrait}
-                            alt="Preview"
-                            className="h-full w-full object-contain object-center"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRecropPortrait}
-                          className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-4 py-1.5 text-sm font-medium text-amber-100 shadow-[0_0_14px_rgba(250,204,21,0.12)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
-                        >
-                          <FiCrop className="text-base" /> Ajustar recorte
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {/* Descripción */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Descripción
-                    </label>
-                    <textarea
-                      value={newEnemy.description}
-                      onChange={(e) =>
-                        setNewEnemy({
-                          ...newEnemy,
-                          description: e.target.value,
-                        })
-                      }
-                      placeholder="Descripción del enemigo"
-                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
-                    />
-                  </div>
-                  {/* Etiquetas personalizadas */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Etiquetas de criatura
-                    </label>
-                    <p className="text-xs text-gray-400">
-                      Personaliza la línea «Criatura — Enemigo» añadiendo tus propias etiquetas.
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Input
-                        value={enemyTagInput}
-                        onChange={(e) => setEnemyTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleEnemyTagAdd();
-                          }
-                        }}
-                        placeholder="Añadir etiqueta"
-                        className="flex-1 min-w-[8rem]"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleEnemyTagAdd}
-                        className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-100 shadow-[0_0_12px_rgba(250,204,21,0.15)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
-                      >
-                        <FiPlus /> Añadir
-                      </button>
-                    </div>
-                    {newEnemy.tags && newEnemy.tags.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {newEnemy.tags.map((tag, index) => (
-                          <div
-                            key={`${tag}-${index}`}
-                            className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-700/60 bg-gray-800/60 px-3 py-2"
-                          >
-                            {enemyEditingTagIndex === index ? (
-                              <>
-                                <Input
-                                  value={enemyTagDraft}
-                                  onChange={(e) => setEnemyTagDraft(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      handleEnemyTagEditSave();
-                                    }
-                                    if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      handleEnemyTagEditCancel();
-                                    }
-                                  }}
-                                  className="flex-1 min-w-[6rem]"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={handleEnemyTagEditSave}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 text-emerald-100 transition hover:border-emerald-300/60 hover:bg-emerald-500/20"
-                                  aria-label="Guardar etiqueta"
-                                >
-                                  <FiCheck />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleEnemyTagEditCancel}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
-                                  aria-label="Cancelar edición"
-                                >
-                                  <FiX />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="flex-1 text-sm font-medium text-amber-100/90">
-                                  {tag}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleEnemyTagEditStart(index)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-400/40 bg-indigo-500/10 text-indigo-100 transition hover:border-indigo-300/60 hover:bg-indigo-500/20"
-                                  aria-label={`Editar etiqueta ${tag}`}
-                                >
-                                  <FiEdit2 />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleEnemyTagRemove(index)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
-                                  aria-label={`Eliminar etiqueta ${tag}`}
-                                >
-                                  <FiX />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleEnemyTagReset}
-                        className="rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
-                      >
-                        Restablecer etiquetas
-                      </button>
-                    </div>
-                  </div>
-                  {/* Tema visual de la carta */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Color base del estilo
-                    </label>
-                    <p className="text-xs text-gray-400">
-                      Selecciona un color y generaremos automáticamente el degradado y los acentos de la carta.
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <input
-                        type="color"
-                        value={newEnemy.themeColor || DEFAULT_ENEMY_THEME_COLOR}
-                        onChange={(e) => handleEnemyThemeColorCommit(e.target.value)}
-                        className="h-10 w-14 cursor-pointer rounded border border-gray-600 bg-gray-700"
-                        aria-label="Elegir color base"
-                      />
-                      <Input
-                        value={enemyThemeColorDraft}
-                        onChange={(e) => handleEnemyThemeColorInputChange(e.target.value)}
-                        onBlur={handleEnemyThemeColorBlur}
-                        placeholder="#facc15"
-                        className="w-28"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleEnemyThemeColorCommit(DEFAULT_ENEMY_THEME_COLOR)}
-                        className="inline-flex items-center gap-2 rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
-                      >
-                        Restablecer color
-                      </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {ENEMY_THEME_PRESETS.map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => handleEnemyThemeColorCommit(preset)}
-                          className={`h-8 w-8 rounded-full border ${
-                            normalizeHexColor(newEnemy.themeColor) === normalizeHexColor(preset)
-                              ? 'border-amber-300 shadow-[0_0_12px_rgba(250,204,21,0.35)]'
-                              : 'border-gray-600'
-                          } transition`}
-                          style={{ background: preset }}
-                          aria-label={`Usar color ${preset}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  {/* Nivel y Experiencia */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Columna izquierda: Información básica */}
+                  <div className="space-y-4">
+                    {/* Nombre */}
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Nivel
+                        Nombre
                       </label>
                       <Input
-                        type="number"
-                        value={newEnemy.nivel}
+                        value={newEnemy.name}
                         onChange={(e) =>
-                          setNewEnemy({
-                            ...newEnemy,
-                            nivel: parseInt(e.target.value) || 1,
-                          })
+                          setNewEnemy({ ...newEnemy, name: e.target.value })
                         }
-                        min="1"
+                        placeholder="Nombre del enemigo"
                         className="w-full"
                       />
                     </div>
+                    {/* Retrato */}
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Experiencia
+                        Retrato
                       </label>
-                      <Input
-                        type="number"
-                        value={newEnemy.experiencia}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                      />
+                      {newEnemy.portrait && (
+                        <div className="mt-2 flex w-full max-w-md flex-col items-center gap-3">
+                          <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800/80 shadow-inner">
+                            <img
+                              src={newEnemy.portrait}
+                              alt="Preview"
+                              className="h-full w-full object-contain object-center"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRecropPortrait}
+                            className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-4 py-1.5 text-sm font-medium text-amber-100 shadow-[0_0_14px_rgba(250,204,21,0.12)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
+                          >
+                            <FiCrop className="text-base" /> Ajustar recorte
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {/* Descripción */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Descripción
+                      </label>
+                      <textarea
+                        value={newEnemy.description}
                         onChange={(e) =>
                           setNewEnemy({
                             ...newEnemy,
-                            experiencia: parseInt(e.target.value) || 0,
+                            description: e.target.value,
+                          })
+                        }
+                        placeholder="Descripción del enemigo"
+                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-20 resize-none"
+                      />
+                    </div>
+                    {/* Etiquetas personalizadas */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Etiquetas de criatura
+                      </label>
+                      <p className="text-xs text-gray-400">
+                        Personaliza la línea «Criatura — Enemigo» añadiendo tus propias etiquetas.
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Input
+                          value={enemyTagInput}
+                          onChange={(e) => setEnemyTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleEnemyTagAdd();
+                            }
+                          }}
+                          placeholder="Añadir etiqueta"
+                          className="flex-1 min-w-[8rem]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleEnemyTagAdd}
+                          className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-100 shadow-[0_0_12px_rgba(250,204,21,0.15)] transition hover:border-amber-300/60 hover:bg-amber-500/20"
+                        >
+                          <FiPlus /> Añadir
+                        </button>
+                      </div>
+                      {newEnemy.tags && newEnemy.tags.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {newEnemy.tags.map((tag, index) => (
+                            <div
+                              key={`${tag}-${index}`}
+                              className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-700/60 bg-gray-800/60 px-3 py-2"
+                            >
+                              {enemyEditingTagIndex === index ? (
+                                <>
+                                  <Input
+                                    value={enemyTagDraft}
+                                    onChange={(e) => setEnemyTagDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleEnemyTagEditSave();
+                                      }
+                                      if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        handleEnemyTagEditCancel();
+                                      }
+                                    }}
+                                    className="flex-1 min-w-[6rem]"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleEnemyTagEditSave}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 text-emerald-100 transition hover:border-emerald-300/60 hover:bg-emerald-500/20"
+                                    aria-label="Guardar etiqueta"
+                                  >
+                                    <FiCheck />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleEnemyTagEditCancel}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
+                                    aria-label="Cancelar edición"
+                                  >
+                                    <FiX />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="flex-1 text-sm font-medium text-amber-100/90">
+                                    {tag}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnemyTagEditStart(index)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-400/40 bg-indigo-500/10 text-indigo-100 transition hover:border-indigo-300/60 hover:bg-indigo-500/20"
+                                    aria-label={`Editar etiqueta ${tag}`}
+                                  >
+                                    <FiEdit2 />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnemyTagRemove(index)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-300/60 hover:bg-rose-500/20"
+                                    aria-label={`Eliminar etiqueta ${tag}`}
+                                  >
+                                    <FiX />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleEnemyTagReset}
+                          className="rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
+                        >
+                          Restablecer etiquetas
+                        </button>
+                      </div>
+                    </div>
+                    {/* Tema visual de la carta */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Color base del estilo
+                      </label>
+                      <p className="text-xs text-gray-400">
+                        Selecciona un color y generaremos automáticamente el degradado y los acentos de la carta.
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <input
+                          type="color"
+                          value={newEnemy.themeColor || DEFAULT_ENEMY_THEME_COLOR}
+                          onChange={(e) => handleEnemyThemeColorCommit(e.target.value)}
+                          className="h-10 w-14 cursor-pointer rounded border border-gray-600 bg-gray-700"
+                          aria-label="Elegir color base"
+                        />
+                        <Input
+                          value={enemyThemeColorDraft}
+                          onChange={(e) => handleEnemyThemeColorInputChange(e.target.value)}
+                          onBlur={handleEnemyThemeColorBlur}
+                          placeholder="#facc15"
+                          className="w-28"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleEnemyThemeColorCommit(DEFAULT_ENEMY_THEME_COLOR)}
+                          className="inline-flex items-center gap-2 rounded-full border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gray-200 transition hover:border-gray-400 hover:bg-gray-600/60"
+                        >
+                          Restablecer color
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {ENEMY_THEME_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => handleEnemyThemeColorCommit(preset)}
+                            className={`h-8 w-8 rounded-full border ${normalizeHexColor(newEnemy.themeColor) === normalizeHexColor(preset)
+                              ? 'border-amber-300 shadow-[0_0_12px_rgba(250,204,21,0.35)]'
+                              : 'border-gray-600'
+                              } transition`}
+                            style={{ background: preset }}
+                            aria-label={`Usar color ${preset}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {/* Nivel y Experiencia */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Nivel
+                        </label>
+                        <Input
+                          type="number"
+                          value={newEnemy.nivel}
+                          onChange={(e) =>
+                            setNewEnemy({
+                              ...newEnemy,
+                              nivel: parseInt(e.target.value) || 1,
+                            })
+                          }
+                          min="1"
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Experiencia
+                        </label>
+                        <Input
+                          type="number"
+                          value={newEnemy.experiencia}
+                          onChange={(e) =>
+                            setNewEnemy({
+                              ...newEnemy,
+                              experiencia: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          min="0"
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    {/* Dinero */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Dinero
+                      </label>
+                      <Input
+                        type="number"
+                        value={newEnemy.dinero}
+                        onChange={(e) =>
+                          setNewEnemy({
+                            ...newEnemy,
+                            dinero: parseInt(e.target.value) || 0,
                           })
                         }
                         min="0"
                         className="w-full"
                       />
                     </div>
-                  </div>
-                  {/* Dinero */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Dinero
-                    </label>
-                    <Input
-                      type="number"
-                      value={newEnemy.dinero}
-                      onChange={(e) =>
-                        setNewEnemy({
-                          ...newEnemy,
-                          dinero: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      min="0"
-                      className="w-full"
-                    />
-                  </div>
-                  {/* Notas */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Notas
-                    </label>
-                    <textarea
-                      value={newEnemy.notas}
-                      onChange={(e) =>
-                        setNewEnemy({ ...newEnemy, notas: e.target.value })
-                      }
-                      placeholder="Notas adicionales sobre el enemigo"
-                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
-                    />
-                  </div>
-                </div>
-                {/* Columna derecha: Atributos y Estadísticas */}
-                <div className="space-y-4">
-                  {/* Atributos */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Atributos</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {atributos.map((attr) => (
-                        <div key={attr} className="flex items-center gap-2">
-                          <label className="text-sm font-medium w-16">
-                            {attr}:
-                          </label>
-                          <select
-                            value={newEnemy.atributos[attr] || 'D4'}
-                            onChange={(e) => {
-                              const newAtributos = {
-                                ...newEnemy.atributos,
-                                [attr]: e.target.value,
-                              };
-                              const updatedEnemy = {
-                                ...newEnemy,
-                                atributos: newAtributos,
-                              };
-                              setNewEnemy(updatedEnemy);
-                            }}
-                            className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                          >
-                            {DADOS.map((dado) => (
-                              <option key={dado} value={dado}>
-                                {dado}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ))}
+                    {/* Notas */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Notas
+                      </label>
+                      <textarea
+                        value={newEnemy.notas}
+                        onChange={(e) =>
+                          setNewEnemy({ ...newEnemy, notas: e.target.value })
+                        }
+                        placeholder="Notas adicionales sobre el enemigo"
+                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white h-16 resize-none"
+                      />
                     </div>
                   </div>
-                  {/* Estadísticas */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
-                    <div className="space-y-3">
-                      {defaultRecursos.map((recurso) => {
-                        const stat = newEnemy.stats[recurso] || {
-                          base: 0,
-                          total: 0,
-                          actual: 0,
-                          buff: 0,
-                        };
-                        const color = recursoColor[recurso] || '#ffffff';
-                        return (
-                          <div key={recurso} className="space-y-2">
-                            {/* Línea minimalista como en fichas de jugador */}
-                            <div className="flex items-center justify-between">
-                              <span
-                                className="text-sm font-medium capitalize"
-                                style={{ color }}
-                              >
-                                {recurso}
-                              </span>
-                              <div className="flex gap-2 text-xs">
-                                <span className="text-gray-400">
-                                  Base: {stat.base}
+                  {/* Columna derecha: Atributos y Estadísticas */}
+                  <div className="space-y-4">
+                    {/* Atributos */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Atributos</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {atributos.map((attr) => (
+                          <div key={attr} className="flex items-center gap-2">
+                            <label className="text-sm font-medium w-16">
+                              {attr}:
+                            </label>
+                            <select
+                              value={newEnemy.atributos[attr] || 'D4'}
+                              onChange={(e) => {
+                                const newAtributos = {
+                                  ...newEnemy.atributos,
+                                  [attr]: e.target.value,
+                                };
+                                const updatedEnemy = {
+                                  ...newEnemy,
+                                  atributos: newAtributos,
+                                };
+                                setNewEnemy(updatedEnemy);
+                              }}
+                              className="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                            >
+                              {DADOS.map((dado) => (
+                                <option key={dado} value={dado}>
+                                  {dado}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Estadísticas */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Estadísticas</h3>
+                      <div className="space-y-3">
+                        {defaultRecursos.map((recurso) => {
+                          const stat = newEnemy.stats[recurso] || {
+                            base: 0,
+                            total: 0,
+                            actual: 0,
+                            buff: 0,
+                          };
+                          const color = recursoColor[recurso] || '#ffffff';
+                          return (
+                            <div key={recurso} className="space-y-2">
+                              {/* Línea minimalista como en fichas de jugador */}
+                              <div className="flex items-center justify-between">
+                                <span
+                                  className="text-sm font-medium capitalize"
+                                  style={{ color }}
+                                >
+                                  {recurso}
                                 </span>
-                                <span className="text-green-400">
-                                  +{stat.buff}
-                                </span>
-                                <span className="text-blue-400">
-                                  = {stat.total}
-                                </span>
-                                <span className="text-yellow-400">
-                                  ({stat.actual})
-                                </span>
+                                <div className="flex gap-2 text-xs">
+                                  <span className="text-gray-400">
+                                    Base: {stat.base}
+                                  </span>
+                                  <span className="text-green-400">
+                                    +{stat.buff}
+                                  </span>
+                                  <span className="text-blue-400">
+                                    = {stat.total}
+                                  </span>
+                                  <span className="text-yellow-400">
+                                    ({stat.actual})
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Controles de edición */}
+                              <div className="grid grid-cols-3 gap-2">
+                                <Input
+                                  type="number"
+                                  placeholder="Base"
+                                  value={stat.base}
+                                  onChange={(e) => {
+                                    const newStats = { ...newEnemy.stats };
+                                    if (!newStats[recurso])
+                                      newStats[recurso] = {
+                                        base: 0,
+                                        total: 0,
+                                        actual: 0,
+                                        buff: 0,
+                                      };
+                                    newStats[recurso].base =
+                                      parseInt(e.target.value) || 0;
+                                    newStats[recurso].total =
+                                      newStats[recurso].base +
+                                      newStats[recurso].buff;
+                                    if (newStats[recurso].actual === 0) {
+                                      newStats[recurso].actual =
+                                        newStats[recurso].total;
+                                    }
+                                    setNewEnemy({ ...newEnemy, stats: newStats });
+                                  }}
+                                  className="text-sm"
+                                />
+                                <Input
+                                  type="number"
+                                  placeholder="Buff"
+                                  value={stat.buff}
+                                  onChange={(e) => {
+                                    const newStats = { ...newEnemy.stats };
+                                    if (!newStats[recurso])
+                                      newStats[recurso] = {
+                                        base: 0,
+                                        total: 0,
+                                        actual: 0,
+                                        buff: 0,
+                                      };
+                                    newStats[recurso].buff =
+                                      parseInt(e.target.value) || 0;
+                                    newStats[recurso].total =
+                                      newStats[recurso].base +
+                                      newStats[recurso].buff;
+                                    setNewEnemy({ ...newEnemy, stats: newStats });
+                                  }}
+                                  className="text-sm"
+                                />
+                                <Input
+                                  type="number"
+                                  placeholder="Actual"
+                                  value={stat.actual}
+                                  onChange={(e) => {
+                                    const newStats = { ...newEnemy.stats };
+                                    if (!newStats[recurso])
+                                      newStats[recurso] = {
+                                        base: 0,
+                                        total: 0,
+                                        actual: 0,
+                                        buff: 0,
+                                      };
+                                    newStats[recurso].actual =
+                                      parseInt(e.target.value) || 0;
+                                    setNewEnemy({ ...newEnemy, stats: newStats });
+                                  }}
+                                  className="text-sm"
+                                />
                               </div>
                             </div>
-                            {/* Controles de edición */}
-                            <div className="grid grid-cols-3 gap-2">
-                              <Input
-                                type="number"
-                                placeholder="Base"
-                                value={stat.base}
-                                onChange={(e) => {
-                                  const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso])
-                                    newStats[recurso] = {
-                                      base: 0,
-                                      total: 0,
-                                      actual: 0,
-                                      buff: 0,
-                                    };
-                                  newStats[recurso].base =
-                                    parseInt(e.target.value) || 0;
-                                  newStats[recurso].total =
-                                    newStats[recurso].base +
-                                    newStats[recurso].buff;
-                                  if (newStats[recurso].actual === 0) {
-                                    newStats[recurso].actual =
-                                      newStats[recurso].total;
-                                  }
-                                  setNewEnemy({ ...newEnemy, stats: newStats });
-                                }}
-                                className="text-sm"
-                              />
-                              <Input
-                                type="number"
-                                placeholder="Buff"
-                                value={stat.buff}
-                                onChange={(e) => {
-                                  const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso])
-                                    newStats[recurso] = {
-                                      base: 0,
-                                      total: 0,
-                                      actual: 0,
-                                      buff: 0,
-                                    };
-                                  newStats[recurso].buff =
-                                    parseInt(e.target.value) || 0;
-                                  newStats[recurso].total =
-                                    newStats[recurso].base +
-                                    newStats[recurso].buff;
-                                  setNewEnemy({ ...newEnemy, stats: newStats });
-                                }}
-                                className="text-sm"
-                              />
-                              <Input
-                                type="number"
-                                placeholder="Actual"
-                                value={stat.actual}
-                                onChange={(e) => {
-                                  const newStats = { ...newEnemy.stats };
-                                  if (!newStats[recurso])
-                                    newStats[recurso] = {
-                                      base: 0,
-                                      total: 0,
-                                      actual: 0,
-                                      buff: 0,
-                                    };
-                                  newStats[recurso].actual =
-                                    parseInt(e.target.value) || 0;
-                                  setNewEnemy({ ...newEnemy, stats: newStats });
-                                }}
-                                className="text-sm"
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
                 </div>
               )}
               {/* Sección de Equipo */}
@@ -8093,9 +8077,8 @@ function App() {
                     type="button"
                     onClick={handleConfirmCrop}
                     disabled={imageCropLoading}
-                    className={`inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${
-                      imageCropLoading ? 'cursor-wait' : ''
-                    }`}
+                    className={`inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${imageCropLoading ? 'cursor-wait' : ''
+                      }`}
                   >
                     {imageCropLoading && (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
@@ -8134,8 +8117,8 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'routeMapLite') {
     return withTooltips(
-      <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando mapa de rutas (Lite)…</div>}>
-        <RouteMapBuilderLite onBack={() => setChosenView(null)} />
+      <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando mapa de campaña...</div>}>
+        <CampaignMapView onBack={() => setChosenView(null)} />
       </React.Suspense>
     );
   }
@@ -8977,8 +8960,8 @@ function App() {
                               <strong>Carga física:</strong>{' '}
                               {parseCargaValue(a.cargaFisica ?? a.carga) > 0
                                 ? '🔲'.repeat(
-                                    parseCargaValue(a.cargaFisica ?? a.carga)
-                                  )
+                                  parseCargaValue(a.cargaFisica ?? a.carga)
+                                )
                                 : '❌'}
                             </p>
                             <p>
@@ -8989,11 +8972,11 @@ function App() {
                               <strong>Rasgos:</strong>{' '}
                               {a.rasgos.length
                                 ? a.rasgos.map((r, ri) => (
-                                    <React.Fragment key={ri}>
-                                      {highlightText(r)}
-                                      {ri < a.rasgos.length - 1 ? ', ' : ''}
-                                    </React.Fragment>
-                                  ))
+                                  <React.Fragment key={ri}>
+                                    {highlightText(r)}
+                                    {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                  </React.Fragment>
+                                ))
                                 : '❌'}
                             </p>
                             <p>
@@ -9064,8 +9047,8 @@ function App() {
                               <strong>Carga física:</strong>{' '}
                               {parseCargaValue(a.cargaFisica ?? a.carga) > 0
                                 ? '🔲'.repeat(
-                                    parseCargaValue(a.cargaFisica ?? a.carga)
-                                  )
+                                  parseCargaValue(a.cargaFisica ?? a.carga)
+                                )
                                 : '❌'}
                             </p>
                             <p>
@@ -9076,11 +9059,11 @@ function App() {
                               <strong>Rasgos:</strong>{' '}
                               {a.rasgos.length
                                 ? a.rasgos.map((r, ri) => (
-                                    <React.Fragment key={ri}>
-                                      {highlightText(r)}
-                                      {ri < a.rasgos.length - 1 ? ', ' : ''}
-                                    </React.Fragment>
-                                  ))
+                                  <React.Fragment key={ri}>
+                                    {highlightText(r)}
+                                    {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                  </React.Fragment>
+                                ))
                                 : '❌'}
                             </p>
                             <p>
