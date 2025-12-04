@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, addDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
@@ -19,7 +19,10 @@ import {
   FiRefreshCw,
   FiTrash2,
   FiSliders,
+  FiMap,
+  FiChevronRight,
 } from 'react-icons/fi';
+import { ClassCreatorView } from './ClassCreatorView';
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
 import Boton from './Boton';
@@ -1319,6 +1322,8 @@ const ClassList = ({
     abilities: '',
   });
   const [saveButtonState, setSaveButtonState] = useState('idle'); // 'idle', 'saving', 'success', 'error'
+  const [isCreating, setIsCreating] = useState(false);
+
 
   const fileInputRef = useRef(null);
 
@@ -1797,6 +1802,30 @@ const ClassList = ({
       rules.splice(index, 1);
       draft.rules = rules;
     });
+  };
+
+  const handleSaveNewClass = async (newClass) => {
+    try {
+      let imageUrl = newClass.image;
+
+      // If image is a base64 string, upload it to Storage
+      if (imageUrl && imageUrl.startsWith('data:')) {
+        const imageRef = ref(storage, `class-images/${newClass.id}`);
+        await uploadString(imageRef, imageUrl, 'data_url');
+        imageUrl = await getDownloadURL(imageRef);
+      }
+
+      const classToSave = {
+        ...newClass,
+        image: imageUrl,
+      };
+
+      await setDoc(doc(db, 'classes', newClass.id), classToSave);
+      setClasses((prev) => [...prev, classToSave]);
+      setIsCreating(false);
+    } catch (error) {
+      console.error("Error creating class:", error);
+    }
   };
 
   const handleTagChange = (index, value) => {
@@ -3079,42 +3108,51 @@ const ClassList = ({
 
                   </div>
                 </div>
-
                 {/* Right: Data & Stats */}
                 <div className="flex-1 w-full max-w-5xl flex flex-col gap-8">
 
                   {/* Header / Title Section */}
                   <div>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        Dificultad:
-                        <EditableText
-                          value={dndClass.difficulty}
-                          onChange={(val) => handleUpdateClassField('difficulty', val)}
-                          className="inline text-[#c8aa6e]"
-                        />
+                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Dificultad: {editingClass.difficulty}
                       </div>
-                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        Rol:
-                        <EditableText
-                          value={dndClass.role}
-                          onChange={(val) => handleUpdateClassField('role', val)}
-                          className="inline text-cyan-400"
-                        />
+                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Rol: {editingClass.role || 'N/A'}
                       </div>
+
+                      {/* UNLOCK/LOCK TOGGLE */}
+                      <button
+                        onClick={() => {
+                          const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
+                          updateEditingClass((draft) => {
+                            draft.status = newStatus;
+                          });
+                        }}
+                        className={`px-3 py-1 border rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${editingClass.status !== 'locked'
+                          ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
+                          : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
+                          }`}
+                        title={editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase"}
+                      >
+                        {editingClass.status !== 'locked' ? <FiLock className="w-3 h-3" /> : <FiLock className="w-3 h-3" />}
+                        {editingClass.status !== 'locked' ? 'DESBLOQUEADO' : 'BLOQUEADO'}
+                      </button>
                     </div>
 
-                    <EditableText
-                      value={dndClass.name}
-                      onChange={(val) => handleUpdateClassField('name', val)}
-                      className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6 block"
-                    />
+                    <h1 className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6">
+                      {editingClass.name}
+                    </h1>
 
                     <div className="relative pl-6 border-l-2 border-[#c8aa6e]/30">
                       <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
                         "<EditableText
-                          value={dndClass.description}
-                          onChange={(val) => handleUpdateClassField('description', val)}
+                          value={editingClass.description}
+                          onChange={(val) =>
+                            updateEditingClass((draft) => {
+                              draft.description = val;
+                            })
+                          }
                           className="inline text-slate-300"
                           multiline={true}
                         />"
@@ -3183,13 +3221,13 @@ const ClassList = ({
                           Editar Retrato
                         </button>
                       </div>
-                    </div>
+                    </div >
 
                     {/* Right Column: Stats */}
-                    <div>
+                    < div >
 
                       {/* STATS SECTION */}
-                      <div>
+                      < div >
                         <div className="flex items-center justify-between mb-6 border-b border-[#c8aa6e]/30 pb-2">
                           <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
                             <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
@@ -3642,13 +3680,13 @@ const ClassList = ({
                             <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
                           </div>
                         </div>
-                      </div>
+                      </div >
 
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                    </div >
+                  </div >
+                </div >
+              </div >
+            </div >
           );
         case 'progression':
           return (
@@ -3854,121 +3892,145 @@ const ClassList = ({
               </div>
             </div>
 
-            <div
-              className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-            >
-              {filteredClasses.map((classItem) => {
-                const isLocked = classItem.status === 'locked';
+            {isCreating ? (
+              <ClassCreatorView
+                onBack={() => setIsCreating(false)}
+                onSave={handleSaveNewClass}
+              />
+            ) : (
+              <div className="flex flex-col gap-10 pb-12">
+                {/* Divider */}
+                <div className="flex items-center gap-4">
+                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
+                  <span className="font-['Cinzel'] text-[#c8aa6e] tracking-widest text-lg">CAMPEONES DISPONIBLES</span>
+                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
+                </div>
 
-                return (
+                <div
+                  className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                >
+                  {/* Create New Class Card */}
                   <div
-                    key={classItem.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openClassDetails(classItem)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openClassDetails(classItem);
-                      }
-                    }}
-                    className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
+                    onClick={() => setIsCreating(true)}
+                    className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4"
                   >
-                    {/* Main Frame Content */}
-                    <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
-                      {/* Background Image with Zoom effect */}
-                      <div className="absolute inset-0 overflow-hidden">
-                        {classItem.image ? (
-                          <img
-                            src={classItem.image}
-                            alt={classItem.name}
-                            className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
-                            <FiImage className="h-12 w-12 opacity-20" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
-                      </div>
-
-                      {/* Locked Overlay */}
-                      {isLocked && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
-                            <FiLock className="h-8 w-8 text-slate-400" />
-                          </div>
-                          <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
-                        </div>
-                      )}
-
-                      {/* Card Content */}
-                      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
-                        <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
-                          {classItem.name}
-                        </h3>
-
-                        {/* Stars */}
-                        <div className="mb-3 flex items-center justify-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <svg
-                              key={i}
-                              className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                          ))}
-                        </div>
-
-                        {/* Role/Level Badge */}
-                        {!isLocked && (
-                          <div className="flex w-full items-center justify-center gap-3">
-                            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
-                            <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
-                              Nvl {classItem.level || 1}
-                            </div>
-                            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
-                          </div>
-                        )}
-                      </div>
+                    <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
+                      <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
                     </div>
-
-                    {/* Fancy Border Frame (Over everything) */}
-                    <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
-                      {/* Corner Accents */}
-                      <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
-                      <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
-                      <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
-                      <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
+                    <div className="text-center">
+                      <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
+                      <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Campeón</p>
                     </div>
-
-                    {/* Static Border for non-hover */}
-                    <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
-
-                    {/* Role Icon Badge (Top Right) */}
-                    <div className="absolute right-3 top-3 z-30">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full border bg-[#0b1120]/90 shadow-lg ${!isLocked ? 'border-[#c8aa6e] text-[#c8aa6e]' : 'border-slate-600 text-slate-600'}`}>
-                        <span className="text-xs font-bold">{classItem.name.charAt(0)}</span>
-                      </div>
-                    </div>
-
-                    {/* Edit Button (Top Left) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFileDialogForClass(classItem.id);
-                      }}
-                      className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
-                      title="Cambiar retrato"
-                    >
-                      <FiImage className="h-3.5 w-3.5" />
-                    </button>
                   </div>
-                );
-              })}
-            </div>
+
+                  {filteredClasses.map((classItem) => {
+                    const isLocked = classItem.status === 'locked';
+
+                    return (
+                      <div
+                        key={classItem.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openClassDetails(classItem)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openClassDetails(classItem);
+                          }
+                        }}
+                        className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
+                      >
+                        {/* Main Frame Content */}
+                        <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
+                          {/* Background Image with Zoom effect */}
+                          <div className="absolute inset-0 overflow-hidden">
+                            {classItem.image ? (
+                              <img
+                                src={classItem.image}
+                                alt={classItem.name}
+                                className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                                <FiImage className="h-12 w-12 opacity-20" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
+                          </div>
+
+                          {/* Locked Overlay */}
+                          {isLocked && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
+                                <FiLock className="h-8 w-8 text-slate-400" />
+                              </div>
+                              <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
+                            </div>
+                          )}
+
+                          {/* Card Content */}
+                          <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
+                            <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
+                              {classItem.name}
+                            </h3>
+
+                            {/* Stars */}
+                            <div className="mb-3 flex items-center justify-center gap-0.5">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <svg
+                                  key={i}
+                                  className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                </svg>
+                              ))}
+                            </div>
+
+                            {/* Role/Level Badge */}
+                            {!isLocked && (
+                              <div className="flex w-full items-center justify-center gap-3">
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
+                                <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                                  Nvl {classItem.level || 1}
+                                </div>
+                                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Fancy Border Frame (Over everything) */}
+                        <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
+                          {/* Corner Accents */}
+                          <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
+                          <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
+                          <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
+                          <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
+                        </div>
+
+                        {/* Static Border for non-hover */}
+                        <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
+
+
+                        {/* Edit Button (Top Left) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openFileDialogForClass(classItem.id);
+                          }}
+                          className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
+                          title="Cambiar retrato"
+                        >
+                          <FiImage className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </motion.div>
         ) : (
           <motion.div
