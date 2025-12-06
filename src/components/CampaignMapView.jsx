@@ -16,7 +16,11 @@ import {
     Plus,
     Settings,
     Save,
-    X
+    X,
+    Archive,
+    Coins,
+    Scroll,
+    FlaskConical
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -31,7 +35,8 @@ const NODE_TYPES = {
     SHOP: 'SHOP',
     BOSS: 'BOSS',
     CLASS_REWARD: 'CLASS_REWARD',
-    TROPHY: 'TROPHY'
+    TROPHY: 'TROPHY',
+    TREASURE: 'TREASURE'
 };
 
 const NODE_STATUS = {
@@ -144,9 +149,10 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
             x: viewportCenter,
             y: 50, // Center vertical
             type,
+            subtype: type === 'TREASURE' ? 'GENERAL' : undefined,
             status: 'LOCKED',
             connections: [],
-            label: type === 'BOSS' ? 'Jefe' : type === 'SHOP' ? 'Tienda' : 'Encuentro'
+            label: type === 'BOSS' ? 'Jefe' : type === 'SHOP' ? 'Tienda' : type === 'TREASURE' ? 'Tesoro' : 'Encuentro'
         };
         setNodes(prev => [...prev, newNode]);
         setSelectedNodeId(newNode.id);
@@ -225,15 +231,40 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
     };
 
     // --- RENDER HELPERS ---
-    const getNodeIcon = (type, classId) => {
-        if (type === 'CLASS_REWARD' && classId) {
-            const dndClass = classes.find(c => c.id === classId);
+    const getNodeIcon = (node) => {
+        if (node.type === 'CLASS_REWARD' && node.classId) {
+            const dndClass = classes.find(c => c.id === node.classId);
             if (dndClass && dndClass.image) return <img src={dndClass.image} className="w-full h-full object-cover rounded-full" alt="Class" />;
         }
-        switch (type) {
+
+        // Helper to render subtype icon for treasure
+        const getSubtypeIcon = () => {
+            const iconClass = "w-4 h-4"; // Same size as chest
+            switch (node.subtype) {
+                case 'GOLD': return <Coins className={iconClass} />;
+                case 'WEAPON': return <Sword className={iconClass} />;
+                case 'ARMOR': return <Shield className={iconClass} />;
+                case 'SCROLL': return <Scroll className={iconClass} />;
+                case 'POTION': return <FlaskConical className={iconClass} />;
+                default: return null;
+            }
+        };
+
+        switch (node.type) {
             case 'START': return <MapPin className="w-5 h-5" />;
             case 'COMBAT': return <Sword className="w-5 h-5" />;
             case 'ELITE': return <Skull className="w-6 h-6 text-red-400" />;
+            case 'TREASURE':
+                const SubIcon = getSubtypeIcon();
+                if (SubIcon) {
+                    return (
+                        <div className="flex items-center gap-0.5 text-[#c8aa6e]">
+                            <Archive className="w-4 h-4" />
+                            {SubIcon}
+                        </div>
+                    );
+                }
+                return <Archive className="w-5 h-5 text-[#c8aa6e]" />;
             case 'BOSS': return <Skull className="w-8 h-8 text-red-500 fill-red-900/50" />;
             case 'EVENT': return <HelpCircle className="w-5 h-5 text-blue-400" />;
             case 'SHOP': return <ShoppingBag className="w-5 h-5 text-yellow-400" />;
@@ -350,6 +381,8 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
                         let sizeClass = "w-12 h-12";
                         if (node.type === 'BOSS') sizeClass = "w-20 h-20";
                         if (node.type === 'TROPHY') sizeClass = "w-24 h-24";
+                        // Slightly wider for treasure if it has subtype to accommodate 2 icons
+                        if (node.type === 'TREASURE' && node.subtype && node.subtype !== 'GENERAL') sizeClass = "w-16 h-12";
 
                         return (
                             <div
@@ -366,7 +399,7 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
                                 bg-[#0b1120]
                             `}>
                                     <div className={`text-slate-400 ${isSelected ? 'text-[#c8aa6e]' : ''}`}>
-                                        {getNodeIcon(node.type, node.classId)}
+                                        {getNodeIcon(node)}
                                     </div>
                                 </div>
 
@@ -411,8 +444,10 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
                 {/* Add Nodes Palette */}
                 <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-[#c8aa6e] uppercase tracking-widest mr-2">Añadir:</span>
-                    <button onClick={() => handleAddNode('COMBAT')} className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 hover:border-[#c8aa6e] hover:text-[#c8aa6e] flex items-center justify-center transition-colors" title="Combate">
-                        <Sword className="w-4 h-4" />
+
+                    {/* TREASURE (Clean icon) */}
+                    <button onClick={() => handleAddNode('TREASURE')} className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 hover:border-yellow-200 hover:text-yellow-200 flex items-center justify-center transition-colors" title="Tesoro / Cofre">
+                        <Archive className="w-4 h-4" />
                     </button>
                     <button onClick={() => handleAddNode('ELITE')} className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 hover:border-red-500 hover:text-red-500 flex items-center justify-center transition-colors" title="Elite">
                         <Skull className="w-4 h-4" />
@@ -466,6 +501,7 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
                             >
                                 <option value="START">Inicio</option>
                                 <option value="COMBAT">Combate</option>
+                                <option value="TREASURE">Tesoro</option>
                                 <option value="ELITE">Elite</option>
                                 <option value="EVENT">Evento</option>
                                 <option value="SHOP">Tienda</option>
@@ -474,6 +510,25 @@ const CampaignMapView = ({ onSelectClass, onBack }) => {
                                 <option value="TROPHY">Final</option>
                             </select>
                         </div>
+
+                        {/* TREASURE SUBTYPE SELECTOR */}
+                        {selectedNode.type === 'TREASURE' && (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                                <label className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-wider block mb-1">Contenido del Cofre</label>
+                                <select
+                                    value={selectedNode.subtype || 'GENERAL'}
+                                    onChange={(e) => setNodes(prev => prev.map(n => n.id === selectedNode.id ? { ...n, subtype: e.target.value } : n))}
+                                    className="w-full bg-[#161f32] border border-slate-700 text-slate-200 text-xs p-2 rounded focus:border-[#c8aa6e] outline-none"
+                                >
+                                    <option value="GENERAL">Cofre General (Sin especificar)</option>
+                                    <option value="GOLD">Oro / Tesoro</option>
+                                    <option value="WEAPON">Arma</option>
+                                    <option value="ARMOR">Armadura</option>
+                                    <option value="SCROLL">Pergamino</option>
+                                    <option value="POTION">Consumible / Poción</option>
+                                </select>
+                            </div>
+                        )}
 
                         {selectedNode.type === 'CLASS_REWARD' && (
                             <div>

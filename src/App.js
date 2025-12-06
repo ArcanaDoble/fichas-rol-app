@@ -8276,256 +8276,175 @@ function App() {
   }
   if (userType === 'master' && authenticated) {
     return withTooltips(
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-        <div className="sticky top-0 bg-gray-900 pb-2 z-10">
-          <h1 className="text-2xl font-bold mb-2">Modo Máster</h1>
-          <div className="flex flex-wrap gap-2 mb-2">
-            <Boton onClick={() => setChosenView(null)}>← Menú Máster</Boton>
-            <Boton onClick={volverAlMenu}>Volver al menú principal</Boton>
-            <Boton onClick={refreshCatalog}>Refrescar catálogo</Boton>
-          </div>
-          <div className="flex justify-center">
-            <Input
-              placeholder="Buscar en el catálogo"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full max-w-md text-center"
-            />
-          </div>
+      <div className="min-h-screen bg-[#0b1120] text-gray-100">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
         </div>
-        <Collapsible title="Objetos de inventario personalizados" defaultOpen={false}>
-          <CustomItemManager />
-        </Collapsible>
-        <Collapsible
-          title={
-            editingTerm
-              ? `Editar término: ${editingTerm}`
-              : 'Añadir término destacado'
-          }
-          defaultOpen={false}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              placeholder="Palabra"
-              value={newTerm.word}
-              onChange={(e) => {
-                setNewTermError('');
-                setNewTerm((t) => ({ ...t, word: e.target.value }));
-              }}
-            />
-            <input
-              type="color"
-              value={newTerm.color}
-              onChange={(e) => {
-                setNewTermError('');
-                setNewTerm((t) => ({
-                  ...t,
-                  color: e.target.value,
-                  colorInput: e.target.value,
-                }));
-              }}
-              className="w-10 h-8 border-none p-0 rounded"
-            />
-            <Input
-              placeholder="#RRGGBB"
-              value={newTerm.colorInput ?? newTerm.color}
-              onChange={(e) => {
-                const { value } = e.target;
-                setNewTermError('');
-                setNewTerm((t) => {
-                  const normalized = normalizeGlossaryHexColor(value);
-                  if (isValidGlossaryHexColor(normalized)) {
-                    return { ...t, color: normalized, colorInput: normalized };
-                  }
-                  return { ...t, colorInput: value };
-                });
-              }}
-              className="sm:col-span-1"
-            />
-            <textarea
-              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
-              placeholder="Descripción"
-              value={newTerm.info}
-              onChange={(e) => {
-                setNewTermError('');
-                setNewTerm((t) => ({ ...t, info: e.target.value }));
-              }}
-            />
-            <div className="sm:col-span-2 flex justify-between items-center">
-              {editingTerm && (
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setEditingTerm(null);
-                    setNewTerm({
-                      word: '',
-                      color: '#ffff00',
-                      colorInput: '#ffff00',
-                      info: '',
-                    });
-                    setNewTermError('');
-                  }}
-                >
-                  Cancelar
-                </Boton>
-              )}
-              <Boton color="green" onClick={saveTerm}>
-                {editingTerm ? 'Actualizar' : 'Guardar'} término
-              </Boton>
-            </div>
-            {newTermError && (
-              <p className="text-red-400 text-center sm:col-span-2">
-                {newTermError}
-              </p>
-            )}
-          </div>
-        </Collapsible>
-        <Collapsible title="Glosario" defaultOpen={false}>
-          {glossary.length === 0 ? (
-            <p className="text-gray-400">No hay términos.</p>
-          ) : (
-            <ul className="space-y-2">
-              {glossary.map((t, i) => (
-                <li key={i} className="flex justify-between items-center">
-                  <span className="mr-2">
-                    <span style={{ color: t.color }} className="font-bold">
-                      {t.word}
-                    </span>{' '}
-                    - {t.info}
-                  </span>
-                  <div className="flex gap-2">
-                    <Boton
-                      color="blue"
-                      onClick={() => startEditTerm(t)}
-                      className="px-2 py-1 text-sm"
-                    >
-                      Editar
-                    </Boton>
-                    <Boton
-                      color="red"
-                      onClick={() => deleteTerm(t.word)}
-                      className="px-2 py-1 text-sm"
-                    >
-                      Borrar
-                    </Boton>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Collapsible>
-        <Collapsible
-          title={
-            editingRarity
-              ? `Editar rareza: ${editingRarity}`
-              : 'Gestionar rarezas'
-          }
-          defaultOpen={false}
-        >
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+        {/* Main Content */}
+        <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="sticky top-0 bg-[#0b1120]/95 backdrop-blur-sm pb-4 z-20 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-[#c8aa6e]/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
-                  Nombre
-                </label>
-                <Input
-                  placeholder="Nombre"
-                  value={newRarityData.nombre}
-                  onChange={(e) =>
-                    setNewRarityData((data) => ({
-                      ...data,
-                      nombre: e.target.value,
-                    }))
-                  }
+                <h1 className="text-2xl md:text-3xl font-['Cinzel'] text-[#f0e6d2] tracking-wide">
+                  Herramientas del Máster
+                </h1>
+                <p className="text-slate-400 text-xs md:text-sm uppercase tracking-widest mt-1">
+                  Gestión de contenido y catálogo
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setChosenView(null)}
+                  className="px-4 py-2 bg-[#161f32] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded hover:bg-[#c8aa6e]/10 transition-all text-sm font-semibold tracking-wide"
+                >
+                  ← Menú Máster
+                </button>
+                <button
+                  onClick={volverAlMenu}
+                  className="px-4 py-2 bg-[#161f32] border border-slate-600 text-slate-300 rounded hover:bg-slate-700/50 transition-all text-sm font-semibold tracking-wide"
+                >
+                  Menú Principal
+                </button>
+                <button
+                  onClick={refreshCatalog}
+                  className="px-4 py-2 bg-gradient-to-r from-[#c8aa6e] to-[#a1824a] text-[#0b1120] rounded hover:from-[#d4b87a] hover:to-[#b89254] transition-all text-sm font-bold tracking-wide"
+                >
+                  Refrescar
+                </button>
+              </div>
+            </div>
+            {/* Search Bar */}
+            <div className="flex justify-center">
+              <div className="relative w-full max-w-2xl">
+                <input
+                  placeholder="🔍  Buscar en el catálogo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-[#161f32] border border-[#c8aa6e]/30 rounded-lg px-6 py-3 text-[#f0e6d2] placeholder-slate-500 focus:border-[#c8aa6e] focus:ring-2 focus:ring-[#c8aa6e]/20 transition-all text-center font-medium"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
-                  Color
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={normalizeHexColor(newRarityData.color, '#7c3aed')}
-                    onChange={(e) =>
-                      setNewRarityData((data) => ({
-                        ...data,
-                        color: e.target.value,
-                      }))
-                    }
-                    className="w-12 h-10 border-0 rounded cursor-pointer"
-                  />
-                  <Input
-                    value={newRarityData.color}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
-                        setNewRarityData((data) => ({ ...data, color: value }));
-                      }
-                    }}
-                    placeholder="#7c3aed"
-                  />
-                </div>
-              </div>
             </div>
-            {rarityError && (
-              <p className="text-red-400 text-center text-sm">{rarityError}</p>
-            )}
-            <div className="flex flex-col sm:flex-row justify-end gap-2">
-              {editingRarity && (
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setEditingRarity(null);
-                    setNewRarityData({ nombre: '', color: '#7c3aed' });
-                    setRarityError('');
+          </div>
+
+          {/* Collapsible Sections with Premium Styling */}
+          <div className="mt-6 space-y-4">
+            <Collapsible title="Objetos de inventario personalizados" defaultOpen={false} variant="premium">
+              <CustomItemManager />
+            </Collapsible>
+            <Collapsible
+              title={
+                editingTerm
+                  ? `Editar término: ${editingTerm}`
+                  : 'Añadir término destacado'
+              }
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Palabra"
+                  value={newTerm.word}
+                  onChange={(e) => {
+                    setNewTermError('');
+                    setNewTerm((t) => ({ ...t, word: e.target.value }));
                   }}
-                >
-                  Cancelar
-                </Boton>
-              )}
-              <Boton color="green" onClick={agregarRareza}>
-                {editingRarity ? 'Actualizar' : 'Guardar'} rareza
-              </Boton>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-gray-200 mb-2">
-                Rarezas creadas
-              </h4>
-              {rarities.length === 0 ? (
-                <p className="text-gray-400 text-sm">
-                  Aún no has definido rarezas personalizadas.
-                </p>
+                />
+                <input
+                  type="color"
+                  value={newTerm.color}
+                  onChange={(e) => {
+                    setNewTermError('');
+                    setNewTerm((t) => ({
+                      ...t,
+                      color: e.target.value,
+                      colorInput: e.target.value,
+                    }));
+                  }}
+                  className="w-10 h-8 border-none p-0 rounded"
+                />
+                <Input
+                  placeholder="#RRGGBB"
+                  value={newTerm.colorInput ?? newTerm.color}
+                  onChange={(e) => {
+                    const { value } = e.target;
+                    setNewTermError('');
+                    setNewTerm((t) => {
+                      const normalized = normalizeGlossaryHexColor(value);
+                      if (isValidGlossaryHexColor(normalized)) {
+                        return { ...t, color: normalized, colorInput: normalized };
+                      }
+                      return { ...t, colorInput: value };
+                    });
+                  }}
+                  className="sm:col-span-1"
+                />
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newTerm.info}
+                  onChange={(e) => {
+                    setNewTermError('');
+                    setNewTerm((t) => ({ ...t, info: e.target.value }));
+                  }}
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingTerm && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingTerm(null);
+                        setNewTerm({
+                          word: '',
+                          color: '#ffff00',
+                          colorInput: '#ffff00',
+                          info: '',
+                        });
+                        setNewTermError('');
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={saveTerm}>
+                    {editingTerm ? 'Actualizar' : 'Guardar'} término
+                  </Boton>
+                </div>
+                {newTermError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newTermError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            <Collapsible title="Glosario" defaultOpen={false} variant="premium">
+              {glossary.length === 0 ? (
+                <p className="text-gray-400">No hay términos.</p>
               ) : (
                 <ul className="space-y-2">
-                  {rarities.map((rarity) => (
-                    <li
-                      key={`rarity-${rarity.nombre}`}
-                      className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="w-6 h-6 rounded-full border border-white/20 shadow"
-                          style={{ background: rarity.color }}
-                        />
-                        <span className="font-semibold text-white">
-                          {rarity.nombre}
-                        </span>
-                      </div>
+                  {glossary.map((t, i) => (
+                    <li key={i} className="flex justify-between items-center">
+                      <span className="mr-2">
+                        <span style={{ color: t.color }} className="font-bold">
+                          {t.word}
+                        </span>{' '}
+                        - {t.info}
+                      </span>
                       <div className="flex gap-2">
                         <Boton
                           color="blue"
-                          size="sm"
-                          onClick={() => startEditRarity(rarity)}
-                          className="px-2 py-1 text-xs"
+                          onClick={() => startEditTerm(t)}
+                          className="px-2 py-1 text-sm"
                         >
                           Editar
                         </Boton>
                         <Boton
                           color="red"
-                          size="sm"
-                          onClick={() => deleteRarity(rarity.nombre)}
-                          className="px-2 py-1 text-xs"
+                          onClick={() => deleteTerm(t.word)}
+                          className="px-2 py-1 text-sm"
                         >
                           Borrar
                         </Boton>
@@ -8534,689 +8453,819 @@ function App() {
                   ))}
                 </ul>
               )}
-            </div>
-          </div>
-        </Collapsible>
-        <Collapsible
-          title={
-            editingWeapon
-              ? `Editar arma: ${editingWeapon}`
-              : 'Crear nueva arma'
-          }
-          defaultOpen={false}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              placeholder="Nombre"
-              value={newWeaponData.nombre}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, nombre: e.target.value }))
+            </Collapsible>
+            <Collapsible
+              title={
+                editingRarity
+                  ? `Editar rareza: ${editingRarity}`
+                  : 'Gestionar rarezas'
               }
-            />
-            <Input
-              placeholder="Daño"
-              value={newWeaponData.dano}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, dano: e.target.value }))
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-1">
+                      Nombre
+                    </label>
+                    <Input
+                      placeholder="Nombre"
+                      value={newRarityData.nombre}
+                      onChange={(e) =>
+                        setNewRarityData((data) => ({
+                          ...data,
+                          nombre: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-1">
+                      Color
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={normalizeHexColor(newRarityData.color, '#7c3aed')}
+                        onChange={(e) =>
+                          setNewRarityData((data) => ({
+                            ...data,
+                            color: e.target.value,
+                          }))
+                        }
+                        className="w-12 h-10 border-0 rounded cursor-pointer"
+                      />
+                      <Input
+                        value={newRarityData.color}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
+                            setNewRarityData((data) => ({ ...data, color: value }));
+                          }
+                        }}
+                        placeholder="#7c3aed"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {rarityError && (
+                  <p className="text-red-400 text-center text-sm">{rarityError}</p>
+                )}
+                <div className="flex flex-col sm:flex-row justify-end gap-2">
+                  {editingRarity && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingRarity(null);
+                        setNewRarityData({ nombre: '', color: '#7c3aed' });
+                        setRarityError('');
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarRareza}>
+                    {editingRarity ? 'Actualizar' : 'Guardar'} rareza
+                  </Boton>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-200 mb-2">
+                    Rarezas creadas
+                  </h4>
+                  {rarities.length === 0 ? (
+                    <p className="text-gray-400 text-sm">
+                      Aún no has definido rarezas personalizadas.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {rarities.map((rarity) => (
+                        <li
+                          key={`rarity-${rarity.nombre}`}
+                          className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="w-6 h-6 rounded-full border border-white/20 shadow"
+                              style={{ background: rarity.color }}
+                            />
+                            <span className="font-semibold text-white">
+                              {rarity.nombre}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Boton
+                              color="blue"
+                              size="sm"
+                              onClick={() => startEditRarity(rarity)}
+                              className="px-2 py-1 text-xs"
+                            >
+                              Editar
+                            </Boton>
+                            <Boton
+                              color="red"
+                              size="sm"
+                              onClick={() => deleteRarity(rarity.nombre)}
+                              className="px-2 py-1 text-xs"
+                            >
+                              Borrar
+                            </Boton>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </Collapsible>
+            <Collapsible
+              title={
+                editingWeapon
+                  ? `Editar arma: ${editingWeapon}`
+                  : 'Crear nueva arma'
               }
-            />
-            <Input
-              placeholder="Alcance"
-              value={newWeaponData.alcance}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, alcance: e.target.value }))
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  value={newWeaponData.nombre}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, nombre: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Daño"
+                  value={newWeaponData.dano}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, dano: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Alcance"
+                  value={newWeaponData.alcance}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, alcance: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Consumo"
+                  value={newWeaponData.consumo}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, consumo: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga física"
+                  value={newWeaponData.cargaFisica}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, cargaFisica: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga mental"
+                  value={newWeaponData.cargaMental}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, cargaMental: e.target.value }))
+                  }
+                />
+                <TraitsInput
+                  placeholder="Rasgos (separados por comas)"
+                  value={newWeaponData.rasgos}
+                  glossary={glossary}
+                  onChange={(value) =>
+                    setNewWeaponData((w) => ({ ...w, rasgos: value }))
+                  }
+                />
+                <Input
+                  placeholder="Tipo de daño"
+                  value={newWeaponData.tipoDano}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, tipoDano: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Valor"
+                  value={newWeaponData.valor}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, valor: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Tecnología"
+                  value={newWeaponData.tecnologia}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, tecnologia: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    Rareza
+                  </label>
+                  <select
+                    value={newWeaponData.rareza}
+                    onChange={(e) =>
+                      setNewWeaponData((w) => ({ ...w, rareza: e.target.value }))
+                    }
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="">Sin rareza</option>
+                    {rarities.map((rarity) => (
+                      <option key={`weapon-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                        {rarity.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newWeaponData.descripcion}
+                  onChange={(e) =>
+                    setNewWeaponData((w) => ({ ...w, descripcion: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingWeapon && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingWeapon(null);
+                        setNewWeaponData({
+                          nombre: '',
+                          dano: '',
+                          alcance: '',
+                          consumo: '',
+                          cargaFisica: '',
+                          cargaMental: '',
+                          rasgos: '',
+                          descripcion: '',
+                          tipoDano: '',
+                          valor: '',
+                          tecnologia: '',
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarArma}>
+                    {editingWeapon ? 'Actualizar' : 'Guardar'} arma
+                  </Boton>
+                </div>
+                {newWeaponError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newWeaponError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            <Collapsible
+              title={
+                editingArmor
+                  ? `Editar armadura: ${editingArmor}`
+                  : 'Crear nueva armadura'
               }
-            />
-            <Input
-              placeholder="Consumo"
-              value={newWeaponData.consumo}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, consumo: e.target.value }))
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  value={newArmorData.nombre}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, nombre: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Defensa"
+                  value={newArmorData.defensa}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, defensa: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga física"
+                  value={newArmorData.cargaFisica}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, cargaFisica: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga mental"
+                  value={newArmorData.cargaMental}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, cargaMental: e.target.value }))
+                  }
+                />
+                <TraitsInput
+                  placeholder="Rasgos (separados por comas)"
+                  value={newArmorData.rasgos}
+                  glossary={glossary}
+                  onChange={(value) =>
+                    setNewArmorData((a) => ({ ...a, rasgos: value }))
+                  }
+                />
+                <Input
+                  placeholder="Valor"
+                  value={newArmorData.valor}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, valor: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Tecnología"
+                  value={newArmorData.tecnologia}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, tecnologia: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    Rareza
+                  </label>
+                  <select
+                    value={newArmorData.rareza}
+                    onChange={(e) =>
+                      setNewArmorData((a) => ({ ...a, rareza: e.target.value }))
+                    }
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="">Sin rareza</option>
+                    {rarities.map((rarity) => (
+                      <option key={`armor-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                        {rarity.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newArmorData.descripcion}
+                  onChange={(e) =>
+                    setNewArmorData((a) => ({ ...a, descripcion: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingArmor && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingArmor(null);
+                        setNewArmorData({
+                          nombre: '',
+                          defensa: '',
+                          cargaFisica: '',
+                          cargaMental: '',
+                          rasgos: '',
+                          descripcion: '',
+                          valor: '',
+                          tecnologia: '',
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarArmadura}>
+                    {editingArmor ? 'Actualizar' : 'Guardar'} armadura
+                  </Boton>
+                </div>
+                {newArmorError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newArmorError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            <Collapsible
+              title={
+                editingAbility
+                  ? `Editar habilidad: ${editingAbility}`
+                  : 'Crear nueva habilidad'
               }
-            />
-            <Input
-              placeholder="Carga física"
-              value={newWeaponData.cargaFisica}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, cargaFisica: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Carga mental"
-              value={newWeaponData.cargaMental}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, cargaMental: e.target.value }))
-              }
-            />
-            <TraitsInput
-              placeholder="Rasgos (separados por comas)"
-              value={newWeaponData.rasgos}
-              glossary={glossary}
-              onChange={(value) =>
-                setNewWeaponData((w) => ({ ...w, rasgos: value }))
-              }
-            />
-            <Input
-              placeholder="Tipo de daño"
-              value={newWeaponData.tipoDano}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, tipoDano: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Valor"
-              value={newWeaponData.valor}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, valor: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Tecnología"
-              value={newWeaponData.tecnologia}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, tecnologia: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-1">
-                Rareza
-              </label>
-              <select
-                value={newWeaponData.rareza}
-                onChange={(e) =>
-                  setNewWeaponData((w) => ({ ...w, rareza: e.target.value }))
-                }
-                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              >
-                <option value="">Sin rareza</option>
-                {rarities.map((rarity) => (
-                  <option key={`weapon-rarity-${rarity.nombre}`} value={rarity.nombre}>
-                    {rarity.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
-              placeholder="Descripción"
-              value={newWeaponData.descripcion}
-              onChange={(e) =>
-                setNewWeaponData((w) => ({ ...w, descripcion: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2 flex justify-between items-center">
-              {editingWeapon && (
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setEditingWeapon(null);
-                    setNewWeaponData({
-                      nombre: '',
-                      dano: '',
-                      alcance: '',
-                      consumo: '',
-                      cargaFisica: '',
-                      cargaMental: '',
-                      rasgos: '',
-                      descripcion: '',
-                      tipoDano: '',
-                      valor: '',
-                      tecnologia: '',
-                    });
-                  }}
-                >
-                  Cancelar
-                </Boton>
-              )}
-              <Boton color="green" onClick={agregarArma}>
-                {editingWeapon ? 'Actualizar' : 'Guardar'} arma
-              </Boton>
-            </div>
-            {newWeaponError && (
-              <p className="text-red-400 text-center sm:col-span-2">
-                {newWeaponError}
-              </p>
-            )}
-          </div>
-        </Collapsible>
-        <Collapsible
-          title={
-            editingArmor
-              ? `Editar armadura: ${editingArmor}`
-              : 'Crear nueva armadura'
-          }
-          defaultOpen={false}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              placeholder="Nombre"
-              value={newArmorData.nombre}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, nombre: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Defensa"
-              value={newArmorData.defensa}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, defensa: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Carga física"
-              value={newArmorData.cargaFisica}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, cargaFisica: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Carga mental"
-              value={newArmorData.cargaMental}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, cargaMental: e.target.value }))
-              }
-            />
-            <TraitsInput
-              placeholder="Rasgos (separados por comas)"
-              value={newArmorData.rasgos}
-              glossary={glossary}
-              onChange={(value) =>
-                setNewArmorData((a) => ({ ...a, rasgos: value }))
-              }
-            />
-            <Input
-              placeholder="Valor"
-              value={newArmorData.valor}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, valor: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Tecnología"
-              value={newArmorData.tecnologia}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, tecnologia: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-1">
-                Rareza
-              </label>
-              <select
-                value={newArmorData.rareza}
-                onChange={(e) =>
-                  setNewArmorData((a) => ({ ...a, rareza: e.target.value }))
-                }
-                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              >
-                <option value="">Sin rareza</option>
-                {rarities.map((rarity) => (
-                  <option key={`armor-rarity-${rarity.nombre}`} value={rarity.nombre}>
-                    {rarity.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
-              placeholder="Descripción"
-              value={newArmorData.descripcion}
-              onChange={(e) =>
-                setNewArmorData((a) => ({ ...a, descripcion: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2 flex justify-between items-center">
-              {editingArmor && (
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setEditingArmor(null);
-                    setNewArmorData({
-                      nombre: '',
-                      defensa: '',
-                      cargaFisica: '',
-                      cargaMental: '',
-                      rasgos: '',
-                      descripcion: '',
-                      valor: '',
-                      tecnologia: '',
-                    });
-                  }}
-                >
-                  Cancelar
-                </Boton>
-              )}
-              <Boton color="green" onClick={agregarArmadura}>
-                {editingArmor ? 'Actualizar' : 'Guardar'} armadura
-              </Boton>
-            </div>
-            {newArmorError && (
-              <p className="text-red-400 text-center sm:col-span-2">
-                {newArmorError}
-              </p>
-            )}
-          </div>
-        </Collapsible>
-        <Collapsible
-          title={
-            editingAbility
-              ? `Editar habilidad: ${editingAbility}`
-              : 'Crear nueva habilidad'
-          }
-          defaultOpen={false}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              placeholder="Nombre"
-              value={newAbility.nombre}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, nombre: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Alcance"
-              value={newAbility.alcance}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, alcance: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Consumo"
-              value={newAbility.consumo}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, consumo: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Cuerpo"
-              value={newAbility.cuerpo}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, cuerpo: e.target.value }))
-              }
-            />
-            <Input
-              placeholder="Mente"
-              value={newAbility.mente}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, mente: e.target.value }))
-              }
-            />
-            <TraitsInput
-              placeholder="Rasgos (separados por comas)"
-              value={newAbility.rasgos}
-              glossary={glossary}
-              onChange={(value) =>
-                setNewAbility((a) => ({ ...a, rasgos: value }))
-              }
-            />
-            <Input
-              placeholder="Daño"
-              value={newAbility.poder}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, poder: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-1">
-                Rareza
-              </label>
-              <select
-                value={newAbility.rareza}
-                onChange={(e) =>
-                  setNewAbility((a) => ({ ...a, rareza: e.target.value }))
-                }
-                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              >
-                <option value="">Sin rareza</option>
-                {rarities.map((rarity) => (
-                  <option key={`power-rarity-${rarity.nombre}`} value={rarity.nombre}>
-                    {rarity.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
-              placeholder="Descripción"
-              value={newAbility.descripcion}
-              onChange={(e) =>
-                setNewAbility((a) => ({ ...a, descripcion: e.target.value }))
-              }
-            />
-            <div className="sm:col-span-2 flex justify-between items-center">
-              {editingAbility && (
-                <Boton
-                  color="gray"
-                  onClick={() => {
-                    setEditingAbility(null);
-                    setNewAbility({
-                      nombre: '',
-                      alcance: '',
-                      consumo: '',
-                      cuerpo: '',
-                      mente: '',
-                      poder: '',
-                      rasgos: '',
-                      descripcion: '',
-                    });
-                  }}
-                >
-                  Cancelar
-                </Boton>
-              )}
-              <Boton color="green" onClick={agregarHabilidad}>
-                {editingAbility ? 'Actualizar' : 'Guardar'} habilidad
-              </Boton>
-            </div>
-            {newAbilityError && (
-              <p className="text-red-400 text-center sm:col-span-2">
-                {newAbilityError}
-              </p>
-            )}
-          </div>
-        </Collapsible>
-        {loading ? (
-          <p>Cargando catálogo…</p>
-        ) : (
-          <>
-            {/* Mostrar pestañas solo si hay búsqueda activa */}
-            {searchTerm.trim() && (
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  value={newAbility.nombre}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, nombre: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Alcance"
+                  value={newAbility.alcance}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, alcance: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Consumo"
+                  value={newAbility.consumo}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, consumo: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Cuerpo"
+                  value={newAbility.cuerpo}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, cuerpo: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Mente"
+                  value={newAbility.mente}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, mente: e.target.value }))
+                  }
+                />
+                <TraitsInput
+                  placeholder="Rasgos (separados por comas)"
+                  value={newAbility.rasgos}
+                  glossary={glossary}
+                  onChange={(value) =>
+                    setNewAbility((a) => ({ ...a, rasgos: value }))
+                  }
+                />
+                <Input
+                  placeholder="Daño"
+                  value={newAbility.poder}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, poder: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    Rareza
+                  </label>
+                  <select
+                    value={newAbility.rareza}
+                    onChange={(e) =>
+                      setNewAbility((a) => ({ ...a, rareza: e.target.value }))
+                    }
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="">Sin rareza</option>
+                    {rarities.map((rarity) => (
+                      <option key={`power-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                        {rarity.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newAbility.descripcion}
+                  onChange={(e) =>
+                    setNewAbility((a) => ({ ...a, descripcion: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingAbility && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingAbility(null);
+                        setNewAbility({
+                          nombre: '',
+                          alcance: '',
+                          consumo: '',
+                          cuerpo: '',
+                          mente: '',
+                          poder: '',
+                          rasgos: '',
+                          descripcion: '',
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarHabilidad}>
+                    {editingAbility ? 'Actualizar' : 'Guardar'} habilidad
+                  </Boton>
+                </div>
+                {newAbilityError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newAbilityError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            {loading ? (
+              <p>Cargando catálogo…</p>
+            ) : (
               <>
-                {/* Mostrar Armas si hay coincidencias */}
-                {(() => {
-                  const armasFiltradas = armas.filter(
-                    (a) =>
-                      a.nombre
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase()) ||
-                      a.descripcion
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())
-                  );
-                  return (
-                    armasFiltradas.length > 0 && (
-                      <Collapsible
-                        title={`Armas (${armasFiltradas.length})`}
-                        defaultOpen={true}
-                      >
-                        {armasFiltradas.map((a, i) => (
-                          <Tarjeta
-                            key={`arma-${i}`}
-                            variant="weapon"
-                            rarityColor={rarityColorMap[a.rareza]}
+                {/* Mostrar pestañas solo si hay búsqueda activa */}
+                {searchTerm.trim() && (
+                  <>
+                    {/* Mostrar Armas si hay coincidencias */}
+                    {(() => {
+                      const armasFiltradas = armas.filter(
+                        (a) =>
+                          a.nombre
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          a.descripcion
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      );
+                      return (
+                        armasFiltradas.length > 0 && (
+                          <Collapsible
+                            title={`Armas (${armasFiltradas.length})`}
+                            defaultOpen={true}
+                            variant="premium"
                           >
-                            <p className="font-bold text-lg">{a.nombre}</p>
-                            <p>
-                              <strong>Daño:</strong> {dadoIcono()} {a.dano}{' '}
-                              {iconoDano(a.tipoDano)}
-                            </p>
-                            <p>
-                              <strong>Alcance:</strong> {a.alcance}
-                            </p>
-                            <p>
-                              <strong>Consumo:</strong> {a.consumo}
-                            </p>
-                            <p>
-                              <strong>Carga física:</strong>{' '}
-                              {parseCargaValue(a.cargaFisica ?? a.carga) > 0
-                                ? '🔲'.repeat(
-                                  parseCargaValue(a.cargaFisica ?? a.carga)
-                                )
-                                : '❌'}
-                            </p>
-                            <p>
-                              <strong>Carga mental:</strong>{' '}
-                              {cargaMentalIcon(a.cargaMental)}
-                            </p>
-                            <p>
-                              <strong>Rasgos:</strong>{' '}
-                              {a.rasgos.length
-                                ? a.rasgos.map((r, ri) => (
-                                  <React.Fragment key={ri}>
-                                    {highlightText(r)}
-                                    {ri < a.rasgos.length - 1 ? ', ' : ''}
-                                  </React.Fragment>
-                                ))
-                                : '❌'}
-                            </p>
-                            <p>
-                              <strong>Valor:</strong> {a.valor}
-                            </p>
-                            {a.tecnologia && (
-                              <p>
-                                <strong>Tecnología:</strong> {a.tecnologia}
-                              </p>
-                            )}
-                            {a.descripcion && (
-                              <p className="italic">
-                                {highlightText(a.descripcion)}
-                              </p>
-                            )}
-                            {a.fuente === 'custom' && (
-                              <div className="flex justify-end gap-2 mt-2">
-                                <Boton
-                                  color="blue"
-                                  onClick={() => startEditWeapon(a)}
-                                  className="px-2 py-1 text-sm"
-                                >
-                                  Editar
-                                </Boton>
-                                <Boton
-                                  color="red"
-                                  onClick={() => deleteWeapon(a.nombre)}
-                                  className="px-2 py-1 text-sm"
-                                >
-                                  Borrar
-                                </Boton>
-                              </div>
-                            )}
-                          </Tarjeta>
-                        ))}
-                      </Collapsible>
-                    )
-                  );
-                })()}
-                {/* Mostrar Armaduras si hay coincidencias */}
-                {(() => {
-                  const armadurasFiltradas = armaduras.filter(
-                    (a) =>
-                      a.nombre
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase()) ||
-                      a.descripcion
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())
-                  );
-                  return (
-                    armadurasFiltradas.length > 0 && (
-                      <Collapsible
-                        title={`Armaduras (${armadurasFiltradas.length})`}
-                        defaultOpen={true}
-                      >
-                        {armadurasFiltradas.map((a, i) => (
-                          <Tarjeta
-                            key={`armadura-${i}`}
-                            variant="armor"
-                            rarityColor={rarityColorMap[a.rareza]}
+                            {armasFiltradas.map((a, i) => (
+                              <Tarjeta
+                                key={`arma-${i}`}
+                                variant="weapon"
+                                rarityColor={rarityColorMap[a.rareza]}
+                              >
+                                <p className="font-bold text-lg">{a.nombre}</p>
+                                <p>
+                                  <strong>Daño:</strong> {dadoIcono()} {a.dano}{' '}
+                                  {iconoDano(a.tipoDano)}
+                                </p>
+                                <p>
+                                  <strong>Alcance:</strong> {a.alcance}
+                                </p>
+                                <p>
+                                  <strong>Consumo:</strong> {a.consumo}
+                                </p>
+                                <p>
+                                  <strong>Carga física:</strong>{' '}
+                                  {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                                    ? '🔲'.repeat(
+                                      parseCargaValue(a.cargaFisica ?? a.carga)
+                                    )
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Carga mental:</strong>{' '}
+                                  {cargaMentalIcon(a.cargaMental)}
+                                </p>
+                                <p>
+                                  <strong>Rasgos:</strong>{' '}
+                                  {a.rasgos.length
+                                    ? a.rasgos.map((r, ri) => (
+                                      <React.Fragment key={ri}>
+                                        {highlightText(r)}
+                                        {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                      </React.Fragment>
+                                    ))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Valor:</strong> {a.valor}
+                                </p>
+                                {a.tecnologia && (
+                                  <p>
+                                    <strong>Tecnología:</strong> {a.tecnologia}
+                                  </p>
+                                )}
+                                {a.descripcion && (
+                                  <p className="italic">
+                                    {highlightText(a.descripcion)}
+                                  </p>
+                                )}
+                                {a.fuente === 'custom' && (
+                                  <div className="flex justify-end gap-2 mt-2">
+                                    <Boton
+                                      color="blue"
+                                      onClick={() => startEditWeapon(a)}
+                                      className="px-2 py-1 text-sm"
+                                    >
+                                      Editar
+                                    </Boton>
+                                    <Boton
+                                      color="red"
+                                      onClick={() => deleteWeapon(a.nombre)}
+                                      className="px-2 py-1 text-sm"
+                                    >
+                                      Borrar
+                                    </Boton>
+                                  </div>
+                                )}
+                              </Tarjeta>
+                            ))}
+                          </Collapsible>
+                        )
+                      );
+                    })()}
+                    {/* Mostrar Armaduras si hay coincidencias */}
+                    {(() => {
+                      const armadurasFiltradas = armaduras.filter(
+                        (a) =>
+                          a.nombre
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          a.descripcion
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      );
+                      return (
+                        armadurasFiltradas.length > 0 && (
+                          <Collapsible
+                            title={`Armaduras (${armadurasFiltradas.length})`}
+                            defaultOpen={true}
+                            variant="premium"
                           >
-                            <p className="font-bold text-lg">{a.nombre}</p>
-                            <p>
-                              <strong>Defensa:</strong> {a.defensa}
-                            </p>
-                            <p>
-                              <strong>Carga física:</strong>{' '}
-                              {parseCargaValue(a.cargaFisica ?? a.carga) > 0
-                                ? '🔲'.repeat(
-                                  parseCargaValue(a.cargaFisica ?? a.carga)
-                                )
-                                : '❌'}
-                            </p>
-                            <p>
-                              <strong>Carga mental:</strong>{' '}
-                              {cargaMentalIcon(a.cargaMental)}
-                            </p>
-                            <p>
-                              <strong>Rasgos:</strong>{' '}
-                              {a.rasgos.length
-                                ? a.rasgos.map((r, ri) => (
-                                  <React.Fragment key={ri}>
-                                    {highlightText(r)}
-                                    {ri < a.rasgos.length - 1 ? ', ' : ''}
-                                  </React.Fragment>
-                                ))
-                                : '❌'}
-                            </p>
-                            <p>
-                              <strong>Valor:</strong> {a.valor}
-                            </p>
-                            {a.tecnologia && (
-                              <p>
-                                <strong>Tecnología:</strong> {a.tecnologia}
-                              </p>
-                            )}
-                            {a.descripcion && (
-                              <p className="italic">
-                                {highlightText(a.descripcion)}
-                              </p>
-                            )}
-                            {a.fuente === 'custom' && (
-                              <div className="flex justify-end gap-2 mt-2">
-                                <Boton
-                                  color="blue"
-                                  onClick={() => startEditArmor(a)}
-                                  className="px-2 py-1 text-sm"
-                                >
-                                  Editar
-                                </Boton>
-                                <Boton
-                                  color="red"
-                                  onClick={() => deleteArmor(a.nombre)}
-                                  className="px-2 py-1 text-sm"
-                                >
-                                  Borrar
-                                </Boton>
-                              </div>
-                            )}
-                          </Tarjeta>
-                        ))}
-                      </Collapsible>
-                    )
-                  );
-                })()}
-                {/* Mostrar Habilidades si hay coincidencias */}
-                {(() => {
-                  const habilidadesFiltradas = habilidades.filter(
+                            {armadurasFiltradas.map((a, i) => (
+                              <Tarjeta
+                                key={`armadura-${i}`}
+                                variant="armor"
+                                rarityColor={rarityColorMap[a.rareza]}
+                              >
+                                <p className="font-bold text-lg">{a.nombre}</p>
+                                <p>
+                                  <strong>Defensa:</strong> {a.defensa}
+                                </p>
+                                <p>
+                                  <strong>Carga física:</strong>{' '}
+                                  {parseCargaValue(a.cargaFisica ?? a.carga) > 0
+                                    ? '🔲'.repeat(
+                                      parseCargaValue(a.cargaFisica ?? a.carga)
+                                    )
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Carga mental:</strong>{' '}
+                                  {cargaMentalIcon(a.cargaMental)}
+                                </p>
+                                <p>
+                                  <strong>Rasgos:</strong>{' '}
+                                  {a.rasgos.length
+                                    ? a.rasgos.map((r, ri) => (
+                                      <React.Fragment key={ri}>
+                                        {highlightText(r)}
+                                        {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                      </React.Fragment>
+                                    ))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Valor:</strong> {a.valor}
+                                </p>
+                                {a.tecnologia && (
+                                  <p>
+                                    <strong>Tecnología:</strong> {a.tecnologia}
+                                  </p>
+                                )}
+                                {a.descripcion && (
+                                  <p className="italic">
+                                    {highlightText(a.descripcion)}
+                                  </p>
+                                )}
+                                {a.fuente === 'custom' && (
+                                  <div className="flex justify-end gap-2 mt-2">
+                                    <Boton
+                                      color="blue"
+                                      onClick={() => startEditArmor(a)}
+                                      className="px-2 py-1 text-sm"
+                                    >
+                                      Editar
+                                    </Boton>
+                                    <Boton
+                                      color="red"
+                                      onClick={() => deleteArmor(a.nombre)}
+                                      className="px-2 py-1 text-sm"
+                                    >
+                                      Borrar
+                                    </Boton>
+                                  </div>
+                                )}
+                              </Tarjeta>
+                            ))}
+                          </Collapsible>
+                        )
+                      );
+                    })()}
+                    {/* Mostrar Habilidades si hay coincidencias */}
+                    {(() => {
+                      const habilidadesFiltradas = habilidades.filter(
+                        (h) =>
+                          h.nombre
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          (h.descripcion || '')
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      );
+                      return (
+                        habilidadesFiltradas.length > 0 && (
+                          <Collapsible
+                            title={`Habilidades (${habilidadesFiltradas.length})`}
+                            defaultOpen={true}
+                            variant="premium"
+                          >
+                            {habilidadesFiltradas.map((h, i) => (
+                              <Tarjeta
+                                key={`hab-${i}`}
+                                variant="power"
+                                rarityColor={rarityColorMap[h.rareza]}
+                              >
+                                <p className="font-bold text-lg">{h.nombre}</p>
+                                <p>
+                                  <strong>Alcance:</strong> {h.alcance}
+                                </p>
+                                <p>
+                                  <strong>Consumo:</strong> {h.consumo}
+                                </p>
+                                <p>
+                                  <strong>Cuerpo:</strong> {h.cuerpo}
+                                </p>
+                                <p>
+                                  <strong>Mente:</strong> {h.mente}
+                                </p>
+                                {h.rasgos && h.rasgos.length > 0 && (
+                                  <p>
+                                    <strong>Rasgos:</strong> {h.rasgos.join(', ')}
+                                  </p>
+                                )}
+                                <p>
+                                  <strong>Daño:</strong> {h.poder}
+                                </p>
+                                {h.descripcion && (
+                                  <p className="italic">
+                                    {highlightText(h.descripcion)}
+                                  </p>
+                                )}
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <Boton
+                                    color="blue"
+                                    onClick={() => startEditAbility(h)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Editar
+                                  </Boton>
+                                  <Boton
+                                    color="red"
+                                    onClick={() => deleteAbility(h.nombre)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Borrar
+                                  </Boton>
+                                </div>
+                              </Tarjeta>
+                            ))}
+                          </Collapsible>
+                        )
+                      );
+                    })()}
+                  </>
+                )}
+                {/* Mostrar mensaje cuando no hay búsqueda activa */}
+                {!searchTerm.trim() && (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400 text-lg">
+                      Usa el buscador para explorar el catálogo
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Las pestañas se abrirán automáticamente cuando busques
+                    </p>
+                  </div>
+                )}
+                {/* Mostrar mensaje cuando no hay resultados */}
+                {searchTerm.trim() &&
+                  armas.filter(
+                    (a) =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).length === 0 &&
+                  armaduras.filter(
+                    (a) =>
+                      a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).length === 0 &&
+                  habilidades.filter(
                     (h) =>
-                      h.nombre
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase()) ||
+                      h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                       (h.descripcion || '')
                         .toLowerCase()
                         .includes(searchTerm.toLowerCase())
-                  );
-                  return (
-                    habilidadesFiltradas.length > 0 && (
-                      <Collapsible
-                        title={`Habilidades (${habilidadesFiltradas.length})`}
-                        defaultOpen={true}
-                      >
-                        {habilidadesFiltradas.map((h, i) => (
-                          <Tarjeta
-                            key={`hab-${i}`}
-                            variant="power"
-                            rarityColor={rarityColorMap[h.rareza]}
-                          >
-                            <p className="font-bold text-lg">{h.nombre}</p>
-                            <p>
-                              <strong>Alcance:</strong> {h.alcance}
-                            </p>
-                            <p>
-                              <strong>Consumo:</strong> {h.consumo}
-                            </p>
-                            <p>
-                              <strong>Cuerpo:</strong> {h.cuerpo}
-                            </p>
-                            <p>
-                              <strong>Mente:</strong> {h.mente}
-                            </p>
-                            {h.rasgos && h.rasgos.length > 0 && (
-                              <p>
-                                <strong>Rasgos:</strong> {h.rasgos.join(', ')}
-                              </p>
-                            )}
-                            <p>
-                              <strong>Daño:</strong> {h.poder}
-                            </p>
-                            {h.descripcion && (
-                              <p className="italic">
-                                {highlightText(h.descripcion)}
-                              </p>
-                            )}
-                            <div className="flex justify-end gap-2 mt-2">
-                              <Boton
-                                color="blue"
-                                onClick={() => startEditAbility(h)}
-                                className="px-2 py-1 text-sm"
-                              >
-                                Editar
-                              </Boton>
-                              <Boton
-                                color="red"
-                                onClick={() => deleteAbility(h.nombre)}
-                                className="px-2 py-1 text-sm"
-                              >
-                                Borrar
-                              </Boton>
-                            </div>
-                          </Tarjeta>
-                        ))}
-                      </Collapsible>
-                    )
-                  );
-                })()}
+                  ).length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400 text-lg">
+                        No se encontraron resultados para "{searchTerm}"
+                      </p>
+                      <p className="text-gray-500 text-sm mt-2">
+                        Intenta con otros términos de búsqueda
+                      </p>
+                    </div>
+                  )}
               </>
             )}
-            {/* Mostrar mensaje cuando no hay búsqueda activa */}
-            {!searchTerm.trim() && (
-              <div className="text-center py-8">
-                <p className="text-gray-400 text-lg">
-                  Usa el buscador para explorar el catálogo
-                </p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Las pestañas se abrirán automáticamente cuando busques
-                </p>
-              </div>
-            )}
-            {/* Mostrar mensaje cuando no hay resultados */}
-            {searchTerm.trim() &&
-              armas.filter(
-                (a) =>
-                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-              ).length === 0 &&
-              armaduras.filter(
-                (a) =>
-                  a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-              ).length === 0 &&
-              habilidades.filter(
-                (h) =>
-                  h.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  (h.descripcion || '')
-                    .toLowerCase()
-                    .includes(searchTerm.toLowerCase())
-              ).length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-gray-400 text-lg">
-                    No se encontraron resultados para "{searchTerm}"
-                  </p>
-                  <p className="text-gray-500 text-sm mt-2">
-                    Intenta con otros términos de búsqueda
-                  </p>
-                </div>
-              )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -9237,3 +9286,4 @@ const AppWithProviders = () => {
   );
 };
 export default AppWithProviders;
+
