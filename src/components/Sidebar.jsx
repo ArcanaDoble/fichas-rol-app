@@ -1,8 +1,94 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { FiUser, FiBarChart2, FiBriefcase, FiShield, FiBookOpen } from 'react-icons/fi';
+import { FiUser, FiBarChart2, FiBriefcase, FiShield, FiBookOpen, FiSave } from 'react-icons/fi';
 import { Coins } from 'lucide-react';
 
+// Menú items compartidos entre desktop y mobile
+const menuItems = [
+    { id: 'overview', label: 'RESUMEN', sub: 'Stats & Lore', icon: <FiUser className="w-5 h-5" />, mobileLabel: 'Resumen' },
+    { id: 'progression', label: 'CONSTELACIÓN', sub: 'Progresión', icon: <FiBarChart2 className="w-5 h-5" />, mobileLabel: 'Nivel' },
+    { id: 'loadout', label: 'MAZO INICIAL', sub: 'Equipamiento', icon: <FiBriefcase className="w-5 h-5" />, mobileLabel: 'Equipo' },
+    { id: 'feats', label: 'RELIQUIAS', sub: 'Talentos', icon: <FiShield className="w-5 h-5" />, mobileLabel: 'Reliq.' },
+    { id: 'store', label: 'TIENDA', sub: 'Mejoras', icon: <Coins className="w-5 h-5" />, mobileLabel: 'Tienda' },
+];
+
+// Componente de navegación móvil (barra inferior)
+export const MobileNav = ({
+    activeTab,
+    onTabChange,
+    onSave,
+    hasUnsavedChanges = false,
+    saveButtonState = 'idle'
+}) => {
+    return (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0b1120]/98 border-t border-[#c8aa6e]/30 backdrop-blur-xl" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="flex items-center justify-around px-1 py-2">
+                {menuItems.map((item) => (
+                    <button
+                        key={item.id}
+                        onClick={() => onTabChange(item.id)}
+                        className={`flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all min-w-[52px] relative ${activeTab === item.id
+                                ? 'text-[#c8aa6e]'
+                                : 'text-slate-500'
+                            }`}
+                    >
+                        <span className={`transition-transform ${activeTab === item.id ? 'scale-110' : ''}`}>
+                            {item.icon}
+                        </span>
+                        <span className={`text-[9px] mt-0.5 font-bold uppercase tracking-tight ${activeTab === item.id ? 'text-[#c8aa6e]' : 'text-slate-600'
+                            }`}>
+                            {item.mobileLabel}
+                        </span>
+                        {activeTab === item.id && (
+                            <div className="absolute -top-0.5 w-6 h-0.5 bg-[#c8aa6e] rounded-full"></div>
+                        )}
+                    </button>
+                ))}
+
+                {/* Save Button Mobile */}
+                {onSave && (
+                    <button
+                        onClick={hasUnsavedChanges ? onSave : undefined}
+                        disabled={!hasUnsavedChanges || saveButtonState === 'saving'}
+                        className={`flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all min-w-[52px] relative ${hasUnsavedChanges
+                                ? 'text-[#c8aa6e]'
+                                : 'text-slate-600 opacity-50'
+                            }`}
+                    >
+                        {saveButtonState === 'saving' ? (
+                            <div className="w-5 h-5 border-2 border-[#c8aa6e] border-t-transparent rounded-full animate-spin"></div>
+                        ) : saveButtonState === 'success' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        ) : (
+                            <>
+                                <FiSave className="w-5 h-5" />
+                                {hasUnsavedChanges && (
+                                    <div className="absolute top-0 right-2 w-2 h-2 rounded-full bg-[#c8aa6e] animate-pulse"></div>
+                                )}
+                            </>
+                        )}
+                        <span className={`text-[9px] mt-0.5 font-bold uppercase tracking-tight ${hasUnsavedChanges ? 'text-[#c8aa6e]' : 'text-slate-600'
+                            }`}>
+                            Guardar
+                        </span>
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+MobileNav.propTypes = {
+    activeTab: PropTypes.string.isRequired,
+    onTabChange: PropTypes.func.isRequired,
+    onSave: PropTypes.func,
+    hasUnsavedChanges: PropTypes.bool,
+    saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error'])
+};
+
+// Sidebar Desktop (oculto en móvil)
 const Sidebar = ({
     activeTab,
     onTabChange,
@@ -14,16 +100,8 @@ const Sidebar = ({
     saveButtonState = 'idle'
 }) => {
 
-    const menuItems = [
-        { id: 'overview', label: 'RESUMEN', sub: 'Stats & Lore', icon: <FiUser className="w-5 h-5" /> },
-        { id: 'progression', label: 'CONSTELACIÓN', sub: 'Progresión', icon: <FiBarChart2 className="w-5 h-5" /> },
-        { id: 'loadout', label: 'MAZO INICIAL', sub: 'Equipamiento', icon: <FiBriefcase className="w-5 h-5" /> },
-        { id: 'feats', label: 'RELIQUIAS', sub: 'Talentos', icon: <FiShield className="w-5 h-5" /> },
-        { id: 'store', label: 'TIENDA', sub: 'Mejoras', icon: <Coins className="w-5 h-5" /> },
-    ];
-
     return (
-        <div className="w-20 md:w-72 lg:w-80 h-full flex flex-col bg-[#0b1120]/95 border-r border-[#c8aa6e]/20 relative z-30 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.4)] transition-all duration-300">
+        <div className="hidden md:flex w-20 lg:w-72 xl:w-80 h-full flex-col bg-[#0b1120]/95 border-r border-[#c8aa6e]/20 relative z-30 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.4)] transition-all duration-300">
 
             {/* Character Header */}
             <div className="p-6 pb-8 flex flex-col items-center border-b border-[#c8aa6e]/10 relative overflow-hidden group">
@@ -50,7 +128,7 @@ const Sidebar = ({
                     </div>
                 </div>
 
-                <div className="text-center hidden md:block">
+                <div className="text-center hidden lg:block">
                     <h2 className="text-xl font-['Cinzel'] font-bold text-[#f0e6d2] uppercase tracking-wider drop-shadow-md">{characterName}</h2>
                     <p className="text-[#c8aa6e] text-[10px] font-bold tracking-[0.2em] uppercase mt-1 opacity-70">Clase de Héroe</p>
 
@@ -65,14 +143,14 @@ const Sidebar = ({
             </div>
 
             {/* Navigation Menu */}
-            <nav className="flex-1 flex flex-col gap-1 py-6 px-2 md:px-4 overflow-y-auto">
+            <nav className="flex-1 flex flex-col gap-1 py-6 px-2 lg:px-4 overflow-y-auto">
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onTabChange(item.id)}
                         className={`
-              relative w-full text-left py-3 px-3 md:px-4 rounded border transition-all duration-200 group overflow-hidden
-              flex items-center justify-center md:justify-start gap-4
+              relative w-full text-left py-3 px-3 lg:px-4 rounded border transition-all duration-200 group overflow-hidden
+              flex items-center justify-center lg:justify-start gap-4
               ${activeTab === item.id
                                 ? 'bg-gradient-to-r from-[#c8aa6e]/20 to-transparent border-[#c8aa6e]/40 shadow-[inset_0_0_12px_rgba(200,170,110,0.1)]'
                                 : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/10'}
@@ -86,7 +164,7 @@ const Sidebar = ({
                             {item.icon}
                         </span>
 
-                        <div className="hidden md:flex flex-col">
+                        <div className="hidden lg:flex flex-col">
                             <span className={`font-['Cinzel'] tracking-widest text-sm font-bold transition-colors ${activeTab === item.id ? 'text-[#f0e6d2]' : 'text-slate-400 group-hover:text-slate-200'}`}>
                                 {item.label}
                             </span>
@@ -116,37 +194,37 @@ const Sidebar = ({
                             {saveButtonState === 'saving' ? (
                                 <>
                                     <div className="w-4 h-4 border-2 border-[#c8aa6e] border-t-transparent rounded-full animate-spin"></div>
-                                    <span className="hidden md:inline">Guardando...</span>
+                                    <span className="hidden lg:inline">Guardando...</span>
                                 </>
                             ) : saveButtonState === 'success' ? (
                                 <>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
-                                    <span className="hidden md:inline">Guardado</span>
+                                    <span className="hidden lg:inline">Guardado</span>
                                 </>
                             ) : saveButtonState === 'error' ? (
                                 <>
                                     <span>❌</span>
-                                    <span className="hidden md:inline">Error</span>
+                                    <span className="hidden lg:inline">Error</span>
                                 </>
                             ) : hasUnsavedChanges ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-[#c8aa6e] animate-pulse"></div>
-                                    <span className="hidden md:inline">Guardar Cambios</span>
-                                    <span className="md:hidden"><FiBookOpen /></span>
+                                    <span className="hidden lg:inline">Guardar Cambios</span>
+                                    <span className="lg:hidden"><FiSave /></span>
                                 </>
                             ) : (
-                                <span className="hidden md:inline">Sin cambios</span>
+                                <span className="hidden lg:inline">Sin cambios</span>
                             )}
                         </button>
                     )}
 
-                    <div className="flex items-center justify-center md:justify-start gap-3 group cursor-pointer opacity-60 hover:opacity-100 transition-opacity">
+                    <div className="hidden lg:flex items-center justify-start gap-3 group cursor-pointer opacity-60 hover:opacity-100 transition-opacity">
                         <div className="w-8 h-8 rounded-full border border-slate-600 flex items-center justify-center group-hover:border-[#c8aa6e] group-hover:text-[#c8aa6e] transition-colors">
                             <FiBookOpen className="w-4 h-4" />
                         </div>
-                        <div className="hidden md:block text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-[#f0e6d2]">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-[#f0e6d2]">
                             Intercambiar<br />Campeones
                         </div>
                     </div>

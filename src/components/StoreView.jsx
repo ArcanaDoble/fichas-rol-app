@@ -284,38 +284,38 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
     const animationClass = slideDirection === 'right' ? 'slide-in-from-right' : 'slide-in-from-left';
 
     return (
-        <div className="w-full h-full flex items-center justify-center bg-[#09090b] overflow-hidden p-4 lg:p-8">
+        <div className="w-full h-full min-h-screen flex items-start md:items-center justify-center bg-[#09090b] overflow-y-auto md:overflow-hidden p-2 pt-12 md:p-4 lg:p-8 pb-20 md:pb-4">
 
             {/* Main Machine Container */}
-            <div className="relative w-full max-w-6xl h-full max-h-[90vh] bg-[#0b1120] rounded-[30px] border-[4px] border-[#1e293b] shadow-2xl shadow-[0_0_100px_rgba(200,170,110,0.15)] flex flex-col overflow-hidden z-10">
+            <div className="relative w-full max-w-6xl h-auto md:h-full md:max-h-[90vh] bg-[#0b1120] rounded-[20px] md:rounded-[30px] border-[3px] md:border-[4px] border-[#1e293b] shadow-2xl shadow-[0_0_100px_rgba(200,170,110,0.15)] flex flex-col overflow-hidden z-10">
 
                 {/* Decorative Corners */}
                 <div className="absolute top-3 left-3 w-3 h-3 rounded-full bg-slate-700 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.2)] z-30"></div>
                 <div className="absolute top-3 right-3 w-3 h-3 rounded-full bg-slate-700 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.2)] z-30"></div>
 
                 {/* --- HEADER (Navegación de Categorías) --- */}
-                <div className="h-20 border-b border-[#c8aa6e] relative flex items-center justify-between px-12 shrink-0 bg-[#0b1120] z-20">
+                <div className="h-16 md:h-20 border-b border-[#c8aa6e] relative flex items-center justify-between px-4 md:px-12 shrink-0 bg-[#0b1120] z-20">
 
-                    {/* Left Decoration */}
-                    <div className="flex gap-3">
+                    {/* Left Decoration - hidden on mobile */}
+                    <div className="hidden md:flex gap-3">
                         {[1, 2, 3].map(i => <div key={i} className="w-3 h-3 bg-[#c8aa6e] rotate-45"></div>)}
                     </div>
 
                     {/* Center Label Badge with Navigation Arrows */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] flex items-center justify-center">
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[280px] md:w-[400px] flex items-center justify-center">
 
                         {/* Flecha Izquierda */}
                         <button
                             onClick={() => handleCategoryChange('prev')}
-                            className="absolute left-0 top-6 w-10 h-10 rounded-full border-2 border-[#c8aa6e] bg-[#0b1120] text-[#c8aa6e] flex items-center justify-center hover:bg-[#c8aa6e] hover:text-[#0b1120] transition-colors z-30 shadow-lg group"
+                            className="absolute left-0 top-4 md:top-6 w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-[#c8aa6e] bg-[#0b1120] text-[#c8aa6e] flex items-center justify-center hover:bg-[#c8aa6e] hover:text-[#0b1120] transition-colors z-30 shadow-lg group"
                         >
-                            <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
+                            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 group-hover:-translate-x-0.5 transition-transform" />
                         </button>
 
-                        <div className="relative mx-4">
-                            <div className="h-14 w-64 bg-[#0b1120] border-b-2 border-x-2 border-[#c8aa6e] rounded-b-3xl flex items-center justify-center shadow-lg overflow-hidden">
+                        <div className="relative mx-2 md:mx-4">
+                            <div className="h-12 md:h-14 w-40 md:w-64 bg-[#0b1120] border-b-2 border-x-2 border-[#c8aa6e] rounded-b-3xl flex items-center justify-center shadow-lg overflow-hidden">
                                 <div key={currentCategory} className={`animate-in ${animationClass} fade-in duration-300 w-full text-center`}>
-                                    <span className="text-[#c8aa6e] font-fantasy font-bold text-xl tracking-[0.25em] pt-2 block">
+                                    <span className="text-[#c8aa6e] font-fantasy font-bold text-base md:text-xl tracking-[0.15em] md:tracking-[0.25em] pt-2 block">
                                         {currentCategory}
                                     </span>
                                 </div>
@@ -326,14 +326,14 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                         {/* Flecha Derecha */}
                         <button
                             onClick={() => handleCategoryChange('next')}
-                            className="absolute right-0 top-6 w-10 h-10 rounded-full border-2 border-[#c8aa6e] bg-[#0b1120] text-[#c8aa6e] flex items-center justify-center hover:bg-[#c8aa6e] hover:text-[#0b1120] transition-colors z-30 shadow-lg group"
+                            className="absolute right-0 top-4 md:top-6 w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-[#c8aa6e] bg-[#0b1120] text-[#c8aa6e] flex items-center justify-center hover:bg-[#c8aa6e] hover:text-[#0b1120] transition-colors z-30 shadow-lg group"
                         >
-                            <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
+                            <ChevronRight className="w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-0.5 transition-transform" />
                         </button>
                     </div>
 
-                    {/* Right Decoration */}
-                    <div className="flex gap-3">
+                    {/* Right Decoration - hidden on mobile */}
+                    <div className="hidden md:flex gap-3">
                         {[1, 2, 3].map(i => <div key={i} className="w-3 h-3 bg-[#c8aa6e] rotate-45"></div>)}
                     </div>
                 </div>
@@ -342,10 +342,10 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
                 {currentCategory === 'OFERTA' ? (
                     /* --- VISTA DE MASTER (OFERTA) --- */
-                    <div className={`flex-1 flex overflow-hidden animate-in ${animationClass} fade-in duration-500`}>
+                    <div className={`flex-1 flex flex-col md:flex-row overflow-hidden animate-in ${animationClass} fade-in duration-500`}>
 
                         {/* Left: Inventory List (Management) */}
-                        <div className="w-1/2 border-r border-[#c8aa6e]/30 flex flex-col bg-[#0f1219]">
+                        <div className="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-[#c8aa6e]/30 flex flex-col bg-[#0f1219] max-h-[40vh] md:max-h-none">
                             {/* Header con buscador */}
                             <div className="p-4 border-b border-[#c8aa6e]/10 bg-[#0b1120] space-y-3">
                                 <h3 className="text-[#c8aa6e] font-fantasy tracking-widest text-sm flex items-center gap-2">
@@ -445,12 +445,12 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                         </div>
 
                         {/* Right: Forge (Create Item Form) */}
-                        <div className="w-1/2 bg-[#0b1120] p-8 flex flex-col items-center justify-center">
-                            <div className="w-full max-w-md space-y-6">
-                                <div className="text-center mb-8">
-                                    <h2 className="text-3xl font-fantasy text-[#f0e6d2] uppercase tracking-widest mb-2">La Forja</h2>
+                        <div className="w-full md:w-1/2 bg-[#0b1120] p-4 md:p-8 flex flex-col items-center justify-start md:justify-center">
+                            <div className="w-full max-w-md space-y-4 md:space-y-6">
+                                <div className="text-center mb-4 md:mb-8">
+                                    <h2 className="text-xl md:text-3xl font-fantasy text-[#f0e6d2] uppercase tracking-widest mb-2">La Forja</h2>
                                     <div className="h-1 w-24 bg-[#c8aa6e] mx-auto"></div>
-                                    <p className="text-slate-500 text-xs mt-2 uppercase tracking-wider">Crear nuevo objeto para la tienda</p>
+                                    <p className="text-slate-500 text-[10px] md:text-xs mt-2 uppercase tracking-wider">Crear nuevo objeto para la tienda</p>
                                 </div>
 
                                 <div className="space-y-4">
@@ -511,11 +511,11 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                     </div>
                 ) : (
                     /* --- VISTA DE JUGADOR (TIENDA NORMAL) --- */
-                    <div key={currentCategory} className={`flex-1 flex overflow-hidden animate-in ${animationClass} fade-in duration-300`}>
+                    <div key={currentCategory} className={`flex-1 flex flex-col md:flex-row overflow-hidden animate-in ${animationClass} fade-in duration-300`}>
 
                         {/* Left Column: Lista de Objetos filtrada */}
-                        <div className="w-5/12 border-r border-[#c8aa6e]/30 flex flex-col bg-[#0f1219]">
-                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+                        <div className="w-full md:w-5/12 border-b md:border-b-0 md:border-r border-[#c8aa6e]/30 flex flex-col bg-[#0f1219] max-h-[35vh] md:max-h-none">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-6 space-y-2 md:space-y-4">
                                 {filteredItems.length === 0 && (
                                     <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
                                         <Lock className="w-12 h-12 mb-2" />
@@ -562,7 +562,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                         </div>
 
                         {/* Right Column: RICH DETAIL VIEW */}
-                        <div className="w-7/12 relative flex flex-col items-center justify-start p-8 bg-[#0b1120] overflow-y-auto custom-scrollbar">
+                        <div className="w-full md:w-7/12 relative flex flex-col items-center justify-start p-4 md:p-8 bg-[#0b1120] overflow-y-auto custom-scrollbar flex-1">
 
                             {/* Background Rarity Gradient (Bottom-Right) */}
                             {selectedItem && selectedItem.rareza && (
@@ -572,7 +572,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                             {selectedItem ? (
                                 <div className="relative z-10 w-full flex flex-col items-center">
                                     {/* Circle Image (Top Centered) */}
-                                    <div className="relative w-64 h-64 shrink-0 mb-6 group">
+                                    <div className="relative w-40 h-40 md:w-64 md:h-64 shrink-0 mb-4 md:mb-6 group">
                                         <div
                                             className={`absolute inset-0 rounded-full border-2 border-dashed transition-all duration-700 animate-spin ${selectedItem.isSold ? 'border-red-900' : 'border-[#c8aa6e]/40'}`}
                                             style={{ animationDuration: '60s' }}
@@ -617,15 +617,15 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                                     </div>
 
                                     {/* ITEM DETAILS CONTAINER */}
-                                    <div className="w-full max-w-lg animate-in slide-in-from-bottom-4 duration-500 flex flex-col gap-4">
+                                    <div className="w-full max-w-lg animate-in slide-in-from-bottom-4 duration-500 flex flex-col gap-3 md:gap-4">
 
                                         {/* Header */}
                                         <div className="text-center">
-                                            <h2 className={`text-3xl font-fantasy font-bold uppercase tracking-[0.15em] drop-shadow-md ${selectedItem.isSold ? 'text-slate-600' : 'text-[#f0e6d2]'}`}>
+                                            <h2 className={`text-xl md:text-3xl font-fantasy font-bold uppercase tracking-[0.15em] drop-shadow-md ${selectedItem.isSold ? 'text-slate-600' : 'text-[#f0e6d2]'}`}>
                                                 {selectedItem.name}
                                             </h2>
                                             {selectedItem.rareza && (
-                                                <span className={`text-xs font-bold uppercase tracking-[0.3em] ${getRarityTextColor(selectedItem.rareza)}`}>
+                                                <span className={`text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] ${getRarityTextColor(selectedItem.rareza)}`}>
                                                     {selectedItem.rareza}
                                                 </span>
                                             )}
@@ -636,7 +636,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
                                         {/* RPG Stats Grid */}
                                         {(selectedItem.damage || selectedItem.defense || selectedItem.range || selectedItem.resourceCost !== undefined) && (
-                                            <div className="grid grid-cols-2 gap-4 p-4 rounded border transition-all duration-500 bg-[#161f32]/50 border-[#c8aa6e]/10">
+                                            <div className="grid grid-cols-2 gap-2 md:gap-4 p-3 md:p-4 rounded border transition-all duration-500 bg-[#161f32]/50 border-[#c8aa6e]/10">
                                                 {/* Column 1: Damage / Defense */}
                                                 <div className="space-y-3 border-r border-[#c8aa6e]/10 pr-4">
                                                     {(selectedItem.damage || selectedItem.dano || selectedItem.Damage || selectedItem.Dano || selectedItem.daño || selectedItem.Daño) && (
@@ -763,7 +763,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
                                         {/* Flavor Text Description */}
                                         <div className="mt-2 text-center">
-                                            <p className="text-[#c8aa6e] font-serif italic text-sm opacity-80 leading-relaxed border-t border-[#c8aa6e]/20 pt-4">
+                                            <p className="text-[#c8aa6e] font-serif italic text-xs md:text-sm opacity-80 leading-relaxed border-t border-[#c8aa6e]/20 pt-3 md:pt-4">
                                                 "{selectedItem.description}"
                                             </p>
                                         </div>
@@ -780,19 +780,19 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                 )}
 
                 {/* --- FOOTER --- */}
-                <div className="h-24 bg-[#0b1120] border-t-2 border-[#c8aa6e] relative shrink-0 flex items-start justify-between px-8 lg:px-12 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] z-30">
+                <div className="h-20 md:h-24 bg-[#0b1120] border-t-2 border-[#c8aa6e] relative shrink-0 flex items-start justify-between px-3 md:px-8 lg:px-12 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] z-30">
 
                     {/* Money Display Group */}
                     <div className="relative self-start -mt-[2px] z-40 group/money">
 
-                        <div className="absolute bottom-[calc(100%-2px)] left-0 bg-[#0b1120] border-2 border-b-0 border-[#c8aa6e] px-4 py-1.5 rounded-t-lg z-20 flex items-center justify-center min-w-[90px]">
-                            <span className="text-[11px] text-[#c8aa6e] font-bold uppercase tracking-[0.15em] pt-0.5">SALDO</span>
+                        <div className="absolute bottom-[calc(100%-2px)] left-0 bg-[#0b1120] border-2 border-b-0 border-[#c8aa6e] px-2 md:px-4 py-1 md:py-1.5 rounded-t-lg z-20 flex items-center justify-center min-w-[60px] md:min-w-[90px]">
+                            <span className="text-[9px] md:text-[11px] text-[#c8aa6e] font-bold uppercase tracking-[0.15em] pt-0.5">SALDO</span>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <div className="bg-[#0b1120] border-2 border-[#c8aa6e] rounded-b-lg rounded-tr-lg rounded-tl-none px-6 py-3 shadow-[inset_0_0_20px_rgba(200,170,110,0.1)] min-w-[200px] flex items-center justify-end gap-3 relative z-10">
+                        <div className="flex items-center gap-2 md:gap-3">
+                            <div className="bg-[#0b1120] border-2 border-[#c8aa6e] rounded-b-lg rounded-tr-lg rounded-tl-none px-3 md:px-6 py-2 md:py-3 shadow-[inset_0_0_20px_rgba(200,170,110,0.1)] min-w-[100px] md:min-w-[200px] flex items-center justify-end gap-2 md:gap-3 relative z-10">
 
-                                <div className="shrink-0 drop-shadow-md">
+                                <div className="shrink-0 drop-shadow-md hidden md:block">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-md">
                                         <circle cx="12" cy="12" r="10" fill="url(#coinGradient)" stroke="#b45309" strokeWidth="1.5" />
                                         <circle cx="12" cy="12" r="7" stroke="#b45309" strokeWidth="1" strokeDasharray="2 2" opacity="0.6" />
@@ -814,10 +814,10 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                                         onChange={handleMoneyChange}
                                         onBlur={() => setIsEditingMoney(false)}
                                         onKeyDown={(e) => e.key === 'Enter' && setIsEditingMoney(false)}
-                                        className="bg-transparent border-none outline-none text-[#c8aa6e] font-fantasy text-3xl font-bold tracking-widest w-full text-right"
+                                        className="bg-transparent border-none outline-none text-[#c8aa6e] font-fantasy text-xl md:text-3xl font-bold tracking-widest w-full text-right"
                                     />
                                 ) : (
-                                    <span className={`text-[#c8aa6e] font-fantasy text-3xl font-bold tracking-widest drop-shadow-[0_0_8px_rgba(200,170,110,0.5)] transition-colors duration-100 ${displayMoney < actualMoney ? 'text-green-400' : displayMoney > actualMoney ? 'text-red-400' : ''}`}>
+                                    <span className={`text-[#c8aa6e] font-fantasy text-xl md:text-3xl font-bold tracking-widest drop-shadow-[0_0_8px_rgba(200,170,110,0.5)] transition-colors duration-100 ${displayMoney < actualMoney ? 'text-green-400' : displayMoney > actualMoney ? 'text-red-400' : ''}`}>
                                         {displayMoney}
                                     </span>
                                 )}
@@ -825,21 +825,21 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
 
                             <button
                                 onClick={toggleMoneyEdit}
-                                className="text-slate-600 hover:text-[#c8aa6e] transition-colors opacity-0 group-hover/money:opacity-100"
+                                className="text-slate-600 hover:text-[#c8aa6e] transition-colors opacity-100 md:opacity-0 md:group-hover/money:opacity-100"
                             >
-                                {isEditingMoney ? <Save className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
+                                {isEditingMoney ? <Save className="w-4 h-4 md:w-5 md:h-5" /> : <Edit2 className="w-4 h-4 md:w-5 md:h-5" />}
                             </button>
                         </div>
                     </div>
 
                     {/* Action Buttons */}
                     {currentCategory !== 'OFERTA' && (
-                        <div className="flex items-center gap-8 self-center animate-in fade-in duration-300">
+                        <div className="flex items-center gap-3 md:gap-8 self-center animate-in fade-in duration-300">
                             <button
                                 onClick={handlePurchase}
                                 disabled={!selectedItem || actualMoney < selectedItem.price || selectedItem.isSold}
                                 className={`
-                            flex items-center justify-center px-8 py-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300
+                            flex items-center justify-center px-4 md:px-8 py-2 md:py-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 text-sm md:text-base
                             ${!selectedItem || selectedItem.isSold
                                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                                         : actualMoney >= selectedItem.price
@@ -848,13 +848,13 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
                                     }
                         `}
                             >
-                                <span className="flex items-center gap-2">
-                                    {selectedItem?.isSold ? <Lock className="w-5 h-5" /> : <Check className="w-5 h-5" />}
-                                    {selectedItem?.isSold ? 'AGOTADO' : 'COMPRAR'}
+                                <span className="flex items-center gap-1 md:gap-2">
+                                    {selectedItem?.isSold ? <Lock className="w-4 h-4 md:w-5 md:h-5" /> : <Check className="w-4 h-4 md:w-5 md:h-5" />}
+                                    <span className="hidden md:inline">{selectedItem?.isSold ? 'AGOTADO' : 'COMPRAR'}</span>
                                 </span>
                             </button>
 
-                            <div className="flex items-center gap-2 text-[#991b1b] hover:text-red-500 cursor-pointer transition-colors">
+                            <div className="hidden md:flex items-center gap-2 text-[#991b1b] hover:text-red-500 cursor-pointer transition-colors">
                                 <div className="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center font-bold font-serif pt-0.5">B</div>
                                 <span className="font-bold font-fantasy tracking-wider">VOLVER</span>
                             </div>

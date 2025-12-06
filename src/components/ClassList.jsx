@@ -30,7 +30,7 @@ import Modal from './Modal';
 import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 import { convertNumericStringToIcons } from '../utils/iconConversions';
 import { db, storage } from '../firebase';
-import Sidebar from './Sidebar';
+import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
 import { StoreView } from './StoreView';
@@ -492,6 +492,12 @@ const ensureClassDefaults = (classItem) => {
   };
 
   merged.status = merged.status || 'available';
+
+  merged.summary = merged.summary || { battleRole: '', combo: '', difficultyNote: '', highlights: [] };
+  merged.summary.proficiencies = merged.summary.proficiencies || {
+    weapons: { simple: false, martial: false, special: false },
+    armor: { light: false, medium: false, heavy: false }
+  };
 
   merged.inspiration = (merged.inspiration || []).map((entry) => ({
     completed: false,
@@ -1717,6 +1723,22 @@ const ClassList = ({
     });
   };
 
+  const handleProficiencyChange = (type, key) => {
+    updateEditingClass((draft) => {
+      draft.summary = draft.summary || {};
+      draft.summary.proficiencies = draft.summary.proficiencies || { weapons: {}, armor: {} };
+      draft.summary.proficiencies[type] = draft.summary.proficiencies[type] || {};
+      draft.summary.proficiencies[type][key] = !draft.summary.proficiencies[type][key];
+    });
+  };
+
+  const handleUpdateEquipped = (slot, item) => {
+    updateEditingClass((draft) => {
+      draft.equippedItems = draft.equippedItems || { mainHand: null, offHand: null, body: null };
+      draft.equippedItems[slot] = item;
+    });
+  };
+
   const handleHighlightChange = (index, value) => {
     updateEditingClass((draft) => {
       draft.summary = draft.summary || {};
@@ -2110,9 +2132,12 @@ const ClassList = ({
                 inputClassName="bg-purple-950/50 border-purple-500/40 focus:ring-purple-400"
               />
             </div>
+// Proficiencies removed from here and moved to LoadoutView
+
             <div>
               <div className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-500">Puntos clave</div>
               <ul className="mt-3 space-y-3">
+
                 {highlights.length > 0 ? (
                   highlights.map((item, index) => (
                     <li
@@ -2155,8 +2180,8 @@ const ClassList = ({
                 <FiPlus className="h-4 w-4" />
                 Agregar punto clave
               </button>
-            </div>
-          </div>
+            </div >
+          </div >
         );
       }
       case 'inspiration': {
@@ -3046,6 +3071,8 @@ const ClassList = ({
       })) : [],
       equipment: editingClass.equipment || [],
       talents: editingClass.talents || {},
+      summary: editingClass.summary || {},
+      equippedItems: editingClass.equippedItems || { mainHand: null, offHand: null, body: null },
       storeItems: editingClass.storeItems || [],
       money: editingClass.money !== undefined ? editingClass.money : 4697
     };
@@ -3054,9 +3081,9 @@ const ClassList = ({
       switch (activeDetailTab) {
         case 'overview':
           return (
-            <div className="relative w-full h-full overflow-y-auto custom-scrollbar bg-[#09090b]">
-              {/* Dynamic Background based on class */}
-              <div className="absolute inset-0 z-0">
+            <div className="relative w-full h-full min-h-screen overflow-y-auto custom-scrollbar bg-[#09090b]">
+              {/* Dynamic Background based on class - FIXED to cover entire scroll */}
+              <div className="fixed inset-0 z-0 pointer-events-none">
                 {/* Capa 1: Oscurecimiento base */}
                 <div className="absolute inset-0 bg-[#0b1120]/80 z-10"></div>
 
@@ -3072,9 +3099,9 @@ const ClassList = ({
                 <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-10"></div>
               </div>
 
-              <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-center p-8 lg:p-16 gap-12 lg:gap-24">
+              <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-start lg:justify-center p-4 pt-16 md:p-8 lg:p-16 gap-6 md:gap-12 lg:gap-24 pb-20 md:pb-8">
                 {/* Left: Character Card Presentation */}
-                <div className="relative group w-full max-w-sm lg:max-w-md aspect-[2.5/3.5] shrink-0 perspective-1000">
+                <div className="relative group w-full max-w-[280px] md:max-w-sm lg:max-w-md aspect-[2.5/3.5] shrink-0 perspective-1000">
                   <div className="relative w-full h-full transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
                     {/* Glowing aura behind card */}
                     <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
@@ -3704,11 +3731,13 @@ const ClassList = ({
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
               onUpdateTalent={handleUpdateTalent}
+              onUpdateProficiency={handleProficiencyChange}
+              onUpdateEquipped={handleUpdateEquipped}
             />
           );
         case 'feats':
           return (
-            <div className="relative w-full h-full overflow-hidden bg-[#09090b]">
+            <div className="relative w-full h-full min-h-screen overflow-y-auto bg-[#09090b] pb-20 md:pb-0">
               {/* Dynamic Background based on class */}
               <div className="absolute inset-0 z-0">
                 {/* Capa 1: Oscurecimiento base */}
@@ -3726,7 +3755,7 @@ const ClassList = ({
                 <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-10"></div>
               </div>
 
-              <div className="relative z-20 w-full h-full flex items-center justify-center text-slate-500 font-['Cinzel']">
+              <div className="relative z-20 w-full h-full flex items-center justify-center text-slate-500 font-['Cinzel'] p-4 pt-16">
                 Sección de Talentos en construcción...
               </div>
             </div>
@@ -3757,7 +3786,7 @@ const ClassList = ({
     };
 
     return (
-      <div className="flex h-full w-full overflow-hidden bg-[#09090b]">
+      <div className="flex flex-col md:flex-row h-full w-full overflow-hidden bg-[#09090b]">
         <Sidebar
           activeTab={activeDetailTab}
           onTabChange={setActiveDetailTab}
@@ -3768,17 +3797,26 @@ const ClassList = ({
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
         />
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
           {renderActiveView()}
 
           {/* Close Button Absolute Positioned */}
           <button
             onClick={closeClassDetails}
-            className="absolute top-6 right-6 z-50 p-2 rounded-full bg-black/40 text-slate-400 hover:text-white hover:bg-black/60 transition-colors border border-slate-700/50"
+            className="absolute top-4 right-4 md:top-6 md:right-6 z-50 p-2 rounded-full bg-black/40 text-slate-400 hover:text-white hover:bg-black/60 transition-colors border border-slate-700/50"
           >
-            <FiX className="w-6 h-6" />
+            <FiX className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
+
+        {/* Mobile Navigation Bar */}
+        <MobileNav
+          activeTab={activeDetailTab}
+          onTabChange={setActiveDetailTab}
+          onSave={handleSaveChanges}
+          hasUnsavedChanges={hasUnsavedChanges}
+          saveButtonState={saveButtonState}
+        />
       </div>
     );
   };
