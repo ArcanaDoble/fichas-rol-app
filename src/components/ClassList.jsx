@@ -35,6 +35,7 @@ import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
 import { StoreView } from './StoreView';
 import HexIcon from './HexIcon';
+import { RelicsView } from './RelicsView';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -483,7 +484,9 @@ const ensureClassDefaults = (classItem) => {
     inspiration: [],
     classLevels: [],
     rules: [],
+    features: [], // Relics/Talents
     equipment: deepClone(defaultEquipment),
+    actionData: null, // Custom action reference overrides
   };
 
   const merged = {
@@ -687,6 +690,7 @@ const detailTabs = [
   { id: 'overview', label: 'Resumen' },
   { id: 'inspiration', label: 'Inspiración (Hitos)' },
   { id: 'levels', label: 'Nivel de clase' },
+  { id: 'feats', label: 'Reliquias y Talentos' },
   { id: 'rules', label: 'Reglas' },
   { id: 'equipment', label: 'Equipación' },
 ];
@@ -2387,6 +2391,15 @@ const ClassList = ({
           </div>
         );
       }
+      case 'feats': {
+        return (
+          <RelicsView
+            dndClass={editingClass}
+            onFeaturesChange={(newFeatures) => handleUpdateClassField('features', newFeatures)}
+            onActionsChange={(newActions) => handleUpdateClassField('actionData', newActions)}
+          />
+        );
+      }
       case 'rules': {
         return (
           <div className="space-y-4">
@@ -3064,11 +3077,12 @@ const ClassList = ({
       rating: editingClass.rating || 0,
       id: editingClass.id,
       currentLevel: editingClass.level || 1,
-      features: editingClass.classLevels ? editingClass.classLevels.map((l, i) => ({
+      features: editingClass.features || (editingClass.classLevels ? editingClass.classLevels.map((l, i) => ({
         level: i + 1,
         name: l.title,
         description: l.description
-      })) : [],
+      })) : []),
+      actionData: editingClass.actionData,
       equipment: editingClass.equipment || [],
       talents: editingClass.talents || {},
       summary: editingClass.summary || {},
@@ -3737,28 +3751,11 @@ const ClassList = ({
           );
         case 'feats':
           return (
-            <div className="relative w-full h-full min-h-screen overflow-y-auto bg-[#09090b] pb-20 md:pb-0">
-              {/* Dynamic Background based on class */}
-              <div className="absolute inset-0 z-0">
-                {/* Capa 1: Oscurecimiento base */}
-                <div className="absolute inset-0 bg-[#0b1120]/80 z-10"></div>
-
-                {/* Capa 2: Imagen del campeón desenfocada */}
-                {dndClass.image && (
-                  <img src={dndClass.image} className="w-full h-full object-cover opacity-40 blur-sm" alt="" />
-                )}
-
-                {/* Capa 3: Gradiente lateral para que el texto se lea mejor */}
-                <div className="absolute inset-0 bg-gradient-to-l from-[#0b1120] via-transparent to-[#0b1120] z-10"></div>
-
-                {/* Capa 4: Textura de polvo de estrellas (Stardust) */}
-                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-10"></div>
-              </div>
-
-              <div className="relative z-20 w-full h-full flex items-center justify-center text-slate-500 font-['Cinzel'] p-4 pt-16">
-                Sección de Talentos en construcción...
-              </div>
-            </div>
+            <RelicsView
+              dndClass={dndClass}
+              onFeaturesChange={(newFeatures) => handleUpdateClassField('features', newFeatures)}
+              onActionsChange={(newActions) => handleUpdateClassField('actionData', newActions)}
+            />
           );
         case 'store':
           return (
