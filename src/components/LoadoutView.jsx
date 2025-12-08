@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { FiShield, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar } from 'react-icons/fi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
 
@@ -61,6 +61,34 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
     // Equipment slot selection state
     const [activeSlotSelector, setActiveSlotSelector] = useState(null); // 'mainHand', 'offHand', 'body', or null
+    const [activeTalentSlotSelector, setActiveTalentSlotSelector] = useState(null); // 0, 1, 2 or null
+
+    // Get talent slots (restored)
+    const talentSlots = useMemo(() => {
+        const slots = dndClass.talents?.slots;
+        return Array.isArray(slots) && slots.length >= 3 ? slots.slice(0, 3) : [null, null, null];
+    }, [dndClass.talents]);
+
+    // Get available talents options
+    // Combining Action Data (isActive) and Class Features (isActiveAction)
+    // Get available talents options
+    // ONLY fetching active talents from the "reaction" pool as requested
+    const availableTalentOptions = useMemo(() => {
+        const data = dndClass.actionData || {};
+
+        // Specifically 'reaction' array contains the "TALENTOS"
+        // We only want those marked with isActive
+        return (data.reaction || []).filter(f => f.isActive);
+    }, [dndClass.actionData]);
+
+    const handleEquipTalentSlot = (index, talent) => {
+        if (onUpdateTalent) {
+            const newSlots = [...talentSlots];
+            newSlots[index] = talent;
+            onUpdateTalent('slots', newSlots);
+            setActiveTalentSlotSelector(null);
+        }
+    };
 
     // Get talent values from dndClass or use defaults
     const talentTitle = dndClass.talents?.title || 'Centinela';
@@ -803,7 +831,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                     </div>
 
                     {/* Right Column: Relic Slots (Vertical Stack) */}
-                    <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl flex flex-col h-fit max-h-[800px] overflow-y-auto custom-scrollbar sticky top-8">
+                    <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl flex flex-col h-fit max-h-[850px] overflow-y-auto sticky top-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                         <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
                             <FiShield className="w-5 h-5" />
                             TALENTOS
@@ -954,20 +982,87 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                             <div className="w-full h-[1px] bg-slate-800"></div>
 
                             {/* Locked slots */}
+                            {/* Talent Slots (Formerly Locked) */}
                             <div className="space-y-3 w-full">
-                                {[4, 8, 12].map((level) => (
-                                    <div key={level} className="flex items-center gap-4 group opacity-60 hover:opacity-100 transition-opacity">
-                                        <HexIcon size="sm" locked />
-                                        <div>
-                                            <div className="text-slate-300 font-bold text-xs uppercase tracking-wider group-hover:text-[#c8aa6e]">Ranura Bloqueada</div>
-                                            <div className="text-[10px] text-slate-500">Requiere Nivel {level}</div>
+                                {[0, 1, 2].map((index) => {
+                                    const equippedTalent = talentSlots[index];
+                                    const isSlotActive = activeTalentSlotSelector === index;
+
+                                    return (
+                                        <div key={index} className="relative">
+                                            <div
+                                                onClick={() => setActiveTalentSlotSelector(isSlotActive ? null : index)}
+                                                className={`flex items-center gap-4 group transition-all cursor-pointer rounded-lg p-2 border border-transparent
+                                                    ${isSlotActive ? 'bg-slate-800 border-[#c8aa6e] ring-1 ring-[#c8aa6e]' : 'hover:bg-slate-800/50 hover:border-slate-700'}
+                                                `}
+                                            >
+                                                <HexIcon size="sm" active={!!equippedTalent}>
+                                                    {equippedTalent ? (
+                                                        <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                                                            <FiStar className="w-4 h-4 text-[#c8aa6e]" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center bg-slate-900/50">
+                                                            <FiStar className="w-4 h-4 text-slate-700" />
+                                                        </div>
+                                                    )}
+                                                </HexIcon>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className={`font-bold text-xs uppercase tracking-wider truncate transition-colors
+                                                        ${equippedTalent ? 'text-[#c8aa6e]' : 'text-slate-500 group-hover:text-slate-400'}
+                                                    `}>
+                                                        {equippedTalent ? equippedTalent.name : 'Ranura Vacía'}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 line-clamp-1">
+                                                        {equippedTalent ? (equippedTalent.description || equippedTalent.desc || equippedTalent.preview || 'Sin descripción') : 'Clic para seleccionar...'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Dropdown for Talent Selection */}
+                                            {isSlotActive && (
+                                                <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                                                    <div className="p-2 border-b border-slate-700 bg-slate-900/90 sticky top-0 backdrop-blur-sm z-10">
+                                                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block text-center font-bold">
+                                                            Talentos Disponibles
+                                                        </span>
+                                                    </div>
+                                                    {availableTalentOptions.length > 0 ? (
+                                                        availableTalentOptions.map((opt, i) => (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() => handleEquipTalentSlot(index, opt)}
+                                                                className="w-full p-2 text-left hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0 flex flex-col gap-0.5"
+                                                            >
+                                                                <span className="text-xs font-bold text-[#f0e6d2]">{opt.name}</span>
+                                                                <span className="text-[10px] text-slate-500 line-clamp-2">{opt.description || opt.desc}</span>
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <div className="p-4 text-center text-slate-500 text-[10px]">
+                                                            No hay talentos activos.<br />
+                                                            <span className="opacity-70">Actívalos en la sección "Reliquias".</span>
+                                                        </div>
+                                                    )}
+                                                    {/* Option to clear slot */}
+                                                    {equippedTalent && (
+                                                        <button
+                                                            onClick={() => handleEquipTalentSlot(index, null)}
+                                                            className="w-full p-2 text-left bg-red-900/10 hover:bg-red-900/30 text-red-400 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-t border-slate-800"
+                                                        >
+                                                            <FiX className="w-3 h-3" /> Desequipar
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
 
                             {/* SEPARATOR */}
-                            <div className="w-full h-[1px] bg-slate-800 my-4"></div>
+                            <div className="w-full h-[1px] bg-slate-800 my-1"></div>
 
                             {/* PROFICIENCIES BLOCK */}
                             <div className="w-full space-y-3">
