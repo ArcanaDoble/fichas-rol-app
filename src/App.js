@@ -59,6 +59,7 @@ import BarraReflejos from './components/BarraReflejos';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
+import BestiaryView from './components/BestiaryView';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
@@ -6558,7 +6559,18 @@ function App() {
       />
     );
   }
+
+  // MODO MÁSTER -> BESTIARIO (NUEVO)
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    return (
+      <React.Suspense fallback={<div className="text-white p-8">Cargando Bestiario...</div>}>
+        <BestiaryView onBack={() => setChosenView(null)} />
+      </React.Suspense>
+    );
+  }
+
+  // MODO MÁSTER -> GESTOR DE ENEMIGOS (ANTIGUO)
+  if (userType === 'master' && authenticated && chosenView === 'enemies_legacy') {
     const filteredEnemies = enemies.filter((enemy) =>
       enemy.name.toLowerCase().includes(enemySearch.toLowerCase()) ||
       (enemy.description || '').toLowerCase().includes(enemySearch.toLowerCase())
