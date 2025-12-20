@@ -56,38 +56,39 @@ const EnemyCard = ({ enemy, onClick }) => {
                     </p>
 
                     {/* Stats Row */}
+                    {/* Stats Row */}
                     <div className="flex items-center justify-between w-full px-2 mt-2 gap-1 text-[9px] text-slate-400">
                         {/* PT - Postura */}
                         <div className="flex flex-col items-center">
-                            <span className="font-bold text-slate-200">{enemy.stats?.postura?.max || 0}</span>
+                            <span className="font-bold text-slate-200 text-xs">{enemy.stats?.postura?.max || 0}</span>
                             <span className="text-[7px] uppercase tracking-wider text-red-500/70">PT</span>
                         </div>
                         <div className="w-[1px] h-4 bg-gradient-to-b from-transparent via-red-900/60 to-transparent"></div>
 
                         {/* VI - Vida */}
                         <div className="flex flex-col items-center">
-                            <span className="font-bold text-slate-200">{enemy.stats?.vida?.max || enemy.hp || 0}</span>
+                            <span className="font-bold text-slate-200 text-xs">{enemy.stats?.vida?.max || enemy.hp || 0}</span>
                             <span className="text-[7px] uppercase tracking-wider text-red-500/70">VI</span>
                         </div>
                         <div className="w-[1px] h-4 bg-gradient-to-b from-transparent via-red-900/60 to-transparent"></div>
 
                         {/* IG - Ingenio */}
                         <div className="flex flex-col items-center">
-                            <span className="font-bold text-slate-200">{enemy.stats?.ingenio?.max || 0}</span>
+                            <span className="font-bold text-slate-200 text-xs">{enemy.stats?.ingenio?.max || 0}</span>
                             <span className="text-[7px] uppercase tracking-wider text-red-500/70">IG</span>
                         </div>
                         <div className="w-[1px] h-4 bg-gradient-to-b from-transparent via-red-900/60 to-transparent"></div>
 
                         {/* CD - Cordura */}
                         <div className="flex flex-col items-center">
-                            <span className="font-bold text-slate-200">{enemy.stats?.cordura?.max || 0}</span>
+                            <span className="font-bold text-slate-200 text-xs">{enemy.stats?.cordura?.max || 0}</span>
                             <span className="text-[7px] uppercase tracking-wider text-red-500/70">CD</span>
                         </div>
                         <div className="w-[1px] h-4 bg-gradient-to-b from-transparent via-red-900/60 to-transparent"></div>
 
                         {/* AR - Armadura */}
                         <div className="flex flex-col items-center">
-                            <span className="font-bold text-slate-200">{enemy.stats?.armadura?.max || 0}</span>
+                            <span className="font-bold text-slate-200 text-xs">{enemy.stats?.armadura?.max || 0}</span>
                             <span className="text-[7px] uppercase tracking-wider text-red-500/70">AR</span>
                         </div>
                     </div>
@@ -259,8 +260,8 @@ const BestiaryView = ({ onBack }) => {
                         </div>
 
                         {/* CONTENT (Matches EnemyListView) */}
-                        <div className="w-full h-full overflow-y-auto custom-scrollbar p-8">
-                            <div className="max-w-7xl mx-auto flex flex-col gap-10">
+                        <div className="w-full h-full overflow-y-auto custom-scrollbar p-4 md:p-8">
+                            <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-10">
 
                                 {/* Section Divider / Header */}
                                 <div className="flex items-center gap-4">
@@ -270,7 +271,7 @@ const BestiaryView = ({ onBack }) => {
                                 </div>
 
                                 {/* Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8 pb-12">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-12">
 
                                     {/* Create New Enemy Card */}
                                     <div
