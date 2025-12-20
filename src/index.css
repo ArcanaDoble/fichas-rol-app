@@ -2,604 +2,393 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tu CSS existente a continuación */
-
-body {
-  margin: 0;
-  @apply bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 min-h-screen text-gray-100;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
-/* Variables CSS personalizadas */
-:root {
-  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  --warning-gradient: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  --danger-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-/* Estilos base mejorados */
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-/* Animaciones personalizadas */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInFromRight {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes zoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes bounce {
-  0%, 20%, 53%, 80%, 100% {
-    transform: translate3d(0, 0, 0);
-  }
-  40%, 43% {
-    transform: translate3d(0, -30px, 0);
-  }
-  70% {
-    transform: translate3d(0, -15px, 0);
-  }
-  90% {
-    transform: translate3d(0, -4px, 0);
-  }
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes shake {
-  0% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-2px);
-  }
-  50% {
-    transform: translateX(2px);
-  }
-  75% {
-    transform: translateX(-2px);
-  }
-  100% {
-    transform: translateX(0);
-  }
-}
-
-@keyframes sparkle {
-  0% {
-    transform: translate(0, 0) scale(0.5) rotate(0deg);
-    opacity: 1;
-  }
-  70% {
-    transform: translate(calc(var(--tx) * 0.7), calc(var(--ty) * 0.7)) scale(1.5)
-      rotate(calc(var(--rot) * 0.5));
-    opacity: 0.8;
-  }
-  100% {
-    transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot));
-    opacity: 0;
-  }
-}
-
-.animate-sparkle {
-  animation: sparkle 1.4s ease-out infinite;
-}
-
-@keyframes goldFlashUp {
-  0% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-    background-color: rgba(15, 23, 42, 0.6);
-  }
-  35% {
-    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.28);
-    background-color: rgba(22, 101, 52, 0.35);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-    background-color: rgba(15, 23, 42, 0.6);
-  }
-}
-
-@keyframes goldFlashDown {
-  0% {
-    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
-    background-color: rgba(15, 23, 42, 0.6);
-  }
-  35% {
-    box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.28);
-    background-color: rgba(127, 29, 29, 0.35);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
-    background-color: rgba(15, 23, 42, 0.6);
-  }
-}
-
-@keyframes goldDeltaUp {
-  0% {
-    opacity: 0;
-    transform: translateY(6px) scale(0.95);
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-14px) scale(1.05);
-  }
-}
-
-@keyframes goldDeltaDown {
-  0% {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.95);
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(14px) scale(1.05);
-  }
-}
-
-.gold-flash-up {
-  animation: goldFlashUp 1.2s ease-out;
-}
-
-.gold-flash-down {
-  animation: goldFlashDown 1.2s ease-out;
-}
-
-.gold-delta-up {
-  animation: goldDeltaUp 0.95s ease-out forwards;
-}
-
-.gold-delta-down {
-  animation: goldDeltaDown 0.95s ease-out forwards;
-}
-
-/* Clases de utilidad para animaciones */
-.animate-in {
-  animation: fadeIn 0.5s ease-out;
-}
-
-.animate-slide-in-right {
-  animation: slideInFromRight 0.5s ease-out;
-}
-
-.animate-zoom-in {
-  animation: zoomIn 0.3s ease-out;
-}
-
-.animate-bounce {
-  animation: bounce 2s infinite;
-}
-
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-/* Efectos de hover mejorados */
-.hover-lift {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.enemy-grid {
-  position: relative;
-}
-
-.enemy-grid .enemy-card {
-  position: relative;
-  z-index: 10;
-}
-
-@media (min-width: 1024px) {
-  .enemy-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .enemy-grid .enemy-card {
-    max-width: min(100%, 24rem);
-  }
-}
-
-@media (min-width: 1280px) {
-  .enemy-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .enemy-grid .enemy-card {
-    max-width: min(100%, 26rem);
-  }
-}
-
-@media (min-width: 1536px) {
-  .enemy-grid .enemy-card {
-    max-width: min(100%, 28rem);
-  }
-}
-
-.enemy-action-button {
-  border-radius: 9999px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.3em !important;
-  font-size: 0.75rem !important;
-  padding: 0.5rem 1.25rem !important;
-  border: 1px solid var(
-      --enemy-button-border,
-      rgba(250, 204, 21, 0.4)
-    ) !important;
-  color: var(--enemy-button-text, #fefce8) !important;
-  background-image: linear-gradient(
-      135deg,
-      var(--enemy-button-from, rgba(250, 204, 21, 0.2)) 0%,
-      var(--enemy-button-via, rgba(168, 85, 247, 0.2)) 45%,
-      var(--enemy-button-to, rgba(15, 23, 42, 0.6)) 100%
-    ) !important;
-  box-shadow: 0 0 18px var(
-      --enemy-button-glow,
-      rgba(250, 204, 21, 0.18)
-    ) !important;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.enemy-action-button:hover {
-  border-color: var(
-      --enemy-button-hover-border,
-      rgba(250, 204, 21, 0.6)
-    ) !important;
-  background-image: linear-gradient(
-      135deg,
-      var(--enemy-button-hover-from, rgba(250, 204, 21, 0.28)) 0%,
-      var(--enemy-button-hover-via, rgba(168, 85, 247, 0.3)) 45%,
-      var(--enemy-button-hover-to, rgba(15, 23, 42, 0.7)) 100%
-    ) !important;
-}
-
-.enemy-action-button svg {
-  filter: drop-shadow(0 0 10px var(--enemy-button-icon-glow, rgba(250, 204, 21, 0.4)));
-}
-
-/* Scrollbar personalizada */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #374151;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #6b7280;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* Gradientes de fondo */
-.bg-gradient-primary {
-  background: var(--primary-gradient);
-}
-
-.bg-gradient-secondary {
-  background: var(--secondary-gradient);
-}
-
-.bg-gradient-success {
-  background: var(--success-gradient);
-}
-
-.bg-gradient-warning {
-  background: var(--warning-gradient);
-}
-
-.bg-gradient-danger {
-  background: var(--danger-gradient);
-}
-
-/* Efectos de cristal */
-.glass-effect {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Sombras personalizadas */
-.shadow-glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-}
-
-.shadow-glow-green {
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
-}
-
-.shadow-glow-purple {
-  box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);
-}
-
-.shadow-glow-red {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
-}
-
-/* Transiciones suaves */
-.transition-all {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-fast {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-slow {
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Utilidades para texto */
-.text-gradient {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ─── Ocultar flechitas de los inputs number ─── */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* ─── Animaciones y utilidades ─── */
-.bg-gray-850 {
-  background-color: #1f2937;
-}
-
-/* Animaciones personalizadas */
-@keyframes gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-@keyframes glow {
-  0%, 100% { box-shadow: 0 0 5px var(--glow-from, rgba(59, 130, 246, 0.3)); }
-  50% { box-shadow: 0 0 20px var(--glow-to, rgba(59, 130, 246, 0.6)); }
-}
-
-.animate-gradient {
-  animation: gradient 3s ease infinite;
-}
-
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
-}
-
-/* Scrollbar personalizado */
+/* Estilos de scrollbar personalizados */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #374151;
-  border-radius: 4px;
+  background: #0b1120;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #6b7280;
+  background: #334155;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #475569;
 }
 
-/* Mejoras de accesibilidad - Versión menos restrictiva */
-@media (prefers-reduced-motion: reduce) {
-  /* Solo desactivar animaciones complejas, mantener transiciones básicas */
-  .animate-gradient,
-  .animate-glow,
-  .animate-bounce,
-  .animate-pulse,
-  .animate-spin {
-    animation: none !important;
+/* Clases de utilidad personalizadas */
+.text-xxs {
+  font-size: 0.65rem;
+  line-height: 1rem;
+}
+
+/* Animaciones */
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
 
-  /* Reducir duración de transiciones pero no eliminarlas completamente */
-  .transition-all,
-  .transition-transform,
-  .transition-colors {
-    transition-duration: 0.1s !important;
+  to {
+    opacity: 1;
   }
 }
 
-/* Mejoras para dispositivos táctiles */
-@media (hover: none) and (pointer: coarse) {
-  .hover\:scale-105:hover {
-    transform: none;
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Efectos visuales para el minimap */
+.minimap-scanline {
+  background: linear-gradient(to bottom, transparent 50%, rgba(32, 203, 203, 0.02) 51%, transparent 51%);
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+.bg-grid-slate-800 {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(30 41 59 / 0.5)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+}
+
+/* --- CÓDIGO DEL EFECTO: ONDAS SÍSMICAS (TEMBLOR) --- */
+
+/* 1. Animación de vibración rápida (Terremoto) */
+@keyframes seismic-rumble {
+  0% {
+    transform: translate(0, 0);
   }
 
-  .hover\:bg-gray-600:hover {
-    background-color: inherit;
+  20% {
+    transform: translate(-2px, 1px);
+  }
+
+  40% {
+    transform: translate(2px, -1px);
+  }
+
+  60% {
+    transform: translate(-1px, -2px);
+  }
+
+  80% {
+    transform: translate(1px, 2px);
+  }
+
+  100% {
+    transform: translate(0, 0);
   }
 }
 
-/* Estilos para tooltips mejorados */
-.react-tooltip {
-  z-index: 9999 !important;
-  max-width: 300px !important;
-  font-size: 0.875rem !important;
-  line-height: 1.25rem !important;
+/* 2. Animación de la onda expansiva (Radar) */
+@keyframes seismic-wave {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+    border-width: 4px;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  /* Aparece de golpe */
+  100% {
+    transform: scale(4);
+    opacity: 0;
+    border-width: 0px;
+  }
 }
 
-/* Mejoras para el grid del inventario */
-.inventory-grid {
-  image-rendering: pixelated;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: crisp-edges;
-}
+/* 3. Clase Principal */
+.effect-shake {
+  /* Vibración constante */
+  animation: seismic-rumble 0.25s infinite linear;
 
-/* Efectos de hover mejorados */
-.inventory-item:hover {
-  z-index: 100;
-  transform: scale(1.02);
-  transition: all 0.2s ease;
-}
-
-/* Indicadores de estado */
-.status-indicator {
+  /* Propiedades estructurales */
   position: relative;
+  overflow: hidden;
+  z-index: 10;
+
+  /* Brillo interno sutil (Ámbar) - Sin background-color para transparencia */
+  box-shadow: inset 0 0 15px rgba(180, 83, 9, 0.3);
 }
 
-.status-indicator::after {
+/* 4. Onda Primaria (Pseudo-elemento) */
+.effect-shake::before {
   content: '';
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
+  inset: 0;
+  margin: auto;
+  width: 30%;
+  height: 30%;
   border-radius: 50%;
-  background: #10b981;
-  border: 2px solid #1f2937;
+  border: 2px solid #fbbf24;
+  /* Color Ámbar Claro */
+  animation: seismic-wave 1.8s infinite ease-out;
+  pointer-events: none;
+  box-shadow: 0 0 10px #fbbf24;
 }
 
-.status-indicator.error::after {
-  background: #ef4444;
+/* 5. Onda Secundaria con Retraso (Pseudo-elemento) */
+.effect-shake::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  border: 2px solid #d97706;
+  /* Color Ámbar Oscuro */
+  animation: seismic-wave 1.8s infinite ease-out 0.6s;
+  /* Retraso de 0.6s */
+  pointer-events: none;
 }
 
-.status-indicator.warning::after {
-  background: #f59e0b;
-}
+/* Highlight animation params */
+@keyframes highlight-pulse {
 
-/* ─── Aurora minimalista para actores simultáneos ─── */
-@keyframes borderPulse {
-  0%, 100% { 
-    border-color: #f59e0b;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  0%,
+  100% {
+    opacity: 0.4;
   }
-  50% { 
-    border-color: #fbbf24;
-    box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+
+  50% {
+    opacity: 0.8;
   }
 }
 
-.simul {
-  background: linear-gradient(135deg, #1e293b, #334155, #475569);
-  border: 2px solid;
-  animation: borderPulse 4s ease-in-out infinite;
-  position: relative;
+.animate-highlight-pulse {
+  animation: highlight-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Ocultar barra de scroll */
-.scrollbar-hide {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+.font-fantasy {
+  font-family: 'Cinzel', serif;
 }
 
-/* Scrollbar util classes */
-.scrollbar-thin {
-  scrollbar-width: thin;
-}
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-.scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 4px;
-}
-.scrollbar-track-transparent::-webkit-scrollbar-track {
-  background: transparent;
+/* --- EFECTOS TÁCTICOS AVANZADOS --- */
+
+/* 1. Fuego Infernal (Resplandor oscilante) */
+@keyframes effect-fire {
+
+  0%,
+  100% {
+    background-color: rgba(239, 68, 68, 0.3);
+    box-shadow: inset 0 0 20px #ef4444, 0 0 10px #f97316;
+  }
+
+  50% {
+    background-color: rgba(249, 115, 22, 0.5);
+    box-shadow: inset 0 0 40px #f97316, 0 0 20px #fbbf24;
+  }
 }
 
-/* Estilos para listas dentro del editor de notas */
-.ProseMirror ul {
-  list-style-type: disc;
-  margin-left: 1.25rem;
-  padding-left: 1.25rem;
+.effect-fire {
+  animation: effect-fire 1.5s infinite ease-in-out;
+  overflow: hidden;
 }
 
-.ProseMirror ol {
-  list-style-type: decimal;
-  margin-left: 1.25rem;
-  padding-left: 1.25rem;
+.effect-fire::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 50% 100%, transparent 20%, rgba(251, 146, 60, 0.4) 100%);
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+/* 2. Hielo Glacial (Brillo cristalino) */
+@keyframes effect-ice {
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.4;
+  }
+
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.7;
+  }
+
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.4;
+  }
+}
+
+.effect-ice {
+  background: linear-gradient(-45deg, #0ea5e9, #bae6fd, #38bdf8, #7dd3fc);
+  background-size: 400% 400%;
+  animation: effect-ice 3s infinite ease-in-out;
+  box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.5);
+}
+
+/* 3. Aura Arcana (Vórtice púrpura) */
+@keyframes effect-arcane {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.1);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 0.3;
+  }
+}
+
+.effect-arcane {
+  background: radial-gradient(circle, #a855f7 0%, transparent 70%);
+  animation: effect-arcane 4s infinite linear;
+}
+
+/* --- CÓDIGO DEL EFECTO: TÓXICO (Bucle Perfecto) --- */
+@keyframes toxic-rise {
+  0% {
+    background-position: 0px 0px;
+  }
+
+  100% {
+    background-position: 0px -200px;
+  }
+
+  /* Coincide con el height del background-size */
+}
+
+@keyframes toxic-pulse {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.effect-toxic {
+  background-color: rgba(30, 60, 10, 0.6);
+  /* Base pantano oscura */
+  box-shadow: inset 0 0 25px #4d7c0f;
+  /* Glow interno verde profundo */
+  overflow: hidden;
+}
+
+/* Toast Notification Animation */
+@keyframes toast-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) translateX(-50%);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) translateX(-50%);
+  }
+}
+
+.animate-toast-enter {
+  animation: toast-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toast-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) translateX(-50%);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) translateX(-50%);
+  }
+}
+
+.animate-toast-exit {
+  animation: toast-exit 0.3s ease-in forwards;
+}
+
+
+.effect-toxic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Patrón de burbujas dispersas */
+  background-image:
+    radial-gradient(4px 4px at 20% 80%, rgba(200, 255, 100, 0.9) 0%, transparent 100%),
+    radial-gradient(6px 6px at 50% 50%, rgba(163, 230, 53, 0.6) 0%, transparent 100%),
+    radial-gradient(3px 3px at 80% 20%, rgba(200, 255, 100, 0.8) 0%, transparent 100%),
+    radial-gradient(5px 5px at 10% 30%, rgba(163, 230, 53, 0.5) 0%, transparent 100%);
+
+  /* El tamaño vertical es CRÍTICO: 200px para que el loop sea invisible */
+  background-size: 100% 200px;
+
+  /* La animación mueve el fondo exactamente 200px hacia arriba */
+  animation: toxic-rise 4s infinite linear;
+}
+
+/* Capa de Brillo/Neblina pulsante */
+.effect-toxic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 60%, rgba(132, 204, 22, 0.4), transparent 70%);
+  animation: toxic-pulse 3s infinite ease-in-out;
+  pointer-events: none;
+}
+
+/* D&D Custom Slider */
+.dnd-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: #334155;
+  border-radius: 1px;
+  outline: none;
+}
+
+.dnd-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #c8aa6e;
+  border: 2px solid #09090b;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px #c8aa6e;
+  margin-top: -5px;
+  /* (height 2px - thumb 12px) / 2 = -5 */
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.dnd-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  background: #f0e6d2;
+  box-shadow: 0 0 5px #c8aa6e;
+}
+
+.dnd-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #c8aa6e;
+  border: 2px solid #09090b;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px #c8aa6e;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.dnd-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  background: #f0e6d2;
+  box-shadow: 0 0 5px #c8aa6e;
 }

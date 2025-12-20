@@ -36,6 +36,7 @@ import {
   FiCrop,
   FiCheck,
 } from 'react-icons/fi';
+import { User, Crown, Shield, Scroll, ArrowLeft, Lock, Unlock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -50,6 +51,7 @@ import EstadoSelector from './components/EstadoSelector';
 import Inventory from './components/inventory/Inventory';
 import MasterMenu from './components/MasterMenu';
 import ClassList from './components/ClassList';
+import UsersView from './components/UsersView';
 import EncounterPanel from './components/EncounterPanel';
 import { normalizeStateEntry, normalizeStateList } from './utils/stateUtils';
 import CustomItemManager from './components/inventory/CustomItemManager';
@@ -71,7 +73,7 @@ import {
   normalizeHexColor as normalizeGlossaryHexColor,
 } from './utils/color';
 import PageSelector from './components/PageSelector';
-const MinimapBuilder = React.lazy(() => import('./components/MinimapBuilder'));
+const MinimapBuilder = React.lazy(() => import('./components/MinimapV2'));
 const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
 import { nanoid } from 'nanoid';
 import {
@@ -933,12 +935,17 @@ function App() {
   const [passwordInput, setPasswordInput] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [loginTransition, setLoginTransition] = useState(false);
 
   const handleLogin = () => {
     if (passwordInput === MASTER_PASSWORD) {
-      setAuthenticated(true);
-      setShowLogin(false);
       setAuthError('');
+      setLoginTransition(true);
+      setTimeout(() => {
+        setAuthenticated(true);
+        setShowLogin(false);
+        setLoginTransition(false);
+      }, 600);
     } else {
       setAuthError('Contraseña incorrecta');
     }
@@ -950,6 +957,7 @@ function App() {
     setPasswordInput('');
     setAuthenticated(false);
     setAuthError('');
+    setLoginTransition(false);
   };
   const [armas, setArmas] = useState([]);
   const [armaduras, setArmaduras] = useState([]);
@@ -1214,6 +1222,56 @@ function App() {
   const [enemySortDir, setEnemySortDir] = useState('asc'); // 'asc' | 'desc'
   const [enemyFiltersOpen, setEnemyFiltersOpen] = useState(false);
   const [enemyTab, setEnemyTab] = useState('catalog');
+  const [loginTarget, setLoginTarget] = useState(null);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [playerLoginError, setPlayerLoginError] = useState(null);
+  const [playerLoginTransition, setPlayerLoginTransition] = useState(false);
+
+  const handlePlayerLogin = async () => {
+    if (!loginTarget) return;
+    try {
+      const docRef = doc(db, 'players', loginTarget);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // If no passcode set, allow entry (backward and forward compatibility for unlocked chars)
+        // But user requested password protection. We'll assume if it's set, it must match.
+        // If it is NOT set, we might allow entry or demand setting one.
+        // Let's assume: if data.passcode exists and is not empty, check it.
+        if (data.passcode && data.passcode !== loginPassword) {
+          setPlayerLoginError('Contraseña incorrecta');
+          return;
+        }
+
+        // Success - trigger transition
+        setPlayerLoginError(null);
+        setPlayerLoginTransition(true);
+        setTimeout(() => {
+          setPlayerName(loginTarget);
+          setNameEntered(true);
+          setLoginTarget(null);
+          setLoginPassword('');
+          setPlayerLoginTransition(false);
+        }, 600);
+      } else {
+        // If doc doesn't exist but name is in existingPlayers (legacy), allow?
+        // For now, if doc not found, maybe allow creating it implicitly?
+        // No, user said "Master is the ONLY one who can create".
+        // So if doc doesn't exist, we probably shouldn't be here if existingPlayers comes from collection scan.
+        // But existingPlayers comes from 'getDocs(collection("players"))'. So it MUST exist.
+        setPlayerLoginError('Error: El usuario no existe');
+      }
+    } catch (e) {
+      console.error("Login Error", e);
+      setPlayerLoginError('Error al conectar con la base de datos');
+    }
+  };
+
+  const cancelPlayerLogin = () => {
+    setLoginTarget(null);
+    setLoginPassword('');
+    setPlayerLoginError(null);
+  };
   const [encounterAddTarget, setEncounterAddTarget] = useState(null);
   const [encounterAddCount, setEncounterAddCount] = useState(1);
   const encounterSyncRef = useRef(null);
@@ -1810,6 +1868,8 @@ function App() {
   const [showPlayerMinimap, setShowPlayerMinimap] = useState(false);
   // Mapa de Batalla para jugadores
   const [showPlayerBattleMap, setShowPlayerBattleMap] = useState(false);
+  const [showPlayerBestiary, setShowPlayerBestiary] = useState(false);
+  const [showPlayerClassList, setShowPlayerClassList] = useState(false);
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -3650,9 +3710,27 @@ function App() {
           armaduras,
           playerName
         );
+        // Ensure defaults if missing in DB
+        if (!recalculated.atributos) {
+          recalculated.atributos = {
+            destreza: 0,
+            vigor: 0,
+            intelecto: 0,
+            voluntad: 0,
+          };
+        }
+        if (!recalculated.stats) {
+          recalculated.stats = { ...defaultStats };
+        }
+        if (!recalculated.weapons) recalculated.weapons = [];
+        if (!recalculated.armaduras) recalculated.armaduras = [];
+        if (!recalculated.poderes) recalculated.poderes = [];
+        if (!recalculated.claves) recalculated.claves = [];
+        if (!recalculated.estados) recalculated.estados = [];
         const withKarma = attachKarma(recalculated);
         setPlayerData(withKarma);
-        setResourcesList(withKarma.resourcesList || []);
+        const loadedList = withKarma.resourcesList || [];
+        setResourcesList(loadedList.length > 0 ? loadedList : defaultResourcesList);
         setClaves(withKarma.claves || []);
         setEstados(withKarma.estados || []);
       } else {
@@ -3663,12 +3741,10 @@ function App() {
           claves: [],
           estados: [],
           atributos: {
-            fuerza: 0,
             destreza: 0,
-            constitucion: 0,
-            inteligencia: 0,
-            sabiduria: 0,
-            carisma: 0,
+            vigor: 0,
+            intelecto: 0,
+            voluntad: 0,
           },
           stats: { ...defaultStats },
           cargaAcumulada: { fisica: 0, mental: 0 },
@@ -3692,12 +3768,10 @@ function App() {
         claves: [],
         estados: [],
         atributos: {
-          fuerza: 0,
           destreza: 0,
-          constitucion: 0,
-          inteligencia: 0,
-          sabiduria: 0,
-          carisma: 0,
+          vigor: 0,
+          intelecto: 0,
+          voluntad: 0,
         },
         stats: { ...defaultStats },
         cargaAcumulada: { fisica: 0, mental: 0 },
@@ -5024,82 +5098,84 @@ function App() {
   // MENÚ PRINCIPAL
   if (!userType) {
     return withTooltips(
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
-        {/* Partículas de fondo animadas */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(30)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-blue-500/30 rounded-full animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${2 + Math.random() * 4}s`,
-              }}
-            />
-          ))}
+      <div className="min-h-screen bg-[#0b1120] flex flex-col justify-center items-center px-4 relative overflow-hidden font-['Lato']">
+        {/* Fondo de polvo/stardust */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#c8aa6e]/5 via-[#0b1120] to-[#0b1120]"></div>
         </div>
-        {/* Círculos decorativos */}
-        <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-xl animate-pulse"></div>
+
         <div
-          className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-xl animate-pulse"
-          style={{ animationDelay: '1s' }}
-        ></div>
-        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
-          {/* Header minimalista */}
-          <div className="text-center space-y-4">
-            <h1 className="text-3xl font-bold text-center text-white">
+          className="w-full max-w-md relative z-10 p-8 rounded-2xl border border-[#c8aa6e]/20 shadow-2xl flex flex-col gap-8 animate-in fade-in zoom-in-95 duration-700"
+          style={{
+            background: 'rgba(11, 17, 32, 0.88)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 0 50px rgba(200, 170, 110, 0.08)',
+          }}
+        >
+          {/* Decoración superior */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/50 to-transparent"></div>
+
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <h1 className="text-4xl font-bold text-[#f0e6d2] font-['Cinzel'] tracking-wide">
               Fichas de Rol
             </h1>
-            <p className="text-gray-400 text-base">
+            <p className="text-[#c8aa6e]/60 text-xs uppercase tracking-[0.2em] font-medium">
               Sistema de gestión de personajes
             </p>
-            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
+
           {/* Pregunta principal */}
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-white mb-2">
-              ¿Quién eres?
-            </h2>
+            <p className="text-gray-400 text-sm">
+              Selecciona tu rol para continuar
+            </p>
           </div>
-          {/* Opciones minimalistas */}
+
+          {/* Opciones */}
           <div className="flex flex-col gap-4">
-            <Boton
-              color="green"
-              size="lg"
-              className="py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300"
+            <button
               onClick={() => setUserType('player')}
+              className="group relative w-full py-5 rounded-xl border border-emerald-500/30 bg-emerald-900/20 text-emerald-100 font-semibold text-lg tracking-wide shadow-lg hover:bg-emerald-800/30 hover:border-emerald-400/50 hover:shadow-emerald-500/20 active:scale-[0.98] transition-all duration-300 overflow-hidden"
             >
-              <div className="flex flex-col items-center">
-                <span>Soy Jugador</span>
-                <span className="text-sm opacity-70 font-normal">
-                  Gestiona tu personaje
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative z-10 flex flex-col items-center gap-1">
+                <span className="flex items-center gap-2">
+                  <User className="w-5 h-5" strokeWidth={2} />
+                  Soy Jugador
+                </span>
+                <span className="text-xs text-emerald-400/70 font-normal">
+                  Accede a tu ficha de personaje
                 </span>
               </div>
-            </Boton>
-            <Boton
-              color="purple"
-              size="lg"
-              className="py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 active:scale-95 transition-all duration-300"
+            </button>
+
+            <button
               onClick={() => {
                 setUserType('master');
                 setShowLogin(true);
               }}
+              className="group relative w-full py-5 rounded-xl border border-purple-500/30 bg-purple-900/20 text-purple-100 font-semibold text-lg tracking-wide shadow-lg hover:bg-purple-800/30 hover:border-purple-400/50 hover:shadow-purple-500/20 active:scale-[0.98] transition-all duration-300 overflow-hidden"
             >
-              <div className="flex flex-col items-center">
-                <span>Soy Máster</span>
-                <span className="text-sm opacity-70 font-normal">
-                  Herramientas avanzadas
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative z-10 flex flex-col items-center gap-1">
+                <span className="flex items-center gap-2">
+                  <Crown className="w-5 h-5" strokeWidth={2} />
+                  Soy Máster
+                </span>
+                <span className="text-xs text-purple-400/70 font-normal">
+                  Herramientas de dirección de juego
                 </span>
               </div>
-            </Boton>
+            </button>
           </div>
-          {/* Footer minimalista */}
-          <div className="text-center space-y-2 border-t border-gray-700 pt-6">
-            <p className="text-sm font-medium text-gray-400">Versión 2.1.9</p>
-            <p className="text-xs text-gray-500">
-              Animación de dados mejorada.
+
+          {/* Footer */}
+          <div className="text-center space-y-1 border-t border-[#c8aa6e]/10 pt-5">
+            <p className="text-xs font-medium text-[#c8aa6e]/50 uppercase tracking-wider">Versión 2.1.9</p>
+            <p className="text-[10px] text-gray-600">
+              Animación de dados mejorada
             </p>
           </div>
         </div>
@@ -5109,179 +5185,251 @@ function App() {
   // LOGIN MÁSTER
   if (userType === 'master' && showLogin && !authenticated) {
     return withTooltips(
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
-        {/* Partículas de fondo */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-purple-500/30 rounded-full animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
+      <div className="min-h-screen bg-[#0b1120] flex flex-col justify-center items-center px-4 relative overflow-hidden font-['Lato']">
+        {/* Fondo de polvo/stardust */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-purple-900/5 via-[#0b1120] to-[#0b1120]"></div>
         </div>
-        {/* Efectos de fondo */}
-        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl animate-pulse"></div>
+
         <div
-          className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse"
-          style={{ animationDelay: '1s' }}
-        ></div>
-        <div className="w-full max-w-md rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
-          {/* Header minimalista */}
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-bold text-center text-white">
-              Acceso Máster
+          className={`w-full max-w-md relative z-10 p-8 rounded-2xl border shadow-2xl flex flex-col gap-6 transition-all duration-500 ${loginTransition
+            ? 'scale-105 opacity-0 border-purple-400/60'
+            : 'animate-in fade-in zoom-in-95 duration-700 border-purple-500/20'
+            }`}
+          style={{
+            background: 'rgba(11, 17, 32, 0.88)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: loginTransition
+              ? '0 0 80px rgba(147, 51, 234, 0.4)'
+              : '0 0 50px rgba(147, 51, 234, 0.08)',
+          }}
+        >
+          {/* Decoración superior */}
+          <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent transition-opacity duration-300 ${loginTransition ? 'opacity-0' : ''}`}></div>
+
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <div className={`w-20 h-20 mx-auto mb-4 rounded-full border-2 border-purple-500/30 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 shadow-lg transition-all duration-500 ${loginTransition ? 'shadow-purple-500/50 scale-110' : 'shadow-purple-900/20'}`}>
+              <Crown className={`w-10 h-10 transition-colors duration-300 ${loginTransition ? 'text-purple-300' : 'text-purple-400'}`} strokeWidth={1.5} />
+            </div>
+            <h2 className="text-3xl font-bold text-[#f0e6d2] font-['Cinzel'] tracking-wide">
+              {loginTransition ? 'Bienvenido' : 'Acceso Máster'}
             </h2>
-            <p className="text-gray-400 text-sm">
-              Ingresa la contraseña para acceder a las herramientas avanzadas
+            <p className="text-purple-400/60 text-xs uppercase tracking-[0.2em] font-medium">
+              {loginTransition ? 'Accediendo al sistema...' : 'Ingresa la contraseña para continuar'}
             </p>
-            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
+
           {/* Campo de contraseña */}
-          <div className="space-y-4">
-            <Input
-              type="password"
-              placeholder="Contraseña de máster"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              className="w-full text-center"
-              size="lg"
-            />
-            {authError && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center animate-in fade-in duration-300">
-                <p className="text-red-400 text-sm font-medium">{authError}</p>
+          {!loginTransition && (
+            <div className="space-y-5 mt-2">
+              <div className="relative group">
+                <input
+                  type="password"
+                  placeholder="Contraseña de máster..."
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                  className="w-full bg-gray-900/60 border-2 border-gray-700 rounded-xl px-4 py-4 text-center text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none focus:ring-4 focus:ring-purple-500/10 transition-all duration-300 font-['Lato'] tracking-wider text-lg shadow-inner"
+                  autoFocus
+                />
+                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
               </div>
-            )}
-          </div>
-          {/* Botones */}
-          <div className="space-y-3">
-            <Boton
-              color="green"
-              size="lg"
-              className="w-full py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
-              onClick={handleLogin}
-            >
-              Acceder al Sistema
-            </Boton>
-            <Boton
-              color="gray"
-              size="md"
-              className="w-full py-3 rounded-lg font-semibold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
-              onClick={volverAlMenu}
-            >
-              Volver al menú principal
-            </Boton>
-          </div>
+
+              {authError && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center animate-in fade-in slide-in-from-top-2 duration-300">
+                  <p className="text-red-400 text-sm font-medium">{authError}</p>
+                </div>
+              )}
+
+              {/* Botones */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <button
+                  onClick={volverAlMenu}
+                  className="w-full py-3 rounded-xl border border-gray-700/50 bg-gray-800/30 text-gray-400 font-medium text-sm tracking-wide hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver
+                </button>
+                <button
+                  onClick={handleLogin}
+                  className="w-full py-3 rounded-xl border border-purple-500/30 bg-purple-900/30 text-purple-100 font-semibold text-sm tracking-wide hover:bg-purple-800/40 hover:border-purple-400/50 active:scale-[0.98] transition-all duration-300"
+                >
+                  Acceder
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
-  // SELECCIÓN JUGADOR
+  // SELECCIÓN JUGADOR - LOGIN
   if (userType === 'player' && !nameEntered) {
-    return withTooltips(
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
-        {/* Partículas de fondo */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(25)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-green-500/30 rounded-full animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
+    if (loginTarget) {
+      // UI LOGIN JUGADOR ESPECIFICO
+      return withTooltips(
+        <div className="min-h-screen bg-[#0b1120] flex flex-col justify-center items-center px-4 relative overflow-hidden font-['Lato']">
+          {/* Fondo de polvo/stardust */}
+          <div className="fixed inset-0 pointer-events-none z-0">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/5 via-[#0b1120] to-[#0b1120]"></div>
+          </div>
+
+          <div
+            className={`w-full max-w-md relative z-10 p-8 rounded-2xl border shadow-2xl flex flex-col gap-6 transition-all duration-500 ${playerLoginTransition
+              ? 'scale-105 opacity-0 border-emerald-400/60'
+              : 'animate-in fade-in zoom-in-95 duration-700 border-emerald-500/20'
+              }`}
+            style={{
+              background: 'rgba(11, 17, 32, 0.88)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: playerLoginTransition
+                ? '0 0 80px rgba(16, 185, 129, 0.4)'
+                : '0 0 50px rgba(16, 185, 129, 0.08)',
+            }}
+          >
+            {/* Header decorativo */}
+            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent transition-opacity duration-300 ${playerLoginTransition ? 'opacity-0' : ''}`}></div>
+
+            <div className="text-center space-y-4">
+              <div className={`w-20 h-20 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center mx-auto mb-2 border-2 border-emerald-500/30 shadow-lg group relative overflow-hidden transition-all duration-500 ${playerLoginTransition ? 'shadow-emerald-500/50 scale-110' : 'shadow-emerald-900/20'}`}>
+                <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                {playerLoginTransition ? (
+                  <Unlock className="w-10 h-10 text-emerald-300 scale-110 transition-all duration-500" strokeWidth={1.5} />
+                ) : loginPassword.length > 0 ? (
+                  <Unlock className="w-10 h-10 text-emerald-400 group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
+                ) : (
+                  <Lock className="w-10 h-10 text-emerald-400/60 group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
+                )}
+              </div>
+              <div>
+                <h2 className="text-3xl font-bold text-[#f0e6d2] font-['Cinzel'] tracking-wide">
+                  {playerLoginTransition ? 'Bienvenido' : loginTarget}
+                </h2>
+                <p className="mt-2 text-emerald-400/60 text-xs uppercase tracking-[0.2em] font-medium">
+                  {playerLoginTransition ? 'Cargando ficha...' : 'Contraseña de Ficha'}
+                </p>
+              </div>
+            </div>
+
+            {!playerLoginTransition && (
+              <div className="space-y-5 mt-2">
+                <div className="relative group">
+                  <input
+                    type="password"
+                    placeholder="Introduce tu clave..."
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePlayerLogin()}
+                    className="w-full bg-gray-900/60 border-2 border-gray-700 rounded-xl px-4 py-4 text-center text-white placeholder-gray-600 focus:border-emerald-500/50 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all duration-300 font-['Lato'] tracking-wider text-lg shadow-inner"
+                    autoFocus
+                  />
+                  <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
+                </div>
+
+                {playerLoginError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center animate-in fade-in slide-in-from-top-2 duration-300">
+                    <p className="text-red-400 text-sm font-medium">{playerLoginError}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <button
+                    onClick={cancelPlayerLogin}
+                    className="w-full py-3 rounded-xl border border-gray-700/50 bg-gray-800/30 text-gray-400 font-medium text-sm tracking-wide hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handlePlayerLogin}
+                    className="w-full py-3 rounded-xl border border-emerald-500/30 bg-emerald-900/30 text-emerald-100 font-semibold text-sm tracking-wide hover:bg-emerald-800/40 hover:border-emerald-400/50 active:scale-[0.98] transition-all duration-300"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        {/* Efectos de fondo */}
-        <div className="absolute top-20 left-10 w-32 h-32 bg-green-500/10 rounded-full blur-xl animate-pulse"></div>
+      );
+    }
+
+    // LISTADO DE JUGADORES (SIN CREAR)
+    return withTooltips(
+      <div className="min-h-screen bg-[#0b1120] flex flex-col justify-center items-center px-4 relative overflow-hidden font-['Lato']">
+        {/* Fondo de polvo/stardust */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/5 via-[#0b1120] to-[#0b1120]"></div>
+        </div>
+
         <div
-          className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-xl animate-pulse"
-          style={{ animationDelay: '1s' }}
-        ></div>
-        <div className="w-full max-w-lg rounded-2xl shadow-2xl bg-gray-800/90 backdrop-blur-sm border border-gray-700 p-8 flex flex-col gap-6 relative z-10 animate-in fade-in zoom-in-95 duration-700">
-          {/* Header minimalista */}
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-bold text-center text-white">
+          className="w-full max-w-lg relative z-10 p-8 rounded-2xl border border-emerald-500/20 shadow-2xl flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-700"
+          style={{
+            background: 'rgba(11, 17, 32, 0.88)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 0 50px rgba(16, 185, 129, 0.08)',
+          }}
+        >
+          {/* Decoración superior */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 mx-auto mb-2 rounded-full border-2 border-emerald-500/30 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 shadow-lg shadow-emerald-900/20">
+              <User className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
+            </div>
+            <h2 className="text-3xl font-bold text-[#f0e6d2] font-['Cinzel'] tracking-wide">
               Selecciona tu Personaje
             </h2>
-            <p className="text-gray-400 text-sm">
-              Elige un personaje existente o crea uno nuevo
+            <p className="text-emerald-400/60 text-xs uppercase tracking-[0.2em] font-medium">
+              Elige tu ficha para continuar la aventura
             </p>
-            <div className="w-16 h-px bg-gray-600 mx-auto"></div>
           </div>
+
           {/* Jugadores existentes */}
-          {existingPlayers.length > 0 && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="font-semibold text-white mb-3">
-                  Personajes Existentes
-                </h3>
-              </div>
-              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-                {existingPlayers.map((n) => (
-                  <Boton
+          {existingPlayers.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {existingPlayers.map((n, idx) => (
+                  <button
                     key={n}
-                    color="gray"
-                    size="md"
-                    className="w-full rounded-lg font-semibold text-base px-4 py-2 transition-colors duration-200"
                     onClick={() => {
                       const trimmed = n.trim();
-                      setPlayerName(trimmed);
-                      setTimeout(() => setNameEntered(true), 0);
+                      setLoginTarget(trimmed);
+                      setPlayerLoginError(null);
                     }}
+                    className="group relative w-full py-4 px-6 rounded-xl border border-gray-700/50 bg-gray-800/40 text-[#f0e6d2] font-semibold text-lg tracking-wide hover:bg-emerald-900/20 hover:border-emerald-500/40 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+                    style={{ animationDelay: `${idx * 50}ms` }}
                   >
-                    <div className="flex justify-center items-center">
-                      <span className="truncate">{n}</span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/5 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="relative z-10 flex items-center justify-center gap-3">
+                      <User className="w-5 h-5 text-emerald-400/60 group-hover:text-emerald-400 transition-colors" strokeWidth={2} />
+                      <span className="truncate font-['Cinzel'] text-lg">{n}</span>
                     </div>
-                  </Boton>
+                  </button>
                 ))}
               </div>
             </div>
-          )}
-          {/* Crear nuevo personaje */}
-          <div className="space-y-4">
-            <div className="text-center">
-              <h3 className="font-semibold text-white mb-3">
-                Crear Nuevo Personaje
-              </h3>
+          ) : (
+            <div className="text-center py-12 text-gray-500 italic border border-dashed border-gray-700/50 rounded-xl bg-gray-900/30 flex flex-col items-center gap-3">
+              <Scroll className="w-10 h-10 opacity-40" strokeWidth={1.5} />
+              <span>No hay personajes creados. Contacta con el Master.</span>
             </div>
-            <Input
-              placeholder="Nombre de tu personaje"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && enterPlayer()}
-              className="w-full text-center"
-              size="lg"
-              clearable
-            />
-            <Boton
-              color="green"
-              size="lg"
-              className="w-full py-4 rounded-lg font-semibold text-lg tracking-wide shadow-lg hover:scale-105 transition-all duration-300"
-              onClick={enterPlayer}
-            >
-              Crear / Entrar
-            </Boton>
-          </div>
+          )}
+
           {/* Botón volver */}
-          <div className="border-t border-gray-700 pt-4">
-            <Boton
-              color="gray"
-              size="md"
-              className="w-full py-3 rounded-lg font-semibold text-base tracking-wide shadow hover:scale-105 transition-all duration-300"
+          <div className="border-t border-emerald-500/10 pt-5">
+            <button
               onClick={volverAlMenu}
+              className="w-full py-3 rounded-xl border border-gray-700/50 bg-gray-800/30 text-gray-400 font-medium text-sm tracking-wide hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
             >
+              <ArrowLeft className="w-4 h-4" />
               Volver al menú principal
-            </Boton>
+            </button>
           </div>
         </div>
       </div>
@@ -5340,6 +5488,8 @@ function App() {
           showNewBadge={false}
           onBack={() => setShowPlayerMinimap(false)}
           playerName={playerName}
+          currentUserId={playerName}
+          userRole="PLAYER"
         />
       </React.Suspense>
     );
@@ -5573,6 +5723,26 @@ function App() {
       </div>
     );
   }
+  // LISTA DE CLASES PARA JUGADORES
+  if (userType === 'player' && nameEntered && showPlayerClassList) {
+    return withTooltips(
+      <ClassList
+        disableSidebar={true}
+        backButtonLabel="Volver a Ficha"
+        onBack={() => setShowPlayerClassList(false)}
+      />
+    );
+  }
+
+  // BESTIARIO PARA JUGADORES
+  if (userType === 'player' && nameEntered && showPlayerBestiary) {
+    return withTooltips(
+      <BestiaryView onBack={() => setShowPlayerBestiary(false)} />
+    );
+  }
+
+
+
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     return withTooltips(
@@ -5584,42 +5754,72 @@ function App() {
           {/* Botones de herramientas */}
           <div className="mb-4 flex gap-3 justify-center">
             {/* Botón de calculadora de dados */}
-            <Boton
-              onClick={() => setShowDiceCalculator(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
-            >
-              🎲
-            </Boton>
+            {(playerData.permissions?.canViewDiceCalculator !== false) && (
+              <Boton
+                onClick={() => setShowDiceCalculator(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
+              >
+                🎲
+              </Boton>
+            )}
             {/* Botón de minijuego reflejos */}
-            <Boton
-              onClick={() => setShowBarraReflejos(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
-            >
-              🔒
-            </Boton>
+            {(playerData.permissions?.canViewReflexesGame !== false) && (
+              <Boton
+                onClick={() => setShowBarraReflejos(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
+              >
+                🔒
+              </Boton>
+            )}
             {/* Botón de sistema de iniciativa */}
-            <Boton
-              onClick={() => setShowInitiativeTracker(true)}
-              className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
-            >
-              ⚡
-            </Boton>
+            {(playerData.permissions?.canViewInitiative !== false) && (
+              <Boton
+                onClick={() => setShowInitiativeTracker(true)}
+                className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
+              >
+                ⚡
+              </Boton>
+            )}
             {/* Botón de minimapa */}
-            <Boton
-              onClick={() => setShowPlayerMinimap(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-lg sm:text-xl w-10 h-10 rounded-lg flex items-center justify-center sm:w-12 sm:h-12"
-              title="Minimapa"
-            >
-              ⌚️
-            </Boton>
-            {/* Botón de Mapa de Batalla */}
-            <Boton
-              onClick={() => setShowPlayerBattleMap(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
-              title="Mapa de Batalla"
-            >
-              🗺️
-            </Boton>
+            {(playerData.permissions?.canViewMinimap !== false) && (
+              <Boton
+                onClick={() => setShowPlayerMinimap(true)}
+                className="bg-teal-600 hover:bg-teal-700 text-white text-lg sm:text-xl w-10 h-10 rounded-lg flex items-center justify-center sm:w-12 sm:h-12"
+                title="Minimapa"
+              >
+                ⌚️
+              </Boton>
+            )}
+            {/* Botón de Mapa de Batalla (Default false) */}
+            {(playerData.permissions?.canViewBattleMap === true) && (
+              <Boton
+                onClick={() => setShowPlayerBattleMap(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
+                title="Mapa de Batalla"
+              >
+                🗺️
+              </Boton>
+            )}
+            {/* Botón de Bestiario (Default false) */}
+            {(playerData.permissions?.canViewBestiary === true) && (
+              <Boton
+                onClick={() => setShowPlayerBestiary(true)}
+                className="bg-red-900 hover:bg-red-800 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl border border-red-700"
+                title="Bestiario"
+              >
+                👹
+              </Boton>
+            )}
+            {/* Botón de Lista de Clases (Default false) */}
+            {(playerData.permissions?.canViewClasses === true) && (
+              <Boton
+                onClick={() => setShowPlayerClassList(true)}
+                className="bg-amber-900 hover:bg-amber-800 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl border border-amber-700"
+                title="Lista de Clases"
+              >
+                📜
+              </Boton>
+            )}
           </div>
           <div className="mb-4 text-center text-sm text-gray-300 flex flex-col gap-1">
             <span className="flex flex-wrap justify-center items-center gap-2">
@@ -8133,6 +8333,39 @@ function App() {
         <CampaignMapView onBack={() => setChosenView(null)} />
       </React.Suspense>
     );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'users') {
+    return withTooltips(
+      <UsersView onBack={() => setChosenView(null)} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'initiative') {
+    return withTooltips(
+      <div className="min-h-screen bg-gray-900 text-gray-100">
+        <InitiativeTracker onBack={() => setChosenView(null)} />
+      </div>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'enemies') {
+    return withTooltips(
+      <BestiaryView onBack={() => setChosenView(null)} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'classes') {
+    return withTooltips(
+      <div className="h-screen overflow-hidden bg-gray-900 flex flex-col">
+        <div className="flex-none p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-amber-500 font-['Cinzel']">Lista de Clases</h2>
+          <Boton color="gray" onClick={() => setChosenView(null)}>Volver</Boton>
+        </div>
+        <div className="flex-1 overflow-hidden relative">
+          <ClassList disableSidebar={true} />
+        </div>
+      </div>
+    );
+  }
+  if (userType === 'master' && authenticated && !chosenView) {
+    return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return withTooltips(

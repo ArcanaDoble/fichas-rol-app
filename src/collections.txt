@@ -1,0 +1,48 @@
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:          const tokensRef = collection(db, 'pages', pageId, 'tokens');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:      const snap = await getDocs(collection(db, 'pages'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:        const tokenSnap = await getDocs(collection(db, 'pages', page.id, 'tokens'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:          const tokensRef = collection(db, 'pages', pageId, 'tokens');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:        const tokensRef = collection(db, 'pages', pageId, 'tokens');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:    getDocs(collection(db, 'players'))
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:      const snap = await getDocs(collection(db, 'rarities'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:        const snap = await getDocs(collection(db, 'weapons'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:        const snap = await getDocs(collection(db, 'armors'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:      const snap = await getDocs(collection(db, 'abilities'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\App.js:      const snap = await getDocs(collection(db, 'enemies'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\AttackModal.jsx:      const docRef = await addDoc(collection(db, 'attacks'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\AttackModal.jsx:              await addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\AttackModal.jsx:            await addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\BestiaryView.jsx:                const querySnapshot = await getDocs(collection(db, 'enemies'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\CampaignMapView.jsx:                const querySnapshot = await getDocs(collection(db, 'classes'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\ClassList.jsx:        const snapshot = await getDocs(collection(db, 'classes'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\CombatTrackerView.jsx:            const querySnapshot = await getDocs(collection(db, 'enemies'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\DefenseModal.jsx:          addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\DefenseModal.jsx:            addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\DefenseModal.jsx:              addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\DefenseModal.jsx:            addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\inventory\CustomItemManager.jsx:        const snap = await getDocs(collection(db, 'customItems'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\inventory\ItemGenerator.jsx:        const snap = await getDocs(collection(db, 'customItems'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\inventory\ItemToken.jsx:        const snap = await getDocs(collection(db, 'customItems'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\inventory\Slot.jsx:        const snap = await getDocs(collection(db, 'customItems'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MapCanvas.jsx:        const tokensRef = collection(db, 'pages', pageId, 'tokens');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MapCanvas.jsx:    const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MapCanvas.jsx:                          await addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MapCanvas.jsx:                          await addDoc(collection(db, 'damageEvents'), {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:    const playersRef = collection(db, 'players');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:    const quadrantsRef = collection(db, 'minimapQuadrants');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:    const pingsRef = collection(db, 'minimapPings');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:    const annotationsRef = collection(db, 'minimapAnnotations');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:    const itemsRef = collection(db, 'customItems');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:      addDoc(collection(db, 'minimapPings'), payload).catch((error) => {
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:        const annotationsRef = collection(db, 'minimapAnnotations');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:          const annotationsRef = collection(db, 'minimapAnnotations');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapBuilder.jsx:        const annotationsRef = collection(db, 'minimapAnnotations');
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapV2.jsx:                const snap = await getDocs(collection(db, 'customItems'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapV2.jsx:        const q = query(collection(db, 'minimapQuadrants'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapV2.jsx:                const snap = await import('firebase/firestore').then(mod => mod.getDocs(collection(db, 'players')));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapV2.jsx:                const newRef = doc(collection(db, 'minimapQuadrants'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\MinimapV2.jsx:        const newId = doc(collection(db, 'minimapQuadrants')).id;
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\components\UsersView.jsx:                const snap = await getDocs(collection(db, 'players'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\hooks\useAttackRequests.js:    const q = query(collection(db, 'attacks'), where('completed', '==', false));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\hooks\useGlossary.js:      const snap = await getDocs(collection(db, 'glossary'));
+c:\Users\Arcana\Documents\Proyectos\fichas-rol-app\src\utils\initiative.js:        await addDoc(collection(db, 'damageEvents'), {

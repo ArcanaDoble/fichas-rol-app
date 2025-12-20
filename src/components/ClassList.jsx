@@ -1306,6 +1306,8 @@ const ClassList = ({
   habilidades = [],
   glossary = [],
   rarityColorMap = {},
+  readOnly = false,
+  backButtonLabel = "Volver al menú",
 }) => {
   const [classes, setClasses] = useState(initialClasses);
   const [isSaving, setIsSaving] = useState(false);
@@ -3790,7 +3792,7 @@ const ClassList = ({
           characterName={dndClass.name}
           characterLevel={dndClass.currentLevel}
           characterImage={dndClass.image}
-          onSave={handleSaveChanges}
+          onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
         />
@@ -3810,7 +3812,7 @@ const ClassList = ({
         <MobileNav
           activeTab={activeDetailTab}
           onTabChange={setActiveDetailTab}
-          onSave={handleSaveChanges}
+          onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
         />
@@ -3848,7 +3850,7 @@ const ClassList = ({
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between border-b border-[#c8aa6e]/20 pb-8">
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
-                  <span className="opacity-70">DND 5E VAULT</span>
+                  <span className="opacity-70">ARCANA VAULT</span>
                   <span className="h-px w-4 bg-[#c8aa6e]/40"></span>
                   <span>CLASES</span>
                 </div>
@@ -3880,7 +3882,7 @@ const ClassList = ({
                   onClick={onBack}
                   className="border-[#c8aa6e]/30 hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10 hover:text-[#c8aa6e] uppercase tracking-[0.25em] font-['Cinzel'] text-xs"
                 >
-                  Volver al menú
+                  {backButtonLabel}
                 </Boton>
               </div>
             </div>
@@ -3944,19 +3946,21 @@ const ClassList = ({
                 <div
                   className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
                 >
-                  {/* Create New Class Card */}
-                  <div
-                    onClick={() => setIsCreating(true)}
-                    className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
-                      <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
+                  {/* Create New Class Card - Only if not readOnly */}
+                  {!readOnly && (
+                    <div
+                      onClick={() => setIsCreating(true)}
+                      className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
+                        <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
+                      </div>
+                      <div className="text-center">
+                        <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
+                        <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Campeón</p>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
-                      <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Campeón</p>
-                    </div>
-                  </div>
+                  )}
 
                   {filteredClasses.map((classItem) => {
                     const isLocked = classItem.status === 'locked';
@@ -4049,17 +4053,20 @@ const ClassList = ({
 
 
                         {/* Edit Button (Top Left) */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openFileDialogForClass(classItem.id);
-                          }}
-                          className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
-                          title="Cambiar retrato"
-                        >
-                          <FiImage className="h-3.5 w-3.5" />
-                        </button>
+                        {/* Edit Button (Top Left) - Only if not readOnly */}
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openFileDialogForClass(classItem.id);
+                            }}
+                            className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
+                            title="Cambiar retrato"
+                          >
+                            <FiImage className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}

@@ -5,6 +5,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
+        fantasy: ['Cinzel', 'Times New Roman', 'serif'],
       },
       keyframes: {
         shake: {
@@ -30,4 +31,3 @@ module.exports = {
   },
   plugins: [],
 };
-  

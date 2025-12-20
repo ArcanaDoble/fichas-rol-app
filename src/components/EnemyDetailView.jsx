@@ -227,7 +227,7 @@ const EditableField = ({
     );
 };
 
-export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
+export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay }) => {
     // Initial State Setup with Fallbacks for Attributes and Stats
     const [localEnemy, setLocalEnemy] = useState(() => {
         const initial = { ...enemy };
@@ -268,10 +268,38 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
     // Sync local state if prop changes, preserving structure
     useEffect(() => {
         setLocalEnemy(prev => {
+            // Prevent overwriting local edits if the enemy ID hasn't changed.
+            // This solves the issue of "disappearing letters" caused by parent re-renders resetting the state.
+            if (prev?.id === enemy?.id) return prev;
+
             const updated = { ...enemy };
-            // Preserve robust structure if incoming enemy lacks it
-            if (!updated.attributes) updated.attributes = prev.attributes;
-            if (!updated.stats) updated.stats = prev.stats;
+
+            // Ensure Attributes
+            if (!updated.attributes) {
+                updated.attributes = {
+                    dexterity: 'd4',
+                    vigor: 'd4',
+                    intellect: 'd4',
+                    willpower: 'd4'
+                };
+            }
+
+            // Ensure Stats
+            if (!updated.stats) {
+                updated.stats = {
+                    postura: { current: 3, max: 4 },
+                    vida: { current: updated.hp || 4, max: updated.hp || 4 },
+                    ingenio: { current: 2, max: 3 },
+                    cordura: { current: 3, max: 3 },
+                    armadura: { current: updated.ac ? Math.min(updated.ac, 10) : 1, max: updated.ac ? Math.min(updated.ac, 10) : 1 }
+                };
+            }
+
+            // Ensure Tags
+            if (!updated.tags) {
+                updated.tags = [];
+            }
+
             return updated;
         });
     }, [enemy]);
@@ -279,7 +307,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
     const handleFieldChange = (field, value) => {
         setLocalEnemy(prev => {
             const updated = { ...prev, [field]: value };
-            onUpdate(updated); // Auto-save on top level changes
+            // onUpdate(updated); // Removed auto-save on typing, relies on handleCommit (onBlur)
             return updated;
         });
     };
@@ -349,7 +377,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
             const newTags = [...(prev.tags || [])];
             newTags[index] = value;
             const updated = { ...prev, tags: newTags };
-            onUpdate(updated);
+            // onUpdate(updated); // Removed auto-save on typing
             return updated;
         });
     };
@@ -363,7 +391,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
 
         setLocalEnemy(prev => {
             const updated = { ...prev, abilities: newAbilities };
-            onUpdate(updated);
+            // onUpdate(updated); // Removed auto-save on typing
             return updated;
         });
     };
@@ -450,7 +478,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
             <div className="fixed inset-0 z-0 pointer-events-none">
                 <div className="absolute inset-0 bg-[#0b1120]/80 z-10"></div>
                 {localEnemy.image && (
-                    <img src={localEnemy.image} className="w-full h-full object-cover opacity-20 blur-sm" alt="" />
+                    <img key={localEnemy.image} src={localEnemy.image} className="w-full h-full object-cover opacity-20 blur-sm" alt="" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-l from-[#0b1120] via-transparent to-[#0b1120] z-10"></div>
             </div>
@@ -660,17 +688,22 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete }) => {
 
                             {/* Actions */}
                             <div className="mt-auto pt-2 grid grid-cols-2 gap-3">
-                                <button className="group relative px-4 py-3 bg-gradient-to-b from-red-800 to-red-950 hover:to-red-700 text-white font-['Cinzel'] font-bold text-sm uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 shadow-lg border border-red-900/50 rounded overflow-hidden">
-                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
-                                    <span className="relative z-10 flex items-center justify-center gap-2">
-                                        Jugar
-                                        <Play className="w-3 h-3 fill-current" />
-                                    </span>
-                                </button>
+                                {onPlay && (
+                                    <button
+                                        onClick={onPlay}
+                                        className="group relative px-4 py-3 bg-gradient-to-b from-red-800 to-red-950 hover:to-red-700 text-white font-['Cinzel'] font-bold text-sm uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 shadow-lg border border-red-900/50 rounded overflow-hidden"
+                                    >
+                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+                                        <span className="relative z-10 flex items-center justify-center gap-2">
+                                            Jugar
+                                            <Play className="w-3 h-3 fill-current" />
+                                        </span>
+                                    </button>
+                                )}
 
                                 <button
                                     onClick={onDelete}
-                                    className="px-4 py-3 border border-dashed border-red-900/30 text-red-900/60 font-bold uppercase tracking-widest hover:border-red-500/50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 text-[10px] hover:bg-red-950/20 rounded"
+                                    className={`px-4 py-3 border border-dashed border-red-900/30 text-red-900/60 font-bold uppercase tracking-widest hover:border-red-500/50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 text-[10px] hover:bg-red-950/20 rounded ${!onPlay ? 'col-span-2' : ''}`}
                                 >
                                     <Trash2 className="w-3 h-3" /> Eliminar
                                 </button>

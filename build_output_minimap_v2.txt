@@ -1,0 +1,33 @@
+
+> fichas-rol-app@0.1.0 build
+> react-scripts build
+
+Creating an optimized production build...
+Compiled successfully.
+
+File sizes after gzip:
+
+  903 kB (-946 B)    build\static\js\main.ecf49fdc.js
+  56.69 kB           build\static\js\885.a1ab54ab.chunk.js
+  31.49 kB (+60 B)   build\static\css\main.3665a26e.css
+  29.37 kB (+257 B)  build\static\js\314.58fa9ffc.chunk.js
+  4.41 kB            build\static\js\24.8efe4b22.chunk.js
+  1.77 kB            build\static\js\453.b98f43f7.chunk.js
+
+The bundle size is significantly larger than recommended.
+Consider reducing it with code splitting: https://goo.gl/9VhYWB
+You can also analyze the project dependencies: https://goo.gl/LeUzfb
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  npm install -g serve
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
