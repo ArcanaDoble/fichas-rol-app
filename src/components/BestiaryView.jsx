@@ -6,6 +6,7 @@ import { FiSearch, FiChevronLeft } from 'react-icons/fi';
 import { Skull, Plus } from 'lucide-react';
 import { EnemyCreatorView } from './EnemyCreatorView';
 import { EnemyDetailView } from './EnemyDetailView';
+import { CombatTrackerView } from './CombatTrackerView';
 
 const INITIAL_ENEMIES = [
     {
@@ -55,7 +56,6 @@ const EnemyCard = ({ enemy, onClick }) => {
                         {enemy.type}
                     </p>
 
-                    {/* Stats Row */}
                     {/* Stats Row */}
                     <div className="flex items-center justify-between w-full px-2 mt-2 gap-1 text-[9px] text-slate-400">
                         {/* PT - Postura */}
@@ -110,11 +110,12 @@ const EnemyCard = ({ enemy, onClick }) => {
     );
 };
 
-const BestiaryView = ({ onBack }) => {
+const BestiaryView = ({ onBack, readOnly = false }) => {
     const [enemies, setEnemies] = useState(INITIAL_ENEMIES);
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [selectedEnemy, setSelectedEnemy] = useState(null);
+    const [showCombatTracker, setShowCombatTracker] = useState(false);
 
     // Fetch enemies from Firestore
     useEffect(() => {
@@ -201,6 +202,10 @@ const BestiaryView = ({ onBack }) => {
         }
     };
 
+    if (showCombatTracker) {
+        return <CombatTrackerView onBack={() => setShowCombatTracker(false)} onUpdateEnemy={handleUpdateEnemy} />;
+    }
+
     if (isCreating) {
         return (
             <EnemyCreatorView
@@ -242,19 +247,33 @@ const BestiaryView = ({ onBack }) => {
                                     </div>
                                 </div>
 
-                                {/* SEARCH BAR */}
-                                <div className="relative group w-96">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <FiSearch className="h-4 w-4 text-red-700 group-focus-within:text-red-500 transition-colors" />
+                                <div className="flex items-center gap-4">
+                                    {/* SEARCH BAR */}
+                                    <div className="relative group w-64 md:w-96 hidden md:block">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <FiSearch className="h-4 w-4 text-red-700 group-focus-within:text-red-500 transition-colors" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            placeholder="BUSCAR ENEMIGO..."
+                                            className="block w-full rounded-none border-b border-red-900/30 bg-transparent py-2.5 pl-10 pr-4 text-xs font-bold text-red-100 placeholder-red-900/50 focus:border-red-500 focus:outline-none focus:ring-0 transition-all uppercase tracking-wider"
+                                        />
+                                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-red-500 group-focus-within:w-full transition-all duration-500"></div>
                                     </div>
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="BUSCAR ENEMIGO..."
-                                        className="block w-full rounded-none border-b border-red-900/30 bg-transparent py-2.5 pl-10 pr-4 text-xs font-bold text-red-100 placeholder-red-900/50 focus:border-red-500 focus:outline-none focus:ring-0 transition-all uppercase tracking-wider"
-                                    />
-                                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-red-500 group-focus-within:w-full transition-all duration-500"></div>
+
+                                    {/* COMBAT TRACKER BUTTON - Only for Master */}
+                                    {!readOnly && (
+                                        <button
+                                            onClick={() => setShowCombatTracker(true)}
+                                            className="flex items-center gap-2 px-4 py-2 border border-red-900/50 rounded text-red-500 hover:bg-red-900/20 hover:text-red-400 transition-colors group"
+                                            title="Gestor de Combate / Encuentros"
+                                        >
+                                            <Skull className="w-5 h-5 group-hover:animate-pulse" />
+                                            <span className="font-['Cinzel'] font-bold text-xs uppercase hidden sm:inline">Combate</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -273,19 +292,21 @@ const BestiaryView = ({ onBack }) => {
                                 {/* Grid */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-12">
 
-                                    {/* Create New Enemy Card */}
-                                    <div
-                                        onClick={handleCreateNew}
-                                        className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-red-900/30 hover:border-red-500 hover:bg-red-900/10 flex flex-col items-center justify-center gap-4"
-                                    >
-                                        <div className="w-16 h-16 rounded-full bg-[#1a0505] border border-red-900/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]">
-                                            <Plus className="w-8 h-8 text-red-500" />
+                                    {/* Create New Enemy Card - Only if not readOnly */}
+                                    {!readOnly && (
+                                        <div
+                                            onClick={handleCreateNew}
+                                            className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-red-900/30 hover:border-red-500 hover:bg-red-900/10 flex flex-col items-center justify-center gap-4"
+                                        >
+                                            <div className="w-16 h-16 rounded-full bg-[#1a0505] border border-red-900/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+                                                <Plus className="w-8 h-8 text-red-500" />
+                                            </div>
+                                            <div className="text-center">
+                                                <h3 className="font-['Cinzel'] font-bold text-red-500 uppercase tracking-wider text-lg">Crear Nuevo</h3>
+                                                <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Enemigo</p>
+                                            </div>
                                         </div>
-                                        <div className="text-center">
-                                            <h3 className="font-['Cinzel'] font-bold text-red-500 uppercase tracking-wider text-lg">Crear Nuevo</h3>
-                                            <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Enemigo</p>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     {/* Existing Enemies */}
                                     <AnimatePresence>
@@ -315,8 +336,9 @@ const BestiaryView = ({ onBack }) => {
                         key={selectedEnemy.id}
                         enemy={selectedEnemy}
                         onClose={() => setSelectedEnemy(null)}
-                        onUpdate={handleUpdateEnemy}
-                        onDelete={() => handleDeleteEnemy(selectedEnemy.id)}
+                        onUpdate={readOnly ? undefined : handleUpdateEnemy}
+                        onDelete={readOnly ? undefined : () => handleDeleteEnemy(selectedEnemy.id)}
+                        readOnly={readOnly}
                     />
                 )}
             </AnimatePresence>

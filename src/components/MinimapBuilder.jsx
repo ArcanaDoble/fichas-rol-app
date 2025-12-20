@@ -334,11 +334,10 @@ const QuadrantPreview = ({ q, size = 72 }) => {
                   width: cell,
                   height: cell,
                   background: cellData.active ? cellData.fill : 'transparent',
-                  border: `1px solid ${
-                    cellData.active
-                      ? cellData.borderColor
-                      : 'rgba(255,255,255,0.1)'
-                  }`,
+                  border: `1px solid ${cellData.active
+                    ? cellData.borderColor
+                    : 'rgba(255,255,255,0.1)'
+                    }`,
                 }}
               />
             );
@@ -611,8 +610,8 @@ const GRID_STORAGE_VERSION = 'sparse-v1';
 const isSparseGridPayload = (value) =>
   Boolean(
     value &&
-      typeof value === 'object' &&
-      value.version === GRID_STORAGE_VERSION
+    typeof value === 'object' &&
+    value.version === GRID_STORAGE_VERSION
   );
 
 const expandSparseGridMatrix = (payload = {}) => {
@@ -1073,7 +1072,7 @@ const readLocalCustomization = () => {
     if (rawIcons) {
       result.customIcons = sanitizeCustomIcons(JSON.parse(rawIcons));
     }
-  } catch {}
+  } catch { }
   try {
     const rawPresets = window.localStorage.getItem('minimapCellStylePresets');
     if (rawPresets) {
@@ -1081,7 +1080,7 @@ const readLocalCustomization = () => {
         JSON.parse(rawPresets)
       );
     }
-  } catch {}
+  } catch { }
   return result;
 };
 const buildGrid = (rows, cols, prev = []) => {
@@ -1391,12 +1390,12 @@ function MinimapBuilder({
           {activeOwnerNameForDisplay}
         </span>
         {'. '}
-      {L.playerQuadrantLockedOutro}
-    </span>,
-    {
-      title: L.playerQuadrantLockedTitle,
-    }
-  );
+        {L.playerQuadrantLockedOutro}
+      </span>,
+      {
+        title: L.playerQuadrantLockedTitle,
+      }
+    );
   }, [
     activeOwnerDisplayColor,
     activeOwnerKey,
@@ -1951,11 +1950,11 @@ function MinimapBuilder({
         ? doc(db, 'minimapAnnotations', legacyKey)
         : null;
     if (hasContent) {
-      setDoc(ref, payload).catch(() => {});
-      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+      setDoc(ref, payload).catch(() => { });
+      if (legacyRef) deleteDoc(legacyRef).catch(() => { });
     } else {
-      deleteDoc(ref).catch(() => {});
-      if (legacyRef) deleteDoc(legacyRef).catch(() => {});
+      deleteDoc(ref).catch(() => { });
+      if (legacyRef) deleteDoc(legacyRef).catch(() => { });
     }
   };
 
@@ -1986,7 +1985,7 @@ function MinimapBuilder({
       return setDoc(doc(db, 'minimapAnnotations', nextKey), payload)
         .then(() => {
           if (docId && docId !== nextKey) {
-            return deleteDoc(doc(db, 'minimapAnnotations', docId)).catch(() => {});
+            return deleteDoc(doc(db, 'minimapAnnotations', docId)).catch(() => { });
           }
           return undefined;
         })
@@ -2044,7 +2043,7 @@ function MinimapBuilder({
     if (expiredIds.length > 0) {
       expiredIds.forEach((pingId) => {
         if (!pingId) return;
-        deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
+        deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => { });
       });
     }
   }, [db]);
@@ -2071,7 +2070,7 @@ function MinimapBuilder({
     const headerEl = headerSectionRef.current;
     if (!headerEl) return;
     const rect = headerEl.getBoundingClientRect();
-    const spacing = 12;
+    const spacing = -4; // Subir un poco para solapar
     const nextTop = Math.max(rect.bottom + spacing, 0);
     setMobileMapTop((prev) => (Math.abs(prev - nextTop) > 0.5 ? nextTop : prev));
   }, [isMobile]);
@@ -2138,7 +2137,7 @@ function MinimapBuilder({
     return () => {
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
     };
   }, [db]);
   useEffect(() => {
@@ -2246,7 +2245,7 @@ function MinimapBuilder({
       isCancelled = true;
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
       setExplorationLoaded(false);
       setRemoteExplorerOrigin(null);
     };
@@ -2365,7 +2364,7 @@ function MinimapBuilder({
       isUnmounted = true;
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
     };
   }, [db, defaultOwner, filterQuadrantsForMode, updateLocalQuadrants]);
   useEffect(() => {
@@ -2401,8 +2400,8 @@ function MinimapBuilder({
             createdAtRaw && typeof createdAtRaw.toMillis === 'function'
               ? createdAtRaw.toMillis()
               : typeof createdAtRaw === 'number'
-              ? createdAtRaw
-              : Date.now();
+                ? createdAtRaw
+                : Date.now();
           if (!Number.isFinite(createdAtMs)) {
             return;
           }
@@ -2422,7 +2421,7 @@ function MinimapBuilder({
         if (expiredIds.length > 0) {
           expiredIds.forEach((pingId) => {
             if (!pingId) return;
-            deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => {});
+            deleteDoc(doc(db, 'minimapPings', pingId)).catch(() => { });
           });
         }
       },
@@ -2437,7 +2436,7 @@ function MinimapBuilder({
       isUnmounted = true;
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
       setPings([]);
     };
   }, [activeQuadrantId, db]);
@@ -2542,7 +2541,7 @@ function MinimapBuilder({
       unsubscribeFns.forEach((unsubscribe) => {
         try {
           unsubscribe();
-        } catch {}
+        } catch { }
       });
     };
   }, [activeQuadrantId, migrateLegacyAnnotations]);
@@ -2606,7 +2605,7 @@ function MinimapBuilder({
       isUnmounted = true;
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
     };
   }, [customizationDocRef]);
   useEffect(() => {
@@ -2618,13 +2617,13 @@ function MinimapBuilder({
         'minimapCustomIcons',
         JSON.stringify(sanitizedIcons)
       );
-    } catch {}
+    } catch { }
     try {
       window.localStorage.setItem(
         'minimapCellStylePresets',
         JSON.stringify(sanitizedPresets)
       );
-    } catch {}
+    } catch { }
   }, [customIcons, cellStylePresets, isCustomizationReady]);
   useEffect(() => {
     if (!isCustomizationReady) return;
@@ -2742,11 +2741,10 @@ function MinimapBuilder({
             setActiveColorPicker(isOpen ? null : id);
           }}
           disabled={disabled}
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide transition ${
-            disabled
-              ? 'cursor-not-allowed border-gray-800 bg-gray-800 text-gray-500'
-              : 'border-gray-700 bg-gray-800 text-gray-200 hover:border-gray-500'
-          }`}
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide transition ${disabled
+            ? 'cursor-not-allowed border-gray-800 bg-gray-800 text-gray-500'
+            : 'border-gray-700 bg-gray-800 text-gray-200 hover:border-gray-500'
+            }`}
         >
           {Icon && <Icon className="h-4 w-4" />}
           <span>{label}</span>
@@ -2794,7 +2792,7 @@ function MinimapBuilder({
       isMounted = false;
       try {
         unsubscribe();
-      } catch {}
+      } catch { }
     };
   }, [db]);
 
@@ -2915,12 +2913,18 @@ function MinimapBuilder({
 
   const gridWidth = cols * cellSize;
   const gridHeight = rows * cellSize;
-  const adderSize = Math.max(24, Math.min(36, Math.round(cellSize * 0.75)));
+  // Ajustes para móvil: reducir drásticamente el espacio periférico
+  const effectiveCellSize = isMobile ? Math.min(cellSize, 32) : cellSize;
+
+  const adderSize = Math.max(20, Math.min(36, Math.round(effectiveCellSize * 0.75)));
   const adderBtn = Math.max(
-    22,
-    Math.min(adderSize - 6, Math.round(cellSize * 0.75))
+    18,
+    Math.min(adderSize - (isMobile ? 2 : 6), Math.round(effectiveCellSize * (isMobile ? 0.6 : 0.75)))
   );
-  const perimGap = Math.max(10, Math.min(24, Math.round(cellSize * 0.35)));
+  const perimGap = isMobile
+    ? 2
+    : Math.max(10, Math.min(24, Math.round(cellSize * 0.35)));
+
   const perimMargin = perimGap + adderBtn;
   const touchActionClass = isMobile
     ? isMoveMode || isMultiTouchActive
@@ -3600,7 +3604,7 @@ function MinimapBuilder({
           );
         }
         if (previousKey && previousKey !== annotation.key) {
-          deleteDoc(doc(db, 'minimapAnnotations', previousKey)).catch(() => {});
+          deleteDoc(doc(db, 'minimapAnnotations', previousKey)).catch(() => { });
         }
         const newLegacyKey = annotation.scope
           ? null
@@ -3610,17 +3614,17 @@ function MinimapBuilder({
           newLegacyKey &&
           previousLegacyKey !== newLegacyKey
         ) {
-          deleteDoc(doc(db, 'minimapAnnotations', previousLegacyKey)).catch(() => {});
+          deleteDoc(doc(db, 'minimapAnnotations', previousLegacyKey)).catch(() => { });
         }
       });
       removedAnnotationKeys.forEach((key) => {
         if (key) {
-          deleteDoc(doc(db, 'minimapAnnotations', key)).catch(() => {});
+          deleteDoc(doc(db, 'minimapAnnotations', key)).catch(() => { });
         }
       });
       removedLegacyKeys.forEach((legacyKey) => {
         if (legacyKey) {
-          deleteDoc(doc(db, 'minimapAnnotations', legacyKey)).catch(() => {});
+          deleteDoc(doc(db, 'minimapAnnotations', legacyKey)).catch(() => { });
         }
       });
     }
@@ -3793,57 +3797,57 @@ function MinimapBuilder({
         const annotationsRef = collection(db, 'minimapAnnotations');
         const snapshot = await getDocs(annotationsRef);
         const writes = [];
-          const updatedKeys = new Set();
-          const pendingDeletes = new Set();
-          const enqueueDelete = (id) => {
-            if (!id || pendingDeletes.has(id)) return;
-            pendingDeletes.add(id);
-            writes.push(deleteDoc(doc(db, 'minimapAnnotations', id)));
-          };
-          snapshot.forEach((docSnap) => {
-            const dataDoc = docSnap.data();
-            const hasQuadrantField = Object.prototype.hasOwnProperty.call(
-              dataDoc,
-              'quadrantId'
-            );
-            const rawQuadrantId = hasQuadrantField ? dataDoc?.quadrantId : null;
-            if (
-              hasQuadrantField &&
-              rawQuadrantId &&
-              rawQuadrantId !== 'default'
-            ) {
-              return;
-            }
-            const { r, c } = dataDoc || {};
-            if (!Number.isInteger(r) || !Number.isInteger(c)) {
-              return;
-            }
-            const newKey = `${newQuadrantId}-${r}-${c}`;
-            if (!updatedKeys.has(newKey)) {
-              updatedKeys.add(newKey);
-              writes.push(
-                setDoc(doc(db, 'minimapAnnotations', newKey), {
-                  ...dataDoc,
-                  quadrantId: newQuadrantId,
-                  key: newKey,
-                })
-              );
-            }
-            enqueueDelete(docSnap.id);
-            const legacyKey = `${r}-${c}`;
-            if (legacyKey !== docSnap.id) {
-              enqueueDelete(legacyKey);
-            }
-          });
-          if (writes.length > 0) {
-            await Promise.all(writes);
+        const updatedKeys = new Set();
+        const pendingDeletes = new Set();
+        const enqueueDelete = (id) => {
+          if (!id || pendingDeletes.has(id)) return;
+          pendingDeletes.add(id);
+          writes.push(deleteDoc(doc(db, 'minimapAnnotations', id)));
+        };
+        snapshot.forEach((docSnap) => {
+          const dataDoc = docSnap.data();
+          const hasQuadrantField = Object.prototype.hasOwnProperty.call(
+            dataDoc,
+            'quadrantId'
+          );
+          const rawQuadrantId = hasQuadrantField ? dataDoc?.quadrantId : null;
+          if (
+            hasQuadrantField &&
+            rawQuadrantId &&
+            rawQuadrantId !== 'default'
+          ) {
+            return;
           }
-        } catch (error) {
-          console.error('Error migrating default minimap annotations', error);
+          const { r, c } = dataDoc || {};
+          if (!Number.isInteger(r) || !Number.isInteger(c)) {
+            return;
+          }
+          const newKey = `${newQuadrantId}-${r}-${c}`;
+          if (!updatedKeys.has(newKey)) {
+            updatedKeys.add(newKey);
+            writes.push(
+              setDoc(doc(db, 'minimapAnnotations', newKey), {
+                ...dataDoc,
+                quadrantId: newQuadrantId,
+                key: newKey,
+              })
+            );
+          }
+          enqueueDelete(docSnap.id);
+          const legacyKey = `${r}-${c}`;
+          if (legacyKey !== docSnap.id) {
+            enqueueDelete(legacyKey);
+          }
+        });
+        if (writes.length > 0) {
+          await Promise.all(writes);
         }
-      };
-      migrateDefaultAnnotations();
+      } catch (error) {
+        console.error('Error migrating default minimap annotations', error);
+      }
     };
+    migrateDefaultAnnotations();
+  };
   const loadQuadrant = (q, idx) => {
     if (!q) return;
     const sanitizedShared = sanitizeSharedWith(q.sharedWith);
@@ -3937,9 +3941,6 @@ function MinimapBuilder({
             sanitized.cols
           ),
           updatedAt: serverTimestamp(),
-        },
-        {
-          merge: true,
         }
       );
     } catch (error) {
@@ -4175,8 +4176,8 @@ function MinimapBuilder({
       );
       nextSharedWith = exists
         ? sanitized.filter(
-            (entry) => normalizePlayerName(entry) !== normalized
-          )
+          (entry) => normalizePlayerName(entry) !== normalized
+        )
         : [...sanitized, name];
       return nextSharedWith;
     });
@@ -4213,8 +4214,7 @@ function MinimapBuilder({
       }
       const fallbackTitle =
         currentQuadrant?.title ||
-        `Cuadrante ${
-          currentQuadrantIndex === -1 ? 1 : currentQuadrantIndex + 1
+        `Cuadrante ${currentQuadrantIndex === -1 ? 1 : currentQuadrantIndex + 1
         }`;
       const fallbackOrder = Number.isFinite(currentQuadrant?.order)
         ? currentQuadrant.order
@@ -4240,8 +4240,8 @@ function MinimapBuilder({
       const sharedWithKeys = Array.isArray(sanitizedQuadrant.sharedWithKeys)
         ? sanitizedQuadrant.sharedWithKeys
         : sanitizedQuadrant.sharedWith
-            .map((entry) => normalizePlayerName(entry))
-            .filter(Boolean);
+          .map((entry) => normalizePlayerName(entry))
+          .filter(Boolean);
       const recreatePayload = {
         ...sanitizedQuadrant,
         sharedWithKeys,
@@ -4397,9 +4397,9 @@ function MinimapBuilder({
   ]);
 
   const mobileToggleRowClass =
-    'flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2';
+    'flex items-center justify-between gap-3 rounded-lg border border-cyan-500/10 bg-cyan-900/10 px-3 py-3 hover:bg-cyan-900/20 transition-all';
   const mobileToggleGroupClass =
-    'space-y-2 rounded-xl border border-gray-700 bg-gray-900/60 p-3 shadow-inner backdrop-blur-sm';
+    'space-y-2 rounded-xl border border-amber-500/20 bg-[#0b1120]/40 p-3 shadow-inner';
 
   const quadrantSettingsBody = (
     <div className="space-y-3">
@@ -4446,61 +4446,70 @@ function MinimapBuilder({
       )}
       {isMobile && (
         <div className="space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            {L.mobileQuickControls}
+          <div className="flex items-center gap-2 mb-2">
+            <LucideIcons.Zap className="w-4 h-4 text-[#c8aa6e]" />
+            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] font-['Cinzel']">
+              {L.mobileQuickControls}
+            </h3>
+            <div className="h-px flex-1 bg-gradient-to-r from-amber-500/20 to-transparent"></div>
           </div>
           <div className={mobileToggleGroupClass}>
             <label
-              className={`${mobileToggleRowClass} ${
-                canEditActiveQuadrant ? '' : 'opacity-40'
-              }`}
+              className={`${mobileToggleRowClass} ${canEditActiveQuadrant ? '' : 'opacity-40'
+                }`}
             >
-              <span className="text-sm font-medium text-gray-200">{L.shapeEdit}</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-cyan-100 font-['Cinzel'] tracking-wide">{L.shapeEdit}</span>
+                <span className="text-[10px] text-cyan-400/60">Permite modificar la estructura del mapa</span>
+              </div>
               <input
                 type="checkbox"
-                className="h-5 w-5 accent-emerald-500"
+                className="h-5 w-5 accent-cyan-500 cursor-pointer"
                 checked={shapeEdit}
                 onChange={(e) => setShapeEdit(e.target.checked)}
                 disabled={!canEditActiveQuadrant}
               />
             </label>
-            <div className={`${mobileToggleRowClass} opacity-80`}>
+            <div className={mobileToggleRowClass}>
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-200">{L.readable}</span>
-                <span className="text-[11px] text-gray-400">{L.mobileReadableHint}</span>
+                <span className="text-sm font-medium text-cyan-100 font-['Cinzel'] tracking-wide">{L.readable}</span>
+                <span className="text-[10px] text-cyan-400/60">{L.mobileReadableHint}</span>
               </div>
               <input
                 type="checkbox"
-                className="h-5 w-5 accent-emerald-500"
+                className="h-5 w-5 accent-cyan-500 opacity-60"
                 checked={effectiveReadable}
                 readOnly
                 disabled
               />
             </div>
             <div className={mobileToggleRowClass}>
-              <span className="text-sm font-medium text-gray-200">{L.moveMode}</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-cyan-100 font-['Cinzel'] tracking-wide">{L.moveMode}</span>
+                <span className="text-[10px] text-cyan-400/60">Arrastrar para desplazar la vista</span>
+              </div>
               <input
                 type="checkbox"
-                className="h-5 w-5 accent-emerald-500"
+                className="h-5 w-5 accent-cyan-500 cursor-pointer"
                 checked={isMoveMode}
                 onChange={(e) => setIsMoveMode(e.target.checked)}
               />
             </div>
-            <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-3">
+            <div className="space-y-3 rounded-lg border border-cyan-500/10 bg-cyan-900/5 px-3 py-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-200">{L.autoFit}</span>
+                <span className="text-sm font-medium text-cyan-100 font-['Cinzel'] tracking-wide">{L.autoFit}</span>
                 <input
                   type="checkbox"
-                  className="h-5 w-5 accent-emerald-500"
+                  className="h-5 w-5 accent-cyan-500 cursor-pointer"
                   checked={autoFit}
                   onChange={(e) => setAutoFit(e.target.checked)}
                 />
               </div>
               {!autoFit && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span>{L.zoom}</span>
-                    <span className="font-semibold text-gray-200">
+                <div className="space-y-2 pt-2 border-t border-cyan-500/10">
+                  <div className="flex items-center justify-between text-xs text-cyan-400/80">
+                    <span className="uppercase tracking-wider font-bold">Zoom</span>
+                    <span className="font-mono text-cyan-300">
                       {Math.round(zoom * 100)}%
                     </span>
                   </div>
@@ -4510,92 +4519,119 @@ function MinimapBuilder({
                     max={200}
                     value={Math.round(zoom * 100)}
                     onChange={(e) => setZoom(Number(e.target.value) / 100)}
-                    className="h-2 w-full accent-emerald-500"
+                    className="w-full h-1.5 bg-cyan-900/40 rounded-lg appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
                   />
                 </div>
               )}
-              <Boton
-                size="sm"
-                className="w-full justify-center"
+              <button
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold uppercase tracking-wider font-['Cinzel'] hover:bg-cyan-500/20 transition-all mt-2"
                 onClick={() => {
                   setZoom(1);
                   setOffset({ x: 0, y: 0 });
                 }}
               >
+                <LucideIcons.RotateCcw className="w-3.5 h-3.5" />
                 {L.reset}
-              </Boton>
+              </button>
             </div>
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-gray-300">{L.rows}</span>
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={rows}
-            onChange={(e) =>
-              setRows(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
-            }
-            className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
-            disabled={!canEditActiveQuadrant}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-gray-300">{L.cols}</span>
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={cols}
-            onChange={(e) =>
-              setCols(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
-            }
-            className="bg-gray-700 border border-gray-600 rounded px-2 py-1"
-            disabled={!canEditActiveQuadrant}
-          />
-        </label>
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="text-gray-300">
-            {L.cellSize}: {cellSize}px
-          </span>
-          <input
-            type="range"
-            min={24}
-            max={96}
-            step={4}
-            value={cellSize}
-            onChange={(e) => setCellSize(Number(e.target.value))}
-            disabled={!canEditActiveQuadrant}
-          />
-        </label>
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={hasSelectedCells} readOnly />
-          <span>{L.selectedCell}</span>
-        </label>
+      <div className="space-y-4">
+        {/* Bloque: Dimensiones */}
+        <div className="rounded-xl bg-[#1a1f2e]/50 p-3 border border-amber-500/10 shadow-inner">
+          <div className="flex items-center gap-2 mb-3">
+            <LucideIcons.Grid className="w-4 h-4 text-[#c8aa6e]" />
+            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] font-['Cinzel']">
+              Dimensiones
+            </h3>
+            <div className="h-px flex-1 bg-gradient-to-r from-amber-500/20 to-transparent"></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 font-['Cinzel']">{L.rows}</span>
+              <div className="relative group">
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={rows}
+                  onChange={(e) =>
+                    setRows(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
+                  }
+                  className="w-full rounded-lg border border-amber-500/20 bg-[#0b1120] px-3 py-2 text-sm text-[#f0e6d2] placeholder-gray-600 focus:border-amber-500/60 focus:bg-[#0b1120]/80 focus:outline-none focus:ring-1 focus:ring-amber-500/30 transition-all text-center font-mono group-hover:border-amber-500/40"
+                  disabled={!canEditActiveQuadrant}
+                />
+              </div>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 font-['Cinzel']">{L.cols}</span>
+              <div className="relative group">
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={cols}
+                  onChange={(e) =>
+                    setCols(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
+                  }
+                  className="w-full rounded-lg border border-amber-500/20 bg-[#0b1120] px-3 py-2 text-sm text-[#f0e6d2] placeholder-gray-600 focus:border-amber-500/60 focus:bg-[#0b1120]/80 focus:outline-none focus:ring-1 focus:ring-amber-500/30 transition-all text-center font-mono group-hover:border-amber-500/40"
+                  disabled={!canEditActiveQuadrant}
+                />
+              </div>
+            </label>
+
+            <label className="col-span-2 flex flex-col gap-3 mt-1 pt-3 border-t border-white/5">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 font-['Cinzel']">{L.cellSize}</span>
+                <span className="text-xs font-mono text-amber-500/80 bg-amber-500/10 px-2 py-0.5 rounded">{cellSize}px</span>
+              </div>
+              <input
+                type="range"
+                min={24}
+                max={96}
+                step={4}
+                value={cellSize}
+                onChange={(e) => setCellSize(Number(e.target.value))}
+                disabled={!canEditActiveQuadrant}
+                className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 px-1">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={hasSelectedCells} readOnly />
+            <span>{L.selectedCell}</span>
+          </label>
+        </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        <div className="flex gap-2">
+      <div className="mt-3 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={quadrantTitle}
             onChange={(e) => setQuadrantTitle(e.target.value)}
             placeholder={L.title}
-            className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-sm"
+            className="flex-1 min-w-0 rounded-lg border border-amber-500/20 bg-[#0b1120]/60 px-3 py-2 text-sm text-[#f0e6d2] placeholder-gray-500 focus:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500/20 transition-all"
             disabled={!canEditActiveQuadrant}
           />
-          <Boton size="sm" onClick={saveQuadrant} disabled={!canEditActiveQuadrant}>
-            {L.saveQuadrant}
-          </Boton>
+          <button
+            onClick={saveQuadrant}
+            disabled={!canEditActiveQuadrant}
+            className="w-full sm:w-auto px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 text-xs font-bold uppercase tracking-wider font-['Cinzel'] hover:bg-amber-500/20 hover:text-amber-100 hover:border-amber-500/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <LucideIcons.Save className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{L.saveQuadrant}</span>
+            <span className="sm:hidden">Guardar</span>
+          </button>
         </div>
         {canManageQuadrantSharing && (
           <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <div className="text-xs font-bold uppercase tracking-widest text-[#c8aa6e] font-['Cinzel'] mt-4 border-b border-amber-500/20 pb-1">
               {L.permissions}
             </div>
             <div className="text-xs text-gray-400">{L.sharedWithPlayers}</div>
@@ -4611,11 +4647,10 @@ function MinimapBuilder({
                       key={player}
                       type="button"
                       onClick={() => toggleQuadrantPlayer(player)}
-                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                        isSelected
-                          ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
-                          : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-emerald-400 hover:text-emerald-200'
-                      }`}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition ${isSelected
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                        : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-emerald-400 hover:text-emerald-200'
+                        }`}
                     >
                       {player}
                     </button>
@@ -4626,9 +4661,9 @@ function MinimapBuilder({
           </div>
         )}
         {!isPlayerMode && (
-          <div className="space-y-2 rounded-lg border border-gray-700 bg-gray-900/60 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <div className="space-y-2 rounded-xl border border-amber-500/20 bg-[#0b1120]/40 p-2 sm:p-3 shadow-inner shadow-black/20">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#c8aa6e] font-['Cinzel']">
                 {L.masterNotesSummary}
               </span>
               <span className="text-[11px] text-gray-400">
@@ -4638,25 +4673,24 @@ function MinimapBuilder({
                 )}
               </span>
             </div>
-            <Boton
-              size="sm"
-              className="w-full justify-center"
+            <button
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 text-xs font-bold uppercase tracking-wider font-['Cinzel'] hover:bg-amber-500/20 hover:text-amber-100 hover:border-amber-500/60 transition-all"
               onClick={() => setIsMasterNotesOpen(true)}
             >
+              <LucideIcons.FileText className="w-4 h-4" />
               {L.masterNotesButton}
-            </Boton>
+            </button>
           </div>
         )}
         {currentQuadrantIndex !== null && (
           <div
-            className={`text-xs ${
-              canEditActiveQuadrant ? 'text-emerald-400' : 'text-sky-200'
-            }`}
+            className={`text-xs ${canEditActiveQuadrant ? 'text-emerald-400' : 'text-sky-200'
+              }`}
           >
             {canEditActiveQuadrant
               ? `${L.editingQuadrantLabel}: `
               : `${L.viewingQuadrantLabel}: `}
-            {quadrants[currentQuadrantIndex]?.title}
+            <span className="text-[#f0e6d2] font-semibold">{quadrants[currentQuadrantIndex]?.title}</span>
           </div>
         )}
         {currentQuadrantIndex !== null && hasUnsavedChanges && (
@@ -4668,28 +4702,32 @@ function MinimapBuilder({
               />
               <span>{L.unsavedChangesIndicator}</span>
             </div>
-            <Boton
-              size="sm"
+            <button
               onClick={saveQuadrantChanges}
               disabled={!canEditActiveQuadrant}
+              className="w-full px-4 py-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-xs font-bold uppercase tracking-wider font-['Cinzel'] hover:bg-emerald-500/20 hover:text-emerald-100 hover:border-emerald-500/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(16,185,129,0.1)]"
             >
-              {L.saveChanges}
-            </Boton>
+              <div className="flex items-center justify-center gap-2">
+                <LucideIcons.Save className="w-4 h-4" />
+                {L.saveChanges}
+              </div>
+            </button>
           </div>
         )}
         {currentQuadrantIndex !== null && (
           <div>
-            <Boton
-              size="sm"
+            <button
               onClick={() => runUnsavedChangesGuard(() => loadDefaultQuadrant())}
+              className="w-full px-4 py-2 rounded-lg border border-gray-600/50 bg-gray-800/40 text-gray-400 text-xs font-bold uppercase tracking-wider font-['Cinzel'] hover:bg-gray-700/60 hover:text-gray-200 hover:border-gray-500 transition-all flex items-center justify-center gap-2"
             >
+              <LucideIcons.RotateCcw className="w-3.5 h-3.5" />
               {L.defaultQuadrant}
-            </Boton>
+            </button>
           </div>
         )}
         {quadrants.length > 0 && (
-          <div className="space-y-1 mt-2">
-            <div className="text-xs text-gray-300">{L.savedQuadrants}:</div>
+          <div className="space-y-2 mt-4">
+            <div className="text-xs font-bold uppercase tracking-widest text-[#c8aa6e] font-['Cinzel'] border-b border-amber-500/20 pb-1">{L.savedQuadrants}:</div>
             <div className="flex flex-wrap gap-2">
               {quadrants.map((q, i) => {
                 const keyId = q.id || `quadrant-${i}`;
@@ -4788,23 +4826,19 @@ function MinimapBuilder({
                           return;
                         cancelLongPressTimer(keyId);
                       }}
-                      className={`relative flex w-full flex-col items-center rounded border ${
-                        isSharedFromMaster
-                          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
-                          : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
-                      } ${
-                        isSelectedQuadrant ? 'ring-2 ring-emerald-400' : ''
-                      } ${
-                        isMobile
+                      className={`relative flex w-full flex-col items-center rounded-xl border transition-all duration-200 ${isSharedFromMaster
+                        ? 'border-emerald-500/40 bg-emerald-900/20 text-emerald-100 hover:bg-emerald-900/30'
+                        : 'border-amber-500/20 bg-[#0b1120]/60 text-gray-300 hover:border-amber-500/40 hover:bg-[#0b1120]/80'
+                        } ${isSelectedQuadrant ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-[#0b1120]' : ''
+                        } ${isMobile
                           ? 'gap-1.5 p-2 text-[11px]'
                           : 'gap-2 p-3 text-xs'
-                      }`}
+                        }`}
                       style={{ minHeight: tileMinHeight }}
                     >
                       <div
-                        className={`flex w-full justify-center min-h-[18px] ${
-                          isSharedFromMaster ? 'mb-1' : 'mb-0.5'
-                        }`}
+                        className={`flex w-full justify-center min-h-[18px] ${isSharedFromMaster ? 'mb-1' : 'mb-0.5'
+                          }`}
                       >
                         {isSharedFromMaster && (
                           <span
@@ -4817,11 +4851,10 @@ function MinimapBuilder({
                       </div>
                       <QuadrantPreview q={q} size={quadrantPreviewSize} />
                       <span
-                        className={`mt-1 ${
-                          isMobile
-                            ? 'text-center leading-tight break-words whitespace-normal'
-                            : ''
-                        }`}
+                        className={`mt-1 ${isMobile
+                          ? 'text-center leading-tight break-words whitespace-normal'
+                          : ''
+                          }`}
                       >
                         {q.title}
                       </span>
@@ -4861,100 +4894,113 @@ function MinimapBuilder({
   );
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 px-3 py-4 sm:px-4 lg:px-6 flex flex-col overflow-x-hidden">
-      <div ref={headerSectionRef} className="mb-4 space-y-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <Boton
-              size="sm"
-              className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600"
+    <div className="h-[100dvh] bg-[#0b1120] text-gray-100 px-3 py-2 sm:py-4 sm:px-4 lg:px-6 flex flex-col overflow-hidden relative font-['Lato']">
+      {/* Fondo de polvo/stardust */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/5 via-[#0b1120] to-[#0b1120]"></div>
+      </div>
+
+      <div ref={headerSectionRef} className="mb-0 sm:mb-4 space-y-0 sm:space-y-3 relative z-10">
+        <div className="grid grid-cols-[1.5rem_1fr_auto] sm:grid-cols-[8rem_1fr_8rem] items-center gap-0 sm:gap-0 w-full">
+          {/* Col 1: Botón Volver Minimalista */}
+          <div className="flex justify-start z-20">
+            <button
               onClick={onBack}
+              className="group flex items-center justify-center sm:justify-start gap-2 w-6 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-xl sm:border sm:border-[#c8aa6e]/30 sm:bg-[#0b1120]/50 text-[#c8aa6e]/70 font-medium text-sm hover:text-[#c8aa6e] sm:hover:bg-[#c8aa6e]/10 sm:hover:border-[#c8aa6e]/60 active:scale-[0.98] transition-all duration-300 font-['Cinzel'] uppercase tracking-[0.15em]"
+              aria-label="Volver"
             >
-              {L.arrow} {effectiveBackLabel}
-            </Boton>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">Minimapa</h1>
-              {shouldShowNewBadge && (
-                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-yellow-900 rounded-full font-bold">
-                  {L.new}
-                </span>
-              )}
-            </div>
+              <LucideIcons.ArrowLeft className="w-6 h-6 sm:w-4 sm:h-4 group-hover:-translate-x-0.5 transition-transform" />
+              <span className="hidden sm:inline">{effectiveBackLabel}</span>
+            </button>
           </div>
-          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
-            <label
-              className={`flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1 ${
-                canEditActiveQuadrant ? '' : 'opacity-40'
+
+          {/* Col 2: Título Maximizado y Limpio */}
+          <div className="flex flex-col items-center justify-center min-w-0 z-10 px-0">
+            <h1 className="font-['Cinzel'] text-xl sm:text-3xl md:text-4xl font-bold uppercase tracking-tight sm:tracking-wider text-[#f0e6d2] drop-shadow-[0_2px_10px_rgba(200,170,110,0.2)] whitespace-nowrap overflow-visible w-full text-center">
+              Minimapa
+            </h1>
+          </div>
+
+          {/* Col 3: Espaciador Simétrico */}
+          <div className="w-full hidden sm:block"></div>
+        </div>
+        <div className="hidden md:flex flex-wrap items-center justify-center gap-2">
+          <label
+            className={`flex items-center gap-2 text-sm bg-gray-900/60 border border-cyan-500/20 rounded-xl px-3 py-2 hover:border-cyan-400/40 transition-all ${canEditActiveQuadrant ? '' : 'opacity-40'
               }`}
-            >
+          >
+            <input
+              type="checkbox"
+              checked={shapeEdit}
+              onChange={(e) => setShapeEdit(e.target.checked)}
+              disabled={!canEditActiveQuadrant}
+              className="accent-cyan-500"
+            />
+            <span className="text-gray-300">{L.shapeEdit}</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm bg-gray-900/60 border border-cyan-500/20 rounded-xl px-3 py-2 hover:border-cyan-400/40 transition-all">
+            <input
+              type="checkbox"
+              checked={effectiveReadable}
+              onChange={(e) => setReadableMode(e.target.checked)}
+              className="accent-cyan-500"
+            />
+            <span className="text-gray-300">{L.readable}</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm bg-gray-900/60 border border-cyan-500/20 rounded-xl px-3 py-2 hover:border-cyan-400/40 transition-all">
+            <span className="text-gray-300">{L.autoFit}</span>
+            <input
+              type="checkbox"
+              checked={autoFit}
+              onChange={(e) => setAutoFit(e.target.checked)}
+              className="accent-cyan-500"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm bg-gray-900/60 border border-cyan-500/20 rounded-xl px-3 py-2 hover:border-cyan-400/40 transition-all">
+            <input
+              type="checkbox"
+              checked={isMoveMode}
+              onChange={(e) => setIsMoveMode(e.target.checked)}
+              className="accent-cyan-500"
+            />
+            <span className="text-gray-300">{L.moveMode}</span>
+          </label>
+          {!autoFit && (
+            <div className="flex items-center gap-2 text-sm bg-gray-900/60 border border-cyan-500/20 rounded-xl px-3 py-2">
+              <span className="text-gray-300">Zoom</span>
               <input
-                type="checkbox"
-                checked={shapeEdit}
-                onChange={(e) => setShapeEdit(e.target.checked)}
-                disabled={!canEditActiveQuadrant}
+                type="range"
+                min={35}
+                max={200}
+                value={Math.round(zoom * 100)}
+                onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                className="accent-cyan-500"
               />
-              <span>{L.shapeEdit}</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <input
-                type="checkbox"
-                checked={effectiveReadable}
-                onChange={(e) => setReadableMode(e.target.checked)}
-              />
-              <span>{L.readable}</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <span>{L.autoFit}</span>
-              <input
-                type="checkbox"
-                checked={autoFit}
-                onChange={(e) => setAutoFit(e.target.checked)}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-              <input
-                type="checkbox"
-                checked={isMoveMode}
-                onChange={(e) => setIsMoveMode(e.target.checked)}
-              />
-              <span>{L.moveMode}</span>
-            </label>
-            {!autoFit && (
-              <div className="flex items-center gap-2 text-sm bg-gray-800 border border-gray-700 rounded px-2 py-1">
-                <span>Zoom</span>
-                <input
-                  type="range"
-                  min={35}
-                  max={200}
-                  value={Math.round(zoom * 100)}
-                  onChange={(e) => setZoom(Number(e.target.value) / 100)}
-                />
-                <span className="w-10 text-right">{Math.round(zoom * 100)}%</span>
-              </div>
-            )}
-            <Boton
-              size="sm"
-              onClick={() => {
-                setZoom(1);
-                setOffset({ x: 0, y: 0 });
-              }}
-            >
-              {L.reset}
-            </Boton>
-          </div>
+              <span className="w-10 text-right text-cyan-300 font-medium">{Math.round(zoom * 100)}%</span>
+            </div>
+          )}
+          <button
+            className="px-3 py-2 rounded-xl border border-gray-700/50 bg-gray-800/30 text-gray-400 font-medium text-sm hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98] transition-all duration-300"
+            onClick={() => {
+              setZoom(1);
+              setOffset({ x: 0, y: 0 });
+            }}
+          >
+            {L.reset}
+          </button>
         </div>
         {isMobile && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-800/60 px-3 py-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-[#0b1120]/60 backdrop-blur-sm px-3 py-1">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#c8aa6e] font-['Cinzel']">
               {L.quadrant}
             </h2>
-            <Boton
-              size="sm"
-              className="shrink-0"
+            <button
+              className="px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-900/20 text-amber-300 text-xs font-bold uppercase tracking-wide hover:bg-amber-800/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
               onClick={() => setIsQuadrantPanelOpen((prev) => !prev)}
             >
               {isQuadrantPanelOpen ? L.quadrantPanelClose : L.quadrantPanelOpen}
-            </Boton>
+            </button>
           </div>
         )}
         {shouldShowExplorerNotice && (
@@ -5034,21 +5080,29 @@ function MinimapBuilder({
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0 relative z-10">
         {!isMobile && (
-          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 lg:col-span-1">
+          <div
+            className="rounded-2xl p-4 lg:col-span-1 border border-amber-500/20 shadow-xl shadow-black/40"
+            style={{
+              background: 'linear-gradient(135deg, rgba(11, 17, 32, 0.95) 0%, rgba(20, 25, 40, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
             {quadrantSettingsBody}
           </div>
         )}
 
         <div
-          className={`bg-gray-800/80 border border-gray-700 rounded-xl p-3 lg:col-span-3 min-h-[60vh] md:min-h-[50vh] flex flex-col ${
-            isMobile ? 'fixed inset-x-0 bottom-0' : ''
-          }`}
-          style={isMobile ? { top: Math.max(mobileMapTop, 0) } : undefined}
+          className={`rounded-2xl lg:col-span-3 flex flex-col border border-amber-500/20 shadow-xl shadow-black/40 relative overflow-hidden flex-1 w-full ${isMobile ? 'p-1 pt-0 mb-2 mt-3' : 'p-3 min-h-[50vh]'
+            }`}
+          style={{
+            background: 'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+            backdropFilter: 'blur(16px)',
+          }}
         >
           <div
-            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass}`}
+            className={`flex-1 min-h-0 w-full overflow-hidden overscroll-contain ${touchActionClass} flex flex-col justify-start items-center`}
             ref={containerRef}
             onWheel={handleWheel}
           >
@@ -5067,9 +5121,8 @@ function MinimapBuilder({
                   className="absolute top-0 left-0"
                   style={{
                     transformOrigin: 'top left',
-                    transform: `translate(${offset.x}px, ${offset.y}px) scale(${
-                      autoFit ? fitScale : zoom
-                    })`,
+                    transform: `translate(${offset.x}px, ${offset.y}px) scale(${autoFit ? fitScale : zoom
+                      })`,
                     width: `${gridWidth + perimMargin * 2}px`,
                     height: `${gridHeight + perimMargin * 2}px`,
                   }}
@@ -5163,13 +5216,13 @@ function MinimapBuilder({
 
                   <div
                     className="absolute"
-                  style={{
-                    left: perimMargin,
-                    top: perimMargin,
-                    width: gridWidth,
-                    height: gridHeight,
-                  }}
-                >
+                    style={{
+                      left: perimMargin,
+                      top: perimMargin,
+                      width: gridWidth,
+                      height: gridHeight,
+                    }}
+                  >
                     <div
                       className="grid"
                       style={{
@@ -5179,379 +5232,374 @@ function MinimapBuilder({
                         zIndex: 1,
                       }}
                     >
-                        {grid.map((row, r) =>
-                          row.map((cell, c) => {
-                            const key = `${r}-${c}`;
-                            const cellKey = key;
-                            const isSelected = selectedCells.some(
+                      {grid.map((row, r) =>
+                        row.map((cell, c) => {
+                          const key = `${r}-${c}`;
+                          const cellKey = key;
+                          const isSelected = selectedCells.some(
+                            (cell) => cell.r === r && cell.c === c
+                          );
+                          const isHovered =
+                            hoveredCell?.r === r && hoveredCell?.c === c;
+                          const selectedStackIndex = isSelected
+                            ? selectedCells.findIndex(
                               (cell) => cell.r === r && cell.c === c
-                            );
-                            const isHovered =
-                              hoveredCell?.r === r && hoveredCell?.c === c;
-                            const selectedStackIndex = isSelected
-                              ? selectedCells.findIndex(
-                                  (cell) => cell.r === r && cell.c === c
-                                )
-                              : -1;
-                            if (!cell.active) {
-                              const showAdder =
-                                canEditActiveQuadrant && hasActiveNeighbor(r, c);
-                              return (
-                                <div
-                                  key={key}
-                                  className="relative"
-                                  style={{
-                                    width: `${cellSize}px`,
-                                    height: `${cellSize}px`,
-                                  }}
-                                >
-                                  {showAdder && (
-                                    <button
-                                      className="absolute inset-0 m-auto w-7 h-7 rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-xs shadow transition"
-                                      onClick={() => setActive({ r, c }, true)}
-                                      title={L.addCell}
-                                    >
-                                      <LucideIcons.Plus size={14} />
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            }
-                            const isExplorerVisible =
-                              !isExplorerModeActive ||
-                              (explorerVisibleSet
-                                ? explorerVisibleSet.has(cellKey)
-                                : false);
-                            if (isExplorerModeActive && !isExplorerVisible) {
-                              return (
-                                <div
-                                  key={key}
-                                  className="relative"
-                                  style={{
-                                    width: `${cellSize}px`,
-                                    height: `${cellSize}px`,
-                                    background: '#020617',
-                                    border: '1px solid #0f172a',
-                                  }}
-                                />
-                              );
-                            }
-                            const isExplorerExplored =
-                              isExplorerModeActive && exploredCellsSet.has(cellKey);
-                            const isExplorerFrontier =
-                              isExplorerModeActive && explorerFrontierSet.has(cellKey);
-                            const showCellContent =
-                              !isExplorerModeActive || isExplorerExplored;
-                            const showQuestionFace =
-                              isExplorerModeActive &&
-                              !isExplorerExplored &&
-                              isExplorerFrontier;
-                            const borderWidthValue =
-                              readableMode || isMobile
-                                ? Math.max(cell.borderWidth, 2)
-                                : cell.borderWidth;
-                            const effectiveBorderWidth = showCellContent
-                              ? borderWidthValue
-                              : Math.max(borderWidthValue, 2);
-                            const displayBackground = showCellContent
-                              ? cell.fill
-                              : '#0f172a';
-                            const displayBorderColor = showCellContent
-                              ? cell.borderColor
-                              : '#1e293b';
-                            const displayBorderStyle = showCellContent
-                              ? cell.borderStyle
-                              : 'solid';
-                            const displayAnimation = showCellContent
-                              ? cell.effect?.type === 'pulse'
-                                ? 'pulse 1.5s infinite'
-                                : cell.effect?.type === 'bounce'
-                                ? 'bounce 1s infinite'
-                                : cell.effect?.type === 'spin'
-                                ? 'spin 1s infinite linear'
-                                : cell.effect?.type === 'shake'
-                                ? 'shake 0.5s infinite'
-                                : undefined
-                              : undefined;
-                            const zIndex = isSelected
-                              ? 30
-                              : showCellContent && cell.effect?.type !== 'none'
-                              ? 20
-                              : 10;
-                            let computedZIndex = zIndex;
-                            if (isHovered) {
-                              computedZIndex = Math.max(computedZIndex, 40);
-                            }
-                            if (isSelected) {
-                              const stackBoost =
-                                selectedStackIndex >= 0
-                                  ? selectedCells.length - selectedStackIndex
-                                  : 0;
-                              computedZIndex = Math.max(
-                                computedZIndex,
-                                60 + stackBoost
-                              );
-                            }
-                            const hasVividEffect =
-                              showCellContent &&
-                              ['glow', 'sparkle', 'pulse'].includes(
-                                cell.effect?.type
-                              );
-                            const selectionAura =
-                              isSelected || isHovered ? (
-                                <span
-                                  className={`pointer-events-none absolute inset-[3px] rounded-lg transition-all duration-150 ${
-                                    isSelected
-                                      ? `bg-sky-400/15 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.6),0_0_10px_4px_rgba(56,189,248,0.35)] scale-[0.97] animate-[pulse_2s_ease-in-out_infinite]${
-                                          hasVividEffect
-                                            ? ' ring-2 ring-white/80 ring-offset-[2px] ring-offset-slate-950/60 drop-shadow-[0_0_8px_rgba(15,23,42,0.55)]'
-                                            : ''
-                                        }`
-                                      : ''
-                                  } ${
-                                    isHovered
-                                      ? 'bg-slate-200/10 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.45),0_0_6px_2px_rgba(148,163,184,0.25)]'
-                                      : ''
-                                  }`}
-                                  style={{ zIndex: 15 }}
-                                />
-                              ) : null;
-                            const explorerCursorClass =
-                              isExplorerModeActive && !showCellContent && isExplorerFrontier
-                                ? 'cursor-pointer'
-                                : '';
+                            )
+                            : -1;
+                          if (!cell.active) {
+                            const showAdder =
+                              canEditActiveQuadrant && hasActiveNeighbor(r, c);
                             return (
                               <div
                                 key={key}
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => {
-                                  if (
-                                    isMoveMode ||
-                                    skipClickRef.current ||
-                                    hadMultiTouchRef.current ||
-                                    isPanningRef.current
-                                  ) {
-                                    return;
-                                  }
-                                  const keyId = `${r}-${c}`;
-                                  if (
-                                    lastLongPressRef.current.key === keyId &&
-                                    Date.now() - lastLongPressRef.current.t <
-                                      700
-                                  ) {
-                                    e.preventDefault();
-                                    return;
-                                  }
-                                  handleCellClick(r, c, e);
+                                className="relative"
+                                style={{
+                                  width: `${cellSize}px`,
+                                  height: `${cellSize}px`,
                                 }}
-                                onPointerDown={(e) => {
-                                  if (
-                                    (e.pointerType !== 'touch' &&
-                                      e.pointerType !== 'pen') ||
-                                    isMoveMode ||
-                                    pointersRef.current.size > 1 ||
-                                    isPanningRef.current
-                                  ) {
-                                    return;
+                              >
+                                {showAdder && (
+                                  <button
+                                    className="absolute inset-0 m-auto w-7 h-7 rounded-md border-2 border-dashed border-gray-500/70 text-gray-400 bg-transparent hover:border-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center leading-none text-xs shadow transition"
+                                    onClick={() => setActive({ r, c }, true)}
+                                    title={L.addCell}
+                                  >
+                                    <LucideIcons.Plus size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          }
+                          const isExplorerVisible =
+                            !isExplorerModeActive ||
+                            (explorerVisibleSet
+                              ? explorerVisibleSet.has(cellKey)
+                              : false);
+                          if (isExplorerModeActive && !isExplorerVisible) {
+                            return (
+                              <div
+                                key={key}
+                                className="relative"
+                                style={{
+                                  width: `${cellSize}px`,
+                                  height: `${cellSize}px`,
+                                  background: '#020617',
+                                  border: '1px solid #0f172a',
+                                }}
+                              />
+                            );
+                          }
+                          const isExplorerExplored =
+                            isExplorerModeActive && exploredCellsSet.has(cellKey);
+                          const isExplorerFrontier =
+                            isExplorerModeActive && explorerFrontierSet.has(cellKey);
+                          const showCellContent =
+                            !isExplorerModeActive || isExplorerExplored;
+                          const showQuestionFace =
+                            isExplorerModeActive &&
+                            !isExplorerExplored &&
+                            isExplorerFrontier;
+                          const borderWidthValue =
+                            readableMode || isMobile
+                              ? Math.max(cell.borderWidth, 2)
+                              : cell.borderWidth;
+                          const effectiveBorderWidth = showCellContent
+                            ? borderWidthValue
+                            : Math.max(borderWidthValue, 2);
+                          const displayBackground = showCellContent
+                            ? cell.fill
+                            : '#0f172a';
+                          const displayBorderColor = showCellContent
+                            ? cell.borderColor
+                            : '#1e293b';
+                          const displayBorderStyle = showCellContent
+                            ? cell.borderStyle
+                            : 'solid';
+                          const displayAnimation = showCellContent
+                            ? cell.effect?.type === 'pulse'
+                              ? 'pulse 1.5s infinite'
+                              : cell.effect?.type === 'bounce'
+                                ? 'bounce 1s infinite'
+                                : cell.effect?.type === 'spin'
+                                  ? 'spin 1s infinite linear'
+                                  : cell.effect?.type === 'shake'
+                                    ? 'shake 0.5s infinite'
+                                    : undefined
+                            : undefined;
+                          const zIndex = isSelected
+                            ? 30
+                            : showCellContent && cell.effect?.type !== 'none'
+                              ? 20
+                              : 10;
+                          let computedZIndex = zIndex;
+                          if (isHovered) {
+                            computedZIndex = Math.max(computedZIndex, 40);
+                          }
+                          if (isSelected) {
+                            const stackBoost =
+                              selectedStackIndex >= 0
+                                ? selectedCells.length - selectedStackIndex
+                                : 0;
+                            computedZIndex = Math.max(
+                              computedZIndex,
+                              60 + stackBoost
+                            );
+                          }
+                          const hasVividEffect =
+                            showCellContent &&
+                            ['glow', 'sparkle', 'pulse'].includes(
+                              cell.effect?.type
+                            );
+                          const selectionAura =
+                            isSelected || isHovered ? (
+                              <span
+                                className={`pointer-events-none absolute inset-[3px] rounded-lg transition-all duration-150 ${isSelected
+                                  ? `bg-sky-400/15 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.6),0_0_10px_4px_rgba(56,189,248,0.35)] scale-[0.97] animate-[pulse_2s_ease-in-out_infinite]${hasVividEffect
+                                    ? ' ring-2 ring-white/80 ring-offset-[2px] ring-offset-slate-950/60 drop-shadow-[0_0_8px_rgba(15,23,42,0.55)]'
+                                    : ''
+                                  }`
+                                  : ''
+                                  } ${isHovered
+                                    ? 'bg-slate-200/10 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.45),0_0_6px_2px_rgba(148,163,184,0.25)]'
+                                    : ''
+                                  }`}
+                                style={{ zIndex: 15 }}
+                              />
+                            ) : null;
+                          const explorerCursorClass =
+                            isExplorerModeActive && !showCellContent && isExplorerFrontier
+                              ? 'cursor-pointer'
+                              : '';
+                          return (
+                            <div
+                              key={key}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                if (
+                                  isMoveMode ||
+                                  skipClickRef.current ||
+                                  hadMultiTouchRef.current ||
+                                  isPanningRef.current
+                                ) {
+                                  return;
+                                }
+                                const keyId = `${r}-${c}`;
+                                if (
+                                  lastLongPressRef.current.key === keyId &&
+                                  Date.now() - lastLongPressRef.current.t <
+                                  700
+                                ) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                handleCellClick(r, c, e);
+                              }}
+                              onPointerDown={(e) => {
+                                if (
+                                  (e.pointerType !== 'touch' &&
+                                    e.pointerType !== 'pen') ||
+                                  isMoveMode ||
+                                  pointersRef.current.size > 1 ||
+                                  isPanningRef.current
+                                ) {
+                                  return;
+                                }
+                                if (isExplorerModeActive && !showCellContent) {
+                                  return;
+                                }
+                                const keyId = `${r}-${c}`;
+                                cancelLongPressTimer(keyId);
+                                const timer = setTimeout(() => {
+                                  setActive({ r, c }, false);
+                                  setSelectedCells((prev) =>
+                                    prev.filter(
+                                      (cell) => cell.r !== r || cell.c !== c
+                                    )
+                                  );
+                                  lastLongPressRef.current = {
+                                    key: keyId,
+                                    t: Date.now(),
+                                  };
+                                  skipClickRef.current = true;
+                                  longPressTimersRef.current.delete(keyId);
+                                }, 550);
+                                longPressTimersRef.current.set(keyId, {
+                                  id: timer,
+                                  pointerId: e.pointerId,
+                                });
+                              }}
+                              onPointerUp={(e) => {
+                                if (
+                                  e.pointerType !== 'touch' &&
+                                  e.pointerType !== 'pen'
+                                )
+                                  return;
+                                const keyId = `${r}-${c}`;
+                                const st = longPressTimersRef.current.get(keyId);
+                                if (st && st.pointerId === e.pointerId) {
+                                  clearTimeout(st.id);
+                                  longPressTimersRef.current.delete(keyId);
+                                }
+                              }}
+                              onPointerMove={(e) => {
+                                if (
+                                  e.pointerType !== 'touch' &&
+                                  e.pointerType !== 'pen'
+                                )
+                                  return;
+                                if (isExplorerModeActive && !showCellContent) {
+                                  return;
+                                }
+                                cancelLongPressTimer(`${r}-${c}`);
+                              }}
+                              onPointerCancel={(e) => {
+                                if (
+                                  e.pointerType !== 'touch' &&
+                                  e.pointerType !== 'pen'
+                                )
+                                  return;
+                                cancelLongPressTimer(`${r}-${c}`);
+                              }}
+                              onMouseEnter={() => {
+                                if (isExplorerModeActive && !showCellContent) return;
+                                setHoveredCell({ r, c });
+                              }}
+                              onMouseLeave={() => setHoveredCell(null)}
+                              onKeyDown={(e) =>
+                                e.key === 'Enter' && handleCellClick(r, c, e)
+                              }
+                              className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ring-0 ${explorerCursorClass}`}
+                              style={{
+                                background: 'transparent',
+                                borderColor: 'transparent',
+                                borderWidth: 0,
+                                borderStyle: 'solid',
+                                width: `${cellSize}px`,
+                                height: `${cellSize}px`,
+                                animation: undefined,
+                                zIndex: computedZIndex,
+                                boxShadow: 'none',
+                              }}
+                            >
+                              {selectionAura}
+                              <div
+                                className="absolute inset-0"
+                                style={{
+                                  pointerEvents: 'none',
+                                  zIndex: 10,
+                                  perspective: isExplorerModeActive
+                                    ? '1200px'
+                                    : undefined,
+                                }}
+                              >
+                                <div
+                                  className={`relative h-full w-full ${isExplorerModeActive
+                                    ? 'transition-transform duration-500'
+                                    : ''
+                                    }`}
+                                  style={
+                                    isExplorerModeActive
+                                      ? {
+                                        transform: `rotateY(${showCellContent ? 0 : 180}deg)`,
+                                        transformStyle: 'preserve-3d',
+                                      }
+                                      : undefined
                                   }
-                                  if (isExplorerModeActive && !showCellContent) {
-                                    return;
-                                  }
-                                  const keyId = `${r}-${c}`;
-                                  cancelLongPressTimer(keyId);
-                                  const timer = setTimeout(() => {
+                                >
+                                  <div
+                                    className="absolute inset-0"
+                                    style={{
+                                      backfaceVisibility: isExplorerModeActive
+                                        ? 'hidden'
+                                        : undefined,
+                                      background: displayBackground,
+                                      borderColor: displayBorderColor,
+                                      borderWidth: `${effectiveBorderWidth}px`,
+                                      borderStyle: displayBorderStyle,
+                                      animation: displayAnimation,
+                                      zIndex: 10,
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute inset-0"
+                                    style={{ pointerEvents: 'none', zIndex: 20 }}
+                                  >
+                                    {showCellContent &&
+                                      cell.effect?.type !== 'none' && (
+                                        <EffectOverlay effect={cell.effect} />
+                                      )}
+                                    {showCellContent && cell.icon && (
+                                      <img
+                                        src={cell.icon}
+                                        alt="icon"
+                                        className="absolute inset-0 m-auto h-2/3 w-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
+                                        style={{
+                                          transform: cell.iconRotation
+                                            ? `rotate(${cell.iconRotation}deg)`
+                                            : undefined,
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                  {isExplorerModeActive && (
+                                    <div
+                                      className="absolute inset-0 flex items-center justify-center"
+                                      style={{
+                                        transform: 'rotateY(180deg)',
+                                        backfaceVisibility: 'hidden',
+                                        background: '#0f172a',
+                                        borderColor: '#1e293b',
+                                        borderWidth: `${Math.max(borderWidthValue, 2)}px`,
+                                        borderStyle: 'solid',
+                                      }}
+                                    >
+                                      {showQuestionFace && (
+                                        <LucideIcons.HelpCircle className="h-1/2 w-1/2 text-sky-300 drop-shadow-[0_2px_6px_rgba(56,189,248,0.45)]" />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {!isMobile && (
+                                <button
+                                  type="button"
+                                  className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${shapeEdit || isSelected
+                                    ? 'opacity-100 pointer-events-auto'
+                                    : 'opacity-0 pointer-events-none'
+                                    }`}
+                                  title="Eliminar celda"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setActive({ r, c }, false);
                                     setSelectedCells((prev) =>
                                       prev.filter(
                                         (cell) => cell.r !== r || cell.c !== c
                                       )
                                     );
-                                    lastLongPressRef.current = {
-                                      key: keyId,
-                                      t: Date.now(),
-                                    };
-                                    skipClickRef.current = true;
-                                    longPressTimersRef.current.delete(keyId);
-                                  }, 550);
-                                  longPressTimersRef.current.set(keyId, {
-                                    id: timer,
-                                    pointerId: e.pointerId,
-                                  });
-                                }}
-                                onPointerUp={(e) => {
-                                  if (
-                                    e.pointerType !== 'touch' &&
-                                    e.pointerType !== 'pen'
-                                  )
-                                    return;
-                                  const keyId = `${r}-${c}`;
-                                  const st = longPressTimersRef.current.get(keyId);
-                                  if (st && st.pointerId === e.pointerId) {
-                                    clearTimeout(st.id);
-                                    longPressTimersRef.current.delete(keyId);
-                                  }
-                                }}
-                                onPointerMove={(e) => {
-                                  if (
-                                    e.pointerType !== 'touch' &&
-                                    e.pointerType !== 'pen'
-                                  )
-                                    return;
-                                  if (isExplorerModeActive && !showCellContent) {
-                                    return;
-                                  }
-                                  cancelLongPressTimer(`${r}-${c}`);
-                                }}
-                                onPointerCancel={(e) => {
-                                  if (
-                                    e.pointerType !== 'touch' &&
-                                    e.pointerType !== 'pen'
-                                  )
-                                    return;
-                                  cancelLongPressTimer(`${r}-${c}`);
-                                }}
-                                onMouseEnter={() => {
-                                  if (isExplorerModeActive && !showCellContent) return;
-                                  setHoveredCell({ r, c });
-                                }}
-                                onMouseLeave={() => setHoveredCell(null)}
-                                onKeyDown={(e) =>
-                                  e.key === 'Enter' && handleCellClick(r, c, e)
-                                }
-                                className={`group relative overflow-visible select-none transition-transform duration-150 ease-out focus-visible:ring-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/10 ring-0 ${explorerCursorClass}`}
-                                style={{
-                                  background: 'transparent',
-                                  borderColor: 'transparent',
-                                  borderWidth: 0,
-                                  borderStyle: 'solid',
-                                  width: `${cellSize}px`,
-                                  height: `${cellSize}px`,
-                                  animation: undefined,
-                                  zIndex: computedZIndex,
-                                  boxShadow: 'none',
-                                }}
-                              >
-                                {selectionAura}
-                                <div
-                                  className="absolute inset-0"
-                                  style={{
-                                    pointerEvents: 'none',
-                                    zIndex: 10,
-                                    perspective: isExplorerModeActive
-                                      ? '1200px'
-                                      : undefined,
                                   }}
                                 >
-                                  <div
-                                    className={`relative h-full w-full ${
-                                      isExplorerModeActive
-                                        ? 'transition-transform duration-500'
-                                        : ''
-                                    }`}
-                                    style={
-                                      isExplorerModeActive
-                                        ? {
-                                            transform: `rotateY(${showCellContent ? 0 : 180}deg)`,
-                                            transformStyle: 'preserve-3d',
-                                          }
-                                        : undefined
-                                    }
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                    focusable="false"
                                   >
-                                    <div
-                                      className="absolute inset-0"
-                                      style={{
-                                        backfaceVisibility: isExplorerModeActive
-                                          ? 'hidden'
-                                          : undefined,
-                                        background: displayBackground,
-                                        borderColor: displayBorderColor,
-                                        borderWidth: `${effectiveBorderWidth}px`,
-                                        borderStyle: displayBorderStyle,
-                                        animation: displayAnimation,
-                                        zIndex: 10,
-                                      }}
+                                    <path
+                                      d="M5 5L19 19M19 5L5 19"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
                                     />
-                                    <div
-                                      className="absolute inset-0"
-                                      style={{ pointerEvents: 'none', zIndex: 20 }}
-                                    >
-                                      {showCellContent &&
-                                        cell.effect?.type !== 'none' && (
-                                          <EffectOverlay effect={cell.effect} />
-                                        )}
-                                      {showCellContent && cell.icon && (
-                                        <img
-                                          src={cell.icon}
-                                          alt="icon"
-                                          className="absolute inset-0 m-auto h-2/3 w-2/3 object-contain pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]"
-                                          style={{
-                                            transform: cell.iconRotation
-                                              ? `rotate(${cell.iconRotation}deg)`
-                                              : undefined,
-                                          }}
-                                        />
-                                      )}
-                                    </div>
-                                    {isExplorerModeActive && (
-                                      <div
-                                        className="absolute inset-0 flex items-center justify-center"
-                                        style={{
-                                          transform: 'rotateY(180deg)',
-                                          backfaceVisibility: 'hidden',
-                                          background: '#0f172a',
-                                          borderColor: '#1e293b',
-                                          borderWidth: `${Math.max(borderWidthValue, 2)}px`,
-                                          borderStyle: 'solid',
-                                        }}
-                                      >
-                                        {showQuestionFace && (
-                                          <LucideIcons.HelpCircle className="h-1/2 w-1/2 text-sky-300 drop-shadow-[0_2px_6px_rgba(56,189,248,0.45)]" />
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                {!isMobile && (
-                                  <button
-                                    type="button"
-                                    className={`absolute top-0 right-0 m-0.5 z-30 w-4 h-4 rounded text-rose-600 flex items-center justify-center transition-opacity duration-75 ${
-                                      shapeEdit || isSelected
-                                        ? 'opacity-100 pointer-events-auto'
-                                        : 'opacity-0 pointer-events-none'
-                                    }`}
-                                    title="Eliminar celda"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActive({ r, c }, false);
-                                      setSelectedCells((prev) =>
-                                        prev.filter(
-                                          (cell) => cell.r !== r || cell.c !== c
-                                        )
-                                      );
-                                    }}
-                                  >
-                                    <svg
-                                      width="10"
-                                      height="10"
-                                      viewBox="0 0 24 24"
-                                      aria-hidden="true"
-                                      focusable="false"
-                                    >
-                                      <path
-                                        d="M5 5L19 19M19 5L5 19"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                      />
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                     <div
                       className="absolute inset-0 pointer-events-none"
                       style={{ zIndex: 2 }}
@@ -5566,47 +5614,46 @@ function MinimapBuilder({
                         const showTooltip =
                           (hoveredCell &&
                             hoveredCell.r === a.r &&
-                              hoveredCell.c === a.c) ||
-                            selectedCells.some(
-                              (cell) => cell.r === a.r && cell.c === a.c
-                            );
-                          return (
+                            hoveredCell.c === a.c) ||
+                          selectedCells.some(
+                            (cell) => cell.r === a.r && cell.c === a.c
+                          );
+                        return (
+                          <div
+                            key={a.key}
+                            className="absolute"
+                            style={{
+                              left: a.c * cellSize,
+                              top: a.r * cellSize,
+                              width: cellSize,
+                              height: cellSize,
+                            }}
+                          >
                             <div
-                              key={a.key}
-                              className="absolute"
-                              style={{
-                                left: a.c * cellSize,
-                                top: a.r * cellSize,
-                                width: cellSize,
-                                height: cellSize,
-                              }}
-                            >
-                              <div
-                                className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ${
-                                  a.authorRole === 'master'
-                                    ? 'bg-emerald-400'
-                                    : 'border border-amber-200 bg-amber-400'
+                              className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ${a.authorRole === 'master'
+                                ? 'bg-emerald-400'
+                                : 'border border-amber-200 bg-amber-400'
                                 }`}
-                              />
-                              {showTooltip && (
-                                <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
-                                  <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line text-center">
-                                    <div className="flex flex-col gap-1">
-                                      {a.authorRole === 'master' ? (
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-                                          {L.masterNoteTag}
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                                          {a.authorName || L.playerNoteTag}
-                                        </span>
-                                      )}
-                                      <span>{a.text}</span>
-                                    </div>
-                                    <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
+                            />
+                            {showTooltip && (
+                              <div className="absolute z-40 left-1/2 -translate-x-1/2 -translate-y-full mb-2 pointer-events-none">
+                                <div className="relative px-2 py-1 bg-gray-900/90 text-white text-xs rounded-md shadow-lg whitespace-pre-line text-center">
+                                  <div className="flex flex-col gap-1">
+                                    {a.authorRole === 'master' ? (
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                                        {L.masterNoteTag}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                        {a.authorName || L.playerNoteTag}
+                                      </span>
+                                    )}
+                                    <span>{a.text}</span>
                                   </div>
+                                  <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900/90" />
                                 </div>
-                              )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -5671,19 +5718,33 @@ function MinimapBuilder({
               </div>
             </div>
           </div>
+        </div>
       </div>
-    </div>
 
       {isMobile && (
-        <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none">
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity duration-300 ${isQuadrantPanelOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setIsQuadrantPanelOpen(false)}
+        >
           <div
-            className={`mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
-              isQuadrantPanelOpen
-                ? 'pointer-events-auto opacity-100 translate-y-0'
-                : 'pointer-events-none opacity-0 translate-y-2'
-            }`}
+            className={`w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl border border-amber-500/20 bg-[#0b1120] shadow-2xl transition-transform duration-300 ${isQuadrantPanelOpen
+              ? 'translate-y-0 scale-100'
+              : 'translate-y-4 scale-95'
+              }`}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="max-h-[70vh] overflow-y-auto p-4">
+            <div className="flex items-center justify-between p-4 border-b border-amber-500/10 bg-[#0b1120]/50 sticky top-0 z-10">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-[#c8aa6e] font-['Cinzel']">
+                Configuración
+              </h3>
+              <button
+                onClick={() => setIsQuadrantPanelOpen(false)}
+                className="p-2 -mr-2 text-gray-400 hover:text-white"
+              >
+                <LucideIcons.X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(90vh-60px)] p-4">
               {quadrantSettingsBody}
             </div>
           </div>
@@ -5696,9 +5757,8 @@ function MinimapBuilder({
           const selected = selectedCellData;
           return (
             <div
-              className={`fixed bottom-4 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 flex-col items-end gap-2 sm:left-auto sm:right-6 sm:max-w-lg sm:translate-x-0 ${
-                isPropertyPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
-              }`}
+              className={`fixed bottom-4 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 flex-col items-end gap-2 sm:left-auto sm:right-6 sm:max-w-lg sm:translate-x-0 ${isPropertyPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'
+                }`}
             >
               <Boton
                 size="sm"
@@ -5708,11 +5768,10 @@ function MinimapBuilder({
                 {isPropertyPanelOpen ? L.cellPropsClose : L.cellPropsOpen}
               </Boton>
               <div
-                className={`w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${
-                  isPropertyPanelOpen
-                    ? 'pointer-events-auto opacity-100 translate-y-0'
-                    : 'pointer-events-none opacity-0 translate-y-2'
-                }`}
+                className={`w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl transition-all duration-200 ${isPropertyPanelOpen
+                  ? 'pointer-events-auto opacity-100 translate-y-0'
+                  : 'pointer-events-none opacity-0 translate-y-2'
+                  }`}
               >
                 <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -5751,11 +5810,10 @@ function MinimapBuilder({
                             key={tab.id}
                             type="button"
                             onClick={() => setPanelTab(tab.id)}
-                            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold uppercase tracking-wide transition ${
-                              isActive
-                                ? 'border-blue-500 bg-blue-600 text-white shadow'
-                                : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-500'
-                            }`}
+                            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold uppercase tracking-wide transition ${isActive
+                              ? 'border-blue-500 bg-blue-600 text-white shadow'
+                              : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-500'
+                              }`}
                           >
                             {Icon && <Icon className="h-3.5 w-3.5" />}
                             <span className="text-[11px]">{tab.label}</span>
@@ -5788,7 +5846,7 @@ function MinimapBuilder({
                                       const isActive =
                                         selected?.icon === ORIGIN_ICON_DATA_URL &&
                                         normalizeRotation(selected?.iconRotation ?? 0) ===
-                                          direction.rotation;
+                                        direction.rotation;
                                       return (
                                         <button
                                           key={direction.id}
@@ -5802,15 +5860,13 @@ function MinimapBuilder({
                                             );
                                           }}
                                           title={`${L.originStyle} · ${L[direction.labelKey]}`}
-                                          className={`flex h-8 w-8 items-center justify-center text-gray-300 transition ${
-                                            isActive
-                                              ? 'bg-blue-600 text-white shadow-inner'
-                                              : 'hover:bg-gray-700/80'
-                                          } ${
-                                            hasSelectedCells
+                                          className={`flex h-8 w-8 items-center justify-center text-gray-300 transition ${isActive
+                                            ? 'bg-blue-600 text-white shadow-inner'
+                                            : 'hover:bg-gray-700/80'
+                                            } ${hasSelectedCells
                                               ? ''
                                               : 'cursor-not-allowed opacity-40'
-                                          }`}
+                                            }`}
                                         >
                                           {DirectionIcon && (
                                             <DirectionIcon className="h-4 w-4" />
@@ -5953,11 +6009,10 @@ function MinimapBuilder({
                                 key={b.id}
                                 onClick={() => setIconSource(b.id)}
                                 type="button"
-                                className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
-                                  iconSource === b.id
-                                    ? 'border-blue-500 bg-blue-600 text-white shadow'
-                                    : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                }`}
+                                className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${iconSource === b.id
+                                  ? 'border-blue-500 bg-blue-600 text-white shadow'
+                                  : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-500'
+                                  }`}
                               >
                                 {b.label}
                               </button>
@@ -6251,131 +6306,131 @@ function MinimapBuilder({
               </div>
             </div>
           );
-        })()}
+        })()
+      }
 
-      {!isPlayerMode && (
-        <Modal
-          isOpen={isMasterNotesOpen}
-          onClose={() => setIsMasterNotesOpen(false)}
-          title={L.masterNotesTitle}
-          size="lg"
-        >
-          <div className="space-y-4 text-sm">
-            <div className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  {L.masterNotesSummary}
-                </p>
-                <p className="text-[11px] text-gray-400">
-                  {L.masterNotesCounter.replace(
-                    '{count}',
-                    String(masterAnnotationsCount)
-                  )}
-                </p>
+      {
+        !isPlayerMode && (
+          <Modal
+            isOpen={isMasterNotesOpen}
+            onClose={() => setIsMasterNotesOpen(false)}
+            title={L.masterNotesTitle}
+            size="lg"
+          >
+            <div className="space-y-4 text-sm">
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    {L.masterNotesSummary}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    {L.masterNotesCounter.replace(
+                      '{count}',
+                      String(masterAnnotationsCount)
+                    )}
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  value={masterNotesSearch}
+                  onChange={(e) => setMasterNotesSearch(e.target.value)}
+                  placeholder={L.masterNotesSearchPlaceholder}
+                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
               </div>
-              <input
-                type="text"
-                value={masterNotesSearch}
-                onChange={(e) => setMasterNotesSearch(e.target.value)}
-                placeholder={L.masterNotesSearchPlaceholder}
-                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            {filteredMasterAnnotations.length === 0 ? (
-              <p className="text-sm text-gray-400">{L.masterNotesEmpty}</p>
-            ) : (
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                {filteredMasterAnnotations.map((entry) => (
-                  <div
-                    key={entry.key}
-                    className="rounded-lg border border-gray-700 bg-gray-800/70"
-                  >
-                    <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2 text-xs text-gray-300">
-                      <span className="font-semibold uppercase tracking-wide">
-                        {L.masterNotesCell} {entry.r + 1} × {entry.c + 1}
-                      </span>
-                      <span className="text-[11px] text-gray-400">
-                        {entry.notes.length}{' '}
-                        {entry.notes.length === 1
-                          ? L.masterNotesNoteSingular
-                          : L.masterNotesNotePlural}
-                      </span>
-                    </div>
-                    <div className="divide-y divide-gray-700">
-                      {entry.notes.map((note) => (
-                        <div
-                          key={note.key}
-                          className="space-y-2 px-3 py-2 text-sm text-gray-200"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
-                            <span
-                              className={`font-semibold uppercase tracking-wide ${
-                                note.authorRole === 'master'
+              {filteredMasterAnnotations.length === 0 ? (
+                <p className="text-sm text-gray-400">{L.masterNotesEmpty}</p>
+              ) : (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {filteredMasterAnnotations.map((entry) => (
+                    <div
+                      key={entry.key}
+                      className="rounded-lg border border-gray-700 bg-gray-800/70"
+                    >
+                      <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2 text-xs text-gray-300">
+                        <span className="font-semibold uppercase tracking-wide">
+                          {L.masterNotesCell} {entry.r + 1} × {entry.c + 1}
+                        </span>
+                        <span className="text-[11px] text-gray-400">
+                          {entry.notes.length}{' '}
+                          {entry.notes.length === 1
+                            ? L.masterNotesNoteSingular
+                            : L.masterNotesNotePlural}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-gray-700">
+                        {entry.notes.map((note) => (
+                          <div
+                            key={note.key}
+                            className="space-y-2 px-3 py-2 text-sm text-gray-200"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                              <span
+                                className={`font-semibold uppercase tracking-wide ${note.authorRole === 'master'
                                   ? 'text-emerald-300'
                                   : 'text-amber-200'
-                              }`}
-                            >
-                              {note.authorRole === 'master'
-                                ? L.masterNoteTag
-                                : note.authorName || L.playerNoteTag}
-                            </span>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Boton
-                                size="xs"
-                                onClick={() => {
-                                  setSelectedCells([{ r: note.r, c: note.c }]);
-                                  setPanelTab('notes');
-                                  setIsPropertyPanelOpen(true);
-                                  setIsMasterNotesOpen(false);
-                                }}
+                                  }`}
                               >
-                                {L.masterNotesViewCell}
-                              </Boton>
-                              <Boton
-                                size="xs"
-                                color="red"
-                                onClick={() =>
-                                  setAnnotation(
-                                    note.r,
-                                    note.c,
-                                    { text: '', icon: '' },
-                                    { existing: note, override: true }
-                                  )
-                                }
-                              >
-                                {L.masterNotesRemove}
-                              </Boton>
+                                {note.authorRole === 'master'
+                                  ? L.masterNoteTag
+                                  : note.authorName || L.playerNoteTag}
+                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Boton
+                                  size="xs"
+                                  onClick={() => {
+                                    setSelectedCells([{ r: note.r, c: note.c }]);
+                                    setPanelTab('notes');
+                                    setIsPropertyPanelOpen(true);
+                                    setIsMasterNotesOpen(false);
+                                  }}
+                                >
+                                  {L.masterNotesViewCell}
+                                </Boton>
+                                <Boton
+                                  size="xs"
+                                  color="red"
+                                  onClick={() =>
+                                    setAnnotation(
+                                      note.r,
+                                      note.c,
+                                      { text: '', icon: '' },
+                                      { existing: note, override: true }
+                                    )
+                                  }
+                                >
+                                  {L.masterNotesRemove}
+                                </Boton>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-start gap-3">
-                            {note.icon && (
-                              <img
-                                src={note.icon}
-                                alt=""
-                                className="h-8 w-8 flex-shrink-0 rounded border border-gray-700 bg-gray-900 object-contain"
-                              />
-                            )}
-                            <div className="space-y-1">
-                              {note.text ? (
-                                <p className="text-sm text-gray-100">{note.text}</p>
-                              ) : (
-                                <p className="text-xs italic text-gray-400">
-                                  {L.masterNotesNoText}
-                                </p>
+                            <div className="flex items-start gap-3">
+                              {note.icon && (
+                                <img
+                                  src={note.icon}
+                                  alt=""
+                                  className="h-8 w-8 flex-shrink-0 rounded border border-gray-700 bg-gray-900 object-contain"
+                                />
                               )}
+                              <div className="space-y-1">
+                                {note.text ? (
+                                  <p className="text-sm text-gray-100">{note.text}</p>
+                                ) : (
+                                  <p className="text-xs italic text-gray-400">
+                                    {L.masterNotesNoText}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
-
+                  ))}
+                </div>
+              )}
+            </div>
+          </Modal>
+        )}
     </div>
   );
 }

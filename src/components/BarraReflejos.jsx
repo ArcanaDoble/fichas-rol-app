@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Boton from './Boton';
+import { ArrowLeft, Target, RotateCcw, Menu, Zap, Clock, History, ChevronDown, Play } from 'lucide-react';
 
 const BarraReflejos = ({ playerName, onBack }) => {
   const [gameState, setGameState] = useState('menu'); // 'menu', 'playing', 'result'
@@ -11,7 +11,7 @@ const BarraReflejos = ({ playerName, onBack }) => {
 
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
-  
+
   const animationRef = useRef();
   const gameAreaRef = useRef();
 
@@ -19,30 +19,42 @@ const BarraReflejos = ({ playerName, onBack }) => {
   const difficulties = {
     EASY: {
       initialWidth: 22,
-      minWidth: 11, // Mitad de la diana inicial (22/2 = 11)
-      shrinkRate: 1.5, // Reducción más lenta y uniforme
-      speed: 2.0, // Velocidad uniforme para todas las dificultades
+      minWidth: 11,
+      shrinkRate: 1.5,
+      speed: 2.0,
       label: 'Fácil',
-      color: 'bg-green-400',
-      lightColor: 'bg-green-100 text-green-800'
+      color: 'emerald',
+      gradient: 'from-emerald-500/20 to-emerald-600/20',
+      border: 'border-emerald-500/30',
+      text: 'text-emerald-400',
+      activeBg: 'bg-emerald-500/20',
+      activeBorder: 'border-emerald-400/50'
     },
     MEDIUM: {
       initialWidth: 12,
-      minWidth: 6, // Mitad de la diana inicial (12/2 = 6)
-      shrinkRate: 1.5, // Reducción más lenta y uniforme
-      speed: 2.0, // Velocidad uniforme para todas las dificultades
+      minWidth: 6,
+      shrinkRate: 1.5,
+      speed: 2.0,
       label: 'Medio',
-      color: 'bg-yellow-400',
-      lightColor: 'bg-yellow-100 text-yellow-800'
+      color: 'amber',
+      gradient: 'from-amber-500/20 to-amber-600/20',
+      border: 'border-amber-500/30',
+      text: 'text-amber-400',
+      activeBg: 'bg-amber-500/20',
+      activeBorder: 'border-amber-400/50'
     },
     HARD: {
       initialWidth: 6,
-      minWidth: 3, // Mitad de la diana inicial (6/2 = 3)
-      shrinkRate: 1.5, // Reducción más lenta y uniforme
-      speed: 2.0, // Velocidad uniforme para todas las dificultades
+      minWidth: 3,
+      shrinkRate: 1.5,
+      speed: 2.0,
       label: 'Difícil',
-      color: 'bg-red-400',
-      lightColor: 'bg-red-100 text-red-800'
+      color: 'red',
+      gradient: 'from-red-500/20 to-red-600/20',
+      border: 'border-red-500/30',
+      text: 'text-red-400',
+      activeBg: 'bg-red-500/20',
+      activeBorder: 'border-red-400/50'
     }
   };
 
@@ -56,7 +68,7 @@ const BarraReflejos = ({ playerName, onBack }) => {
 
   // Guardar historial en localStorage
   const saveHistory = (newEntry) => {
-    const updatedHistory = [newEntry, ...history].slice(0, 50); // Máximo 50 entradas
+    const updatedHistory = [newEntry, ...history].slice(0, 50);
     setHistory(updatedHistory);
     localStorage.setItem('reflexHistory', JSON.stringify(updatedHistory));
   };
@@ -64,30 +76,19 @@ const BarraReflejos = ({ playerName, onBack }) => {
   // Estados para el sistema de reducción
   const [gameStartTime, setGameStartTime] = useState(0);
   const [lastShrinkTime, setLastShrinkTime] = useState(0);
-
-  // Estado para velocidad aleatoria
   const [currentSpeed, setCurrentSpeed] = useState(2.0);
 
   // Iniciar juego
   const startGame = () => {
     const config = difficulties[difficulty];
+    const baseSpeed = config.speed;
+    const variationRange = 0.2;
+    const randomVariation = 0.9 + (Math.random() * variationRange);
+    const randomizedSpeed = baseSpeed * randomVariation;
+    const initialPosition = Math.random() * 20;
+    const initialDirection = Math.random() < 0.5 ? 1 : -1;
 
-    // Aleatorizar velocidad sutilmente (±10% para mantener dificultad pero romper predictibilidad)
-    const baseSpeed = config.speed; // 2.0 para todas las dificultades
-
-    // Usar distribución más uniforme y sutil: ±10% en lugar de ±15%
-    const variationRange = 0.2; // ±10% (0.9x a 1.1x)
-    const randomVariation = 0.9 + (Math.random() * variationRange); // Entre 0.9x y 1.1x
-    const randomizedSpeed = baseSpeed * randomVariation; // Entre 1.8 y 2.2
-
-    // Calcular porcentaje de variación para mostrar al jugador
-    const variationPercentage = ((randomVariation - 1) * 100);
-
-    // Aleatorizar posición y dirección inicial
-    const initialPosition = Math.random() * 20; // Entre 0% y 20%
-    const initialDirection = Math.random() < 0.5 ? 1 : -1; // Izquierda o derecha aleatoriamente
-
-    setTargetPosition(Math.random() * 80 + 10); // Entre 10% y 90%
+    setTargetPosition(Math.random() * 80 + 10);
     setTargetWidth(config.initialWidth);
     setCirclePosition(initialPosition);
     setDirection(initialDirection);
@@ -98,22 +99,17 @@ const BarraReflejos = ({ playerName, onBack }) => {
     setLastShrinkTime(now);
     setGameState('playing');
     setResult(null);
-
-    console.log(`🎮 Juego iniciado - Velocidad: ${randomizedSpeed.toFixed(2)} (${variationPercentage >= 0 ? '+' : ''}${variationPercentage.toFixed(1)}% de velocidad base)`);
   };
 
-  // Animación del círculo a 60fps CON reducción de diana integrada
+  // Animación del círculo
   const animate = useCallback(() => {
     if (gameState !== 'playing') return;
 
     const config = difficulties[difficulty];
     const now = Date.now();
 
-    // Mover círculo usando la velocidad aleatorizada
     setCirclePosition(prev => {
       let newPos = prev + direction * currentSpeed;
-
-      // Rebote en los bordes
       if (newPos >= 100) {
         newPos = 100;
         setDirection(-1);
@@ -121,19 +117,13 @@ const BarraReflejos = ({ playerName, onBack }) => {
         newPos = 0;
         setDirection(1);
       }
-
       return newPos;
     });
 
-    // Reducir diana cada 2 segundos (2000ms) para que sea más lento
     if (now - lastShrinkTime >= 2000) {
       setTargetWidth(prev => {
         const newWidth = prev - config.shrinkRate;
-        const finalWidth = Math.max(newWidth, config.minWidth);
-
-        console.log(`[${new Date(now).toLocaleTimeString()}] Diana: ${prev.toFixed(1)}% → ${finalWidth.toFixed(1)}%`);
-
-        return finalWidth;
+        return Math.max(newWidth, config.minWidth);
       });
       setLastShrinkTime(now);
     }
@@ -141,12 +131,10 @@ const BarraReflejos = ({ playerName, onBack }) => {
     animationRef.current = requestAnimationFrame(animate);
   }, [gameState, difficulty, direction, difficulties, lastShrinkTime, currentSpeed]);
 
-  // Iniciar animación
   useEffect(() => {
     if (gameState === 'playing') {
       animationRef.current = requestAnimationFrame(animate);
     }
-    
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
@@ -179,13 +167,11 @@ const BarraReflejos = ({ playerName, onBack }) => {
     setGameState('result');
     saveHistory(gameResult);
 
-    // Limpiar animación
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
   };
 
-  // Volver al menú
   const backToMenu = () => {
     setGameState('menu');
     setResult(null);
@@ -195,212 +181,307 @@ const BarraReflejos = ({ playerName, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-[#0b1120] flex flex-col px-4 py-6 relative overflow-hidden font-['Lato']">
+      {/* Fondo de polvo/stardust */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-amber-900/5 via-[#0b1120] to-[#0b1120]"></div>
+      </div>
+
+      <div className="max-w-2xl mx-auto w-full relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <Boton onClick={onBack} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg">
-            ← Volver
-          </Boton>
-          <h1 className="text-xl font-bold text-white text-center flex-1">
-            🔒 Minijuego Cerrajería
-          </h1>
-          <div className="w-16"></div> {/* Spacer para centrar el título */}
-        </div>
-        
-        <div className="text-center mb-6">
-          <p className="text-gray-300 text-sm">Jugador: {playerName}</p>
+        <div className="flex flex-col mb-8">
+          <div className="flex items-start justify-between w-full">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#c8aa6e]/30 bg-[#0b1120]/50 text-[#c8aa6e]/70 font-medium text-sm hover:bg-[#c8aa6e]/10 hover:text-[#c8aa6e] hover:border-[#c8aa6e]/60 active:scale-[0.98] transition-all duration-300 w-fit font-['Cinzel'] uppercase tracking-[0.15em]"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver
+            </button>
+            <div className="flex flex-col gap-2 text-center flex-1">
+              <div className="inline-flex items-center justify-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
+                <span className="opacity-70">ARCANA VAULT</span>
+                <span className="h-px w-4 bg-[#c8aa6e]/40"></span>
+                <span>REFLEJOS</span>
+              </div>
+              <h1 className="font-['Cinzel'] text-2xl sm:text-3xl md:text-4xl font-bold uppercase tracking-wider text-[#f0e6d2] drop-shadow-[0_2px_10px_rgba(200,170,110,0.2)]">
+                Cerrajería
+              </h1>
+              <p className="text-gray-400 text-sm flex items-center justify-center gap-2 mt-1">
+                Jugador: <span className="text-[#c8aa6e] font-medium">{playerName}</span>
+              </p>
+            </div>
+            <div className="w-[88px]"></div>
+          </div>
         </div>
 
         {/* Menú principal */}
         {gameState === 'menu' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
             {/* Selector de dificultad */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-3 text-center">Seleccionar Dificultad</h3>
+            <div
+              className="rounded-2xl border border-amber-500/20 p-6"
+              style={{
+                background: 'rgba(11, 17, 32, 0.88)',
+                backdropFilter: 'blur(16px)',
+                boxShadow: '0 0 50px rgba(251, 191, 36, 0.05)',
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"></div>
+
+              <h3 className="text-lg font-semibold text-[#f0e6d2] font-['Cinzel'] mb-4 text-center flex items-center justify-center gap-2">
+                <Target className="w-5 h-5 text-amber-400" />
+                Seleccionar Dificultad
+              </h3>
+
               <div className="space-y-3">
                 {Object.entries(difficulties).map(([key, config]) => (
-                  <Boton
+                  <button
                     key={key}
                     onClick={() => setDifficulty(key)}
-                    className={`w-full py-3 text-lg ${
-                      difficulty === key
-                        ? `${config.color} text-white`
-                        : `${config.lightColor} hover:${config.color} hover:text-white transition-colors`
-                    }`}
+                    className={`w-full py-4 px-5 rounded-xl border transition-all duration-300 text-left ${difficulty === key
+                      ? `${config.activeBg} ${config.activeBorder} ${config.text}`
+                      : 'border-gray-700/50 bg-gray-800/30 text-gray-300 hover:bg-gray-800/50 hover:border-gray-600/50'
+                      }`}
                   >
-                    {config.label} - Diana: {config.initialWidth}% → {config.minWidth}%
-                  </Boton>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{config.label}</span>
+                      <span className="text-sm opacity-70">Diana: {config.initialWidth}% → {config.minWidth}%</span>
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
 
             {/* Instrucciones */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-3 text-center">Cómo Jugar</h3>
-              <div className="text-sm text-gray-300 space-y-2">
-                <p>• Toca la pantalla cuando el círculo esté en la zona diana</p>
-                <p>• La diana se reduce gradualmente cada 2 segundos</p>
-                <p>• Cuanto más difícil, más pequeña la diana inicial</p>
+            <div
+              className="rounded-2xl border border-gray-700/30 p-6"
+              style={{
+                background: 'rgba(11, 17, 32, 0.7)',
+                backdropFilter: 'blur(12px)',
+              }}
+            >
+              <h3 className="text-lg font-semibold text-[#f0e6d2] font-['Cinzel'] mb-3 text-center">Cómo Jugar</h3>
+              <div className="text-sm text-gray-400 space-y-2">
+                <p className="flex items-center gap-2"><span className="text-amber-400">•</span> Toca la pantalla cuando el círculo esté en la zona diana</p>
+                <p className="flex items-center gap-2"><span className="text-amber-400">•</span> La diana se reduce gradualmente cada 2 segundos</p>
+                <p className="flex items-center gap-2"><span className="text-amber-400">•</span> Cuanto más difícil, más pequeña la diana inicial</p>
               </div>
             </div>
 
             {/* Botón iniciar */}
-            <Boton 
+            <button
               onClick={startGame}
-              className="w-full py-4 text-xl bg-blue-600 hover:bg-blue-700 text-white"
+              className="group relative w-full py-5 rounded-xl border border-amber-500/30 bg-amber-900/20 text-amber-100 font-semibold text-lg tracking-wide shadow-lg hover:bg-amber-800/30 hover:border-amber-400/50 hover:shadow-amber-500/20 active:scale-[0.98] transition-all duration-300 overflow-hidden"
             >
-              🎯 Iniciar Juego
-            </Boton>
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative z-10 flex items-center justify-center gap-2">
+                <Play className="w-5 h-5" />
+                Iniciar Juego
+              </div>
+            </button>
           </div>
         )}
 
         {/* Área de juego */}
         {gameState === 'playing' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in duration-300">
             {/* Info del juego */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
-              <p className="text-white font-semibold">Dificultad: {difficulties[difficulty].label}</p>
-              <p className="text-gray-300 text-sm">Diana: {targetWidth.toFixed(1)}% (Mín: {difficulties[difficulty].minWidth}%)</p>
-              <p className="text-blue-400 text-xs">
-                Velocidad: {currentSpeed.toFixed(2)}
-                <span className="text-yellow-400 ml-1">
-                  ({((currentSpeed / 2.0 - 1) * 100) >= 0 ? '+' : ''}{((currentSpeed / 2.0 - 1) * 100).toFixed(1)}%)
-                </span>
-              </p>
+            <div
+              className="rounded-2xl border border-amber-500/20 p-4"
+              style={{
+                background: 'rgba(11, 17, 32, 0.88)',
+                backdropFilter: 'blur(16px)',
+              }}
+            >
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Dificultad</p>
+                  <p className={`font-semibold ${difficulties[difficulty].text}`}>{difficulties[difficulty].label}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Diana</p>
+                  <p className="text-[#f0e6d2] font-semibold">{targetWidth.toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Velocidad</p>
+                  <p className="text-amber-400 font-semibold">{currentSpeed.toFixed(2)}</p>
+                </div>
+              </div>
             </div>
 
             {/* Área de juego */}
-            <div 
+            <div
               ref={gameAreaRef}
               onClick={handleGameAreaClick}
-              className="bg-gray-800 rounded-lg p-6 border border-gray-700 cursor-pointer select-none"
-              style={{ minHeight: '200px' }}
+              className="rounded-2xl border border-amber-500/30 p-8 cursor-pointer select-none transition-all duration-200 hover:border-amber-400/50 active:scale-[0.99]"
+              style={{
+                minHeight: '220px',
+                background: 'rgba(11, 17, 32, 0.9)',
+                backdropFilter: 'blur(16px)',
+                boxShadow: '0 0 60px rgba(251, 191, 36, 0.08)',
+              }}
             >
-              <div className="text-center mb-4">
-                <p className="text-white font-semibold">¡Toca cuando el círculo esté en la diana!</p>
+              <div className="text-center mb-6">
+                <p className="text-[#f0e6d2] font-semibold text-lg">¡Toca cuando el círculo esté en la diana!</p>
               </div>
 
               {/* Barra de juego */}
-              <div className="relative w-full h-2 bg-gray-600 rounded-full mb-8">
+              <div className="relative w-full h-3 bg-gray-800 rounded-full mb-8 overflow-visible">
                 {/* Diana */}
                 <div
-                  className="absolute h-full bg-yellow-400 rounded-full opacity-70 transition-all duration-1000 ease-in-out"
+                  className="absolute h-full rounded-full transition-all duration-500 ease-out"
                   style={{
                     left: `${targetPosition - targetWidth / 2}%`,
                     width: `${targetWidth}%`,
-                    boxShadow: '0 0 12px rgba(255, 255, 0, 0.8)',
-                    border: '1px solid rgba(255, 255, 0, 0.9)'
+                    background: 'linear-gradient(90deg, rgba(251, 191, 36, 0.4), rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.4))',
+                    boxShadow: '0 0 20px rgba(251, 191, 36, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2)',
+                    border: '1px solid rgba(251, 191, 36, 0.8)'
                   }}
                 />
-                
+
                 {/* Círculo */}
                 <div
-                  className="absolute w-3 h-3 bg-blue-500 rounded-full transform -translate-y-0.5"
+                  className="absolute w-5 h-5 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"
                   style={{
                     left: `${circlePosition}%`,
-                    transform: 'translateX(-50%) translateY(-25%)',
-                    transition: 'none' // Sin transición para animación más fluida
+                    top: '50%',
+                    transform: 'translateX(-50%) translateY(-50%)',
+                    boxShadow: '0 0 15px rgba(34, 211, 238, 0.8), 0 0 30px rgba(34, 211, 238, 0.4)',
+                    transition: 'none'
                   }}
                 />
               </div>
 
               <div className="text-center">
-                <p className="text-gray-400 text-sm">Toca en cualquier lugar para marcar</p>
+                <p className="text-gray-500 text-sm">Toca en cualquier lugar para marcar</p>
               </div>
             </div>
 
             {/* Botón cancelar */}
-            <Boton 
+            <button
               onClick={backToMenu}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white"
+              className="w-full py-3 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 font-medium text-sm tracking-wide hover:bg-red-800/30 hover:border-red-400/50 active:scale-[0.98] transition-all duration-300"
             >
               Cancelar Juego
-            </Boton>
+            </button>
           </div>
         )}
 
         {/* Resultado */}
         {gameState === 'result' && result && (
-          <div className="space-y-6">
-            <div className={`rounded-lg p-6 border ${
-              result.success 
-                ? 'bg-green-900/20 border-green-500/50' 
-                : 'bg-red-900/20 border-red-500/50'
-            }`}>
-              <h3 className={`text-2xl font-bold text-center mb-4 ${
-                result.success ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {result.success ? '🎯 ¡ACIERTO!' : '❌ FALLO'}
-              </h3>
-              
-              <div className="space-y-2 text-center">
-                <p className="text-white">
-                  <span className="font-medium">Dificultad:</span> {result.difficulty}
-                </p>
-                <p className="text-white">
-                  <span className="font-medium">Duración:</span> {result.duration}s
-                </p>
-                <p className="text-white">
-                  <span className="font-medium">Tamaño diana:</span> {result.targetWidth}%
-                </p>
-                <p className="text-white">
-                  <span className="font-medium">Velocidad:</span> {result.speed}
-                  <span className="text-yellow-400 ml-1">
-                    ({result.speedVariation >= 0 ? '+' : ''}{result.speedVariation}%)
-                  </span>
-                </p>
-                <p className="text-gray-300 text-sm">
-                  Círculo en {result.circlePosition}% | Diana en {result.targetPosition}%
-                </p>
+          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
+            <div
+              className={`rounded-2xl p-8 border ${result.success
+                ? 'border-emerald-500/40'
+                : 'border-red-500/40'
+                }`}
+              style={{
+                background: result.success
+                  ? 'rgba(16, 185, 129, 0.1)'
+                  : 'rgba(239, 68, 68, 0.1)',
+                backdropFilter: 'blur(16px)',
+                boxShadow: result.success
+                  ? '0 0 60px rgba(16, 185, 129, 0.15)'
+                  : '0 0 60px rgba(239, 68, 68, 0.15)',
+              }}
+            >
+              <div className="text-center mb-6">
+                <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${result.success
+                  ? 'bg-emerald-500/20 border-2 border-emerald-400/50'
+                  : 'bg-red-500/20 border-2 border-red-400/50'
+                  }`}>
+                  <Target className={`w-10 h-10 ${result.success ? 'text-emerald-400' : 'text-red-400'}`} />
+                </div>
+                <h3 className={`text-3xl font-bold font-['Cinzel'] ${result.success ? 'text-emerald-400' : 'text-red-400'
+                  }`}>
+                  {result.success ? '¡ACIERTO!' : 'FALLO'}
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="bg-gray-900/40 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Dificultad</p>
+                  <p className="text-[#f0e6d2] font-semibold">{result.difficulty}</p>
+                </div>
+                <div className="bg-gray-900/40 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Duración</p>
+                  <p className="text-[#f0e6d2] font-semibold">{result.duration}s</p>
+                </div>
+                <div className="bg-gray-900/40 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tamaño Diana</p>
+                  <p className="text-amber-400 font-semibold">{result.targetWidth}%</p>
+                </div>
+                <div className="bg-gray-900/40 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Velocidad</p>
+                  <p className="text-cyan-400 font-semibold">{result.speed}</p>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <Boton 
+            <div className="grid grid-cols-2 gap-4">
+              <button
                 onClick={startGame}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white"
+                className="py-4 rounded-xl border border-amber-500/30 bg-amber-900/20 text-amber-100 font-semibold tracking-wide hover:bg-amber-800/30 hover:border-amber-400/50 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
               >
-                🔄 Jugar de Nuevo
-              </Boton>
-              <Boton 
+                <RotateCcw className="w-4 h-4" />
+                Jugar de Nuevo
+              </button>
+              <button
                 onClick={backToMenu}
-                className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white"
+                className="py-4 rounded-xl border border-gray-700/50 bg-gray-800/30 text-gray-300 font-semibold tracking-wide hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
               >
-                📋 Menú
-              </Boton>
+                <Menu className="w-4 h-4" />
+                Menú
+              </button>
             </div>
           </div>
         )}
 
         {/* Historial */}
         {history.length > 0 && gameState === 'menu' && (
-          <div className="mt-6 bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-3 text-center">📜 Historial</h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+          <div
+            className="mt-6 rounded-2xl border border-gray-700/30 p-6"
+            style={{
+              background: 'rgba(11, 17, 32, 0.7)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            <h3 className="text-lg font-semibold text-[#f0e6d2] font-['Cinzel'] mb-4 text-center flex items-center justify-center gap-2">
+              <History className="w-5 h-5 text-amber-400" />
+              Historial
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-2">
               {history.slice(0, 10).map((entry, index) => (
-                <div key={index} className="bg-gray-700/50 rounded-lg p-3 text-sm">
+                <div
+                  key={index}
+                  className={`rounded-xl p-4 border ${entry.success
+                    ? 'border-emerald-500/20 bg-emerald-900/10'
+                    : 'border-red-500/20 bg-red-900/10'
+                    }`}
+                >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <p className="text-white font-medium">{entry.player}</p>
-                      <p className="text-gray-300">
-                        {entry.difficulty} - {entry.duration}s
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[#f0e6d2] font-medium">{entry.player}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${entry.success
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-red-500/20 text-red-400'
+                          }`}>
+                          {entry.success ? 'ACIERTO' : 'FALLO'}
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-sm">
+                        {entry.difficulty} • {entry.duration}s
                         {entry.speed && (
-                          <span className="text-blue-400 ml-2">
+                          <span className="text-cyan-400 ml-2">
                             Vel: {entry.speed}
-                            <span className="text-yellow-400 ml-1">
-                              ({entry.speedVariation >= 0 ? '+' : ''}{entry.speedVariation}%)
-                            </span>
                           </span>
                         )}
                       </p>
-                      <p className={`font-bold ${
-                        entry.success ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {entry.success ? '🎯 ACIERTO' : '❌ FALLO'}
-                      </p>
                     </div>
-                    <p className="text-gray-500 text-xs">{entry.timestamp}</p>
+                    <p className="text-gray-600 text-xs">{entry.timestamp}</p>
                   </div>
                 </div>
               ))}
