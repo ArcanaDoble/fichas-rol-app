@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar } from 'react-icons/fi';
+import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus } from 'react-icons/fi';
+import { GiBelt } from 'react-icons/gi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
 
@@ -62,6 +63,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     // Equipment slot selection state
     const [activeSlotSelector, setActiveSlotSelector] = useState(null); // 'mainHand', 'offHand', 'body', or null
     const [activeTalentSlotSelector, setActiveTalentSlotSelector] = useState(null); // 0, 1, 2 or null
+    const [beltSlotCount, setBeltSlotCount] = useState(3); // Default 3 slots, max 9
 
     // Get talent slots (restored)
     const talentSlots = useMemo(() => {
@@ -458,6 +460,42 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                 const isSlotActive = activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem) : null;
 
+                                                // Helper to get weapon image
+                                                const getWeaponImage = (weaponName) => {
+                                                    if (!weaponName) return null;
+                                                    const name = weaponName.toLowerCase();
+
+                                                    // Unique Items
+                                                    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
+                                                    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
+                                                    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+
+                                                    // Standard Weapons
+                                                    if (name.includes('granarco')) return '/armas/arco_largo.png';
+                                                    if (name.includes('arco')) return '/armas/arco_corto.png';
+                                                    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
+                                                    if (name.includes('clava')) return '/armas/clava.png';
+                                                    if (name.includes('jabalina')) return '/armas/jabalina.png';
+                                                    if (name.includes('lanza')) return '/armas/lanza.png';
+                                                    if (name.includes('daga')) return '/armas/daga.png';
+                                                    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
+                                                    if (name.includes('honda')) return '/armas/honda.png';
+                                                    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
+                                                    if (name.includes('estoque')) return '/armas/estoque.png';
+                                                    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
+                                                    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
+                                                    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
+                                                    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+
+                                                    // Swords (Check longer/specific names first)
+                                                    if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
+                                                    if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+                                                    return null;
+                                                };
+
+                                                const weaponImage = equippedItem ? getWeaponImage(equippedItem.name) : null;
+
                                                 return (
                                                     <div key={key} className="relative group">
                                                         {/* Slot Card */}
@@ -475,8 +513,22 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                         >
                                                             {equippedItem ? (
                                                                 <>
+                                                                    {/* Weapon Image Background */}
+                                                                    {weaponImage && (
+                                                                        <>
+                                                                            <img
+                                                                                src={weaponImage}
+                                                                                alt={equippedItem.name}
+                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                            />
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
+                                                                        </>
+                                                                    )}
+
                                                                     {/* Rarity Gradient Background (bottom-right corner) */}
-                                                                    <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                    {!weaponImage && (
+                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                    )}
 
                                                                     {/* Noise Texture Overlay (hover) */}
                                                                     <div
@@ -487,8 +539,10 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                         }}
                                                                     ></div>
 
-                                                                    {/* Icon */}
-                                                                    <Sword className={`w-8 h-8 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                    {/* Icon - Hide if image exists */}
+                                                                    {!weaponImage && (
+                                                                        <Sword className={`w-8 h-8 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                    )}
 
                                                                     {/* Rarity Badge */}
                                                                     {equippedItem.rareza && (
@@ -642,6 +696,29 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                 const isSlotActive = activeSlotSelector === 'body';
                                                 const rarityColors = equippedArmor ? getRarityColors(equippedArmor) : null;
 
+                                                // Helper to get armor image
+                                                const getArmorImage = (armorName) => {
+                                                    if (!armorName) return null;
+                                                    const name = armorName.toLowerCase();
+                                                    // Check specific/longer names first to avoid partial matches
+                                                    if (name.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
+                                                    if (name.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
+                                                    if (name.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
+                                                    if (name.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
+                                                    if (name.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
+                                                    if (name.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
+                                                    if (name.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
+                                                    if (name.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
+                                                    if (name.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
+                                                    if (name.includes('armadura de piel') || name.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
+                                                    if (name.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
+                                                    if (name.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
+                                                    if (name.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
+                                                    return null;
+                                                };
+
+                                                const armorImage = equippedArmor ? getArmorImage(equippedArmor.name) : null;
+
                                                 return (
                                                     <>
                                                         <div
@@ -658,8 +735,22 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                         >
                                                             {equippedArmor ? (
                                                                 <>
+                                                                    {/* Armor Image Background */}
+                                                                    {armorImage && (
+                                                                        <>
+                                                                            <img
+                                                                                src={armorImage}
+                                                                                alt={equippedArmor.name}
+                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                            />
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
+                                                                        </>
+                                                                    )}
+
                                                                     {/* Rarity Gradient Background (bottom-right corner) */}
-                                                                    <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                    {!armorImage && (
+                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                    )}
 
                                                                     {/* Noise Texture Overlay (hover) */}
                                                                     <div
@@ -670,12 +761,19 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                         }}
                                                                     ></div>
 
-                                                                    {/* Icon */}
-                                                                    <Shield className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                    {/* Icon - Hide if image exists unless you want it as an overlay? Let's keep it but maybe smaller or subtle? 
+                                                                        User said "intentar introducir de forma muy estética estas imágenes". 
+                                                                        Usually if there is card art, we don't need the generic icon. 
+                                                                        But let's keep it consistent for now or conditionally hide it.
+                                                                        I'll hide the generic shield icon if there is an image, to show off the art. 
+                                                                    */}
+                                                                    {!armorImage && (
+                                                                        <Shield className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                    )}
 
                                                                     {/* Rarity Badge */}
                                                                     {equippedArmor.rareza && (
-                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10`}>
+                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}>
                                                                             {equippedArmor.rareza}
                                                                         </span>
                                                                     )}
@@ -792,18 +890,40 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                     {/* 3. CINTURON (Belt - Consumables) */}
                                     <div>
                                         <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-5 h-5 rounded-full border border-[#c8aa6e] flex items-center justify-center text-[10px] text-[#c8aa6e] font-bold">3</div>
+                                            <GiBelt className="w-5 h-5 text-[#c8aa6e]" />
                                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
                                                 Cinturón (Consumibles)
                                             </h3>
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
-                                            {[1, 2, 3].map(slot => (
-                                                <div key={slot} className="aspect-square border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all cursor-pointer">
-                                                    <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest mb-1">Slot {slot}</span>
-                                                    <span className="text-[10px] text-slate-700">Vacío</span>
-                                                </div>
-                                            ))}
+                                            {Array.from({ length: beltSlotCount }).map((_, idx) => {
+                                                const slot = idx + 1;
+                                                return (
+                                                    <div key={slot} className="aspect-square border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all cursor-pointer">
+                                                        <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest mb-1">Slot {slot}</span>
+                                                        <span className="text-[10px] text-slate-700">Vacío</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {/* Expand/Reduce Buttons */}
+                                            {beltSlotCount < 9 && (
+                                                <button
+                                                    onClick={() => setBeltSlotCount(prev => Math.min(prev + 1, 9))}
+                                                    className="aspect-square border-2 border-dashed border-[#c8aa6e]/30 rounded-lg flex flex-col items-center justify-center hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 transition-all cursor-pointer group"
+                                                >
+                                                    <FiPlus className="w-8 h-8 text-[#c8aa6e]/50 group-hover:text-[#c8aa6e] transition-colors" />
+                                                    <span className="text-[10px] text-[#c8aa6e]/50 group-hover:text-[#c8aa6e] mt-1 font-['Cinzel'] uppercase tracking-wider">Ampliar</span>
+                                                </button>
+                                            )}
+                                            {beltSlotCount > 1 && (
+                                                <button
+                                                    onClick={() => setBeltSlotCount(prev => Math.max(prev - 1, 1))}
+                                                    className="aspect-square border-2 border-dashed border-red-500/30 rounded-lg flex flex-col items-center justify-center hover:border-red-500 hover:bg-red-500/10 transition-all cursor-pointer group"
+                                                >
+                                                    <FiMinus className="w-8 h-8 text-red-500/50 group-hover:text-red-500 transition-colors" />
+                                                    <span className="text-[10px] text-red-500/50 group-hover:text-red-500 mt-1 font-['Cinzel'] uppercase tracking-wider">Reducir</span>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
