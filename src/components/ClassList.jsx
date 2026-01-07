@@ -513,6 +513,8 @@ const ensureClassDefaults = (classItem) => {
         title: level.title || `Nivel ${index + 1} — Nuevo avance`,
         description: level.description || '',
         completed: Boolean(level.completed),
+        acquired: Boolean(level.acquired),
+        additionalFeatures: level.additionalFeatures || [],
       };
     }
 
@@ -520,6 +522,8 @@ const ensureClassDefaults = (classItem) => {
       title: `Nivel ${index + 1} — Nuevo avance`,
       description: typeof level === 'string' ? level : '',
       completed: false,
+      acquired: false,
+      additionalFeatures: [],
     };
   });
   merged.rules = merged.rules || [];
@@ -1593,6 +1597,42 @@ const ClassList = ({
     });
   };
 
+  const handleAddLevelFeature = (levelIndex) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[levelIndex]) return;
+
+      const currentExtras = levels[levelIndex].additionalFeatures || [];
+      if (currentExtras.length >= 2) return; // Máximo 2 extras + 1 principal = 3
+
+      currentExtras.push({ title: 'Nuevo rasgo', description: '' });
+      levels[levelIndex].additionalFeatures = currentExtras;
+    });
+  };
+
+  const handleRemoveLevelFeature = (levelIndex, featureIndex) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[levelIndex]) return;
+
+      const currentExtras = levels[levelIndex].additionalFeatures || [];
+      currentExtras.splice(featureIndex, 1);
+      levels[levelIndex].additionalFeatures = currentExtras;
+    });
+  };
+
+  const handleUpdateLevelFeature = (levelIndex, featureIndex, field, value) => {
+    updateEditingClass((draft) => {
+      const levels = draft.classLevels || [];
+      if (!levels[levelIndex]) return;
+
+      const currentExtras = levels[levelIndex].additionalFeatures || [];
+      if (currentExtras[featureIndex]) {
+        currentExtras[featureIndex][field] = value;
+      }
+    });
+  };
+
   const handleAddEquipment = (payload, category) => {
     if (!payload) return;
 
@@ -1903,9 +1943,20 @@ const ClassList = ({
         levels.push({ title: `Nivel ${levels.length + 1}`, description: '', acquired: false });
       }
 
-      // Toggle del estado acquired
-      const isAcquired = !levels[levelIndex].acquired;
-      levels[levelIndex].acquired = isAcquired;
+      // Lógica secuencial: Evitar huecos en la progresión
+      const isTargetAcquired = levels[levelIndex].acquired;
+
+      if (!isTargetAcquired) {
+        // DESBLOQUEAR: Marcar este y todos los anteriores como adquiridos
+        for (let i = 0; i <= levelIndex; i++) {
+          if (levels[i]) levels[i].acquired = true;
+        }
+      } else {
+        // BLOQUEAR: Desmarcar este y todos los posteriores como no adquiridos
+        for (let i = levelIndex; i < levels.length; i++) {
+          if (levels[i]) levels[i].acquired = false;
+        }
+      }
 
       // Contar cuántos niveles están marcados como acquired y actualizar el nivel actual
       const acquiredCount = levels.filter(l => l.acquired).length;
@@ -3731,12 +3782,16 @@ const ClassList = ({
               </div >
             </div >
           );
+        /* Funciones movidas al scope principal, ver más arriba */
         case 'progression':
           return (
             <ProgressionView
-              dndClass={dndClass}
+              dndClass={editingClass}
               onUpdateLevel={handleUpdateLevel}
               onToggleAcquired={toggleLevelCompleted}
+              onAddFeature={handleAddLevelFeature}
+              onRemoveFeature={handleRemoveLevelFeature}
+              onUpdateFeature={handleUpdateLevelFeature}
             />
           );
         case 'loadout':

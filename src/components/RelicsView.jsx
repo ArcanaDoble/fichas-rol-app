@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Lock, Zap, Star, Crown, Flame, Footprints, Sword, Hand, Clock, AlertCircle, HelpCircle, Eye, ArrowUpCircle, CornerDownRight, Edit2, Check, Plus, Trash2, Settings, Save, Skull, Heart, Ghost, Crosshair, Droplets, Sun, Moon, Sparkles } from 'lucide-react';
+import { Shield, Lock, Zap, Star, Crown, Flame, Footprints, Sword, Hand, Clock, AlertCircle, HelpCircle, Eye, ArrowUpCircle, CornerDownRight, Edit2, Check, Plus, Trash2, Settings, Save, Skull, Heart, Ghost, Crosshair, Droplets, Sun, Moon, Sparkles, Wand2 } from 'lucide-react';
+import FoilCard from './FoilCard';
 
 // --- POOLS DE CONFIGURACIÓN ---
 
@@ -229,7 +230,8 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
             actionType: 'PASSIVE',
             color: 'gold',
             icon: 'star',
-            isUltimate: false
+            isUltimate: false,
+            foilType: 'none'
         };
         updateFeatures([...features, newFeature]);
     };
@@ -597,16 +599,19 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
                             `}
                             >
                                 {/* CARD CONTAINER */}
-                                <div className={`
-                                w-full h-full relative rounded-xl overflow-hidden border-[3px] shadow-2xl transition-all duration-300
-                                ${unlocked
-                                        ? isUlt
-                                            ? 'border-transparent bg-[#1a0b05]' // Border handled by ring/glow for Ultimate
-                                            : `${theme.border} bg-[#1a0b05] ${theme.shadow}`
-                                        : 'border-slate-700 bg-[#0f1219] shadow-none'
-                                    }
-                                ${isUlt && !isEditing ? 'ring-2 ring-yellow-400 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : ''}
-                            `}>
+                                <FoilCard
+                                    foilType={feature.foilType}
+                                    active={unlocked && !isEditing}
+                                    className={`
+                                    w-full h-full relative rounded-xl overflow-hidden border-[3px] shadow-2xl transition-all duration-300
+                                    ${unlocked
+                                            ? isUlt
+                                                ? 'border-transparent bg-[#1a0b05]' // Border handled by ring/glow for Ultimate
+                                                : `${theme.border} bg-[#1a0b05] ${theme.shadow}`
+                                            : 'border-slate-700 bg-[#0f1219] shadow-none'
+                                        }
+                                    ${isUlt && !isEditing ? 'ring-2 ring-yellow-400 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : ''}
+                                `}>
                                     {/* Ultimate Glow Animation */}
                                     {isUlt && !isEditing && (
                                         <>
@@ -708,6 +713,30 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
                                                 </span>
                                             </label>
 
+                                            {/* FOIL TYPE SELECTOR */}
+                                            <div className="flex flex-col mt-1">
+                                                <label className="text-[9px] text-slate-500 uppercase font-bold flex items-center gap-1">
+                                                    <Wand2 className="w-2 h-2" /> Efecto Foil
+                                                </label>
+                                                <select
+                                                    value={feature.foilType || 'none'}
+                                                    onChange={(e) => handleUpdateFeature(idx, 'foilType', e.target.value)}
+                                                    className="w-full bg-[#161f32] border border-slate-700 rounded p-1.5 text-slate-300 text-[10px] focus:border-[#c8aa6e] outline-none"
+                                                >
+                                                    <option value="none">Ninguno</option>
+                                                    <option value="traditional">Foil Tradicional (Arcoíris)</option>
+                                                    <option value="mithril">Foil Mithril (Plata Élfica)</option>
+                                                    <option value="textured">Foil Textured (Fibra de Carbono)</option>
+                                                    <option value="phoenix">Foil Phoenix (Alma de Fénix)</option>
+                                                    <option value="oil">Foil Oil Slick (Iridiscente Oscuro)</option>
+                                                    <option value="galaxy">Foil Galaxy (Estrellas y Nebulosa)</option>
+                                                    <option value="surge">Foil Void Rift (Grieta del Vacío)</option>
+                                                    <option value="neon">Foil Neon (Resplandor Cyberpunk)</option>
+                                                    <option value="golden">Foil Golden (Liquid Fire)</option>
+                                                    <option value="flux">Foil Flux (Dark Matter)</option>
+                                                </select>
+                                            </div>
+
                                             <div className="flex-1 flex flex-col mt-1">
                                                 <label className="text-[9px] text-slate-500 uppercase font-bold">Descripción</label>
                                                 <textarea
@@ -720,6 +749,30 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
                                     ) : (
                                         /* VIEW MODE CONTENT */
                                         <div className="relative z-10 flex flex-col h-full p-6 items-center text-center">
+
+                                            {/* FOIL TYPE BADGE - Top Right Corner */}
+                                            {feature.foilType && feature.foilType !== 'none' && unlocked && (() => {
+                                                const foilLabels = {
+                                                    traditional: { name: 'TRADITIONAL', color: 'text-[#c8aa6e]' },
+                                                    mithril: { name: 'MITHRIL', color: 'text-slate-200 shadow-white drop-shadow-[0_0_2px_rgba(255,255,255,0.5)]' },
+                                                    textured: { name: 'TEXTURED', color: 'text-slate-300' },
+                                                    phoenix: { name: 'PHOENIX', color: 'text-orange-400' },
+                                                    oil: { name: 'OIL SLICK', color: 'text-purple-400' },
+                                                    galaxy: { name: 'GALAXY', color: 'text-indigo-400' },
+                                                    surge: { name: 'VOID RIFT', color: 'text-violet-400' },
+                                                    neon: { name: 'NEON', color: 'text-emerald-400' },
+                                                    golden: { name: 'GOLDEN', color: 'text-yellow-400' },
+                                                    flux: { name: 'FLUX', color: 'text-white drop-shadow-[0_0_2px_rgba(255,255,255,0.8)]' }
+                                                };
+                                                const foilInfo = foilLabels[feature.foilType] || { name: feature.foilType.toUpperCase(), color: 'text-slate-400' };
+                                                return (
+                                                    <div className={`absolute top-3 right-3 flex items-center gap-1 text-[8px] font-bold uppercase tracking-[0.15em] ${foilInfo.color} opacity-80`}>
+                                                        <Sparkles className="w-2.5 h-2.5" />
+                                                        <span>{foilInfo.name}</span>
+                                                    </div>
+                                                );
+                                            })()}
+
                                             <div className={`
                                             mb-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] border
                                             ${unlocked ? (isUlt ? 'bg-yellow-900/40 border-yellow-500 text-yellow-200 shadow-[0_0_10px_orange]' : `${theme.bg} ${theme.border} ${theme.text}`) : 'bg-slate-800 border-slate-600 text-slate-500'}
@@ -772,16 +825,7 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
                                             )}
                                         </div>
                                     )}
-
-                                    {unlocked && !isEditing && (
-                                        <>
-                                            <div className={`absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 ${isUlt ? 'border-yellow-500' : theme.border}`}></div>
-                                            <div className={`absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 ${isUlt ? 'border-yellow-500' : theme.border}`}></div>
-                                            <div className={`absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 ${isUlt ? 'border-yellow-500' : theme.border}`}></div>
-                                            <div className={`absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 ${isUlt ? 'border-yellow-500' : theme.border}`}></div>
-                                        </>
-                                    )}
-                                </div>
+                                </FoilCard>
                             </div>
                         );
                     })}

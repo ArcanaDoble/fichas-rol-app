@@ -392,3 +392,549 @@
   background: #f0e6d2;
   box-shadow: 0 0 5px #c8aa6e;
 }
+
+/* --- FOIL EFFECTS (MTG STYLE) --- */
+
+:root {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+}
+
+.foil-container {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.foil-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  mix-blend-mode: color-dodge;
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+  background-size: 200% 200%;
+}
+
+.foil-container:hover .foil-layer,
+.foil-container.is-hovered .foil-layer,
+.foil-container:hover .foil-glint,
+.foil-container.is-hovered .foil-glint {
+  opacity: 0.7;
+}
+
+/* Foil Mithril (Based on Obsidian Etched) - Premium Dark Engraved Metal */
+.foil-mithril {
+  /* Dark Matte Metal Base */
+  background-color: #050507;
+  background-image:
+    /* Layer 1: Cross Reflection (Simulates carved relief) */
+    linear-gradient(135deg,
+      transparent 45%,
+      rgba(255, 255, 255, 0.15) 48%,
+      rgba(255, 255, 255, 0.4) 50%,
+      rgba(255, 255, 255, 0.15) 52%,
+      transparent 55%),
+    linear-gradient(45deg,
+      transparent 45%,
+      rgba(200, 210, 255, 0.1) 48%,
+      rgba(200, 210, 255, 0.2) 50%,
+      rgba(200, 210, 255, 0.1) 52%,
+      transparent 55%),
+    /* Layer 2: Micro-Sparkle (Metal crystals) */
+    repeating-radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 255, 255, 0.4) 0px,
+      rgba(255, 255, 255, 0.2) 0.5px,
+      transparent 1px,
+      transparent 5px),
+    /* Layer 3: Rough Engraved Texture */
+    url('https://www.transparenttextures.com/patterns/stardust.png');
+
+  background-size: 300% 300%, 300% 300%, 100% 100%, auto;
+  /* Note: In CSS vars --mouse-x/y are usually pixels or %, here assuming usage aligns with existing system */
+  background-position:
+    var(--mouse-x) var(--mouse-y),
+    calc(100% - var(--mouse-x)) calc(100% - var(--mouse-y)),
+    0 0,
+    0 0;
+
+  /* Aggressive specular light effect */
+  mix-blend-mode: color-dodge;
+  filter: contrast(1.8) brightness(1.3) saturate(0.8);
+  opacity: 1 !important;
+  transition: opacity 0.3s ease;
+}
+
+/* Remove separate after pseudo-element as it's built-in now */
+.foil-mithril::after {
+  content: none;
+}
+
+/* Foil Textured - Premium Carbon/Scale displacement */
+.foil-textured {
+  mix-blend-mode: color-dodge;
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255, 255, 255, 0.4) 0%, transparent 60%),
+    url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+  background-size: 200% 200%, 80px 80px;
+  background-position: var(--mouse-x) var(--mouse-y), calc(var(--mouse-x) / 5) calc(var(--mouse-y) / 5);
+}
+
+/* Foil Platinum (Frosty Silver) - Subtle crystalline shimmer */
+.foil-platinum {
+  mix-blend-mode: color-dodge;
+  background-image:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(200, 220, 255, 0.5) 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.4 !important;
+  filter: brightness(1.2) contrast(1.1) saturate(0.5);
+}
+
+/* Foil Obsidian (Black Chrome) - Deep dark glossy metallic */
+.foil-obsidian {
+  mix-blend-mode: overlay;
+  background-color: rgba(0, 0, 0, 0.4);
+  background-image:
+    linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.2) 50%, transparent 60%),
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(100, 100, 150, 0.3) 0%, transparent 50%);
+  background-size: 300% 300%, 100% 100%;
+  background-position: calc(var(--mouse-x) * 1.5) 0, 0 0;
+  opacity: 0.6 !important;
+  filter: contrast(1.5);
+}
+
+/* Foil Pearl (Nácar) - Soft elegant iridescent shimmer */
+.foil-pearl {
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 200, 255, 0.3) 0%,
+      rgba(200, 255, 255, 0.3) 50%,
+      transparent 100%);
+  background-color: rgba(255, 255, 255, 0.05);
+  opacity: 0.5 !important;
+}
+
+/* Foil Prismatic (Fragmentado) - Modern light diffraction */
+.foil-prismatic {
+  mix-blend-mode: color-dodge;
+  background-image:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255, 255, 255, 0.5) 0%, transparent 60%),
+    repeating-conic-gradient(from 0deg at var(--mouse-x) var(--mouse-y),
+      rgba(255, 0, 0, 0.1) 0deg 10deg,
+      rgba(0, 255, 0, 0.1) 10deg 20deg,
+      rgba(0, 0, 255, 0.1) 20deg 30deg);
+  background-size: 100% 100%;
+  opacity: 0.4 !important;
+  filter: blur(1px) contrast(1.2);
+}
+
+.foil-glint {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 255, 255, 0.3) 0%,
+      transparent 35%);
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* --- NEW MTG FOIL EFFECTS --- */
+
+/* Traditional Foil: Classic rainbow sheen that moves with cursor */
+.foil-traditional {
+  mix-blend-mode: overlay;
+  background-image:
+    linear-gradient(115deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.3) 40%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0.3) 60%,
+      transparent 80%),
+    linear-gradient(to right,
+      rgba(255, 0, 0, 0.1) 0%,
+      rgba(255, 165, 0, 0.1) 15%,
+      rgba(255, 255, 0, 0.1) 30%,
+      rgba(0, 255, 0, 0.1) 45%,
+      rgba(0, 255, 255, 0.1) 60%,
+      rgba(0, 0, 255, 0.1) 75%,
+      rgba(128, 0, 128, 0.1) 90%,
+      rgba(255, 0, 0, 0.1) 100%);
+  background-size: 200% 200%, 300% 100%;
+  background-position: var(--mouse-x) var(--mouse-y), calc(var(--mouse-x) * 2) 0;
+  filter: brightness(1.3) contrast(1.1);
+  opacity: 0.8 !important;
+}
+
+/* Gilded Foil: Premium gold shine effect */
+/* 4. GILDED FOIL - ULTRAPREMIUM: Real Gold Leaf / Cold Foil */
+/* 4. GILDED FOIL - CELESTIAL GOLD: Elegant, deep, and atmospheric */
+/* 4. FOIL OPAL - MYSTIC OPALESCENCE: Soft, magical, pearlescent shine */
+/* 4. FOIL PHOENIX - DRAGON SCALES (Line Drawing Style) */
+.foil-phoenix {
+  /* Base: Dark ember */
+  background-color: #1a0a05;
+
+  background-image:
+    /* 1. Interactive warm glow following mouse */
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 180, 80, 0.4) 0%,
+      rgba(255, 100, 40, 0.2) 40%,
+      transparent 70%),
+
+    /* 2. Scale pattern SVG - Curved Diamond Shape (Outlines Only) */
+    /* Primary Layer */
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0 Q35 5 35 20 Q20 40 20 40 Q5 20 5 20 Q5 5 20 0 Z' fill='none' stroke='%23CC6620' stroke-width='1' opacity='0.5'/%3E%3Cpath d='M20 5 Q30 10 30 20 Q20 35 20 35 Q10 20 10 20 Q10 10 20 5 Z' fill='none' stroke='%23FF8833' stroke-width='0.5' opacity='0.3'/%3E%3C/svg%3E"),
+
+    /* 3. Secondary scale layer offset (Interlocking outlines) */
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0 Q35 5 35 20 Q20 40 20 40 Q5 20 5 20 Q5 5 20 0 Z' fill='none' stroke='%23AA5500' stroke-width='0.8' opacity='0.35'/%3E%3C/svg%3E"),
+
+    /* 4. Warm gradient overlay */
+    linear-gradient(to top,
+      rgba(100, 30, 5, 0.7) 0%,
+      rgba(60, 20, 5, 0.5) 50%,
+      rgba(40, 15, 5, 0.6) 100%);
+
+  /* Size 40x40. Offset secondary layer by half (20,20) to interlocking */
+  background-size: 100% 100%, 40px 40px, 40px 40px, 100% 100%;
+  background-position: 0 0, 0 0, 20px 20px, 0 0;
+  background-repeat: no-repeat, repeat, repeat, no-repeat;
+
+  mix-blend-mode: color-dodge;
+  filter: contrast(1.4) brightness(1.2) saturate(1.3);
+  opacity: 0.9 !important;
+}
+
+/* Remove hover blend mode change to keep line style consistent */
+.foil-phoenix:hover {
+  mix-blend-mode: color-dodge;
+}
+
+/* Animation for Oil Rain - Seamless Loop Downward (Percentage) */
+@keyframes oil-rain-fall {
+  from {
+    background-position: 0 0, 0 0;
+  }
+
+  to {
+    background-position: 0 300%, 0 0;
+  }
+}
+
+/* Oil Slick Foil: Seamless iridescent oil rain effect with interactive lighting */
+.foil-oil {
+  mix-blend-mode: hard-light;
+  background-image:
+    /* Layer 0: Interactive lighting - highlights the rain where mouse is */
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 50%),
+    /* Layer 1: Seamless repeating gradient (Stretched for slow transition) */
+    linear-gradient(180deg,
+      rgba(76, 29, 149, 0) 0%,
+      rgba(124, 58, 237, 0.4) 20%,
+      /* Violet */
+      rgba(6, 182, 212, 0.4) 40%,
+      /* Cyan */
+      rgba(16, 185, 129, 0.3) 60%,
+      /* Emerald */
+      rgba(217, 119, 6, 0.3) 80%,
+      /* Amber */
+      rgba(76, 29, 149, 0) 100%
+      /* Back to transparent start */
+    ),
+    /* Layer 2: Noise texture */
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.3'/%3E%3C/svg%3E");
+
+  /* Added size and position for the light layer (first one) */
+  background-size: 100% 100%, 100% 300%, 200px 200px;
+  background-position: 0 0, 0 0, 0 0;
+  /* Animation handles the rain movement */
+
+  /* Very slow speed (12s) for ultra-viscous oil look */
+  animation: oil-rain-fall 12s linear infinite;
+
+  filter: contrast(1.4) brightness(1.2) saturate(1.5);
+  opacity: 0.65 !important;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Oil Slick extra glare layer (used by FoilCard component) */
+.foil-oil-glare {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.25) 50%,
+      transparent 65%);
+  background-size: 250% 250%;
+  background-position: var(--mouse-x) var(--mouse-y);
+  mix-blend-mode: overlay;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.foil-container:hover .foil-oil-glare,
+.foil-container.is-hovered .foil-oil-glare {
+  opacity: 0.6;
+}
+
+/* Galaxy Foil: Stars and nebula effect */
+.foil-galaxy {
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.9) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 40% 70%, rgba(255, 255, 255, 0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 20%, rgba(255, 255, 255, 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 50%, rgba(255, 255, 255, 0.7) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 10% 80%, rgba(255, 255, 255, 0.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 10%, rgba(255, 255, 255, 0.9) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 50% 50%, rgba(255, 255, 255, 0.8) 0%, transparent 100%),
+    radial-gradient(ellipse at var(--mouse-x) var(--mouse-y),
+      rgba(100, 50, 150, 0.4) 0%,
+      rgba(50, 100, 150, 0.2) 40%,
+      transparent 70%);
+  background-size: 150px 150px, 100px 100px, 200px 200px, 180px 180px, 120px 120px, 90px 90px, 160px 160px, 100% 100%;
+  background-position:
+    calc(var(--mouse-x) * 0.3) calc(var(--mouse-y) * 0.3),
+    calc(var(--mouse-x) * 0.5) calc(var(--mouse-y) * 0.5),
+    calc(var(--mouse-x) * 0.2) calc(var(--mouse-y) * 0.2),
+    calc(var(--mouse-x) * 0.4) calc(var(--mouse-y) * 0.4),
+    calc(var(--mouse-x) * 0.6) calc(var(--mouse-y) * 0.6),
+    calc(var(--mouse-x) * 0.35) calc(var(--mouse-y) * 0.35),
+    calc(var(--mouse-x) * 0.25) calc(var(--mouse-y) * 0.25),
+    0 0;
+  filter: brightness(1.1);
+  opacity: 0.65 !important;
+}
+
+/* 7. FOIL SURGE - REPLACED WITH: VOID RIFT (Deep Space Chaos) */
+.foil-surge {
+  /* Base: Dark Void */
+  background-color: #0f0518;
+  background-image:
+    /* 1. Nebula Clouds (Pulsing Center) */
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(167, 139, 250, 0.4) 0%,
+      rgba(124, 58, 237, 0.2) 30%,
+      transparent 70%),
+    /* 2. Chaotic Electric Tendrils */
+    repeating-linear-gradient(45deg,
+      transparent 0%,
+      rgba(192, 132, 252, 0.05) 2%,
+      rgba(139, 92, 246, 0.1) 3%,
+      transparent 5%),
+    /* 3. Deep Rift Shadows (Edge darkening) */
+    radial-gradient(circle at 50% 50%,
+      transparent 50%,
+      rgba(0, 0, 0, 0.9) 100%),
+    /* 4. Magic Dust Texture */
+    url('https://www.transparenttextures.com/patterns/stardust.png');
+
+  background-size: 150% 150%, 200% 200%, 100% 100%, auto;
+  /* Dynamic movement opposing mouse for parallax depth */
+  background-position: var(--mouse-x) var(--mouse-y), calc(var(--mouse-x) * -0.5) calc(var(--mouse-y) * -0.5), 0 0, 0 0;
+
+  mix-blend-mode: hard-light;
+  filter: contrast(1.3) brightness(1.2) saturate(1.2);
+  opacity: 0.9 !important;
+}
+
+/* Neon Ink Foil: Intense cyberpunk glow effect */
+.foil-neon {
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(0, 255, 255, 0.5) 0%,
+      rgba(255, 0, 255, 0.3) 30%,
+      transparent 60%),
+    radial-gradient(circle at calc(100% - var(--mouse-x)) calc(100% - var(--mouse-y)),
+      rgba(255, 0, 255, 0.3) 0%,
+      transparent 40%);
+  background-size: 100% 100%;
+  filter: blur(1px) brightness(1.3) contrast(1.2);
+  opacity: 0.5 !important;
+}
+
+/* Neon inner glow effect */
+.foil-container:hover .foil-neon,
+.foil-container.is-hovered .foil-neon {
+  box-shadow: inset 0 0 30px rgba(0, 255, 255, 0.2), inset 0 0 60px rgba(255, 0, 255, 0.1);
+}
+
+/* --- 9. FOIL GOLDEN - LIQUID FIRE (From snippet) --- */
+@keyframes liquid-fire-rise {
+  0% {
+    background-position: 0% 0%;
+  }
+
+  100% {
+    background-position: 0% -200%;
+  }
+}
+
+@keyframes core-pulse {
+
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.1);
+  }
+}
+
+.foil-golden {
+  background-color: #2a0500;
+
+  background-image:
+    /* 1. High Contrast Reflection (Sheen) - Clear band of light */
+    linear-gradient(125deg,
+      transparent 35%,
+      rgba(255, 230, 150, 0.4) 45%,
+      rgba(255, 255, 255, 0.8) 50%,
+      rgba(255, 230, 150, 0.4) 55%,
+      transparent 65%);
+
+  background-size: 250% 250%;
+
+  /* Aggressive movement opposite to mouse for realistic light reflection behavior */
+  background-position: calc(var(--mouse-x) * 2%) calc(var(--mouse-y) * 2%);
+
+  background-repeat: no-repeat;
+  overflow: hidden;
+  /* Important: Ensure it has dimensions/opacity to be seen */
+  opacity: 1 !important;
+  mix-blend-mode: normal;
+  /* Base blend mode, children use others */
+}
+
+/* Glowing Core */
+.foil-golden::before {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  left: 10%;
+  right: 10%;
+  height: 60%;
+  background: radial-gradient(ellipse at 50% 100%, #ffaa00, #ff4500 40%, transparent 70%);
+  filter: blur(20px);
+  mix-blend-mode: hard-light;
+  animation: core-pulse 4s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Rising Liquid Fire Textures */
+.foil-golden::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0%, rgba(255, 100, 0, 0.4) 10%, rgba(255, 200, 0, 0.2) 20%, transparent 30%, transparent 50%),
+    repeating-linear-gradient(-45deg, transparent 0%, rgba(200, 50, 0, 0.3) 15%, transparent 30%, transparent 60%);
+  background-size: 100% 100%;
+  filter: blur(15px) contrast(1.5);
+  mix-blend-mode: screen;
+  /* COMBINING ANIMATIONS: Move Up + Pulse */
+  animation: liquid-fire-rise 10s linear infinite, core-pulse 5s ease-in-out infinite alternate;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* --- 10. FOIL FLUX - DARK MATTER FLUID (Metaballs / Gooey Effect) --- */
+/* Creates chaotic but fluid motion for the blobs */
+@keyframes fluid-move-1 {
+  0% {
+    transform: translate(-20%, -20%) rotate(0deg);
+  }
+
+  50% {
+    transform: translate(10%, 10%) rotate(180deg);
+  }
+
+  100% {
+    transform: translate(-20%, -20%) rotate(360deg);
+  }
+}
+
+@keyframes fluid-move-2 {
+  0% {
+    transform: translate(10%, 10%) rotate(0deg);
+  }
+
+  50% {
+    transform: translate(-10%, -20%) rotate(-180deg);
+  }
+
+  100% {
+    transform: translate(10%, 10%) rotate(-360deg);
+  }
+}
+
+.foil-flux {
+  /* Base: Black */
+  background: #000;
+  /* THE SECRET: Contrast filter creates the sharp liquid edge from blurred children */
+  filter: contrast(30);
+  /* Blend mode makes the white parts shine as reflections on the dark card */
+  mix-blend-mode: color-dodge;
+  opacity: 0.8 !important;
+  overflow: hidden;
+}
+
+/* Liquid Blobs (Layers) */
+.foil-flux::before,
+.foil-flux::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  /* White blobs on black background */
+  background: radial-gradient(circle at 50% 50%, white 0%, transparent 40%);
+  /* Heavy blur is required for the contrast filter to 'melt' them together */
+  filter: blur(40px);
+  opacity: 0.8;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.foil-flux::before {
+  background-image:
+    radial-gradient(circle at 30% 30%, white 0%, transparent 30%),
+    radial-gradient(circle at 70% 70%, white 0%, transparent 30%);
+  animation: fluid-move-1 20s infinite linear;
+}
+
+.foil-flux::after {
+  background-image:
+    radial-gradient(circle at 70% 30%, white 0%, transparent 30%),
+    radial-gradient(circle at 30% 70%, white 0%, transparent 30%);
+  animation: fluid-move-2 25s infinite linear;
+}
+
+/* Static iridescence to give the "oil" some color sheen */
+.foil-flux-glare {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.1) 45%, rgba(100, 200, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 55%, transparent 60%);
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+  filter: blur(2px);
+  pointer-events: none;
+}
