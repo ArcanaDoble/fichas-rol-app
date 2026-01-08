@@ -1,8 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, Plus } from 'lucide-react';
-import Cropper from 'react-easy-crop';
-import Modal from './Modal';
-import Boton from './Boton';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, LayoutTemplate, CircleUser, Move, ZoomIn, ZoomOut, RotateCcw, Eye, Image as ImageIcon } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 const DEFAULT_STATS = {
     postura: { current: 3, max: 4 },
@@ -12,39 +11,79 @@ const DEFAULT_STATS = {
     armadura: { current: 1, max: 2 },
 };
 
-const DICE_OPTIONS = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+const DICE_OPTIONS = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
-const createImage = (url) =>
-    new Promise((resolve, reject) => {
-        const image = new Image();
-        image.addEventListener('load', () => resolve(image));
-        image.addEventListener('error', (error) => reject(error));
-        image.setAttribute('crossOrigin', 'anonymous');
-        image.src = url;
-    });
+const DiceSelector = ({ value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef(null);
 
-const getCroppedImage = async (imageSrc, crop) => {
-    if (!imageSrc || !crop) return null;
-    const image = await createImage(imageSrc);
-    const canvas = document.createElement('canvas');
-    canvas.width = crop.width;
-    canvas.height = crop.height;
-    const ctx = canvas.getContext('2d');
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (containerRef.current && !containerRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
-    ctx.drawImage(
-        image,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        crop.width,
-        crop.height
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-center w-[50px] h-[50px] transition-transform hover:scale-110 focus:outline-none"
+            >
+                <img
+                    src={`/dados/${value.toUpperCase()}.png`}
+                    alt={value}
+                    className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(200,170,110,0.5)]"
+                />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-2 grid grid-cols-5 gap-x-1 gap-y-0 w-[210px] backdrop-blur-md"
+                    >
+                        {DICE_OPTIONS.map((dice) => {
+                            const gridPos = {
+                                'd4': 'col-start-1 row-start-1',
+                                'd10': 'col-start-2 row-start-2',
+                                'd6': 'col-start-3 row-start-1',
+                                'd12': 'col-start-4 row-start-2',
+                                'd8': 'col-start-5 row-start-1',
+                            }[dice];
+
+                            return (
+                                <button
+                                    key={dice}
+                                    onClick={() => {
+                                        onChange(dice);
+                                        setIsOpen(false);
+                                    }}
+                                    className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
+                                >
+                                    <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
+                                        <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
+                                    </div>
+                                    <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
+                                        {dice.toUpperCase()}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
-
-    return canvas.toDataURL('image/png');
 };
+
+
 
 export const ClassCreatorView = ({ onBack, onSave }) => {
     const [formData, setFormData] = useState({
@@ -57,7 +96,7 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
             intelecto: 'd4',
             voluntad: 'd4'
         },
-        primaryAbility: '', // Keeping this as it might be used for something else or legacy
+        primaryAbility: '',
         difficulty: 'Medio',
         role: 'Daño',
         image: null,
@@ -67,15 +106,31 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
         stats: JSON.parse(JSON.stringify(DEFAULT_STATS))
     });
 
-    // Cropper State
-    const [isCropping, setIsCropping] = useState(false);
-    const [cropperState, setCropperState] = useState({
-        imageSrc: null,
-        crop: { x: 0, y: 0 },
-        zoom: 1,
-        croppedAreaPixels: null,
-    });
+    // --- IMAGE CROPPER STATE ---
+    const [rawImage, setRawImage] = useState(null);
+
+    // Two separate crop states
+    const [activeMode, setActiveMode] = useState('CARD'); // 'CARD' | 'AVATAR'
+
+    const [cardCrop, setCardCrop] = useState({ x: 0, y: 0 });
+    const [cardZoom, setCardZoom] = useState(1);
+
+    const [avatarCrop, setAvatarCrop] = useState({ x: 0, y: 0 });
+    const [avatarZoom, setAvatarZoom] = useState(1);
+
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [showGuides, setShowGuides] = useState(true);
+
     const fileInputRef = useRef(null);
+    const imageRef = useRef(null);
+    const containerRef = useRef(null);
+
+    // Derived state helpers
+    const currentCrop = activeMode === 'CARD' ? cardCrop : avatarCrop;
+    const currentZoom = activeMode === 'CARD' ? cardZoom : avatarZoom;
+    const setCrop = activeMode === 'CARD' ? setCardCrop : setAvatarCrop;
+    const setZoom = activeMode === 'CARD' ? setCardZoom : setAvatarZoom;
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -102,37 +157,123 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
         }));
     };
 
-    const handleImageUpload = (e) => {
+    // --- HANDLERS: IMAGE ---
+    const handleFileSelect = (e) => {
         if (e.target.files && e.target.files.length > 0) {
-            const file = e.target.files[0];
             const reader = new FileReader();
-            reader.addEventListener('load', () => {
-                setCropperState(prev => ({ ...prev, imageSrc: reader.result }));
-                setIsCropping(true);
-            });
-            reader.readAsDataURL(file);
+            reader.onload = () => {
+                setRawImage(reader.result);
+                const initialWidth = containerRef.current?.clientWidth || 300;
+                setCardCrop({ x: 0, y: 0, refWidth: initialWidth });
+                setCardZoom(1);
+                setAvatarCrop({ x: 0, y: 0, refWidth: initialWidth });
+                setAvatarZoom(1);
+            };
+            reader.readAsDataURL(e.target.files[0]);
         }
     };
 
-    const handleCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
-        setCropperState((prev) => ({ ...prev, croppedAreaPixels }));
-    }, []);
-
-    const handleCropSave = async () => {
-        try {
-            const croppedImage = await getCroppedImage(
-                cropperState.imageSrc,
-                cropperState.croppedAreaPixels
-            );
-            setFormData(prev => ({ ...prev, image: croppedImage }));
-            setIsCropping(false);
-        } catch (e) {
-            console.error(e);
-        }
+    const handleMouseDown = (e) => {
+        if (!rawImage) return;
+        e.preventDefault();
+        setIsDragging(true);
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        setDragStart({ x: clientX - currentCrop.x, y: clientY - currentCrop.y });
     };
 
-    const handleSave = () => {
+    const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        const currentWidth = containerRef.current?.clientWidth || 300;
+        setCrop({
+            x: clientX - dragStart.x,
+            y: clientY - dragStart.y,
+            refWidth: currentWidth
+        });
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    // Use effect for non-passive wheel listener to prevent scrolling
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const onWheel = (e) => {
+            if (!rawImage) return;
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+            setZoom(prev => Math.min(3, Math.max(0.5, prev + delta)));
+        };
+
+        container.addEventListener('wheel', onWheel, { passive: false });
+
+        return () => {
+            container.removeEventListener('wheel', onWheel);
+        };
+    }, [rawImage, setZoom]);
+
+    // --- CANVAS GENERATION ---
+    const generateImage = async (mode) => {
+        if (!rawImage || !imageRef.current) return formData.image;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return formData.image;
+
+        // Config depends on mode
+        const width = mode === 'CARD' ? 600 : 256;
+        const height = mode === 'CARD' ? 900 : 256;
+        const cropState = mode === 'CARD' ? cardCrop : avatarCrop;
+        const zoomState = mode === 'CARD' ? cardZoom : avatarZoom;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Background
+        ctx.fillStyle = '#0b1120';
+        ctx.fillRect(0, 0, width, height);
+
+        const img = imageRef.current;
+
+        // Calculate Scale Ratio (Visual vs Actual Canvas)
+        const domWidth = cropState.refWidth || containerRef.current?.clientWidth || 300;
+        const visualToCanvasRatio = width / domWidth;
+
+        ctx.translate(width / 2, height / 2);
+        ctx.translate(cropState.x * visualToCanvasRatio, cropState.y * visualToCanvasRatio);
+        ctx.scale(zoomState, zoomState);
+
+        // Draw Logic
+        // Determine image aspect ratio
+        const imgAspectRatio = img.naturalHeight / img.naturalWidth;
+        const drawWidth = width;
+        const drawHeight = width * imgAspectRatio; // Base scaling on width
+
+        // If the image is extremely detailed or large, we might want to ensure quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
+        return canvas.toDataURL('image/jpeg', 0.9);
+    };
+
+    const handleSave = async () => {
         if (!formData.name) return;
+
+        let finalImage = formData.image;
+        let finalAvatar = formData.image; // Fallback if no crop
+
+        if (rawImage) {
+            finalImage = await generateImage('CARD');
+            finalAvatar = await generateImage('AVATAR');
+        }
 
         const newClass = {
             id: `custom-${Date.now()}`,
@@ -140,16 +281,18 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
             subtitle: formData.subtitle || 'Campeón Personalizado',
             description: formData.description || 'Sin descripción',
             attributes: formData.attributes,
-            primaryAbility: formData.primaryAbility, // Optional
+            primaryAbility: formData.primaryAbility,
             difficulty: formData.difficulty,
             role: formData.role,
-            image: formData.image, // Base64 or URL
-            rating: Number(formData.starLevel), // Using 'rating' to match ClassList.jsx
-            level: 1, // Using 'level' to match ClassList.jsx
-            status: 'unlocked', // Using 'status' to match ClassList.jsx
+            image: finalImage,
+            avatar: finalAvatar,
+            portraitSource: rawImage || formData.image,
+            rating: Number(formData.starLevel),
+            level: 1,
+            status: 'unlocked',
             stats: formData.stats,
-            equipment: { weapons: [], armor: [], abilities: [] }, // Initialize empty equipment
-            money: 0, // Individual money
+            equipment: { weapons: [], armor: [], abilities: [] },
+            money: 0,
             inspiration: [],
             rules: [],
             summary: {
@@ -184,32 +327,168 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
 
-                    {/* Left Column: Visuals */}
+                    {/* Left Column: ADVANCED IMAGE EDITOR */}
                     <div className="space-y-6">
+
+                        {/* CROP MODE TABS */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setActiveMode('CARD')}
+                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border ${activeMode === 'CARD' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                            >
+                                <LayoutTemplate className="w-4 h-4" /> Portada (Carta)
+                            </button>
+                            <button
+                                onClick={() => setActiveMode('AVATAR')}
+                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border ${activeMode === 'AVATAR' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                            >
+                                <CircleUser className="w-4 h-4" /> Icono (Avatar)
+                            </button>
+                        </div>
+
+                        {/* EDITOR CONTAINER */}
+                        {/* Aspect Ratio Changes Dynamically */}
                         <div
-                            className="relative aspect-[3/4.5] bg-[#0b1120] rounded-lg border-2 border-dashed border-[#c8aa6e]/40 flex flex-col items-center justify-center overflow-hidden group cursor-pointer hover:border-[#c8aa6e]"
-                            onClick={() => fileInputRef.current?.click()}
+                            className={`relative w-full bg-[#0b1120] rounded-sm border border-slate-800 overflow-hidden shadow-2xl group ring-1 ring-slate-700 transition-all duration-300 ${activeMode === 'CARD' ? 'aspect-[2/3]' : 'aspect-square max-w-[300px] mx-auto'}`}
                         >
-                            {formData.image ? (
-                                <img src={formData.image} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+
+                            {rawImage ? (
+                                // INTERACTIVE CROP AREA
+                                <div
+                                    ref={containerRef}
+                                    className={`w-full h-full relative overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                    onMouseDown={handleMouseDown}
+                                    onMouseMove={handleMouseMove}
+                                    onMouseUp={handleMouseUp}
+                                    onMouseLeave={handleMouseUp}
+                                    onTouchStart={handleMouseDown}
+                                    onTouchMove={handleMouseMove}
+                                    onTouchEnd={handleMouseUp}
+
+                                >
+                                    <img
+                                        ref={imageRef}
+                                        src={rawImage}
+                                        alt="Preview"
+                                        draggable={false}
+                                        className="absolute max-w-none origin-center pointer-events-none select-none transition-transform duration-75 ease-out"
+                                        style={{
+                                            left: '50%',
+                                            top: '50%',
+                                            width: '100%',
+                                            height: 'auto',
+                                            transform: `translate(-50%, -50%) translate(${currentCrop.x}px, ${currentCrop.y}px) scale(${currentZoom})`,
+                                        }}
+                                    />
+
+                                    {/* --- OVERLAY GUIDES --- */}
+                                    {showGuides && activeMode === 'CARD' && (
+                                        <>
+                                            <div className="absolute inset-0 border-[4px] border-[#c8aa6e] z-20 pointer-events-none opacity-80"></div>
+                                            <div className="absolute bottom-0 left-0 right-0 h-[35%] bg-gradient-to-t from-[#0b1120] via-[#0b1120]/80 to-transparent z-20 pointer-events-none flex items-end justify-center pb-6">
+                                                <div className="text-[#c8aa6e]/30 text-[10px] uppercase font-bold tracking-widest border border-[#c8aa6e]/20 px-2 py-1 rounded">Zona Texto</div>
+                                            </div>
+                                            <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
+                                                <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                                <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                                <div className="border-r border-white"></div><div className="border-r border-white"></div><div></div>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {showGuides && activeMode === 'AVATAR' && (
+                                        <>
+                                            {/* Circular Mask Overlay */}
+                                            <div className="absolute inset-0 z-20 pointer-events-none border-[2px] border-[#c8aa6e]/50 rounded-full"></div>
+                                            {/* Simple SVG mask is better for circle cutout */}
+                                            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                <defs>
+                                                    <mask id="circleMask">
+                                                        <rect width="100" height="100" fill="white" />
+                                                        <circle cx="50" cy="50" r="48" fill="black" />
+                                                    </mask>
+                                                </defs>
+                                                <rect width="100" height="100" fill="rgba(0,0,0,0.7)" mask="url(#circleMask)" />
+                                            </svg>
+                                        </>
+                                    )}
+                                </div>
                             ) : (
-                                <div className="text-center p-6">
-                                    <Upload className="w-12 h-12 text-[#c8aa6e] mx-auto mb-4" />
-                                    <p className="text-sm font-bold uppercase tracking-widest text-[#f0e6d2] mb-2">Subir Imagen</p>
-                                    <p className="text-xs text-slate-500">Click para seleccionar</p>
+                                // UPLOAD PLACEHOLDER
+                                <div
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#c8aa6e]/5 transition-colors z-30"
+                                >
+                                    <div className="w-16 h-16 rounded-full bg-[#161f32] border border-[#c8aa6e]/50 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(200,170,110,0.2)]">
+                                        <ImageIcon className="w-8 h-8 text-[#c8aa6e]" />
+                                    </div>
+                                    <p className="text-sm font-bold uppercase tracking-widest text-[#f0e6d2]">Subir Imagen</p>
+                                    <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider">Click para explorar</p>
                                 </div>
                             )}
-                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <span className="text-white font-bold uppercase tracking-wider text-sm bg-black/50 px-3 py-1 rounded">Cambiar Imagen</span>
-                            </div>
+
+                            {/* Hidden File Input */}
                             <input
                                 type="file"
                                 ref={fileInputRef}
-                                onChange={handleImageUpload}
+                                onChange={handleFileSelect}
                                 accept="image/*"
                                 className="hidden"
                             />
+
+                            {/* Overlay Controls */}
+                            {rawImage && (
+                                <div className="absolute top-2 right-2 flex gap-2 z-30">
+                                    <button
+                                        onClick={() => setShowGuides(!showGuides)}
+                                        className={`p-2 backdrop-blur rounded-full border transition-colors ${showGuides ? 'bg-[#c8aa6e]/20 border-[#c8aa6e] text-[#c8aa6e]' : 'bg-black/60 border-white/10 text-slate-400'}`}
+                                        title="Alternar Guías"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-2 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                        title="Cambiar Imagen"
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => { setCrop({ x: 0, y: 0 }); setZoom(1); }}
+                                        className="p-2 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                        title="Resetear Posición"
+                                    >
+                                        <RotateCcw className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
+
+                        {/* ZOOM CONTROLS */}
+                        {rawImage && (
+                            <div className="bg-[#161f32]/50 p-4 rounded border border-slate-700 space-y-2">
+                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                    <div className="flex items-center gap-2"><Move className="w-3 h-3" /> Ajuste Visual ({activeMode === 'CARD' ? 'Carta' : 'Avatar'})</div>
+                                    <div className="text-[#c8aa6e]">{(currentZoom * 100).toFixed(0)}%</div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <ZoomOut className="w-4 h-4 text-slate-500" onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} cursor="pointer" />
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="3"
+                                        step="0.05"
+                                        value={currentZoom}
+                                        onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                    />
+                                    <ZoomIn className="w-4 h-4 text-slate-500" onClick={() => setZoom(z => Math.min(3, z + 0.1))} cursor="pointer" />
+                                </div>
+                                <p className="text-[10px] text-slate-500 text-center pt-2 italic">
+                                    {activeMode === 'CARD' ? 'Ajusta para la carta principal.' : 'Ajusta para el círculo de perfil.'}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Middle & Right: Form Data */}
@@ -262,17 +541,12 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
                                 {/* Attributes Selection */}
                                 <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
                                     {['destreza', 'vigor', 'intelecto', 'voluntad'].map(attr => (
-                                        <div key={attr}>
-                                            <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1 capitalize">{attr}</label>
-                                            <select
+                                        <div key={attr} className="flex flex-col items-center">
+                                            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-2 capitalize">{attr}</label>
+                                            <DiceSelector
                                                 value={formData.attributes[attr]}
-                                                onChange={(e) => handleAttributeChange(attr, e.target.value)}
-                                                className="w-full bg-[#0b1120] border border-slate-700 p-2.5 rounded text-slate-200 text-sm focus:border-[#c8aa6e] outline-none"
-                                            >
-                                                {DICE_OPTIONS.map(dice => (
-                                                    <option key={dice} value={dice}>{dice}</option>
-                                                ))}
-                                            </select>
+                                                onChange={(val) => handleAttributeChange(attr, val)}
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -312,64 +586,6 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
                 </div>
             </div>
 
-            {/* Crop Modal */}
-            <Modal
-                isOpen={isCropping}
-                onClose={() => setIsCropping(false)}
-                title="Ajustar retrato"
-                size="xl"
-                footer={
-                    <>
-                        <Boton color="gray" onClick={() => setIsCropping(false)}>
-                            Cancelar
-                        </Boton>
-                        <Boton color="blue" onClick={handleCropSave}>
-                            Guardar recorte
-                        </Boton>
-                    </>
-                }
-            >
-                <div className="flex flex-col gap-6">
-                    <div className="relative h-[360px] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900">
-                        {cropperState.imageSrc ? (
-                            <Cropper
-                                image={cropperState.imageSrc}
-                                crop={cropperState.crop}
-                                zoom={cropperState.zoom}
-                                aspect={3 / 4.5}
-                                minZoom={0.3}
-                                maxZoom={6}
-                                onCropChange={(crop) => setCropperState((prev) => ({ ...prev, crop }))}
-                                onZoomChange={(zoom) => setCropperState((prev) => ({ ...prev, zoom }))}
-                                onCropComplete={handleCropComplete}
-                                restrictPosition
-                                objectFit="cover"
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                                Selecciona una imagen para comenzar.
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="zoom" className="text-xs uppercase tracking-[0.4em] text-slate-500">
-                            Zoom
-                        </label>
-                        <input
-                            id="zoom"
-                            type="range"
-                            min={0.3}
-                            max={6}
-                            step={0.05}
-                            value={cropperState.zoom}
-                            onChange={(event) =>
-                                setCropperState((prev) => ({ ...prev, zoom: Number(event.target.value) }))
-                            }
-                            className="accent-sky-400"
-                        />
-                    </div>
-                </div>
-            </Modal>
         </div>
     );
 };

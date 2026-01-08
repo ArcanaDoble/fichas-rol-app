@@ -4,6 +4,8 @@ import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus } from
 import { GiBelt } from 'react-icons/gi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
+import { db } from '../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const RARITIES = [
     { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
@@ -48,12 +50,109 @@ const getRarityColors = (item) => {
     return { border: 'border-slate-600', bg: 'bg-slate-800/30', text: 'text-slate-400', glow: 'from-slate-800', stripe: 'bg-slate-600', gradient: 'from-slate-800/50' };
 };
 
+// Función para obtener imagen de objetos genéricos (public/objetos)
+const getObjectImage = (item) => {
+    const name = (item.name || '').toLowerCase();
+    const type = (item.type || '').toLowerCase();
+    const category = (item.category || '').toLowerCase();
+    const target = `${name} ${type} ${category}`;
+
+    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
+    if (target.includes('comida')) return '/objetos/comida.png';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
+    if (target.includes('libro')) return '/objetos/libro.png';
+    if (target.includes('llave')) return '/objetos/llave.png';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
+    if (target.includes('pergamino')) return '/objetos/pergamino.png';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
+    if (target.includes('recurso')) return '/objetos/recurso.jpg';
+    if (target.includes('accesorio')) return '/objetos/accesorio.png';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
+
+    // Specific Weapon Checks (From loadout logic)
+    // Unique Items
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+
+    // Standard Weapons
+    if (name.includes('granarco')) return '/armas/arco_largo.png';
+    if (name.includes('arco')) return '/armas/arco_corto.png';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
+    if (name.includes('clava')) return '/armas/clava.png';
+    if (name.includes('jabalina')) return '/armas/jabalina.png';
+    if (name.includes('lanza')) return '/armas/lanza.png';
+    if (name.includes('daga')) return '/armas/daga.png';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
+    if (name.includes('honda')) return '/armas/honda.png';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
+    if (name.includes('estoque')) return '/armas/estoque.png';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+
+    // Swords (Check longer/specific names first)
+    if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
+    if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+    // Specific Armor Checks (Prioritize over generic 'armadura')
+    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
+    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
+    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
+    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
+    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
+    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
+    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
+    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
+    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
+    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
+    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
+    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
+    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
+
+    // Generic Armor Fallback
+    if (target.includes('armadura')) return '/objetos/armadura.png';
+
+    return null;
+};
+
+// Helper to format item names with proper accents
+const formatItemName = (name) => {
+    if (!name) return '';
+    let formatted = name;
+    // Case-insensitive replacements
+    formatted = formatted.replace(/municion/gi, 'Munición');
+    formatted = formatted.replace(/pocion/gi, 'Poción');
+    formatted = formatted.replace(/polvora/gi, 'Pólvora');
+    formatted = formatted.replace(/balsamo/gi, 'Bálsamo');
+    formatted = formatted.replace(/elixir/gi, 'Elixir'); // Usually ok, but just in case
+    return formatted;
+};
+
 const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
     const [showRarityDropdown, setShowRarityDropdown] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
+    const [customItems, setCustomItems] = useState([]);
+
+    // Fetch custom items
+    React.useEffect(() => {
+        const fetchCustomItems = async () => {
+            try {
+                const snap = await getDocs(collection(db, 'customItems'));
+                const fetched = snap.docs.map(d => d.data());
+                setCustomItems(fetched);
+            } catch (error) {
+                console.error("Error fetching custom items:", error);
+            }
+        };
+        fetchCustomItems();
+    }, []);
 
     // Local editing state
     const [editingTitle, setEditingTitle] = useState('');
@@ -63,7 +162,32 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     // Equipment slot selection state
     const [activeSlotSelector, setActiveSlotSelector] = useState(null); // 'mainHand', 'offHand', 'body', or null
     const [activeTalentSlotSelector, setActiveTalentSlotSelector] = useState(null); // 0, 1, 2 or null
-    const [beltSlotCount, setBeltSlotCount] = useState(3); // Default 3 slots, max 9
+
+    // Global click listener to close dropdowns when clicking outside
+    React.useEffect(() => {
+        const handleClickOutside = () => {
+            if (activeSlotSelector) setActiveSlotSelector(null);
+            if (activeTalentSlotSelector !== null) setActiveTalentSlotSelector(null);
+            if (showRarityDropdown) setShowRarityDropdown(false);
+        };
+
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, [activeSlotSelector, activeTalentSlotSelector, showRarityDropdown]);
+
+    // Get equipped items from dndClass (Moved up for initialization)
+    const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
+
+    // Calculate initial belt count based on equipped items
+    const initialBeltCount = useMemo(() => {
+        const indices = Object.keys(equippedItems)
+            .filter(k => k.startsWith('belt_'))
+            .map(k => parseInt(k.split('_')[1], 10));
+        const maxIndex = Math.max(-1, ...indices);
+        return Math.max(3, maxIndex + 1);
+    }, [equippedItems]);
+
+    const [beltSlotCount, setBeltSlotCount] = useState(initialBeltCount); // Default based on usage or 3, max 9
 
     // Get talent slots (restored)
     const talentSlots = useMemo(() => {
@@ -99,7 +223,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     const summary = dndClass.summary || {};
 
     // Get equipped items from dndClass
-    const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
+    // const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null }; // MOVED UP
 
     // Proficiencies
     const proficiencies = summary.proficiencies || { weapons: {}, armor: {} };
@@ -112,6 +236,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
         if (rawEquipment.weapons) list.push(...rawEquipment.weapons.map((item, idx) => ({ ...item, _category: 'weapons', _index: idx })));
         if (rawEquipment.armor) list.push(...rawEquipment.armor.map((item, idx) => ({ ...item, _category: 'armor', _index: idx })));
         if (rawEquipment.abilities) list.push(...rawEquipment.abilities.map((item, idx) => ({ ...item, _category: 'abilities', _index: idx })));
+        if (rawEquipment.objects) list.push(...rawEquipment.objects.map((item, idx) => ({ ...item, _category: 'objects', _index: idx })));
         return list;
     }, [rawEquipment]);
 
@@ -126,7 +251,26 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
     // Filtrar catálogo según búsqueda
     const filteredCatalog = useMemo(() => {
-        const catalog = equipmentCatalog?.[selectedCategory] || [];
+        let catalog = [];
+
+        if (selectedCategory === 'objects') {
+            catalog = customItems.map(item => ({
+                name: item.name,
+                category: 'Objeto',
+                description: item.description,
+                payload: {
+                    ...item,
+                    category: 'objects',
+                    itemType: 'object',
+                    icon: item.icon,
+                    color: item.color,
+                    description: item.description
+                }
+            }));
+        } else {
+            catalog = equipmentCatalog?.[selectedCategory] || [];
+        }
+
         if (!searchTerm.trim()) return catalog.slice(0, 5);
 
         return catalog
@@ -135,7 +279,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                 (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()))
             )
             .slice(0, 5);
-    }, [equipmentCatalog, selectedCategory, searchTerm]);
+    }, [equipmentCatalog, selectedCategory, searchTerm, dndClass.storeItems, customItems]);
 
     // Check if character has proficiency with a weapon
     const hasWeaponProficiency = (item) => {
@@ -224,11 +368,12 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                     </h4>
 
                                     {/* Tabs de categoría */}
-                                    <div className="flex gap-2 mb-3">
+                                    <div className="flex flex-wrap gap-2 mb-3">
                                         {[
                                             { id: 'weapons', label: 'Armas' },
                                             { id: 'armor', label: 'Armaduras' },
-                                            { id: 'abilities', label: 'Habilidades' }
+                                            { id: 'abilities', label: 'Habilidades' },
+                                            { id: 'objects', label: 'Objetos' }
                                         ].map(cat => (
                                             <button
                                                 key={cat.id}
@@ -296,6 +441,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                 if (item.itemType === 'armor') return <Shield className="w-10 h-10 text-slate-400" />;
                                                 if (item.itemType === 'weapon') return <Sword className="w-10 h-10 text-slate-400" />;
                                                 if (item.itemType === 'ability') return <Zap className="w-10 h-10 text-slate-400" />;
+                                                if (item.itemType === 'object') return <HexIcon size="md"><span className="text-xs">📦</span></HexIcon>;
 
                                                 // Fallback: usar category si itemType no existe
                                                 const cat = (item.category || item.type || '').toLowerCase();
@@ -318,6 +464,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                             };
 
                                             const rarityColors = getRarityColors();
+                                            const objectImage = getObjectImage(item);
 
                                             return (
                                                 <div key={index} className="group bg-[#161f32] border border-slate-700 hover:border-[#c8aa6e] p-1 rounded-lg transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex overflow-hidden relative h-full">
@@ -337,18 +484,30 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                     <div className={`w-1 absolute left-0 top-0 bottom-0 z-20 ${rarityColors.border}`}></div>
 
                                                     {/* Image/Icon Section */}
-                                                    <div className="w-24 bg-black/50 relative shrink-0 ml-2 flex flex-col z-10 backdrop-blur-sm">
-                                                        <div className="w-full h-full flex flex-col items-center justify-center border-r border-slate-700/50">
-                                                            <div className="text-3xl mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
-                                                                {getIcon()}
-                                                            </div>
+                                                    <div className="w-24 bg-black/50 relative shrink-0 ml-2 flex flex-col z-10 backdrop-blur-sm overflow-hidden rounded-l">
+                                                        {objectImage && (
+                                                            <>
+                                                                <img
+                                                                    src={objectImage}
+                                                                    alt={item.name}
+                                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
+                                                                />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                                                            </>
+                                                        )}
+                                                        <div className="w-full h-full flex flex-col items-center justify-center border-r border-slate-700/50 relative z-20">
+                                                            {!objectImage && (
+                                                                <div className="text-3xl mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+                                                                    {getIcon()}
+                                                                </div>
+                                                            )}
                                                             {/* Rarity Label - Only show if exists */}
                                                             {item.rareza ? (
-                                                                <span className={`text-[0.6rem] uppercase font-bold ${rarityColors.text} text-center leading-tight px-1`}>
+                                                                <span className={`text-[0.6rem] uppercase font-bold ${rarityColors.text} text-center leading-tight px-1 drop-shadow-md`}>
                                                                     {item.rareza}
                                                                 </span>
                                                             ) : (
-                                                                <div className="w-8 h-[1px] bg-slate-700/50 mt-2"></div>
+                                                                !objectImage && <div className="w-8 h-[1px] bg-slate-700/50 mt-2"></div>
                                                             )}
                                                         </div>
                                                     </div>
@@ -460,47 +619,16 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                 const isSlotActive = activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem) : null;
 
-                                                // Helper to get weapon image
-                                                const getWeaponImage = (weaponName) => {
-                                                    if (!weaponName) return null;
-                                                    const name = weaponName.toLowerCase();
-
-                                                    // Unique Items
-                                                    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
-                                                    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
-                                                    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
-
-                                                    // Standard Weapons
-                                                    if (name.includes('granarco')) return '/armas/arco_largo.png';
-                                                    if (name.includes('arco')) return '/armas/arco_corto.png';
-                                                    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
-                                                    if (name.includes('clava')) return '/armas/clava.png';
-                                                    if (name.includes('jabalina')) return '/armas/jabalina.png';
-                                                    if (name.includes('lanza')) return '/armas/lanza.png';
-                                                    if (name.includes('daga')) return '/armas/daga.png';
-                                                    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
-                                                    if (name.includes('honda')) return '/armas/honda.png';
-                                                    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
-                                                    if (name.includes('estoque')) return '/armas/estoque.png';
-                                                    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
-                                                    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
-                                                    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
-                                                    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
-
-                                                    // Swords (Check longer/specific names first)
-                                                    if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
-                                                    if (name.includes('espada')) return '/armas/espada_de_acero.png';
-
-                                                    return null;
-                                                };
-
-                                                const weaponImage = equippedItem ? getWeaponImage(equippedItem.name) : null;
+                                                const weaponImage = equippedItem ? getObjectImage(equippedItem) : null;
 
                                                 return (
                                                     <div key={key} className="relative group">
                                                         {/* Slot Card */}
                                                         <div
-                                                            onClick={() => setActiveSlotSelector(isSlotActive ? null : key)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveSlotSelector(isSlotActive ? null : key);
+                                                            }}
                                                             className={`h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
                                                                 ${equippedItem
                                                                     ? proficiencyWarning
@@ -623,7 +751,10 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
                                                         {/* Equipment Selector Dropdown */}
                                                         {isSlotActive && (
-                                                            <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                            <div
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                                            >
                                                                 <div className="p-2 border-b border-slate-700">
                                                                     <span className="text-[10px] text-slate-400 uppercase tracking-wider">
                                                                         Seleccionar arma del inventario
@@ -646,7 +777,13 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                                     ${warning ? 'bg-orange-900/10' : ''}
                                                                                 `}
                                                                             >
-                                                                                <Sword className="w-5 h-5 text-[#c8aa6e] shrink-0" />
+                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                    {getObjectImage(weapon) ? (
+                                                                                        <img src={getObjectImage(weapon)} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <Sword className="w-5 h-5" />
+                                                                                    )}
+                                                                                </div>
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="text-sm text-[#f0e6d2] font-medium truncate">{weapon.name}</div>
                                                                                     <div className="flex gap-2 text-[10px]">
@@ -722,7 +859,10 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                 return (
                                                     <>
                                                         <div
-                                                            onClick={() => setActiveSlotSelector(isSlotActive ? null : 'body')}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveSlotSelector(isSlotActive ? null : 'body');
+                                                            }}
                                                             className={`h-32 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
                                                                 ${equippedArmor
                                                                     ? proficiencyWarning
@@ -829,9 +969,11 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                             )}
                                                         </div>
 
-                                                        {/* Armor Selector Dropdown */}
                                                         {isSlotActive && (
-                                                            <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                            <div
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                                            >
                                                                 <div className="p-2 border-b border-slate-700">
                                                                     <span className="text-[10px] text-slate-400 uppercase tracking-wider">
                                                                         Seleccionar armadura del inventario
@@ -852,7 +994,13 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                                     ${warning ? 'bg-orange-900/10' : ''}
                                                                                 `}
                                                                             >
-                                                                                <Shield className="w-5 h-5 text-[#c8aa6e] shrink-0" />
+                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                    {getObjectImage(armor) ? (
+                                                                                        <img src={getObjectImage(armor)} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <Shield className="w-5 h-5" />
+                                                                                    )}
+                                                                                </div>
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="text-sm text-[#f0e6d2] font-medium truncate">{armor.name}</div>
                                                                                     <div className="flex gap-2 text-[10px]">
@@ -897,11 +1045,113 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
                                             {Array.from({ length: beltSlotCount }).map((_, idx) => {
-                                                const slot = idx + 1;
+                                                const slotId = `belt_${idx}`;
+                                                const equippedItem = equippedItems[slotId];
+                                                const isSlotActive = activeSlotSelector === slotId;
+                                                // Filter available objects for belt slots
+                                                const availableObjects = equipment.filter(item => item.itemType === 'object');
+                                                const objectImage = equippedItem ? getObjectImage(equippedItem) : null;
+                                                const itemRarityColors = equippedItem ? getRarityColors(equippedItem.rareza) : null;
+
                                                 return (
-                                                    <div key={slot} className="aspect-square border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all cursor-pointer">
-                                                        <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest mb-1">Slot {slot}</span>
-                                                        <span className="text-[10px] text-slate-700">Vacío</span>
+                                                    <div key={idx} className="relative">
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveSlotSelector(isSlotActive ? null : slotId);
+                                                            }}
+                                                            className={`aspect-square border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative group overflow-hidden
+                                                                ${equippedItem
+                                                                    ? `${itemRarityColors?.border || 'border-slate-600'} bg-slate-800/20`
+                                                                    : isSlotActive
+                                                                        ? 'border-dashed border-[#c8aa6e] bg-[#c8aa6e]/5 ring-1 ring-[#c8aa6e]'
+                                                                        : 'border-dashed border-slate-700 hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5'
+                                                                }`}
+                                                        >
+                                                            {equippedItem ? (
+                                                                <>
+                                                                    {objectImage ? (
+                                                                        <>
+                                                                            <img
+                                                                                src={objectImage}
+                                                                                alt={equippedItem.name}
+                                                                                className="absolute inset-0 w-full h-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
+                                                                            />
+                                                                            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors"></div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="text-2xl mb-1 drop-shadow-md relative z-10">📦</div>
+                                                                    )}
+
+                                                                    <span className="text-white font-['Cinzel'] text-[10px] uppercase font-bold text-center px-1 line-clamp-2 leading-tight relative z-10 drop-shadow-md">
+                                                                        {formatItemName(equippedItem.name)}
+                                                                    </span>
+
+                                                                    {/* Unequip Button (Overlay) */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleUnequipItem(slotId);
+                                                                        }}
+                                                                        className="absolute top-2 right-2 p-1 bg-red-500/20 hover:bg-red-500/40 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                                                        title="Desequipar"
+                                                                    >
+                                                                        <FiX className="w-3 h-3" />
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest mb-1">Slot {idx + 1}</span>
+                                                                    <span className="text-[10px] text-slate-700 group-hover:text-slate-500 transition-colors">Vacío</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Selection Dropdown */}
+                                                        {isSlotActive && (
+                                                            <div
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto w-full z-[100]"
+                                                            >
+                                                                <div className="p-2 border-b border-slate-700">
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                                                                        Seleccionar Objeto
+                                                                    </span>
+                                                                </div>
+                                                                {availableObjects.length > 0 ? (
+                                                                    availableObjects.map((item, i) => {
+                                                                        const itemImg = getObjectImage(item);
+                                                                        return (
+                                                                            <button
+                                                                                key={i}
+                                                                                onClick={() => handleEquipItem(slotId, item)}
+                                                                                className="w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0"
+                                                                            >
+                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                    {itemImg ? (
+                                                                                        <img src={itemImg} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <span className="text-lg leading-none">📦</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="text-sm text-[#f0e6d2] font-medium truncate">{formatItemName(item.name)}</div>
+                                                                                    {(item.description || item.detail) && (
+                                                                                        <div className="flex gap-2 text-[10px]">
+                                                                                            <span className="text-slate-500 truncate">{item.description || item.detail}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </button>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div className="p-4 text-center text-slate-500 text-sm">
+                                                                        No hay objetos en el inventario.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -917,7 +1167,14 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                             )}
                                             {beltSlotCount > 1 && (
                                                 <button
-                                                    onClick={() => setBeltSlotCount(prev => Math.max(prev - 1, 1))}
+                                                    onClick={() => {
+                                                        const indices = Object.keys(equippedItems)
+                                                            .filter(k => k.startsWith('belt_'))
+                                                            .map(k => parseInt(k.split('_')[1], 10));
+                                                        const maxIndex = Math.max(-1, ...indices);
+                                                        // Prevent reducing below the last equipped slot
+                                                        setBeltSlotCount(prev => Math.max(prev - 1, 1, maxIndex + 1));
+                                                    }}
                                                     className="aspect-square border-2 border-dashed border-red-500/30 rounded-lg flex flex-col items-center justify-center hover:border-red-500 hover:bg-red-500/10 transition-all cursor-pointer group"
                                                 >
                                                     <FiMinus className="w-8 h-8 text-red-500/50 group-hover:text-red-500 transition-colors" />
@@ -969,7 +1226,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                     {/* Rarity Badge - Now clickable */}
                                     <div className="relative">
                                         <button
-                                            onClick={() => setShowRarityDropdown(!showRarityDropdown)}
+                                            onClick={(e) => { e.stopPropagation(); setShowRarityDropdown(!showRarityDropdown); }}
                                             className={`absolute -bottom-3 left-1/2 -translate-x-1/2 ${selectedRarity.color} text-[10px] font-bold px-2 py-0.5 rounded shadow hover:opacity-80 transition-opacity whitespace-nowrap`}
                                         >
                                             {selectedRarity.label.toUpperCase()}
@@ -1111,7 +1368,10 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                     return (
                                         <div key={index} className="relative">
                                             <div
-                                                onClick={() => setActiveTalentSlotSelector(isSlotActive ? null : index)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveTalentSlotSelector(isSlotActive ? null : index);
+                                                }}
                                                 className={`flex items-center gap-4 group transition-all cursor-pointer rounded-lg p-2 border border-transparent
                                                     ${isSlotActive ? 'bg-slate-800 border-[#c8aa6e] ring-1 ring-[#c8aa6e]' : 'hover:bg-slate-800/50 hover:border-slate-700'}
                                                 `}
@@ -1142,7 +1402,10 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
 
                                             {/* Dropdown for Talent Selection */}
                                             {isSlotActive && (
-                                                <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                                                <div
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto custom-scrollbar"
+                                                >
                                                     <div className="p-2 border-b border-slate-700 bg-slate-900/90 sticky top-0 backdrop-blur-sm z-10">
                                                         <span className="text-[10px] text-slate-400 uppercase tracking-wider block text-center font-bold">
                                                             Talentos Disponibles

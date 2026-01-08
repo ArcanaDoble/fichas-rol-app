@@ -90,8 +90,8 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
               icon.startsWith('data:')
                 ? ''
                 : icon.startsWith('lucide:')
-                ? icon.slice(7)
-                : icon
+                  ? icon.slice(7)
+                  : icon
             }
             onChange={(e) => {
               if (icon.startsWith('lucide:')) {

@@ -1862,6 +1862,19 @@ function App() {
   const [showDiceCalculator, setShowDiceCalculator] = useState(false);
   // Minijuego Barra-Reflejos
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
+  const [minigamePlayerName, setMinigamePlayerName] = useState('');
+
+  const handleLaunchMinigame = useCallback((name) => {
+    setMinigamePlayerName(name);
+    setShowBarraReflejos(true);
+  }, []);
+
+  const handleLaunchDiceCalculator = useCallback((name) => {
+    setMinigamePlayerName(name);
+    setShowDiceCalculator(true);
+  }, []);
+
+
   // Sistema de Iniciativa
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Minimapa para jugadores
@@ -1870,6 +1883,23 @@ function App() {
   const [showPlayerBattleMap, setShowPlayerBattleMap] = useState(false);
   const [showPlayerBestiary, setShowPlayerBestiary] = useState(false);
   const [showPlayerClassList, setShowPlayerClassList] = useState(false);
+  const [showClassMinimap, setShowClassMinimap] = useState(false);
+
+  const handleLaunchSpeedSystem = useCallback((name) => {
+    setMinigamePlayerName(name);
+    setShowInitiativeTracker(true);
+  }, []);
+
+  const handleLaunchMinimap = useCallback((name) => {
+    if (name) {
+      setMinigamePlayerName(name);
+      setShowClassMinimap(true);
+    } else if (userType === 'master') {
+      setChosenView('minimap');
+    } else {
+      setShowPlayerMinimap(true);
+    }
+  }, [userType, setChosenView, setShowPlayerMinimap]);
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -5069,9 +5099,70 @@ function App() {
       <>
         {content}
         {tooltipElements}
+        {showBarraReflejos && (
+          <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+            <BarraReflejos
+              playerName={minigamePlayerName || playerName || 'Jugador'}
+              onBack={() => {
+                setShowBarraReflejos(false);
+                setMinigamePlayerName('');
+              }}
+            />
+          </div>
+        )}
+        {showDiceCalculator && (
+          <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+            <DiceCalculator
+              playerName={minigamePlayerName || playerName || 'Jugador'}
+              onBack={() => {
+                setShowDiceCalculator(false);
+                setMinigamePlayerName('');
+              }}
+            />
+          </div>
+        )}
+        {showInitiativeTracker && (
+          <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+            <InitiativeTracker
+              playerName={minigamePlayerName || playerName || 'Jugador'}
+              isMaster={true}
+              glossary={glossary}
+              playerEquipment={playerData ? {
+                weapons: playerData.weapons,
+                armaduras: playerData.armaduras,
+                poderes: playerData.poderes,
+              } : null}
+              armas={armas}
+              armaduras={armaduras}
+              habilidades={habilidades}
+              onBack={() => {
+                setShowInitiativeTracker(false);
+                setMinigamePlayerName('');
+              }}
+            />
+          </div>
+        )}
+        {showClassMinimap && (
+          <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+            <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
+              <MinimapBuilder
+                mode="player"
+                backLabel="Volver"
+                showNewBadge={false}
+                onBack={() => {
+                  setShowClassMinimap(false);
+                  setMinigamePlayerName('');
+                }}
+                playerName={minigamePlayerName}
+                currentUserId={minigamePlayerName}
+                userRole="PLAYER"
+              />
+            </React.Suspense>
+          </div>
+        )}
       </>
     ),
-    [tooltipElements]
+    [tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName]
   );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -5435,24 +5526,8 @@ function App() {
       </div>
     );
   }
-  // CALCULADORA DE DADOS
-  if (userType === 'player' && nameEntered && showDiceCalculator) {
-    return withTooltips(
-      <DiceCalculator
-        playerName={playerName}
-        onBack={() => setShowDiceCalculator(false)}
-      />
-    );
-  }
-  // MINIJUEGO BARRA-REFLEJOS
-  if (userType === 'player' && nameEntered && showBarraReflejos) {
-    return withTooltips(
-      <BarraReflejos
-        playerName={playerName}
-        onBack={() => setShowBarraReflejos(false)}
-      />
-    );
-  }
+
+
   // SISTEMA DE INICIATIVA
   if (userType === 'player' && nameEntered && showInitiativeTracker) {
     return withTooltips(
@@ -5730,6 +5805,8 @@ function App() {
         disableSidebar={true}
         backButtonLabel="Volver a Ficha"
         onBack={() => setShowPlayerClassList(false)}
+        onLaunchMinigame={handleLaunchMinigame}
+        onLaunchMinimap={handleLaunchMinimap}
       />
     );
   }
@@ -6756,6 +6833,10 @@ function App() {
         glossary={glossary}
         rarityColorMap={rarityColorMap}
         onBack={() => setChosenView(null)}
+        onLaunchMinigame={handleLaunchMinigame}
+        onLaunchDiceCalculator={handleLaunchDiceCalculator}
+        onLaunchSpeedSystem={handleLaunchSpeedSystem}
+        onLaunchMinimap={handleLaunchMinimap}
       />
     );
   }
