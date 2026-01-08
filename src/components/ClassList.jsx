@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { collection, doc, getDocs, setDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
@@ -13,6 +13,7 @@ import {
   FiTarget,
   FiEdit2,
   FiPlus,
+  FiMinus,
   FiCheckSquare,
   FiSquare,
   FiSave,
@@ -21,7 +22,23 @@ import {
   FiSliders,
   FiMap,
   FiChevronRight,
+  FiUnlock,
+  FiKey,
 } from 'react-icons/fi';
+import {
+  Move,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Eye,
+  LayoutTemplate,
+  CircleUser,
+  Upload,
+  ImageIcon,
+  Dices,
+  Zap,
+  Map,
+} from 'lucide-react';
 import { ClassCreatorView } from './ClassCreatorView';
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
@@ -67,6 +84,7 @@ const defaultEquipment = {
   weapons: [],
   armor: [],
   abilities: [],
+  objects: [],
 };
 
 const normalizeImageValue = (value) => {
@@ -392,6 +410,8 @@ const buildAbilityEntry = (ability) => {
 const EditableField = ({
   value,
   onChange,
+  onCommit,
+  showEditIcon = true,
   placeholder = 'Haz clic para editar',
   multiline = false,
   displayClassName = '',
@@ -415,6 +435,7 @@ const EditableField = ({
 
   const handleBlur = () => {
     setIsEditing(false);
+    if (onCommit) onCommit();
   };
 
   const handleKeyDown = (event) => {
@@ -429,7 +450,7 @@ const EditableField = ({
   };
 
   const baseInputClasses =
-    'w-full rounded-2xl border border-slate-700/60 bg-slate-950/80 px-4 py-2 text-sm text-slate-100 shadow-inner shadow-black/40 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40';
+    'w-full bg-black/60 border border-slate-700/50 rounded px-2 py-1 text-sm text-slate-100 focus:outline-none focus:border-[#c8aa6e]/80 transition-all';
 
   const displayValue = value && value.length > 0 ? value : placeholder;
   const isPlaceholder = !value || value.length === 0;
@@ -463,7 +484,7 @@ const EditableField = ({
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className={`group inline-flex w-full items-center gap-2 text-left transition hover:text-slate-100/90 ${displayClassName}`}
+          className={`group inline-flex items-center gap-2 text-left transition hover:text-slate-100/90 ${displayClassName || 'w-full'}`}
         >
           <span
             className={`${textClassName || ''
@@ -471,7 +492,9 @@ const EditableField = ({
           >
             {displayValue}
           </span>
-          <FiEdit2 className="h-3.5 w-3.5 text-slate-500 opacity-0 transition group-hover:opacity-100" />
+          {showEditIcon && (
+            <FiEdit2 className="h-3.5 w-3.5 absolute -right-5 top-1/2 -translate-y-1/2 text-slate-500 opacity-0 transition group-hover:opacity-100 pointer-events-none" />
+          )}
         </button>
       )}
     </div>
@@ -487,6 +510,7 @@ const ensureClassDefaults = (classItem) => {
     features: [], // Relics/Talents
     equipment: deepClone(defaultEquipment),
     actionData: null, // Custom action reference overrides
+    portraitSource: '',
   };
 
   const merged = {
@@ -1236,7 +1260,9 @@ const EditableText = ({ value, onChange, className = '', multiline = false, plac
       title="Click para editar"
     >
       {value || placeholder}
-      <span className="ml-2 opacity-0 group-hover:opacity-50 text-xs">✏️</span>
+      <span className="absolute -right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 text-xs pointer-events-none">
+        ✏️
+      </span>
     </div>
   );
 };
@@ -1255,7 +1281,7 @@ const DiceSelector = ({ value, onChange }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const diceOptions = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+  const diceOptions = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
   return (
     <div className="relative" ref={containerRef}>
@@ -1277,25 +1303,35 @@ const DiceSelector = ({ value, onChange }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-3 grid grid-cols-3 gap-3 w-[180px] backdrop-blur-md"
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-2 grid grid-cols-5 gap-x-1 gap-y-0 w-[210px] backdrop-blur-md"
           >
-            {diceOptions.map((dice) => (
-              <button
-                key={dice}
-                onClick={() => {
-                  onChange(dice);
-                  setIsOpen(false);
-                }}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
-              >
-                <div className="w-8 h-8 mb-1 transition-transform group-hover:scale-110">
-                  <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
-                </div>
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
-                  {dice.toUpperCase()}
-                </span>
-              </button>
-            ))}
+            {diceOptions.map((dice) => {
+              const gridPos = {
+                'd4': 'col-start-1 row-start-1',
+                'd10': 'col-start-2 row-start-2',
+                'd6': 'col-start-3 row-start-1',
+                'd12': 'col-start-4 row-start-2',
+                'd8': 'col-start-5 row-start-1',
+              }[dice];
+
+              return (
+                <button
+                  key={dice}
+                  onClick={() => {
+                    onChange(dice);
+                    setIsOpen(false);
+                  }}
+                  className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
+                >
+                  <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
+                    <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
+                    {dice.toUpperCase()}
+                  </span>
+                </button>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1312,6 +1348,10 @@ const ClassList = ({
   rarityColorMap = {},
   readOnly = false,
   backButtonLabel = "Volver al menú",
+  onLaunchMinigame,
+  onLaunchDiceCalculator,
+  onLaunchSpeedSystem,
+  onLaunchMinimap,
 }) => {
   const [classes, setClasses] = useState(initialClasses);
   const [isSaving, setIsSaving] = useState(false);
@@ -1325,11 +1365,21 @@ const ClassList = ({
   const [cropperState, setCropperState] = useState({
     classId: null,
     imageSrc: '',
-    crop: { x: 0, y: 0 },
-    zoom: 0.9,
-    croppedAreaPixels: null,
+    isNewUpload: false,
+    activeMode: 'CARD', // 'CARD' | 'AVATAR'
+    card: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+    avatar: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
   });
   const [isCropping, setIsCropping] = useState(false);
+
+  // Custom Cropper State
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [showGuides, setShowGuides] = useState(true);
+
+  const containerRef = useRef(null);
+  const imageRef = useRef(null);
+
   const [editingClass, setEditingClass] = useState(null);
   const [levelSliderLimit, setLevelSliderLimit] = useState(12);
   const [equipmentSearchTerms, setEquipmentSearchTerms] = useState({
@@ -1641,6 +1691,7 @@ const ClassList = ({
     if (category === 'weapons') itemType = 'weapon';
     else if (category === 'armor') itemType = 'armor';
     else if (category === 'abilities') itemType = 'ability';
+    else if (category === 'objects') itemType = 'object';
 
     // Normalizar el item para asegurar que tiene todas las propiedades necesarias
     const normalized = {
@@ -1667,7 +1718,7 @@ const ClassList = ({
       }
 
       // Usar la categoría proporcionada o 'weapons' por defecto si no coincide
-      const targetCategory = ['weapons', 'armor', 'abilities'].includes(category) ? category : 'weapons';
+      const targetCategory = ['weapons', 'armor', 'abilities', 'objects'].includes(category) ? category : 'weapons';
 
       if (!draft.equipment[targetCategory]) {
         draft.equipment[targetCategory] = [];
@@ -1685,6 +1736,31 @@ const ClassList = ({
         draft.equipment[category].splice(index, 1);
       }
     });
+  };
+
+  const handleDeleteClass = async (classId) => {
+    if (!classId) return;
+
+    if (!window.confirm("¿Estás seguro de que quieres eliminar esta clase? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'classes', classId));
+      setClasses((prev) => prev.filter((c) => c.id !== classId));
+
+      if (selectedClass && selectedClass.id === classId) {
+        setSelectedClass(null);
+      }
+      // If we were editing this class, close the editor
+      if (editingClass && editingClass.id === classId) {
+        closeClassDetails();
+      }
+
+    } catch (error) {
+      console.error("Error removing class: ", error);
+      alert("Error al eliminar la clase. Inténtalo de nuevo.");
+    }
   };
 
   const handleUpdateTalent = (field, value) => {
@@ -1875,6 +1951,7 @@ const ClassList = ({
   const handleSaveNewClass = async (newClass) => {
     try {
       let imageUrl = newClass.image;
+      let avatarUrl = newClass.avatar;
 
       // If image is a base64 string, upload it to Storage
       if (imageUrl && imageUrl.startsWith('data:')) {
@@ -1883,9 +1960,25 @@ const ClassList = ({
         imageUrl = await getDownloadURL(imageRef);
       }
 
+      // If avatar is a base64 string, upload it to Storage
+      if (avatarUrl && avatarUrl.startsWith('data:')) {
+        const avatarRef = ref(storage, `class-avatars/${newClass.id}`);
+        await uploadString(avatarRef, avatarUrl, 'data_url');
+        avatarUrl = await getDownloadURL(avatarRef);
+      }
+
+      let portraitSourceUrl = newClass.portraitSource;
+      if (portraitSourceUrl && portraitSourceUrl.startsWith('data:')) {
+        const sourceRef = ref(storage, `class-sources/${newClass.id}`);
+        await uploadString(sourceRef, portraitSourceUrl, 'data_url');
+        portraitSourceUrl = await getDownloadURL(sourceRef);
+      }
+
       const classToSave = {
         ...newClass,
         image: imageUrl,
+        avatar: avatarUrl,
+        portraitSource: portraitSourceUrl || '',
       };
 
       await setDoc(doc(db, 'classes', newClass.id), classToSave);
@@ -3020,12 +3113,16 @@ const ClassList = ({
     return sorted;
   }, [classes, searchTerm, sortBy]);
 
-  const openFileDialogForClass = (classId) => {
-    setCropperState({ classId, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 1, croppedAreaPixels: null });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      fileInputRef.current.click();
-    }
+  const handleStartPortraitEdit = (dndClass) => {
+    setCropperState({
+      classId: dndClass.id,
+      imageSrc: dndClass.portraitSource || dndClass.image || dndClass.avatar || '',
+      isNewUpload: false,
+      activeMode: 'CARD',
+      card: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+      avatar: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+    });
+    setIsCropping(true);
   };
 
   const handleFileChange = (event) => {
@@ -3034,79 +3131,210 @@ const ClassList = ({
 
     const reader = new FileReader();
     reader.onload = () => {
-      setCropperState((prev) => ({ ...prev, imageSrc: reader.result }));
+      // Initialize with default refWidth, will be updated by effect or first interaction
+      setCropperState((prev) => ({
+        ...prev,
+        imageSrc: reader.result,
+        isNewUpload: true,
+        card: { ...prev.card, crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+        avatar: { ...prev.avatar, crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 }
+      }));
       setIsCropping(true);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleCropComplete = useCallback((_, croppedAreaPixels) => {
-    setCropperState((prev) => ({ ...prev, croppedAreaPixels }));
-  }, []);
+  // --- CUSTOM CROPPER HANDLERS ---
+  const handleMouseDown = (e) => {
+    if (!cropperState.imageSrc) return;
+    e.preventDefault();
+    setIsDragging(true);
+    const currentCrop = cropperState.activeMode === 'CARD' ? cropperState.card.crop : cropperState.avatar.crop;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStart({ x: clientX - currentCrop.x, y: clientY - currentCrop.y });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const currentWidth = containerRef.current?.clientWidth || 300;
+
+    setCropperState((prev) => ({
+      ...prev,
+      [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+        ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+        crop: {
+          x: clientX - dragStart.x,
+          y: clientY - dragStart.y
+        },
+        refWidth: currentWidth
+      }
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e) => {
+    if (!isCropping || !cropperState.imageSrc) return;
+
+    // Smooth zoom with wheel
+    const delta = e.deltaY;
+    const zoomStep = 0.05;
+
+    setCropperState(prev => {
+      const mode = prev.activeMode === 'CARD' ? 'card' : 'avatar';
+      const currentZoom = prev[mode].zoom;
+      let newZoom = currentZoom - (delta > 0 ? zoomStep : -zoomStep);
+      newZoom = Math.min(Math.max(0.5, newZoom), 3);
+
+      return {
+        ...prev,
+        [mode]: {
+          ...prev[mode],
+          zoom: newZoom
+        }
+      };
+    });
+  };
+
+  // Effect to capture initial width once modal opens
+  useEffect(() => {
+    if (isCropping && containerRef.current) {
+      const width = containerRef.current.clientWidth;
+      setCropperState(prev => ({
+        ...prev,
+        card: { ...prev.card, refWidth: width },
+        avatar: { ...prev.avatar, refWidth: width }
+      }));
+    }
+  }, [isCropping]);
+
+
+  const generateCustomImage = async (mode) => {
+    if (!cropperState.imageSrc || !imageRef.current) return null;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const width = mode === 'CARD' ? 600 : 256;
+    const height = mode === 'CARD' ? 900 : 256;
+    const cropState = mode === 'CARD' ? cropperState.card : cropperState.avatar;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    // Background
+    ctx.fillStyle = '#0b1120';
+    ctx.fillRect(0, 0, width, height);
+
+    const img = imageRef.current;
+
+    // Calculate Scale Ratio
+    // IMPORTANT: Use the stored refWidth to ensure consistency even if container resized
+    const domWidth = cropState.refWidth || 300;
+    const visualToCanvasRatio = width / domWidth;
+
+    ctx.translate(width / 2, height / 2);
+    ctx.translate(cropState.crop.x * visualToCanvasRatio, cropState.crop.y * visualToCanvasRatio);
+    ctx.scale(cropState.zoom, cropState.zoom);
+
+    // Draw Logic
+    const imgAspectRatio = img.naturalHeight / img.naturalWidth;
+    const drawWidth = width;
+    const drawHeight = width * imgAspectRatio;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
+    return canvas.toDataURL('image/jpeg', 0.9);
+  };
 
   const handleCropCancel = () => {
     setIsCropping(false);
-    setCropperState({ classId: null, imageSrc: '', crop: { x: 0, y: 0 }, zoom: 0.9, croppedAreaPixels: null });
+    setCropperState({
+      classId: null,
+      imageSrc: '',
+      activeMode: 'CARD',
+      card: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+      avatar: { crop: { x: 0, y: 0 }, zoom: 1, refWidth: 300 },
+    });
   };
 
   const handleCropSave = async () => {
     if (!cropperState.classId) return;
-    const croppedImage = await getCroppedImage(cropperState.imageSrc, cropperState.croppedAreaPixels);
-    if (!croppedImage) return;
 
     const classId = cropperState.classId;
-    const filePath = `class-images/${classId}.png`;
+    const updates = {};
+    let hasUpdates = false;
 
     try {
       setSaveStatus(null);
-      const storageRef = ref(storage, filePath);
-      await uploadString(storageRef, croppedImage, 'data_url');
-      const downloadURL = await getDownloadURL(storageRef);
-      const normalizedUrl = normalizeImageValue(downloadURL);
 
-      if (normalizedUrl) {
-        try {
-          await setDoc(
-            doc(db, 'classes', classId),
-            { image: normalizedUrl },
-            { merge: true },
-          );
-        } catch (firestoreError) {
-          console.error('Error al guardar la URL del retrato en Firestore', firestoreError);
-          setSaveStatus({
-            type: 'error',
-            message: 'El retrato se subió a Storage, pero no se pudo guardar en Firestore.',
-          });
-          return;
-        }
+      // 0. If it's a new upload, save the RAW source first
+      if (cropperState.isNewUpload && cropperState.imageSrc.startsWith('data:')) {
+        const sourcePath = `class-sources/${classId}`;
+        const sourceRef = ref(storage, sourcePath);
+        await uploadString(sourceRef, cropperState.imageSrc, 'data_url');
+        const sourceUrl = await getDownloadURL(sourceRef);
+        updates.portraitSource = sourceUrl;
+        hasUpdates = true;
       }
 
-      setClasses((prevClasses) =>
-        prevClasses.map((classItem) =>
-          classItem.id === classId ? { ...classItem, image: normalizedUrl } : classItem,
-        ),
-      );
+      // 1. Process Card Image (if pixels exist)
+      // Note: We prioritize the current crop data.
+      // 1. Process Card Image
+      const cardDataUrl = await generateCustomImage('CARD');
+      if (cardDataUrl) {
+        const filePath = `class-images/${classId}`;
+        const storageRef = ref(storage, filePath);
+        await uploadString(storageRef, cardDataUrl, 'data_url');
+        const url = await getDownloadURL(storageRef);
+        updates.image = normalizeImageValue(url);
+        hasUpdates = true;
+      }
 
-      setSelectedClass((prevSelected) =>
-        prevSelected && prevSelected.id === classId
-          ? { ...prevSelected, image: normalizedUrl }
-          : prevSelected,
-      );
+      // 2. Process Avatar Image
+      const avatarDataUrl = await generateCustomImage('AVATAR');
+      if (avatarDataUrl) {
+        const filePath = `class-avatars/${classId}`;
+        const storageRef = ref(storage, filePath);
+        await uploadString(storageRef, avatarDataUrl, 'data_url');
+        const url = await getDownloadURL(storageRef);
+        updates.avatar = normalizeImageValue(url);
+        hasUpdates = true;
+      }
 
-      setEditingClass((prevEditing) =>
-        prevEditing && prevEditing.id === classId ? { ...prevEditing, image: normalizedUrl } : prevEditing,
-      );
+      if (hasUpdates) {
+        await setDoc(doc(db, 'classes', classId), updates, { merge: true });
 
-      setSaveStatus({
-        type: 'success',
-        message: 'Retrato actualizado y guardado en Firebase.',
-      });
+        setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...updates } : c));
+
+        if (selectedClass?.id === classId) {
+          setSelectedClass((prev) => ({ ...prev, ...updates }));
+        }
+        if (editingClass?.id === classId) {
+          setEditingClass((prev) => ({ ...prev, ...updates }));
+        }
+
+        setSaveStatus({
+          type: 'success',
+          message: 'Imágenes actualizadas correctamente.',
+        });
+      }
+
       handleCropCancel();
     } catch (error) {
-      console.error('Error al subir la imagen recortada a Firebase Storage', error);
+      console.error('Error al guardar imágenes recortadas', error);
       setSaveStatus({
         type: 'error',
-        message: 'No se pudo subir la imagen recortada. Intenta nuevamente.',
+        message: 'No se pudieron guardar las imágenes.',
       });
     }
   };
@@ -3120,6 +3348,8 @@ const ClassList = ({
     const dndClass = {
       name: editingClass.name,
       image: editingClass.image || '',
+      avatar: editingClass.avatar || '',
+      portraitSource: editingClass.portraitSource || '',
       hitDie: editingClass.hitDie || 'd8',
       subtitle: editingClass.subtitle || 'Clase de Héroe',
       difficulty: editingClass.difficulty || 'Media',
@@ -3167,53 +3397,406 @@ const ClassList = ({
               </div>
 
               <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-start lg:justify-center p-4 pt-16 md:p-8 lg:p-16 gap-6 md:gap-12 lg:gap-24 pb-20 md:pb-8">
-                {/* Left: Character Card Presentation */}
-                <div className="relative group w-full max-w-[280px] md:max-w-sm lg:max-w-md aspect-[2.5/3.5] shrink-0 perspective-1000">
-                  <div className="relative w-full h-full transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
-                    {/* Glowing aura behind card */}
-                    <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
+                {/* Left: Character Card Presentation / Portrait Editor */}
+                <div className={`relative group w-full max-w-[280px] md:max-w-sm lg:max-w-md shrink-0 perspective-1000 ${!isCropping ? 'aspect-[2/3]' : ''}`}>
+                  <div className="relative w-full h-full transition-transform duration-700">
 
-                    {/* Card Frame */}
-                    <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl">
-                      {dndClass.image ? (
-                        <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
-                          <FiImage className="h-24 w-24 opacity-20" />
+                    {isCropping ? (
+                      <div className="space-y-6 h-full flex flex-col">
+                        {/* MODE TABS */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'CARD' }))}
+                            className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'CARD' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                          >
+                            <LayoutTemplate className="w-3 h-3" /> Portada
+                          </button>
+                          <button
+                            onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'AVATAR' }))}
+                            className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'AVATAR' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                          >
+                            <CircleUser className="w-3 h-3" /> Avatar
+                          </button>
                         </div>
-                      )}
 
-                      {/* Card UI Overlays */}
+                        {/* EDITOR CONTAINER */}
+                        <div
+                          className={`relative w-full bg-[#0b1120] rounded-sm border border-slate-800 overflow-hidden shadow-2xl group ring-1 ring-slate-700 transition-all duration-300 ${cropperState.activeMode === 'CARD' ? 'aspect-[2/3]' : 'aspect-square max-w-[300px] mx-auto flex-1'}`}
+                          style={{ zIndex: 30 }}
+                        >
+                          {cropperState.imageSrc ? (
+                            <div
+                              ref={containerRef}
+                              className={`w-full h-full relative overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                              onMouseDown={handleMouseDown}
+                              onMouseMove={handleMouseMove}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
+                              onTouchStart={handleMouseDown}
+                              onTouchMove={handleMouseMove}
+                              onTouchEnd={handleMouseUp}
+                              onWheel={handleWheel}
+                            >
+                              <img
+                                ref={imageRef}
+                                src={cropperState.imageSrc}
+                                alt="Preview"
+                                draggable={false}
+                                crossOrigin="anonymous"
+                                className="absolute max-w-none origin-center pointer-events-none select-none transition-transform duration-75 ease-out"
+                                style={{
+                                  left: '50%',
+                                  top: '50%',
+                                  width: '100%',
+                                  height: 'auto',
+                                  transform: `translate(-50%, -50%) translate(${cropperState.activeMode === 'CARD' ? cropperState.card.crop.x : cropperState.avatar.crop.x}px, ${cropperState.activeMode === 'CARD' ? cropperState.card.crop.y : cropperState.avatar.crop.y}px) scale(${cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom})`,
+                                }}
+                              />
 
-                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
-                        <EditableText
-                          value={dndClass.name}
-                          onChange={(val) => handleUpdateClassField('name', val)}
-                          className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
-                        />
-                        <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
-                        <EditableText
-                          value={dndClass.subtitle}
-                          onChange={(val) => handleUpdateClassField('subtitle', val)}
-                          className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
-                        />
+                              {/* OVERLAY GUIDES */}
+                              {showGuides && cropperState.activeMode === 'CARD' && (
+                                <>
+                                  <div className="absolute inset-0 border-[4px] border-[#c8aa6e] z-20 pointer-events-none opacity-80"></div>
+                                  <div className="absolute bottom-0 left-0 right-0 h-[35%] bg-gradient-to-t from-[#0b1120] via-[#0b1120]/80 to-transparent z-20 pointer-events-none flex items-end justify-center pb-6">
+                                    <div className="text-[#c8aa6e]/30 text-[8px] uppercase font-bold tracking-widest border border-[#c8aa6e]/20 px-2 py-1 rounded">Zona Texto</div>
+                                  </div>
+                                  <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
+                                    <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                    <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                    <div className="border-r border-white"></div><div className="border-r border-white"></div><div></div>
+                                  </div>
+                                </>
+                              )}
+
+                              {showGuides && cropperState.activeMode === 'AVATAR' && (
+                                <>
+                                  <div className="absolute inset-0 z-20 pointer-events-none border-[2px] border-[#c8aa6e]/50 rounded-full"></div>
+                                  <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                    <defs>
+                                      <mask id="circleMaskDetail">
+                                        <rect width="100" height="100" fill="white" />
+                                        <circle cx="50" cy="50" r="48" fill="black" />
+                                      </mask>
+                                    </defs>
+                                    <rect width="100" height="100" fill="rgba(0,0,0,0.7)" mask="url(#circleMaskDetail)" />
+                                  </svg>
+                                </>
+                              )}
+
+                              {/* Toolbar Controls */}
+                              <div className="absolute top-2 right-2 flex gap-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => setShowGuides(!showGuides)}
+                                  className={`p-1.5 backdrop-blur rounded-full border transition-colors ${showGuides ? 'bg-[#c8aa6e]/20 border-[#c8aa6e] text-[#c8aa6e]' : 'bg-black/60 border-white/10 text-slate-400'}`}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                >
+                                  <Upload className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setCropperState(prev => ({
+                                    ...prev,
+                                    [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                      ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                      crop: { x: 0, y: 0 },
+                                      zoom: 1
+                                    }
+                                  }))}
+                                  className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {/* ZOOM & ACTIONS */}
+                        <div className="bg-[#161f32]/50 p-4 rounded border border-slate-700 space-y-4 shadow-xl shrink-0">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                              <div className="flex items-center gap-2"><Move className="w-3 h-3" /> Zoom</div>
+                              <div>{((cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom) * 100).toFixed(0)}%</div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <ZoomOut className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
+                                ...prev,
+                                [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                  ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                  zoom: Math.max(0.5, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) - 0.1)
+                                }
+                              }))} />
+                              <input
+                                type="range"
+                                min="0.5"
+                                max="3"
+                                step="0.05"
+                                value={cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value);
+                                  setCropperState(prev => ({
+                                    ...prev,
+                                    [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                      ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                      zoom: value
+                                    }
+                                  }));
+                                }}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                              />
+                              <ZoomIn className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
+                                ...prev,
+                                [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                  ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                  zoom: Math.min(3, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) + 0.1)
+                                }
+                              }))} />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-2 border-t border-slate-700/50">
+                            <button
+                              onClick={handleCropCancel}
+                              className="flex-1 py-1.5 border border-slate-700 text-slate-400 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 hover:text-slate-200 transition-all"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={handleCropSave}
+                              className="flex-1 py-1.5 bg-[#c8aa6e] text-[#0b1120] text-[10px] font-bold uppercase tracking-widest hover:brightness-110 shadow-lg shadow-[#c8aa6e]/20 transition-all"
+                            >
+                              Guardar
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Static Card Flow */}
+                        <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
+                        <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
+                          {dndClass.image ? (
+                            <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                              <FiImage className="h-24 w-24 opacity-20" />
+                            </div>
+                          )}
 
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
+                            <EditableText
+                              value={dndClass.name}
+                              onChange={(val) => handleUpdateClassField('name', val)}
+                              className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
+                            />
+                            <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
+                            <EditableText
+                              value={dndClass.subtitle}
+                              onChange={(val) => handleUpdateClassField('subtitle', val)}
+                              className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 {/* Right: Data & Stats */}
                 <div className="flex-1 w-full max-w-5xl flex flex-col gap-8">
 
                   {/* Header / Title Section */}
-                  <div>
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em]">
-                        Dificultad: {editingClass.difficulty}
-                      </div>
-                      <div className="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em]">
-                        Rol: {editingClass.role || 'N/A'}
-                      </div>
+                  <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
+                    <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-4">
+                      {/* DIFICULTAD */}
+                      <EditableField
+                        value={`${editingClass.difficulty}`}
+                        onChange={(val) => updateEditingClass(d => { d.difficulty = val })}
+                        showEditIcon={false}
+                        displayClassName="w-auto"
+                        textClassName="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] block"
+                        inputClassName="bg-[#0b1120] text-[#c8aa6e] text-[10px] font-bold uppercase border border-[#c8aa6e]/50 px-2 py-0.5 rounded w-24"
+                        placeholder="Dificultad"
+                      />
+
+                      {/* ROL */}
+                      <EditableField
+                        value={editingClass.role || 'N/A'}
+                        onChange={(val) => updateEditingClass(d => { d.role = val })}
+                        showEditIcon={false}
+                        displayClassName="w-auto"
+                        textClassName="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
+                        inputClassName="bg-[#0b1120] text-cyan-400 text-[10px] font-bold uppercase border border-cyan-500/50 px-2 py-0.5 rounded w-24"
+                        placeholder="Rol"
+                      />
+
+                      {/* ETIQUETAS DINÁMICAS */}
+                      {(editingClass.tags || []).map((tag, index) => {
+                        const isMinigame = tag.toLowerCase().trim() === 'minijuego';
+
+                        if (isMinigame) {
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={() => {
+                                  if (onLaunchMinigame) {
+                                    onLaunchMinigame(editingClass.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-amber-900/40 border border-amber-500/50 text-amber-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-amber-800/60 transition-colors group/mini relative"
+                                title="Abrir Minijuego de Cerrajería"
+                              >
+                                <FiLock className="w-3 h-3" />
+                                MINIJUEGO
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                                  title="Eliminar Etiqueta"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isCalculator = tag.toLowerCase().trim() === 'calculadora';
+
+                        if (isCalculator) {
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={() => {
+                                  if (onLaunchDiceCalculator) {
+                                    onLaunchDiceCalculator(editingClass.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-cyan-900/40 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-cyan-800/60 transition-colors group/mini relative"
+                                title="Abrir Calculadora de Dados"
+                              >
+                                <Dices className="w-3 h-3" />
+                                CALCULADORA
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                                  title="Eliminar Etiqueta"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isSpeedSystem = tag.toLowerCase().trim() === 'velocidad';
+
+                        if (isSpeedSystem) {
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={() => {
+                                  if (onLaunchSpeedSystem) {
+                                    onLaunchSpeedSystem(editingClass.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-amber-900/40 border border-amber-500/50 text-amber-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-amber-800/60 transition-colors group/mini relative"
+                                title="Abrir Sistema de Velocidad"
+                              >
+                                <Zap className="w-3 h-3" />
+                                VELOCIDAD
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                                  title="Eliminar Etiqueta"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isMinimap = tag.toLowerCase().trim() === 'minimapa';
+
+                        if (isMinimap) {
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={() => {
+                                  if (onLaunchMinimap) {
+                                    onLaunchMinimap(editingClass.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-indigo-900/40 border border-indigo-500/50 text-indigo-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-indigo-800/60 transition-colors group/mini relative"
+                                title="Abrir Biblioteca de Cuadrantes"
+                              >
+                                <Map className="w-3 h-3" />
+                                MINIMAPA
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                                  title="Eliminar Etiqueta"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <EditableField
+                            key={index}
+                            value={tag}
+                            onChange={(val) => updateEditingClass(d => { d.tags[index] = val })}
+                            onCommit={() => {
+                              updateEditingClass(d => {
+                                d.tags = (d.tags || []).filter(t => t.trim() !== '');
+                              });
+                            }}
+                            showEditIcon={false}
+                            displayClassName="w-auto"
+                            textClassName="px-3 py-1 bg-slate-800/40 border border-slate-700/50 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
+                            inputClassName="bg-[#0b1120] text-slate-400 text-[10px] font-bold uppercase border border-slate-700 px-2 py-0.5 rounded w-28"
+                            placeholder="Etiqueta"
+                          />
+                        );
+                      })}
+
+                      {/* BOTÓN AÑADIR ETIQUETA */}
+                      <button
+                        onClick={() => updateEditingClass(d => {
+                          if (!d.tags) d.tags = [];
+                          d.tags.push('ETIQUETA');
+                        })}
+                        className="p-1 text-[#c8aa6e] hover:text-[#f0e6d2] transition-colors"
+                        title="Añadir Etiqueta"
+                      >
+                        <FiPlus className="w-5 h-5" />
+                      </button>
 
                       {/* UNLOCK/LOCK TOGGLE */}
                       <button
@@ -3223,14 +3806,13 @@ const ClassList = ({
                             draft.status = newStatus;
                           });
                         }}
-                        className={`px-3 py-1 border rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${editingClass.status !== 'locked'
+                        className={`w-10 h-[26px] border rounded flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${editingClass.status !== 'locked'
                           ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
                           : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
                           }`}
                         title={editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase"}
                       >
-                        {editingClass.status !== 'locked' ? <FiLock className="w-3 h-3" /> : <FiLock className="w-3 h-3" />}
-                        {editingClass.status !== 'locked' ? 'DESBLOQUEADO' : 'BLOQUEADO'}
+                        {editingClass.status !== 'locked' ? <FiUnlock className="w-3.5 h-3.5" /> : <FiLock className="w-3.5 h-3.5" />}
                       </button>
                     </div>
 
@@ -3238,7 +3820,7 @@ const ClassList = ({
                       {editingClass.name}
                     </h1>
 
-                    <div className="relative pl-6 border-l-2 border-[#c8aa6e]/30">
+                    <div className="relative pl-6 lg:pl-6 border-l-2 lg:border-l-2 border-[#c8aa6e]/30 mx-auto lg:mx-0 max-w-prose text-left">
                       <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
                         "<EditableText
                           value={editingClass.description}
@@ -3309,10 +3891,10 @@ const ClassList = ({
                         </button>
 
                         <button
-                          onClick={() => openFileDialogForClass(dndClass.id)}
-                          className="w-full px-6 py-4 border border-[#c8aa6e]/30 text-[#c8aa6e] font-['Cinzel'] font-bold uppercase tracking-widest hover:bg-[#c8aa6e]/10 transition-colors"
+                          onClick={() => handleStartPortraitEdit(dndClass)}
+                          className={`w-full px-6 py-4 border font-['Cinzel'] font-bold uppercase tracking-widest transition-all ${isCropping ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
                         >
-                          Editar Retrato
+                          {isCropping ? 'Editando Retrato...' : 'Editar Retrato'}
                         </button>
                       </div>
                     </div >
@@ -3797,6 +4379,7 @@ const ClassList = ({
         case 'loadout':
           return (
             <LoadoutView
+              key={dndClass.id}
               dndClass={dndClass}
               equipmentCatalog={equipmentCatalog}
               onAddEquipment={handleAddEquipment}
@@ -3847,6 +4430,7 @@ const ClassList = ({
           characterName={dndClass.name}
           characterLevel={dndClass.currentLevel}
           characterImage={dndClass.image}
+          characterAvatar={dndClass.avatar}
           onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
@@ -4110,17 +4694,33 @@ const ClassList = ({
                         {/* Edit Button (Top Left) */}
                         {/* Edit Button (Top Left) - Only if not readOnly */}
                         {!readOnly && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openFileDialogForClass(classItem.id);
-                            }}
-                            className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
-                            title="Cambiar retrato"
-                          >
-                            <FiImage className="h-3.5 w-3.5" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartPortraitEdit(classItem);
+                              }}
+                              className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
+                              title="Cambiar retrato"
+                            >
+                              <FiImage className="h-3.5 w-3.5" />
+                            </button>
+
+                            {!isLocked && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteClass(classItem.id);
+                                }}
+                                className="absolute right-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-[#0b1120]/80 text-red-400 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-red-900/50 hover:text-red-200 group-hover:opacity-100"
+                                title="Eliminar clase"
+                              >
+                                <FiTrash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     );
@@ -4143,63 +4743,7 @@ const ClassList = ({
         )}
       </AnimatePresence>
 
-      <Modal
-        isOpen={isCropping}
-        onClose={handleCropCancel}
-        title="Ajustar retrato"
-        size="xl"
-        footer={
-          <>
-            <Boton color="gray" onClick={handleCropCancel}>
-              Cancelar
-            </Boton>
-            <Boton color="blue" onClick={handleCropSave}>
-              Guardar recorte
-            </Boton>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-6">
-          <div className="relative h-[360px] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900">
-            {cropperState.imageSrc ? (
-              <Cropper
-                image={cropperState.imageSrc}
-                crop={cropperState.crop}
-                zoom={cropperState.zoom}
-                aspect={4 / 5}
-                minZoom={0.3}
-                maxZoom={6}
-                onCropChange={(crop) => setCropperState((prev) => ({ ...prev, crop }))}
-                onZoomChange={(zoom) => setCropperState((prev) => ({ ...prev, zoom }))}
-                onCropComplete={handleCropComplete}
-                restrictPosition
-                objectFit="cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                Selecciona una imagen para comenzar.
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="zoom" className="text-xs uppercase tracking-[0.4em] text-slate-500">
-              Zoom
-            </label>
-            <input
-              id="zoom"
-              type="range"
-              min={0.3}
-              max={6}
-              step={0.05}
-              value={cropperState.zoom}
-              onChange={(event) =>
-                setCropperState((prev) => ({ ...prev, zoom: Number(event.target.value) }))
-              }
-              className="accent-sky-400"
-            />
-          </div>
-        </div>
-      </Modal>
+
     </div>
   );
 };

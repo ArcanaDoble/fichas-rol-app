@@ -28,8 +28,8 @@ export const MobileNav = ({
                         key={item.id}
                         onClick={() => onTabChange(item.id)}
                         className={`flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all min-w-[52px] relative ${activeTab === item.id
-                                ? 'text-[#c8aa6e]'
-                                : 'text-slate-500'
+                            ? 'text-[#c8aa6e]'
+                            : 'text-slate-500'
                             }`}
                     >
                         <span className={`transition-transform ${activeTab === item.id ? 'scale-110' : ''}`}>
@@ -51,8 +51,8 @@ export const MobileNav = ({
                         onClick={hasUnsavedChanges ? onSave : undefined}
                         disabled={!hasUnsavedChanges || saveButtonState === 'saving'}
                         className={`flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all min-w-[52px] relative ${hasUnsavedChanges
-                                ? 'text-[#c8aa6e]'
-                                : 'text-slate-600 opacity-50'
+                            ? 'text-[#c8aa6e]'
+                            : 'text-slate-600 opacity-50'
                             }`}
                     >
                         {saveButtonState === 'saving' ? (
@@ -95,6 +95,7 @@ const Sidebar = ({
     characterName,
     characterLevel,
     characterImage,
+    characterAvatar,
     onSave,
     hasUnsavedChanges = false,
     saveButtonState = 'idle'
@@ -112,8 +113,8 @@ const Sidebar = ({
                     {/* Animated Level Progress Ring (Visual only) */}
                     <div className="w-24 h-24 rounded-full p-[2px] bg-gradient-to-tr from-[#c8aa6e] to-[#785a28]">
                         <div className="w-full h-full rounded-full bg-[#0b1120] p-1 overflow-hidden">
-                            {characterImage ? (
-                                <img src={characterImage} alt={characterName} className="w-full h-full object-cover rounded-full opacity-90 group-hover:opacity-100 transition-opacity" />
+                            {characterAvatar || characterImage ? (
+                                <img src={characterAvatar || characterImage} alt={characterName} className="w-full h-full object-cover rounded-full opacity-90 group-hover:opacity-100 transition-opacity" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-slate-800 rounded-full">
                                     <FiUser className="w-10 h-10 text-slate-500" />
@@ -240,6 +241,7 @@ Sidebar.propTypes = {
     characterName: PropTypes.string,
     characterLevel: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     characterImage: PropTypes.string,
+    characterAvatar: PropTypes.string,
     onSave: PropTypes.func,
     hasUnsavedChanges: PropTypes.bool,
     saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error'])
