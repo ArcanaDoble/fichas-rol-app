@@ -6,6 +6,7 @@ import EmojiPicker from 'emoji-picker-react';
 import LucideIconPicker from '../LucideIconPicker';
 import { Search } from 'lucide-react';
 import { uploadDataUrl } from '../../utils/storage';
+import { nanoid } from 'nanoid';
 
 const toSlug = (str) =>
   str
@@ -49,13 +50,20 @@ const CustomItemForm = ({ onSave, onCancel, initial = null }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name) return;
+
+    // Use existing ID if present, otherwise use initial type or slug (for backward compatibility)
+    // Actually better to just use nanoid for new items if they don't have id/type.
+    const id = initial?.id || initial?.type || nanoid();
     const type = toSlug(name);
+
     let finalIcon = icon;
     if (icon?.startsWith('data:')) {
-      finalIcon = await uploadDataUrl(icon, `custom-item-icons/${type}`);
+      finalIcon = await uploadDataUrl(icon, `custom-item-icons/${id}`);
       setIcon(finalIcon);
     }
-    onSave({ name, type, icon: finalIcon, description, color });
+
+    onSave({ id, name, type, icon: finalIcon, description, color });
+
     if (!initial) {
       setName('');
       setDescription('');

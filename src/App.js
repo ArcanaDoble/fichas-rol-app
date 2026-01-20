@@ -1135,6 +1135,7 @@ function App() {
   const [editingRarity, setEditingRarity] = useState(null);
   const [rarityError, setRarityError] = useState('');
   const [newWeaponData, setNewWeaponData] = useState({
+    id: '',
     nombre: '',
     dano: '',
     alcance: '',
@@ -1148,9 +1149,10 @@ function App() {
     tecnologia: '',
     rareza: '',
   });
-  const [editingWeapon, setEditingWeapon] = useState(null);
+  const [editingWeapon, setEditingWeapon] = useState(null); // Now stores the ID instead of the name
   const [newWeaponError, setNewWeaponError] = useState('');
   const [newArmorData, setNewArmorData] = useState({
+    id: '',
     nombre: '',
     defensa: '',
     cargaFisica: '',
@@ -1161,10 +1163,11 @@ function App() {
     tecnologia: '',
     rareza: '',
   });
-  const [editingArmor, setEditingArmor] = useState(null);
+  const [editingArmor, setEditingArmor] = useState(null); // Now stores the ID instead of the name
   const [newArmorError, setNewArmorError] = useState('');
   const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [newAbility, setNewAbility] = useState({
+    id: '',
     nombre: '',
     alcance: '',
     consumo: '',
@@ -1175,7 +1178,7 @@ function App() {
     descripcion: '',
     rareza: '',
   });
-  const [editingAbility, setEditingAbility] = useState(null);
+  const [editingAbility, setEditingAbility] = useState(null); // Now stores the ID instead of the name
   const [newAbilityError, setNewAbilityError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
@@ -3584,18 +3587,21 @@ function App() {
     if (fetchArmasError) return;
     setLoading(true);
     try {
-      let datos;
+      let sheetItems = [];
       try {
         const rows = await fetchSheetData(sheetId, 'Lista_Armas');
         if (rows && rows.length > 0) {
-          datos = rows.map((obj) => {
+          sheetItems = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
                 s.replace(/[[\]]/g, '').trim()
               )
               : [];
+            const nombre = obj.NOMBRE || '';
+            const id = `sheet-weapon-${normalizeName(nombre)}`;
             return {
-              nombre: obj.NOMBRE,
+              id,
+              nombre,
               dano: obj.DAÑO,
               alcance: obj.ALCANCE,
               consumo: obj.CONSUMO,
@@ -3625,26 +3631,49 @@ function App() {
             };
           });
         } else {
-          datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+          sheetItems = datosPruebaArmas.map((d) => ({
+            ...d,
+            id: `sheet-weapon-${normalizeName(d.nombre)}`,
+            fuente: 'sheet'
+          }));
         }
       } catch (err) {
-        datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+        sheetItems = datosPruebaArmas.map((d) => ({
+          ...d,
+          id: `sheet-weapon-${normalizeName(d.nombre)}`,
+          fuente: 'sheet'
+        }));
         setFetchArmasError(true);
       }
-      setSheetWeaponNames(new Set(datos.map((d) => normalizeName(d.nombre))));
+
+      setSheetWeaponNames(new Set(sheetItems.map((d) => normalizeName(d.nombre))));
+
+      let finalDatos = [];
       try {
         const snap = await getDocs(collection(db, 'weapons'));
-        const custom = snap.docs.map((d) => ({
-          ...d.data(),
-          rareza: (d.data().rareza || '').trim(),
-          fuente: 'custom',
-        }));
-        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
-        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
-        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
-      } catch (e) { }
+        const firebaseItems = snap.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: data.id || doc.id, // Use existing id field or the document ID
+            rareza: (data.rareza || '').trim(),
+            fuente: 'custom',
+          };
+        });
+
+        const itemMap = new Map();
+        // Add sheet items first
+        sheetItems.forEach(item => itemMap.set(item.id, item));
+        // Overwrite with firebase items (including deletions)
+        firebaseItems.forEach(item => itemMap.set(item.id, item));
+
+        finalDatos = Array.from(itemMap.values()).filter(item => !item.deleted);
+      } catch (e) {
+        finalDatos = sheetItems;
+      }
+
       setArmas(
-        datos.map((item) => ({
+        finalDatos.map((item) => ({
           ...item,
           rareza: (item.rareza || '').trim(),
         }))
@@ -3664,18 +3693,21 @@ function App() {
     if (fetchArmadurasError) return;
     setLoading(true);
     try {
-      let datos;
+      let sheetItems = [];
       try {
         const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
         if (rows && rows.length > 0) {
-          datos = rows.map((obj) => {
+          sheetItems = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
                 s.replace(/[[\]]/g, '').trim()
               )
               : [];
+            const nombre = obj.NOMBRE || '';
+            const id = `sheet-armor-${normalizeName(nombre)}`;
             return {
-              nombre: obj.NOMBRE,
+              id,
+              nombre,
               defensa: obj.ARMADURA,
               cuerpo: obj.CUERPO,
               mente: obj.MENTE,
@@ -3702,26 +3734,49 @@ function App() {
             };
           });
         } else {
-          datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+          sheetItems = datosPruebaArmaduras.map((d) => ({
+            ...d,
+            id: `sheet-armor-${normalizeName(d.nombre)}`,
+            fuente: 'sheet'
+          }));
         }
       } catch (err) {
-        datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+        sheetItems = datosPruebaArmaduras.map((d) => ({
+          ...d,
+          id: `sheet-armor-${normalizeName(d.nombre)}`,
+          fuente: 'sheet'
+        }));
         setFetchArmadurasError(true);
       }
-      setSheetArmorNames(new Set(datos.map((d) => normalizeName(d.nombre))));
+
+      setSheetArmorNames(new Set(sheetItems.map((d) => normalizeName(d.nombre))));
+
+      let finalDatos = [];
       try {
         const snap = await getDocs(collection(db, 'armors'));
-        const custom = snap.docs.map((d) => ({
-          ...d.data(),
-          rareza: (d.data().rareza || '').trim(),
-          fuente: 'custom',
-        }));
-        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
-        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
-        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
-      } catch (e) { }
+        const firebaseItems = snap.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: data.id || doc.id, // Use existing id field or doc ID
+            rareza: (data.rareza || '').trim(),
+            fuente: 'custom',
+          };
+        });
+
+        const itemMap = new Map();
+        // Add sheet entries first
+        sheetItems.forEach(item => itemMap.set(item.id, item));
+        // Overwrite with Firebase entries
+        firebaseItems.forEach(item => itemMap.set(item.id, item));
+
+        finalDatos = Array.from(itemMap.values()).filter(item => !item.deleted);
+      } catch (e) {
+        finalDatos = sheetItems;
+      }
+
       setArmaduras(
-        datos.map((item) => ({
+        finalDatos.map((item) => ({
           ...item,
           rareza: (item.rareza || '').trim(),
         }))
@@ -3744,6 +3799,7 @@ function App() {
         const data = d.data() || {};
         return {
           ...data,
+          id: data.id || d.id,
           rareza: (data.rareza || '').trim(),
         };
       });
@@ -4145,21 +4201,16 @@ function App() {
     }
   };
   const agregarArma = async () => {
-    const { nombre } = newWeaponData;
+    const { id, nombre } = newWeaponData;
     if (!nombre.trim()) {
       setNewWeaponError('Nombre requerido');
       return;
     }
     try {
-      if (editingWeapon && editingWeapon !== nombre) {
-        if (sheetWeaponNames.has(normalizeName(editingWeapon))) {
-          await setDoc(doc(db, 'weapons', editingWeapon), { nombre: editingWeapon, deleted: true, fuente: 'custom' });
-        } else {
-          await deleteDoc(doc(db, 'weapons', editingWeapon));
-        }
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newWeaponData,
+        id: finalId,
         rareza: (newWeaponData.rareza || '').trim(),
       });
 
@@ -4170,9 +4221,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'weapons', nombre), dataToSave);
+      await setDoc(doc(db, 'weapons', finalId), dataToSave);
       setEditingWeapon(null);
       setNewWeaponData({
+        id: '',
         nombre: '',
         dano: '',
         alcance: '',
@@ -4200,18 +4252,30 @@ function App() {
         : weapon.rasgos || '',
       rareza: weapon.rareza || '',
     });
-    setEditingWeapon(weapon.nombre);
+    setEditingWeapon(weapon.id);
   };
-  const deleteWeapon = async (name) => {
+  const deleteWeapon = async (id) => {
     try {
-      if (sheetWeaponNames.has(normalizeName(name))) {
-        await setDoc(doc(db, 'weapons', name), { nombre: name, deleted: true, fuente: 'custom' });
+      // Find the item to check its source
+      const weapon = armas.find(a => a.id === id);
+      if (!weapon) return;
+
+      if (weapon.fuente === 'sheet') {
+        // Mark as deleted in Firestore to override sheet
+        await setDoc(doc(db, 'weapons', id), {
+          ...weapon,
+          deleted: true,
+          fuente: 'custom'
+        });
       } else {
-        await deleteDoc(doc(db, 'weapons', name));
+        // Truly delete custom items
+        await deleteDoc(doc(db, 'weapons', id));
       }
-      if (editingWeapon === name) {
+
+      if (editingWeapon === id) {
         setEditingWeapon(null);
         setNewWeaponData({
+          id: '',
           nombre: '',
           dano: '',
           alcance: '',
@@ -4230,21 +4294,16 @@ function App() {
     } catch (e) { }
   };
   const agregarArmadura = async () => {
-    const { nombre } = newArmorData;
+    const { id, nombre } = newArmorData;
     if (!nombre.trim()) {
       setNewArmorError('Nombre requerido');
       return;
     }
     try {
-      if (editingArmor && editingArmor !== nombre) {
-        if (sheetArmorNames.has(normalizeName(editingArmor))) {
-          await setDoc(doc(db, 'armors', editingArmor), { nombre: editingArmor, deleted: true, fuente: 'custom' });
-        } else {
-          await deleteDoc(doc(db, 'armors', editingArmor));
-        }
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newArmorData,
+        id: finalId,
         rareza: (newArmorData.rareza || '').trim(),
       });
 
@@ -4255,9 +4314,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'armors', nombre), dataToSave);
+      await setDoc(doc(db, 'armors', finalId), dataToSave);
       setEditingArmor(null);
       setNewArmorData({
+        id: '',
         nombre: '',
         defensa: '',
         cargaFisica: '',
@@ -4282,18 +4342,27 @@ function App() {
         : armor.rasgos || '',
       rareza: armor.rareza || '',
     });
-    setEditingArmor(armor.nombre);
+    setEditingArmor(armor.id);
   };
-  const deleteArmor = async (name) => {
+  const deleteArmor = async (id) => {
     try {
-      if (sheetArmorNames.has(normalizeName(name))) {
-        await setDoc(doc(db, 'armors', name), { nombre: name, deleted: true, fuente: 'custom' });
+      const armor = armaduras.find(a => a.id === id);
+      if (!armor) return;
+
+      if (armor.fuente === 'sheet') {
+        await setDoc(doc(db, 'armors', id), {
+          ...armor,
+          deleted: true,
+          fuente: 'custom'
+        });
       } else {
-        await deleteDoc(doc(db, 'armors', name));
+        await deleteDoc(doc(db, 'armors', id));
       }
-      if (editingArmor === name) {
+
+      if (editingArmor === id) {
         setEditingArmor(null);
         setNewArmorData({
+          id: '',
           nombre: '',
           defensa: '',
           cargaFisica: '',
@@ -4309,17 +4378,16 @@ function App() {
     } catch (e) { }
   };
   const agregarHabilidad = async () => {
-    const { nombre } = newAbility;
+    const { id, nombre } = newAbility;
     if (!nombre.trim()) {
       setNewAbilityError('Nombre requerido');
       return;
     }
     try {
-      if (editingAbility && editingAbility !== nombre) {
-        await deleteDoc(doc(db, 'abilities', editingAbility));
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newAbility,
+        id: finalId,
         rareza: (newAbility.rareza || '').trim(),
       });
 
@@ -4330,9 +4398,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'abilities', nombre), dataToSave);
+      await setDoc(doc(db, 'abilities', finalId), dataToSave);
       setEditingAbility(null);
       setNewAbility({
+        id: '',
         nombre: '',
         alcance: '',
         consumo: '',
@@ -4357,20 +4426,22 @@ function App() {
         : ability.rasgos || '',
       rareza: ability.rareza || '',
     });
-    setEditingAbility(ability.nombre);
+    setEditingAbility(ability.id);
   };
-  const deleteAbility = async (name) => {
+  const deleteAbility = async (id) => {
     try {
-      await deleteDoc(doc(db, 'abilities', name));
-      if (editingAbility === name) {
+      await deleteDoc(doc(db, 'abilities', id));
+      if (editingAbility === id) {
         setEditingAbility(null);
         setNewAbility({
+          id: '',
           nombre: '',
           alcance: '',
           consumo: '',
           cuerpo: '',
           mente: '',
           poder: '',
+          rasgos: '',
           descripcion: '',
           rareza: '',
         });
@@ -9037,7 +9108,7 @@ function App() {
             <Collapsible
               title={
                 editingWeapon
-                  ? `Editar arma: ${editingWeapon}`
+                  ? `Editar arma: ${newWeaponData.nombre}`
                   : 'Crear nueva arma'
               }
               defaultOpen={false}
@@ -9149,6 +9220,7 @@ function App() {
                       onClick={() => {
                         setEditingWeapon(null);
                         setNewWeaponData({
+                          id: '',
                           nombre: '',
                           dano: '',
                           alcance: '',
@@ -9180,7 +9252,7 @@ function App() {
             <Collapsible
               title={
                 editingArmor
-                  ? `Editar armadura: ${editingArmor}`
+                  ? `Editar armadura: ${newArmorData.nombre}`
                   : 'Crear nueva armadura'
               }
               defaultOpen={false}
@@ -9271,6 +9343,7 @@ function App() {
                       onClick={() => {
                         setEditingArmor(null);
                         setNewArmorData({
+                          id: '',
                           nombre: '',
                           defensa: '',
                           cargaFisica: '',
@@ -9279,6 +9352,7 @@ function App() {
                           descripcion: '',
                           valor: '',
                           tecnologia: '',
+                          rareza: '',
                         });
                       }}
                     >
@@ -9299,7 +9373,7 @@ function App() {
             <Collapsible
               title={
                 editingAbility
-                  ? `Editar habilidad: ${editingAbility}`
+                  ? `Editar habilidad: ${newAbility.nombre}`
                   : 'Crear nueva habilidad'
               }
               defaultOpen={false}
@@ -9390,6 +9464,7 @@ function App() {
                       onClick={() => {
                         setEditingAbility(null);
                         setNewAbility({
+                          id: '',
                           nombre: '',
                           alcance: '',
                           consumo: '',
@@ -9442,7 +9517,7 @@ function App() {
                           >
                             {armasFiltradas.map((a, i) => (
                               <Tarjeta
-                                key={`arma-${i}`}
+                                key={a.id}
                                 variant="weapon"
                                 rarityColor={rarityColorMap[a.rareza]}
                               >
@@ -9503,7 +9578,7 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteWeapon(a.nombre)}
+                                    onClick={() => deleteWeapon(a.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
@@ -9535,7 +9610,7 @@ function App() {
                           >
                             {armadurasFiltradas.map((a, i) => (
                               <Tarjeta
-                                key={`armadura-${i}`}
+                                key={a.id}
                                 variant="armor"
                                 rarityColor={rarityColorMap[a.rareza]}
                               >
@@ -9589,7 +9664,7 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteArmor(a.nombre)}
+                                    onClick={() => deleteArmor(a.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
@@ -9621,7 +9696,7 @@ function App() {
                           >
                             {habilidadesFiltradas.map((h, i) => (
                               <Tarjeta
-                                key={`hab-${i}`}
+                                key={h.id}
                                 variant="power"
                                 rarityColor={rarityColorMap[h.rareza]}
                               >
@@ -9661,7 +9736,7 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteAbility(h.nombre)}
+                                    onClick={() => deleteAbility(h.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
