@@ -125,22 +125,21 @@ const CATEGORY_THEME = {
 // Initial Data
 const INITIAL_ACTIONS = {
     movement: [
-        { id: 'm1', name: 'Moverse', desc: 'Coste: 5 pies por 5 pies.' },
-        { id: 'm2', name: 'Escalar / Nadar', desc: 'Coste: 10 pies por 5 pies.' },
-        { id: 'm3', name: 'Levantarse', desc: 'Coste: Mitad de velocidad.' },
-        { id: 'm4', name: 'Arrastrarse', desc: 'Coste: 10 pies por 5 pies.' },
-        { id: 'm5', name: 'Tirarse al suelo', desc: 'Coste: 0 pies.' },
-        { id: 'm6', name: 'Terreno Difícil', desc: 'Coste: +5 pies por 5 pies.' }
+        { id: 'm1', name: 'Moverse', desc: 'Coste: 🟡 por casilla.' },
+        { id: 'm2', name: 'Escalar / Nadar', desc: 'Coste: 🟡 🟡 por casilla.' },
+        { id: 'm3', name: 'Levantarse', desc: 'Coste: 🟡' },
+        { id: 'm4', name: 'Arrastrarse', desc: 'Coste: 🟡 🟡 por casilla.' },
+        { id: 'm5', name: 'Terreno Difícil', desc: 'Coste: + 🟡 por casilla.' }
     ],
     action: [
-        { id: 'a1', name: 'Atacar', desc: 'Cuerpo a cuerpo o distancia.' },
-        { id: 'a2', name: 'Lanzar Conjuro', desc: 'Tiempo: 1 acción.' },
-        { id: 'a3', name: 'Correr (Dash)', desc: 'Dobla tu velocidad.' },
-        { id: 'a4', name: 'Destrabarse', desc: 'Evita ataques de oportunidad.' },
-        { id: 'a5', name: 'Esquivar', desc: 'Desventaja en ataques contra ti.' },
-        { id: 'a6', name: 'Ayudar', desc: 'Ventaja a un aliado.' },
-        { id: 'a7', name: 'Esconderse', desc: 'Prueba de Sigilo.' },
-        { id: 'a8', name: 'Preparar', desc: 'Disparador y Reacción.' },
+        { id: 'a1', name: 'Atacar', desc: 'Cuerpo a cuerpo o distancia. Coste del arma.' },
+        { id: 'a2', name: 'Lanzar Conjuro', desc: 'Coste del conjuro, medido por: 🟡 + 🔵' },
+        { id: 'a3', name: 'Correr (Dash)', desc: '..' },
+        { id: 'a4', name: 'Destrabarse', desc: 'Coste: 🟡. Evita ataques de oportunidad.' },
+        { id: 'a5', name: 'Esquivar', desc: 'Coste: 🟡. Elimina un dado del ataque.' },
+        { id: 'a6', name: 'Ayudar', desc: 'Coste: 🟡 por acción. Levantar, tratar aflicción a un aliado.' },
+        { id: 'a7', name: 'Esconderse', desc: 'Coste: 🟡. Prueba de Sigilo.' },
+        { id: 'a8', name: 'Esperar', desc: 'Coste: 🟡' },
         { id: 'a9', name: 'Usar Objeto', desc: 'Interactuar con mecanismo/poción.' }
     ],
     bonus: [

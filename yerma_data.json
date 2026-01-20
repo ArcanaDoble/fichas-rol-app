@@ -1,0 +1,119 @@
+Data for Yerma: {
+  "armaduras": [],
+  "weapons": [],
+  "claves": [
+    {
+      "color": "#0000ff",
+      "total": 2,
+      "name": "Astuta",
+      "actual": 0,
+      "id": "clave1761845218052"
+    },
+    {
+      "color": "#ff0000",
+      "total": 1,
+      "actual": 0,
+      "id": "clave1761845254104",
+      "name": "Soberbia"
+    }
+  ],
+  "permissions": {
+    "canViewBestiary": false,
+    "canViewInitiative": true,
+    "canViewClasses": true,
+    "canViewReflexesGame": true
+  },
+  "updatedAt": {
+    "type": "firestore/timestamp/1.0",
+    "seconds": 1767905412,
+    "nanoseconds": 785000000
+  },
+  "poderes": [
+    "UROBOROS",
+    "SUBLIMACIÓN YERMA",
+    "SUBLIMACIÓN TAIGA",
+    "SUBLIMACIÓN TUNDRA"
+  ],
+  "cargaAcumulada": {
+    "fisica": 0,
+    "mental": 0
+  },
+  "resistenciaMental": "cordura",
+  "atributos": {
+    "carisma": 0,
+    "sabiduria": 0,
+    "voluntad": "D10",
+    "fuerza": 0,
+    "constitucion": 0,
+    "inteligencia": 0,
+    "destreza": "D4"
+  },
+  "resourcesList": [
+    {
+      "name": "postura",
+      "id": "postura",
+      "color": "#34d399",
+      "info": "Explicación de Postura"
+    },
+    {
+      "name": "vida",
+      "color": "#f87171",
+      "info": "Explicación de Vida",
+      "id": "vida"
+    },
+    {
+      "color": "#60a5fa",
+      "name": "ingenio",
+      "id": "ingenio",
+      "info": "Explicación de Ingenio"
+    },
+    {
+      "id": "cordura",
+      "info": "Explicación de Cordura",
+      "name": "cordura",
+      "color": "#a78bfa"
+    },
+    {
+      "name": "armadura",
+      "id": "armadura",
+      "color": "#9ca3af",
+      "info": "Explicación de Armadura"
+    }
+  ],
+  "estados": [
+    "sangrado"
+  ],
+  "stats": {
+    "ingenio": {
+      "total": 2,
+      "buff": 0,
+      "actual": 2,
+      "base": 2
+    },
+    "cordura": {
+      "buff": 0,
+      "actual": 1,
+      "base": 5,
+      "total": 5
+    },
+    "armadura": {
+      "base": 0,
+      "actual": 0,
+      "buff": 0,
+      "total": 0
+    },
+    "postura": {
+      "total": 2,
+      "base": 2,
+      "actual": 2,
+      "buff": 0
+    },
+    "vida": {
+      "buff": 0,
+      "actual": 0,
+      "total": 2,
+      "base": 2
+    }
+  },
+  "resistenciaFisica": "vida"
+}

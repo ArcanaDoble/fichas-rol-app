@@ -90,6 +90,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             isNew: true,
         },
         {
+            id: 'status_effects',
+            title: 'Estados Alterados',
+            description: 'Configura iconos, descripciones y colores globales de los estados.',
+            color: 'emerald',
+            icon: FiZap,
+            features: ['Global', 'Iconos', 'Colores'],
+            isNew: true,
+        },
+        {
             id: 'default',
             title: 'Herramientas',
             description: 'Utilidades generales, glosario y configuraciones adicionales.',
