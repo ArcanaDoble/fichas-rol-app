@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
+import { Tooltip } from 'react-tooltip';
 import PropTypes from 'prop-types';
-import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus } from 'react-icons/fi';
+import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus, FiEdit2 } from 'react-icons/fi';
 import { GiBelt } from 'react-icons/gi';
 import { Sword, Shield, Zap } from 'lucide-react';
 import HexIcon from './HexIcon';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+
+import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
 
 const RARITIES = [
     { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
@@ -52,32 +55,31 @@ const getRarityColors = (item) => {
 
 // Función para obtener imagen de objetos genéricos (public/objetos)
 const getObjectImage = (item) => {
+    // 1. Priorizar imágenes personalizadas (Base64 o URLs externas)
+    if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) {
+        return item.icon;
+    }
+
     const name = (item.name || '').toLowerCase();
     const type = (item.type || '').toLowerCase();
     const category = (item.category || '').toLowerCase();
     const target = `${name} ${type} ${category}`;
 
-    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
-    if (target.includes('comida')) return '/objetos/comida.png';
-    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
-    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
-    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
-    if (target.includes('libro')) return '/objetos/libro.png';
-    if (target.includes('llave')) return '/objetos/llave.png';
-    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
-    if (target.includes('pergamino')) return '/objetos/pergamino.png';
-    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
-    if (target.includes('recurso')) return '/objetos/recurso.jpg';
-    if (target.includes('accesorio')) return '/objetos/accesorio.png';
-    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
-
-    // Specific Weapon Checks (From loadout logic)
-    // Unique Items
+    // Specific Item/Weapon Overrides (Higher Priority)
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
+    if (target.includes('antorcha')) return '/armas/antorcha.png';
     if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
     if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
     if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
 
     // Standard Weapons
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
+    if (name.includes('pistola')) return '/armas/pistola.png';
+    if (name.includes('rifle')) return '/armas/rifle.png';
+    if (name.includes('escopeta')) return '/armas/escopeta.png';
     if (name.includes('granarco')) return '/armas/arco_largo.png';
     if (name.includes('arco')) return '/armas/arco_corto.png';
     if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
@@ -94,9 +96,32 @@ const getObjectImage = (item) => {
     if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
     if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
 
+    // Hammers
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
+
     // Swords (Check longer/specific names first)
     if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
     if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+    // Generic Object Checks
+    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
+    if (target.includes('comida')) return '/objetos/comida.png';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
+    if (target.includes('libro')) return '/objetos/libro.png';
+    if (target.includes('llave')) return '/objetos/llave.png';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
+    if (target.includes('pergamino')) return '/objetos/pergamino.png';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
+    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.png';
+    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.png';
+    if (target.includes('recurso')) return '/objetos/recurso.jpg';
+    if (target.includes('accesorio')) return '/objetos/accesorio.png';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
 
     // Specific Armor Checks (Prioritize over generic 'armadura')
     if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
@@ -132,13 +157,43 @@ const formatItemName = (name) => {
     return formatted;
 };
 
-const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
+const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
     const [showRarityDropdown, setShowRarityDropdown] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [customItems, setCustomItems] = useState([]);
+    const [editingBeltNote, setEditingBeltNote] = useState(null);
+    const [tempBeltNote, setTempBeltNote] = useState('');
+
+    const renderTrait = (t, i) => {
+        const traitName = t.trim();
+        if (!traitName) return null;
+
+        const normalizedTrait = normalizeGlossaryWord(traitName);
+        const glossaryEntry = (glossary || []).find(g => normalizeGlossaryWord(g.word) === normalizedTrait);
+
+        if (glossaryEntry) {
+            return (
+                <span
+                    key={i}
+                    className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/90 text-[#f0e6d2] border border-slate-700 uppercase cursor-help hover:border-[#c8aa6e] transition-colors shadow-sm"
+                    data-tooltip-id="trait-tooltip"
+                    data-tooltip-content={glossaryEntry.info}
+                    style={glossaryEntry.color ? { color: glossaryEntry.color } : {}}
+                >
+                    {traitName}
+                </span>
+            );
+        }
+
+        return (
+            <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
+                {traitName}
+            </span>
+        );
+    };
 
     // Fetch custom items
     React.useEffect(() => {
@@ -178,16 +233,19 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     // Get equipped items from dndClass (Moved up for initialization)
     const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
 
-    // Calculate initial belt count based on equipped items
+    // Calculate initial belt count based on equipped items as fallback
     const initialBeltCount = useMemo(() => {
-        const indices = Object.keys(equippedItems)
-            .filter(k => k.startsWith('belt_'))
-            .map(k => parseInt(k.split('_')[1], 10));
+        const indices = Object.entries(equippedItems)
+            .filter(([k, v]) => k.startsWith('belt_') && v)
+            .map(([k]) => parseInt(k.split('_')[1], 10));
         const maxIndex = Math.max(-1, ...indices);
         return Math.max(3, maxIndex + 1);
     }, [equippedItems]);
 
-    const [beltSlotCount, setBeltSlotCount] = useState(initialBeltCount); // Default based on usage or 3, max 9
+    // Use persisted belt slot count if available, otherwise fallback to calculated initial count
+    const beltSlotCount = useMemo(() => {
+        return dndClass.equippedItems?.beltSlotCount || initialBeltCount;
+    }, [dndClass.equippedItems?.beltSlotCount, initialBeltCount]);
 
     // Get talent slots (restored)
     const talentSlots = useMemo(() => {
@@ -318,7 +376,11 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     // Handle equipping an item
     const handleEquipItem = (slot, item) => {
         if (onUpdateEquipped) {
-            onUpdateEquipped(slot, item);
+            // Initialize quantity for belt items if not present
+            const newItem = slot.startsWith('belt_')
+                ? { ...item, quantity: item.quantity || 1 }
+                : item;
+            onUpdateEquipped(slot, newItem);
         }
         setActiveSlotSelector(null);
     };
@@ -327,6 +389,19 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
     const handleUnequipItem = (slot) => {
         if (onUpdateEquipped) {
             onUpdateEquipped(slot, null);
+        }
+    };
+
+    // Handle updating quantity for belt items
+    const handleUpdateQuantity = (slot, delta) => {
+        const currentItem = equippedItems[slot];
+        if (!currentItem || !onUpdateEquipped) return;
+
+        const currentQty = currentItem.quantity || 1;
+        const newQty = Math.min(10, Math.max(1, currentQty + delta));
+
+        if (newQty !== currentQty) {
+            onUpdateEquipped(slot, { ...currentItem, quantity: newQty });
         }
     };
 
@@ -553,11 +628,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                         {(item.traits || item.rasgos || item.trait) && (
                                                             <div className="mb-2">
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    {(item.traits || item.rasgos || item.trait).toString().split(',').map((t, i) => (
-                                                                        <span key={i} className="text-[0.6rem] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase tracking-wider">
-                                                                            {t.trim()}
-                                                                        </span>
-                                                                    ))}
+                                                                    {(item.traits || item.rasgos || item.trait).toString().split(',').map((t, i) => renderTrait(t, i))}
                                                                 </div>
                                                             </div>
                                                         )}
@@ -706,11 +777,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                     {/* Traits */}
                                                                     {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait) && (
                                                                         <div className="flex flex-wrap justify-center gap-1 mt-2 relative z-10">
-                                                                            {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait).toString().split(',').slice(0, 3).map((t, i) => (
-                                                                                <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
-                                                                                    {t.trim()}
-                                                                                </span>
-                                                                            ))}
+                                                                            {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
                                                                         </div>
                                                                     )}
 
@@ -854,7 +921,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                     return null;
                                                 };
 
-                                                const armorImage = equippedArmor ? getArmorImage(equippedArmor.name) : null;
+                                                const armorImage = equippedArmor ? (getObjectImage(equippedArmor) || getArmorImage(equippedArmor.name)) : null;
 
                                                 return (
                                                     <>
@@ -933,11 +1000,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                     {/* Traits */}
                                                                     {(equippedArmor.traits || equippedArmor.rasgos || equippedArmor.trait) && (
                                                                         <div className="flex flex-wrap justify-center gap-1 mt-1 relative z-10">
-                                                                            {(equippedArmor.traits || equippedArmor.rasgos || equippedArmor.trait).toString().split(',').slice(0, 3).map((t, i) => (
-                                                                                <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
-                                                                                    {t.trim()}
-                                                                                </span>
-                                                                            ))}
+                                                                            {(equippedArmor.traits || equippedArmor.rasgos || equippedArmor.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
                                                                         </div>
                                                                     )}
 
@@ -1083,11 +1146,52 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                         <div className="text-2xl mb-1 drop-shadow-md relative z-10">📦</div>
                                                                     )}
 
+                                                                    {/* Edit Note Button */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingBeltNote(slotId);
+                                                                            setTempBeltNote(equippedItem.note || '');
+                                                                            setActiveSlotSelector(null);
+                                                                        }}
+                                                                        className={`absolute top-2 left-2 p-1 rounded z-40 transition-all ${equippedItem.note
+                                                                            ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] opacity-100'
+                                                                            : 'bg-slate-600/50 text-slate-200 opacity-0 group-hover:opacity-100'
+                                                                            } hover:bg-[#c8aa6e]/40 hover:text-[#f0e6d2]`}
+                                                                        title={equippedItem.note ? "Editar nota" : "Añadir nota"}
+                                                                    >
+                                                                        <FiEdit2 className="w-3 h-3" />
+                                                                    </button>
+
                                                                     <span className="text-white font-['Cinzel'] text-[10px] uppercase font-bold text-center px-1 line-clamp-2 leading-tight relative z-10 drop-shadow-md">
                                                                         {formatItemName(equippedItem.name)}
                                                                     </span>
 
-                                                                    {/* Unequip Button (Overlay) */}
+                                                                    {/* Aesthetic Bottom Controls Bar */}
+                                                                    <div
+                                                                        className="absolute bottom-0 inset-x-0 h-10 flex items-end justify-between px-1 pb-1 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-30 opacity-100 transition-opacity"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <button
+                                                                            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-colors active:scale-90"
+                                                                            onClick={() => handleUpdateQuantity(slotId, -1)}
+                                                                        >
+                                                                            <FiMinus className="w-3.5 h-3.5" />
+                                                                        </button>
+
+                                                                        <span className="text-xs font-bold text-[#c8aa6e] font-['Cinzel'] mb-2 drop-shadow-lg">
+                                                                            x{equippedItem.quantity || 1}
+                                                                        </span>
+
+                                                                        <button
+                                                                            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-colors active:scale-90"
+                                                                            onClick={() => handleUpdateQuantity(slotId, 1)}
+                                                                        >
+                                                                            <FiPlus className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* Unequip Button (Original Style) */}
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
@@ -1106,6 +1210,93 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                                                 </>
                                                             )}
                                                         </div>
+
+                                                        {/* Note Editor Components - Responsive Handling */}
+                                                        {editingBeltNote === slotId && (
+                                                            <>
+                                                                {/* Mobile Version: Fixed Modal */}
+                                                                <div
+                                                                    className="md:hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEditingBeltNote(null);
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        className="w-full max-w-[300px] bg-[#0b1120] border border-[#c8aa6e] rounded-xl p-4 flex flex-col shadow-[0_0_50px_rgba(200,170,110,0.2)] scale-100 animate-in zoom-in-95 duration-200"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <h4 className="text-[#c8aa6e] font-bold uppercase mb-3 font-['Cinzel'] text-center tracking-widest text-sm">
+                                                                            Nota
+                                                                        </h4>
+                                                                        <textarea
+                                                                            value={tempBeltNote}
+                                                                            onChange={(e) => setTempBeltNote(e.target.value)}
+                                                                            className="w-full h-32 bg-slate-900/50 text-sm text-slate-200 resize-none border border-slate-700/50 rounded-lg p-3 mb-4 focus:outline-none focus:border-[#c8aa6e]/50 focus:bg-slate-900 overflow-y-auto custom-scrollbar shadow-inner"
+                                                                            placeholder="Escribe una nota..."
+                                                                            autoFocus
+                                                                        />
+                                                                        <div className="flex justify-between gap-3">
+                                                                            <button
+                                                                                onClick={() => setEditingBeltNote(null)}
+                                                                                className="flex-1 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                                                                            >
+                                                                                <FiX className="w-4 h-4" />
+                                                                                <span className="text-xs uppercase font-bold tracking-wider">Cancelar</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (onUpdateEquipped && equippedItem) {
+                                                                                        onUpdateEquipped(slotId, { ...equippedItem, note: tempBeltNote });
+                                                                                    }
+                                                                                    setEditingBeltNote(null);
+                                                                                }}
+                                                                                className="flex-1 py-2 rounded-lg bg-[#c8aa6e]/10 border border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/20 hover:text-[#f0e6d2] transition-colors flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(200,170,110,0.1)]"
+                                                                            >
+                                                                                <FiCheck className="w-4 h-4" />
+                                                                                <span className="text-xs uppercase font-bold tracking-wider">Guardar</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Desktop Version: In-Slot Overlay (Restored) */}
+                                                                <div
+                                                                    className="hidden md:flex absolute inset-0 z-[60] bg-[#0b1120] border border-[#c8aa6e] rounded-lg p-2 flex-col shadow-2xl"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <span className="text-[10px] text-[#c8aa6e] font-bold uppercase mb-1 font-['Cinzel'] text-center">Nota</span>
+                                                                    <textarea
+                                                                        value={tempBeltNote}
+                                                                        onChange={(e) => setTempBeltNote(e.target.value)}
+                                                                        className="flex-1 w-full bg-slate-900/50 text-xs text-slate-200 resize-none border border-slate-700/50 rounded p-1 mb-2 focus:outline-none focus:border-[#c8aa6e]/50"
+                                                                        placeholder="..."
+                                                                        autoFocus
+                                                                    />
+                                                                    <div className="flex justify-between gap-2">
+                                                                        <button
+                                                                            onClick={() => setEditingBeltNote(null)}
+                                                                            className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded flex-1 flex justify-center"
+                                                                            title="Cancelar"
+                                                                        >
+                                                                            <FiX className="w-3 h-3" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (onUpdateEquipped && equippedItem) {
+                                                                                    onUpdateEquipped(slotId, { ...equippedItem, note: tempBeltNote });
+                                                                                }
+                                                                                setEditingBeltNote(null);
+                                                                            }}
+                                                                            className="p-1 text-[#c8aa6e] hover:text-[#f0e6d2] hover:bg-[#c8aa6e]/10 rounded flex-1 flex justify-center"
+                                                                            title="Guardar"
+                                                                        >
+                                                                            <FiCheck className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        )}
 
                                                         {/* Selection Dropdown */}
                                                         {isSlotActive && (
@@ -1158,7 +1349,12 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                             {/* Expand/Reduce Buttons */}
                                             {beltSlotCount < 9 && (
                                                 <button
-                                                    onClick={() => setBeltSlotCount(prev => Math.min(prev + 1, 9))}
+                                                    onClick={() => {
+                                                        const newCount = Math.min(beltSlotCount + 1, 9);
+                                                        if (onUpdateEquipped) {
+                                                            onUpdateEquipped('beltSlotCount', newCount);
+                                                        }
+                                                    }}
                                                     className="aspect-square border-2 border-dashed border-[#c8aa6e]/30 rounded-lg flex flex-col items-center justify-center hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 transition-all cursor-pointer group"
                                                 >
                                                     <FiPlus className="w-8 h-8 text-[#c8aa6e]/50 group-hover:text-[#c8aa6e] transition-colors" />
@@ -1168,12 +1364,15 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                                             {beltSlotCount > 1 && (
                                                 <button
                                                     onClick={() => {
-                                                        const indices = Object.keys(equippedItems)
-                                                            .filter(k => k.startsWith('belt_'))
-                                                            .map(k => parseInt(k.split('_')[1], 10));
+                                                        const indices = Object.entries(equippedItems)
+                                                            .filter(([k, v]) => k.startsWith('belt_') && v)
+                                                            .map(([k]) => parseInt(k.split('_')[1], 10));
                                                         const maxIndex = Math.max(-1, ...indices);
                                                         // Prevent reducing below the last equipped slot
-                                                        setBeltSlotCount(prev => Math.max(prev - 1, 1, maxIndex + 1));
+                                                        const newCount = Math.max(beltSlotCount - 1, 1, maxIndex + 1);
+                                                        if (onUpdateEquipped) {
+                                                            onUpdateEquipped('beltSlotCount', newCount);
+                                                        }
                                                     }}
                                                     className="aspect-square border-2 border-dashed border-red-500/30 rounded-lg flex flex-col items-center justify-center hover:border-red-500 hover:bg-red-500/10 transition-all cursor-pointer group"
                                                 >
@@ -1501,6 +1700,13 @@ const LoadoutView = ({ dndClass, equipmentCatalog, onAddEquipment, onRemoveEquip
                     </div>
                 </div>
             </div>
+
+            {/* Tooltip dedicado para rasgos en esta vista */}
+            <Tooltip
+                id="trait-tooltip"
+                place="top"
+                className="max-w-[90vw] sm:max-w-xs whitespace-pre-line z-[9999]"
+            />
         </div>
     );
 };

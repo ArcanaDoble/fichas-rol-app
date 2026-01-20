@@ -5,14 +5,17 @@ export const KARMA_MAX = 10;
 const normalize = (value) =>
   value
     ? value
-        .toString()
-        .normalize('NFD')
-        .replace(/\p{Diacritic}/gu, '')
-        .toLowerCase()
-        .replace(/\s+/g, '')
+      .toString()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
     : '';
 
-export const isYuuzuName = (name) => normalize(name) === 'yuuzu';
+export const isYuuzuName = (name) => {
+  const n = normalize(name);
+  return n === 'yuuzu' || n === 'yuzuu';
+};
 
 export const clampKarma = (value) => {
   const numeric = Number(value);

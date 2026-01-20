@@ -1,0 +1,6 @@
+--- CLASSES ---
+C: Arcanista Umbral (arcanista)
+C: Señor de los muertos (custom-1764543759518)
+--- PLAYERS ---
+P: Yerma (Yerma)
+P: Yuuzu (Yuuzu)

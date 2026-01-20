@@ -150,21 +150,21 @@ const createRadialGradientShapes = ({
   const ShapeComponent = polygonPoints ? Line : Circle;
   const baseProps = polygonPoints
     ? {
-        points: polygonPoints,
-        closed: true,
-        fillRadialGradientStartPoint: { x: centerX, y: centerY },
-        fillRadialGradientEndPoint: { x: centerX, y: centerY },
-        perfectDrawEnabled: false,
-        listening,
-      }
+      points: polygonPoints,
+      closed: true,
+      fillRadialGradientStartPoint: { x: centerX, y: centerY },
+      fillRadialGradientEndPoint: { x: centerX, y: centerY },
+      perfectDrawEnabled: false,
+      listening,
+    }
     : {
-        x: centerX,
-        y: centerY,
-        radius: outerRadius,
-        fillRadialGradientStartPoint: { x: 0, y: 0 },
-        fillRadialGradientEndPoint: { x: 0, y: 0 },
-        listening,
-      };
+      x: centerX,
+      y: centerY,
+      radius: outerRadius,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      listening,
+    };
 
   const compositeProps = compositeOperation
     ? { globalCompositeOperation: compositeOperation }
@@ -338,8 +338,8 @@ const buildShopItem = (type, raw, idCounts, index) => {
     numericCost != null
       ? numericCost.toLocaleString('es-ES')
       : typeof costSource === 'string' && costSource.trim()
-      ? costSource.trim()
-      : '';
+        ? costSource.trim()
+        : '';
 
   const searchText = [
     fallbackName,
@@ -489,26 +489,26 @@ const normalizeWallRotation = (x1, y1, x2, y2) => {
 // Componente para mostrar puertas interactivas en la capa fichas
 const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
   const [x1, y1, x2, y2] = wall.points;
-  
+
   // Calcular el punto central exacto del segmento del muro
   const centerX = wall.x + (x1 + x2) / 2;
   const centerY = wall.y + (y1 + y2) / 2;
-  
+
   // Calcular la orientación del muro para orientar la puerta
   const wallAngle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
   const isVertical = Math.abs(wallAngle) > 45 && Math.abs(wallAngle) < 135;
-  
+
   // Tamaño más sutil y proporcional
   const doorWidth = effectiveGridSize * 0.6;
   const doorHeight = effectiveGridSize * 0.15;
-  
+
   // Solo mostrar puertas cerradas y abiertas (no secretas) desde la capa fichas
   if (wall.door === 'secret') return null;
-  
+
   // Colores más sutiles y realistas
   const doorColor = wall.door === 'closed' ? '#8B4513' : '#90EE90'; // Marrón para cerrada, verde claro para abierta
   const handleColor = wall.door === 'closed' ? '#FFD700' : '#32CD32'; // Dorado para cerrada, verde para abierta
-  
+
   return (
     <Group>
       {/* Marco de la puerta */}
@@ -528,7 +528,7 @@ const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
         listening={true}
         opacity={0.9}
       />
-      
+
       {/* Manija/indicador de la puerta */}
       <Circle
         x={centerX + (isVertical ? 0 : (wall.door === 'closed' ? -doorWidth * 0.3 : doorWidth * 0.3))}
@@ -541,7 +541,7 @@ const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
         onTap={() => onToggle(wall.id)}
         listening={true}
       />
-      
+
       {/* Indicador sutil de estado (solo aparece al hacer hover) */}
       <Text
         x={centerX}
@@ -556,7 +556,7 @@ const InteractiveDoor = ({ wall, effectiveGridSize, onToggle }) => {
         listening={true}
         opacity={0.7}
       />
-      
+
       {/* Área de click más grande pero invisible */}
       <Circle
         x={centerX}
@@ -629,14 +629,72 @@ TokenAura.propTypes = {
   showAura: PropTypes.bool,
 };
 
-const EstadoImg = ({ src, ...props }) => {
-  const [img] = useImage(src, 'anonymous');
-  if (!img) return null;
-  return <KonvaImage image={img} listening={false} {...props} />;
+// Utility to convert common tailwind colors to hex
+const TAILWIND_COLOR_MAP = {
+  'red': '#ef4444',
+  'orange': '#f97316',
+  'amber': '#f59e0b',
+  'yellow': '#eab308',
+  'lime': '#84cc16',
+  'green': '#22c55e',
+  'emerald': '#10b981',
+  'teal': '#14b8a6',
+  'cyan': '#06b6d4',
+  'sky': '#0ea5e9',
+  'blue': '#3b82f6',
+  'indigo': '#6366f1',
+  'violet': '#8b5cf6',
+  'purple': '#a855f7',
+  'fuchsia': '#d946ef',
+  'pink': '#ec4899',
+  'rose': '#f43f5e',
+  'slate': '#64748b',
+  'gray': '#6b7280',
+  'zinc': '#71717a',
+  'neutral': '#737373',
+  'stone': '#78716c'
+};
+
+const extractHex = (effect) => {
+  if (effect.hex) return effect.hex;
+  const colorStr = effect.color || '';
+  if (colorStr.includes('[') && colorStr.includes(']')) {
+    return colorStr.match(/\[(.*?)\]/)?.[1];
+  }
+  // Match standard like text-red-500
+  const standardMatch = colorStr.match(/text-([a-z]+)-(\d+)/);
+  if (standardMatch) {
+    const colorName = standardMatch[1];
+    return TAILWIND_COLOR_MAP[colorName] || '#94a3b8';
+  }
+  return '#94a3b8';
+};
+
+const EstadoImg = ({ src, hex, ...props }) => {
+  const [img, status] = useImage(src, 'anonymous');
+
+  if (status === 'loaded' && img) {
+    return <KonvaImage image={img} listening={false} {...props} />;
+  }
+
+  // Fallback to a colored circle if image is not available or loading
+  return (
+    <Circle
+      {...props}
+      x={props.x + props.width / 2}
+      y={props.y + props.height / 2}
+      radius={props.width / 4}
+      fill={hex || '#94a3b8'}
+      stroke="rgba(255,255,255,0.4)"
+      strokeWidth={1}
+      listening={false}
+    />
+  );
 };
 
 EstadoImg.propTypes = {
   src: PropTypes.string.isRequired,
+  hex: PropTypes.string,
 };
 
 const TileImage = forwardRef(({ url, ...props }, ref) => {
@@ -701,6 +759,7 @@ const Token = forwardRef(
       damageFlashIntensity = 0,
       showSpinner = true,
       estados = [],
+      statusEffectsConfig = {},
     },
     ref
   ) => {
@@ -727,7 +786,18 @@ const Token = forwardRef(
     const buttonSize = cellSize * 0.3;
     const estadoBase = cellSize * 0.3;
     const estadosInfo = estados
-      .map((id) => ESTADOS.find((e) => e.id === id))
+      .map((eid) => {
+        const config = statusEffectsConfig[eid] ||
+          Object.values(statusEffectsConfig).find(c => c.label.toLowerCase() === (eid || '').toLowerCase());
+        if (!config) return null;
+        return {
+          id: eid,
+          name: config.label,
+          img: `/estados/${config.label}.png`,
+          hex: extractHex(config),
+          ...config
+        };
+      })
       .filter(Boolean);
     const estadoSize =
       estadosInfo.length > 0
@@ -1239,6 +1309,7 @@ const Token = forwardRef(
               <EstadoImg
                 key={e.id}
                 src={e.img}
+                hex={e.hex}
                 x={x + width * gridSize - estadoSize * (i + 1)}
                 y={y - estadoSize - 2}
                 width={estadoSize}
@@ -1387,6 +1458,7 @@ Token.propTypes = {
   tintColor: PropTypes.string,
   tintOpacity: PropTypes.number,
   damageFlashIntensity: PropTypes.number,
+  showSpinner: PropTypes.bool,
   onClick: PropTypes.func,
   onDragStart: PropTypes.func,
   onDragEnd: PropTypes.func.isRequired,
@@ -1397,6 +1469,7 @@ Token.propTypes = {
   onBars: PropTypes.func,
   onHoverChange: PropTypes.func,
   estados: PropTypes.array,
+  statusEffectsConfig: PropTypes.object,
   tokenSheetId: PropTypes.string,
   activeTool: PropTypes.string,
   isAttacker: PropTypes.bool,
@@ -1421,7 +1494,7 @@ const MapCanvas = ({
   tokens,
   onTokensChange,
   tiles: propTiles = [],
-  onTilesChange = () => {},
+  onTilesChange = () => { },
   enemies = [],
   onEnemyUpdate,
   players = [],
@@ -1433,15 +1506,15 @@ const MapCanvas = ({
   userType = 'master',
   playerName = '',
   lines: propLines = [],
-  onLinesChange = () => {},
+  onLinesChange = () => { },
   walls: propWalls = [],
-  onWallsChange = () => {},
+  onWallsChange = () => { },
   texts: propTexts = [],
-  onTextsChange = () => {},
+  onTextsChange = () => { },
   ambientLights: propAmbientLights = [],
-  onAmbientLightsChange = () => {},
+  onAmbientLightsChange = () => { },
   activeLayer: propActiveLayer = 'fichas',
-  onLayerChange = () => {},
+  onLayerChange = () => { },
   enableDarkness = true,
   darknessOpacity = 0.7,
   showVisionPolygons = true,
@@ -1532,7 +1605,7 @@ const MapCanvas = ({
         const id = nanoid();
         setFocusPings((ps) => [...ps, { id, x: screenX, y: screenY }]);
         setTimeout(() => setFocusPings((ps) => ps.filter((p) => p.id !== id)), 1200);
-      } catch {}
+      } catch { }
     };
     window.addEventListener('focusToken', handler);
     return () => window.removeEventListener('focusToken', handler);
@@ -1554,7 +1627,7 @@ const MapCanvas = ({
         const gx = width / 2 - centerX * scale;
         const gy = height / 2 - centerY * scale;
         setGroupPos({ x: gx, y: gy });
-      } catch {}
+      } catch { }
     };
     window.addEventListener('focusToken', handler);
     return () => window.removeEventListener('focusToken', handler);
@@ -1687,6 +1760,21 @@ const MapCanvas = ({
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
   const [inventoryFeedback, setInventoryFeedback] = useState(null);
+  const [statusEffectsConfig, setStatusEffectsConfig] = useState({});
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'status_effects_config'), (snapshot) => {
+      const data = {};
+      snapshot.forEach(docSnap => {
+        data[docSnap.id] = docSnap.data();
+      });
+      if (Object.keys(data).length > 0) {
+        setStatusEffectsConfig(data);
+      }
+    });
+
+    return () => unsub();
+  }, []);
   const [shopGold, setShopGold] = useState(0);
   const [lines, setLines] = useState(propLines);
   const [currentLine, setCurrentLine] = useState(null);
@@ -2678,50 +2766,50 @@ const MapCanvas = ({
   }, [playerVisionPolygons]);
 
   // Función wrapper para manejar cambios de tokens con sincronización
-    const diffTokens = (prev, next) => {
-      const prevMap = new Map(
-        prev.map((t) => {
-          const id = String(t.id);
-          return [id, { ...t, id }];
-        })
-      );
-      const changed = [];
-      const stripMeta = (token) => {
-        if (!token) return token;
-        const { updatedAt, updatedBy, ...rest } = token;
-        return rest;
-      };
-      const author = playerName || 'unknown';
-      next.forEach((tk) => {
-        const id = String(tk.id);
-        const old = prevMap.get(id);
-        if (!old) {
-          changed.push({
-            ...tk,
-            id,
-            updatedAt: Date.now(),
-            updatedBy: author,
-          });
-        } else if (!deepEqual(stripMeta(old), stripMeta(tk))) {
-          changed.push({
-            ...tk,
-            id,
-            updatedAt: Date.now(),
-            updatedBy: author,
-          });
-        }
-        prevMap.delete(id);
-      });
-      prevMap.forEach((tk) => {
+  const diffTokens = (prev, next) => {
+    const prevMap = new Map(
+      prev.map((t) => {
+        const id = String(t.id);
+        return [id, { ...t, id }];
+      })
+    );
+    const changed = [];
+    const stripMeta = (token) => {
+      if (!token) return token;
+      const { updatedAt, updatedBy, ...rest } = token;
+      return rest;
+    };
+    const author = playerName || 'unknown';
+    next.forEach((tk) => {
+      const id = String(tk.id);
+      const old = prevMap.get(id);
+      if (!old) {
         changed.push({
-          id: String(tk.id),
-          _deleted: true,
+          ...tk,
+          id,
           updatedAt: Date.now(),
           updatedBy: author,
         });
+      } else if (!deepEqual(stripMeta(old), stripMeta(tk))) {
+        changed.push({
+          ...tk,
+          id,
+          updatedAt: Date.now(),
+          updatedBy: author,
+        });
+      }
+      prevMap.delete(id);
+    });
+    prevMap.forEach((tk) => {
+      changed.push({
+        id: String(tk.id),
+        _deleted: true,
+        updatedAt: Date.now(),
+        updatedBy: author,
       });
-      return changed;
-    };
+    });
+    return changed;
+  };
 
   const handleTokensChange = useCallback(
     (newTokens, options = {}) => {
@@ -2865,9 +2953,9 @@ const MapCanvas = ({
         lights.map((light) =>
           light.id === id
             ? {
-                ...light,
-                ...updates,
-              }
+              ...light,
+              ...updates,
+            }
             : light
         )
       );
@@ -2902,7 +2990,7 @@ const MapCanvas = ({
     try {
       const stored = localStorage.getItem('tokenSwitcherPos');
       if (stored) return JSON.parse(stored);
-    } catch {}
+    } catch { }
     return { x: window.innerWidth / 2 - 140, y: 70 };
   });
   const [draggingSwitcher, setDraggingSwitcher] = useState(false);
@@ -3212,9 +3300,9 @@ const MapCanvas = ({
   // Función para verificar si un punto está dentro de un rectángulo
   const isPointInRect = (point, rect) => {
     return point.x >= rect.x &&
-           point.x <= rect.x + rect.width &&
-           point.y >= rect.y &&
-           point.y <= rect.y + rect.height;
+      point.x <= rect.x + rect.width &&
+      point.y >= rect.y &&
+      point.y <= rect.y + rect.height;
   };
 
   const handleTileDragStart = useCallback((tileId) => {
@@ -3261,12 +3349,12 @@ const MapCanvas = ({
         prev.map((tile) =>
           String(tile.id) === String(tileId)
             ? {
-                ...tile,
-                x: nextX,
-                y: nextY,
-                width: nextWidth,
-                height: nextHeight,
-              }
+              ...tile,
+              x: nextX,
+              y: nextY,
+              width: nextWidth,
+              height: nextHeight,
+            }
             : tile
         )
       );
@@ -3326,18 +3414,18 @@ const MapCanvas = ({
           totalX += centerX / effectiveGridSize; // Convertir a coordenadas de grid
           totalY += centerY / effectiveGridSize;
           break;
-      case 'texts':
-        totalX += element.x / effectiveGridSize;
-        totalY += element.y / effectiveGridSize;
-        break;
-      case 'ambientLights':
-        totalX += element.x / effectiveGridSize;
-        totalY += element.y / effectiveGridSize;
-        break;
-      default:
-        break;
-    }
-  });
+        case 'texts':
+          totalX += element.x / effectiveGridSize;
+          totalY += element.y / effectiveGridSize;
+          break;
+        case 'ambientLights':
+          totalX += element.x / effectiveGridSize;
+          totalY += element.y / effectiveGridSize;
+          break;
+        default:
+          break;
+      }
+    });
 
     return {
       x: totalX / elements.length,
@@ -3358,9 +3446,9 @@ const MapCanvas = ({
 
     // Verificar si la posición del mouse está dentro del stage
     const isMouseInStage = mousePosition.x >= stageRect.left &&
-                          mousePosition.x <= stageRect.right &&
-                          mousePosition.y >= stageRect.top &&
-                          mousePosition.y <= stageRect.bottom;
+      mousePosition.x <= stageRect.right &&
+      mousePosition.y >= stageRect.top &&
+      mousePosition.y <= stageRect.bottom;
 
     if (isMouseInStage) {
       // Usar posición del cursor relativa al stage
@@ -3396,9 +3484,9 @@ const MapCanvas = ({
 
         // Verificar si el token intersecta con el cuadro de selección
         return !(tokenX + tokenWidth < normalizedBox.x ||
-                tokenX > normalizedBox.x + normalizedBox.width ||
-                tokenY + tokenHeight < normalizedBox.y ||
-                tokenY > normalizedBox.y + normalizedBox.height);
+          tokenX > normalizedBox.x + normalizedBox.width ||
+          tokenY + tokenHeight < normalizedBox.y ||
+          tokenY > normalizedBox.y + normalizedBox.height);
       }
       case 'line': {
         // Para líneas, verificar si algún punto está dentro del cuadro
@@ -3450,7 +3538,7 @@ const MapCanvas = ({
   // Función para alternar el estado de las puertas (solo desde capa fichas)
   const handleDoorToggle = useCallback((wallId) => {
     if (activeLayer !== 'fichas') return; // Solo permitir desde capa fichas
-    
+
     const updatedWalls = walls.map(wall => {
       if (wall.id === wallId) {
         // Solo alternar entre cerrado y abierto (no tocar secretas)
@@ -3462,7 +3550,7 @@ const MapCanvas = ({
       }
       return wall;
     });
-    
+
     setWalls(updatedWalls);
     handleWallsChange(updatedWalls);
   }, [walls, activeLayer, handleWallsChange]);
@@ -4044,23 +4132,23 @@ const MapCanvas = ({
   const snapWallEndpoints = useCallback((walls) => {
     const SNAP_DISTANCE = effectiveGridSize * 0.25; // Distancia de snap (1/4 de celda)
     const connectedWalls = [...walls];
-    
+
     for (let i = 0; i < connectedWalls.length; i++) {
       const wall1 = connectedWalls[i];
       const [x1_1, y1_1, x2_1, y2_1] = wall1.points;
-      
+
       // Extremos del primer muro en coordenadas absolutas
       const wall1_start = { x: wall1.x + x1_1, y: wall1.y + y1_1 };
       const wall1_end = { x: wall1.x + x2_1, y: wall1.y + y2_1 };
-      
+
       for (let j = i + 1; j < connectedWalls.length; j++) {
         const wall2 = connectedWalls[j];
         const [x1_2, y1_2, x2_2, y2_2] = wall2.points;
-        
+
         // Extremos del segundo muro en coordenadas absolutas
         const wall2_start = { x: wall2.x + x1_2, y: wall2.y + y1_2 };
         const wall2_end = { x: wall2.x + x2_2, y: wall2.y + y2_2 };
-        
+
         // Verificar todas las combinaciones de extremos
         const connections = [
           { w1_point: wall1_start, w1_isStart: true, w2_point: wall2_start, w2_isStart: true },
@@ -4068,18 +4156,18 @@ const MapCanvas = ({
           { w1_point: wall1_end, w1_isStart: false, w2_point: wall2_start, w2_isStart: true },
           { w1_point: wall1_end, w1_isStart: false, w2_point: wall2_end, w2_isStart: false }
         ];
-        
+
         connections.forEach(conn => {
           const distance = Math.sqrt(
-            Math.pow(conn.w1_point.x - conn.w2_point.x, 2) + 
+            Math.pow(conn.w1_point.x - conn.w2_point.x, 2) +
             Math.pow(conn.w1_point.y - conn.w2_point.y, 2)
           );
-          
+
           if (distance > 0 && distance <= SNAP_DISTANCE) {
             // Calcular punto medio para la conexión
             const midX = (conn.w1_point.x + conn.w2_point.x) / 2;
             const midY = (conn.w1_point.y + conn.w2_point.y) / 2;
-            
+
             // Actualizar el primer muro
             const newWall1Points = [...wall1.points];
             if (conn.w1_isStart) {
@@ -4090,7 +4178,7 @@ const MapCanvas = ({
               newWall1Points[3] = midY - wall1.y;
             }
             connectedWalls[i] = { ...wall1, points: newWall1Points };
-            
+
             // Actualizar el segundo muro
             const newWall2Points = [...wall2.points];
             if (conn.w2_isStart) {
@@ -4105,7 +4193,7 @@ const MapCanvas = ({
         });
       }
     }
-    
+
     return connectedWalls;
   }, [effectiveGridSize]);
 
@@ -4146,26 +4234,26 @@ const MapCanvas = ({
   const findNearestWallEndpoint = useCallback((x, y, threshold = 25) => {
     let nearestPoint = null;
     let minDistance = threshold;
-    
+
     walls.forEach(wall => {
       const [x1, y1, x2, y2] = wall.points;
       const endpoints = [
         { x: wall.x + x1, y: wall.y + y1 },
         { x: wall.x + x2, y: wall.y + y2 }
       ];
-      
+
       endpoints.forEach(endpoint => {
         const distance = Math.sqrt(
           Math.pow(x - endpoint.x, 2) + Math.pow(y - endpoint.y, 2)
         );
-        
+
         if (distance < minDistance) {
           minDistance = distance;
           nearestPoint = endpoint;
         }
       });
     });
-    
+
     return nearestPoint;
   }, [walls]);
 
@@ -4176,42 +4264,42 @@ const MapCanvas = ({
     const wallY1 = wall.y + y1;
     const wallX2 = wall.x + x2;
     const wallY2 = wall.y + y2;
-    
+
     // Calcular la distancia del punto al segmento de línea
     const A = x - wallX1;
     const B = y - wallY1;
     const C = wallX2 - wallX1;
     const D = wallY2 - wallY1;
-    
+
     const dot = A * C + B * D;
     const lenSq = C * C + D * D;
-    
+
     if (lenSq === 0) return Math.sqrt(A * A + B * B) <= threshold;
-    
+
     let param = dot / lenSq;
     param = Math.max(0, Math.min(1, param));
-    
+
     const xx = wallX1 + param * C;
     const yy = wallY1 + param * D;
-    
+
     const dx = x - xx;
     const dy = y - yy;
-    
+
     return Math.sqrt(dx * dx + dy * dy) <= threshold;
   }, []);
 
   // Función para sugerir la mejor posición para una puerta en un muro
   const suggestDoorPosition = useCallback((wall) => {
     const [x1, y1, x2, y2] = wall.points;
-    
+
     // Calcular el punto medio del segmento
     const centerX = wall.x + (x1 + x2) / 2;
     const centerY = wall.y + (y1 + y2) / 2;
-    
+
     // Ajustar a la cuadrícula más cercana
     const gridCenterX = Math.round(centerX / effectiveGridSize) * effectiveGridSize;
     const gridCenterY = Math.round(centerY / effectiveGridSize) * effectiveGridSize;
-    
+
     return { x: gridCenterX, y: gridCenterY };
   }, [effectiveGridSize]);
 
@@ -4421,13 +4509,13 @@ const MapCanvas = ({
   const findSnapPoint = (x, y, currentWallId, snapDistance = 15) => {
     for (const wall of walls) {
       if (wall.id === currentWallId) continue;
-      
+
       // Obtener los puntos absolutos del muro
       const points = [
         { x: wall.x + wall.points[0], y: wall.y + wall.points[1] },
         { x: wall.x + wall.points[2], y: wall.y + wall.points[3] }
       ];
-      
+
       // Verificar distancia a cada punto
       for (const point of points) {
         const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
@@ -4443,20 +4531,20 @@ const MapCanvas = ({
     const node = e.target;
     let x = node.x();
     let y = node.y();
-    
+
     // Aplicar snap si estamos guardando (al soltar)
     if (save) {
       const snapResult = findSnapPoint(x, y, id);
       x = snapResult.x;
       y = snapResult.y;
-      
+
       // Actualizar la posición visual del nodo si hubo snap
       if (snapResult.snapped) {
         node.x(x);
         node.y(y);
       }
     }
-    
+
     const updater = (ws) =>
       ws.map((w) => {
         if (w.id !== id) return w;
@@ -4573,7 +4661,7 @@ const MapCanvas = ({
     const top = node.y() - offY;
     const col = Math.round((left - gridOffsetX) / effectiveGridSize);
     const row = Math.round((top - gridOffsetY) / effectiveGridSize);
-    
+
     // Verificar colisiones con muros antes de colocar el token
     if (isPositionBlocked(col, row)) {
       // Si la posición está bloqueada, devolver el token a su posición original
@@ -4587,7 +4675,7 @@ const MapCanvas = ({
       setDragShadow(null);
       return;
     }
-    
+
     node.position({
       x: col * effectiveGridSize + offX + gridOffsetX,
       y: row * effectiveGridSize + offY + gridOffsetY,
@@ -4631,7 +4719,7 @@ const MapCanvas = ({
       window.dispatchEvent(
         new CustomEvent('tokenSettingsEditing', { detail: { delta: 1 } })
       );
-    } catch {}
+    } catch { }
   };
 
   const handleCloseSettings = (id) => {
@@ -4640,7 +4728,7 @@ const MapCanvas = ({
       window.dispatchEvent(
         new CustomEvent('tokenSettingsEditing', { detail: { delta: -1 } })
       );
-    } catch {}
+    } catch { }
   };
 
   const handleOpenEstados = (id) => {
@@ -5257,20 +5345,20 @@ const MapCanvas = ({
         e.preventDefault();
         const clipboardData = {
           tokens: selectedTokens.length > 0 ? tokens.filter(t => selectedTokens.includes(t.id)) :
-                  selectedId ? [tokens.find(t => t.id === selectedId)] : [],
+            selectedId ? [tokens.find(t => t.id === selectedId)] : [],
           lines: selectedLines.length > 0 ? lines.filter(l => selectedLines.includes(l.id)) :
-                 selectedLineId ? [lines.find(l => l.id === selectedLineId)] : [],
+            selectedLineId ? [lines.find(l => l.id === selectedLineId)] : [],
           walls: selectedWalls.length > 0 ? walls.filter(w => selectedWalls.includes(w.id)) :
-                 selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
+            selectedWallId ? [walls.find(w => w.id === selectedWallId)] : [],
           texts: selectedTexts.length > 0 ? texts.filter(t => selectedTexts.includes(t.id)) :
-                 selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
+            selectedTextId ? [texts.find(t => t.id === selectedTextId)] : []
           ,
           ambientLights:
             selectedAmbientLights.length > 0
               ? ambientLights.filter((light) => selectedAmbientLights.includes(light.id))
               : selectedAmbientLightId
-              ? [ambientLights.find((light) => light.id === selectedAmbientLightId)]
-              : [],
+                ? [ambientLights.find((light) => light.id === selectedAmbientLightId)]
+                : [],
         };
 
         clipboardData.tokens = clipboardData.tokens.filter(Boolean);
@@ -5911,7 +5999,7 @@ const MapCanvas = ({
           // Si la posición está bloqueada, no crear el token
           return;
         }
-        
+
         const newToken = createToken({
           id: nanoid(),
           x,
@@ -6227,6 +6315,7 @@ const MapCanvas = ({
                     onRotate={handleRotateChange}
                     onHoverChange={(h) => setHoveredId(h ? token.id : null)}
                     estados={token.estados || []}
+                    statusEffectsConfig={statusEffectsConfig}
                     draggable={
                       activeTool === 'select' && canSelectElement(token, 'token')
                     }
@@ -6537,11 +6626,11 @@ const MapCanvas = ({
                     radius={6}
                     fill="#ff6600"
                     opacity={wl.crossLayerOpacity || 1}
-                  draggable={
-                    activeTool === 'select' &&
-                    !wl.isBackground &&
-                    canSelectElement(wl, 'wall')
-                  }
+                    draggable={
+                      activeTool === 'select' &&
+                      !wl.isBackground &&
+                      canSelectElement(wl, 'wall')
+                    }
                     listening={!wl.isBackground}
                     onMouseDown={() => {
                       if (!wl.isBackground) {
@@ -6557,8 +6646,8 @@ const MapCanvas = ({
                       (stageRef.current.container().style.cursor = 'crosshair')
                     }
                     onMouseLeave={() =>
-                      (stageRef.current.container().style.cursor =
-                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    (stageRef.current.container().style.cursor =
+                      activeTool === 'wall' ? 'crosshair' : 'default')
                     }
                   />
                   {/* Door icon at midpoint */}
@@ -6577,8 +6666,8 @@ const MapCanvas = ({
                       (stageRef.current.container().style.cursor = 'pointer')
                     }
                     onMouseLeave={() =>
-                      (stageRef.current.container().style.cursor =
-                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    (stageRef.current.container().style.cursor =
+                      activeTool === 'wall' ? 'crosshair' : 'default')
                     }
                   >
                     <Rect
@@ -6605,9 +6694,9 @@ const MapCanvas = ({
                     y={wl.y + wl.points[3]}
                     radius={6}
                     fill="#ff6600"
-                  draggable={
-                    activeTool === 'select' && canSelectElement(wl, 'wall')
-                  }
+                    draggable={
+                      activeTool === 'select' && canSelectElement(wl, 'wall')
+                    }
                     onMouseDown={() => {
                       setSelectedWallId(wl.id);
                       setSelectedId(null);
@@ -6620,8 +6709,8 @@ const MapCanvas = ({
                       (stageRef.current.container().style.cursor = 'crosshair')
                     }
                     onMouseLeave={() =>
-                      (stageRef.current.container().style.cursor =
-                        activeTool === 'wall' ? 'crosshair' : 'default')
+                    (stageRef.current.container().style.cursor =
+                      activeTool === 'wall' ? 'crosshair' : 'default')
                     }
                   />
                 </React.Fragment>
@@ -6689,7 +6778,7 @@ const MapCanvas = ({
                 const opacity = token.light.opacity ?? 0.4;
                 const brightIntensity = opacity;
                 const dimIntensity = opacity * 0.8;
-                
+
                 // Verificar si hay polígono de visibilidad para este token
                 const lightData = lightPolygons[token.id];
                 const hasWallBlocking =
@@ -7051,10 +7140,10 @@ const MapCanvas = ({
                 p.type === 'resist'
                   ? 'Resiste el daño'
                   : p.type === 'counter'
-                  ? '¡Contraataque!'
-                  : p.type === 'perfect'
-                  ? '¡Bloqueo perfecto!'
-                  : `-${p.value}`;
+                    ? '¡Contraataque!'
+                    : p.type === 'perfect'
+                      ? '¡Bloqueo perfecto!'
+                      : `-${p.value}`;
               const group = groups[p.tokenId] || [];
               const index = group.findIndex((g) => g.id === p.id);
               const offset = (index - (group.length - 1) / 2) * 30;
@@ -7249,86 +7338,65 @@ const MapCanvas = ({
         />
       )}
       {attackResult && (
-          <DefenseModal
-            isOpen
-            attacker={tokens.find(t => t.id === attackSourceId)}
-            target={tokens.find(t => t.id === attackTargetId)}
-            distance={attackLine ? Math.round(Math.hypot(
-              pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
-              pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
-            )) : 0}
-            attackResult={attackResult}
-            pageId={pageId}
-            armas={armas}
-            poderesCatalog={habilidades}
-            onClose={async (res) => {
-              const currentAttackResult = attackResult;
-              const currentTargetId = attackTargetId;
-              const currentRequestId = attackRequestId;
-              setAttackTargetId(null);
-              setAttackLine(null);
-              setAttackResult(null);
-              setAttackReady(false);
-              if (!res && currentAttackResult) {
-                try {
-                  let alreadyCompleted = false;
-                  if (currentRequestId) {
-                    try {
-                      const snap = await getDoc(doc(db, 'attacks', currentRequestId));
-                      if (snap.exists() && snap.data().completed) alreadyCompleted = true;
-                    } catch {}
-                  }
-                  if (!alreadyCompleted) {
-                    const target = tokens.find(t => t.id === currentTargetId);
-                    if (target) {
-                      let lost = { armadura: 0, postura: 0, vida: 0 };
-                      let updatedSheet = null;
-                      if (target.tokenSheetId) {
-                        const stored = localStorage.getItem('tokenSheets');
-                        if (stored) {
-                          const sheets = JSON.parse(stored);
-                          const sheet = sheets[target.tokenSheetId];
-                          if (sheet) {
-                            let updated = sheet;
-                            let remaining = currentAttackResult.total;
-                            ['postura', 'armadura', 'vida'].forEach((stat) => {
-                              const resDam = applyDamage(updated, remaining, stat);
-                              remaining = resDam.remaining;
-                              updated = resDam.sheet;
-                              lost[stat] = resDam.blocks;
-                            });
-                            sheets[updated.id] = updated;
-                            localStorage.setItem('tokenSheets', JSON.stringify(sheets));
-                            window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
-                            saveTokenSheet(updated);
-                            updatedSheet = updated;
-                          }
+        <DefenseModal
+          isOpen
+          attacker={tokens.find(t => t.id === attackSourceId)}
+          target={tokens.find(t => t.id === attackTargetId)}
+          distance={attackLine ? Math.round(Math.hypot(
+            pxToCell(attackLine[2], gridOffsetX) - pxToCell(attackLine[0], gridOffsetX),
+            pxToCell(attackLine[3], gridOffsetY) - pxToCell(attackLine[1], gridOffsetY)
+          )) : 0}
+          attackResult={attackResult}
+          pageId={pageId}
+          armas={armas}
+          poderesCatalog={habilidades}
+          onClose={async (res) => {
+            const currentAttackResult = attackResult;
+            const currentTargetId = attackTargetId;
+            const currentRequestId = attackRequestId;
+            setAttackTargetId(null);
+            setAttackLine(null);
+            setAttackResult(null);
+            setAttackReady(false);
+            if (!res && currentAttackResult) {
+              try {
+                let alreadyCompleted = false;
+                if (currentRequestId) {
+                  try {
+                    const snap = await getDoc(doc(db, 'attacks', currentRequestId));
+                    if (snap.exists() && snap.data().completed) alreadyCompleted = true;
+                  } catch { }
+                }
+                if (!alreadyCompleted) {
+                  const target = tokens.find(t => t.id === currentTargetId);
+                  if (target) {
+                    let lost = { armadura: 0, postura: 0, vida: 0 };
+                    let updatedSheet = null;
+                    if (target.tokenSheetId) {
+                      const stored = localStorage.getItem('tokenSheets');
+                      if (stored) {
+                        const sheets = JSON.parse(stored);
+                        const sheet = sheets[target.tokenSheetId];
+                        if (sheet) {
+                          let updated = sheet;
+                          let remaining = currentAttackResult.total;
+                          ['postura', 'armadura', 'vida'].forEach((stat) => {
+                            const resDam = applyDamage(updated, remaining, stat);
+                            remaining = resDam.remaining;
+                            updated = resDam.sheet;
+                            lost[stat] = resDam.blocks;
+                          });
+                          sheets[updated.id] = updated;
+                          localStorage.setItem('tokenSheets', JSON.stringify(sheets));
+                          window.dispatchEvent(new CustomEvent('tokenSheetSaved', { detail: updated }));
+                          saveTokenSheet(updated);
+                          updatedSheet = updated;
                         }
                       }
-                      for (const stat of ['postura', 'armadura', 'vida']) {
-                        if (lost[stat] > 0) {
-                          const anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
-                          try {
-                            let effectivePageId = pageId;
-                            try {
-                              const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
-                              if (visibilityDoc.exists()) {
-                                effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
-                              }
-                            } catch (err) {
-                              console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
-                          }
-                          await addDoc(collection(db, 'damageEvents'), {
-                            ...anim,
-                            pageId: effectivePageId,
-                            timestamp: serverTimestamp(),
-                          });
-                        } catch {}
-                      }
-                      }
-                      const totalLost = lost.armadura + lost.postura + lost.vida;
-                      if (totalLost === 0) {
-                        const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
+                    }
+                    for (const stat of ['postura', 'armadura', 'vida']) {
+                      if (lost[stat] > 0) {
+                        const anim = { tokenId: target.id, value: lost[stat], stat, ts: Date.now() };
                         try {
                           let effectivePageId = pageId;
                           try {
@@ -7344,46 +7412,67 @@ const MapCanvas = ({
                             pageId: effectivePageId,
                             timestamp: serverTimestamp(),
                           });
-                        } catch {}
-                      }
-                      let msgs = [];
-                      try {
-                        const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
-                        if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
-                      } catch {}
-                      const targetName = target.customName || target.name || 'Defensor';
-                      const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
-                      const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
-                      const diff = currentAttackResult.total;
-                      const noDamageText = `${targetName} resiste el daño. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-                      const damageText = `${targetName} no se defendió. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-                      msgs.push({
-                        id: nanoid(),
-                        author: targetName,
-                        text: totalLost === 0 ? noDamageText : damageText,
-                      });
-                      await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
-                      if (currentRequestId) {
-                        try {
-                          await updateDoc(doc(db, 'attacks', currentRequestId), { completed: true, auto: true });
-                        } catch {}
+                        } catch { }
                       }
                     }
+                    const totalLost = lost.armadura + lost.postura + lost.vida;
+                    if (totalLost === 0) {
+                      const anim = { tokenId: target.id, type: 'resist', ts: Date.now() };
+                      try {
+                        let effectivePageId = pageId;
+                        try {
+                          const visibilityDoc = await getDoc(doc(db, 'gameSettings', 'playerVisibility'));
+                          if (visibilityDoc.exists()) {
+                            effectivePageId = visibilityDoc.data().playerVisiblePageId || pageId;
+                          }
+                        } catch (err) {
+                          console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
+                        }
+                        await addDoc(collection(db, 'damageEvents'), {
+                          ...anim,
+                          pageId: effectivePageId,
+                          timestamp: serverTimestamp(),
+                        });
+                      } catch { }
+                    }
+                    let msgs = [];
+                    try {
+                      const chatSnap = await getDoc(doc(db, 'assetSidebar', 'chat'));
+                      if (chatSnap.exists()) msgs = chatSnap.data().messages || [];
+                    } catch { }
+                    const targetName = target.customName || target.name || 'Defensor';
+                    const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
+                    const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
+                    const diff = currentAttackResult.total;
+                    const noDamageText = `${targetName} resiste el daño. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                    const damageText = `${targetName} no se defendió. Ataque ${currentAttackResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+                    msgs.push({
+                      id: nanoid(),
+                      author: targetName,
+                      text: totalLost === 0 ? noDamageText : damageText,
+                    });
+                    await setDoc(doc(db, 'assetSidebar', 'chat'), { messages: msgs });
+                    if (currentRequestId) {
+                      try {
+                        await updateDoc(doc(db, 'attacks', currentRequestId), { completed: true, auto: true });
+                      } catch { }
+                    }
                   }
-                } catch (err) {
-                  console.error(err);
                 }
+              } catch (err) {
+                console.error(err);
               }
-              if (currentRequestId) {
-                try {
-                  await deleteDoc(doc(db, 'attacks', currentRequestId));
-                } catch (err) {
-                  console.error(err);
-                }
-                setAttackRequestId(null);
+            }
+            if (currentRequestId) {
+              try {
+                await deleteDoc(doc(db, 'attacks', currentRequestId));
+              } catch (err) {
+                console.error(err);
               }
-            }}
-          />
+              setAttackRequestId(null);
+            }
+          }}
+        />
       )}
 
       {/* Indicador de modo simulación */}
@@ -7475,29 +7564,29 @@ const MapCanvas = ({
           selectedWalls.length > 0 ||
           selectedTexts.length > 0 ||
           selectedAmbientLights.length > 0) && (
-          <div className="rounded-lg bg-green-600 px-3 py-2 text-white shadow-lg">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">📋 Seleccionados:</span>
-              <span className="font-bold">
-                {selectedTokens.length +
-                  selectedLines.length +
-                  selectedWalls.length +
-                  selectedTexts.length +
-                  selectedAmbientLights.length}
-              </span>
-              <span className="text-xs opacity-75">
-                ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
-                {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
-                {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
-                {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`}
-                {selectedAmbientLights.length > 0 && ` ${selectedAmbientLights.length} luces`})
-              </span>
+            <div className="rounded-lg bg-green-600 px-3 py-2 text-white shadow-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">📋 Seleccionados:</span>
+                <span className="font-bold">
+                  {selectedTokens.length +
+                    selectedLines.length +
+                    selectedWalls.length +
+                    selectedTexts.length +
+                    selectedAmbientLights.length}
+                </span>
+                <span className="text-xs opacity-75">
+                  ({selectedTokens.length > 0 && `${selectedTokens.length} tokens`}
+                  {selectedLines.length > 0 && ` ${selectedLines.length} líneas`}
+                  {selectedWalls.length > 0 && ` ${selectedWalls.length} muros`}
+                  {selectedTexts.length > 0 && ` ${selectedTexts.length} textos`}
+                  {selectedAmbientLights.length > 0 && ` ${selectedAmbientLights.length} luces`})
+                </span>
+              </div>
+              <div className="mt-1 text-xs opacity-75">
+                Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
+              </div>
             </div>
-            <div className="mt-1 text-xs opacity-75">
-              Ctrl+C: Copiar | Ctrl+V: Pegar | Delete: Eliminar | Escape: Deseleccionar
-            </div>
-          </div>
-        )}
+          )}
       </div>
 
       {/* Indicador de clipboard */}

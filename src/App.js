@@ -13,6 +13,8 @@ import {
   addDoc,
   serverTimestamp,
   Timestamp,
+  query,
+  where,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -58,10 +60,13 @@ import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
+import { CharacterCreatorView } from './components/CharacterCreatorView';
+import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
+import StatusEffectsManager from './components/StatusEffectsManager';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
@@ -984,6 +989,8 @@ function App() {
   const [playerArmaduraError, setPlayerArmaduraError] = useState('');
   const [playerInputPoder, setPlayerInputPoder] = useState('');
   const [playerPoderError, setPlayerPoderError] = useState('');
+  const [sheetWeaponNames, setSheetWeaponNames] = useState(new Set());
+  const [sheetArmorNames, setSheetArmorNames] = useState(new Set());
 
   const attachKarma = useCallback(
     (sheet) => {
@@ -1156,6 +1163,7 @@ function App() {
   });
   const [editingArmor, setEditingArmor] = useState(null);
   const [newArmorError, setNewArmorError] = useState('');
+  const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [newAbility, setNewAbility] = useState({
     nombre: '',
     alcance: '',
@@ -1227,6 +1235,45 @@ function App() {
   const [playerLoginError, setPlayerLoginError] = useState(null);
   const [playerLoginTransition, setPlayerLoginTransition] = useState(false);
 
+  const handleSaveNewCharacter = async (newCharacter) => {
+    try {
+      const charId = newCharacter.id;
+      let imageUrl = newCharacter.image;
+      let avatarUrl = newCharacter.avatar;
+      let portraitSource = newCharacter.portraitSource;
+
+      // Subir imagen principal si es data URL
+      if (imageUrl && imageUrl.startsWith('data:')) {
+        imageUrl = await uploadDataUrl(imageUrl, `characters/${charId}/image.jpg`);
+      }
+
+      // Subir avatar si es data URL
+      if (avatarUrl && avatarUrl.startsWith('data:')) {
+        avatarUrl = await uploadDataUrl(avatarUrl, `characters/${charId}/avatar.jpg`);
+      }
+
+      // Subir fuente del retrato para permitir re-edición sin pérdida
+      if (portraitSource && portraitSource.startsWith('data:')) {
+        portraitSource = await uploadDataUrl(portraitSource, `characters/${charId}/source.jpg`);
+      }
+
+      const charToSave = {
+        ...newCharacter,
+        image: imageUrl,
+        avatar: avatarUrl,
+        portraitSource: portraitSource,
+        owner: playerName,
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'characters', charId), charToSave);
+      setShowCharacterCreator(false);
+    } catch (error) {
+      console.error("Error saving character:", error);
+      throw error; // Re-lanzar para que CharacterCreatorView lo capture
+    }
+  };
+
   const handlePlayerLogin = async () => {
     if (!loginTarget) return;
     try {
@@ -1234,16 +1281,14 @@ function App() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // If no passcode set, allow entry (backward and forward compatibility for unlocked chars)
-        // But user requested password protection. We'll assume if it's set, it must match.
-        // If it is NOT set, we might allow entry or demand setting one.
-        // Let's assume: if data.passcode exists and is not empty, check it.
         if (data.passcode && data.passcode !== loginPassword) {
           setPlayerLoginError('Contraseña incorrecta');
           return;
         }
 
-        // Success - trigger transition
+        const charactersQuery = query(collection(db, 'characters'), where('owner', '==', loginTarget));
+        const charSnap = await getDocs(charactersQuery);
+
         setPlayerLoginError(null);
         setPlayerLoginTransition(true);
         setTimeout(() => {
@@ -1252,13 +1297,14 @@ function App() {
           setLoginTarget(null);
           setLoginPassword('');
           setPlayerLoginTransition(false);
+
+          if (charSnap.empty) {
+            setShowCharacterCreator(true);
+          } else {
+            setShowCharacterCreator(false);
+          }
         }, 600);
       } else {
-        // If doc doesn't exist but name is in existingPlayers (legacy), allow?
-        // For now, if doc not found, maybe allow creating it implicitly?
-        // No, user said "Master is the ONLY one who can create".
-        // So if doc doesn't exist, we probably shouldn't be here if existingPlayers comes from collection scan.
-        // But existingPlayers comes from 'getDocs(collection("players"))'. So it MUST exist.
         setPlayerLoginError('Error: El usuario no existe');
       }
     } catch (e) {
@@ -1886,9 +1932,9 @@ function App() {
   const [showClassMinimap, setShowClassMinimap] = useState(false);
 
   const handleLaunchSpeedSystem = useCallback((name) => {
-    setMinigamePlayerName(name);
+    setMinigamePlayerName(name || playerName || 'Jugador');
     setShowInitiativeTracker(true);
-  }, []);
+  }, [playerName]);
 
   const handleLaunchMinimap = useCallback((name) => {
     if (name) {
@@ -1899,7 +1945,7 @@ function App() {
     } else {
       setShowPlayerMinimap(true);
     }
-  }, [userType, setChosenView, setShowPlayerMinimap]);
+  }, [userType, setChosenView, setShowPlayerMinimap, setShowClassMinimap]);
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -2090,17 +2136,24 @@ function App() {
   );
 
   const ensureTokenSheetIds = useCallback(async (pageId, tokens) => {
-    if (!pageId || checkedPagesRef.current[pageId]) return tokens || [];
-    const updated = tokens ? [...tokens] : [];
+    if (!pageId || !tokens || tokens.length === 0) return tokens || [];
+
+    // Si ya chequeamos esta página, no volvemos a procesar automáticamente
+    if (checkedPagesRef.current[pageId]) return tokens;
+
+    const updated = [...tokens];
     let modified = false;
     const tasks = [];
     const updates = [];
+
     updated.forEach((tk) => {
       if (!tk.tokenSheetId) {
         const newId = nanoid();
         tk.tokenSheetId = newId;
         modified = true;
         updates.push({ id: tk.id, tokenSheetId: newId });
+
+        // Crear la ficha técnica
         if (tk.enemyId) {
           tasks.push(
             getDoc(doc(db, 'enemies', tk.enemyId))
@@ -2110,12 +2163,12 @@ function App() {
                 }
                 return setDoc(doc(db, 'tokenSheets', newId), { stats: {} });
               })
-              .catch((err) => console.error('clone enemy sheet', err))
+              .catch((err) => console.error('Error clonando enemigo para ficha:', err))
           );
         } else {
           tasks.push(
             setDoc(doc(db, 'tokenSheets', newId), { stats: {} }).catch((err) =>
-              console.error('create token sheet', err)
+              console.error('Error creando ficha técnica:', err)
             )
           );
         }
@@ -2123,6 +2176,7 @@ function App() {
     });
 
     if (modified) {
+      console.log(`[Firebase] Detectados ${updates.length} tokens sin ficha. Reparando...`);
       try {
         await Promise.all(tasks);
         await Promise.all(
@@ -2132,11 +2186,9 @@ function App() {
             })
           )
         );
+        console.log(`[Firebase] ${updates.length} tokens reparados exitosamente.`);
       } catch (err) {
-        console.error('update tokens', err);
-        // Revert to original tokens on failure to avoid losing data
-        checkedPagesRef.current[pageId] = true;
-        return tokens || [];
+        console.error('Error al reparar tokens:', err);
       }
     }
 
@@ -2827,7 +2879,7 @@ function App() {
       clearTimeout(tokenSaveTimeout.current);
     }
 
-    // Debouncing: esperar 20ms antes de guardar
+    // Debouncing: esperar 2000ms antes de guardar (antes 20ms, demasiado agresivo)
     tokenSaveTimeout.current = setTimeout(async () => {
       const saveId = ++saveVersionRef.current.tokens;
 
@@ -2846,13 +2898,27 @@ function App() {
             console.log('Guardado de tokens cancelado por cambio de página');
             return;
           }
+          // Solo guardar tokens que han cambiado realmente comparado con prevTokens
+          const changedTokens = tokens.filter(t => {
+            const pt = prevTokens.find(p => p.id === t.id);
+            if (!pt) return true; // Nuevo token
+            // Comparar campos críticos para decidir si guardar
+            return t.x !== pt.x || t.y !== pt.y || t.size !== pt.size ||
+              t.rotation !== pt.rotation || t.name !== pt.name ||
+              t.url !== pt.url || t.hp !== pt.hp || t.hpMax !== pt.hpMax ||
+              t.tokenSheetId !== pt.tokenSheetId || t.isLocked !== pt.isLocked;
+          });
+
+          if (changedTokens.length === 0 && toDelete.length === 0) {
+            console.log('No hay cambios reales en los tokens, saltando guardado.');
+            return;
+          }
+
           const tokensRef = collection(db, 'pages', pageId, 'tokens');
-          const toDelete = prevTokens.filter(
-            (pt) => !tokens.some((t) => t.id === pt.id)
-          );
           const author = playerName || 'Master';
+
           await Promise.all([
-            ...tokens.map((t) => {
+            ...changedTokens.map((t) => {
               const tokenId = String(t.id);
               const payload = {
                 ...t,
@@ -2886,6 +2952,8 @@ function App() {
     canvasTokensRef.current = canvasTokens;
   }, [canvasTokens]);
 
+  // Debounce para guardado de textos
+  const textSaveTimeout = useRef(null);
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
     if (userType !== 'master') return;
@@ -2893,29 +2961,23 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasTexts, prevTextsRef.current)) return;
 
-    console.log(
-      'Guardando textos en página:',
-      pageId,
-      'currentPage:',
-      currentPage
-    );
-    prevTextsRef.current = canvasTexts;
+    if (textSaveTimeout.current) clearTimeout(textSaveTimeout.current);
+    textSaveTimeout.current = setTimeout(() => {
+      console.log('Guardando textos en página:', pageId);
+      prevTextsRef.current = canvasTexts;
+      const saveId = ++saveVersionRef.current.texts;
 
-    const saveId = ++saveVersionRef.current.texts;
-
-    updateDoc(doc(db, 'pages', pageId), { texts: canvasTexts })
-      .then(() => {
-        if (saveId !== saveVersionRef.current.texts) {
-          console.log(
-            'Resultado de guardado de textos ignorado por cambio de página'
-          );
-          return;
-        }
-        console.log('Textos guardados exitosamente en página:', pageId);
-      })
-      .catch((error) => console.error('Error guardando textos:', error));
+      updateDoc(doc(db, 'pages', pageId), { texts: canvasTexts })
+        .then(() => {
+          if (saveId !== saveVersionRef.current.texts) return;
+          console.log('Textos guardados exitosamente');
+        })
+        .catch((error) => console.error('Error guardando textos:', error));
+    }, 1000);
   }, [canvasTexts, currentPage]);
 
+  // Debounce para guardado de líneas
+  const lineSaveTimeout = useRef(null);
   useEffect(() => {
     if (!pagesLoadedRef.current) return;
     if (userType !== 'master') return;
@@ -2923,27 +2985,19 @@ function App() {
     if (!pageId) return;
     if (deepEqual(canvasLines, prevLinesRef.current)) return;
 
-    console.log(
-      'Guardando líneas en página:',
-      pageId,
-      'currentPage:',
-      currentPage
-    );
-    prevLinesRef.current = canvasLines;
+    if (lineSaveTimeout.current) clearTimeout(lineSaveTimeout.current);
+    lineSaveTimeout.current = setTimeout(() => {
+      console.log('Guardando líneas en página:', pageId);
+      prevLinesRef.current = canvasLines;
+      const saveId = ++saveVersionRef.current.lines;
 
-    const saveId = ++saveVersionRef.current.lines;
-
-    updateDoc(doc(db, 'pages', pageId), { lines: canvasLines })
-      .then(() => {
-        if (saveId !== saveVersionRef.current.lines) {
-          console.log(
-            'Resultado de guardado de líneas ignorado por cambio de página'
-          );
-          return;
-        }
-        console.log('Líneas guardadas exitosamente en página:', pageId);
-      })
-      .catch((error) => console.error('Error guardando líneas:', error));
+      updateDoc(doc(db, 'pages', pageId), { lines: canvasLines })
+        .then(() => {
+          if (saveId !== saveVersionRef.current.lines) return;
+          console.log('Líneas guardadas exitosamente');
+        })
+        .catch((error) => console.error('Error guardando líneas:', error));
+    }, 1000);
   }, [canvasLines, currentPage]);
 
   useEffect(() => {
@@ -3577,6 +3631,7 @@ function App() {
         datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
         setFetchArmasError(true);
       }
+      setSheetWeaponNames(new Set(datos.map((d) => normalizeName(d.nombre))));
       try {
         const snap = await getDocs(collection(db, 'weapons'));
         const custom = snap.docs.map((d) => ({
@@ -3584,7 +3639,9 @@ function App() {
           rareza: (d.data().rareza || '').trim(),
           fuente: 'custom',
         }));
-        datos = [...datos, ...custom];
+        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
+        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
+        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
       } catch (e) { }
       setArmas(
         datos.map((item) => ({
@@ -3651,6 +3708,7 @@ function App() {
         datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
         setFetchArmadurasError(true);
       }
+      setSheetArmorNames(new Set(datos.map((d) => normalizeName(d.nombre))));
       try {
         const snap = await getDocs(collection(db, 'armors'));
         const custom = snap.docs.map((d) => ({
@@ -3658,7 +3716,9 @@ function App() {
           rareza: (d.data().rareza || '').trim(),
           fuente: 'custom',
         }));
-        datos = [...datos, ...custom];
+        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
+        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
+        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
       } catch (e) { }
       setArmaduras(
         datos.map((item) => ({
@@ -4092,7 +4152,11 @@ function App() {
     }
     try {
       if (editingWeapon && editingWeapon !== nombre) {
-        await deleteDoc(doc(db, 'weapons', editingWeapon));
+        if (sheetWeaponNames.has(normalizeName(editingWeapon))) {
+          await setDoc(doc(db, 'weapons', editingWeapon), { nombre: editingWeapon, deleted: true, fuente: 'custom' });
+        } else {
+          await deleteDoc(doc(db, 'weapons', editingWeapon));
+        }
       }
       const iconReady = applyIconConversions({
         ...newWeaponData,
@@ -4140,7 +4204,11 @@ function App() {
   };
   const deleteWeapon = async (name) => {
     try {
-      await deleteDoc(doc(db, 'weapons', name));
+      if (sheetWeaponNames.has(normalizeName(name))) {
+        await setDoc(doc(db, 'weapons', name), { nombre: name, deleted: true, fuente: 'custom' });
+      } else {
+        await deleteDoc(doc(db, 'weapons', name));
+      }
       if (editingWeapon === name) {
         setEditingWeapon(null);
         setNewWeaponData({
@@ -4169,7 +4237,11 @@ function App() {
     }
     try {
       if (editingArmor && editingArmor !== nombre) {
-        await deleteDoc(doc(db, 'armors', editingArmor));
+        if (sheetArmorNames.has(normalizeName(editingArmor))) {
+          await setDoc(doc(db, 'armors', editingArmor), { nombre: editingArmor, deleted: true, fuente: 'custom' });
+        } else {
+          await deleteDoc(doc(db, 'armors', editingArmor));
+        }
       }
       const iconReady = applyIconConversions({
         ...newArmorData,
@@ -4214,7 +4286,11 @@ function App() {
   };
   const deleteArmor = async (name) => {
     try {
-      await deleteDoc(doc(db, 'armors', name));
+      if (sheetArmorNames.has(normalizeName(name))) {
+        await setDoc(doc(db, 'armors', name), { nombre: name, deleted: true, fuente: 'custom' });
+      } else {
+        await deleteDoc(doc(db, 'armors', name));
+      }
       if (editingArmor === name) {
         setEditingArmor(null);
         setNewArmorData({
@@ -5125,7 +5201,7 @@ function App() {
           <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
             <InitiativeTracker
               playerName={minigamePlayerName || playerName || 'Jugador'}
-              isMaster={true}
+              isMaster={userType === 'master' && authenticated}
               glossary={glossary}
               playerEquipment={playerData ? {
                 weapons: playerData.weapons,
@@ -5135,6 +5211,7 @@ function App() {
               armas={armas}
               armaduras={armaduras}
               habilidades={habilidades}
+              enemies={enemies}
               onBack={() => {
                 setShowInitiativeTracker(false);
                 setMinigamePlayerName('');
@@ -5146,23 +5223,23 @@ function App() {
           <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
             <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
               <MinimapBuilder
-                mode="player"
+                mode={userType === 'master' ? 'master' : 'player'}
                 backLabel="Volver"
                 showNewBadge={false}
                 onBack={() => {
                   setShowClassMinimap(false);
                   setMinigamePlayerName('');
                 }}
-                playerName={minigamePlayerName}
+                playerName={playerName || (userType === 'master' ? 'DM' : 'Jugador')}
                 currentUserId={minigamePlayerName}
-                userRole="PLAYER"
+                userRole={userType === 'master' ? 'DM' : 'PLAYER'}
               />
             </React.Suspense>
           </div>
         )}
       </>
     ),
-    [tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName]
+    [tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName, authenticated, glossary, playerData, armas, armaduras, habilidades, userType]
   );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -5264,9 +5341,9 @@ function App() {
 
           {/* Footer */}
           <div className="text-center space-y-1 border-t border-[#c8aa6e]/10 pt-5">
-            <p className="text-xs font-medium text-[#c8aa6e]/50 uppercase tracking-wider">Versión 2.1.9</p>
+            <p className="text-xs font-medium text-[#c8aa6e]/50 uppercase tracking-wider">Versión 3.0</p>
             <p className="text-[10px] text-gray-600">
-              Animación de dados mejorada
+              Refactorización, cambio de estética y otras mejoras
             </p>
           </div>
         </div>
@@ -5528,25 +5605,7 @@ function App() {
   }
 
 
-  // SISTEMA DE INICIATIVA
-  if (userType === 'player' && nameEntered && showInitiativeTracker) {
-    return withTooltips(
-      <InitiativeTracker
-        playerName={playerName}
-        isMaster={authenticated}
-        glossary={glossary}
-        playerEquipment={{
-          weapons: playerData.weapons,
-          armaduras: playerData.armaduras,
-          poderes: playerData.poderes,
-        }}
-        armas={armas}
-        armaduras={armaduras}
-        habilidades={habilidades}
-        onBack={() => setShowInitiativeTracker(false)}
-      />
-    );
-  }
+
   // MINIMAPA PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerMinimap) {
     return withTooltips(
@@ -5683,7 +5742,7 @@ function App() {
             <Boton
               size="sm"
               color="green"
-              onClick={() => setShowInitiativeTracker(true)}
+              onClick={() => handleLaunchSpeedSystem(playerName)}
             >
               ⚡ Sistema de Velocidad
             </Boton>
@@ -5803,10 +5862,19 @@ function App() {
     return withTooltips(
       <ClassList
         disableSidebar={true}
+        isPlayerMode={true}
+        readOnly={true}
         backButtonLabel="Volver a Ficha"
         onBack={() => setShowPlayerClassList(false)}
         onLaunchMinigame={handleLaunchMinigame}
+        onLaunchDiceCalculator={handleLaunchDiceCalculator}
+        onLaunchSpeedSystem={handleLaunchSpeedSystem}
         onLaunchMinimap={handleLaunchMinimap}
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        glossary={glossary}
+        rarityColorMap={rarityColorMap}
       />
     );
   }
@@ -5814,7 +5882,7 @@ function App() {
   // BESTIARIO PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerBestiary) {
     return withTooltips(
-      <BestiaryView onBack={() => setShowPlayerBestiary(false)} />
+      <BestiaryView onBack={() => setShowPlayerBestiary(false)} readOnly={true} />
     );
   }
 
@@ -5822,8 +5890,40 @@ function App() {
 
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
+    if (showCharacterCreator) {
+      return withTooltips(
+        <CharacterCreatorView
+          onBack={() => setShowCharacterCreator(false)}
+          onSave={handleSaveNewCharacter}
+        />
+      );
+    }
+
     return withTooltips(
-      <div className="min-h-screen bg-gray-900 text-gray-100 px-2 py-4">
+      <div className="min-h-screen bg-[#0b1120]">
+        <CharacterListView
+          playerName={playerName}
+          armas={armas}
+          armaduras={armaduras}
+          habilidades={habilidades}
+          glossary={glossary}
+          rarityColorMap={rarityColorMap}
+          onLaunchMinigame={handleLaunchMinigame}
+          onLaunchDiceCalculator={handleLaunchDiceCalculator}
+          onLaunchSpeedSystem={handleLaunchSpeedSystem}
+          onLaunchMinimap={handleLaunchMinimap}
+          onBack={() => {
+            setNameEntered(false);
+            setPlayerName('');
+            setAuthenticated(false);
+          }}
+        />
+      </div>
+    );
+
+    // OLD CODE (Unreachable)
+    return withTooltips(
+      <div className="hidden">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <h1 className="text-2xl font-bold text-center mb-2">
             Ficha de {playerName}
@@ -8404,6 +8504,9 @@ function App() {
         <MinimapBuilder
           mode="master"
           onBack={() => setChosenView(null)}
+          currentUserId="user-dm"
+          userRole="DM"
+          playerName="DM"
         />
       </React.Suspense>
     );
@@ -8423,13 +8526,27 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'initiative') {
     return withTooltips(
       <div className="min-h-screen bg-gray-900 text-gray-100">
-        <InitiativeTracker onBack={() => setChosenView(null)} />
+        <InitiativeTracker
+          onBack={() => setChosenView(null)}
+          isMaster={true}
+          playerName="Máster"
+          enemies={enemies}
+          glossary={glossary}
+          armas={armas}
+          armaduras={armaduras}
+          habilidades={habilidades}
+        />
       </div>
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return withTooltips(
       <BestiaryView onBack={() => setChosenView(null)} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'status_effects') {
+    return withTooltips(
+      <StatusEffectsManager onBack={() => setChosenView(null)} />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'classes') {
@@ -8440,7 +8557,20 @@ function App() {
           <Boton color="gray" onClick={() => setChosenView(null)}>Volver</Boton>
         </div>
         <div className="flex-1 overflow-hidden relative">
-          <ClassList disableSidebar={true} />
+          <ClassList
+            disableSidebar={true}
+            isPlayerMode={false}
+            readOnly={false}
+            armas={armas}
+            armaduras={armaduras}
+            habilidades={habilidades}
+            glossary={glossary}
+            rarityColorMap={rarityColorMap}
+            onLaunchDiceCalculator={handleLaunchDiceCalculator}
+            onLaunchSpeedSystem={handleLaunchSpeedSystem}
+            onLaunchMinigame={handleLaunchMinigame}
+            onLaunchMinimap={handleLaunchMinimap}
+          />
         </div>
       </div>
     );
@@ -9363,24 +9493,22 @@ function App() {
                                     {highlightText(a.descripcion)}
                                   </p>
                                 )}
-                                {a.fuente === 'custom' && (
-                                  <div className="flex justify-end gap-2 mt-2">
-                                    <Boton
-                                      color="blue"
-                                      onClick={() => startEditWeapon(a)}
-                                      className="px-2 py-1 text-sm"
-                                    >
-                                      Editar
-                                    </Boton>
-                                    <Boton
-                                      color="red"
-                                      onClick={() => deleteWeapon(a.nombre)}
-                                      className="px-2 py-1 text-sm"
-                                    >
-                                      Borrar
-                                    </Boton>
-                                  </div>
-                                )}
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <Boton
+                                    color="blue"
+                                    onClick={() => startEditWeapon(a)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Editar
+                                  </Boton>
+                                  <Boton
+                                    color="red"
+                                    onClick={() => deleteWeapon(a.nombre)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Borrar
+                                  </Boton>
+                                </div>
                               </Tarjeta>
                             ))}
                           </Collapsible>
@@ -9451,24 +9579,22 @@ function App() {
                                     {highlightText(a.descripcion)}
                                   </p>
                                 )}
-                                {a.fuente === 'custom' && (
-                                  <div className="flex justify-end gap-2 mt-2">
-                                    <Boton
-                                      color="blue"
-                                      onClick={() => startEditArmor(a)}
-                                      className="px-2 py-1 text-sm"
-                                    >
-                                      Editar
-                                    </Boton>
-                                    <Boton
-                                      color="red"
-                                      onClick={() => deleteArmor(a.nombre)}
-                                      className="px-2 py-1 text-sm"
-                                    >
-                                      Borrar
-                                    </Boton>
-                                  </div>
-                                )}
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <Boton
+                                    color="blue"
+                                    onClick={() => startEditArmor(a)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Editar
+                                  </Boton>
+                                  <Boton
+                                    color="red"
+                                    onClick={() => deleteArmor(a.nombre)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Borrar
+                                  </Boton>
+                                </div>
                               </Tarjeta>
                             ))}
                           </Collapsible>

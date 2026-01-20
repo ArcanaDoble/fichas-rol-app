@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0b1120;
+  color: #f8fafc;
+  min-height: 100vh;
+}
+
 /* Estilos de scrollbar personalizados */
 ::-webkit-scrollbar {
   width: 8px;

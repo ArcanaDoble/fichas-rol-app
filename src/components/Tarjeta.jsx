@@ -144,38 +144,37 @@ const Tarjeta = ({
     ${glowClass}
     ${style.border}
     ${className}
-    ${
-      variant === 'magic'
-        ? 'transition-transform duration-500 will-change-transform z-10 sm:z-30 relative backdrop-saturate-150'
-        : 'relative'
+    ${variant === 'magic'
+      ? 'transition-transform duration-500 will-change-transform z-10 sm:z-30 relative backdrop-saturate-150'
+      : 'relative'
     }
   `;
 
   const baseCardStyle = variant === 'magic'
     ? {
-        boxShadow: isHovered
-          ? '0 22px 45px -18px rgba(250, 204, 21, 0.45), 0 14px 44px rgba(56, 189, 248, 0.25)'
-          : '0 16px 40px rgba(8, 7, 21, 0.7)',
-        transform: isHovered ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
-        zIndex: isHovered ? 50 : 10,
-        borderRadius: '1.6rem',
-        overflow: 'visible',
-        minHeight: '340px',
-        width: '100%',
-        margin: 0,
-        height: '100%',
-        backgroundImage:
-          'radial-gradient(circle at 12% 20%, rgba(250, 204, 21, 0.18), transparent 55%), radial-gradient(circle at 88% 16%, rgba(99, 102, 241, 0.22), transparent 60%), linear-gradient(140deg, rgba(26, 20, 12, 0.95), rgba(9, 10, 20, 0.92))',
-        border: '1px solid rgba(250, 204, 21, 0.18)',
-      }
+      boxShadow: isHovered
+        ? '0 22px 45px -18px rgba(250, 204, 21, 0.45), 0 14px 44px rgba(56, 189, 248, 0.25)'
+        : '0 16px 40px rgba(8, 7, 21, 0.7)',
+      transform: isHovered ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
+      zIndex: isHovered ? 50 : 10,
+      borderRadius: '1.6rem',
+      overflow: 'visible',
+      minHeight: '340px',
+      width: '100%',
+      margin: 0,
+      height: '100%',
+      backgroundImage:
+        'radial-gradient(circle at 12% 20%, rgba(250, 204, 21, 0.18), transparent 55%), radial-gradient(circle at 88% 16%, rgba(99, 102, 241, 0.22), transparent 60%), linear-gradient(140deg, rgba(26, 20, 12, 0.95), rgba(9, 10, 20, 0.92))',
+      border: '1px solid rgba(250, 204, 21, 0.18)',
+    }
     : {
-        boxShadow: '0 2px 12px 0 #0006',
-        borderRadius: '1rem',
-        overflow: 'hidden',
-        minHeight: 'unset',
-        maxWidth: 'unset',
-        margin: 'unset',
-      };
+      boxShadow: '0 2px 12px 0 #0006',
+      borderRadius: '1rem',
+      overflow: 'hidden',
+      minHeight: 'unset',
+      maxWidth: 'unset',
+      margin: 'unset',
+    };
 
   const handleMouseEnter = () => {
     if (canHover) setIsHovered(true);
@@ -212,23 +211,22 @@ const Tarjeta = ({
     >
       {/* Gradient overlay */}
       <div
-        className={`absolute inset-0 pointer-events-none bg-gradient-to-br ${style.gradient} ${
-          rarityPalette ? 'transition-opacity duration-300' : ''
-        } ${variant === 'magic' ? 'opacity-50' : 'opacity-20'}`}
+        className={`absolute inset-0 pointer-events-none bg-gradient-to-br ${style.gradient} ${rarityPalette ? 'transition-opacity duration-300' : ''
+          } ${variant === 'magic' ? 'opacity-50' : 'opacity-20'}`}
         style={
           rarityPalette
             ? {
-                '--tw-gradient-from': rarityPalette.gradientFrom,
-                '--tw-gradient-stops': `var(--tw-gradient-from), ${rarityPalette.gradientVia}, ${rarityPalette.gradientTo}`,
-                '--tw-gradient-to': rarityPalette.gradientTo,
-                opacity: isHovered
-                  ? variant === 'magic'
-                    ? 0.75
-                    : 0.55
-                  : variant === 'magic'
-                    ? 0.55
-                    : 0.35,
-              }
+              '--tw-gradient-from': rarityPalette.gradientFrom,
+              '--tw-gradient-stops': `var(--tw-gradient-from), ${rarityPalette.gradientVia}, ${rarityPalette.gradientTo}`,
+              '--tw-gradient-to': rarityPalette.gradientTo,
+              opacity: isHovered
+                ? variant === 'magic'
+                  ? 0.75
+                  : 0.55
+                : variant === 'magic'
+                  ? 0.55
+                  : 0.35,
+            }
             : undefined
         }
       />

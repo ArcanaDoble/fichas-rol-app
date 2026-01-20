@@ -25,7 +25,7 @@ const COLORS = [
 
 const BORDER_COLORS = ['#374151', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#c8aa6e'];
 
-const STATUS_ICONS = ESTADOS;
+// STATUS_ICONS will be managed dynamically within MinimapView state
 
 const CELL_SIZE = 64;
 const GRID_GAP = 12;
@@ -149,7 +149,25 @@ const SaveToast = ({ show, exiting }) => {
     );
 };
 
-export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM' }) => {
+export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM', playerName = null }) => {
+    const [statusIcons, setStatusIcons] = useState([]);
+
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'status_effects_config'), (snapshot) => {
+            const data = [];
+            snapshot.forEach(docSnap => {
+                const config = docSnap.data();
+                data.push({
+                    id: docSnap.id,
+                    name: config.label,
+                    img: `/estados/${config.label}.png`, // For legacy image support
+                    ...config
+                });
+            });
+            if (data.length > 0) setStatusIcons(data);
+        });
+        return () => unsub();
+    }, []);
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
     const [savedStyles, setSavedStyles] = useState([]);
@@ -382,7 +400,16 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
         return () => container.removeEventListener('wheel', onWheel);
     }, []);
 
-    // --- CAMERA NAVIGATION LOGIC (DRAG) ---
+    // --- CAMERA NAVIGATION LOGIC (DRAG & ZOOM) ---
+    const lastPinchDist = useRef(null);
+
+    const getTouchDistance = (touches) => {
+        return Math.hypot(
+            touches[0].clientX - touches[1].clientX,
+            touches[0].clientY - touches[1].clientY
+        );
+    };
+
     const handleStartDrag = (clientX, clientY, isMiddleButton = false) => {
         // Iniciar arrastre si está en modo PAN, o si se usa Alt o botón central
         if (activeMode === 'PAN' || isMiddleButton) {
@@ -401,7 +428,40 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
 
     const handleEndDrag = () => {
         setIsDragging(false);
+        lastPinchDist.current = null;
     };
+
+    // TOUCH HANDLERS (Pinch to Zoom + Pan)
+    const handleTouchStart = (e) => {
+        if (e.touches.length === 2) {
+            // Start Pinch
+            setIsDragging(false);
+            lastPinchDist.current = getTouchDistance(e.touches);
+        } else if (e.touches.length === 1) {
+            // Start Pan
+            handleStartDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.touches.length === 2 && lastPinchDist.current !== null) {
+            // Pinch Zoom
+            const newDist = getTouchDistance(e.touches);
+            const delta = newDist - lastPinchDist.current;
+            const zoomSensitivity = 0.005; // Adjust sensitivity
+
+            setZoom(prev => Math.min(Math.max(0.1, prev + delta * zoomSensitivity), 4));
+            lastPinchDist.current = newDist;
+        } else if (e.touches.length === 1) {
+            // Pan
+            handleMoveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        handleEndDrag();
+    };
+
 
     const handleUpload = async (e) => {
         const file = e.target.files?.[0];
@@ -425,7 +485,10 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
 
 
     const visibleScenarios = scenarios.filter(s =>
-        userRole === 'DM' || s.ownerId === currentUserId || s.sharedWith.includes(currentUserId)
+        userRole === 'DM' ||
+        s.ownerId === currentUserId ||
+        (s.sharedWith || []).includes(currentUserId) ||
+        (playerName && (s.ownerId === playerName || (s.sharedWith || []).includes(playerName)))
     );
 
     const firstSelectedId = selectedCells.size > 0 ? Array.from(selectedCells)[0] : null;
@@ -456,7 +519,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                         {visibleScenarios.map(s => (
                             <div key={s.id} onClick={() => setActiveScenario(s)} className="group relative bg-[#0b1120] border border-slate-800 rounded-xl p-6 cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#161f32] transition-all overflow-hidden">
-                                {(userRole === 'DM' || s.ownerId === currentUserId) && (
+                                {(userRole === 'DM' || s.ownerId === currentUserId || (playerName && s.ownerId === playerName)) && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setItemToDelete(s); }}
                                         className="absolute top-4 right-4 p-2 bg-[#0b1120]/80 border border-slate-700/50 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-900/20 hover:border-red-500/30 opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg backdrop-blur-sm"
@@ -479,7 +542,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                                 <div className="mt-6 flex items-center justify-between border-t border-slate-800/50 pt-4">
                                     <span className="text-[9px] text-slate-600 font-mono">ID: {s.id.slice(-8)}</span>
                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {s.ownerId === currentUserId && <Share2 className="w-4 h-4 text-[#c8aa6e]" />}
+                                        {(s.ownerId === currentUserId || (playerName && s.ownerId === playerName)) && <Share2 className="w-4 h-4 text-[#c8aa6e]" />}
                                         <ChevronLeft className="w-4 h-4 text-slate-500 rotate-180" />
                                     </div>
                                 </div>
@@ -543,9 +606,9 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                 onMouseMove={(e) => handleMoveDrag(e.clientX, e.clientY)}
                 onMouseUp={handleEndDrag}
                 onMouseLeave={handleEndDrag}
-                onTouchStart={(e) => handleStartDrag(e.touches[0].clientX, e.touches[0].clientY)}
-                onTouchMove={(e) => handleMoveDrag(e.touches[0].clientX, e.touches[0].clientY)}
-                onTouchEnd={handleEndDrag}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
                 {/* CAPA DE TRANSFORMACIÓN (ZOOM Y OFFSET) */}
                 <div
@@ -620,7 +683,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                                                         <img src={data.customImg} className="w-full h-full object-contain" />
                                                     ) : data.iconType === 'STATUS' ? (
                                                         (() => {
-                                                            const st = STATUS_ICONS.find(i => i.id === data.icon);
+                                                            const st = statusIcons.find(i => i.id === data.icon);
                                                             return st ? <img src={st.img} className="w-full h-full object-contain" /> : null;
                                                         })()
                                                     ) : data.iconType === 'LUCIDE' ? (
@@ -660,7 +723,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                     </div>
                 </div>
 
-                <div className="absolute bottom-6 left-6 bg-[#0b1120]/90 border border-[#c8aa6e]/30 px-4 py-2 rounded-full z-40 shadow-2xl flex items-center gap-4">
+                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 md:bottom-6 md:left-6 md:translate-x-0 bg-[#0b1120]/90 border border-[#c8aa6e]/30 px-4 py-2 rounded-full z-40 shadow-2xl flex items-center gap-4">
                     <div className="flex items-center gap-2"><div className="w-2 h-2 bg-[#c8aa6e] rounded-full"></div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{activeScenario.rows}x{activeScenario.cols} Celdas</span></div>
                     <div className="w-[1px] h-3 bg-slate-700"></div>
                     <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-[#c8aa6e] flex items-center gap-2"><Settings className="w-3 h-3" /><span className="text-[8px] font-bold uppercase tracking-widest">Propiedades</span></button>
@@ -712,7 +775,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                                                         <img src={s.config.customImg} className="w-full h-full object-contain" />
                                                     ) : s.config.iconType === 'STATUS' ? (
                                                         (() => {
-                                                            const st = STATUS_ICONS.find(i => i.id === s.config.icon);
+                                                            const st = statusIcons.find(i => i.id === s.config.icon);
                                                             return st ? <img src={st.img} className="w-full h-full object-contain" /> : null;
                                                         })()
                                                     ) : s.config.iconType === 'RESOURCES' ? (
@@ -893,7 +956,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                                 <div className="h-64 border border-slate-800 bg-black/30 rounded-lg p-3 overflow-y-auto custom-scrollbar">
                                     {itemSubTab === 'STATUS' && (
                                         <div className="grid grid-cols-4 gap-2">
-                                            {STATUS_ICONS.map(i => (
+                                            {statusIcons.map(i => (
                                                 <button
                                                     key={i.id}
                                                     onClick={() => updateSelectedCells({ icon: i.id, iconType: 'STATUS', customImg: undefined })}

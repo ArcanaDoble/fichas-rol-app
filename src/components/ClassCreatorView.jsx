@@ -571,7 +571,7 @@ export const ClassCreatorView = ({ onBack, onSave }) => {
                                         <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">{stat.label}</label>
                                         <input
                                             type="number"
-                                            min="1"
+                                            min="0"
                                             max="10"
                                             value={formData.stats[stat.id].max}
                                             onChange={(e) => handleStatChange(stat.id, 'max', parseInt(e.target.value))}

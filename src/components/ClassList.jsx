@@ -4,6 +4,7 @@ import { collection, doc, getDocs, setDoc, addDoc, deleteDoc } from 'firebase/fi
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
+  FiArrowLeft,
   FiImage,
   FiLock,
   FiSearch,
@@ -38,7 +39,11 @@ import {
   Dices,
   Zap,
   Map,
+  Star,
+  Lock,
 } from 'lucide-react';
+import { onSnapshot } from 'firebase/firestore';
+import { ICON_MAP, DEFAULT_STATUS_EFFECTS } from '../utils/statusEffects';
 import { ClassCreatorView } from './ClassCreatorView';
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
@@ -53,8 +58,51 @@ import LoadoutView from './LoadoutView';
 import { StoreView } from './StoreView';
 import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
+import KarmaBar from './KarmaBar';
+import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
+// Utility to convert common tailwind colors to hex
+const TAILWIND_COLOR_MAP = {
+  'red': '#ef4444',
+  'orange': '#f97316',
+  'amber': '#f59e0b',
+  'yellow': '#eab308',
+  'lime': '#84cc16',
+  'green': '#22c55e',
+  'emerald': '#10b981',
+  'teal': '#14b8a6',
+  'cyan': '#06b6d4',
+  'sky': '#0ea5e9',
+  'blue': '#3b82f6',
+  'indigo': '#6366f1',
+  'violet': '#8b5cf6',
+  'purple': '#a855f7',
+  'fuchsia': '#d946ef',
+  'pink': '#ec4899',
+  'rose': '#f43f5e',
+  'slate': '#64748b',
+  'gray': '#6b7280',
+  'zinc': '#71717a',
+  'neutral': '#737373',
+  'stone': '#78716c'
+};
+
+const extractHex = (effect) => {
+  if (effect.hex) return effect.hex;
+  const colorStr = effect.color || '';
+  if (colorStr.includes('[') && colorStr.includes(']')) {
+    return colorStr.match(/\[(.*?)\]/)?.[1];
+  }
+  // Match standard like text-red-500
+  const standardMatch = colorStr.match(/text-([a-z]+)-(\d+)/);
+  if (standardMatch) {
+    const colorName = standardMatch[1];
+    return TAILWIND_COLOR_MAP[colorName] || '#94a3b8';
+  }
+  return '#94a3b8';
+};
 
 const pruneUndefined = (value) => {
   if (Array.isArray(value)) {
@@ -503,6 +551,8 @@ const EditableField = ({
 
 const ensureClassDefaults = (classItem) => {
   const base = {
+    name: '',
+    subtitle: '',
     summary: { battleRole: '', combo: '', difficultyNote: '', highlights: [] },
     inspiration: [],
     classLevels: [],
@@ -518,6 +568,8 @@ const ensureClassDefaults = (classItem) => {
     ...deepClone(classItem),
   };
 
+  merged.name = merged.name || '';
+  merged.subtitle = merged.subtitle || '';
   merged.status = merged.status || 'available';
 
   merged.summary = merged.summary || { battleRole: '', combo: '', difficultyNote: '', highlights: [] };
@@ -1352,8 +1404,15 @@ const ClassList = ({
   onLaunchDiceCalculator,
   onLaunchSpeedSystem,
   onLaunchMinimap,
+  title = "Lista de Clases",
+  subtitle = "Gestiona el archivo de héroes. Personaliza los retratos y estados para tu próxima sesión.",
+  collectionPath = "classes",
+  ownerFilter = null,
+  CreatorComponent = ClassCreatorView,
+  creatorLabel = "Campeón",
+  isPlayerMode = false,
 }) => {
-  const [classes, setClasses] = useState(initialClasses);
+  const [classes, setClasses] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1389,9 +1448,27 @@ const ClassList = ({
   });
   const [saveButtonState, setSaveButtonState] = useState('idle'); // 'idle', 'saving', 'success', 'error'
   const [isCreating, setIsCreating] = useState(false);
+  const [statusEffectsConfig, setStatusEffectsConfig] = useState(DEFAULT_STATUS_EFFECTS);
+  const [showStatusSelector, setShowStatusSelector] = useState(false);
+  const [viewingStatusEffect, setViewingStatusEffect] = useState(null);
 
 
   const fileInputRef = useRef(null);
+
+  // Sync status effects from Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'status_effects_config'), (snapshot) => {
+      const data = {};
+      snapshot.forEach(docSnap => {
+        data[docSnap.id] = docSnap.data();
+      });
+      if (Object.keys(data).length > 0) {
+        setStatusEffectsConfig(data);
+      }
+    });
+
+    return () => unsub();
+  }, []);
 
   // Detectar si hay cambios entre editingClass y selectedClass
   const hasUnsavedChanges = useMemo(() => {
@@ -1413,13 +1490,25 @@ const ClassList = ({
 
     const fetchClasses = async () => {
       try {
-        const snapshot = await getDocs(collection(db, 'classes'));
+        let q;
+        if (ownerFilter) {
+          const { query, where } = await import('firebase/firestore');
+          q = query(collection(db, collectionPath), where('owner', '==', ownerFilter));
+        } else {
+          q = collection(db, collectionPath);
+        }
+        const snapshot = await getDocs(q);
         if (!isMounted) return;
+
         if (!snapshot.empty) {
           const loaded = snapshot.docs.map((docSnap) =>
             ensureClassDefaults({ id: docSnap.id, ...docSnap.data() }),
           );
           setClasses(loaded);
+        } else if (collectionPath === 'classes' && !ownerFilter) {
+          setClasses(initialClasses);
+        } else {
+          setClasses([]);
         }
       } catch (error) {
         console.error('Error al cargar las clases desde Firebase', error);
@@ -1431,7 +1520,7 @@ const ClassList = ({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [collectionPath, ownerFilter]); // Added dependencies to refetch if props change
 
   const highlightText = useCallback(
     (rawValue) => {
@@ -1709,6 +1798,7 @@ const ClassList = ({
       description: payload.description || payload.descripcion || '',
       body: payload.body || '',
       mind: payload.mind || '',
+      icon: payload.icon || '',
     };
 
     updateEditingClass((draft) => {
@@ -1746,7 +1836,7 @@ const ClassList = ({
     }
 
     try {
-      await deleteDoc(doc(db, 'classes', classId));
+      await deleteDoc(doc(db, collectionPath, classId));
       setClasses((prev) => prev.filter((c) => c.id !== classId));
 
       if (selectedClass && selectedClass.id === classId) {
@@ -1979,13 +2069,15 @@ const ClassList = ({
         image: imageUrl,
         avatar: avatarUrl,
         portraitSource: portraitSourceUrl || '',
+        owner: ownerFilter || newClass.owner || 'master',
       };
 
-      await setDoc(doc(db, 'classes', newClass.id), classToSave);
+      await setDoc(doc(db, collectionPath, newClass.id), classToSave);
       setClasses((prev) => [...prev, classToSave]);
       setIsCreating(false);
     } catch (error) {
       console.error("Error creating class:", error);
+      throw error;
     }
   };
 
@@ -2185,29 +2277,52 @@ const ClassList = ({
       sanitized.image = normalizeImageValue(sanitized.image);
       const cleanedData = pruneUndefined(sanitized);
 
-      // Guardar en Firebase
-      await setDoc(doc(db, 'classes', classId), cleanedData, { merge: true });
+      // Asegurar que cleanedData tenga el id
+      cleanedData.id = classId;
+
+      // Guardar en Firebase con timeout extendido para evitar espera indefinida
+      // Si Firebase está saturado (resource-exhausted), esto fallará después de 20s
+      const savePromise = setDoc(doc(db, collectionPath, classId), cleanedData, { merge: true });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firebase está saturado o la conexión es lenta (Timeout 20s)')), 20000)
+      );
+
+      try {
+        await Promise.race([savePromise, timeoutPromise]);
+      } catch (saveError) {
+        console.error('Error detallado al guardar:', saveError);
+        // Si es un error de cuota o saturación, avisamos específicamente
+        if (saveError.message?.includes('resource-exhausted') || saveError.code === 'resource-exhausted') {
+          throw new Error('Firebase ha alcanzado el límite de escritura. Espera unos minutos.');
+        }
+        throw saveError;
+      }
+
+      // Usar cleanedData para el estado local para que coincida exactamente con lo guardado
+      const savedData = ensureClassDefaults(cleanedData);
 
       // Actualizar el estado principal de clases
       setClasses((prevClasses) => {
-        const exists = prevClasses.some((c) => c.id === sanitized.id);
+        const exists = prevClasses.some((c) => c.id === classId);
         if (exists) {
-          return prevClasses.map((c) => (c.id === sanitized.id ? sanitized : c));
+          return prevClasses.map((c) => (c.id === classId ? savedData : c));
         }
-        return [...prevClasses, sanitized];
+        return [...prevClasses, savedData];
       });
 
-      // Actualizar selectedClass para que hasUnsavedChanges sea false
-      setSelectedClass(sanitized);
-      setEditingClass(deepClone(sanitized));
+      // Actualizar selectedClass y editingClass con los mismos datos
+      // para que hasUnsavedChanges sea false
+      setSelectedClass(savedData);
+      setEditingClass(deepClone(savedData));
 
       // Mostrar éxito
       setSaveButtonState('success');
       setTimeout(() => setSaveButtonState('idle'), 2000);
     } catch (error) {
-      console.error('Error al guardar en Firebase:', error);
+      console.error('Error final en handleSaveChanges:', error);
       setSaveButtonState('error');
-      setTimeout(() => setSaveButtonState('idle'), 2000);
+      // No reseteamos a idle inmediatamente para que el usuario vea el error
+      setTimeout(() => setSaveButtonState('idle'), 4000);
     }
   };
 
@@ -3612,26 +3727,30 @@ const ClassList = ({
                   <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
                     <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-4">
                       {/* DIFICULTAD */}
-                      <EditableField
-                        value={`${editingClass.difficulty}`}
-                        onChange={(val) => updateEditingClass(d => { d.difficulty = val })}
-                        showEditIcon={false}
-                        displayClassName="w-auto"
-                        textClassName="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] block"
-                        inputClassName="bg-[#0b1120] text-[#c8aa6e] text-[10px] font-bold uppercase border border-[#c8aa6e]/50 px-2 py-0.5 rounded w-24"
-                        placeholder="Dificultad"
-                      />
+                      {!isPlayerMode && (
+                        <EditableField
+                          value={`${editingClass.difficulty}`}
+                          onChange={(val) => updateEditingClass(d => { d.difficulty = val })}
+                          showEditIcon={false}
+                          displayClassName="w-auto"
+                          textClassName="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] block"
+                          inputClassName="bg-[#0b1120] text-[#c8aa6e] text-[10px] font-bold uppercase border border-[#c8aa6e]/50 px-2 py-0.5 rounded w-24"
+                          placeholder="Dificultad"
+                        />
+                      )}
 
                       {/* ROL */}
-                      <EditableField
-                        value={editingClass.role || 'N/A'}
-                        onChange={(val) => updateEditingClass(d => { d.role = val })}
-                        showEditIcon={false}
-                        displayClassName="w-auto"
-                        textClassName="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
-                        inputClassName="bg-[#0b1120] text-cyan-400 text-[10px] font-bold uppercase border border-cyan-500/50 px-2 py-0.5 rounded w-24"
-                        placeholder="Rol"
-                      />
+                      {!isPlayerMode && (
+                        <EditableField
+                          value={editingClass.role || 'N/A'}
+                          onChange={(val) => updateEditingClass(d => { d.role = val })}
+                          showEditIcon={false}
+                          displayClassName="w-auto"
+                          textClassName="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
+                          inputClassName="bg-[#0b1120] text-cyan-400 text-[10px] font-bold uppercase border border-cyan-500/50 px-2 py-0.5 rounded w-24"
+                          placeholder="Rol"
+                        />
+                      )}
 
                       {/* ETIQUETAS DINÁMICAS */}
                       {(editingClass.tags || []).map((tag, index) => {
@@ -3767,6 +3886,51 @@ const ClassList = ({
                           );
                         }
 
+                        // Check for Status Effects (Robust lookup by ID or Label)
+                        const statusConfig = statusEffectsConfig[tag.toLowerCase()] ||
+                          Object.values(statusEffectsConfig).find(c => c.label.toLowerCase() === tag.toLowerCase());
+
+                        if (statusConfig) {
+                          const StatusIcon = ICON_MAP[statusConfig.iconName] || ICON_MAP.AlertCircle;
+
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setViewingStatusEffect({
+                                    ...statusConfig,
+                                    label: statusConfig.label,
+                                    desc: statusConfig.desc
+                                  });
+                                }}
+                                className={`px-3 py-1 ${statusConfig.bg} border ${statusConfig.border} ${statusConfig.color} text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:brightness-110 transition-all group/mini relative`}
+                                style={{
+                                  borderColor: extractHex(statusConfig) + '80',
+                                  background: extractHex(statusConfig) + '1a',
+                                  color: extractHex(statusConfig)
+                                }}
+                                title={`${statusConfig.label}: ${statusConfig.desc}`}
+                              >
+                                <StatusIcon className="w-3 h-3" />
+                                {statusConfig.label}
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg cursor-pointer"
+                                  title="Eliminar Estado"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
                         return (
                           <EditableField
                             key={index}
@@ -3798,29 +3962,167 @@ const ClassList = ({
                         <FiPlus className="w-5 h-5" />
                       </button>
 
-                      {/* UNLOCK/LOCK TOGGLE */}
-                      <button
-                        onClick={() => {
-                          const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
-                          updateEditingClass((draft) => {
-                            draft.status = newStatus;
-                          });
-                        }}
-                        className={`w-10 h-[26px] border rounded flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${editingClass.status !== 'locked'
-                          ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
-                          : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
-                          }`}
-                        title={editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase"}
-                      >
-                        {editingClass.status !== 'locked' ? <FiUnlock className="w-3.5 h-3.5" /> : <FiLock className="w-3.5 h-3.5" />}
-                      </button>
+                      {/* UNLOCK/LOCK TOGGLE or STATUS MENU */}
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            if (isPlayerMode) {
+                              setShowStatusSelector(!showStatusSelector);
+                            } else {
+                              const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
+                              updateEditingClass((draft) => {
+                                draft.status = newStatus;
+                              });
+                            }
+                          }}
+                          className={`w-10 h-[26px] border rounded flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isPlayerMode
+                            ? showStatusSelector ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120]' : 'bg-[#c8aa6e]/10 border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/20 hover:border-[#c8aa6e]'
+                            : editingClass.status !== 'locked'
+                              ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
+                              : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
+                            }`}
+                          title={isPlayerMode ? "Gestionar Estados" : (editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase")}
+                        >
+                          {isPlayerMode ? (
+                            <Star className="w-3.5 h-3.5" />
+                          ) : (
+                            editingClass.status !== 'locked' ? <FiUnlock className="w-3.5 h-3.5" /> : <FiLock className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
+                        {/* Status Selector Popover */}
+                        <AnimatePresence>
+                          {showStatusSelector && isPlayerMode && (
+                            <>
+                              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setShowStatusSelector(false)} />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 md:absolute md:inset-auto md:top-10 md:left-0 md:translate-y-0 w-auto md:w-80 rounded-xl border border-[#c8aa6e]/30 bg-[#0b1120] p-4 shadow-2xl ring-1 ring-[#c8aa6e]/20 max-h-[80vh] flex flex-col"
+                              >
+                                <div className="mb-3 flex items-center justify-between border-b border-[#c8aa6e]/20 pb-2">
+                                  <span className="text-xs font-bold uppercase tracking-widest text-[#c8aa6e]">
+                                    Estados Alterados
+                                  </span>
+                                  <button
+                                    onClick={() => setShowStatusSelector(false)}
+                                    className="text-slate-500 hover:text-white"
+                                  >
+                                    <FiX className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                                  {Object.entries(statusEffectsConfig).map(([key, config]) => {
+                                    const isSelected = (editingClass.tags || []).some(t => t.toLowerCase() === key);
+                                    const StatusIcon = ICON_MAP[config.iconName] || ICON_MAP.AlertCircle;
+
+                                    return (
+                                      <button
+                                        key={key}
+                                        onClick={() => {
+                                          updateEditingClass(draft => {
+                                            const tags = draft.tags || [];
+                                            const tagIndex = tags.findIndex(t => {
+                                              const tLow = t.toLowerCase();
+                                              return tLow === key || tLow === config.label.toLowerCase();
+                                            });
+
+                                            if (tagIndex >= 0) {
+                                              draft.tags.splice(tagIndex, 1);
+                                            } else {
+                                              if (!draft.tags) draft.tags = [];
+                                              // We push the key for better internal consistency, 
+                                              // but the lookup now handles both.
+                                              draft.tags.push(key);
+                                            }
+                                          });
+                                        }}
+                                        className={`flex flex-col items-center justify-center gap-1 rounded-lg border p-2 transition-all ${isSelected
+                                          ? `${config.bg} ${config.border} ${config.color}`
+                                          : 'border-slate-800 bg-slate-900/50 text-slate-500 hover:border-slate-700 hover:text-slate-300'
+                                          }`}
+                                        style={isSelected ? {
+                                          borderColor: extractHex(config) + '80',
+                                          background: extractHex(config) + '1a',
+                                          color: extractHex(config)
+                                        } : {}}
+                                        title={config.label}
+                                      >
+                                        <StatusIcon className="h-5 w-5" />
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-center">{config.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Status Effect Info Modal */}
+                        <AnimatePresence>
+                          {viewingStatusEffect && (
+                            <>
+                              <div
+                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+                                onClick={() => setViewingStatusEffect(null)}
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: '-40%', x: '-50%' }}
+                                animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
+                                exit={{ opacity: 0, scale: 0.95, y: '-40%', x: '-50%' }}
+                                className="fixed top-1/2 left-1/2 z-[70] w-[90%] max-w-sm md:max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#c8aa6e]/30 bg-[#0b1120] p-6 shadow-2xl ring-1 ring-[#c8aa6e]/20 max-h-[85vh] overflow-y-auto custom-scrollbar"
+                              >
+                                <div className="flex flex-col items-center text-center gap-4">
+                                  <div
+                                    className={`p-4 rounded-full border-2 ${viewingStatusEffect.bg} ${viewingStatusEffect.border}`}
+                                    style={{
+                                      borderColor: extractHex(viewingStatusEffect) + '80',
+                                      background: extractHex(viewingStatusEffect) + '1a'
+                                    }}
+                                  >
+                                    {(() => {
+                                      const StatusIcon = ICON_MAP[viewingStatusEffect.iconName] || ICON_MAP.AlertCircle;
+                                      return <StatusIcon
+                                        className={`w-8 h-8 ${viewingStatusEffect.color}`}
+                                        style={{ color: extractHex(viewingStatusEffect) }}
+                                      />;
+                                    })()}
+                                  </div>
+
+                                  <div>
+                                    <h3
+                                      className={`text-xl font-['Cinzel'] font-bold uppercase tracking-widest ${viewingStatusEffect.color}`}
+                                      style={{ color: extractHex(viewingStatusEffect) }}
+                                    >
+                                      {viewingStatusEffect.label}
+                                    </h3>
+                                    <div className="h-[1px] w-24 bg-[#c8aa6e]/30 mx-auto my-3" />
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                      {viewingStatusEffect.desc}
+                                    </p>
+                                  </div>
+
+                                  <button
+                                    onClick={() => setViewingStatusEffect(null)}
+                                    className="mt-2 px-6 py-2 rounded-full border border-slate-700 hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/10 text-slate-400 hover:text-[#c8aa6e] text-xs font-bold uppercase tracking-widest transition-all"
+                                  >
+                                    Cerrar
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
 
                     <h1 className="text-5xl lg:text-6xl font-['Cinzel'] text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-sm mb-6">
                       {editingClass.name}
                     </h1>
 
-                    <div className="relative pl-6 lg:pl-6 border-l-2 lg:border-l-2 border-[#c8aa6e]/30 mx-auto lg:mx-0 max-w-prose text-left">
+                    <div className="relative pl-6 lg:pl-6 border-l-2 lg:border-l-2 border-[#c8aa6e]/30 mx-auto lg:mx-0 w-full text-left">
                       <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
                         "<EditableText
                           value={editingClass.description}
@@ -3847,15 +4149,15 @@ const ClassList = ({
                         <div className="mb-6 border-b border-[#c8aa6e]/30 pb-2">
                           <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
                             <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
-                            ATRIBUTOS DE CLASE
+                            {isPlayerMode ? 'ATRIBUTOS' : 'ATRIBUTOS DE CLASE'}
                           </h4>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           {[
-                            { key: 'dexterity', label: 'Destreza', icon: '🎯' },
+                            { key: 'destreza', label: 'Destreza', icon: '🎯' },
                             { key: 'vigor', label: 'Vigor', icon: '💪' },
-                            { key: 'intellect', label: 'Intelecto', icon: '🧠' },
-                            { key: 'willpower', label: 'Voluntad', icon: '✨' }
+                            { key: 'intelecto', label: 'Intelecto', icon: '🧠' },
+                            { key: 'voluntad', label: 'Voluntad', icon: '✨' }
                           ].map((attr) => {
                             const diceValue = editingClass.attributes?.[attr.key] || 'd4';
 
@@ -3877,6 +4179,53 @@ const ClassList = ({
                           })}
                         </div>
                       </div>
+
+                      {isYuuzuName(dndClass.name) && (
+                        <div className="mt-3 mb-2 rounded-xl border border-[#c8aa6e]/20 bg-[#161f32]/80 p-4 relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c8aa6e]/5 to-transparent opacity-50 pointer-events-none" />
+
+                          <div className="relative z-10 flex items-center justify-between gap-4">
+                            <div className="flex flex-col gap-1 min-w-[60px]">
+                              <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                                Karma
+                              </span>
+                              <span className={`font-mono text-xs font-bold ${editingClass.stats?.karma?.actual > 0 ? 'text-white' : editingClass.stats?.karma?.actual < 0 ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {editingClass.stats?.karma?.actual > 0 ? '+' : ''}{editingClass.stats?.karma?.actual || 0}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-1 items-center gap-3">
+                              <button
+                                onClick={() => updateEditingClass(draft => {
+                                  if (!draft.stats) draft.stats = {};
+                                  if (!draft.stats.karma) draft.stats.karma = { actual: 0 };
+                                  const current = draft.stats.karma.actual || 0;
+                                  if (current > KARMA_MIN) draft.stats.karma.actual = current - 1;
+                                })}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:border-[#c8aa6e]/50 hover:bg-slate-700 hover:text-rose-400"
+                              >
+                                <FiMinus className="h-3 w-3" />
+                              </button>
+
+                              <div className="flex-1">
+                                <KarmaBar value={editingClass.stats?.karma?.actual || 0} />
+                              </div>
+
+                              <button
+                                onClick={() => updateEditingClass(draft => {
+                                  if (!draft.stats) draft.stats = {};
+                                  if (!draft.stats.karma) draft.stats.karma = { actual: 0 };
+                                  const current = draft.stats.karma.actual || 0;
+                                  if (current < KARMA_MAX) draft.stats.karma.actual = current + 1;
+                                })}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:border-[#c8aa6e]/50 hover:bg-slate-700 hover:text-emerald-400"
+                              >
+                                <FiPlus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Actions */}
                       <div className="mt-auto space-y-4">
@@ -3945,21 +4294,21 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
-                                          const newCurrent = Math.max(0, (draft.stats.postura.current || 3) - 1);
-                                          draft.stats.postura.current = Math.min(newCurrent, draft.stats.postura.max || 4);
+                                          const newCurrent = Math.max(0, (draft.stats.postura.current ?? 3) - 1);
+                                          draft.stats.postura.current = Math.min(newCurrent, draft.stats.postura.max ?? 4);
                                         });
                                       }}
                                       className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.postura?.current || 3}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.postura?.current ?? 3}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
-                                          const newCurrent = Math.min((draft.stats.postura.max || 4), (draft.stats.postura.current || 3) + 1);
+                                          const newCurrent = Math.min((draft.stats.postura.max ?? 4), (draft.stats.postura.current ?? 3) + 1);
                                           draft.stats.postura.current = newCurrent;
                                         });
                                       }}
@@ -3976,7 +4325,7 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
-                                          const newMax = Math.max(1, (draft.stats.postura.max || 4) - 1);
+                                          const newMax = Math.max(0, (draft.stats.postura.max ?? 4) - 1);
                                           draft.stats.postura.max = Math.min(10, newMax);
                                           if (draft.stats.postura.current > newMax) draft.stats.postura.current = newMax;
                                         });
@@ -3985,13 +4334,13 @@ const ClassList = ({
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.postura?.max || 4}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.postura?.max ?? 4}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.postura) draft.stats.postura = { current: 3, max: 4 };
-                                          const newMax = Math.min(10, (draft.stats.postura.max || 4) + 1);
+                                          const newMax = Math.min(10, (draft.stats.postura.max ?? 4) + 1);
                                           draft.stats.postura.max = newMax;
                                         });
                                       }}
@@ -4003,16 +4352,16 @@ const ClassList = ({
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.postura?.current || 3} <span className="text-slate-600">/</span> {editingClass.stats?.postura?.max || 4}
+                                  {editingClass.stats?.postura?.current ?? 3} <span className="text-slate-600">/</span> {editingClass.stats?.postura?.max ?? 4}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.postura?.max || 4 }).map((_, i) => (
+                              {Array.from({ length: editingClass.stats?.postura?.max ?? 4 }).map((_, i) => (
                                 <div
                                   key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.postura?.current || 3)
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.postura?.current ?? 3)
                                     ? 'bg-[#a3c9a8] border-green-900'
                                     : 'bg-[#a3c9a8]/20 border-green-900/30'
                                     }`}
@@ -4021,7 +4370,7 @@ const ClassList = ({
                                       ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
                                       : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
                                     marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.postura?.max || 4) - i,
+                                    zIndex: (editingClass.stats?.postura?.max ?? 4) - i,
                                     filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
                                   }}
                                 >
@@ -4050,21 +4399,21 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
-                                          const newCurrent = Math.max(0, (draft.stats.vida.current || 4) - 1);
-                                          draft.stats.vida.current = Math.min(newCurrent, draft.stats.vida.max || 4);
+                                          const newCurrent = Math.max(0, (draft.stats.vida.current ?? 4) - 1);
+                                          draft.stats.vida.current = Math.min(newCurrent, draft.stats.vida.max ?? 4);
                                         });
                                       }}
                                       className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.vida?.current || 4}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.vida?.current ?? 4}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
-                                          const newCurrent = Math.min((draft.stats.vida.max || 4), (draft.stats.vida.current || 4) + 1);
+                                          const newCurrent = Math.min((draft.stats.vida.max ?? 4), (draft.stats.vida.current ?? 4) + 1);
                                           draft.stats.vida.current = newCurrent;
                                         });
                                       }}
@@ -4081,7 +4430,7 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
-                                          const newMax = Math.max(1, (draft.stats.vida.max || 4) - 1);
+                                          const newMax = Math.max(0, (draft.stats.vida.max ?? 4) - 1);
                                           draft.stats.vida.max = Math.min(10, newMax);
                                           if (draft.stats.vida.current > newMax) draft.stats.vida.current = newMax;
                                         });
@@ -4090,13 +4439,13 @@ const ClassList = ({
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.vida?.max || 4}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.vida?.max ?? 4}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.vida) draft.stats.vida = { current: 4, max: 4 };
-                                          const newMax = Math.min(10, (draft.stats.vida.max || 4) + 1);
+                                          const newMax = Math.min(10, (draft.stats.vida.max ?? 4) + 1);
                                           draft.stats.vida.max = newMax;
                                         });
                                       }}
@@ -4108,16 +4457,16 @@ const ClassList = ({
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.vida?.current || 4} <span className="text-slate-600">/</span> {editingClass.stats?.vida?.max || 4}
+                                  {editingClass.stats?.vida?.current ?? 4} <span className="text-slate-600">/</span> {editingClass.stats?.vida?.max ?? 4}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.vida?.max || 4 }).map((_, i) => (
+                              {Array.from({ length: editingClass.stats?.vida?.max ?? 4 }).map((_, i) => (
                                 <div
                                   key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.vida?.current || 4)
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.vida?.current ?? 4)
                                     ? 'bg-[#e09f9f] border-red-900'
                                     : 'bg-[#e09f9f]/20 border-red-900/30'
                                     }`}
@@ -4126,7 +4475,7 @@ const ClassList = ({
                                       ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
                                       : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
                                     marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.vida?.max || 4) - i,
+                                    zIndex: (editingClass.stats?.vida?.max ?? 4) - i,
                                     filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
                                   }}
                                 >
@@ -4150,30 +4499,30 @@ const ClassList = ({
                                 <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.max(0, (draft.stats.ingenio.current || 2) - 1); draft.stats.ingenio.current = Math.min(newCurrent, draft.stats.ingenio.max || 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
-                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.ingenio?.current || 2}</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.min((draft.stats.ingenio.max || 3), (draft.stats.ingenio.current || 2) + 1); draft.stats.ingenio.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.max(0, (draft.stats.ingenio.current ?? 2) - 1); draft.stats.ingenio.current = Math.min(newCurrent, draft.stats.ingenio.max ?? 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.ingenio?.current ?? 2}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newCurrent = Math.min((draft.stats.ingenio.max ?? 3), (draft.stats.ingenio.current ?? 2) + 1); draft.stats.ingenio.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
                                   </div>
                                   <div className="w-[1px] h-3 bg-slate-700"></div>
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.max(1, (draft.stats.ingenio.max || 3) - 1); draft.stats.ingenio.max = Math.min(10, newMax); if (draft.stats.ingenio.current > newMax) draft.stats.ingenio.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
-                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.ingenio?.max || 3}</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.min(10, (draft.stats.ingenio.max || 3) + 1); draft.stats.ingenio.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.max(0, (draft.stats.ingenio.max ?? 3) - 1); draft.stats.ingenio.max = Math.min(10, newMax); if (draft.stats.ingenio.current > newMax) draft.stats.ingenio.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.ingenio?.max ?? 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.ingenio) draft.stats.ingenio = { current: 2, max: 3 }; const newMax = Math.min(10, (draft.stats.ingenio.max ?? 3) + 1); draft.stats.ingenio.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
                                   </div>
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.ingenio?.current || 2} <span className="text-slate-600">/</span> {editingClass.stats?.ingenio?.max || 3}
+                                  {editingClass.stats?.ingenio?.current ?? 2} <span className="text-slate-600">/</span> {editingClass.stats?.ingenio?.max ?? 3}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.ingenio?.max || 3 }).map((_, i) => (
+                              {Array.from({ length: editingClass.stats?.ingenio?.max ?? 3 }).map((_, i) => (
                                 <div
                                   key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.ingenio?.current || 2)
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.ingenio?.current ?? 2)
                                     ? 'bg-[#9face0] border-blue-900'
                                     : 'bg-[#9face0]/20 border-blue-900/30'
                                     }`}
@@ -4182,7 +4531,7 @@ const ClassList = ({
                                       ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
                                       : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
                                     marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.ingenio?.max || 3) - i,
+                                    zIndex: (editingClass.stats?.ingenio?.max ?? 3) - i,
                                     filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
                                   }}
                                 >
@@ -4206,30 +4555,30 @@ const ClassList = ({
                                 <div className="flex items-center gap-3 bg-[#0b1120] border border-[#c8aa6e]/30 rounded px-3 py-1">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Valor</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.max(0, (draft.stats.cordura.current || 3) - 1); draft.stats.cordura.current = Math.min(newCurrent, draft.stats.cordura.max || 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
-                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.cordura?.current || 3}</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.min((draft.stats.cordura.max || 3), (draft.stats.cordura.current || 3) + 1); draft.stats.cordura.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.max(0, (draft.stats.cordura.current ?? 3) - 1); draft.stats.cordura.current = Math.min(newCurrent, draft.stats.cordura.max ?? 3); }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.cordura?.current ?? 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newCurrent = Math.min((draft.stats.cordura.max ?? 3), (draft.stats.cordura.current ?? 3) + 1); draft.stats.cordura.current = newCurrent; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
                                   </div>
                                   <div className="w-[1px] h-3 bg-slate-700"></div>
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-1">Max</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.max(1, (draft.stats.cordura.max || 3) - 1); draft.stats.cordura.max = Math.min(10, newMax); if (draft.stats.cordura.current > newMax) draft.stats.cordura.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
-                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.cordura?.max || 3}</span>
-                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.min(10, (draft.stats.cordura.max || 3) + 1); draft.stats.cordura.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.max(0, (draft.stats.cordura.max ?? 3) - 1); draft.stats.cordura.max = Math.min(10, newMax); if (draft.stats.cordura.current > newMax) draft.stats.cordura.current = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3 rotate-45" /></button>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.cordura?.max ?? 3}</span>
+                                    <button onClick={() => { updateEditingClass((draft) => { if (!draft.stats) draft.stats = {}; if (!draft.stats.cordura) draft.stats.cordura = { current: 3, max: 3 }; const newMax = Math.min(10, (draft.stats.cordura.max ?? 3) + 1); draft.stats.cordura.max = newMax; }); }} className="text-slate-400 hover:text-[#c8aa6e] transition-colors"><FiPlus className="w-3 h-3" /></button>
                                   </div>
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.cordura?.current || 3} <span className="text-slate-600">/</span> {editingClass.stats?.cordura?.max || 3}
+                                  {editingClass.stats?.cordura?.current ?? 3} <span className="text-slate-600">/</span> {editingClass.stats?.cordura?.max ?? 3}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.cordura?.max || 3 }).map((_, i) => (
+                              {Array.from({ length: editingClass.stats?.cordura?.max ?? 3 }).map((_, i) => (
                                 <div
                                   key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.cordura?.current || 3)
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.cordura?.current ?? 3)
                                     ? 'bg-[#c09fe0] border-purple-900'
                                     : 'bg-[#c09fe0]/20 border-purple-900/30'
                                     }`}
@@ -4238,7 +4587,7 @@ const ClassList = ({
                                       ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
                                       : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
                                     marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.cordura?.max || 3) - i,
+                                    zIndex: (editingClass.stats?.cordura?.max ?? 3) - i,
                                     filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
                                   }}
                                 >
@@ -4267,21 +4616,21 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
-                                          const newCurrent = Math.max(0, (draft.stats.armadura.current || 1) - 1);
-                                          draft.stats.armadura.current = Math.min(newCurrent, draft.stats.armadura.max || 2);
+                                          const newCurrent = Math.max(0, (draft.stats.armadura.current ?? 1) - 1);
+                                          draft.stats.armadura.current = Math.min(newCurrent, draft.stats.armadura.max ?? 2);
                                         });
                                       }}
                                       className="text-slate-400 hover:text-[#c8aa6e] transition-colors"
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.armadura?.current || 1}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-[#c8aa6e]">{editingClass.stats?.armadura?.current ?? 1}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
-                                          const newCurrent = Math.min((draft.stats.armadura.max || 2), (draft.stats.armadura.current || 1) + 1);
+                                          const newCurrent = Math.min((draft.stats.armadura.max ?? 2), (draft.stats.armadura.current ?? 1) + 1);
                                           draft.stats.armadura.current = newCurrent;
                                         });
                                       }}
@@ -4298,7 +4647,7 @@ const ClassList = ({
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
-                                          const newMax = Math.max(1, (draft.stats.armadura.max || 2) - 1);
+                                          const newMax = Math.max(0, (draft.stats.armadura.max ?? 2) - 1);
                                           draft.stats.armadura.max = Math.min(10, newMax);
                                           if (draft.stats.armadura.current > newMax) draft.stats.armadura.current = newMax;
                                         });
@@ -4307,13 +4656,13 @@ const ClassList = ({
                                     >
                                       <FiPlus className="w-3 h-3 rotate-45" />
                                     </button>
-                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.armadura?.max || 2}</span>
+                                    <span className="text-xs font-mono w-4 text-center text-slate-400">{editingClass.stats?.armadura?.max ?? 2}</span>
                                     <button
                                       onClick={() => {
                                         updateEditingClass((draft) => {
                                           if (!draft.stats) draft.stats = {};
                                           if (!draft.stats.armadura) draft.stats.armadura = { current: 1, max: 2 };
-                                          const newMax = Math.min(10, (draft.stats.armadura.max || 2) + 1);
+                                          const newMax = Math.min(10, (draft.stats.armadura.max ?? 2) + 1);
                                           draft.stats.armadura.max = newMax;
                                         });
                                       }}
@@ -4325,16 +4674,16 @@ const ClassList = ({
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.armadura?.current || 1} <span className="text-slate-600">/</span> {editingClass.stats?.armadura?.max || 2}
+                                  {editingClass.stats?.armadura?.current ?? 1} <span className="text-slate-600">/</span> {editingClass.stats?.armadura?.max ?? 2}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.armadura?.max || 2 }).map((_, i) => (
+                              {Array.from({ length: editingClass.stats?.armadura?.max ?? 2 }).map((_, i) => (
                                 <div
                                   key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.armadura?.current || 1)
+                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.armadura?.current ?? 1)
                                     ? 'bg-[#a0a0a0] border-slate-600'
                                     : 'bg-[#a0a0a0]/20 border-slate-600/30'
                                     }`}
@@ -4343,7 +4692,7 @@ const ClassList = ({
                                       ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
                                       : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
                                     marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.armadura?.max || 2) - i,
+                                    zIndex: (editingClass.stats?.armadura?.max ?? 2) - i,
                                     filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
                                   }}
                                 >
@@ -4382,6 +4731,7 @@ const ClassList = ({
               key={dndClass.id}
               dndClass={dndClass}
               equipmentCatalog={equipmentCatalog}
+              glossary={glossary}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
               onUpdateTalent={handleUpdateTalent}
@@ -4491,38 +4841,45 @@ const ClassList = ({
                 <div className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
                   <span className="opacity-70">ARCANA VAULT</span>
                   <span className="h-px w-4 bg-[#c8aa6e]/40"></span>
-                  <span>CLASES</span>
+                  <span>{isPlayerMode ? 'PERSONAJES' : 'CLASES'}</span>
                 </div>
                 <h1 className="font-['Cinzel'] text-4xl font-bold uppercase tracking-wider text-[#f0e6d2] drop-shadow-[0_2px_10px_rgba(200,170,110,0.2)] md:text-5xl">
-                  Lista de Clases
+                  {title}
                 </h1>
                 <p className="max-w-2xl font-['Lato'] text-lg font-light leading-relaxed text-[#94a3b8]">
-                  Gestiona el archivo de héroes. Personaliza los retratos y estados para tu próxima sesión.
+                  {subtitle}
                 </p>
+
                 <div className="flex flex-wrap gap-3 pt-2">
                   <div className="flex items-center gap-2 rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-3 py-1.5">
-                    <span className="font-['Cinzel'] text-lg font-bold text-[#c8aa6e]">67</span>
-                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Activas</span>
+                    <span className="font-['Cinzel'] text-lg font-bold text-[#c8aa6e]">{classes.length}</span>
+                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Activos</span>
                   </div>
-                  <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
-                    <span className="font-['Cinzel'] text-lg font-bold text-slate-400">200</span>
-                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Esencias</span>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
-                    <span className="font-['Cinzel'] text-lg font-bold text-slate-400">1.2k</span>
-                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Reliquias</span>
-                  </div>
+                  {!isPlayerMode && (
+                    <>
+                      <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
+                        <span className="font-['Cinzel'] text-lg font-bold text-slate-400">200</span>
+                        <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Esencias</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
+                        <span className="font-['Cinzel'] text-lg font-bold text-slate-400">1.2k</span>
+                        <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Reliquias</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="flex flex-col gap-4 md:items-end">
-                <Boton
-                  color="gray"
+                <button
                   onClick={onBack}
-                  className="border-[#c8aa6e]/30 hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10 hover:text-[#c8aa6e] uppercase tracking-[0.25em] font-['Cinzel'] text-xs"
+                  className="group relative px-6 py-2 overflow-hidden rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 text-[#c8aa6e] font-['Cinzel'] font-bold text-xs uppercase tracking-[0.2em] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 hover:shadow-[0_0_15px_rgba(200,170,110,0.3)]"
                 >
-                  {backButtonLabel}
-                </Boton>
+                  <span className="relative z-10 flex items-center gap-2">
+                    <FiArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-1" />
+                    {backButtonLabel}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -4569,7 +4926,7 @@ const ClassList = ({
             </div>
 
             {isCreating ? (
-              <ClassCreatorView
+              <CreatorComponent
                 onBack={() => setIsCreating(false)}
                 onSave={handleSaveNewClass}
               />
@@ -4578,7 +4935,7 @@ const ClassList = ({
                 {/* Divider */}
                 <div className="flex items-center gap-4">
                   <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
-                  <span className="font-['Cinzel'] text-[#c8aa6e] tracking-widest text-lg">CAMPEONES DISPONIBLES</span>
+                  <span className="font-['Cinzel'] text-[#c8aa6e] tracking-widest text-lg">{isPlayerMode ? 'PERSONAJES DISPONIBLES' : 'CAMPEONES DISPONIBLES'}</span>
                   <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent"></div>
                 </div>
 
@@ -4596,7 +4953,7 @@ const ClassList = ({
                       </div>
                       <div className="text-center">
                         <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
-                        <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Campeón</p>
+                        <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">{creatorLabel}</p>
                       </div>
                     </div>
                   )}
@@ -4744,7 +5101,7 @@ const ClassList = ({
       </AnimatePresence>
 
 
-    </div>
+    </div >
   );
 };
 
