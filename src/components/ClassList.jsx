@@ -2043,23 +2043,25 @@ const ClassList = ({
       let imageUrl = newClass.image;
       let avatarUrl = newClass.avatar;
 
+      const storagePrefix = collectionPath === 'classes' ? 'class' : 'character';
+
       // If image is a base64 string, upload it to Storage
       if (imageUrl && imageUrl.startsWith('data:')) {
-        const imageRef = ref(storage, `class-images/${newClass.id}`);
+        const imageRef = ref(storage, `${storagePrefix}-images/${newClass.id}`);
         await uploadString(imageRef, imageUrl, 'data_url');
         imageUrl = await getDownloadURL(imageRef);
       }
 
       // If avatar is a base64 string, upload it to Storage
       if (avatarUrl && avatarUrl.startsWith('data:')) {
-        const avatarRef = ref(storage, `class-avatars/${newClass.id}`);
+        const avatarRef = ref(storage, `${storagePrefix}-avatars/${newClass.id}`);
         await uploadString(avatarRef, avatarUrl, 'data_url');
         avatarUrl = await getDownloadURL(avatarRef);
       }
 
       let portraitSourceUrl = newClass.portraitSource;
       if (portraitSourceUrl && portraitSourceUrl.startsWith('data:')) {
-        const sourceRef = ref(storage, `class-sources/${newClass.id}`);
+        const sourceRef = ref(storage, `${storagePrefix}-sources/${newClass.id}`);
         await uploadString(sourceRef, portraitSourceUrl, 'data_url');
         portraitSourceUrl = await getDownloadURL(sourceRef);
       }
@@ -3392,9 +3394,11 @@ const ClassList = ({
     try {
       setSaveStatus(null);
 
+      const storagePrefix = collectionPath === 'classes' ? 'class' : 'character';
+
       // 0. If it's a new upload, save the RAW source first
       if (cropperState.isNewUpload && cropperState.imageSrc.startsWith('data:')) {
-        const sourcePath = `class-sources/${classId}`;
+        const sourcePath = `${storagePrefix}-sources/${classId}`;
         const sourceRef = ref(storage, sourcePath);
         await uploadString(sourceRef, cropperState.imageSrc, 'data_url');
         const sourceUrl = await getDownloadURL(sourceRef);
@@ -3402,12 +3406,10 @@ const ClassList = ({
         hasUpdates = true;
       }
 
-      // 1. Process Card Image (if pixels exist)
-      // Note: We prioritize the current crop data.
-      // 1. Process Card Image
+      // 1. Process Main Card Image
       const cardDataUrl = await generateCustomImage('CARD');
       if (cardDataUrl) {
-        const filePath = `class-images/${classId}`;
+        const filePath = `${storagePrefix}-images/${classId}`;
         const storageRef = ref(storage, filePath);
         await uploadString(storageRef, cardDataUrl, 'data_url');
         const url = await getDownloadURL(storageRef);
@@ -3418,7 +3420,7 @@ const ClassList = ({
       // 2. Process Avatar Image
       const avatarDataUrl = await generateCustomImage('AVATAR');
       if (avatarDataUrl) {
-        const filePath = `class-avatars/${classId}`;
+        const filePath = `${storagePrefix}-avatars/${classId}`;
         const storageRef = ref(storage, filePath);
         await uploadString(storageRef, avatarDataUrl, 'data_url');
         const url = await getDownloadURL(storageRef);
@@ -3427,7 +3429,7 @@ const ClassList = ({
       }
 
       if (hasUpdates) {
-        await setDoc(doc(db, 'classes', classId), updates, { merge: true });
+        await setDoc(doc(db, collectionPath, classId), updates, { merge: true });
 
         setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...updates } : c));
 
@@ -3513,212 +3515,245 @@ const ClassList = ({
 
               <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-start lg:justify-center p-4 pt-16 md:p-8 lg:p-16 gap-6 md:gap-12 lg:gap-24 pb-20 md:pb-8">
                 {/* Left: Character Card Presentation / Portrait Editor */}
-                <div className={`relative group w-full max-w-[280px] md:max-w-sm lg:max-w-md shrink-0 perspective-1000 ${!isCropping ? 'aspect-[2/3]' : ''}`}>
-                  <div className="relative w-full h-full transition-transform duration-700">
+                <div className="relative w-full max-w-[280px] md:max-w-sm lg:max-w-md shrink-0 flex flex-col gap-0">
+                  <div className={`relative group w-full perspective-1000 ${!isCropping ? 'aspect-[2/3]' : ''}`}>
+                    <div className="relative w-full h-full transition-transform duration-700">
 
-                    {isCropping ? (
-                      <div className="space-y-6 h-full flex flex-col">
-                        {/* MODE TABS */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'CARD' }))}
-                            className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'CARD' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
-                          >
-                            <LayoutTemplate className="w-3 h-3" /> Portada
-                          </button>
-                          <button
-                            onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'AVATAR' }))}
-                            className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'AVATAR' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
-                          >
-                            <CircleUser className="w-3 h-3" /> Avatar
-                          </button>
-                        </div>
-
-                        {/* EDITOR CONTAINER */}
-                        <div
-                          className={`relative w-full bg-[#0b1120] rounded-sm border border-slate-800 overflow-hidden shadow-2xl group ring-1 ring-slate-700 transition-all duration-300 ${cropperState.activeMode === 'CARD' ? 'aspect-[2/3]' : 'aspect-square max-w-[300px] mx-auto flex-1'}`}
-                          style={{ zIndex: 30 }}
-                        >
-                          {cropperState.imageSrc ? (
-                            <div
-                              ref={containerRef}
-                              className={`w-full h-full relative overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                              onMouseDown={handleMouseDown}
-                              onMouseMove={handleMouseMove}
-                              onMouseUp={handleMouseUp}
-                              onMouseLeave={handleMouseUp}
-                              onTouchStart={handleMouseDown}
-                              onTouchMove={handleMouseMove}
-                              onTouchEnd={handleMouseUp}
-                              onWheel={handleWheel}
+                      {isCropping ? (
+                        <div className="space-y-6 h-full flex flex-col">
+                          {/* MODE TABS */}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'CARD' }))}
+                              className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'CARD' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
                             >
-                              <img
-                                ref={imageRef}
-                                src={cropperState.imageSrc}
-                                alt="Preview"
-                                draggable={false}
-                                crossOrigin="anonymous"
-                                className="absolute max-w-none origin-center pointer-events-none select-none transition-transform duration-75 ease-out"
-                                style={{
-                                  left: '50%',
-                                  top: '50%',
-                                  width: '100%',
-                                  height: 'auto',
-                                  transform: `translate(-50%, -50%) translate(${cropperState.activeMode === 'CARD' ? cropperState.card.crop.x : cropperState.avatar.crop.x}px, ${cropperState.activeMode === 'CARD' ? cropperState.card.crop.y : cropperState.avatar.crop.y}px) scale(${cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom})`,
-                                }}
-                              />
+                              <LayoutTemplate className="w-3 h-3" /> Portada
+                            </button>
+                            <button
+                              onClick={() => setCropperState(prev => ({ ...prev, activeMode: 'AVATAR' }))}
+                              className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 rounded border transition-colors ${cropperState.activeMode === 'AVATAR' ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-[#0b1120] text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                            >
+                              <CircleUser className="w-3 h-3" /> Avatar
+                            </button>
+                          </div>
 
-                              {/* OVERLAY GUIDES */}
-                              {showGuides && cropperState.activeMode === 'CARD' && (
-                                <>
-                                  <div className="absolute inset-0 border-[4px] border-[#c8aa6e] z-20 pointer-events-none opacity-80"></div>
-                                  <div className="absolute bottom-0 left-0 right-0 h-[35%] bg-gradient-to-t from-[#0b1120] via-[#0b1120]/80 to-transparent z-20 pointer-events-none flex items-end justify-center pb-6">
-                                    <div className="text-[#c8aa6e]/30 text-[8px] uppercase font-bold tracking-widest border border-[#c8aa6e]/20 px-2 py-1 rounded">Zona Texto</div>
-                                  </div>
-                                  <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
-                                    <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
-                                    <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
-                                    <div className="border-r border-white"></div><div className="border-r border-white"></div><div></div>
-                                  </div>
-                                </>
-                              )}
+                          {/* EDITOR CONTAINER */}
+                          <div
+                            className={`relative w-full bg-[#0b1120] rounded-sm border border-slate-800 overflow-hidden shadow-2xl group ring-1 ring-slate-700 transition-all duration-300 ${cropperState.activeMode === 'CARD' ? 'aspect-[2/3]' : 'aspect-square max-w-[300px] mx-auto flex-1'}`}
+                            style={{ zIndex: 30 }}
+                          >
+                            {cropperState.imageSrc ? (
+                              <div
+                                ref={containerRef}
+                                className={`w-full h-full relative overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                onMouseDown={handleMouseDown}
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseUp}
+                                onTouchStart={handleMouseDown}
+                                onTouchMove={handleMouseMove}
+                                onTouchEnd={handleMouseUp}
+                                onWheel={handleWheel}
+                              >
+                                <img
+                                  ref={imageRef}
+                                  src={cropperState.imageSrc}
+                                  alt="Preview"
+                                  draggable={false}
+                                  crossOrigin="anonymous"
+                                  className="absolute max-w-none origin-center pointer-events-none select-none transition-transform duration-75 ease-out"
+                                  style={{
+                                    left: '50%',
+                                    top: '50%',
+                                    width: '100%',
+                                    height: 'auto',
+                                    transform: `translate(-50%, -50%) translate(${cropperState.activeMode === 'CARD' ? cropperState.card.crop.x : cropperState.avatar.crop.x}px, ${cropperState.activeMode === 'CARD' ? cropperState.card.crop.y : cropperState.avatar.crop.y}px) scale(${cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom})`,
+                                  }}
+                                />
 
-                              {showGuides && cropperState.activeMode === 'AVATAR' && (
-                                <>
-                                  <div className="absolute inset-0 z-20 pointer-events-none border-[2px] border-[#c8aa6e]/50 rounded-full"></div>
-                                  <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                    <defs>
-                                      <mask id="circleMaskDetail">
-                                        <rect width="100" height="100" fill="white" />
-                                        <circle cx="50" cy="50" r="48" fill="black" />
-                                      </mask>
-                                    </defs>
-                                    <rect width="100" height="100" fill="rgba(0,0,0,0.7)" mask="url(#circleMaskDetail)" />
-                                  </svg>
-                                </>
-                              )}
+                                {/* OVERLAY GUIDES */}
+                                {showGuides && cropperState.activeMode === 'CARD' && (
+                                  <>
+                                    <div className="absolute inset-0 border-[4px] border-[#c8aa6e] z-20 pointer-events-none opacity-80"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-[35%] bg-gradient-to-t from-[#0b1120] via-[#0b1120]/80 to-transparent z-20 pointer-events-none flex items-end justify-center pb-6">
+                                      <div className="text-[#c8aa6e]/30 text-[8px] uppercase font-bold tracking-widest border border-[#c8aa6e]/20 px-2 py-1 rounded">Zona Texto</div>
+                                    </div>
+                                    <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
+                                      <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                      <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                      <div className="border-r border-white"></div><div className="border-r border-white"></div><div></div>
+                                    </div>
+                                  </>
+                                )}
 
-                              {/* Toolbar Controls */}
-                              <div className="absolute top-2 right-2 flex gap-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => setShowGuides(!showGuides)}
-                                  className={`p-1.5 backdrop-blur rounded-full border transition-colors ${showGuides ? 'bg-[#c8aa6e]/20 border-[#c8aa6e] text-[#c8aa6e]' : 'bg-black/60 border-white/10 text-slate-400'}`}
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => fileInputRef.current?.click()}
-                                  className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
-                                >
-                                  <Upload className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setCropperState(prev => ({
-                                    ...prev,
-                                    [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
-                                      ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
-                                      crop: { x: 0, y: 0 },
-                                      zoom: 1
-                                    }
-                                  }))}
-                                  className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
+                                {showGuides && cropperState.activeMode === 'AVATAR' && (
+                                  <>
+                                    <div className="absolute inset-0 z-20 pointer-events-none border-[2px] border-[#c8aa6e]/50 rounded-full"></div>
+                                    <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                      <defs>
+                                        <mask id="circleMaskDetail">
+                                          <rect width="100" height="100" fill="white" />
+                                          <circle cx="50" cy="50" r="48" fill="black" />
+                                        </mask>
+                                      </defs>
+                                      <rect width="100" height="100" fill="rgba(0,0,0,0.7)" mask="url(#circleMaskDetail)" />
+                                    </svg>
+                                  </>
+                                )}
+
+                                {/* Toolbar Controls */}
+                                <div className="absolute top-2 right-2 flex gap-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => setShowGuides(!showGuides)}
+                                    className={`p-1.5 backdrop-blur rounded-full border transition-colors ${showGuides ? 'bg-[#c8aa6e]/20 border-[#c8aa6e] text-[#c8aa6e]' : 'bg-black/60 border-white/10 text-slate-400'}`}
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                  >
+                                    <Upload className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setCropperState(prev => ({
+                                      ...prev,
+                                      [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                        ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                        crop: { x: 0, y: 0 },
+                                        zoom: 1
+                                      }
+                                    }))}
+                                    className="p-1.5 bg-black/60 backdrop-blur rounded-full text-slate-300 hover:text-white border border-white/10 hover:border-[#c8aa6e]"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {/* ZOOM & ACTIONS */}
+                          <div className="bg-[#161f32]/50 p-4 rounded border border-slate-700 space-y-4 shadow-xl shrink-0">
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                                <div className="flex items-center gap-2"><Move className="w-3 h-3" /> Zoom</div>
+                                <div>{((cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom) * 100).toFixed(0)}%</div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <ZoomOut className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
+                                  ...prev,
+                                  [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                    ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                    zoom: Math.max(0.5, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) - 0.1)
+                                  }
+                                }))} />
+                                <input
+                                  type="range"
+                                  min="0.5"
+                                  max="3"
+                                  step="0.05"
+                                  value={cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value);
+                                    setCropperState(prev => ({
+                                      ...prev,
+                                      [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                        ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                        zoom: value
+                                      }
+                                    }));
+                                  }}
+                                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                />
+                                <ZoomIn className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
+                                  ...prev,
+                                  [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
+                                    ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
+                                    zoom: Math.min(3, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) + 0.1)
+                                  }
+                                }))} />
                               </div>
                             </div>
-                          ) : null}
-                        </div>
 
-                        {/* ZOOM & ACTIONS */}
-                        <div className="bg-[#161f32]/50 p-4 rounded border border-slate-700 space-y-4 shadow-xl shrink-0">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
-                              <div className="flex items-center gap-2"><Move className="w-3 h-3" /> Zoom</div>
-                              <div>{((cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom) * 100).toFixed(0)}%</div>
+                            <div className="flex gap-2 pt-2 border-t border-slate-700/50">
+                              <button
+                                onClick={handleCropCancel}
+                                className="flex-1 py-1.5 border border-slate-700 text-slate-400 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 hover:text-slate-200 transition-all"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={handleCropSave}
+                                className="flex-1 py-1.5 bg-[#c8aa6e] text-[#0b1120] text-[10px] font-bold uppercase tracking-widest hover:brightness-110 shadow-lg shadow-[#c8aa6e]/20 transition-all"
+                              >
+                                Guardar
+                              </button>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <ZoomOut className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
-                                ...prev,
-                                [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
-                                  ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
-                                  zoom: Math.max(0.5, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) - 0.1)
-                                }
-                              }))} />
-                              <input
-                                type="range"
-                                min="0.5"
-                                max="3"
-                                step="0.05"
-                                value={cropperState.activeMode === 'CARD' ? cropperState.card.zoom : cropperState.avatar.zoom}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  setCropperState(prev => ({
-                                    ...prev,
-                                    [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
-                                      ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
-                                      zoom: value
-                                    }
-                                  }));
-                                }}
-                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Static Card Flow */}
+                          <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
+                          <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
+                            {dndClass.image ? (
+                              <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+                                <FiImage className="h-24 w-24 opacity-20" />
+                              </div>
+                            )}
+
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
+                              <EditableText
+                                value={dndClass.name}
+                                onChange={(val) => handleUpdateClassField('name', val)}
+                                className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
                               />
-                              <ZoomIn className="w-4 h-4 text-slate-500 cursor-pointer" onClick={() => setCropperState(prev => ({
-                                ...prev,
-                                [prev.activeMode === 'CARD' ? 'card' : 'avatar']: {
-                                  ...prev[prev.activeMode === 'CARD' ? 'card' : 'avatar'],
-                                  zoom: Math.min(3, (prev.activeMode === 'CARD' ? prev.card.zoom : prev.avatar.zoom) + 0.1)
-                                }
-                              }))} />
+                              <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
+                              <EditableText
+                                value={dndClass.subtitle}
+                                onChange={(val) => handleUpdateClassField('subtitle', val)}
+                                className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
+                              />
                             </div>
                           </div>
-
-                          <div className="flex gap-2 pt-2 border-t border-slate-700/50">
-                            <button
-                              onClick={handleCropCancel}
-                              className="flex-1 py-1.5 border border-slate-700 text-slate-400 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 hover:text-slate-200 transition-all"
-                            >
-                              Cancelar
-                            </button>
-                            <button
-                              onClick={handleCropSave}
-                              className="flex-1 py-1.5 bg-[#c8aa6e] text-[#0b1120] text-[10px] font-bold uppercase tracking-widest hover:brightness-110 shadow-lg shadow-[#c8aa6e]/20 transition-all"
-                            >
-                              Guardar
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Static Card Flow */}
-                        <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
-                        <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
-                          {dndClass.image ? (
-                            <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
-                              <FiImage className="h-24 w-24 opacity-20" />
-                            </div>
-                          )}
-
-                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
-                            <EditableText
-                              value={dndClass.name}
-                              onChange={(val) => handleUpdateClassField('name', val)}
-                              className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
-                            />
-                            <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
-                            <EditableText
-                              value={dndClass.subtitle}
-                              onChange={(val) => handleUpdateClassField('subtitle', val)}
-                              className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </div>
+
+                  {['Yerma', 'Taiga', 'Tundra'].includes(dndClass.name) && !isCropping && (
+                    <div className="flex justify-center gap-6 mt-4">
+                      {[
+                        { name: 'Yerma', src: '/yerma/Yerma.png' },
+                        { name: 'Taiga', src: '/yerma/Taiga.png' },
+                        { name: 'Tundra', src: '/yerma/Tundra.png' }
+                      ].map((item) => (
+                        <div key={item.name} className="relative group w-14 h-14 cursor-pointer">
+                          {/* Glow Effect */}
+                          <div className="absolute -inset-2 bg-[#c8aa6e] rounded-full opacity-0 blur-md group-hover:opacity-30 transition-opacity duration-700 pointer-events-none"></div>
+
+                          {/* Button */}
+                          <button
+                            onClick={() => updateEditingClass(draft => {
+                              draft.image = item.src;
+                              draft.avatar = item.src;
+                              draft.name = item.name;
+                            })}
+                            className="relative w-full h-full rounded-full border-2 border-slate-600 group-hover:border-[#c8aa6e] overflow-hidden shadow-xl
+                                     transition-all duration-700 transform group-hover:scale-110 will-change-transform"
+                            title={item.name}
+                          >
+                            <img src={item.src} alt={item.name} className="w-full h-full object-cover" />
+                            {/* Inner Shine */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {/* Right: Data & Stats */}
                 <div className="flex-1 w-full max-w-5xl flex flex-col gap-8">

@@ -103,8 +103,16 @@ const getObjectImage = (item) => {
     if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
 
     // Swords (Check longer/specific names first)
-    if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
+    if (name.includes('espada larga')) return '/armas/espada_larga.png';
+    if (name.includes('espada corta')) return '/armas/espada_corta.png';
+    if (name.includes('mandoble')) return '/armas/mandoble.png';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
     if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+    // Natural Weapons
+    if (name.includes('fauces')) return '/armas/fauces.png';
+    if (name.includes('garras')) return '/armas/garras.png';
 
     // Generic Object Checks
     if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
@@ -836,7 +844,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
 
                                                                         return (
                                                                             <button
-                                                                                key={idx}
+                                                                                key={weapon.id || weapon.name || idx}
                                                                                 onClick={() => handleEquipItem(key, weapon)}
                                                                                 disabled={isAlreadyEquipped}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
@@ -1049,7 +1057,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
 
                                                                         return (
                                                                             <button
-                                                                                key={idx}
+                                                                                key={armor.id || armor.name || idx}
                                                                                 onClick={() => handleEquipItem('body', armor)}
                                                                                 disabled={isAlreadyEquipped}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
@@ -1314,7 +1322,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                                                         const itemImg = getObjectImage(item);
                                                                         return (
                                                                             <button
-                                                                                key={i}
+                                                                                key={item.id || item.name || i}
                                                                                 onClick={() => handleEquipItem(slotId, item)}
                                                                                 className="w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0"
                                                                             >

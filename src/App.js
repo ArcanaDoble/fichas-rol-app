@@ -38,7 +38,7 @@ import {
   FiCrop,
   FiCheck,
 } from 'react-icons/fi';
-import { User, Crown, Shield, Scroll, ArrowLeft, Lock, Unlock } from 'lucide-react';
+import { User, Crown, Shield, Scroll, ArrowLeft, Lock, Unlock, Map as MapIcon, Skull, Zap, Wrench, Eye, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -78,9 +78,9 @@ import {
   normalizeHexColor as normalizeGlossaryHexColor,
 } from './utils/color';
 import PageSelector from './components/PageSelector';
+import { nanoid } from 'nanoid';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapV2'));
 const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
-import { nanoid } from 'nanoid';
 import {
   saveTokenSheet,
   ensureSheetDefaults,
@@ -2022,7 +2022,7 @@ function App() {
   const [gridColor, setGridColor] = useState('#ffffff');
   const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
-  const [showVisionRanges, setShowVisionRanges] = useState(true);
+  const [showVisionRanges, setShowVisionRanges] = useState(false);
 
   const diffTokens = (prev, next) => {
     const prevMap = new Map(
@@ -2911,6 +2911,7 @@ function App() {
               t.url !== pt.url || t.hp !== pt.hp || t.hpMax !== pt.hpMax ||
               t.tokenSheetId !== pt.tokenSheetId || t.isLocked !== pt.isLocked;
           });
+          const toDelete = prevTokens.filter(pt => !tokens.some(t => t.id === pt.id));
 
           if (changedTokens.length === 0 && toDelete.length === 0) {
             console.log('No hay cambios reales en los tokens, saltando guardado.');
@@ -5799,131 +5800,201 @@ function App() {
     };
 
     return withTooltips(
-      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
-        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-          <div className="flex flex-wrap gap-2">
+      <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
+        </div>
+
+        {/* Premium Header */}
+        <div className="relative z-10 sticky top-0 h-16 bg-[#0b1120]/95 border-b border-[#c8aa6e]/20 flex items-center justify-between px-6 shadow-lg backdrop-blur-sm flex-shrink-0">
+          <h1 className="text-2xl font-bold font-['Cinzel'] text-[#f0e6d2] tracking-wide flex items-center gap-3 drop-shadow-md">
+            <MapIcon className="w-8 h-8 text-[#c8aa6e] filter drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+            Mapa de Batalla
+          </h1>
+          <div className="flex items-center gap-2">
             <Boton
               size="sm"
+              color="slate"
               onClick={() => setShowPlayerBattleMap(false)}
-              className="bg-gray-700 hover:bg-gray-600"
+              className="flex items-center gap-2"
             >
-              ← Volver a Ficha
+              <ArrowLeft size={16} />
+              Volver a Ficha
             </Boton>
             <Boton
               size="sm"
-              color="green"
+              color="purple"
               onClick={() => handleLaunchSpeedSystem(playerName)}
+              className="flex items-center gap-2"
             >
-              ⚡ Sistema de Velocidad
+              <Zap size={16} />
+              Sistema de Velocidad
             </Boton>
           </div>
         </div>
-        <div className="flex-1 overflow-hidden flex">
-          <div className="flex-1 overflow-hidden">
-            <MapCanvas
-              userType="player"
-              playerName={playerName}
-              playerViewMode={true}
-              simulatedPlayer={playerName}
-              tokens={effectivePage?.tokens || []}
-              onTokensChange={(updater) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  const prev = updatedPages[effectivePageIndex].tokens || [];
-                  const next =
-                    typeof updater === 'function' ? updater(prev) : updater;
-                  const changed = diffTokens(prev, next);
-                  changed.forEach((tk) => {
-                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                    const resolvedUpdatedAt =
-                      normalizedUpdatedAt ??
-                      (typeof tk.updatedAt === 'number'
-                        ? tk.updatedAt
-                        : Timestamp.now().toMillis());
-                    pendingTokenChangesRef.current.set(String(tk.id), {
-                      ...tk,
-                      updatedAt: resolvedUpdatedAt,
+
+        {/* Main Content Area */}
+        <div className="relative z-10 flex-1 flex overflow-hidden p-4 gap-4">
+          {/* Map Card */}
+          <div
+            className="flex-1 flex flex-col min-w-0 rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-300"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <div className="flex-1 relative bg-black/30 overflow-hidden">
+              <MapCanvas
+                userType="player"
+                playerName={playerName}
+                playerViewMode={true}
+                simulatedPlayer={playerName}
+                tokens={effectivePage?.tokens || []}
+                onTokensChange={(updater) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    const prev = updatedPages[effectivePageIndex].tokens || [];
+                    const next =
+                      typeof updater === 'function' ? updater(prev) : updater;
+                    const changed = diffTokens(prev, next);
+                    changed.forEach((tk) => {
+                      const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+                      const resolvedUpdatedAt =
+                        normalizedUpdatedAt ??
+                        (typeof tk.updatedAt === 'number'
+                          ? tk.updatedAt
+                          : Timestamp.now().toMillis());
+                      pendingTokenChangesRef.current.set(String(tk.id), {
+                        ...tk,
+                        updatedAt: resolvedUpdatedAt,
+                      });
                     });
-                  });
-                  updatedPages[effectivePageIndex].tokens = next;
-                  setPages(updatedPages);
+                    updatedPages[effectivePageIndex].tokens = next;
+                    setPages(updatedPages);
+
+                    // Sincronizar cambios a Firebase para jugadores (movimiento, borrado, etc.)
+                    const pageId = playerVisiblePageId;
+                    if (pageId && changed.length > 0) {
+                      const tokensRef = collection(db, 'pages', pageId, 'tokens');
+                      const author = playerName || 'Jugador';
+                      changed.forEach((tk) => {
+                        const tokenId = String(tk.id);
+                        // Para saber si el jugador tenía control sobre el token borrado, lo buscamos en 'prev'
+                        const originalToken = prev.find(t => String(t.id) === tokenId);
+                        const isControlled = originalToken && originalToken.controlledBy === playerName;
+                        const isMaster = userType !== 'player';
+
+                        if (tk._deleted) {
+                          if (isMaster || isControlled) {
+                            deleteDoc(doc(tokensRef, tokenId)).catch(err => console.error('Error eliminando token:', err));
+                          }
+                        } else {
+                          // Solo permitir que el jugador actualice tokens que controla
+                          if (isMaster || tk.controlledBy === playerName) {
+                            const payload = {
+                              ...tk,
+                              updatedAt: serverTimestamp(),
+                              updatedBy: author,
+                            };
+                            setDoc(doc(tokensRef, tokenId), payload).catch(err => console.error('Error actualizando token:', err));
+                          }
+                        }
+                      });
+                    }
+                  }
+                }}
+                lines={effectivePage?.lines || []}
+                onLinesChange={(newLines) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].lines = newLines;
+                    setPages(updatedPages);
+                  }
+                }}
+                walls={effectivePage?.walls || []}
+                onWallsChange={(newWalls) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].walls = newWalls;
+                    setPages(updatedPages);
+                  }
+                }}
+                texts={effectivePage?.texts || []}
+                onTextsChange={(newTexts) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].texts = newTexts;
+                    setPages(updatedPages);
+                  }
+                }}
+                tiles={effectivePage?.tiles || []}
+                onTilesChange={(newTiles) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].tiles = newTiles;
+                    setPages(updatedPages);
+                  }
+                }}
+                ambientLights={effectivePage?.ambientLights || []}
+                onAmbientLightsChange={(newLights) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].ambientLights = newLights;
+                    setPages(updatedPages);
+                  }
+                }}
+                backgroundImage={effectivePage?.background}
+                imageSize={effectivePage?.imageSize}
+                gridCells={effectivePage?.gridCells}
+                gridSize={effectivePage?.gridSize || 50}
+                gridOffsetX={effectivePage?.gridOffsetX || 0}
+                gridOffsetY={effectivePage?.gridOffsetY || 0}
+                showGrid={
+                  effectivePage?.showGrid !== undefined
+                    ? effectivePage.showGrid
+                    : true
                 }
-              }}
-              lines={effectivePage?.lines || []}
-              onLinesChange={(newLines) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].lines = newLines;
-                  setPages(updatedPages);
+                gridColor={effectivePage?.gridColor || '#ffffff'}
+                gridOpacity={
+                  effectivePage?.gridOpacity !== undefined
+                    ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
+                    : 0.2
                 }
-              }}
-              walls={effectivePage?.walls || []}
-              onWallsChange={(newWalls) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].walls = newWalls;
-                  setPages(updatedPages);
-                }
-              }}
-              texts={effectivePage?.texts || []}
-              onTextsChange={(newTexts) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].texts = newTexts;
-                  setPages(updatedPages);
-                }
-              }}
-              tiles={effectivePage?.tiles || []}
-              onTilesChange={(newTiles) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].tiles = newTiles;
-                  setPages(updatedPages);
-                }
-              }}
-              ambientLights={effectivePage?.ambientLights || []}
-              onAmbientLightsChange={(newLights) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].ambientLights = newLights;
-                  setPages(updatedPages);
-                }
-              }}
-              backgroundImage={effectivePage?.background}
-              imageSize={effectivePage?.imageSize}
-              gridCells={effectivePage?.gridCells}
-              gridSize={effectivePage?.gridSize || 50}
-              gridOffsetX={effectivePage?.gridOffsetX || 0}
-              gridOffsetY={effectivePage?.gridOffsetY || 0}
-              showGrid={
-                effectivePage?.showGrid !== undefined
-                  ? effectivePage.showGrid
-                  : true
-              }
-              gridColor={effectivePage?.gridColor || '#ffffff'}
-              gridOpacity={
-                effectivePage?.gridOpacity !== undefined
-                  ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
-                  : 0.2
-              }
-              enableDarkness={effectivePage?.enableDarkness || false}
-              darknessOpacity={effectivePage?.darknessOpacity || 0.8}
-              shopConfig={effectivePage?.shopConfig}
-              onShopConfigChange={handlePlayerShopConfigChange}
-              activeLayer="fichas"
-              enemies={enemies}
-              players={[playerName]}
-              armas={armas}
-              armaduras={armaduras}
-              habilidades={habilidades}
-              highlightText={highlightText}
-              rarityColorMap={rarityColorMap}
-              isPlayerView={true}
-              pageId={playerVisiblePageId}
+                enableDarkness={effectivePage?.enableDarkness || false}
+                darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+                shopConfig={effectivePage?.shopConfig}
+                onShopConfigChange={handlePlayerShopConfigChange}
+                activeLayer="fichas"
+                enemies={enemies}
+                players={[playerName]}
+                armas={armas}
+                armaduras={armaduras}
+                habilidades={habilidades}
+                highlightText={highlightText}
+                rarityColorMap={rarityColorMap}
+                isPlayerView={true}
+                pageId={playerVisiblePageId}
+              />
+            </div>
+          </div>
+
+          <div
+            className="w-80 flex-shrink-0 flex flex-col rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <ChatPanel
+              playerName={playerName}
+              isMaster={false}
+              className="!w-full !h-full bg-transparent p-0"
             />
           </div>
-          <ChatPanel playerName={playerName} isMaster={false} />
         </div>
       </div>
     );
@@ -8651,152 +8722,196 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return withTooltips(
-      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
-        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
-          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-          <div className="flex flex-wrap gap-2">
-            <Boton
-              size="sm"
+      <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
+        </div>
+
+        {/* Premium Header */}
+        <div className="relative z-10 sticky top-0 h-16 bg-[#0b1120]/95 border-b border-[#c8aa6e]/20 flex items-center justify-between px-6 shadow-lg backdrop-blur-sm flex-shrink-0">
+          <h1 className="text-2xl font-bold font-['Cinzel'] text-[#f0e6d2] tracking-wide flex items-center gap-3 drop-shadow-md">
+            <MapIcon className="w-8 h-8 text-[#c8aa6e] filter drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+            Mapa de Batalla
+          </h1>
+          <div className="flex items-center gap-3">
+            <button
               onClick={() => setChosenView(null)}
-              className="bg-gray-700 hover:bg-gray-600"
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 text-[#c8aa6e] font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 hover:shadow-[0_0_15px_rgba(200,170,110,0.3)] "
             >
-              ← Menú Máster
-            </Boton>
-            <Boton
-              size="sm"
-              color="red"
+              <span className="relative z-10 flex items-center gap-2">
+                <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5" />
+                Menú Máster
+              </span>
+            </button>
+            <div className="h-6 w-px bg-[#c8aa6e]/20 mx-1"></div>
+            <button
               onClick={() => setChosenView('enemies')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-rose-500/30 bg-rose-500/5 text-rose-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-rose-400 hover:bg-rose-500/10 hover:shadow-[0_0_15px_rgba(244,63,94,0.25)] hover:text-rose-300 "
             >
-              Fichas de Enemigos
-            </Boton>
-            <Boton
-              size="sm"
-              color="blue"
+              <span className="relative z-10 flex items-center gap-2">
+                <Skull size={14} />
+                Enemigos
+              </span>
+            </button>
+            <button
               onClick={() => setChosenView('initiative')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-sky-500/30 bg-sky-500/5 text-sky-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-sky-400 hover:bg-sky-500/10 hover:shadow-[0_0_15px_rgba(14,165,233,0.25)] hover:text-sky-300 "
             >
-              Sistema de Velocidad
-            </Boton>
-            <Boton
-              size="sm"
-              color="purple"
+              <span className="relative z-10 flex items-center gap-2">
+                <Zap size={14} />
+                Velocidad
+              </span>
+            </button>
+            <button
               onClick={() => setChosenView('tools')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-purple-500/30 bg-purple-500/5 text-purple-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-purple-400 hover:bg-purple-500/10 hover:shadow-[0_0_15px_rgba(168,85,247,0.25)] hover:text-purple-300 "
             >
-              Herramientas
-            </Boton>
-            <label className="flex items-center gap-1 text-sm ml-2">
-              <input
-                type="checkbox"
-                checked={showVisionRanges}
-                onChange={(e) => setShowVisionRanges(e.target.checked)}
-              />
-              Rangos de visión
-            </label>
+              <span className="relative z-10 flex items-center gap-2">
+                <Wrench size={14} />
+                Herramientas
+              </span>
+            </button>
           </div>
         </div>
-        <div className="mb-4 mr-80">
-          <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-semibold tracking-wide rounded-lg bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 focus:ring-gray-500 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-95 transform shadow-md hover:shadow-lg cursor-pointer text-white">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
-            Subir Mapa
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleBackgroundUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-          </label>
-        </div>
-        <div className="mr-80">
-          <PageSelector
-            pages={pages}
-            current={currentPage}
-            onSelect={setCurrentPage}
-            onAdd={addPage}
-            onUpdate={updatePage}
-            onDelete={deletePage}
-            playerVisiblePageId={playerVisiblePageId}
-            onPlayerVisiblePageChange={updatePlayerVisiblePage}
-          />
-        </div>
-        <div className="relative pt-14 flex-1 overflow-hidden">
-          <div className="h-full mr-80">
-            <MapCanvas
-              backgroundImage={
-                canvasBackground || 'https://via.placeholder.com/800x600'
-              }
-              gridSize={gridSize}
-              gridCells={gridCells}
-              gridOffsetX={gridOffsetX}
-              gridOffsetY={gridOffsetY}
-              showGrid={showGrid}
-              gridColor={gridColor}
-              gridOpacity={gridOpacity}
-              shopConfig={canvasShopConfig}
-              tokens={canvasTokens}
-              onTokensChange={(updater) => {
-                setCanvasTokens((prev) => {
-                  const next =
-                    typeof updater === 'function' ? updater(prev) : updater;
-                  const changed = diffTokens(prev, next);
-                  changed.forEach((tk) => {
-                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                    const resolvedUpdatedAt =
-                      normalizedUpdatedAt ??
-                      (typeof tk.updatedAt === 'number'
-                        ? tk.updatedAt
-                        : Timestamp.now().toMillis());
-                    pendingTokenChangesRef.current.set(String(tk.id), {
-                      ...tk,
-                      updatedAt: resolvedUpdatedAt,
+
+        {/* Main Content Area */}
+        <div className="relative z-10 flex-1 flex overflow-hidden p-4 gap-4">
+          {/* Map Card */}
+          <div
+            className="flex-1 flex flex-col min-w-0 rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-300"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            {/* Map Toolbar */}
+            <div className="p-3 border-b border-amber-500/10 bg-[#0b1120]/40 flex flex-col xl:flex-row xl:items-center gap-4 shadow-sm z-20">
+              <div className="flex-1 min-w-0">
+                <PageSelector
+                  pages={pages}
+                  current={currentPage}
+                  onSelect={setCurrentPage}
+                  onAdd={addPage}
+                  onUpdate={updatePage}
+                  onDelete={deletePage}
+                  playerVisiblePageId={playerVisiblePageId}
+                  onPlayerVisiblePageChange={updatePlayerVisiblePage}
+                />
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-300 bg-[#0f172a]/60 p-2 rounded-xl border border-slate-700/50">
+                <label className="flex items-center gap-2 cursor-pointer hover:text-amber-200 transition-colors select-none">
+                  <input
+                    type="checkbox"
+                    checked={showVisionRanges}
+                    onChange={(e) => setShowVisionRanges(e.target.checked)}
+                    className="rounded border-gray-600 text-amber-600 focus:ring-amber-500/50 bg-gray-800"
+                  />
+                  <Eye size={16} className="text-amber-500/80" />
+                  <span>Rangos de visión</span>
+                </label>
+                <div className="w-px h-5 bg-slate-700"></div>
+                <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg bg-gradient-to-r from-amber-700/80 to-amber-600/80 hover:from-amber-600 hover:to-amber-500 border border-amber-500/30 shadow-lg cursor-pointer text-white transition-all hover:shadow-amber-900/40 active:scale-95">
+                  <Upload size={14} />
+                  Subir Mapa
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Map Canvas Container */}
+            <div className="flex-1 relative bg-black/30 overflow-hidden">
+              <MapCanvas
+                backgroundImage={
+                  canvasBackground || 'https://via.placeholder.com/800x600'
+                }
+                gridSize={gridSize}
+                gridCells={gridCells}
+                gridOffsetX={gridOffsetX}
+                gridOffsetY={gridOffsetY}
+                showGrid={showGrid}
+                gridColor={gridColor}
+                gridOpacity={gridOpacity}
+                shopConfig={canvasShopConfig}
+                tokens={canvasTokens}
+                onTokensChange={(updater) => {
+                  setCanvasTokens((prev) => {
+                    const next =
+                      typeof updater === 'function' ? updater(prev) : updater;
+                    const changed = diffTokens(prev, next);
+                    changed.forEach((tk) => {
+                      const normalizedUpdatedAt = normalizeTokenUpdatedAt(
+                        tk.updatedAt
+                      );
+                      const resolvedUpdatedAt =
+                        normalizedUpdatedAt ??
+                        (typeof tk.updatedAt === 'number'
+                          ? tk.updatedAt
+                          : Timestamp.now().toMillis());
+                      pendingTokenChangesRef.current.set(String(tk.id), {
+                        ...tk,
+                        updatedAt: resolvedUpdatedAt,
+                      });
                     });
+                    return next;
                   });
-                  return next;
-                });
-                isRemoteTokenUpdate.current = false;
-                isLocalTokenEdit.current = true;
-              }}
-              texts={canvasTexts}
-              onTextsChange={setCanvasTexts}
-              lines={canvasLines}
-              onLinesChange={setCanvasLines}
-              walls={canvasWalls}
-              onWallsChange={setCanvasWalls}
-              tiles={canvasTiles}
-              onTilesChange={setCanvasTiles}
-              ambientLights={canvasAmbientLights}
-              onAmbientLightsChange={setCanvasAmbientLights}
-              onShopConfigChange={handleShopConfigChange}
-              enemies={enemies}
-              onEnemyUpdate={updateEnemyFromToken}
-              players={existingPlayers}
-              armas={armas}
-              armaduras={armaduras}
-              habilidades={habilidades}
-              highlightText={highlightText}
-              rarityColorMap={rarityColorMap}
-              userType={userType}
+                  isRemoteTokenUpdate.current = false;
+                  isLocalTokenEdit.current = true;
+                }}
+                texts={canvasTexts}
+                onTextsChange={setCanvasTexts}
+                lines={canvasLines}
+                onLinesChange={setCanvasLines}
+                walls={canvasWalls}
+                onWallsChange={setCanvasWalls}
+                tiles={canvasTiles}
+                onTilesChange={setCanvasTiles}
+                ambientLights={canvasAmbientLights}
+                onAmbientLightsChange={setCanvasAmbientLights}
+                onShopConfigChange={handleShopConfigChange}
+                enemies={enemies}
+                onEnemyUpdate={updateEnemyFromToken}
+                players={existingPlayers}
+                armas={armas}
+                armaduras={armaduras}
+                habilidades={habilidades}
+                highlightText={highlightText}
+                rarityColorMap={rarityColorMap}
+                userType={userType}
+                playerName={playerName}
+                activeLayer={activeLayer}
+                onLayerChange={setActiveLayer}
+                enableDarkness={enableDarkness}
+                darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
+                showVisionPolygons={showVisionRanges}
+                pageId={pages[currentPage]?.id}
+                onGridSettingsChange={handleGridSettingsChange}
+              />
+            </div>
+          </div>
+
+          {/* Sidebar Card */}
+          <div
+            className="w-80 flex-shrink-0 flex flex-col rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <AssetSidebar
+              isMaster={authenticated}
               playerName={playerName}
-              activeLayer={activeLayer}
-              onLayerChange={setActiveLayer}
-              enableDarkness={enableDarkness}
-              darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
-              showVisionPolygons={showVisionRanges}
-              pageId={pages[currentPage]?.id}
-              onGridSettingsChange={handleGridSettingsChange}
+              className="!w-full !h-full bg-transparent p-0"
             />
           </div>
-          <AssetSidebar isMaster={authenticated} playerName={playerName} />
         </div>
       </div>
     );
