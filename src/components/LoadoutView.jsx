@@ -3,7 +3,7 @@ import { Tooltip } from 'react-tooltip';
 import PropTypes from 'prop-types';
 import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus, FiEdit2 } from 'react-icons/fi';
 import { GiBelt } from 'react-icons/gi';
-import { Sword, Shield, Zap } from 'lucide-react';
+import { Sword, Shield, Zap, Gem } from 'lucide-react';
 import HexIcon from './HexIcon';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -103,8 +103,16 @@ const getObjectImage = (item) => {
     if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
 
     // Swords (Check longer/specific names first)
-    if (name.includes('espada corta')) return '/armas/espada_de_hierro.png';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
+    if (name.includes('espada larga')) return '/armas/espada_larga.png';
+    if (name.includes('espada corta')) return '/armas/espada_corta.png';
+    if (name.includes('mandoble')) return '/armas/mandoble.png';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
     if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+    // Natural Weapons
+    if (name.includes('fauces')) return '/armas/fauces.png';
+    if (name.includes('garras')) return '/armas/garras.png';
 
     // Generic Object Checks
     if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
@@ -141,6 +149,9 @@ const getObjectImage = (item) => {
     // Generic Armor Fallback
     if (target.includes('armadura')) return '/objetos/armadura.png';
 
+    // Accessories
+    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
+
     return null;
 };
 
@@ -157,13 +168,14 @@ const formatItemName = (name) => {
     return formatted;
 };
 
-const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
+const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary = [], onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
     const [showRarityDropdown, setShowRarityDropdown] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [customItems, setCustomItems] = useState([]);
+    const [accessories, setAccessories] = useState([]); // Add state for accessories
     const [editingBeltNote, setEditingBeltNote] = useState(null);
     const [tempBeltNote, setTempBeltNote] = useState('');
 
@@ -195,7 +207,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
         );
     };
 
-    // Fetch custom items
+    // Fetch custom items and accessories
     React.useEffect(() => {
         const fetchCustomItems = async () => {
             try {
@@ -206,7 +218,22 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                 console.error("Error fetching custom items:", error);
             }
         };
+
+        const fetchAccessories = async () => { // Add fetch function
+            try {
+                const snap = await getDocs(collection(db, 'accessories'));
+                const fetched = snap.docs.map(d => {
+                    const data = d.data();
+                    return { ...data, id: data.id || d.id };
+                });
+                setAccessories(fetched);
+            } catch (error) {
+                console.error("Error fetching accessories:", error);
+            }
+        };
+
         fetchCustomItems();
+        fetchAccessories(); // Call fetch function
     }, []);
 
     // Local editing state
@@ -246,6 +273,48 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
     const beltSlotCount = useMemo(() => {
         return dndClass.equippedItems?.beltSlotCount || initialBeltCount;
     }, [dndClass.equippedItems?.beltSlotCount, initialBeltCount]);
+
+    // Calculate total physical load
+    const totalPhysicalLoad = useMemo(() => {
+        let total = 0;
+        Object.entries(equippedItems || {}).forEach(([key, item]) => {
+            if (item) {
+                // Determine load from various possible properties, checking both top-level and nested payload
+                const p = item.payload || {};
+                const val = item.physicalLoad || item.cargaFisica || item.carga_fisica || item.carga || item.peso || item.weight ||
+                    p.physicalLoad || p.cargaFisica || p.carga_fisica || p.carga || p.peso || p.weight || '';
+                const loadValue = val.toString().trim();
+
+                if (!loadValue) return;
+
+                // 1. Try direct parseInt (for numeric values)
+                let load = parseInt(loadValue, 10);
+
+                // 2. If parseInt failed or if there are icons, try counting icons
+                if (isNaN(load) || loadValue.includes('🔲')) {
+                    // Count occurrences of 🔲
+                    const match = loadValue.match(/🔲/g);
+                    if (match) {
+                        load = match.length;
+                    } else {
+                        // 3. Fallback: Try to extract first number found in string if no icons
+                        const digitMatch = loadValue.match(/\d+/);
+                        if (digitMatch) {
+                            load = parseInt(digitMatch[0], 10);
+                        } else {
+                            load = 0;
+                        }
+                    }
+                }
+
+                if (!isNaN(load) && load > 0) {
+                    const quantity = item.quantity || 1;
+                    total += (load * quantity);
+                }
+            }
+        });
+        return total;
+    }, [equippedItems]);
 
     // Get talent slots (restored)
     const talentSlots = useMemo(() => {
@@ -295,6 +364,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
         if (rawEquipment.armor) list.push(...rawEquipment.armor.map((item, idx) => ({ ...item, _category: 'armor', _index: idx })));
         if (rawEquipment.abilities) list.push(...rawEquipment.abilities.map((item, idx) => ({ ...item, _category: 'abilities', _index: idx })));
         if (rawEquipment.objects) list.push(...rawEquipment.objects.map((item, idx) => ({ ...item, _category: 'objects', _index: idx })));
+        if (rawEquipment.accessories) list.push(...rawEquipment.accessories.map((item, idx) => ({ ...item, _category: 'accessories', _index: idx })));
         return list;
     }, [rawEquipment]);
 
@@ -305,6 +375,11 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
 
     const inventoryArmor = useMemo(() => {
         return equipment.filter(item => item._category === 'armor');
+    }, [equipment]);
+
+    // Get available accessories from inventory
+    const inventoryAccessories = useMemo(() => {
+        return equipment.filter(item => item._category === 'accessories');
     }, [equipment]);
 
     // Filtrar catálogo según búsqueda
@@ -325,6 +400,19 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                     description: item.description
                 }
             }));
+        } else if (selectedCategory === 'accessories') {
+            catalog = accessories.map(item => ({
+                name: item.nombre || item.name, // Support both naming keys
+                category: 'Accesorio',
+                description: item.descripcion || item.description,
+                payload: {
+                    ...item,
+                    name: item.nombre || item.name,
+                    category: 'accessories',
+                    itemType: 'accessory',
+                    description: item.descripcion || item.description
+                }
+            }));
         } else {
             catalog = equipmentCatalog?.[selectedCategory] || [];
         }
@@ -337,7 +425,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                 (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()))
             )
             .slice(0, 5);
-    }, [equipmentCatalog, selectedCategory, searchTerm, dndClass.storeItems, customItems]);
+    }, [equipmentCatalog, selectedCategory, searchTerm, dndClass.storeItems, customItems, accessories]);
 
     // Check if character has proficiency with a weapon
     const hasWeaponProficiency = (item) => {
@@ -448,7 +536,8 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                             { id: 'weapons', label: 'Armas' },
                                             { id: 'armor', label: 'Armaduras' },
                                             { id: 'abilities', label: 'Habilidades' },
-                                            { id: 'objects', label: 'Objetos' }
+                                            { id: 'objects', label: 'Objetos' },
+                                            { id: 'accessories', label: 'Accesorios' }
                                         ].map(cat => (
                                             <button
                                                 key={cat.id}
@@ -517,12 +606,14 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                                 if (item.itemType === 'weapon') return <Sword className="w-10 h-10 text-slate-400" />;
                                                 if (item.itemType === 'ability') return <Zap className="w-10 h-10 text-slate-400" />;
                                                 if (item.itemType === 'object') return <HexIcon size="md"><span className="text-xs">📦</span></HexIcon>;
+                                                if (item.itemType === 'accessory') return <Gem className="w-10 h-10 text-slate-400" />;
 
-                                                // Fallback: usar category si itemType no existe
-                                                const cat = (item.category || item.type || '').toLowerCase();
+                                                // Fallback: usar category o _category
+                                                const cat = (item.category || item.type || item._category || '').toLowerCase();
                                                 if (cat.includes('armadura') || cat.includes('armor')) return <Shield className="w-10 h-10 text-slate-400" />;
                                                 if (cat.includes('arma') || cat.includes('weapon')) return <Sword className="w-10 h-10 text-slate-400" />;
                                                 if (cat.includes('habilidad') || cat.includes('ability') || cat.includes('spell')) return <Zap className="w-10 h-10 text-slate-400" />;
+                                                if (cat.includes('accesorio') || cat.includes('accessory')) return <Gem className="w-10 h-10 text-slate-400" />;
 
                                                 // Default: Shield
                                                 return <Shield className="w-10 h-10 text-slate-400" />;
@@ -743,8 +834,8 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                                                         <Sword className={`w-8 h-8 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
                                                                     )}
 
-                                                                    {/* Rarity Badge */}
-                                                                    {equippedItem.rareza && (
+                                                                    {/* Rarity Badge - Hide if common */}
+                                                                    {equippedItem.rareza && equippedItem.rareza.toLowerCase() !== 'común' && (
                                                                         <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10`}>
                                                                             {equippedItem.rareza}
                                                                         </span>
@@ -836,7 +927,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
 
                                                                         return (
                                                                             <button
-                                                                                key={idx}
+                                                                                key={weapon.id || weapon.name || idx}
                                                                                 onClick={() => handleEquipItem(key, weapon)}
                                                                                 disabled={isAlreadyEquipped}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
@@ -978,8 +1069,8 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                                                         <Shield className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
                                                                     )}
 
-                                                                    {/* Rarity Badge */}
-                                                                    {equippedArmor.rareza && (
+                                                                    {/* Rarity Badge - Hide if common */}
+                                                                    {equippedArmor.rareza && equippedArmor.rareza.toLowerCase() !== 'común' && (
                                                                         <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}>
                                                                             {equippedArmor.rareza}
                                                                         </span>
@@ -1049,7 +1140,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
 
                                                                         return (
                                                                             <button
-                                                                                key={idx}
+                                                                                key={armor.id || armor.name || idx}
                                                                                 onClick={() => handleEquipItem('body', armor)}
                                                                                 disabled={isAlreadyEquipped}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
@@ -1314,7 +1405,7 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                                                         const itemImg = getObjectImage(item);
                                                                         return (
                                                                             <button
-                                                                                key={i}
+                                                                                key={item.id || item.name || i}
                                                                                 onClick={() => handleEquipItem(slotId, item)}
                                                                                 className="w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0"
                                                                             >
@@ -1386,18 +1477,171 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                                     {/* 4. ACCESORIOS (Accessories) */}
                                     <div>
                                         <div className="flex items-center gap-3 mb-4">
-                                            <Zap className="w-5 h-5 text-[#c8aa6e]" />
+                                            <Gem className="w-5 h-5 text-[#c8aa6e]" />
                                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
                                                 Accesorios
                                             </h3>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
-                                            {[1, 2].map(slot => (
-                                                <div key={slot} className="h-16 border-2 border-dashed border-slate-700 rounded-lg flex items-center justify-center gap-2 hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all cursor-pointer">
-                                                    <Zap className="w-4 h-4 text-slate-600 opacity-50" />
-                                                    <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest">Accesorio {slot}</span>
-                                                </div>
-                                            ))}
+                                            {[1, 2].map(slotNum => {
+                                                const slotKey = `accessory_${slotNum}`;
+                                                const equippedAccessory = equippedItems[slotKey];
+                                                const isSlotActive = activeSlotSelector === slotKey;
+                                                const rarityColors = equippedAccessory ? getRarityColors(equippedAccessory) : null;
+                                                const accessoryImage = equippedAccessory ? getObjectImage(equippedAccessory) : null;
+
+                                                return (
+                                                    <div key={slotNum} className="relative group">
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveSlotSelector(isSlotActive ? null : slotKey);
+                                                            }}
+                                                            className={`h-32 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
+                                                                ${equippedAccessory
+                                                                    ? `${rarityColors?.border || 'border-[#c8aa6e]/50'}`
+                                                                    : 'border-dashed border-slate-700 hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5'
+                                                                }
+                                                                ${isSlotActive ? 'ring-2 ring-[#c8aa6e]' : ''}
+                                                            `}
+                                                        >
+                                                            {equippedAccessory ? (
+                                                                <>
+                                                                    {/* Accessory Image Background */}
+                                                                    {accessoryImage && (
+                                                                        <>
+                                                                            <img
+                                                                                src={accessoryImage}
+                                                                                alt={equippedAccessory.name || equippedAccessory.nombre}
+                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                            />
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
+                                                                        </>
+                                                                    )}
+
+                                                                    {/* Rarity Gradient Background */}
+                                                                    {!accessoryImage && (
+                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                    )}
+
+                                                                    {/* Noise Texture Overlay (hover) */}
+                                                                    <div
+                                                                        className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700 z-0 pointer-events-none"
+                                                                        style={{
+                                                                            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E")`,
+                                                                            backgroundSize: '100px 100px'
+                                                                        }}
+                                                                    ></div>
+
+                                                                    {/* Icon - Hide if image exists */}
+                                                                    {!accessoryImage && (
+                                                                        <Gem className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                    )}
+
+                                                                    {/* Rarity Badge - Hide if common */}
+                                                                    {equippedAccessory.rareza && equippedAccessory.rareza.toLowerCase() !== 'común' && (
+                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}>
+                                                                            {equippedAccessory.rareza}
+                                                                        </span>
+                                                                    )}
+
+                                                                    {/* Name */}
+                                                                    <span className="text-[#f0e6d2] font-['Cinzel'] text-xs uppercase tracking-wider text-center px-2 font-bold relative z-10">
+                                                                        {equippedAccessory.name || equippedAccessory.nombre}
+                                                                    </span>
+
+                                                                    {/* Defense Stats */}
+                                                                    {(equippedAccessory.defense || equippedAccessory.defensa) && (
+                                                                        <span className="text-[10px] text-blue-300 mt-1 relative z-10">
+                                                                            <span className="text-slate-500">Defensa:</span> {equippedAccessory.defense || equippedAccessory.defensa}
+                                                                        </span>
+                                                                    )}
+
+                                                                    {/* Traits */}
+                                                                    {(equippedAccessory.traits || equippedAccessory.rasgos || equippedAccessory.trait) && (
+                                                                        <div className="flex flex-wrap justify-center gap-1 mt-1 relative z-10">
+                                                                            {(equippedAccessory.traits || equippedAccessory.rasgos || equippedAccessory.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Unequip Button */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleUnequipItem(slotKey);
+                                                                        }}
+                                                                        className="absolute top-2 right-2 p-1 bg-red-500/20 hover:bg-red-500/40 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                                                    >
+                                                                        <FiX className="w-3 h-3" />
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Gem className="w-6 h-6 text-slate-600 mb-2 opacity-50" />
+                                                                    <span className="text-slate-600 font-['Cinzel'] text-xs uppercase tracking-widest">Accesorio {slotNum}</span>
+                                                                    <span className="text-[10px] text-slate-700">Clic para equipar</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Equipment Selector Dropdown */}
+                                                        {isSlotActive && (
+                                                            <div
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                                            >
+                                                                <div className="p-2 border-b border-slate-700">
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                                                                        Seleccionar accesorio del inventario
+                                                                    </span>
+                                                                </div>
+                                                                {inventoryAccessories.length > 0 ? (
+                                                                    inventoryAccessories.map((accessory, idx) => {
+                                                                        const isAlreadyEquipped =
+                                                                            (equippedItems.accessory_1 && equippedItems.accessory_1._index === accessory._index) ||
+                                                                            (equippedItems.accessory_2 && equippedItems.accessory_2._index === accessory._index);
+
+                                                                        return (
+                                                                            <button
+                                                                                key={accessory.id || accessory.name || idx}
+                                                                                onClick={() => handleEquipItem(slotKey, accessory)}
+                                                                                disabled={isAlreadyEquipped}
+                                                                                className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
+                                                                                    ${isAlreadyEquipped ? 'opacity-40 cursor-not-allowed' : ''}
+                                                                                `}
+                                                                            >
+                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                    {getObjectImage(accessory) ? (
+                                                                                        <img src={getObjectImage(accessory)} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <Gem className="w-5 h-5" />
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="text-sm text-[#f0e6d2] font-medium truncate">{accessory.name || accessory.nombre}</div>
+                                                                                    <div className="flex gap-2 text-[10px]">
+                                                                                        {(accessory.defense || accessory.defensa) && <span className="text-blue-300">Defensa: {accessory.defense || accessory.defensa}</span>}
+                                                                                        {accessory.rareza && accessory.rareza.toLowerCase() !== 'común' && <span className="text-slate-500">{accessory.rareza}</span>}
+                                                                                    </div>
+                                                                                </div>
+                                                                                {isAlreadyEquipped && (
+                                                                                    <span className="text-[10px] text-slate-500 uppercase">Equipado</span>
+                                                                                )}
+                                                                            </button>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div className="p-4 text-center text-slate-500 text-sm">
+                                                                        No hay accesorios en el inventario.
+                                                                        <br />
+                                                                        <span className="text-[10px]">Añade accesorios desde la pestaña Inventario</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
@@ -1646,56 +1890,112 @@ const LoadoutView = ({ dndClass, equipmentCatalog, glossary = [], onAddEquipment
                             {/* SEPARATOR */}
                             <div className="w-full h-[1px] bg-slate-800 my-1"></div>
 
-                            {/* PROFICIENCIES BLOCK */}
-                            <div className="w-full space-y-3">
-                                <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
+                            {/* LOAD AND LIFE COUNTERS BLOCK */}
+                            {isCharacter ? (
+                                (() => {
+                                    const maxVida = dndClass.stats?.vida?.max ?? dndClass.vida ?? 0;
+                                    const isOverloaded = totalPhysicalLoad > maxVida;
+                                    const excess = isOverloaded ? totalPhysicalLoad - maxVida : 0;
 
-                                {/* Weapons */}
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armas</div>
-                                    <div className="flex flex-wrap gap-2 justify-center">
-                                        {['Simples', 'Marciales', 'Especiales'].map(type => {
-                                            const key = type === 'Simples' ? 'simple' : type === 'Marciales' ? 'martial' : 'special';
-                                            const isActive = summary.proficiencies?.weapons?.[key];
-                                            return (
-                                                <button
-                                                    key={key}
-                                                    onClick={() => onUpdateProficiency && onUpdateProficiency('weapons', key)}
-                                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
-                                                        ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
-                                                        : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
-                                                        }`}
-                                                >
-                                                    {type}
-                                                </button>
-                                            )
-                                        })}
+                                    return (
+                                        <div className="w-full space-y-6 pt-4">
+                                            {/* Vida Counter (Resistance) */}
+                                            <div className="text-center">
+                                                <h4 className="text-[#e09f9f] font-['Cinzel'] text-[10px] uppercase tracking-[0.2em] mb-1 opacity-80">Resistencia Máxima (Vida)</h4>
+                                                <div className="flex items-center justify-center gap-1.5 mt-2">
+                                                    <div className="flex gap-1 flex-wrap justify-center max-w-[200px]">
+                                                        {Array.from({ length: Math.max(1, maxVida) }).map((_, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className={`w-3.5 h-3.5 rounded-sm border transition-all duration-500 animate-in fade-in zoom-in ${i < maxVida
+                                                                    ? 'bg-[#e09f9f] border-[#e09f9f] shadow-[0_0_8px_rgba(224,159,159,0.4)] scale-110'
+                                                                    : 'bg-transparent border-slate-700 scale-100 opacity-50'
+                                                                    }`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <span className="ml-2 font-mono text-xs font-bold text-[#e09f9f]">
+                                                        {maxVida}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Physical Load Counter */}
+                                            <div className="text-center">
+                                                <h4 className="text-[#c8aa6e] font-['Cinzel'] text-[10px] uppercase tracking-[0.2em] mb-1 opacity-80">Carga del Equipamiento</h4>
+                                                <div className="flex items-center justify-center gap-1.5 mt-2">
+                                                    <div className="flex gap-1 flex-wrap justify-center max-w-[200px]">
+                                                        {Array.from({ length: Math.max(maxVida, totalPhysicalLoad, 1) }).map((_, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className={`w-3.5 h-3.5 rounded-sm border transition-all duration-500 animate-in fade-in zoom-in ${i < totalPhysicalLoad
+                                                                    ? i >= maxVida
+                                                                        ? 'bg-red-500 border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] scale-110'
+                                                                        : 'bg-[#c8aa6e] border-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.5)] scale-110'
+                                                                    : 'bg-transparent border-slate-700 scale-100 opacity-50'
+                                                                    }`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <span className={`ml-2 font-mono text-xs font-bold ${isOverloaded ? 'text-red-400 animate-pulse' : totalPhysicalLoad > 0 ? 'text-[#c8aa6e]' : 'text-slate-600'}`}>
+                                                        {totalPhysicalLoad}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            ) : (
+                                <div className="w-full space-y-3">
+                                    <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
+
+                                    {/* Weapons */}
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armas</div>
+                                        <div className="flex flex-wrap gap-2 justify-center">
+                                            {['Simples', 'Marciales', 'Especiales'].map(type => {
+                                                const key = type === 'Simples' ? 'simple' : type === 'Marciales' ? 'martial' : 'special';
+                                                const isActive = summary.proficiencies?.weapons?.[key];
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => onUpdateProficiency && onUpdateProficiency('weapons', key)}
+                                                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
+                                                            ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
+                                                            : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
+                                                            }`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Armor */}
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armaduras</div>
+                                        <div className="flex flex-wrap gap-2 justify-center">
+                                            {['Ligera', 'Media', 'Pesada'].map(type => {
+                                                const key = type === 'Ligera' ? 'light' : type === 'Media' ? 'medium' : 'heavy';
+                                                const isActive = summary.proficiencies?.armor?.[key];
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => onUpdateProficiency && onUpdateProficiency('armor', key)}
+                                                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
+                                                            ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
+                                                            : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
+                                                            }`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
-
-                                {/* Armor */}
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armaduras</div>
-                                    <div className="flex flex-wrap gap-2 justify-center">
-                                        {['Ligera', 'Media', 'Pesada'].map(type => {
-                                            const key = type === 'Ligera' ? 'light' : type === 'Media' ? 'medium' : 'heavy';
-                                            const isActive = summary.proficiencies?.armor?.[key];
-                                            return (
-                                                <button
-                                                    key={key}
-                                                    onClick={() => onUpdateProficiency && onUpdateProficiency('armor', key)}
-                                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
-                                                        ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
-                                                        : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
-                                                        }`}
-                                                >
-                                                    {type}
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>

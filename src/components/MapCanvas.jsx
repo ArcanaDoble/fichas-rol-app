@@ -1058,12 +1058,10 @@ const Token = forwardRef(
         box.width = Math.max(SNAP, Math.round(box.width / SNAP) * SNAP);
         box.height = Math.max(SNAP, Math.round(box.height / SNAP) * SNAP);
       } else {
-        const cells = Math.max(
-          1,
-          Math.round(Math.max(box.width, box.height) / gridSize)
-        );
-        box.width = cells * gridSize;
-        box.height = cells * gridSize;
+        const cellsW = Math.max(1, Math.round(box.width / gridSize));
+        const cellsH = Math.max(1, Math.round(box.height / gridSize));
+        box.width = cellsW * gridSize;
+        box.height = cellsH * gridSize;
       }
 
       return box;
@@ -1096,12 +1094,10 @@ const Token = forwardRef(
         newWidth = Math.max(SNAP, Math.round(newWidth / SNAP) * SNAP);
         newHeight = Math.max(SNAP, Math.round(newHeight / SNAP) * SNAP);
       } else {
-        const cells = Math.max(
-          1,
-          Math.round(Math.max(newWidth, newHeight) / gridSize)
-        );
-        newWidth = cells * gridSize;
-        newHeight = cells * gridSize;
+        const cellsW = Math.max(1, Math.round(newWidth / gridSize));
+        const cellsH = Math.max(1, Math.round(newHeight / gridSize));
+        newWidth = cellsW * gridSize;
+        newHeight = cellsH * gridSize;
       }
 
       node.width(newWidth);
@@ -1367,8 +1363,12 @@ const Token = forwardRef(
               ref={trRef}
               enabledAnchors={[
                 'top-left',
+                'top-center',
                 'top-right',
+                'middle-right',
+                'middle-left',
                 'bottom-left',
+                'bottom-center',
                 'bottom-right',
               ]}
               rotateEnabled={false}
@@ -6165,7 +6165,16 @@ const MapCanvas = ({
               <Transformer
                 ref={tileTrRef}
                 rotateEnabled={false}
-                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                enabledAnchors={[
+                  'top-left',
+                  'top-center',
+                  'top-right',
+                  'middle-right',
+                  'middle-left',
+                  'bottom-left',
+                  'bottom-center',
+                  'bottom-right',
+                ]}
                 listening={false}
               />
               {drawGrid()}

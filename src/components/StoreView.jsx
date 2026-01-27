@@ -109,7 +109,7 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
         const mergedTags = [...new Set([...existingTags, ...traitTags])];
 
         const newItem = {
-            id: `${selectedSearchCategory}-${catalogItem.name}-${Date.now()}`,
+            id: catalogItem.id ? `${selectedSearchCategory}-${catalogItem.id}-${Date.now()}` : `${selectedSearchCategory}-${catalogItem.name}-${Date.now()}`,
             name: catalogItem.name,
             description: source.description || source.detail || source.descripcion || catalogItem.preview || 'Sin descripción',
             price: catalogItem.price || 100,
@@ -128,8 +128,11 @@ export const StoreView = ({ equipmentCatalog = { weapons: [], armor: [], abiliti
             tags: mergedTags
         };
 
-        // Verificar si ya existe un item con el mismo nombre
-        const exists = items.find(item => item.name === catalogItem.name);
+        // Verificar si ya existe un item con el mismo nombre o ID original
+        const exists = items.find(item =>
+            item.name === catalogItem.name ||
+            (catalogItem.id && item.id.includes(catalogItem.id))
+        );
         if (!exists) {
             const newItemsList = [...items, newItem];
             setItems(newItemsList);

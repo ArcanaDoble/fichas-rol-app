@@ -36,7 +36,8 @@ const CustomItemManager = () => {
       updated = [...items, item];
     }
     setItems(updated);
-    await setDoc(doc(db, 'customItems', item.type), item);
+    const id = item.id || item.type;
+    await setDoc(doc(db, 'customItems', id), item);
     setShowForm(false);
     setEditing(null);
   };
@@ -45,7 +46,8 @@ const CustomItemManager = () => {
     const item = items[index];
     const updated = items.filter((_, idx) => idx !== index);
     setItems(updated);
-    await deleteDoc(doc(db, 'customItems', item.type));
+    const id = item.id || item.type;
+    await deleteDoc(doc(db, 'customItems', id));
   };
 
   useEffect(() => {
@@ -140,7 +142,7 @@ const CustomItemManager = () => {
       <ul className="space-y-2">
         {filtered.map(({ item, index }) => (
           <li
-            key={item.type}
+            key={item.id || item.type || index}
             className="flex items-center gap-2 p-2 border border-gray-600 rounded"
           >
             {item.icon?.startsWith('data:') || item.icon?.startsWith('http://') || item.icon?.startsWith('https://') ? (

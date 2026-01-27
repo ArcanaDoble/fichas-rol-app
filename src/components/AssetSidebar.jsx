@@ -110,23 +110,23 @@ const AssetSidebar = ({
             // Carpetas por defecto diferentes para jugadores
             const defaultFolders = isMaster
               ? [
-                  {
-                    id: nanoid(),
-                    name: 'Enemigos',
-                    assets: [],
-                    folders: [],
-                    open: true,
-                  },
-                ]
+                {
+                  id: nanoid(),
+                  name: 'Enemigos',
+                  assets: [],
+                  folders: [],
+                  open: true,
+                },
+              ]
               : [
-                  {
-                    id: nanoid(),
-                    name: 'Mis Tokens',
-                    assets: [],
-                    folders: [],
-                    open: true,
-                  },
-                ];
+                {
+                  id: nanoid(),
+                  name: 'Mis Tokens',
+                  assets: [],
+                  folders: [],
+                  open: true,
+                },
+              ];
             setFolders(defaultFolders);
           }
         }
@@ -523,21 +523,21 @@ const AssetSidebar = ({
         >
           <button
             onClick={() => toggleFolder(folder.id)}
-            className="flex-1 text-left flex items-center gap-2 p-1 rounded transition-colors duration-150 hover:bg-[#2a3344]"
+            className="flex-1 text-left flex items-center gap-2 p-2 rounded-sm transition-all hover:bg-[#c8aa6e]/10"
           >
-            {folder.open ? <FiChevronDown /> : <FiChevronRight />}
+            {folder.open ? <FiChevronDown className="text-[#c8aa6e]" /> : <FiChevronRight className="text-[#c8aa6e]/60" />}
             {level === 0 ? (
-              <FiFolder className="text-yellow-400" />
+              <FiFolder className="text-[#c8aa6e]" />
             ) : (
-              <FiFolderPlus className="text-yellow-400 rounded-sm" />
+              <FiFolderPlus className="text-[#c8aa6e]/70" />
             )}
-            <span className="text-gray-200 font-semibold truncate">
+            <span className="text-[#f0e6d2] font-semibold truncate text-sm">
               {folder.name}
             </span>
           </button>
           <button
             onClick={() => removeFolder(folder.id)}
-            className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+            className="text-xs bg-[#0b1120]/50 border border-slate-700/50 hover:border-rose-500/50 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-sm px-2 py-1 transition-all"
           >
             <FiTrash />
           </button>
@@ -555,11 +555,11 @@ const AssetSidebar = ({
               <div className="flex gap-2">
                 <button
                   onClick={() => addFolder(folder.id)}
-                  className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+                  className="text-xs bg-[#0b1120]/50 border border-[#c8aa6e]/20 text-[#c8aa6e]/70 hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e]/40 hover:text-[#c8aa6e] rounded-sm px-2 py-1.5 transition-all"
                 >
                   + Carpeta
                 </button>
-                <label className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150 cursor-pointer">
+                <label className="text-xs bg-[#0b1120]/50 border border-[#c8aa6e]/20 text-[#c8aa6e]/70 hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e]/40 hover:text-[#c8aa6e] rounded-sm px-2 py-1.5 transition-all cursor-pointer">
                   Examinar
                   <input
                     type="file"
@@ -604,24 +604,28 @@ const AssetSidebar = ({
 
   return (
     <div
-      className={`fixed right-0 top-0 h-screen w-[320px] bg-[#1f2937] border-l border-[#2d3748] p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}
+      className={`h-full w-full bg-transparent p-3 flex flex-col overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${className}`}
     >
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setTab('chat')}
-          className={`p-1 rounded flex-1 flex justify-center ${
-            tab === 'chat' ? 'bg-[#374151]' : 'bg-[#1f2937]'
-          }`}
+          className={`p-2 rounded-sm flex-1 flex justify-center items-center gap-2 transition-all font-['Cinzel'] text-xs uppercase tracking-wider ${tab === 'chat'
+            ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] border border-[#c8aa6e]/50 shadow-[0_0_10px_rgba(200,170,110,0.2)]'
+            : 'bg-[#0b1120]/50 text-slate-400 border border-slate-700/50 hover:border-[#c8aa6e]/30 hover:text-[#c8aa6e]/80'
+            }`}
         >
-          <FiMessageCircle />
+          <FiMessageCircle className="w-4 h-4" />
+          <span className="hidden sm:inline">Chat</span>
         </button>
         <button
           onClick={() => setTab('assets')}
-          className={`p-1 rounded flex-1 flex justify-center ${
-            tab === 'assets' ? 'bg-[#374151]' : 'bg-[#1f2937]'
-          }`}
+          className={`p-2 rounded-sm flex-1 flex justify-center items-center gap-2 transition-all font-['Cinzel'] text-xs uppercase tracking-wider ${tab === 'assets'
+            ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] border border-[#c8aa6e]/50 shadow-[0_0_10px_rgba(200,170,110,0.2)]'
+            : 'bg-[#0b1120]/50 text-slate-400 border border-slate-700/50 hover:border-[#c8aa6e]/30 hover:text-[#c8aa6e]/80'
+            }`}
         >
-          <FiFolder />
+          <FiFolder className="w-4 h-4" />
+          <span className="hidden sm:inline">Tokens</span>
         </button>
       </div>
 
@@ -630,9 +634,9 @@ const AssetSidebar = ({
           <div className="mb-3">
             <button
               onClick={() => addFolder()}
-              className="w-full text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+              className="w-full text-xs font-['Cinzel'] uppercase tracking-wider bg-[#0b1120]/50 border border-[#c8aa6e]/30 text-[#c8aa6e]/80 hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] rounded-sm px-3 py-2 transition-all"
             >
-              + Carpeta
+              + Nueva Carpeta
             </button>
           </div>
           <div className="mb-3">
@@ -641,6 +645,8 @@ const AssetSidebar = ({
               value={tokenSearch}
               onChange={(e) => setTokenSearch(e.target.value)}
               clearable
+              variant="premium"
+              size="sm"
             />
           </div>
           {tokenSearch.trim() ? (
@@ -707,11 +713,11 @@ const AssetSidebar = ({
             {messages.map((m) => (
               <div
                 key={m.id}
-                className="bg-gray-700/50 p-2 rounded flex items-start gap-2"
+                className="bg-[#0b1120]/60 border border-slate-700/30 p-3 rounded-sm flex items-start gap-2"
               >
                 <div className="flex-1 mr-2 min-w-0 space-y-1">
                   {m.doorCheck ? (
-                    <div className="text-gray-200">
+                    <div className="text-[#f0e6d2]">
                       <span
                         className="font-semibold mr-1"
                         style={{ color: getPlayerColor(m.author), textShadow: m.author === 'Master' ? '0 0 4px ' + MASTER_COLOR : 'none' }}
@@ -751,7 +757,7 @@ const AssetSidebar = ({
                           const sides = match ? match[1] : null;
                           const img =
                             sides &&
-                            [4, 6, 8, 10, 12, 20, 100].includes(Number(sides))
+                              [4, 6, 8, 10, 12, 20, 100].includes(Number(sides))
                               ? `/dados/calculadora/calculadora-D${sides}.png`
                               : null;
                           return (
@@ -815,15 +821,17 @@ const AssetSidebar = ({
           <div className="flex gap-2">
             <Input
               className="flex-1"
-              placeholder="Mensaje..."
+              placeholder="Escribe un mensaje..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') sendMessage();
               }}
+              variant="premium"
+              size="sm"
             />
             <button
-              className="text-xs bg-[#374151] hover:bg-[#4b5563] rounded px-2 py-1 transition-colors duration-150"
+              className="text-xs font-['Cinzel'] uppercase tracking-wider bg-[#c8aa6e]/20 border border-[#c8aa6e]/40 text-[#c8aa6e] hover:bg-[#c8aa6e]/30 hover:border-[#c8aa6e] rounded-sm px-3 py-2 transition-all"
               onClick={sendMessage}
             >
               Enviar

@@ -38,7 +38,7 @@ import {
   FiCrop,
   FiCheck,
 } from 'react-icons/fi';
-import { User, Crown, Shield, Scroll, ArrowLeft, Lock, Unlock } from 'lucide-react';
+import { User, Crown, Shield, Scroll, ArrowLeft, Lock, Unlock, Map as MapIcon, Skull, Zap, Wrench, Eye, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import Boton from './components/Boton';
@@ -78,9 +78,9 @@ import {
   normalizeHexColor as normalizeGlossaryHexColor,
 } from './utils/color';
 import PageSelector from './components/PageSelector';
+import { nanoid } from 'nanoid';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapV2'));
 const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
-import { nanoid } from 'nanoid';
 import {
   saveTokenSheet,
   ensureSheetDefaults,
@@ -968,6 +968,7 @@ function App() {
   const [armaduras, setArmaduras] = useState([]);
   const [habilidades, setHabilidades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [accesorios, setAccesorios] = useState([]);
   const [playerName, setPlayerName] = useState('');
   const [nameEntered, setNameEntered] = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
@@ -1135,6 +1136,7 @@ function App() {
   const [editingRarity, setEditingRarity] = useState(null);
   const [rarityError, setRarityError] = useState('');
   const [newWeaponData, setNewWeaponData] = useState({
+    id: '',
     nombre: '',
     dano: '',
     alcance: '',
@@ -1148,9 +1150,10 @@ function App() {
     tecnologia: '',
     rareza: '',
   });
-  const [editingWeapon, setEditingWeapon] = useState(null);
+  const [editingWeapon, setEditingWeapon] = useState(null); // Now stores the ID instead of the name
   const [newWeaponError, setNewWeaponError] = useState('');
   const [newArmorData, setNewArmorData] = useState({
+    id: '',
     nombre: '',
     defensa: '',
     cargaFisica: '',
@@ -1161,10 +1164,27 @@ function App() {
     tecnologia: '',
     rareza: '',
   });
-  const [editingArmor, setEditingArmor] = useState(null);
+  const [editingArmor, setEditingArmor] = useState(null); // Now stores the ID instead of the name
   const [newArmorError, setNewArmorError] = useState('');
+
+  const [newAccessoryData, setNewAccessoryData] = useState({
+    id: '',
+    nombre: '',
+    defensa: '',
+    cargaFisica: '',
+    cargaMental: '',
+    rasgos: '',
+    descripcion: '',
+    valor: '',
+    tecnologia: '',
+    rareza: '',
+  });
+  const [editingAccessory, setEditingAccessory] = useState(null);
+  const [newAccessoryError, setNewAccessoryError] = useState('');
+
   const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [newAbility, setNewAbility] = useState({
+    id: '',
     nombre: '',
     alcance: '',
     consumo: '',
@@ -1175,7 +1195,7 @@ function App() {
     descripcion: '',
     rareza: '',
   });
-  const [editingAbility, setEditingAbility] = useState(null);
+  const [editingAbility, setEditingAbility] = useState(null); // Now stores the ID instead of the name
   const [newAbilityError, setNewAbilityError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingInfoId, setEditingInfoId] = useState(null);
@@ -2019,7 +2039,7 @@ function App() {
   const [gridColor, setGridColor] = useState('#ffffff');
   const [gridOpacity, setGridOpacity] = useState(0.2);
   const [enableDarkness, setEnableDarkness] = useState(true);
-  const [showVisionRanges, setShowVisionRanges] = useState(true);
+  const [showVisionRanges, setShowVisionRanges] = useState(false);
 
   const diffTokens = (prev, next) => {
     const prevMap = new Map(
@@ -2908,6 +2928,7 @@ function App() {
               t.url !== pt.url || t.hp !== pt.hp || t.hpMax !== pt.hpMax ||
               t.tokenSheetId !== pt.tokenSheetId || t.isLocked !== pt.isLocked;
           });
+          const toDelete = prevTokens.filter(pt => !tokens.some(t => t.id === pt.id));
 
           if (changedTokens.length === 0 && toDelete.length === 0) {
             console.log('No hay cambios reales en los tokens, saltando guardado.');
@@ -3584,18 +3605,21 @@ function App() {
     if (fetchArmasError) return;
     setLoading(true);
     try {
-      let datos;
+      let sheetItems = [];
       try {
         const rows = await fetchSheetData(sheetId, 'Lista_Armas');
         if (rows && rows.length > 0) {
-          datos = rows.map((obj) => {
+          sheetItems = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
                 s.replace(/[[\]]/g, '').trim()
               )
               : [];
+            const nombre = obj.NOMBRE || '';
+            const id = `sheet-weapon-${normalizeName(nombre)}`;
             return {
-              nombre: obj.NOMBRE,
+              id,
+              nombre,
               dano: obj.DAÑO,
               alcance: obj.ALCANCE,
               consumo: obj.CONSUMO,
@@ -3625,26 +3649,49 @@ function App() {
             };
           });
         } else {
-          datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+          sheetItems = datosPruebaArmas.map((d) => ({
+            ...d,
+            id: `sheet-weapon-${normalizeName(d.nombre)}`,
+            fuente: 'sheet'
+          }));
         }
       } catch (err) {
-        datos = datosPruebaArmas.map((d) => ({ ...d, fuente: 'sheet' }));
+        sheetItems = datosPruebaArmas.map((d) => ({
+          ...d,
+          id: `sheet-weapon-${normalizeName(d.nombre)}`,
+          fuente: 'sheet'
+        }));
         setFetchArmasError(true);
       }
-      setSheetWeaponNames(new Set(datos.map((d) => normalizeName(d.nombre))));
+
+      setSheetWeaponNames(new Set(sheetItems.map((d) => normalizeName(d.nombre))));
+
+      let finalDatos = [];
       try {
         const snap = await getDocs(collection(db, 'weapons'));
-        const custom = snap.docs.map((d) => ({
-          ...d.data(),
-          rareza: (d.data().rareza || '').trim(),
-          fuente: 'custom',
-        }));
-        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
-        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
-        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
-      } catch (e) { }
+        const firebaseItems = snap.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: data.id || doc.id, // Use existing id field or the document ID
+            rareza: (data.rareza || '').trim(),
+            fuente: 'custom',
+          };
+        });
+
+        const itemMap = new Map();
+        // Add sheet items first
+        sheetItems.forEach(item => itemMap.set(item.id, item));
+        // Overwrite with firebase items (including deletions)
+        firebaseItems.forEach(item => itemMap.set(item.id, item));
+
+        finalDatos = Array.from(itemMap.values()).filter(item => !item.deleted);
+      } catch (e) {
+        finalDatos = sheetItems;
+      }
+
       setArmas(
-        datos.map((item) => ({
+        finalDatos.map((item) => ({
           ...item,
           rareza: (item.rareza || '').trim(),
         }))
@@ -3664,18 +3711,21 @@ function App() {
     if (fetchArmadurasError) return;
     setLoading(true);
     try {
-      let datos;
+      let sheetItems = [];
       try {
         const rows = await fetchSheetData(sheetId, 'Lista_Armaduras');
         if (rows && rows.length > 0) {
-          datos = rows.map((obj) => {
+          sheetItems = rows.map((obj) => {
             const rasgos = obj.RASGOS
               ? (obj.RASGOS.match(/\[[^\]]+\]/g) || []).map((s) =>
                 s.replace(/[[\]]/g, '').trim()
               )
               : [];
+            const nombre = obj.NOMBRE || '';
+            const id = `sheet-armor-${normalizeName(nombre)}`;
             return {
-              nombre: obj.NOMBRE,
+              id,
+              nombre,
               defensa: obj.ARMADURA,
               cuerpo: obj.CUERPO,
               mente: obj.MENTE,
@@ -3702,26 +3752,49 @@ function App() {
             };
           });
         } else {
-          datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+          sheetItems = datosPruebaArmaduras.map((d) => ({
+            ...d,
+            id: `sheet-armor-${normalizeName(d.nombre)}`,
+            fuente: 'sheet'
+          }));
         }
       } catch (err) {
-        datos = datosPruebaArmaduras.map((d) => ({ ...d, fuente: 'sheet' }));
+        sheetItems = datosPruebaArmaduras.map((d) => ({
+          ...d,
+          id: `sheet-armor-${normalizeName(d.nombre)}`,
+          fuente: 'sheet'
+        }));
         setFetchArmadurasError(true);
       }
-      setSheetArmorNames(new Set(datos.map((d) => normalizeName(d.nombre))));
+
+      setSheetArmorNames(new Set(sheetItems.map((d) => normalizeName(d.nombre))));
+
+      let finalDatos = [];
       try {
         const snap = await getDocs(collection(db, 'armors'));
-        const custom = snap.docs.map((d) => ({
-          ...d.data(),
-          rareza: (d.data().rareza || '').trim(),
-          fuente: 'custom',
-        }));
-        const customNames = new Set(custom.map(c => normalizeName(c.nombre)));
-        const datosSheet = datos.filter(d => !customNames.has(normalizeName(d.nombre)));
-        datos = [...datosSheet, ...custom].filter(d => !d.deleted);
-      } catch (e) { }
+        const firebaseItems = snap.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: data.id || doc.id, // Use existing id field or doc ID
+            rareza: (data.rareza || '').trim(),
+            fuente: 'custom',
+          };
+        });
+
+        const itemMap = new Map();
+        // Add sheet entries first
+        sheetItems.forEach(item => itemMap.set(item.id, item));
+        // Overwrite with Firebase entries
+        firebaseItems.forEach(item => itemMap.set(item.id, item));
+
+        finalDatos = Array.from(itemMap.values()).filter(item => !item.deleted);
+      } catch (e) {
+        finalDatos = sheetItems;
+      }
+
       setArmaduras(
-        datos.map((item) => ({
+        finalDatos.map((item) => ({
           ...item,
           rareza: (item.rareza || '').trim(),
         }))
@@ -3744,6 +3817,7 @@ function App() {
         const data = d.data() || {};
         return {
           ...data,
+          id: data.id || d.id,
           rareza: (data.rareza || '').trim(),
         };
       });
@@ -3757,6 +3831,33 @@ function App() {
   useEffect(() => {
     fetchHabilidades();
   }, [fetchHabilidades]);
+
+  // ───────────────────────────────────────────────────────────
+  // FETCH ACCESORIOS
+  // ───────────────────────────────────────────────────────────
+  const fetchAccesorios = useCallback(async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'accessories'));
+      const datos = snap.docs.map((d) => {
+        const data = d.data() || {};
+        return {
+          ...data,
+          id: data.id || d.id,
+          rareza: (data.rareza || '').trim(),
+        };
+      });
+      setAccesorios(datos);
+    } catch (e) {
+      console.error("Error fetching accessories", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccesorios();
+  }, [fetchAccesorios]);
   // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -4145,21 +4246,16 @@ function App() {
     }
   };
   const agregarArma = async () => {
-    const { nombre } = newWeaponData;
+    const { id, nombre } = newWeaponData;
     if (!nombre.trim()) {
       setNewWeaponError('Nombre requerido');
       return;
     }
     try {
-      if (editingWeapon && editingWeapon !== nombre) {
-        if (sheetWeaponNames.has(normalizeName(editingWeapon))) {
-          await setDoc(doc(db, 'weapons', editingWeapon), { nombre: editingWeapon, deleted: true, fuente: 'custom' });
-        } else {
-          await deleteDoc(doc(db, 'weapons', editingWeapon));
-        }
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newWeaponData,
+        id: finalId,
         rareza: (newWeaponData.rareza || '').trim(),
       });
 
@@ -4170,9 +4266,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'weapons', nombre), dataToSave);
+      await setDoc(doc(db, 'weapons', finalId), dataToSave);
       setEditingWeapon(null);
       setNewWeaponData({
+        id: '',
         nombre: '',
         dano: '',
         alcance: '',
@@ -4200,18 +4297,30 @@ function App() {
         : weapon.rasgos || '',
       rareza: weapon.rareza || '',
     });
-    setEditingWeapon(weapon.nombre);
+    setEditingWeapon(weapon.id);
   };
-  const deleteWeapon = async (name) => {
+  const deleteWeapon = async (id) => {
     try {
-      if (sheetWeaponNames.has(normalizeName(name))) {
-        await setDoc(doc(db, 'weapons', name), { nombre: name, deleted: true, fuente: 'custom' });
+      // Find the item to check its source
+      const weapon = armas.find(a => a.id === id);
+      if (!weapon) return;
+
+      if (weapon.fuente === 'sheet') {
+        // Mark as deleted in Firestore to override sheet
+        await setDoc(doc(db, 'weapons', id), {
+          ...weapon,
+          deleted: true,
+          fuente: 'custom'
+        });
       } else {
-        await deleteDoc(doc(db, 'weapons', name));
+        // Truly delete custom items
+        await deleteDoc(doc(db, 'weapons', id));
       }
-      if (editingWeapon === name) {
+
+      if (editingWeapon === id) {
         setEditingWeapon(null);
         setNewWeaponData({
+          id: '',
           nombre: '',
           dano: '',
           alcance: '',
@@ -4230,21 +4339,16 @@ function App() {
     } catch (e) { }
   };
   const agregarArmadura = async () => {
-    const { nombre } = newArmorData;
+    const { id, nombre } = newArmorData;
     if (!nombre.trim()) {
       setNewArmorError('Nombre requerido');
       return;
     }
     try {
-      if (editingArmor && editingArmor !== nombre) {
-        if (sheetArmorNames.has(normalizeName(editingArmor))) {
-          await setDoc(doc(db, 'armors', editingArmor), { nombre: editingArmor, deleted: true, fuente: 'custom' });
-        } else {
-          await deleteDoc(doc(db, 'armors', editingArmor));
-        }
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newArmorData,
+        id: finalId,
         rareza: (newArmorData.rareza || '').trim(),
       });
 
@@ -4255,9 +4359,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'armors', nombre), dataToSave);
+      await setDoc(doc(db, 'armors', finalId), dataToSave);
       setEditingArmor(null);
       setNewArmorData({
+        id: '',
         nombre: '',
         defensa: '',
         cargaFisica: '',
@@ -4282,18 +4387,27 @@ function App() {
         : armor.rasgos || '',
       rareza: armor.rareza || '',
     });
-    setEditingArmor(armor.nombre);
+    setEditingArmor(armor.id);
   };
-  const deleteArmor = async (name) => {
+  const deleteArmor = async (id) => {
     try {
-      if (sheetArmorNames.has(normalizeName(name))) {
-        await setDoc(doc(db, 'armors', name), { nombre: name, deleted: true, fuente: 'custom' });
+      const armor = armaduras.find(a => a.id === id);
+      if (!armor) return;
+
+      if (armor.fuente === 'sheet') {
+        await setDoc(doc(db, 'armors', id), {
+          ...armor,
+          deleted: true,
+          fuente: 'custom'
+        });
       } else {
-        await deleteDoc(doc(db, 'armors', name));
+        await deleteDoc(doc(db, 'armors', id));
       }
-      if (editingArmor === name) {
+
+      if (editingArmor === id) {
         setEditingArmor(null);
         setNewArmorData({
+          id: '',
           nombre: '',
           defensa: '',
           cargaFisica: '',
@@ -4308,18 +4422,95 @@ function App() {
       fetchArmaduras();
     } catch (e) { }
   };
+  const agregarAccesorio = async () => {
+    const { id, nombre } = newAccessoryData;
+    if (!nombre.trim()) {
+      setNewAccessoryError('Nombre requerido');
+      return;
+    }
+    try {
+      const finalId = id || nanoid();
+      const iconReady = applyIconConversions({
+        ...newAccessoryData,
+        id: finalId,
+        rareza: (newAccessoryData.rareza || '').trim(),
+      });
+
+      const dataToSave = {
+        ...iconReady,
+        rasgos: (newAccessoryData.rasgos || '')
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean),
+        fuente: 'custom',
+      };
+
+      await setDoc(doc(db, 'accessories', finalId), dataToSave);
+      setEditingAccessory(null);
+      setNewAccessoryData({
+        id: '',
+        nombre: '',
+        defensa: '',
+        cargaFisica: '',
+        cargaMental: '',
+        rasgos: '',
+        descripcion: '',
+        valor: '',
+        tecnologia: '',
+        rareza: '',
+      });
+      setNewAccessoryError('');
+      fetchAccesorios();
+    } catch (e) {
+      console.error(e);
+      setNewAccessoryError('Error al guardar');
+    }
+  };
+
+  const startEditAccesorio = (acc) => {
+    setNewAccessoryData({
+      ...acc,
+      rasgos: Array.isArray(acc.rasgos)
+        ? acc.rasgos.join(', ')
+        : acc.rasgos || '',
+      rareza: acc.rareza || '',
+    });
+    setEditingAccessory(acc.id);
+  };
+
+  const deleteAccesorio = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'accessories', id));
+      if (editingAccessory === id) {
+        setEditingAccessory(null);
+        setNewAccessoryData({
+          id: '',
+          nombre: '',
+          defensa: '',
+          cargaFisica: '',
+          cargaMental: '',
+          rasgos: '',
+          descripcion: '',
+          valor: '',
+          tecnologia: '',
+          rareza: '',
+        });
+      }
+      fetchAccesorios();
+    } catch (e) { }
+  };
+
   const agregarHabilidad = async () => {
-    const { nombre } = newAbility;
+    const { id, nombre } = newAbility;
     if (!nombre.trim()) {
       setNewAbilityError('Nombre requerido');
       return;
     }
     try {
-      if (editingAbility && editingAbility !== nombre) {
-        await deleteDoc(doc(db, 'abilities', editingAbility));
-      }
+      const finalId = id || nanoid();
       const iconReady = applyIconConversions({
         ...newAbility,
+        id: finalId,
         rareza: (newAbility.rareza || '').trim(),
       });
 
@@ -4330,9 +4521,10 @@ function App() {
           .map((r) => r.trim())
           .filter(Boolean),
       };
-      await setDoc(doc(db, 'abilities', nombre), dataToSave);
+      await setDoc(doc(db, 'abilities', finalId), dataToSave);
       setEditingAbility(null);
       setNewAbility({
+        id: '',
         nombre: '',
         alcance: '',
         consumo: '',
@@ -4357,20 +4549,22 @@ function App() {
         : ability.rasgos || '',
       rareza: ability.rareza || '',
     });
-    setEditingAbility(ability.nombre);
+    setEditingAbility(ability.id);
   };
-  const deleteAbility = async (name) => {
+  const deleteAbility = async (id) => {
     try {
-      await deleteDoc(doc(db, 'abilities', name));
-      if (editingAbility === name) {
+      await deleteDoc(doc(db, 'abilities', id));
+      if (editingAbility === id) {
         setEditingAbility(null);
         setNewAbility({
+          id: '',
           nombre: '',
           alcance: '',
           consumo: '',
           cuerpo: '',
           mente: '',
           poder: '',
+          rasgos: '',
           descripcion: '',
           rareza: '',
         });
@@ -5728,131 +5922,201 @@ function App() {
     };
 
     return withTooltips(
-      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
-        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-          <div className="flex flex-wrap gap-2">
+      <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
+        </div>
+
+        {/* Premium Header */}
+        <div className="relative z-10 sticky top-0 h-16 bg-[#0b1120]/95 border-b border-[#c8aa6e]/20 flex items-center justify-between px-6 shadow-lg backdrop-blur-sm flex-shrink-0">
+          <h1 className="text-2xl font-bold font-['Cinzel'] text-[#f0e6d2] tracking-wide flex items-center gap-3 drop-shadow-md">
+            <MapIcon className="w-8 h-8 text-[#c8aa6e] filter drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+            Mapa de Batalla
+          </h1>
+          <div className="flex items-center gap-2">
             <Boton
               size="sm"
+              color="slate"
               onClick={() => setShowPlayerBattleMap(false)}
-              className="bg-gray-700 hover:bg-gray-600"
+              className="flex items-center gap-2"
             >
-              ← Volver a Ficha
+              <ArrowLeft size={16} />
+              Volver a Ficha
             </Boton>
             <Boton
               size="sm"
-              color="green"
+              color="purple"
               onClick={() => handleLaunchSpeedSystem(playerName)}
+              className="flex items-center gap-2"
             >
-              ⚡ Sistema de Velocidad
+              <Zap size={16} />
+              Sistema de Velocidad
             </Boton>
           </div>
         </div>
-        <div className="flex-1 overflow-hidden flex">
-          <div className="flex-1 overflow-hidden">
-            <MapCanvas
-              userType="player"
-              playerName={playerName}
-              playerViewMode={true}
-              simulatedPlayer={playerName}
-              tokens={effectivePage?.tokens || []}
-              onTokensChange={(updater) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  const prev = updatedPages[effectivePageIndex].tokens || [];
-                  const next =
-                    typeof updater === 'function' ? updater(prev) : updater;
-                  const changed = diffTokens(prev, next);
-                  changed.forEach((tk) => {
-                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                    const resolvedUpdatedAt =
-                      normalizedUpdatedAt ??
-                      (typeof tk.updatedAt === 'number'
-                        ? tk.updatedAt
-                        : Timestamp.now().toMillis());
-                    pendingTokenChangesRef.current.set(String(tk.id), {
-                      ...tk,
-                      updatedAt: resolvedUpdatedAt,
+
+        {/* Main Content Area */}
+        <div className="relative z-10 flex-1 flex overflow-hidden p-4 gap-4">
+          {/* Map Card */}
+          <div
+            className="flex-1 flex flex-col min-w-0 rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-300"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <div className="flex-1 relative bg-black/30 overflow-hidden">
+              <MapCanvas
+                userType="player"
+                playerName={playerName}
+                playerViewMode={true}
+                simulatedPlayer={playerName}
+                tokens={effectivePage?.tokens || []}
+                onTokensChange={(updater) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    const prev = updatedPages[effectivePageIndex].tokens || [];
+                    const next =
+                      typeof updater === 'function' ? updater(prev) : updater;
+                    const changed = diffTokens(prev, next);
+                    changed.forEach((tk) => {
+                      const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
+                      const resolvedUpdatedAt =
+                        normalizedUpdatedAt ??
+                        (typeof tk.updatedAt === 'number'
+                          ? tk.updatedAt
+                          : Timestamp.now().toMillis());
+                      pendingTokenChangesRef.current.set(String(tk.id), {
+                        ...tk,
+                        updatedAt: resolvedUpdatedAt,
+                      });
                     });
-                  });
-                  updatedPages[effectivePageIndex].tokens = next;
-                  setPages(updatedPages);
+                    updatedPages[effectivePageIndex].tokens = next;
+                    setPages(updatedPages);
+
+                    // Sincronizar cambios a Firebase para jugadores (movimiento, borrado, etc.)
+                    const pageId = playerVisiblePageId;
+                    if (pageId && changed.length > 0) {
+                      const tokensRef = collection(db, 'pages', pageId, 'tokens');
+                      const author = playerName || 'Jugador';
+                      changed.forEach((tk) => {
+                        const tokenId = String(tk.id);
+                        // Para saber si el jugador tenía control sobre el token borrado, lo buscamos en 'prev'
+                        const originalToken = prev.find(t => String(t.id) === tokenId);
+                        const isControlled = originalToken && originalToken.controlledBy === playerName;
+                        const isMaster = userType !== 'player';
+
+                        if (tk._deleted) {
+                          if (isMaster || isControlled) {
+                            deleteDoc(doc(tokensRef, tokenId)).catch(err => console.error('Error eliminando token:', err));
+                          }
+                        } else {
+                          // Solo permitir que el jugador actualice tokens que controla
+                          if (isMaster || tk.controlledBy === playerName) {
+                            const payload = {
+                              ...tk,
+                              updatedAt: serverTimestamp(),
+                              updatedBy: author,
+                            };
+                            setDoc(doc(tokensRef, tokenId), payload).catch(err => console.error('Error actualizando token:', err));
+                          }
+                        }
+                      });
+                    }
+                  }
+                }}
+                lines={effectivePage?.lines || []}
+                onLinesChange={(newLines) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].lines = newLines;
+                    setPages(updatedPages);
+                  }
+                }}
+                walls={effectivePage?.walls || []}
+                onWallsChange={(newWalls) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].walls = newWalls;
+                    setPages(updatedPages);
+                  }
+                }}
+                texts={effectivePage?.texts || []}
+                onTextsChange={(newTexts) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].texts = newTexts;
+                    setPages(updatedPages);
+                  }
+                }}
+                tiles={effectivePage?.tiles || []}
+                onTilesChange={(newTiles) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].tiles = newTiles;
+                    setPages(updatedPages);
+                  }
+                }}
+                ambientLights={effectivePage?.ambientLights || []}
+                onAmbientLightsChange={(newLights) => {
+                  const updatedPages = [...pages];
+                  if (updatedPages[effectivePageIndex]) {
+                    updatedPages[effectivePageIndex].ambientLights = newLights;
+                    setPages(updatedPages);
+                  }
+                }}
+                backgroundImage={effectivePage?.background}
+                imageSize={effectivePage?.imageSize}
+                gridCells={effectivePage?.gridCells}
+                gridSize={effectivePage?.gridSize || 50}
+                gridOffsetX={effectivePage?.gridOffsetX || 0}
+                gridOffsetY={effectivePage?.gridOffsetY || 0}
+                showGrid={
+                  effectivePage?.showGrid !== undefined
+                    ? effectivePage.showGrid
+                    : true
                 }
-              }}
-              lines={effectivePage?.lines || []}
-              onLinesChange={(newLines) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].lines = newLines;
-                  setPages(updatedPages);
+                gridColor={effectivePage?.gridColor || '#ffffff'}
+                gridOpacity={
+                  effectivePage?.gridOpacity !== undefined
+                    ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
+                    : 0.2
                 }
-              }}
-              walls={effectivePage?.walls || []}
-              onWallsChange={(newWalls) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].walls = newWalls;
-                  setPages(updatedPages);
-                }
-              }}
-              texts={effectivePage?.texts || []}
-              onTextsChange={(newTexts) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].texts = newTexts;
-                  setPages(updatedPages);
-                }
-              }}
-              tiles={effectivePage?.tiles || []}
-              onTilesChange={(newTiles) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].tiles = newTiles;
-                  setPages(updatedPages);
-                }
-              }}
-              ambientLights={effectivePage?.ambientLights || []}
-              onAmbientLightsChange={(newLights) => {
-                const updatedPages = [...pages];
-                if (updatedPages[effectivePageIndex]) {
-                  updatedPages[effectivePageIndex].ambientLights = newLights;
-                  setPages(updatedPages);
-                }
-              }}
-              backgroundImage={effectivePage?.background}
-              imageSize={effectivePage?.imageSize}
-              gridCells={effectivePage?.gridCells}
-              gridSize={effectivePage?.gridSize || 50}
-              gridOffsetX={effectivePage?.gridOffsetX || 0}
-              gridOffsetY={effectivePage?.gridOffsetY || 0}
-              showGrid={
-                effectivePage?.showGrid !== undefined
-                  ? effectivePage.showGrid
-                  : true
-              }
-              gridColor={effectivePage?.gridColor || '#ffffff'}
-              gridOpacity={
-                effectivePage?.gridOpacity !== undefined
-                  ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
-                  : 0.2
-              }
-              enableDarkness={effectivePage?.enableDarkness || false}
-              darknessOpacity={effectivePage?.darknessOpacity || 0.8}
-              shopConfig={effectivePage?.shopConfig}
-              onShopConfigChange={handlePlayerShopConfigChange}
-              activeLayer="fichas"
-              enemies={enemies}
-              players={[playerName]}
-              armas={armas}
-              armaduras={armaduras}
-              habilidades={habilidades}
-              highlightText={highlightText}
-              rarityColorMap={rarityColorMap}
-              isPlayerView={true}
-              pageId={playerVisiblePageId}
+                enableDarkness={effectivePage?.enableDarkness || false}
+                darknessOpacity={effectivePage?.darknessOpacity || 0.8}
+                shopConfig={effectivePage?.shopConfig}
+                onShopConfigChange={handlePlayerShopConfigChange}
+                activeLayer="fichas"
+                enemies={enemies}
+                players={[playerName]}
+                armas={armas}
+                armaduras={armaduras}
+                habilidades={habilidades}
+                highlightText={highlightText}
+                rarityColorMap={rarityColorMap}
+                isPlayerView={true}
+                pageId={playerVisiblePageId}
+              />
+            </div>
+          </div>
+
+          <div
+            className="w-80 flex-shrink-0 flex flex-col rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <ChatPanel
+              playerName={playerName}
+              isMaster={false}
+              className="!w-full !h-full bg-transparent p-0"
             />
           </div>
-          <ChatPanel playerName={playerName} isMaster={false} />
         </div>
       </div>
     );
@@ -8580,152 +8844,196 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return withTooltips(
-      <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 pl-16 overflow-hidden">
-        <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4 mr-80">
-          <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-          <div className="flex flex-wrap gap-2">
-            <Boton
-              size="sm"
+      <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
+        </div>
+
+        {/* Premium Header */}
+        <div className="relative z-10 sticky top-0 h-16 bg-[#0b1120]/95 border-b border-[#c8aa6e]/20 flex items-center justify-between px-6 shadow-lg backdrop-blur-sm flex-shrink-0">
+          <h1 className="text-2xl font-bold font-['Cinzel'] text-[#f0e6d2] tracking-wide flex items-center gap-3 drop-shadow-md">
+            <MapIcon className="w-8 h-8 text-[#c8aa6e] filter drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+            Mapa de Batalla
+          </h1>
+          <div className="flex items-center gap-3">
+            <button
               onClick={() => setChosenView(null)}
-              className="bg-gray-700 hover:bg-gray-600"
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 text-[#c8aa6e] font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 hover:shadow-[0_0_15px_rgba(200,170,110,0.3)] "
             >
-              ← Menú Máster
-            </Boton>
-            <Boton
-              size="sm"
-              color="red"
+              <span className="relative z-10 flex items-center gap-2">
+                <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5" />
+                Menú Máster
+              </span>
+            </button>
+            <div className="h-6 w-px bg-[#c8aa6e]/20 mx-1"></div>
+            <button
               onClick={() => setChosenView('enemies')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-rose-500/30 bg-rose-500/5 text-rose-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-rose-400 hover:bg-rose-500/10 hover:shadow-[0_0_15px_rgba(244,63,94,0.25)] hover:text-rose-300 "
             >
-              Fichas de Enemigos
-            </Boton>
-            <Boton
-              size="sm"
-              color="blue"
+              <span className="relative z-10 flex items-center gap-2">
+                <Skull size={14} />
+                Enemigos
+              </span>
+            </button>
+            <button
               onClick={() => setChosenView('initiative')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-sky-500/30 bg-sky-500/5 text-sky-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-sky-400 hover:bg-sky-500/10 hover:shadow-[0_0_15px_rgba(14,165,233,0.25)] hover:text-sky-300 "
             >
-              Sistema de Velocidad
-            </Boton>
-            <Boton
-              size="sm"
-              color="purple"
+              <span className="relative z-10 flex items-center gap-2">
+                <Zap size={14} />
+                Velocidad
+              </span>
+            </button>
+            <button
               onClick={() => setChosenView('tools')}
+              className="group relative px-4 py-2 overflow-hidden rounded-sm border border-purple-500/30 bg-purple-500/5 text-purple-400 font-['Cinzel'] font-bold text-xs uppercase tracking-[0.15em] transition-all hover:border-purple-400 hover:bg-purple-500/10 hover:shadow-[0_0_15px_rgba(168,85,247,0.25)] hover:text-purple-300 "
             >
-              Herramientas
-            </Boton>
-            <label className="flex items-center gap-1 text-sm ml-2">
-              <input
-                type="checkbox"
-                checked={showVisionRanges}
-                onChange={(e) => setShowVisionRanges(e.target.checked)}
-              />
-              Rangos de visión
-            </label>
+              <span className="relative z-10 flex items-center gap-2">
+                <Wrench size={14} />
+                Herramientas
+              </span>
+            </button>
           </div>
         </div>
-        <div className="mb-4 mr-80">
-          <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-semibold tracking-wide rounded-lg bg-gradient-to-b from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 focus:ring-gray-500 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-95 transform shadow-md hover:shadow-lg cursor-pointer text-white">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
-            Subir Mapa
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleBackgroundUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-          </label>
-        </div>
-        <div className="mr-80">
-          <PageSelector
-            pages={pages}
-            current={currentPage}
-            onSelect={setCurrentPage}
-            onAdd={addPage}
-            onUpdate={updatePage}
-            onDelete={deletePage}
-            playerVisiblePageId={playerVisiblePageId}
-            onPlayerVisiblePageChange={updatePlayerVisiblePage}
-          />
-        </div>
-        <div className="relative pt-14 flex-1 overflow-hidden">
-          <div className="h-full mr-80">
-            <MapCanvas
-              backgroundImage={
-                canvasBackground || 'https://via.placeholder.com/800x600'
-              }
-              gridSize={gridSize}
-              gridCells={gridCells}
-              gridOffsetX={gridOffsetX}
-              gridOffsetY={gridOffsetY}
-              showGrid={showGrid}
-              gridColor={gridColor}
-              gridOpacity={gridOpacity}
-              shopConfig={canvasShopConfig}
-              tokens={canvasTokens}
-              onTokensChange={(updater) => {
-                setCanvasTokens((prev) => {
-                  const next =
-                    typeof updater === 'function' ? updater(prev) : updater;
-                  const changed = diffTokens(prev, next);
-                  changed.forEach((tk) => {
-                    const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                    const resolvedUpdatedAt =
-                      normalizedUpdatedAt ??
-                      (typeof tk.updatedAt === 'number'
-                        ? tk.updatedAt
-                        : Timestamp.now().toMillis());
-                    pendingTokenChangesRef.current.set(String(tk.id), {
-                      ...tk,
-                      updatedAt: resolvedUpdatedAt,
+
+        {/* Main Content Area */}
+        <div className="relative z-10 flex-1 flex overflow-hidden p-4 gap-4">
+          {/* Map Card */}
+          <div
+            className="flex-1 flex flex-col min-w-0 rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-300"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            {/* Map Toolbar */}
+            <div className="p-3 border-b border-amber-500/10 bg-[#0b1120]/40 flex flex-col xl:flex-row xl:items-center gap-4 shadow-sm z-20">
+              <div className="flex-1 min-w-0">
+                <PageSelector
+                  pages={pages}
+                  current={currentPage}
+                  onSelect={setCurrentPage}
+                  onAdd={addPage}
+                  onUpdate={updatePage}
+                  onDelete={deletePage}
+                  playerVisiblePageId={playerVisiblePageId}
+                  onPlayerVisiblePageChange={updatePlayerVisiblePage}
+                />
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-300 bg-[#0f172a]/60 p-2 rounded-xl border border-slate-700/50">
+                <label className="flex items-center gap-2 cursor-pointer hover:text-amber-200 transition-colors select-none">
+                  <input
+                    type="checkbox"
+                    checked={showVisionRanges}
+                    onChange={(e) => setShowVisionRanges(e.target.checked)}
+                    className="rounded border-gray-600 text-amber-600 focus:ring-amber-500/50 bg-gray-800"
+                  />
+                  <Eye size={16} className="text-amber-500/80" />
+                  <span>Rangos de visión</span>
+                </label>
+                <div className="w-px h-5 bg-slate-700"></div>
+                <label className="relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg bg-gradient-to-r from-amber-700/80 to-amber-600/80 hover:from-amber-600 hover:to-amber-500 border border-amber-500/30 shadow-lg cursor-pointer text-white transition-all hover:shadow-amber-900/40 active:scale-95">
+                  <Upload size={14} />
+                  Subir Mapa
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Map Canvas Container */}
+            <div className="flex-1 relative bg-black/30 overflow-hidden">
+              <MapCanvas
+                backgroundImage={
+                  canvasBackground || 'https://via.placeholder.com/800x600'
+                }
+                gridSize={gridSize}
+                gridCells={gridCells}
+                gridOffsetX={gridOffsetX}
+                gridOffsetY={gridOffsetY}
+                showGrid={showGrid}
+                gridColor={gridColor}
+                gridOpacity={gridOpacity}
+                shopConfig={canvasShopConfig}
+                tokens={canvasTokens}
+                onTokensChange={(updater) => {
+                  setCanvasTokens((prev) => {
+                    const next =
+                      typeof updater === 'function' ? updater(prev) : updater;
+                    const changed = diffTokens(prev, next);
+                    changed.forEach((tk) => {
+                      const normalizedUpdatedAt = normalizeTokenUpdatedAt(
+                        tk.updatedAt
+                      );
+                      const resolvedUpdatedAt =
+                        normalizedUpdatedAt ??
+                        (typeof tk.updatedAt === 'number'
+                          ? tk.updatedAt
+                          : Timestamp.now().toMillis());
+                      pendingTokenChangesRef.current.set(String(tk.id), {
+                        ...tk,
+                        updatedAt: resolvedUpdatedAt,
+                      });
                     });
+                    return next;
                   });
-                  return next;
-                });
-                isRemoteTokenUpdate.current = false;
-                isLocalTokenEdit.current = true;
-              }}
-              texts={canvasTexts}
-              onTextsChange={setCanvasTexts}
-              lines={canvasLines}
-              onLinesChange={setCanvasLines}
-              walls={canvasWalls}
-              onWallsChange={setCanvasWalls}
-              tiles={canvasTiles}
-              onTilesChange={setCanvasTiles}
-              ambientLights={canvasAmbientLights}
-              onAmbientLightsChange={setCanvasAmbientLights}
-              onShopConfigChange={handleShopConfigChange}
-              enemies={enemies}
-              onEnemyUpdate={updateEnemyFromToken}
-              players={existingPlayers}
-              armas={armas}
-              armaduras={armaduras}
-              habilidades={habilidades}
-              highlightText={highlightText}
-              rarityColorMap={rarityColorMap}
-              userType={userType}
+                  isRemoteTokenUpdate.current = false;
+                  isLocalTokenEdit.current = true;
+                }}
+                texts={canvasTexts}
+                onTextsChange={setCanvasTexts}
+                lines={canvasLines}
+                onLinesChange={setCanvasLines}
+                walls={canvasWalls}
+                onWallsChange={setCanvasWalls}
+                tiles={canvasTiles}
+                onTilesChange={setCanvasTiles}
+                ambientLights={canvasAmbientLights}
+                onAmbientLightsChange={setCanvasAmbientLights}
+                onShopConfigChange={handleShopConfigChange}
+                enemies={enemies}
+                onEnemyUpdate={updateEnemyFromToken}
+                players={existingPlayers}
+                armas={armas}
+                armaduras={armaduras}
+                habilidades={habilidades}
+                highlightText={highlightText}
+                rarityColorMap={rarityColorMap}
+                userType={userType}
+                playerName={playerName}
+                activeLayer={activeLayer}
+                onLayerChange={setActiveLayer}
+                enableDarkness={enableDarkness}
+                darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
+                showVisionPolygons={showVisionRanges}
+                pageId={pages[currentPage]?.id}
+                onGridSettingsChange={handleGridSettingsChange}
+              />
+            </div>
+          </div>
+
+          {/* Sidebar Card */}
+          <div
+            className="w-80 flex-shrink-0 flex flex-col rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <AssetSidebar
+              isMaster={authenticated}
               playerName={playerName}
-              activeLayer={activeLayer}
-              onLayerChange={setActiveLayer}
-              enableDarkness={enableDarkness}
-              darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
-              showVisionPolygons={showVisionRanges}
-              pageId={pages[currentPage]?.id}
-              onGridSettingsChange={handleGridSettingsChange}
+              className="!w-full !h-full bg-transparent p-0"
             />
           </div>
-          <AssetSidebar isMaster={authenticated} playerName={playerName} />
         </div>
       </div>
     );
@@ -9037,7 +9345,7 @@ function App() {
             <Collapsible
               title={
                 editingWeapon
-                  ? `Editar arma: ${editingWeapon}`
+                  ? `Editar arma: ${newWeaponData.nombre}`
                   : 'Crear nueva arma'
               }
               defaultOpen={false}
@@ -9149,6 +9457,7 @@ function App() {
                       onClick={() => {
                         setEditingWeapon(null);
                         setNewWeaponData({
+                          id: '',
                           nombre: '',
                           dano: '',
                           alcance: '',
@@ -9180,7 +9489,7 @@ function App() {
             <Collapsible
               title={
                 editingArmor
-                  ? `Editar armadura: ${editingArmor}`
+                  ? `Editar armadura: ${newArmorData.nombre}`
                   : 'Crear nueva armadura'
               }
               defaultOpen={false}
@@ -9271,6 +9580,7 @@ function App() {
                       onClick={() => {
                         setEditingArmor(null);
                         setNewArmorData({
+                          id: '',
                           nombre: '',
                           defensa: '',
                           cargaFisica: '',
@@ -9279,6 +9589,7 @@ function App() {
                           descripcion: '',
                           valor: '',
                           tecnologia: '',
+                          rareza: '',
                         });
                       }}
                     >
@@ -9298,8 +9609,129 @@ function App() {
             </Collapsible>
             <Collapsible
               title={
+                editingAccessory
+                  ? `Editar accesorio: ${newAccessoryData.nombre}`
+                  : 'Crear nuevo accesorio'
+              }
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  value={newAccessoryData.nombre}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, nombre: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Defensa"
+                  value={newAccessoryData.defensa}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, defensa: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga física"
+                  value={newAccessoryData.cargaFisica}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, cargaFisica: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga mental"
+                  value={newAccessoryData.cargaMental}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, cargaMental: e.target.value }))
+                  }
+                />
+                <TraitsInput
+                  placeholder="Rasgos (separados por comas)"
+                  value={newAccessoryData.rasgos}
+                  glossary={glossary}
+                  onChange={(value) =>
+                    setNewAccessoryData((a) => ({ ...a, rasgos: value }))
+                  }
+                />
+                <Input
+                  placeholder="Valor"
+                  value={newAccessoryData.valor}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, valor: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Tecnología"
+                  value={newAccessoryData.tecnologia}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, tecnologia: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    Rareza
+                  </label>
+                  <select
+                    value={newAccessoryData.rareza}
+                    onChange={(e) =>
+                      setNewAccessoryData((a) => ({ ...a, rareza: e.target.value }))
+                    }
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="">Sin rareza</option>
+                    {rarities.map((rarity) => (
+                      <option key={`accessory-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                        {rarity.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newAccessoryData.descripcion}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, descripcion: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingAccessory && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingAccessory(null);
+                        setNewAccessoryData({
+                          id: '',
+                          nombre: '',
+                          defensa: '',
+                          cargaFisica: '',
+                          cargaMental: '',
+                          rasgos: '',
+                          descripcion: '',
+                          valor: '',
+                          tecnologia: '',
+                          rareza: '',
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarAccesorio}>
+                    {editingAccessory ? 'Actualizar' : 'Guardar'} accesorio
+                  </Boton>
+                </div>
+                {newAccessoryError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newAccessoryError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            <Collapsible
+              title={
                 editingAbility
-                  ? `Editar habilidad: ${editingAbility}`
+                  ? `Editar habilidad: ${newAbility.nombre}`
                   : 'Crear nueva habilidad'
               }
               defaultOpen={false}
@@ -9390,6 +9822,7 @@ function App() {
                       onClick={() => {
                         setEditingAbility(null);
                         setNewAbility({
+                          id: '',
                           nombre: '',
                           alcance: '',
                           consumo: '',
@@ -9442,7 +9875,7 @@ function App() {
                           >
                             {armasFiltradas.map((a, i) => (
                               <Tarjeta
-                                key={`arma-${i}`}
+                                key={a.id}
                                 variant="weapon"
                                 rarityColor={rarityColorMap[a.rareza]}
                               >
@@ -9503,7 +9936,7 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteWeapon(a.nombre)}
+                                    onClick={() => deleteWeapon(a.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
@@ -9535,7 +9968,7 @@ function App() {
                           >
                             {armadurasFiltradas.map((a, i) => (
                               <Tarjeta
-                                key={`armadura-${i}`}
+                                key={a.id}
                                 variant="armor"
                                 rarityColor={rarityColorMap[a.rareza]}
                               >
@@ -9589,7 +10022,89 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteArmor(a.nombre)}
+                                    onClick={() => deleteArmor(a.id)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Borrar
+                                  </Boton>
+                                </div>
+                              </Tarjeta>
+                            ))}
+                          </Collapsible>
+                        )
+                      );
+                    })()}
+                    {/* Mostrar Accesorios si hay coincidencias */}
+                    {(() => {
+                      const accesoriosFiltrados = accesorios.filter(
+                        (a) =>
+                          a.nombre
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          a.descripcion
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      );
+                      return (
+                        accesoriosFiltrados.length > 0 && (
+                          <Collapsible
+                            title={`Accesorios (${accesoriosFiltrados.length})`}
+                            defaultOpen={true}
+                            variant="premium"
+                          >
+                            {accesoriosFiltrados.map((a, i) => (
+                              <Tarjeta
+                                key={a.id}
+                                variant="armor"
+                                rarityColor={rarityColorMap[a.rareza]}
+                              >
+                                <p className="font-bold text-lg">{a.nombre}</p>
+                                {a.defensa && <p><strong>Defensa:</strong> {a.defensa}</p>}
+                                <p>
+                                  <strong>Carga física:</strong>{' '}
+                                  {parseCargaValue(a.cargaFisica) > 0
+                                    ? '🔲'.repeat(parseCargaValue(a.cargaFisica))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Carga mental:</strong>{' '}
+                                  {cargaMentalIcon(a.cargaMental)}
+                                </p>
+                                <p>
+                                  <strong>Rasgos:</strong>{' '}
+                                  {a.rasgos.length
+                                    ? a.rasgos.map((r, ri) => (
+                                      <React.Fragment key={ri}>
+                                        {highlightText(r)}
+                                        {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                      </React.Fragment>
+                                    ))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Valor:</strong> {a.valor}
+                                </p>
+                                {a.tecnologia && (
+                                  <p>
+                                    <strong>Tecnología:</strong> {a.tecnologia}
+                                  </p>
+                                )}
+                                {a.descripcion && (
+                                  <p className="italic">
+                                    {highlightText(a.descripcion)}
+                                  </p>
+                                )}
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <Boton
+                                    color="blue"
+                                    onClick={() => startEditAccesorio(a)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Editar
+                                  </Boton>
+                                  <Boton
+                                    color="red"
+                                    onClick={() => deleteAccesorio(a.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
@@ -9621,7 +10136,7 @@ function App() {
                           >
                             {habilidadesFiltradas.map((h, i) => (
                               <Tarjeta
-                                key={`hab-${i}`}
+                                key={h.id}
                                 variant="power"
                                 rarityColor={rarityColorMap[h.rareza]}
                               >
@@ -9661,7 +10176,7 @@ function App() {
                                   </Boton>
                                   <Boton
                                     color="red"
-                                    onClick={() => deleteAbility(h.nombre)}
+                                    onClick={() => deleteAbility(h.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar

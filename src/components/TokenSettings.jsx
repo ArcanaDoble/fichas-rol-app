@@ -8,7 +8,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { Extension } from '@tiptap/core';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
-import { FiX } from 'react-icons/fi';
+import { FiX, FiTrash2 } from 'react-icons/fi';
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
@@ -40,8 +40,8 @@ const FontFamily = Extension.create({
     return {
       setFontFamily:
         (font) =>
-        ({ chain }) =>
-          chain().setMark('textStyle', { fontFamily: font }).run(),
+          ({ chain }) =>
+            chain().setMark('textStyle', { fontFamily: font }).run(),
     };
   },
 });
@@ -740,6 +740,23 @@ const TokenSettings = ({
                     Subir capa
                   </Boton>
                 </div>
+                {canEditToken && (
+                  <div className="pt-4 mt-4 border-t border-gray-700">
+                    <Boton
+                      size="sm"
+                      color="red"
+                      className="w-full"
+                      onClick={() => {
+                        if (window.confirm('¿Seguro que quieres eliminar este token?')) {
+                          onUpdate({ ...token, _deleted: true });
+                          onClose();
+                        }
+                      }}
+                    >
+                      <FiTrash2 className="mr-2" /> Eliminar Token
+                    </Boton>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -947,25 +964,22 @@ const TokenSettings = ({
               <div className="flex flex-wrap gap-1 bg-gray-200 p-1 rounded">
                 <button
                   onClick={() => editor.chain().focus().toggleBold().run()}
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive('bold') ? 'bg-gray-400' : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive('bold') ? 'bg-gray-400' : 'bg-gray-300'
+                    }`}
                 >
                   N
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleItalic().run()}
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive('italic') ? 'bg-gray-400' : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive('italic') ? 'bg-gray-400' : 'bg-gray-300'
+                    }`}
                 >
                   I
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleUnderline().run()}
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive('underline') ? 'bg-gray-400' : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive('underline') ? 'bg-gray-400' : 'bg-gray-300'
+                    }`}
                 >
                   S
                 </button>
@@ -973,11 +987,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().toggleBulletList().run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive('bulletList')
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive('bulletList')
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   •
                 </button>
@@ -985,11 +998,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().toggleOrderedList().run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive('orderedList')
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive('orderedList')
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   1.
                 </button>
@@ -997,11 +1009,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().setTextAlign('left').run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive({ textAlign: 'left' })
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive({ textAlign: 'left' })
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   L
                 </button>
@@ -1009,11 +1020,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().setTextAlign('center').run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive({ textAlign: 'center' })
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive({ textAlign: 'center' })
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   C
                 </button>
@@ -1021,11 +1031,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().setTextAlign('right').run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive({ textAlign: 'right' })
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive({ textAlign: 'right' })
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   R
                 </button>
@@ -1033,11 +1042,10 @@ const TokenSettings = ({
                   onClick={() =>
                     editor.chain().focus().setTextAlign('justify').run()
                   }
-                  className={`px-2 py-1 rounded text-sm ${
-                    editor.isActive({ textAlign: 'justify' })
-                      ? 'bg-gray-400'
-                      : 'bg-gray-300'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${editor.isActive({ textAlign: 'justify' })
+                    ? 'bg-gray-400'
+                    : 'bg-gray-300'
+                    }`}
                 >
                   J
                 </button>
@@ -1076,7 +1084,7 @@ const TokenSettings = ({
             )}
         </div>
       </div>
-    </div>
+    </div >
   );
 
   return createPortal(content, document.body);

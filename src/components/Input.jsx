@@ -12,6 +12,7 @@ const variants = {
   success: 'bg-gray-700/70 border-green-500 focus:border-green-400 focus:ring-green-500',
   error: 'bg-gray-700/70 border-red-500 focus:border-red-400 focus:ring-red-500',
   warning: 'bg-gray-700/70 border-yellow-500 focus:border-yellow-400 focus:ring-yellow-500',
+  premium: 'bg-[#0b1120]/60 border-[#c8aa6e]/30 text-[#f0e6d2] placeholder-slate-500 focus:border-[#c8aa6e]/60 focus:ring-[#c8aa6e]/30',
 };
 
 const Input = forwardRef(({
@@ -117,12 +118,11 @@ const Input = forwardRef(({
       </div>
 
       {(helperText || error || success || warning) && (
-        <p className={`mt-1 text-sm ${
-          error ? 'text-red-400' :
-          success ? 'text-green-400' :
-          warning ? 'text-yellow-400' :
-          'text-gray-400'
-        }`}>
+        <p className={`mt-1 text-sm ${error ? 'text-red-400' :
+            success ? 'text-green-400' :
+              warning ? 'text-yellow-400' :
+                'text-gray-400'
+          }`}>
           {error || success || warning || helperText}
         </p>
       )}
