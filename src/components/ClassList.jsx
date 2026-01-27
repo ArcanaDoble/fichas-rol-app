@@ -133,6 +133,7 @@ const defaultEquipment = {
   armor: [],
   abilities: [],
   objects: [],
+  accessories: [],
 };
 
 const normalizeImageValue = (value) => {
@@ -650,6 +651,86 @@ const ensureClassDefaults = (classItem) => {
       damage: toDisplayString(weapon.damage ?? weapon.dano ?? ''),
       range: toDisplayString(weapon.range ?? weapon.alcance ?? ''),
       consumption,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+    };
+  });
+
+  merged.equipment.abilities = (merged.equipment.abilities || []).map((ability) => {
+    const speed = convertNumericStringToIcons(
+      ability.consumption ?? ability.cost ?? ability.consumo ?? '',
+      '🟡',
+      ['Consumo', 'Velocidad'],
+    );
+    const mana = convertNumericStringToIcons(
+      ability.mana ?? ability.maná ?? '',
+      '🔵',
+      ['Mana'],
+    );
+    const consumption = `${speed} ${mana}`.trim();
+
+    const body = toDisplayString(ability.body ?? ability.cuerpo ?? '');
+    const mind = toDisplayString(ability.mind ?? ability.mente ?? '');
+    const traitValue = joinTraits(ability.trait || ability.rasgo || ability.rasgos || '');
+
+    return {
+      name: '',
+      category: '',
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ability.Damage ?? ability.Dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ability.Range ?? ability.Alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+      rareza: toDisplayString(ability.rareza || ability.rarity || ability.Rareza || ability.Rarity || ''),
+      description: '',
+      ...ability,
+      damage: toDisplayString(ability.damage ?? ability.dano ?? ability.Damage ?? ability.Dano ?? ''),
+      range: toDisplayString(ability.range ?? ability.alcance ?? ability.Range ?? ability.Alcance ?? ''),
+      consumption,
+      body,
+      mind,
+      trait: traitValue,
+    };
+  });
+
+  merged.equipment.objects = (merged.equipment.objects || []).map((object) => {
+    return {
+      name: '',
+      category: '',
+      quantity: 1,
+      rareza: '',
+      description: '',
+      ...object,
+    };
+  });
+
+  merged.equipment.accessories = (merged.equipment.accessories || []).map((accessory) => {
+    const physicalLoad = toDisplayString(
+      accessory.physicalLoad ??
+      accessory.weight ??
+      accessory.cargaFisica ??
+      accessory.carga ??
+      '',
+    );
+    const mentalLoad = toDisplayString(accessory.mentalLoad ?? accessory.cargaMental ?? '');
+    const traitsValue = joinTraits(accessory.traits || accessory.rasgos || '');
+
+    // Convert defense to squares for "Coste" slot visualization if needed, or keep as string
+    const defense = toDisplayString(accessory.defense ?? accessory.defensa ?? '');
+
+    return {
+      name: '',
+      category: '',
+      defense,
+      physicalLoad,
+      mentalLoad,
+      traits: traitsValue,
+      rareza: toDisplayString(accessory.rareza || ''),
+      description: '',
+      ...accessory,
+      defense,
       physicalLoad,
       mentalLoad,
       traits: traitsValue,
@@ -1485,6 +1566,41 @@ const ClassList = ({
     [armas, armaduras, habilidades],
   );
 
+  const totalPhysicalLoad = useMemo(() => {
+    if (!editingClass || !editingClass.equippedItems) return 0;
+    let total = 0;
+    Object.entries(editingClass.equippedItems).forEach(([key, item]) => {
+      if (item) {
+        const p = item.payload || {};
+        const val = item.physicalLoad || item.cargaFisica || item.carga_fisica || item.carga || item.peso || item.weight ||
+          p.physicalLoad || p.cargaFisica || p.carga_fisica || p.carga || p.peso || p.weight || '';
+        const loadValue = val.toString().trim();
+        if (!loadValue) return;
+        let load = parseInt(loadValue, 10);
+        if (isNaN(load) || loadValue.includes('🔲')) {
+          const match = loadValue.match(/🔲/g);
+          if (match) load = match.length;
+          else {
+            const digitMatch = loadValue.match(/\d+/);
+            if (digitMatch) load = parseInt(digitMatch[0], 10);
+            else load = 0;
+          }
+        }
+        if (!isNaN(load) && load > 0) {
+          const quantity = item.quantity || 1;
+          total += (load * quantity);
+        }
+      }
+    });
+    return total;
+  }, [editingClass?.equippedItems]);
+
+  const excessLoad = useMemo(() => {
+    if (!isPlayerMode || !editingClass) return 0;
+    const maxVida = editingClass.stats?.vida?.max ?? editingClass.vida ?? 0;
+    return Math.max(0, totalPhysicalLoad - maxVida);
+  }, [isPlayerMode, editingClass?.stats?.vida?.max, editingClass?.vida, totalPhysicalLoad]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1781,10 +1897,11 @@ const ClassList = ({
     else if (category === 'armor') itemType = 'armor';
     else if (category === 'abilities') itemType = 'ability';
     else if (category === 'objects') itemType = 'object';
+    else if (category === 'accessories') itemType = 'accessory';
 
     // Normalizar el item para asegurar que tiene todas las propiedades necesarias
     const normalized = {
-      name: payload.name || 'Item sin nombre',
+      name: payload.name || payload.nombre || 'Item sin nombre',
       category: payload.category || 'General',
       itemType: itemType, // Campo nuevo para identificar el tipo de ítem
       damage: payload.damage || payload.dano || '',
@@ -1808,7 +1925,7 @@ const ClassList = ({
       }
 
       // Usar la categoría proporcionada o 'weapons' por defecto si no coincide
-      const targetCategory = ['weapons', 'armor', 'abilities', 'objects'].includes(category) ? category : 'weapons';
+      const targetCategory = ['weapons', 'armor', 'abilities', 'objects', 'accessories'].includes(category) ? category : 'weapons';
 
       if (!draft.equipment[targetCategory]) {
         draft.equipment[targetCategory] = [];
@@ -3488,7 +3605,11 @@ const ClassList = ({
       summary: editingClass.summary || {},
       equippedItems: editingClass.equippedItems || { mainHand: null, offHand: null, body: null },
       storeItems: editingClass.storeItems || [],
-      money: editingClass.money !== undefined ? editingClass.money : 4697
+      money: editingClass.money !== undefined ? editingClass.money : 4697,
+      stats: editingClass.stats || {},
+      attributes: editingClass.attributes || {},
+      inspiration: editingClass.inspiration || [],
+      rules: editingClass.rules || []
     };
 
     const renderActiveView = () => {
@@ -4387,32 +4508,42 @@ const ClassList = ({
                                 </div>
                               ) : (
                                 <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
-                                  {editingClass.stats?.postura?.current ?? 3} <span className="text-slate-600">/</span> {editingClass.stats?.postura?.max ?? 4}
+                                  {Math.max(0, Math.min(editingClass.stats?.postura?.current ?? 3, (editingClass.stats?.postura?.max ?? 4) - excessLoad))} <span className="text-slate-600">/</span> {editingClass.stats?.postura?.max ?? 4}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-                              {Array.from({ length: editingClass.stats?.postura?.max ?? 4 }).map((_, i) => (
-                                <div
-                                  key={i}
-                                  className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] ${i < (editingClass.stats?.postura?.current ?? 3)
-                                    ? 'bg-[#a3c9a8] border-green-900'
-                                    : 'bg-[#a3c9a8]/20 border-green-900/30'
-                                    }`}
-                                  style={{
-                                    clipPath: i === 0
-                                      ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
-                                      : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
-                                    marginLeft: i === 0 ? '0' : '-6px',
-                                    zIndex: (editingClass.stats?.postura?.max ?? 4) - i,
-                                    filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
-                                  }}
-                                >
-                                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
-                                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
-                                </div>
-                              ))}
+                              {Array.from({ length: editingClass.stats?.postura?.max ?? 4 }).map((_, i) => {
+                                const maxPostura = editingClass.stats?.postura?.max ?? 4;
+                                const isBlocked = i >= (maxPostura - excessLoad);
+                                const isActive = i < (editingClass.stats?.postura?.current ?? 3);
+
+                                return (
+                                  <div
+                                    key={i}
+                                    className={`flex-1 h-full transition-all duration-300 relative min-w-[20px] 
+                                      ${isBlocked
+                                        ? 'bg-red-600/60 border-red-900 shadow-[inset_0_0_8px_rgba(255,0,0,0.4)]'
+                                        : isActive
+                                          ? 'bg-[#a3c9a8] border-green-900'
+                                          : 'bg-[#a3c9a8]/20 border-green-900/30'
+                                      }`}
+                                    style={{
+                                      clipPath: i === 0
+                                        ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                                        : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                                      marginLeft: i === 0 ? '0' : '-6px',
+                                      zIndex: (editingClass.stats?.postura?.max ?? 4) - i,
+                                      filter: isBlocked ? 'drop-shadow(2px 0 0 rgba(150,0,0,0.8))' : 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                                    }}
+                                  >
+                                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20"></div>
+                                    {/* isBlocked X removed */}
+                                  </div>
+                                )
+                              })}
                             </div>
 
                             <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
@@ -4765,6 +4896,7 @@ const ClassList = ({
             <LoadoutView
               key={dndClass.id}
               dndClass={dndClass}
+              isCharacter={isPlayerMode}
               equipmentCatalog={equipmentCatalog}
               glossary={glossary}
               onAddEquipment={handleAddEquipment}

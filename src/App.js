@@ -968,6 +968,7 @@ function App() {
   const [armaduras, setArmaduras] = useState([]);
   const [habilidades, setHabilidades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [accesorios, setAccesorios] = useState([]);
   const [playerName, setPlayerName] = useState('');
   const [nameEntered, setNameEntered] = useState(false);
   const [existingPlayers, setExistingPlayers] = useState([]);
@@ -1165,6 +1166,22 @@ function App() {
   });
   const [editingArmor, setEditingArmor] = useState(null); // Now stores the ID instead of the name
   const [newArmorError, setNewArmorError] = useState('');
+
+  const [newAccessoryData, setNewAccessoryData] = useState({
+    id: '',
+    nombre: '',
+    defensa: '',
+    cargaFisica: '',
+    cargaMental: '',
+    rasgos: '',
+    descripcion: '',
+    valor: '',
+    tecnologia: '',
+    rareza: '',
+  });
+  const [editingAccessory, setEditingAccessory] = useState(null);
+  const [newAccessoryError, setNewAccessoryError] = useState('');
+
   const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [newAbility, setNewAbility] = useState({
     id: '',
@@ -3814,6 +3831,33 @@ function App() {
   useEffect(() => {
     fetchHabilidades();
   }, [fetchHabilidades]);
+
+  // ───────────────────────────────────────────────────────────
+  // FETCH ACCESORIOS
+  // ───────────────────────────────────────────────────────────
+  const fetchAccesorios = useCallback(async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'accessories'));
+      const datos = snap.docs.map((d) => {
+        const data = d.data() || {};
+        return {
+          ...data,
+          id: data.id || d.id,
+          rareza: (data.rareza || '').trim(),
+        };
+      });
+      setAccesorios(datos);
+    } catch (e) {
+      console.error("Error fetching accessories", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccesorios();
+  }, [fetchAccesorios]);
   // ───────────────────────────────────────────────────────────
   // FETCH ENEMIGOS
   // ───────────────────────────────────────────────────────────
@@ -4378,6 +4422,84 @@ function App() {
       fetchArmaduras();
     } catch (e) { }
   };
+  const agregarAccesorio = async () => {
+    const { id, nombre } = newAccessoryData;
+    if (!nombre.trim()) {
+      setNewAccessoryError('Nombre requerido');
+      return;
+    }
+    try {
+      const finalId = id || nanoid();
+      const iconReady = applyIconConversions({
+        ...newAccessoryData,
+        id: finalId,
+        rareza: (newAccessoryData.rareza || '').trim(),
+      });
+
+      const dataToSave = {
+        ...iconReady,
+        rasgos: (newAccessoryData.rasgos || '')
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean),
+        fuente: 'custom',
+      };
+
+      await setDoc(doc(db, 'accessories', finalId), dataToSave);
+      setEditingAccessory(null);
+      setNewAccessoryData({
+        id: '',
+        nombre: '',
+        defensa: '',
+        cargaFisica: '',
+        cargaMental: '',
+        rasgos: '',
+        descripcion: '',
+        valor: '',
+        tecnologia: '',
+        rareza: '',
+      });
+      setNewAccessoryError('');
+      fetchAccesorios();
+    } catch (e) {
+      console.error(e);
+      setNewAccessoryError('Error al guardar');
+    }
+  };
+
+  const startEditAccesorio = (acc) => {
+    setNewAccessoryData({
+      ...acc,
+      rasgos: Array.isArray(acc.rasgos)
+        ? acc.rasgos.join(', ')
+        : acc.rasgos || '',
+      rareza: acc.rareza || '',
+    });
+    setEditingAccessory(acc.id);
+  };
+
+  const deleteAccesorio = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'accessories', id));
+      if (editingAccessory === id) {
+        setEditingAccessory(null);
+        setNewAccessoryData({
+          id: '',
+          nombre: '',
+          defensa: '',
+          cargaFisica: '',
+          cargaMental: '',
+          rasgos: '',
+          descripcion: '',
+          valor: '',
+          tecnologia: '',
+          rareza: '',
+        });
+      }
+      fetchAccesorios();
+    } catch (e) { }
+  };
+
   const agregarHabilidad = async () => {
     const { id, nombre } = newAbility;
     if (!nombre.trim()) {
@@ -9487,6 +9609,127 @@ function App() {
             </Collapsible>
             <Collapsible
               title={
+                editingAccessory
+                  ? `Editar accesorio: ${newAccessoryData.nombre}`
+                  : 'Crear nuevo accesorio'
+              }
+              defaultOpen={false}
+              variant="premium"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  value={newAccessoryData.nombre}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, nombre: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Defensa"
+                  value={newAccessoryData.defensa}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, defensa: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga física"
+                  value={newAccessoryData.cargaFisica}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, cargaFisica: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Carga mental"
+                  value={newAccessoryData.cargaMental}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, cargaMental: e.target.value }))
+                  }
+                />
+                <TraitsInput
+                  placeholder="Rasgos (separados por comas)"
+                  value={newAccessoryData.rasgos}
+                  glossary={glossary}
+                  onChange={(value) =>
+                    setNewAccessoryData((a) => ({ ...a, rasgos: value }))
+                  }
+                />
+                <Input
+                  placeholder="Valor"
+                  value={newAccessoryData.valor}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, valor: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Tecnología"
+                  value={newAccessoryData.tecnologia}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, tecnologia: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    Rareza
+                  </label>
+                  <select
+                    value={newAccessoryData.rareza}
+                    onChange={(e) =>
+                      setNewAccessoryData((a) => ({ ...a, rareza: e.target.value }))
+                    }
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="">Sin rareza</option>
+                    {rarities.map((rarity) => (
+                      <option key={`accessory-rarity-${rarity.nombre}`} value={rarity.nombre}>
+                        {rarity.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
+                  placeholder="Descripción"
+                  value={newAccessoryData.descripcion}
+                  onChange={(e) =>
+                    setNewAccessoryData((a) => ({ ...a, descripcion: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2 flex justify-between items-center">
+                  {editingAccessory && (
+                    <Boton
+                      color="gray"
+                      onClick={() => {
+                        setEditingAccessory(null);
+                        setNewAccessoryData({
+                          id: '',
+                          nombre: '',
+                          defensa: '',
+                          cargaFisica: '',
+                          cargaMental: '',
+                          rasgos: '',
+                          descripcion: '',
+                          valor: '',
+                          tecnologia: '',
+                          rareza: '',
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </Boton>
+                  )}
+                  <Boton color="green" onClick={agregarAccesorio}>
+                    {editingAccessory ? 'Actualizar' : 'Guardar'} accesorio
+                  </Boton>
+                </div>
+                {newAccessoryError && (
+                  <p className="text-red-400 text-center sm:col-span-2">
+                    {newAccessoryError}
+                  </p>
+                )}
+              </div>
+            </Collapsible>
+            <Collapsible
+              title={
                 editingAbility
                   ? `Editar habilidad: ${newAbility.nombre}`
                   : 'Crear nueva habilidad'
@@ -9780,6 +10023,88 @@ function App() {
                                   <Boton
                                     color="red"
                                     onClick={() => deleteArmor(a.id)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Borrar
+                                  </Boton>
+                                </div>
+                              </Tarjeta>
+                            ))}
+                          </Collapsible>
+                        )
+                      );
+                    })()}
+                    {/* Mostrar Accesorios si hay coincidencias */}
+                    {(() => {
+                      const accesoriosFiltrados = accesorios.filter(
+                        (a) =>
+                          a.nombre
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          a.descripcion
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      );
+                      return (
+                        accesoriosFiltrados.length > 0 && (
+                          <Collapsible
+                            title={`Accesorios (${accesoriosFiltrados.length})`}
+                            defaultOpen={true}
+                            variant="premium"
+                          >
+                            {accesoriosFiltrados.map((a, i) => (
+                              <Tarjeta
+                                key={a.id}
+                                variant="armor"
+                                rarityColor={rarityColorMap[a.rareza]}
+                              >
+                                <p className="font-bold text-lg">{a.nombre}</p>
+                                {a.defensa && <p><strong>Defensa:</strong> {a.defensa}</p>}
+                                <p>
+                                  <strong>Carga física:</strong>{' '}
+                                  {parseCargaValue(a.cargaFisica) > 0
+                                    ? '🔲'.repeat(parseCargaValue(a.cargaFisica))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Carga mental:</strong>{' '}
+                                  {cargaMentalIcon(a.cargaMental)}
+                                </p>
+                                <p>
+                                  <strong>Rasgos:</strong>{' '}
+                                  {a.rasgos.length
+                                    ? a.rasgos.map((r, ri) => (
+                                      <React.Fragment key={ri}>
+                                        {highlightText(r)}
+                                        {ri < a.rasgos.length - 1 ? ', ' : ''}
+                                      </React.Fragment>
+                                    ))
+                                    : '❌'}
+                                </p>
+                                <p>
+                                  <strong>Valor:</strong> {a.valor}
+                                </p>
+                                {a.tecnologia && (
+                                  <p>
+                                    <strong>Tecnología:</strong> {a.tecnologia}
+                                  </p>
+                                )}
+                                {a.descripcion && (
+                                  <p className="italic">
+                                    {highlightText(a.descripcion)}
+                                  </p>
+                                )}
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <Boton
+                                    color="blue"
+                                    onClick={() => startEditAccesorio(a)}
+                                    className="px-2 py-1 text-sm"
+                                  >
+                                    Editar
+                                  </Boton>
+                                  <Boton
+                                    color="red"
+                                    onClick={() => deleteAccesorio(a.id)}
                                     className="px-2 py-1 text-sm"
                                   >
                                     Borrar
