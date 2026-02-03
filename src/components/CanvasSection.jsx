@@ -5,6 +5,7 @@ import { BsDice6 } from 'react-icons/bs';
 import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PRESET_COLORS = [
@@ -15,7 +16,7 @@ const PRESET_COLORS = [
 ];
 
 const GRID_SIZE = 50; // Tamaño de la celda en px
-const WORLD_SIZE = 8000; // Tamaño del mundo canvas en px
+const WORLD_SIZE = 12000; // Tamaño del mundo canvas en px (Aumentado para mapas 4k)
 
 const CanvasThumbnail = ({ scenario }) => {
     const config = scenario.config || {};
@@ -88,6 +89,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
     const [itemToDelete, setItemToDelete] = useState(null);
+    const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
+    const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
 
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
@@ -117,12 +120,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         const onWheel = (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            setZoom(prev => Math.min(Math.max(0.1, prev + delta), 4));
+            setZoom(prev => Math.min(Math.max(0.1, prev + delta), 5));
         };
 
         container.addEventListener('wheel', onWheel, { passive: false });
         return () => container.removeEventListener('wheel', onWheel);
-    }, []);
+    }, [activeScenario]); // Re-vincular cuando cambia el escenario activo y se monta el viewport
 
     // Handlers de Touch para Zoom (Pinch) y Pan (Igual que MinimapV2)
     const lastPinchDist = useRef(null);
@@ -260,6 +263,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        // Guardamos el archivo para subirlo luego
+        setPendingImageFile(file);
+
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new window.Image();
@@ -270,7 +276,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                 setGridConfig(prev => ({
                     ...prev,
-                    backgroundImage: event.target.result,
+                    backgroundImage: event.target.result, // Local preview
                     imageWidth: img.width,
                     imageHeight: img.height,
                     isInfinite: false,
@@ -312,6 +318,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 columns: 20,
                 rows: 15,
                 backgroundImage: null,
+                backgroundImageHash: null, // Guardamos el hash para gestión de Storage
             },
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
         };
@@ -339,7 +346,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             console.warn("⚠️ Intento de guardado sin escenario activo");
             return;
         }
-        console.log("💾 Guardando escenario (Firebase):", activeScenario.name);
+
+        setIsSaving(true);
+        console.log("💾 Iniciando guardado de escenario:", activeScenario.name);
 
         // Feedback visual inmediato
         setToastType('success');
@@ -347,22 +356,56 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         setToastExiting(false);
 
         try {
+            let finalBackgroundImage = gridConfig.backgroundImage;
+            let finalImageHash = gridConfig.backgroundImageHash;
+
+            // Si hay un archivo pendiente, lo subimos a Storage primero
+            if (pendingImageFile) {
+                console.log("📤 Subiendo imagen pesada a Firebase Storage...");
+                const { url, hash } = await getOrUploadFile(pendingImageFile, 'CanvasMaps');
+
+                // Si ya había una imagen diferente antes, liberamos la referencia anterior
+                if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
+                    console.log("♻️ Liberando imagen anterior de Storage...");
+                    await releaseFile(gridConfig.backgroundImageHash);
+                }
+
+                finalBackgroundImage = url;
+                finalImageHash = hash;
+
+                // Actualizamos el estado local
+                setGridConfig(prev => ({
+                    ...prev,
+                    backgroundImage: url,
+                    backgroundImageHash: hash
+                }));
+                setPendingImageFile(null);
+            }
+
+            const updatedConfig = {
+                ...gridConfig,
+                backgroundImage: finalBackgroundImage,
+                backgroundImageHash: finalImageHash
+            };
+
             await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
                 name: activeScenario.name,
-                config: gridConfig,
+                config: updatedConfig,
                 camera: { zoom, offset },
                 lastModified: Date.now()
             });
-            console.log("✅ Escenario guardado correctamente");
+
+            console.log("✅ Escenario guardado correctamente con imagen persistente");
         } catch (error) {
             console.error("❌ Error al guardar escenario:", error);
             setToastType('error');
-            // Si ya estaba mostrado (éxito), forzamos reinicio para mostrar el error
             setShowToast(false);
             setTimeout(() => {
                 setShowToast(true);
                 setToastExiting(false);
             }, 50);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -374,7 +417,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         setItemToDelete(null);
 
         try {
+            // Si el escenario tenía una imagen en Storage, liberamos la referencia
+            if (itemToDelete.config?.backgroundImageHash) {
+                console.log("♻️ Eliminando imagen asociada de Storage...");
+                await releaseFile(itemToDelete.config.backgroundImageHash);
+            }
+
             await deleteDoc(doc(db, 'canvas_scenarios', idToDelete));
+
+            console.log("🗑️ Encuentro y archivos asociados eliminados correctamente");
 
             // Si el escenario borrado era el que estábamos editando, volvemos a la biblioteca
             if (activeScenario?.id === idToDelete) {
@@ -856,17 +907,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                         </div>
 
-                        {/* Sidebar Footer */}
                         <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
                             <button
                                 onClick={saveCurrentScenario}
-                                className="group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+                                disabled={isSaving}
+                                className={`group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
-                                {/* EFECTO DE BRILLO (Shine effect) */}
-                                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+                                {/* EFECTO DE BRILLO (Shine effect) - Solo si no está guardando */}
+                                {!isSaving && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
 
-                                <span className="relative z-10 drop-shadow-md">
-                                    Confirmar Cambios
+                                <span className="relative z-10 drop-shadow-md flex items-center justify-center gap-3">
+                                    {isSaving ? (
+                                        <>
+                                            <RotateCw className="w-5 h-5 animate-spin" />
+                                            Guardando...
+                                        </>
+                                    ) : (
+                                        'Confirmar Cambios'
+                                    )}
                                 </span>
                             </button>
                         </div>
@@ -928,7 +986,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                 left: '50%',
                                 top: '50%',
                                 marginLeft: `${-WORLD_SIZE / 2}px`,
-                                marginTop: `${-WORLD_SIZE / 2}px`
+                                marginTop: `${-WORLD_SIZE / 2}px`,
+                                pointerEvents: 'none' // Evita interferir con los eventos del viewport
                             }}
                         >
 
