@@ -4,6 +4,8 @@ import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getOrUploadFile } from '../utils/storage';
 import { ESTADOS } from './EstadoSelector';
+import { FiArrowLeft } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as LucideIcons from 'lucide-react';
 
 /* --- CONSTANTS --- */
@@ -501,15 +503,19 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
 
     if (!activeScenario) {
         return (
-            <div className="fixed inset-0 z-50 w-screen h-screen bg-[#09090b] flex flex-col p-8 md:p-12 overflow-y-auto custom-scrollbar">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="fixed inset-0 z-[60] bg-[#09090b] flex flex-col p-8 md:p-12 overflow-y-auto custom-scrollbar font-['Lato']"
+            >
                 <div className="max-w-6xl mx-auto w-full">
                     <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                         <div>
-                            <button onClick={onBack} className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-widest text-xs mb-4 hover:translate-x-[-4px] transition-transform">
-                                <ChevronLeft className="w-4 h-4" /> Volver
+                            <button onClick={onBack} className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-widest text-xs mb-4 hover:translate-x-[-4px] transition-all">
+                                <FiArrowLeft className="w-4 h-4" /> <b>VOLVER</b>
                             </button>
                             <h1 className="text-4xl md:text-5xl font-fantasy text-[#f0e6d2] tracking-tighter">BIBLIOTECA DE CUADRANTES</h1>
-                            <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2">Gestión de escenarios tácticos</p>
+                            <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2"><b>Gestión de escenarios tácticos</b></p>
                         </div>
                         <button onClick={createNewScenario} className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-widest rounded shadow-[0_0_20px_rgba(200,170,110,0.3)] hover:scale-105 transition-all">
                             <Plus className="w-6 h-6" /> Nuevo Cuadrante
@@ -589,7 +595,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                         </div>
                     </div>
                 )}
-            </div>
+            </motion.div>
         );
     }
 
