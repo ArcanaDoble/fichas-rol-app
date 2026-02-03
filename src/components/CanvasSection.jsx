@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, Sparkles, Activity, RotateCw } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,33 +35,42 @@ const CanvasThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show }) => {
+const SaveToast = ({ show, exiting, type = 'success' }) => {
+    console.log("🍞 Rendering SaveToast - show:", show, "exiting:", exiting, "type:", type);
+    if (!show) return null;
+
+    // Configuración según el tipo (éxito o error)
+    const isSuccess = type === 'success';
+    const mainText = isSuccess ? "PROGRESO\nGUARDADO" : "ERROR AL\nGUARDAR";
+    const subText = isSuccess ? "Encuentro Sincronizado" : "Error de Conexión";
+
+    // Clases dinámicas
+    const borderColor = isSuccess ? "border-[#c8aa6e]" : "border-red-500";
+    const titleColor = isSuccess ? "text-[#f0e6d2]" : "text-red-500";
+    const subtextColor = isSuccess ? "text-[#c8aa6e]" : "text-red-400";
+    const iconContainer = isSuccess ? "border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)]" : "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
+    const barColor = isSuccess ? "bg-[#c8aa6e]/50" : "bg-red-500/50";
+
     return (
-        <AnimatePresence>
-            {show && (
-                <motion.div
-                    initial={{ opacity: 0, y: -50, x: '-50%' }}
-                    animate={{ opacity: 1, y: 0, x: '-50%' }}
-                    exit={{ opacity: 0, y: -20, x: '-50%' }}
-                    className="fixed top-12 left-1/2 z-[100] origin-top"
-                >
-                    <div className="relative bg-[#0b1120] border border-[#c8aa6e] px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg">
-                        <div className="w-10 h-10 rounded-full border border-[#c8aa6e] flex items-center justify-center bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)] shrink-0">
-                            <Check className="w-5 h-5 text-[#c8aa6e]" />
-                        </div>
-                        <div className="flex flex-col">
-                            <h3 className="text-[#f0e6d2] font-fantasy text-xl leading-none tracking-widest text-left mb-1">
-                                ESCENARIO<br />GUARDADO
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <div className="h-[1px] w-6 bg-[#c8aa6e]/50"></div>
-                                <span className="text-[#c8aa6e] text-[9px] font-bold uppercase tracking-[0.2em]">Encuentro Sincronizado</span>
-                            </div>
-                        </div>
+        <div className={`fixed top-12 left-1/2 z-[999] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
+            <div className={`relative bg-[#0b1120] border ${borderColor} px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg`}>
+                {/* Icon */}
+                <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
+                    {isSuccess ? <Check className="w-5 h-5 text-[#c8aa6e]" /> : <X className="w-5 h-5 text-red-500" />}
+                </div>
+
+                {/* Text */}
+                <div className="flex flex-col">
+                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line`}>
+                        {mainText}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                        <div className={`h-[1px] w-6 ${barColor}`}></div>
+                        <span className={`${subtextColor} text-[9px] font-bold uppercase tracking-[0.2em]`}>{subText}</span>
                     </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -76,6 +85,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [activeScenario, setActiveScenario] = useState(null);
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const [showToast, setShowToast] = useState(false);
+    const [toastExiting, setToastExiting] = useState(false);
+    const [toastType, setToastType] = useState('success');
     const [itemToDelete, setItemToDelete] = useState(null);
 
     // Refs para gestión de eventos directos (performance)
@@ -83,10 +94,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const dragStartRef = useRef({ x: 0, y: 0 });
     // No longer needed: const transformRef = useRef(transform);
 
-    // No longer needed: Sincronizar ref con estado para callbacks
-    // No longer needed: useEffect(() => {
-    // No longer needed:     transformRef.current = transform;
-    // No longer needed: }, [transform]);
+    // --- Gestión de Notificaciones (Auto-hide) ---
+    useEffect(() => {
+        if (showToast) {
+            const duration = toastType === 'success' ? 3000 : 4000;
+            const timer1 = setTimeout(() => setToastExiting(true), duration);
+            const timer2 = setTimeout(() => setShowToast(false), duration + 300);
+
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+            };
+        }
+    }, [showToast, toastType]);
 
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
     // Listener no pasivo para prevenir el scroll por defecto correctamente
@@ -315,7 +335,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const saveCurrentScenario = async () => {
-        if (!activeScenario) return;
+        if (!activeScenario) {
+            console.warn("⚠️ Intento de guardado sin escenario activo");
+            return;
+        }
+        console.log("💾 Guardando escenario (Firebase):", activeScenario.name);
+
+        // Feedback visual inmediato
+        setToastType('success');
+        setShowToast(true);
+        setToastExiting(false);
 
         try {
             await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
@@ -324,10 +353,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 camera: { zoom, offset },
                 lastModified: Date.now()
             });
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
+            console.log("✅ Escenario guardado correctamente");
         } catch (error) {
-            console.error("Error saving scenario:", error);
+            console.error("❌ Error al guardar escenario:", error);
+            setToastType('error');
+            // Si ya estaba mostrado (éxito), forzamos reinicio para mostrar el error
+            setShowToast(false);
+            setTimeout(() => {
+                setShowToast(true);
+                setToastExiting(false);
+            }, 50);
         }
     };
 
@@ -391,8 +426,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     return (
         <div className="h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none">
-            <SaveToast show={showToast} />
-
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
             {viewMode === 'LIBRARY' && !activeScenario && (
                 <motion.div
@@ -973,6 +1006,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     </div>
                 </>
             )}
+            {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
+            <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
         </div>
     );
 };
