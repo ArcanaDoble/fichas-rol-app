@@ -92,6 +92,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
 
+    // Tabs del Sidebar
+    const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
+    const [tokens, setTokens] = useState([]);
+    const [uploadingToken, setUploadingToken] = useState(false);
+
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
     const dragStartRef = useRef({ x: 0, y: 0 });
@@ -301,6 +306,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         return () => unsub();
     }, []);
 
+    // --- SUSCRIPCIÓN A TOKENS (Firebase) ---
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'canvas_tokens'), (snap) => {
+            const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setTokens(loaded.sort((a, b) => b.createdAt - a.createdAt));
+        });
+        return () => unsub();
+    }, []);
+
     const createNewScenario = async () => {
         const newScenario = {
             name: 'Nuevo Encuentro',
@@ -438,6 +452,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         } catch (error) {
             console.error("Error deleting scenario:", error);
             // Si falla, podríamos informar al usuario
+        }
+    };
+
+    const handleTokenUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingToken(true);
+        try {
+            const { url, hash } = await getOrUploadFile(file, 'CanvasTokens');
+            await addDoc(collection(db, 'canvas_tokens'), {
+                url,
+                hash,
+                name: file.name,
+                createdAt: Date.now(),
+                uploadedBy: currentUserId
+            });
+            console.log("Token uploaded successfully");
+        } catch (error) {
+            console.error("Error uploading token:", error);
+        } finally {
+            setUploadingToken(false);
+        }
+    };
+
+    const deleteToken = async (token) => {
+        if (!confirm("¿Eliminar este token?")) return;
+        try {
+            if (token.hash) await releaseFile(token.hash);
+            await deleteDoc(doc(db, 'canvas_tokens', token.id));
+        } catch (error) {
+            console.error("Error deleting token:", error);
         }
     };
 
@@ -654,257 +700,341 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             </button>
                         </div>
 
+                        {/* Sidebar Tabs */}
+                        <div className="flex bg-[#0b1120] border-b border-slate-800 shrink-0 z-10">
+                            <button
+                                onClick={() => setActiveTab('CONFIG')}
+                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'CONFIG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Settings className="w-4 h-4" />
+                                <span className="text-[8px] font-bold uppercase">Configuración</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('TOKENS')}
+                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Sparkles className="w-4 h-4" />
+                                <span className="text-[8px] font-bold uppercase">Tokens</span>
+                            </button>
+                        </div>
+
                         {/* Sidebar Content Wrapper */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
 
-                            {/* 1. Modo de Mapa */}
-                            <div className="space-y-3">
-                                <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                    <LayoutGrid className="w-3 h-3" />
-                                    Modo de Mapa
-                                </h4>
-                                <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[10px] font-bold font-fantasy shadow-inner">
-                                    <button
-                                        onClick={() => handleConfigChange('isInfinite', true)}
-                                        className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                    >
-                                        Infinito
-                                    </button>
-                                    <button
-                                        onClick={() => handleConfigChange('isInfinite', false)}
-                                        className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${!gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                    >
-                                        Finito
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="w-full h-px bg-slate-800/50"></div>
-
-                            {/* 2. Fondo de Mapa */}
-                            <div className="space-y-3">
-                                <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                    <Image className="w-3 h-3" />
-                                    Imagen de Fondo
-                                </h4>
-
-                                {!gridConfig.backgroundImage ? (
-                                    <div
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="border-2 border-dashed border-slate-700/50 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all group"
-                                    >
-                                        <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
-                                        <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Mapa</span>
-                                        <input
-                                            type="file"
-                                            ref={fileInputRef}
-                                            onChange={handleImageUpload}
-                                            className="hidden"
-                                            accept="image/*"
-                                        />
-                                    </div>
-                                ) : (
+                            {/* --- TAB: CONFIGURACIÓN --- */}
+                            {activeTab === 'CONFIG' && (
+                                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    {/* 1. Modo de Mapa */}
                                     <div className="space-y-3">
-                                        <div className="relative w-full h-32 bg-[#0b1120] rounded-lg overflow-hidden border border-slate-700/50 group shadow-lg">
-                                            <img src={gridConfig.backgroundImage} alt="Background Preview" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
-                                                <span className="text-[10px] font-bold text-[#f0e6d2] uppercase tracking-[0.2em]">Vista Previa</span>
-                                            </div>
+                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                            <LayoutGrid className="w-3 h-3" />
+                                            Modo de Mapa
+                                        </h4>
+                                        <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[10px] font-bold font-fantasy shadow-inner">
+                                            <button
+                                                onClick={() => handleConfigChange('isInfinite', true)}
+                                                className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                            >
+                                                Infinito
+                                            </button>
+                                            <button
+                                                onClick={() => handleConfigChange('isInfinite', false)}
+                                                className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${!gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                            >
+                                                Finito
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={clearBackgroundImage}
-                                            className="w-full py-2.5 bg-red-900/10 border border-red-900/30 text-red-500 rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-red-900/20 transition-all font-sans"
-                                        >
-                                            <Trash2 className="w-3 h-3" /> Eliminar Fondo
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="w-full h-px bg-slate-800/50"></div>
-
-                            {/* 3. Dimensiones (Solo Finito) */}
-                            {!gridConfig.isInfinite && (
-                                <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
-                                    <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                        <Maximize className="w-3 h-3" />
-                                        Dimensiones (Celdas)
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                            <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
-                                            <div className="flex items-center justify-between">
-                                                <input
-                                                    type="number"
-                                                    value={gridConfig.columns}
-                                                    onChange={(e) => handleConfigChange('columns', Number(e.target.value))}
-                                                    className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                    min="1" max="100"
-                                                />
-                                                <div className="flex flex-col gap-0.5 ml-2">
-                                                    <button onClick={() => handleConfigChange('columns', Math.min(100, gridConfig.columns + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                    <button onClick={() => handleConfigChange('columns', Math.max(1, gridConfig.columns - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                            <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Filas</span>
-                                            <div className="flex items-center justify-between">
-                                                <input
-                                                    type="number"
-                                                    value={gridConfig.rows}
-                                                    onChange={(e) => handleConfigChange('rows', Number(e.target.value))}
-                                                    className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                    min="1" max="100"
-                                                />
-                                                <div className="flex flex-col gap-0.5 ml-2">
-                                                    <button onClick={() => handleConfigChange('rows', Math.min(100, gridConfig.rows + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                    <button onClick={() => handleConfigChange('rows', Math.max(1, gridConfig.rows - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="text-[9px] text-slate-600 text-right font-mono flex items-center justify-end gap-2 uppercase">
-                                        <span className="w-1 h-1 rounded-full bg-slate-800"></span>
-                                        TOTAL: {finiteGridWidth}x{finiteGridHeight}PX
                                     </div>
 
                                     <div className="w-full h-px bg-slate-800/50"></div>
+
+                                    {/* 2. Fondo de Mapa */}
+                                    <div className="space-y-3">
+                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                            <Image className="w-3 h-3" />
+                                            Imagen de Fondo
+                                        </h4>
+
+                                        {!gridConfig.backgroundImage ? (
+                                            <div
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="border-2 border-dashed border-slate-700/50 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all group"
+                                            >
+                                                <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
+                                                <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Mapa</span>
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    onChange={handleImageUpload}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                <div className="relative w-full h-32 bg-[#0b1120] rounded-lg overflow-hidden border border-slate-700/50 group shadow-lg">
+                                                    <img src={gridConfig.backgroundImage} alt="Background Preview" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
+                                                        <span className="text-[10px] font-bold text-[#f0e6d2] uppercase tracking-[0.2em]">Vista Previa</span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={clearBackgroundImage}
+                                                    className="w-full py-2.5 bg-red-900/10 border border-red-900/30 text-red-500 rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-red-900/20 transition-all font-sans"
+                                                >
+                                                    <Trash2 className="w-3 h-3" /> Eliminar Fondo
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="w-full h-px bg-slate-800/50"></div>
+
+                                    {/* 3. Dimensiones (Solo Finito) */}
+                                    {!gridConfig.isInfinite && (
+                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                                            <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Maximize className="w-3 h-3" />
+                                                Dimensiones (Celdas)
+                                            </h4>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
+                                                    <div className="flex items-center justify-between">
+                                                        <input
+                                                            type="number"
+                                                            value={gridConfig.columns}
+                                                            onChange={(e) => handleConfigChange('columns', Number(e.target.value))}
+                                                            className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            min="1" max="100"
+                                                        />
+                                                        <div className="flex flex-col gap-0.5 ml-2">
+                                                            <button onClick={() => handleConfigChange('columns', Math.min(100, gridConfig.columns + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('columns', Math.max(1, gridConfig.columns - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Filas</span>
+                                                    <div className="flex items-center justify-between">
+                                                        <input
+                                                            type="number"
+                                                            value={gridConfig.rows}
+                                                            onChange={(e) => handleConfigChange('rows', Number(e.target.value))}
+                                                            className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            min="1" max="100"
+                                                        />
+                                                        <div className="flex flex-col gap-0.5 ml-2">
+                                                            <button onClick={() => handleConfigChange('rows', Math.min(100, gridConfig.rows + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('rows', Math.max(1, gridConfig.rows - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-[9px] text-slate-600 text-right font-mono flex items-center justify-end gap-2 uppercase">
+                                                <span className="w-1 h-1 rounded-full bg-slate-800"></span>
+                                                TOTAL: {finiteGridWidth}x{finiteGridHeight}PX
+                                            </div>
+
+                                            <div className="w-full h-px bg-slate-800/50"></div>
+                                        </div>
+                                    )}
+
+                                    {/* 4. Tamaño de Celda */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                            <Ruler className="w-3 h-3" />
+                                            Escala de Rejilla
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Ancho (PX)</span>
+                                                <div className="flex items-center justify-between">
+                                                    <input
+                                                        type="number"
+                                                        value={gridConfig.cellWidth}
+                                                        onChange={(e) => handleConfigChange('cellWidth', Number(e.target.value))}
+                                                        className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        min="10" max="500"
+                                                    />
+                                                    <div className="flex flex-col gap-0.5 ml-2">
+                                                        <button onClick={() => handleConfigChange('cellWidth', Math.min(500, gridConfig.cellWidth + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                        <button onClick={() => handleConfigChange('cellWidth', Math.max(10, gridConfig.cellWidth - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Alto (PX)</span>
+                                                <div className="flex items-center justify-between">
+                                                    <input
+                                                        type="number"
+                                                        value={gridConfig.cellHeight}
+                                                        onChange={(e) => handleConfigChange('cellHeight', Number(e.target.value))}
+                                                        className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        min="10" max="500"
+                                                    />
+                                                    <div className="flex flex-col gap-0.5 ml-2">
+                                                        <button onClick={() => handleConfigChange('cellHeight', Math.min(500, gridConfig.cellHeight + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                        <button onClick={() => handleConfigChange('cellHeight', Math.max(10, gridConfig.cellHeight - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* 4. Tamaño de Celda */}
-                            <div className="space-y-4">
-                                <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                    <Ruler className="w-3 h-3" />
-                                    Escala de Rejilla
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                        <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Ancho (PX)</span>
-                                        <div className="flex items-center justify-between">
-                                            <input
-                                                type="number"
-                                                value={gridConfig.cellWidth}
-                                                onChange={(e) => handleConfigChange('cellWidth', Number(e.target.value))}
-                                                className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                min="10" max="500"
-                                            />
-                                            <div className="flex flex-col gap-0.5 ml-2">
-                                                <button onClick={() => handleConfigChange('cellWidth', Math.min(500, gridConfig.cellWidth + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                <button onClick={() => handleConfigChange('cellWidth', Math.max(10, gridConfig.cellWidth - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                            {/* --- TAB: TOKENS --- */}
+                            {activeTab === 'TOKENS' && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                        <Sparkles className="w-3 h-3" />
+                                        Biblioteca de Tokens
+                                    </h4>
+
+                                    {/* Upload Button */}
+                                    <label className={`
+                                        flex flex-col items-center justify-center w-full h-32 
+                                        border-2 border-dashed border-slate-700/50 rounded-xl 
+                                        cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 
+                                        transition-all group relative overflow-hidden
+                                        ${uploadingToken ? 'pointer-events-none opacity-50' : ''}
+                                    `}>
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleTokenUpload} disabled={uploadingToken} />
+                                        {uploadingToken ? (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <RotateCw className="w-6 h-6 text-[#c8aa6e] animate-spin" />
+                                                <span className="text-[10px] uppercase font-bold text-[#c8aa6e]">Subiendo...</span>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                        <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Alto (PX)</span>
-                                        <div className="flex items-center justify-between">
-                                            <input
-                                                type="number"
-                                                value={gridConfig.cellHeight}
-                                                onChange={(e) => handleConfigChange('cellHeight', Number(e.target.value))}
-                                                className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                min="10" max="500"
-                                            />
-                                            <div className="flex flex-col gap-0.5 ml-2">
-                                                <button onClick={() => handleConfigChange('cellHeight', Math.min(500, gridConfig.cellHeight + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                <button onClick={() => handleConfigChange('cellHeight', Math.max(10, gridConfig.cellHeight - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
+                                                <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Nuevo Token</span>
+                                            </>
+                                        )}
+                                    </label>
+
+                                    {/* Tokens Grid */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {tokens.map(token => (
+                                            <div key={token.id} className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors">
+                                                <img src={token.url} alt={token.name} className="w-full h-full object-contain p-2" />
+
+                                                {/* Delete Button Overlay */}
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => deleteToken(token)}
+                                                        className="p-1.5 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-200 transition-colors"
+                                                        title="Eliminar Token"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                    {/* Future: Add 'Drag' handle or 'Add to Map' button here */}
+                                                </div>
                                             </div>
-                                        </div>
+                                        ))}
+                                        {tokens.length === 0 && !uploadingToken && (
+                                            <div className="col-span-3 py-8 text-center text-slate-600 text-[10px] uppercase font-bold tracking-widest border border-dashed border-slate-800 rounded-lg">
+                                                Sin tokens
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
+                            )}
+
+
 
                             <div className="w-full h-px bg-slate-800/50"></div>
 
                             {/* 5. Estilo Visual */}
-                            <div className="space-y-6">
-                                <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                    <Palette className="w-3 h-3" />
-                                    Apariencia Visual
-                                </h4>
+                            {activeTab === 'CONFIG' && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                        <Palette className="w-3 h-3" />
+                                        Apariencia Visual
+                                    </h4>
 
-                                <div className="space-y-6">
-                                    {/* Color y Grosor */}
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div className="bg-[#111827]/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Color de Línea</span>
-                                                <span className="text-[10px] font-mono text-[#c8aa6e] uppercase tracking-widest">{gridConfig.color}</span>
-                                            </div>
-                                            <div className="flex gap-3">
-                                                {/* Custom Picker */}
-                                                <div className="h-10 w-10 relative rounded overflow-hidden border border-slate-700/50 shrink-0 cursor-pointer hover:border-[#c8aa6e]/50 transition-all shadow-inner">
-                                                    <input
-                                                        type="color"
-                                                        value={gridConfig.color}
-                                                        onChange={(e) => handleConfigChange('color', e.target.value)}
-                                                        className="absolute -top-2 -left-2 w-14 h-14 border-none cursor-pointer p-0 opacity-0"
-                                                    />
-                                                    <div className="w-full h-full" style={{ backgroundColor: gridConfig.color }}></div>
+                                    <div className="space-y-6">
+                                        {/* Color y Grosor */}
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div className="bg-[#111827]/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Color de Línea</span>
+                                                    <span className="text-[10px] font-mono text-[#c8aa6e] uppercase tracking-widest">{gridConfig.color}</span>
                                                 </div>
-                                                {/* Presets */}
-                                                <div className="flex-1 grid grid-cols-4 gap-2">
-                                                    {PRESET_COLORS.map(c => (
-                                                        <button
-                                                            key={c}
-                                                            onClick={() => handleConfigChange('color', c)}
-                                                            className={`h-full w-full rounded-sm transition-all ${gridConfig.color === c ? 'ring-2 ring-offset-2 ring-offset-[#0b1120] ring-[#c8aa6e] scale-105' : 'hover:opacity-80 hover:scale-105'}`}
-                                                            style={{ backgroundColor: c }}
+                                                <div className="flex gap-3">
+                                                    {/* Custom Picker */}
+                                                    <div className="h-10 w-10 relative rounded overflow-hidden border border-slate-700/50 shrink-0 cursor-pointer hover:border-[#c8aa6e]/50 transition-all shadow-inner">
+                                                        <input
+                                                            type="color"
+                                                            value={gridConfig.color}
+                                                            onChange={(e) => handleConfigChange('color', e.target.value)}
+                                                            className="absolute -top-2 -left-2 w-14 h-14 border-none cursor-pointer p-0 opacity-0"
                                                         />
-                                                    ))}
+                                                        <div className="w-full h-full" style={{ backgroundColor: gridConfig.color }}></div>
+                                                    </div>
+                                                    {/* Presets */}
+                                                    <div className="flex-1 grid grid-cols-4 gap-2">
+                                                        {PRESET_COLORS.map(c => (
+                                                            <button
+                                                                key={c}
+                                                                onClick={() => handleConfigChange('color', c)}
+                                                                className={`h-full w-full rounded-sm transition-all ${gridConfig.color === c ? 'ring-2 ring-offset-2 ring-offset-[#0b1120] ring-[#c8aa6e] scale-105' : 'hover:opacity-80 hover:scale-105'}`}
+                                                                style={{ backgroundColor: c }}
+                                                            />
+                                                        ))}
+                                                    </div>
                                                 </div>
+                                            </div>
+
+                                            <div className="bg-[#0b1120] p-4 rounded border border-slate-800 hover:border-slate-700 transition-colors">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Grosor (PX)</span>
+                                                    <span className="text-[10px] font-mono text-[#c8aa6e]">{gridConfig.lineWidth}PX</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0.5" max="10" step="0.5"
+                                                    value={gridConfig.lineWidth}
+                                                    onChange={(e) => handleConfigChange('lineWidth', Number(e.target.value))}
+                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                />
                                             </div>
                                         </div>
 
-                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 hover:border-slate-700 transition-colors">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Grosor (PX)</span>
-                                                <span className="text-[10px] font-mono text-[#c8aa6e]">{gridConfig.lineWidth}PX</span>
+                                        {/* Opacidad */}
+                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                                                <span>Opacidad de Rejilla</span>
+                                                <span className="font-mono text-[#c8aa6e]">{Math.round(gridConfig.opacity * 100)}%</span>
                                             </div>
                                             <input
                                                 type="range"
-                                                min="0.5" max="10" step="0.5"
-                                                value={gridConfig.lineWidth}
-                                                onChange={(e) => handleConfigChange('lineWidth', Number(e.target.value))}
+                                                min="0" max="1" step="0.05"
+                                                value={gridConfig.opacity}
+                                                onChange={(e) => handleConfigChange('opacity', parseFloat(e.target.value))}
                                                 className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                             />
                                         </div>
-                                    </div>
 
-                                    {/* Opacidad */}
-                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                                            <span>Opacidad de Rejilla</span>
-                                            <span className="font-mono text-[#c8aa6e]">{Math.round(gridConfig.opacity * 100)}%</span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="0" max="1" step="0.05"
-                                            value={gridConfig.opacity}
-                                            onChange={(e) => handleConfigChange('opacity', parseFloat(e.target.value))}
-                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                        />
-                                    </div>
-
-                                    {/* Tipo de Línea */}
-                                    <div className="space-y-3">
-                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] block pl-1">Estilo de Trazo</span>
-                                        <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[9px] font-bold font-fantasy shadow-inner">
-                                            {['solid', 'dashed', 'dotted'].map(type => (
-                                                <button
-                                                    key={type}
-                                                    onClick={() => handleConfigChange('lineType', type)}
-                                                    className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.lineType === type ? 'bg-[#c8aa6e] text-[#0b1120] shadow-md' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                                >
-                                                    {type === 'solid' ? 'Sólido' : type === 'dashed' ? 'Guiones' : 'Puntos'}
-                                                </button>
-                                            ))}
+                                        {/* Tipo de Línea */}
+                                        <div className="space-y-3">
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] block pl-1">Estilo de Trazo</span>
+                                            <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[9px] font-bold font-fantasy shadow-inner">
+                                                {['solid', 'dashed', 'dotted'].map(type => (
+                                                    <button
+                                                        key={type}
+                                                        onClick={() => handleConfigChange('lineType', type)}
+                                                        className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.lineType === type ? 'bg-[#c8aa6e] text-[#0b1120] shadow-md' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                                    >
+                                                        {type === 'solid' ? 'Sólido' : type === 'dashed' ? 'Guiones' : 'Puntos'}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
+                            )}
                         </div>
 
                         <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
@@ -1064,10 +1194,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
-        </div>
+        </div >
     );
 };
 
