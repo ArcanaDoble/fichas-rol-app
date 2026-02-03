@@ -102,6 +102,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse al empezar arrastre
     const [tokenOriginalPos, setTokenOriginalPos] = useState({ x: 0, y: 0 }); // Posición inicial del token
 
+    // Configuración de movimiento
+    const [snapToGrid, setSnapToGrid] = useState(false);
+
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
     const dragStartRef = useRef({ x: 0, y: 0 });
@@ -214,10 +217,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
             const newItems = activeScenario.items.map(item => {
                 if (item.id === draggedTokenId) {
+                    let newX = tokenOriginalPos.x + deltaX;
+                    let newY = tokenOriginalPos.y + deltaY;
+
+                    if (snapToGrid) {
+                        const cellW = gridConfig.cellWidth;
+                        const cellH = gridConfig.cellHeight;
+                        newX = Math.round(newX / cellW) * cellW;
+                        newY = Math.round(newY / cellH) * cellH;
+                    }
+
                     return {
                         ...item,
-                        x: tokenOriginalPos.x + deltaX,
-                        y: tokenOriginalPos.y + deltaY
+                        x: newX,
+                        y: newY
                     };
                 }
                 return item;
@@ -825,6 +838,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 Finito
                                             </button>
                                         </div>
+                                    </div>
+
+                                    {/* Control de Snap */}
+                                    <div className="flex items-center justify-between bg-[#111827] p-3 rounded border border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <LayoutGrid className="w-4 h-4 text-[#c8aa6e]" />
+                                            <span className="text-[10px] font-bold uppercase text-slate-400">Ajustar a Rejilla (Snap)</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setSnapToGrid(!snapToGrid)}
+                                            className={`relative w-10 h-5 rounded-full transition-colors ${snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${snapToGrid ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
                                     </div>
 
                                     <div className="w-full h-px bg-slate-800/50"></div>
