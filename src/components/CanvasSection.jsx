@@ -101,9 +101,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [draggedTokenId, setDraggedTokenId] = useState(null);
     const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse al empezar arrastre
     const [tokenOriginalPos, setTokenOriginalPos] = useState({ x: 0, y: 0 }); // Posición inicial del token
+    const [selectedTokenId, setSelectedTokenId] = useState(null); // Nuevo estado para seleccion
+    const [rotatingTokenId, setRotatingTokenId] = useState(null); // Estado para rotación libre
 
     // Configuración de movimiento
-    const [snapToGrid, setSnapToGrid] = useState(false);
 
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
@@ -210,17 +211,77 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const handleMouseMove = (e) => {
+        // --- ROTACIÓN LIBRE ---
+        if (rotatingTokenId && activeScenario) {
+            const containerRect = containerRef.current?.getBoundingClientRect();
+            if (!containerRect) return;
+
+            // Encontrar el token
+            const token = activeScenario.items.find(t => t.id === rotatingTokenId);
+            if (!token) return;
+
+            // Calcular el Centro del Token en Coordenadas de Pantalla
+            // ScreenX = (WorldCenterX + TokenWorldX + TokenWidth/2 - WorldSize/2) * zoom + offset.x
+            // Simplificado: CenterScreen = WorldDivCenterScreen + (TokenLocalPosFromCenter * zoom)
+
+            // 1. Centro del WorldDiv en Pantalla
+            const worldDivCenterX = containerRect.width / 2 + offset.x;
+            const worldDivCenterY = containerRect.height / 2 + offset.y;
+
+            // 2. Posición del Token respecto al centro del mundo (0,0 del mundo es su centro geométrico en CSS layout, pero item.x/y son coords desde top-left 0,0?)
+            // Revisando `spawnX` logic: item.x/y son coordenadas dentro del div de tamaño WORLD_SIZE.
+            // 0,0 es top-left del WORLD_SIZE.
+            // Centro del token relativo al top-left del mundo:
+            const tokenCenterX_World = token.x + token.width / 2;
+            const tokenCenterY_World = token.y + token.height / 2;
+
+            // Distancia desde el centro del mundo (WORLD_SIZE/2, WORLD_SIZE/2)
+            const distFromCenterWorldX = tokenCenterX_World - (WORLD_SIZE / 2);
+            const distFromCenterWorldY = tokenCenterY_World - (WORLD_SIZE / 2);
+
+            // 3. Posición final en pantalla
+            const tokenScreenX = worldDivCenterX + (distFromCenterWorldX * zoom);
+            const tokenScreenY = worldDivCenterY + (distFromCenterWorldY * zoom);
+
+            // 4. Calcular Ángulo
+            const deltaX = e.clientX - tokenScreenX;
+            const deltaY = e.clientY - tokenScreenY;
+
+            // atan2(y, x) da el ángulo en radianes desde el eje X positivo.
+            // Queremos que "Arriba" (-Y) sea 0 grados (o la orientación base).
+            // Normal atan2: Right=0, Down=90, Left=180, Up=-90.
+            // Queremos Up=0. 
+            // -90 + 90 = 0.
+            let angleDeg = (Math.atan2(deltaY, deltaX) * 180 / Math.PI) + 90;
+
+            setLoadingRotation(angleDeg); // Update Rotation
+
+            const newItems = activeScenario.items.map(i => {
+                if (i.id === rotatingTokenId) {
+                    return { ...i, rotation: angleDeg };
+                }
+                return i;
+            });
+            setActiveScenario(prev => ({ ...prev, items: newItems }));
+            return;
+        }
+
         if (draggedTokenId && activeScenario) {
             // Lógica de arrastre de TOKEN
             const deltaX = (e.clientX - tokenDragStart.x) / zoom;
             const deltaY = (e.clientY - tokenDragStart.y) / zoom;
+
+            // Si se está arrastrando, aseguramos que el token también está seleccionado
+            if (draggedTokenId !== selectedTokenId) {
+                setSelectedTokenId(draggedTokenId);
+            }
 
             const newItems = activeScenario.items.map(item => {
                 if (item.id === draggedTokenId) {
                     let newX = tokenOriginalPos.x + deltaX;
                     let newY = tokenOriginalPos.y + deltaY;
 
-                    if (snapToGrid) {
+                    if (gridConfig.snapToGrid) {
                         const cellW = gridConfig.cellWidth;
                         const cellH = gridConfig.cellHeight;
                         newX = Math.round(newX / cellW) * cellW;
@@ -257,26 +318,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const handleMouseUp = () => {
         setIsDragging(false);
         setDraggedTokenId(null); // Soltar token
+        setRotatingTokenId(null); // Soltar rotación
         document.body.style.cursor = 'default';
     };
 
     // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
         const handleGlobalMouseUp = () => {
-            if (isDragging || draggedTokenId) {
+            if (isDragging || draggedTokenId || rotatingTokenId) {
                 setIsDragging(false);
                 setDraggedTokenId(null);
+                setRotatingTokenId(null);
                 document.body.style.cursor = 'default';
             }
         };
 
         const handleGlobalMouseMove = (e) => {
-            if (isDragging || draggedTokenId) {
+            if (isDragging || draggedTokenId || rotatingTokenId) {
                 handleMouseMove(e);
             }
         };
 
-        if (isDragging || draggedTokenId) {
+        if (isDragging || draggedTokenId || rotatingTokenId) {
             window.addEventListener('mouseup', handleGlobalMouseUp);
             window.addEventListener('mousemove', handleGlobalMouseMove);
         }
@@ -285,7 +348,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             window.removeEventListener('mouseup', handleGlobalMouseUp);
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
-    }, [isDragging, draggedTokenId]);
+    }, [isDragging, draggedTokenId, rotatingTokenId]);
+
+    // Dummy state just to make linter happy if needed or unused var
+    const [, setLoadingRotation] = useState(0);
 
     // Estado de configuración del Grid
     const [gridConfig, setGridConfig] = useState({
@@ -301,6 +367,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         backgroundImage: null,
         imageWidth: null,
         imageHeight: null,
+        snapToGrid: false,
     });
 
     const fileInputRef = useRef(null);
@@ -374,6 +441,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 rows: 15,
                 backgroundImage: null,
                 backgroundImageHash: null, // Guardamos el hash para gestión de Storage
+                snapToGrid: false,
             },
             items: [], // Inicializamos array de tokens
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
@@ -567,11 +635,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     const handleTokenMouseDown = (e, token) => {
         e.stopPropagation(); // Evitar que el canvas inicie pan
-        if (e.button !== 0) return; // Solo click izquierdo
 
-        setDraggedTokenId(token.id);
-        setTokenDragStart({ x: e.clientX, y: e.clientY });
-        setTokenOriginalPos({ x: token.x, y: token.y });
+        // Si click izquierdo, seleccionamos y preparamos arrastre
+        if (e.button === 0) {
+            // Si estamos pulsando el control de rotación, no iniciamos drag
+            setDraggedTokenId(token.id);
+            setTokenDragStart({ x: e.clientX, y: e.clientY });
+            setTokenOriginalPos({ x: token.x, y: token.y });
+            setSelectedTokenId(token.id); // Selección inmediata
+        }
+    };
+
+    const handleRotationMouseDown = (e, token) => {
+        e.stopPropagation();
+        if (e.button === 0) {
+            setRotatingTokenId(token.id);
+            setSelectedTokenId(token.id);
+        }
     };
 
     const deleteItem = (itemId) => {
@@ -579,6 +659,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             ...prev,
             items: prev.items.filter(i => i.id !== itemId)
         }));
+        if (selectedTokenId === itemId) setSelectedTokenId(null);
+    };
+
+    const rotateItem = (itemId, angle) => {
+        setActiveScenario(prev => ({
+            ...prev,
+            items: prev.items.map(i => {
+                if (i.id === itemId) {
+                    return { ...i, rotation: (i.rotation || 0) + angle };
+                }
+                return i;
+            })
+        }));
+    };
+
+    // Handler para click en el fondo del canvas (Deseleccionar)
+    const handleCanvasBackgroundMouseDown = (e) => {
+        // Solo si click izquierdo directo en el fondo
+        if (e.button === 0 && !e.altKey && e.target === containerRef.current) {
+            setSelectedTokenId(null);
+        }
+        handleMouseDown(e); // Mantener lógica de pan
     };
 
 
@@ -847,10 +949,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             <span className="text-[10px] font-bold uppercase text-slate-400">Ajustar a Rejilla (Snap)</span>
                                         </div>
                                         <button
-                                            onClick={() => setSnapToGrid(!snapToGrid)}
-                                            className={`relative w-10 h-5 rounded-full transition-colors ${snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                            onClick={() => handleConfigChange('snapToGrid', !gridConfig.snapToGrid)}
+                                            className={`relative w-10 h-5 rounded-full transition-colors ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                         >
-                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${snapToGrid ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${gridConfig.snapToGrid ? 'translate-x-5' : 'translate-x-0'}`} />
                                         </button>
                                     </div>
 
@@ -1208,7 +1310,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     <div
                         ref={containerRef}
                         className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
-                        onMouseDown={handleMouseDown}
+                        onMouseDown={handleCanvasBackgroundMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseUp}
@@ -1314,17 +1416,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     }}
                                     className="group"
                                 >
-                                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'cursor-grabbing scale-105 shadow-xl ring-2 ring-[#c8aa6e]' : ''} transition-transform`}>
+
+                                    {/* Visual Selection Ring & Drag State */}
+                                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
+                                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenId === item.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                                            {/* (Línea conectora y controles ahora unificados abajo) */}
+                                            {selectedTokenId === item.id && (
+                                                <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
+                                            )}
+                                        </div>
+
                                         <img
                                             src={item.img}
                                             className="w-full h-full object-contain drop-shadow-lg"
                                             draggable={false}
                                         />
-                                        {/* Controles de Token (Hover) */}
-                                        <div className="absolute -top-6 right-0 hidden group-hover:flex bg-black/80 rounded px-1 gap-1">
+                                        {/* Controles de Token (Superiores) */}
+                                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenId === item.id || 'group-hover:opacity-100 opacity-0'}`}>
+                                            <button
+                                                onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
+                                                className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
+                                                title="Rotar 45°"
+                                            >
+                                                <RotateCw size={12} />
+                                            </button>
+
+                                            {/* Handle de Rotación Libre (Central) */}
+                                            <div
+                                                className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]"
+                                                onMouseDown={(e) => handleRotationMouseDown(e, item)}
+                                                title="Arrastrar para rotar libremente"
+                                            />
+
                                             <button
                                                 onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                                className="text-red-400 hover:text-red-200 p-1"
+                                                className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
                                                 title="Eliminar del mapa"
                                             >
                                                 <Trash2 size={12} />
