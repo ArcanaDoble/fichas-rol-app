@@ -97,6 +97,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [tokens, setTokens] = useState([]);
     const [uploadingToken, setUploadingToken] = useState(false);
 
+    // Estado para Drag & Drop de Tokens en el Canvas
+    const [draggedTokenId, setDraggedTokenId] = useState(null);
+    const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse al empezar arrastre
+    const [tokenOriginalPos, setTokenOriginalPos] = useState({ x: 0, y: 0 }); // Posición inicial del token
+
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
     const dragStartRef = useRef({ x: 0, y: 0 });
@@ -202,8 +207,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const handleMouseMove = (e) => {
+        if (draggedTokenId && activeScenario) {
+            // Lógica de arrastre de TOKEN
+            const deltaX = (e.clientX - tokenDragStart.x) / zoom;
+            const deltaY = (e.clientY - tokenDragStart.y) / zoom;
+
+            const newItems = activeScenario.items.map(item => {
+                if (item.id === draggedTokenId) {
+                    return {
+                        ...item,
+                        x: tokenOriginalPos.x + deltaX,
+                        y: tokenOriginalPos.y + deltaY
+                    };
+                }
+                return item;
+            });
+
+            setActiveScenario(prev => ({ ...prev, items: newItems }));
+            return;
+        }
+
         if (!isDragging) return;
 
+        // Lógica de paneo de CÁMARA
         const deltaX = e.clientX - dragStartRef.current.x;
         const deltaY = e.clientY - dragStartRef.current.y;
 
@@ -217,25 +243,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     const handleMouseUp = () => {
         setIsDragging(false);
+        setDraggedTokenId(null); // Soltar token
         document.body.style.cursor = 'default';
     };
 
     // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
         const handleGlobalMouseUp = () => {
-            if (isDragging) {
+            if (isDragging || draggedTokenId) {
                 setIsDragging(false);
+                setDraggedTokenId(null);
                 document.body.style.cursor = 'default';
             }
         };
 
         const handleGlobalMouseMove = (e) => {
-            if (isDragging) {
+            if (isDragging || draggedTokenId) {
                 handleMouseMove(e);
             }
         };
 
-        if (isDragging) {
+        if (isDragging || draggedTokenId) {
             window.addEventListener('mouseup', handleGlobalMouseUp);
             window.addEventListener('mousemove', handleGlobalMouseMove);
         }
@@ -244,7 +272,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             window.removeEventListener('mouseup', handleGlobalMouseUp);
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
-    }, [isDragging]);
+    }, [isDragging, draggedTokenId]);
 
     // Estado de configuración del Grid
     const [gridConfig, setGridConfig] = useState({
@@ -334,6 +362,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 backgroundImage: null,
                 backgroundImageHash: null, // Guardamos el hash para gestión de Storage
             },
+            items: [], // Inicializamos array de tokens
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
         };
 
@@ -405,6 +434,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
                 name: activeScenario.name,
                 config: updatedConfig,
+                items: activeScenario.items || [], // Guardamos items
                 camera: { zoom, offset },
                 lastModified: Date.now()
             });
@@ -485,6 +515,57 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         } catch (error) {
             console.error("Error deleting token:", error);
         }
+    };
+
+    const addTokenToCanvas = (tokenUrl) => {
+        if (!activeScenario) return;
+
+        // Calcular posición central basada en el offset actual y zoom para que aparezca en el centro de la pantalla visible
+        // Calcular posición central basada en el offset actual y zoom para que aparezca en el centro de la pantalla visible
+        // P_mundo = CentroMundo - (Offset / Zoom)
+        // El centro del div WORLD está en (WORLD_SIZE/2, WORLD_SIZE/2)
+
+        const centerX = (WORLD_SIZE / 2) - (offset.x / zoom);
+        const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
+
+        // Centrar el token en ese punto (restando la mitad de su tamaño)
+        const w = gridConfig.cellWidth;
+        const h = gridConfig.cellHeight;
+
+        const spawnX = centerX - (w / 2);
+        const spawnY = centerY - (h / 2);
+
+        const newToken = {
+            id: `token-${Date.now()}`,
+            x: spawnX,
+            y: spawnY,
+            width: gridConfig.cellWidth, // Tamaño por defecto: 1 celda
+            height: gridConfig.cellHeight,
+            img: tokenUrl,
+            rotation: 0,
+            layer: 'TOKEN'
+        };
+
+        setActiveScenario(prev => ({
+            ...prev,
+            items: [...(prev.items || []), newToken]
+        }));
+    };
+
+    const handleTokenMouseDown = (e, token) => {
+        e.stopPropagation(); // Evitar que el canvas inicie pan
+        if (e.button !== 0) return; // Solo click izquierdo
+
+        setDraggedTokenId(token.id);
+        setTokenDragStart({ x: e.clientX, y: e.clientY });
+        setTokenOriginalPos({ x: token.x, y: token.y });
+    };
+
+    const deleteItem = (itemId) => {
+        setActiveScenario(prev => ({
+            ...prev,
+            items: prev.items.filter(i => i.id !== itemId)
+        }));
     };
 
 
@@ -917,19 +998,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     {/* Tokens Grid */}
                                     <div className="grid grid-cols-3 gap-3">
                                         {tokens.map(token => (
-                                            <div key={token.id} className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors">
+                                            <div
+                                                key={token.id}
+                                                className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors cursor-pointer"
+                                                onClick={() => addTokenToCanvas(token.url)} // Click to Add
+                                                title="Click para añadir al mapa"
+                                            >
                                                 <img src={token.url} alt={token.name} className="w-full h-full object-contain p-2" />
 
                                                 {/* Delete Button Overlay */}
                                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                                     <button
-                                                        onClick={() => deleteToken(token)}
+                                                        onClick={(e) => { e.stopPropagation(); deleteToken(token); }}
                                                         className="p-1.5 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-200 transition-colors"
-                                                        title="Eliminar Token"
+                                                        title="Eliminar Token de Biblioteca"
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
-                                                    {/* Future: Add 'Drag' handle or 'Add to Map' button here */}
                                                 </div>
                                             </div>
                                         ))}
@@ -1185,20 +1270,50 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                             {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                             {/* (Aquí irán los tokens en el futuro) */}
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="text-[#c8aa6e]/10 font-['Cinzel'] text-9xl font-bold uppercase tracking-widest select-none">
-                                    Arcana
+                            {/* --- ITEMS / TOKENS LAYER --- */}
+                            {activeScenario?.items?.map(item => (
+                                <div
+                                    key={item.id}
+                                    onMouseDown={(e) => handleTokenMouseDown(e, item)}
+                                    style={{
+                                        transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
+                                        width: `${item.width}px`,
+                                        height: `${item.height}px`,
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        pointerEvents: 'auto', // Reactivar eventos para el token
+                                        cursor: 'grab'
+                                    }}
+                                    className="group"
+                                >
+                                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'cursor-grabbing scale-105 shadow-xl ring-2 ring-[#c8aa6e]' : ''} transition-transform`}>
+                                        <img
+                                            src={item.img}
+                                            className="w-full h-full object-contain drop-shadow-lg"
+                                            draggable={false}
+                                        />
+                                        {/* Controles de Token (Hover) */}
+                                        <div className="absolute -top-6 right-0 hidden group-hover:flex bg-black/80 rounded px-1 gap-1">
+                                            <button
+                                                onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                                className="text-red-400 hover:text-red-200 p-1"
+                                                title="Eliminar del mapa"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            ))}
 
                         </div>
                     </div>
                 </>
-            )
-            }
+            )}
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
-        </div >
+        </div>
     );
 };
 
