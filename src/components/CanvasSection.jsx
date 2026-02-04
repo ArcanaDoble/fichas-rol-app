@@ -164,20 +164,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
 
+                // --- Sincronización de Items (Tokens) ---
                 setActiveScenario(current => {
-                    // Si no hay escenario actual o cambiamos de mapa entre medias, no hacer nada
                     if (!current || current.id !== docSnap.id) return current;
 
-                    // Verificar si los items remotos son diferentes a los locales
-                    // Esto permite que si otro usuario (o tú en otro navegador) guarda cambios,
-                    // aparezcan aquí mágicamente sin recargar.
-                    // Comprobación simple para evitar re-renders si no hay cambios reales
+                    // Si hay cambios en los items
                     if (JSON.stringify(remoteData.items) !== JSON.stringify(current.items)) {
                         console.log("🔄 Sincronizando tablero con datos remotos...");
                         return { ...current, items: remoteData.items || [] };
                     }
                     return current;
                 });
+
+                // --- Sincronización de Configuración (Oscuridad, Grid, Fondo) ---
+                if (remoteData.config) {
+                    setGridConfig(currentConfig => {
+                        // Comprobación profunda simple para evitar re-renders innecesarios
+                        if (JSON.stringify(remoteData.config) !== JSON.stringify(currentConfig)) {
+                            console.log("🌑 Sincronizando configuración (oscuridad/grid) remota...");
+                            return remoteData.config;
+                        }
+                        return currentConfig;
+                    });
+                }
             }
         });
 
@@ -522,6 +531,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         imageWidth: null,
         imageHeight: null,
         snapToGrid: false,
+        ambientDarkness: 0, // 0 = Día (Transparente), 1 = Noche Total (Negro)
     });
 
     const fileInputRef = useRef(null);
@@ -667,8 +677,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 columns: 20,
                 rows: 15,
                 backgroundImage: null,
-                backgroundImageHash: null, // Guardamos el hash para gestión de Storage
+                backgroundImageHash: null,
                 snapToGrid: false,
+                ambientDarkness: 0,
             },
             items: [], // Inicializamos array de tokens
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
@@ -1546,6 +1557,54 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="w-full h-px bg-slate-800/50"></div>
+
+                                    {/* 6. Iluminación / Atmósfera */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-slate-600 shadow-[0_0_10px_currentColor] flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                            </div>
+                                            Iluminación Global
+                                        </h4>
+
+                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Oscuridad Ambiental</span>
+                                                <span className="text-[10px] font-mono text-[#c8aa6e]">{Math.round((gridConfig.ambientDarkness || 0) * 100)}%</span>
+                                            </div>
+
+                                            {/* Slider Personalizado */}
+                                            <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden cursor-pointer group">
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.05"
+                                                    value={gridConfig.ambientDarkness || 0}
+                                                    onChange={(e) => handleConfigChange('ambientDarkness', parseFloat(e.target.value))}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                />
+                                                {/* Barra de progreso visual */}
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-slate-600 to-black transition-all duration-100 ease-out"
+                                                    style={{ width: `${(gridConfig.ambientDarkness || 0) * 100}%` }}
+                                                ></div>
+
+                                                {/* Indicador de posición (Thumb) visual */}
+                                                <div
+                                                    className="absolute top-0 h-full w-1 bg-[#c8aa6e] pointer-events-none transition-all duration-100 ease-out shadow-[0_0_10px_#c8aa6e]"
+                                                    style={{ left: `${(gridConfig.ambientDarkness || 0) * 100}%`, transform: 'translateX(-50%)' }}
+                                                ></div>
+                                            </div>
+
+                                            <p className="text-[9px] text-slate-600 mt-2 leading-relaxed">
+                                                Ajusta la opacidad de la capa de oscuridad.
+                                                <span className="text-slate-500 italic block mt-0.5">Las fuentes de luz (próximamente) recortarán esta oscuridad.</span>
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -2058,6 +2117,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     </React.Fragment>
                                 );
                             })}
+
+                            {/* DARKNESS OVERLAY (Capa de Oscuridad Global) */}
+                            {/* Se posiciona encima de tiles y tokens para efecto "noche". 
+                                z-index alto pero menor que los controles de UI si es posible, 
+                                aunque pointer-events-none permite interactuar igual. */}
+                            <div
+                                className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-300 ease-in-out z-30"
+                                style={{
+                                    opacity: gridConfig.ambientDarkness || 0,
+                                    // En el futuro aquí irán mask-images para las luces
+                                }}
+                            ></div>
 
                         </div>
                     </div>
