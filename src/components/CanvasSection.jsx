@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
@@ -128,6 +128,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
     }, [showToast, toastType]);
 
+    const lastSelectedIdRef = useRef(null);
+
+    // Auto-open Inspector on Selection
+    useEffect(() => {
+        // No hacer nada si estamos rotando
+        if (rotatingTokenId) return;
+
+        if (selectedTokenIds.length === 1) {
+            const currentId = selectedTokenIds[0];
+            // Solo abrir si es un token DIFERENTE al que ya teníamos seleccionado/procesado
+            if (currentId !== lastSelectedIdRef.current) {
+                setActiveTab('INSPECTOR');
+                setShowSettings(true);
+                lastSelectedIdRef.current = currentId;
+            }
+        } else {
+            // Si no hay selección o hay múltiple, reseteamos la referencia
+            lastSelectedIdRef.current = null;
+            if (selectedTokenIds.length === 0 && activeTab === 'INSPECTOR') {
+                setActiveTab('CONFIG');
+            }
+        }
+    }, [selectedTokenIds, rotatingTokenId, activeTab]);
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
     // Listener no pasivo para prevenir el scroll por defecto correctamente
     useEffect(() => {
@@ -686,7 +709,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             height: gridConfig.cellHeight,
             img: tokenUrl,
             rotation: 0,
-            layer: 'TOKEN'
+            layer: 'TOKEN',
+            name: 'Token' // Nombre por defecto
         };
 
         setActiveScenario(prev => ({
@@ -761,6 +785,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 }
                 return i;
             })
+        }));
+    };
+
+    const updateItem = (itemId, updates) => {
+        setActiveScenario(prev => ({
+            ...prev,
+            items: prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
         }));
     };
 
@@ -1013,6 +1044,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                 <Sparkles className="w-4 h-4" />
                                 <span className="text-[8px] font-bold uppercase">Tokens</span>
                             </button>
+                            {selectedTokenIds.length === 1 && (
+                                <button
+                                    onClick={() => setActiveTab('INSPECTOR')}
+                                    className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'INSPECTOR' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                    <span className="text-[8px] font-bold uppercase">Inspector</span>
+                                </button>
+                            )}
                         </div>
 
                         {/* Sidebar Content Wrapper */}
@@ -1350,7 +1390,77 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* --- TAB: INSPECTOR --- */}
+                            {activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
+                                const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
+                                if (!token) return null;
+
+                                return (
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        {/* Header Inspector */}
+                                        <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
+                                            <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
+                                                <img src={token.img} className="w-full h-full object-contain p-1" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
+                                                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{token.layer} LAYER</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Properties Form */}
+                                        <div className="space-y-4">
+
+                                            {/* Name Input */}
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Nombre</label>
+                                                <input
+                                                    type="text"
+                                                    value={token.name}
+                                                    onChange={(e) => updateItem(token.id, { name: e.target.value })}
+                                                    className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
+                                                />
+                                            </div>
+
+                                            {/* Rotation & Size */}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
+                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded">
+                                                        <input
+                                                            type="number"
+                                                            value={Math.round(token.rotation || 0)}
+                                                            onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
+                                                            className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-200 outline-none"
+                                                        />
+                                                        <span className="pr-3 text-slate-600 text-xs">°</span>
+                                                    </div>
+                                                </div>
+                                                {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
+                                                <div className="space-y-2 opacity-50 cursor-not-allowed" title="Próximamente">
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Escala</label>
+                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded">
+                                                        <input disabled type="text" value="1x1" className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-500 outline-none" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Future Links */}
+                                            <div className="pt-4 border-t border-slate-800/50">
+                                                <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
+                                                    <Activity size={14} />
+                                                    Ver Ficha de Personaje
+                                                </button>
+                                                <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
+
 
                         <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
                             <button
@@ -1546,8 +1656,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             className="w-full h-full object-contain drop-shadow-lg"
                                             draggable={false}
                                         />
+                                        {/* NOMBRE DEL TOKEN (Visible al seleccionar o hover) */}
+                                        <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
+                                            <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
+                                                {item.name}
+                                            </span>
+                                        </div>
+
                                         {/* Controles de Token (Superiores) */}
                                         <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
+
+
                                             <button
                                                 onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
                                                 className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
@@ -1578,10 +1697,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
+
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
-        </div>
+        </div >
     );
 };
 
