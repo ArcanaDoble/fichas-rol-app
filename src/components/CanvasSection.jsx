@@ -140,13 +140,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         if (rotatingTokenId) return;
 
         if (selectedTokenIds.length === 1) {
+            // Auto-open deshabilitado a petición del usuario. Solo doble clic abre inspector.
             const currentId = selectedTokenIds[0];
-            // Solo abrir si es un token DIFERENTE al que ya teníamos seleccionado/procesado
-            if (currentId !== lastSelectedIdRef.current) {
-                setActiveTab('INSPECTOR');
-                setShowSettings(true);
-                lastSelectedIdRef.current = currentId;
-            }
+            lastSelectedIdRef.current = currentId;
         } else {
             // Si no hay selección o hay múltiple, reseteamos la referencia
             lastSelectedIdRef.current = null;
@@ -1788,113 +1784,188 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* --- ITEMS / TOKENS LAYER --- */}
 
                             {/* --- ITEMS / TOKENS LAYER --- */}
-                            {activeScenario?.items?.map(item => (
-                                <div
-                                    key={item.id}
-                                    onMouseDown={(e) => handleTokenMouseDown(e, item)}
-                                    style={{
-                                        transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
-                                        width: `${item.width}px`,
-                                        height: `${item.height}px`,
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: 0,
-                                        pointerEvents: 'auto', // Reactivar eventos para el token
-                                        cursor: 'grab'
-                                    }}
-                                    className="group"
-                                >
+                            {activeScenario?.items?.map(item => {
+                                const original = tokenOriginalPos[item.id];
+                                return (
+                                    <React.Fragment key={item.id}>
+                                        {/* GHOST TOKEN & LINE (Visual Aid when moving) */}
+                                        {original && (
+                                            <>
+                                                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                                                    <line
+                                                        x1={original.x + item.width / 2}
+                                                        y1={original.y + item.height / 2}
+                                                        x2={item.x + item.width / 2}
+                                                        y2={item.y + item.height / 2}
+                                                        stroke="#c8aa6e"
+                                                        strokeWidth="1.5"
+                                                        strokeDasharray="6 4"
+                                                        opacity="0.6"
+                                                    />
+                                                    <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
+                                                </svg>
+                                                <div
+                                                    className="absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 rounded-sm overflow-hidden"
+                                                    style={{
+                                                        transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
+                                                        width: `${item.width}px`,
+                                                        height: `${item.height}px`,
+                                                    }}
+                                                >
+                                                    <img src={item.img} className="w-full h-full object-contain" draggable={false} />
+                                                </div>
+                                            </>
+                                        )}
 
-                                    {/* Visual Selection Ring & Drag State */}
-                                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenIds.includes(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
-                                            {/* (Línea conectora y controles ahora unificados abajo) */}
-                                            {selectedTokenIds.includes(item.id) && (
-                                                <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
-                                            )}
-                                        </div>
+                                        <div
+                                            onMouseDown={(e) => handleTokenMouseDown(e, item)}
+                                            onDoubleClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveTab('INSPECTOR');
+                                                setShowSettings(true);
+                                            }}
+                                            style={{
+                                                transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
+                                                width: `${item.width}px`,
+                                                height: `${item.height}px`,
+                                                position: 'absolute',
+                                                left: 0,
+                                                top: 0,
+                                                pointerEvents: 'auto', // Reactivar eventos para el token
+                                                cursor: 'grab'
+                                            }}
+                                            className="group"
+                                        >
 
-                                        <img
-                                            src={item.img}
-                                            className="w-full h-full object-contain drop-shadow-lg"
-                                            draggable={false}
-                                        />
+                                            {/* Visual Selection Ring & Drag State */}
+                                            <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
+                                                <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenIds.includes(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                                                    {/* (Línea conectora y controles ahora unificados abajo) */}
+                                                    {selectedTokenIds.includes(item.id) && (
+                                                        <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
+                                                    )}
+                                                </div>
 
-                                        {/* STATUS EFFECTS ONSCREEN */}
-                                        {item.status && item.status.length > 0 && (
-                                            <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
-                                                {item.status.slice(0, 4).map(statusId => {
-                                                    const effect = DEFAULT_STATUS_EFFECTS[statusId];
-                                                    if (!effect) return null;
-                                                    const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+                                                <img
+                                                    src={item.img}
+                                                    className="w-full h-full object-contain drop-shadow-lg"
+                                                    draggable={false}
+                                                />
 
-                                                    return (
-                                                        <div
-                                                            key={statusId}
-                                                            className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm"
-                                                            style={{
-                                                                borderColor: effect.hex || '#c8aa6e',
-                                                                color: effect.hex || '#c8aa6e'
-                                                            }}
-                                                        >
-                                                            <Icon size={12} />
-                                                        </div>
-                                                    );
-                                                })}
-                                                {item.status.length > 4 && (
-                                                    <div className="w-5 h-5 bg-[#0b1120] rounded-full border border-slate-600 flex items-center justify-center shadow-sm text-[8px] text-slate-400 font-bold">
-                                                        +{item.status.length - 4}
+                                                {/* STATUS EFFECTS ONSCREEN */}
+                                                {item.status && item.status.length > 0 && (
+                                                    <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
+                                                        {item.status.slice(0, 4).map(statusId => {
+                                                            const effect = DEFAULT_STATUS_EFFECTS[statusId];
+                                                            if (!effect) return null;
+                                                            const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+
+                                                            return (
+                                                                <div
+                                                                    key={statusId}
+                                                                    className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm"
+                                                                    style={{
+                                                                        borderColor: effect.hex || '#c8aa6e',
+                                                                        color: effect.hex || '#c8aa6e'
+                                                                    }}
+                                                                >
+                                                                    <Icon size={12} />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {item.status.length > 4 && (
+                                                            <div className="w-5 h-5 bg-[#0b1120] rounded-full border border-slate-600 flex items-center justify-center shadow-sm text-[8px] text-slate-400 font-bold">
+                                                                +{item.status.length - 4}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
+
+                                                {/* MOVEMENT DISTANCE INDICATOR (Solo al arrastrar) */}
+                                                {tokenOriginalPos[item.id] && (
+                                                    (() => {
+                                                        const original = tokenOriginalPos[item.id];
+                                                        const dx = Math.abs(item.x - original.x);
+                                                        const dy = Math.abs(item.y - original.y);
+                                                        const cellW = gridConfig.cellWidth || 50;
+                                                        const cellH = gridConfig.cellHeight || 50;
+
+                                                        // Distancia en casillas (Regla Chebyshev: Diagonal = 1)
+                                                        const moveX = Math.round(dx / cellW);
+                                                        const moveY = Math.round(dy / cellH);
+                                                        const distance = Math.max(moveX, moveY);
+
+                                                        if (distance === 0) return null;
+
+                                                        return (
+                                                            <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
+                                                                <div className="bg-black/80 backdrop-blur-md border border-yellow-500/50 rounded-full px-3 py-1 flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
+                                                                    {distance <= 5 ? (
+                                                                        <span className="text-xs leading-none flex gap-0.5">
+                                                                            {Array(distance).fill('🟡').map((_, i) => (
+                                                                                <span key={i} className="drop-shadow-md">🟡</span>
+                                                                            ))}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-xs leading-none drop-shadow-md">🟡</span>
+                                                                            <span className="text-yellow-400 font-bold text-xs font-mono leading-none">x{distance}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()
+                                                )}
+
+                                                {/* NOMBRE DEL TOKEN (Visible al seleccionar o hover) */}
+                                                <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
+                                                    <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
+                                                        {item.name}
+                                                    </span>
+                                                </div>
+
+                                                {/* Controles de Token (Superiores) */}
+                                                <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
+
+
+                                                    <button
+                                                        onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
+                                                        className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
+                                                        title="Rotar 45°"
+                                                    >
+                                                        <RotateCw size={12} />
+                                                    </button>
+
+                                                    {/* Handle de Rotación Libre (Central) */}
+                                                    <div
+                                                        className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]"
+                                                        onMouseDown={(e) => handleRotationMouseDown(e, item)}
+                                                        title="Arrastrar para rotar libremente"
+                                                    />
+
+                                                    <button
+                                                        onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                                        className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
+                                                        title="Eliminar del mapa"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+
+                                                {/* RESIZE HANDLE (Bottom-Right) */}
+                                                {selectedTokenIds.includes(item.id) && !rotatingTokenId && (
+                                                    <div
+                                                        onMouseDown={(e) => handleResizeMouseDown(e, item)}
+                                                        className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
+                                                        title="Redimensionar (Click + Arrastrar)"
+                                                    ></div>
+                                                )}
                                             </div>
-                                        )}
-
-                                        {/* NOMBRE DEL TOKEN (Visible al seleccionar o hover) */}
-                                        <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
-                                            <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
-                                                {item.name}
-                                            </span>
                                         </div>
-
-                                        {/* Controles de Token (Superiores) */}
-                                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
-
-
-                                            <button
-                                                onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
-                                                className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
-                                                title="Rotar 45°"
-                                            >
-                                                <RotateCw size={12} />
-                                            </button>
-
-                                            {/* Handle de Rotación Libre (Central) */}
-                                            <div
-                                                className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]"
-                                                onMouseDown={(e) => handleRotationMouseDown(e, item)}
-                                                title="Arrastrar para rotar libremente"
-                                            />
-
-                                            <button
-                                                onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                                className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
-                                                title="Eliminar del mapa"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-
-                                        {/* RESIZE HANDLE (Bottom-Right) */}
-                                        {selectedTokenIds.includes(item.id) && !rotatingTokenId && (
-                                            <div
-                                                onMouseDown={(e) => handleResizeMouseDown(e, item)}
-                                                className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
-                                                title="Redimensionar (Click + Arrastrar)"
-                                            ></div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                                    </React.Fragment>
+                                );
+                            })}
 
                         </div>
                     </div>
