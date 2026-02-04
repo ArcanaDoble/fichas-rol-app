@@ -22,22 +22,45 @@ function EstadoSelector({ selected = [], onToggle }) {
   }, []);
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-3 gap-2">
       {Object.entries(effects).map(([id, e]) => {
         const Icon = ICON_MAP[e.iconName] || ICON_MAP.AlertCircle;
-        const colorClass = e.color || 'text-white';
-        const isSelected = selected.includes(id) || selected.includes(e.label);
+        const active = selected.includes(id) || selected.includes(e.label);
+
+        // Recuperar color hexadecimal (prioridad: data actual > default > fallback)
+        const colorHex = e.hex || DEFAULT_STATUS_EFFECTS[id]?.hex || '#c8aa6e';
+
+        // Colores base para inactivo (gris apagado) vs activo (color del elemento)
+        const borderColor = active ? colorHex : '#334155';
+        const textColor = active ? colorHex : '#64748b';
 
         return (
           <button
             key={id}
             type="button"
             onClick={() => onToggle(id)}
-            className={`relative rounded-lg p-2 bg-gray-800 hover:bg-gray-700 transition flex flex-col items-center justify-center gap-1 ${isSelected ? 'ring-2 ring-[#c8aa6e] bg-[#c8aa6e]/10' : ''}`}
+            style={{
+              borderColor: borderColor,
+              color: textColor,
+              boxShadow: active ? `0 0 10px -2px ${colorHex}40` : 'none'
+            }}
+            className={`
+                relative rounded-lg p-3 border transition-all duration-300
+                flex flex-col items-center justify-center gap-2 aspect-square
+                bg-[#0b1120] hover:bg-[#111827]
+                ${active ? 'bg-opacity-100' : 'bg-opacity-50'}
+            `}
             title={e.desc}
           >
-            <Icon className={`w-8 h-8 ${colorClass}`} />
-            <span className="text-[10px] mt-1 font-bold uppercase tracking-wider text-center line-clamp-1">{e.label}</span>
+            <Icon
+              size={24}
+              style={{
+                filter: active ? `drop-shadow(0 0 2px ${colorHex})` : 'none'
+              }}
+            />
+            <span className="text-[9px] font-bold uppercase tracking-wider text-center leading-tight">
+              {e.label}
+            </span>
           </button>
         );
       })}

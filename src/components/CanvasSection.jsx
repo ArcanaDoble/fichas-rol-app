@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
 import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2 } from 'lucide-react';
+import EstadoSelector from './EstadoSelector';
+import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
@@ -710,7 +712,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             img: tokenUrl,
             rotation: 0,
             layer: 'TOKEN',
-            name: 'Token' // Nombre por defecto
+            name: 'Token', // Nombre por defecto
+            status: [] // Array de IDs de estados
         };
 
         setActiveScenario(prev => ({
@@ -1455,6 +1458,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
                                             </div>
 
+                                            {/* Estados Alterados */}
+                                            <div className="pt-4 border-t border-slate-800/50 space-y-3">
+                                                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
+                                                <EstadoSelector
+                                                    selected={token.status || []}
+                                                    onToggle={(statusId) => {
+                                                        const currentStatus = token.status || [];
+                                                        const newStatus = currentStatus.includes(statusId)
+                                                            ? currentStatus.filter(s => s !== statusId)
+                                                            : [...currentStatus, statusId];
+                                                        updateItem(token.id, { status: newStatus });
+                                                    }}
+                                                />
+                                            </div>
+
                                         </div>
                                     </div>
                                 );
@@ -1656,6 +1674,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             className="w-full h-full object-contain drop-shadow-lg"
                                             draggable={false}
                                         />
+
+                                        {/* STATUS EFFECTS ONSCREEN */}
+                                        {item.status && item.status.length > 0 && (
+                                            <div className="absolute top-0 -right-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-left">
+                                                {item.status.slice(0, 4).map(statusId => {
+                                                    const effect = DEFAULT_STATUS_EFFECTS[statusId];
+                                                    if (!effect) return null;
+                                                    const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+
+                                                    return (
+                                                        <div
+                                                            key={statusId}
+                                                            className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm"
+                                                            style={{
+                                                                borderColor: effect.hex || '#c8aa6e',
+                                                                color: effect.hex || '#c8aa6e'
+                                                            }}
+                                                        >
+                                                            <Icon size={12} />
+                                                        </div>
+                                                    );
+                                                })}
+                                                {item.status.length > 4 && (
+                                                    <div className="w-5 h-5 bg-[#0b1120] rounded-full border border-slate-600 flex items-center justify-center shadow-sm text-[8px] text-slate-400 font-bold">
+                                                        +{item.status.length - 4}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* NOMBRE DEL TOKEN (Visible al seleccionar o hover) */}
                                         <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
                                             <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
