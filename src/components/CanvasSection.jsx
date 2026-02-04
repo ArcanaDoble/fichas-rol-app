@@ -95,6 +95,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
+    const [clipboard, setClipboard] = useState([]); // Portapapeles para copiar/pegar tokens
 
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
@@ -575,6 +576,79 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         });
         return () => unsub();
     }, []);
+
+    // --- KEYBOARD SHORTCUTS (Copy/Paste) ---
+    useEffect(() => {
+        const handleKeyDown = async (e) => {
+            // Ignorar si estamos escribiendo en un input
+            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+            // COPY (Ctrl+C)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                if (selectedTokenIds.length > 0 && activeScenario?.items) {
+                    const tokensToCopy = activeScenario.items.filter(item => selectedTokenIds.includes(item.id));
+                    if (tokensToCopy.length > 0) {
+                        setClipboard(tokensToCopy);
+                        console.log("Tokens copiados al portapapeles:", tokensToCopy.length);
+                    }
+                }
+            }
+
+            // PASTE (Ctrl+V)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                if (clipboard.length > 0 && activeScenario) {
+                    e.preventDefault(); // Evitar pegado nativo
+
+                    const newTokens = clipboard.map(originalItem => {
+                        // Generar ID única y desplazar ligeramente
+                        const newId = crypto.randomUUID();
+                        return {
+                            ...originalItem,
+                            id: newId,
+                            x: (originalItem.x || 0) + 40,
+                            y: (originalItem.y || 0) + 40,
+                            // COPIA PROFUNDA (Deep Copy) para singularidad en BD
+                            // Esto asegura que editar stats/status del nuevo no afecte al original
+                            stats: JSON.parse(JSON.stringify(originalItem.stats || {})),
+                            attributes: JSON.parse(JSON.stringify(originalItem.attributes || {})),
+                            status: [...(originalItem.status || [])]
+                        };
+                    });
+
+                    const updatedItems = [...(activeScenario.items || []), ...newTokens];
+
+                    // Actualización Optimista Local
+                    setActiveScenario(prev => ({
+                        ...prev,
+                        items: updatedItems
+                    }));
+
+                    // Guardar en Firebase
+                    try {
+                        await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                            items: updatedItems,
+                            lastModified: Date.now()
+                        });
+
+                        // Seleccionar los nuevos tokens clonados
+                        setSelectedTokenIds(newTokens.map(t => t.id));
+
+                        // Feedback visual reutilizando el Toast existente
+                        setToastType('success');
+                        setShowToast(true);
+                        setTimeout(() => setToastExiting(true), 2000);
+                        setTimeout(() => { setShowToast(false); setToastExiting(false); }, 2500);
+
+                    } catch (error) {
+                        console.error('Error al pegar tokens:', error);
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeScenario, selectedTokenIds, clipboard]);
 
     const createNewScenario = async () => {
         const newScenario = {
