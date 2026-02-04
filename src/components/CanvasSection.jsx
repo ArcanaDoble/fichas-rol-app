@@ -98,11 +98,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [uploadingToken, setUploadingToken] = useState(false);
 
     // Estado para Drag & Drop de Tokens en el Canvas
-    const [draggedTokenId, setDraggedTokenId] = useState(null);
-    const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse al empezar arrastre
-    const [tokenOriginalPos, setTokenOriginalPos] = useState({ x: 0, y: 0 }); // Posición inicial del token
-    const [selectedTokenId, setSelectedTokenId] = useState(null); // Nuevo estado para seleccion
-    const [rotatingTokenId, setRotatingTokenId] = useState(null); // Estado para rotación libre
+    const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
+    const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse
+    const [tokenOriginalPos, setTokenOriginalPos] = useState({}); // Mapa de posiciones originales { [id]: {x, y} }
+    const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
+    const [rotatingTokenId, setRotatingTokenId] = useState(null);
+
+    // Estado para Cuadro de Selección
+    const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
 
     // Configuración de movimiento
 
@@ -210,7 +213,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
     };
 
+    // --- Helper: Screen to World Coords ---
+    const divToWorld = (screenX, screenY) => {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return { x: 0, y: 0 };
+
+        // 1. Convert to simple offset relative to container center
+        const startX = screenX - containerRect.left - (containerRect.width / 2);
+        const startY = screenY - containerRect.top - (containerRect.height / 2);
+
+        // 2. Adjust for Pan Offset and Zoom
+        // Screen = Offset + (World - Center) * Zoom
+        // (Screen - Offset) / Zoom = World - Center
+        // World = ((Screen - Offset) / Zoom) + Center
+
+        const worldX = ((startX - offset.x) / zoom) + (WORLD_SIZE / 2);
+        const worldY = ((startY - offset.y) / zoom) + (WORLD_SIZE / 2);
+
+        return { x: worldX, y: worldY };
+    }
+
     const handleMouseMove = (e) => {
+        // --- SELECTION BOX ---
+        if (selectionBox) {
+            setSelectionBox(prev => ({ ...prev, current: { x: e.clientX, y: e.clientY } }));
+            return;
+        }
+
         // --- ROTACIÓN LIBRE ---
         if (rotatingTokenId && activeScenario) {
             const containerRect = containerRef.current?.getBoundingClientRect();
@@ -267,19 +296,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
 
         if (draggedTokenId && activeScenario) {
-            // Lógica de arrastre de TOKEN
+            // Lógica de arrastre de TOKENS (Multiples)
             const deltaX = (e.clientX - tokenDragStart.x) / zoom;
             const deltaY = (e.clientY - tokenDragStart.y) / zoom;
 
-            // Si se está arrastrando, aseguramos que el token también está seleccionado
-            if (draggedTokenId !== selectedTokenId) {
-                setSelectedTokenId(draggedTokenId);
-            }
-
             const newItems = activeScenario.items.map(item => {
-                if (item.id === draggedTokenId) {
-                    let newX = tokenOriginalPos.x + deltaX;
-                    let newY = tokenOriginalPos.y + deltaY;
+                if (selectedTokenIds.includes(item.id)) {
+                    const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
+                    let newX = original.x + deltaX;
+                    let newY = original.y + deltaY;
 
                     if (gridConfig.snapToGrid) {
                         const cellW = gridConfig.cellWidth;
@@ -288,11 +313,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         newY = Math.round(newY / cellH) * cellH;
                     }
 
-                    return {
-                        ...item,
-                        x: newX,
-                        y: newY
-                    };
+                    return { ...item, x: newX, y: newY };
                 }
                 return item;
             });
@@ -300,6 +321,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             setActiveScenario(prev => ({ ...prev, items: newItems }));
             return;
         }
+
 
         if (!isDragging) return;
 
@@ -315,31 +337,71 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         dragStartRef.current = { x: e.clientX, y: e.clientY };
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
+        // --- FINALIZAR SELECCIÓN BOX ---
+        if (selectionBox && activeScenario) {
+            const containerRect = containerRef.current?.getBoundingClientRect();
+            if (containerRect) {
+                // Calcular rectangulo de selección en coordenadas relativas al div contenedor (para simplificar)
+                const sbLeft = Math.min(selectionBox.start.x, selectionBox.current.x);
+                const sbTop = Math.min(selectionBox.start.y, selectionBox.current.y);
+                const sbRight = Math.max(selectionBox.start.x, selectionBox.current.x);
+                const sbBottom = Math.max(selectionBox.start.y, selectionBox.current.y);
+
+                // Convertir las 4 esquinas a Mundo para un AABB check aproximado (si no rotamos cámara)
+                const tl = divToWorld(sbLeft, sbTop);
+                const br = divToWorld(sbRight, sbBottom);
+
+                // Definir caja de selección en Mundo
+                const selX = tl.x;
+                const selY = tl.y;
+                const selW = br.x - tl.x;
+                const selH = br.y - tl.y;
+
+                // Seleccionar items que intersecten
+                const newSelected = activeScenario.items.filter(item => {
+                    // Simple AABB intersection
+                    return (
+                        item.x < selX + selW &&
+                        item.x + item.width > selX &&
+                        item.y < selY + selH &&
+                        item.y + item.height > selY
+                    );
+                }).map(i => i.id);
+
+                // Add to existing if Shift used? For now simpler: Replace selection or Add if Shift
+                if (e && e.shiftKey) {
+                    setSelectedTokenIds(prev => [...new Set([...prev, ...newSelected])]);
+                } else {
+                    setSelectedTokenIds(newSelected);
+                }
+            }
+            setSelectionBox(null);
+            return;
+        }
+
         setIsDragging(false);
         setDraggedTokenId(null); // Soltar token
         setRotatingTokenId(null); // Soltar rotación
+        setTokenOriginalPos({});
         document.body.style.cursor = 'default';
     };
 
     // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
-        const handleGlobalMouseUp = () => {
-            if (isDragging || draggedTokenId || rotatingTokenId) {
-                setIsDragging(false);
-                setDraggedTokenId(null);
-                setRotatingTokenId(null);
-                document.body.style.cursor = 'default';
+        const handleGlobalMouseUp = (e) => {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
+                handleMouseUp(e);
             }
         };
 
         const handleGlobalMouseMove = (e) => {
-            if (isDragging || draggedTokenId || rotatingTokenId) {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
                 handleMouseMove(e);
             }
         };
 
-        if (isDragging || draggedTokenId || rotatingTokenId) {
+        if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
             window.addEventListener('mouseup', handleGlobalMouseUp);
             window.addEventListener('mousemove', handleGlobalMouseMove);
         }
@@ -348,7 +410,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             window.removeEventListener('mouseup', handleGlobalMouseUp);
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
-    }, [isDragging, draggedTokenId, rotatingTokenId]);
+    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox]);
 
     // Dummy state just to make linter happy if needed or unused var
     const [, setLoadingRotation] = useState(0);
@@ -638,11 +700,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Si click izquierdo, seleccionamos y preparamos arrastre
         if (e.button === 0) {
-            // Si estamos pulsando el control de rotación, no iniciamos drag
+            let newSelection = [...selectedTokenIds];
+
+            // Si el token NO está ya seleccionado, lo añadimos o reemplazamos
+            if (!selectedTokenIds.includes(token.id)) {
+                if (e.shiftKey) {
+                    newSelection.push(token.id);
+                } else {
+                    newSelection = [token.id];
+                }
+                setSelectedTokenIds(newSelection);
+            }
+            // Si YA está seleccionado, si pulsamos Shift podríamos deseleccionarlo?
+            // Por simplicidad de arrastre, si ya está seleccionado y NO Shift, no hacemos nada (mantenemos grupo)
+            // Si Shift y ya está, podríamos quitarlo.
+            else if (e.shiftKey) {
+                newSelection = newSelection.filter(id => id !== token.id);
+                setSelectedTokenIds(newSelection);
+                return; // No iniciamos drag si estamos deseleccionando
+            }
+
             setDraggedTokenId(token.id);
             setTokenDragStart({ x: e.clientX, y: e.clientY });
-            setTokenOriginalPos({ x: token.x, y: token.y });
-            setSelectedTokenId(token.id); // Selección inmediata
+
+            // Guardar posiciones originales de TODOS los seleccionados (incluyendo el nuevo si acabamos de seleccionarlo)
+            // Nota: Usamos 'newSelection' para asegurar que tenemos la lista actualizada
+            const originals = {};
+            activeScenario.items.forEach(i => {
+                if (newSelection.includes(i.id)) {
+                    originals[i.id] = { x: i.x, y: i.y };
+                }
+            });
+            setTokenOriginalPos(originals);
         }
     };
 
@@ -650,7 +739,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         e.stopPropagation();
         if (e.button === 0) {
             setRotatingTokenId(token.id);
-            setSelectedTokenId(token.id);
+            // Para rotación, forzamos selección única del token rotado para evitar confusiones visuales
+            setSelectedTokenIds([token.id]);
         }
     };
 
@@ -659,7 +749,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             ...prev,
             items: prev.items.filter(i => i.id !== itemId)
         }));
-        if (selectedTokenId === itemId) setSelectedTokenId(null);
+        setSelectedTokenIds(prev => prev.filter(id => id !== itemId));
     };
 
     const rotateItem = (itemId, angle) => {
@@ -674,13 +764,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }));
     };
 
-    // Handler para click en el fondo del canvas (Deseleccionar)
+    // Handler para click en el fondo del canvas (Deseleccionar y Selection Box)
     const handleCanvasBackgroundMouseDown = (e) => {
         // Solo si click izquierdo directo en el fondo
         if (e.button === 0 && !e.altKey && e.target === containerRef.current) {
-            setSelectedTokenId(null);
+            if (!e.shiftKey) setSelectedTokenIds([]); // Limpiar selección si no es Shift
+
+            // Verificación de dispositivo móvil (Touch o pantalla pequeña)
+            const isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
+            if (isMobile) return;
+
+            // Iniciar Selection Box
+            setSelectionBox({
+                start: { x: e.clientX, y: e.clientY },
+                current: { x: e.clientX, y: e.clientY }
+            });
+        } else {
+            handleMouseDown(e); // Mantener lógica de pan (Alt+Click o Middle Click)
         }
-        handleMouseDown(e); // Mantener lógica de pan
     };
 
 
@@ -1319,6 +1420,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         onTouchEnd={handleTouchEnd}
                         onContextMenu={(e) => e.preventDefault()}
                     >
+                        {/* --- SELECTION BOX RENDER (Screen Space Overlay) --- */}
+                        {selectionBox && (
+                            <div
+                                className="absolute border border-[#c8aa6e] bg-[#c8aa6e]/10 pointer-events-none z-50"
+                                style={{
+                                    left: Math.min(selectionBox.start.x, selectionBox.current.x) - (containerRef.current?.getBoundingClientRect().left || 0),
+                                    top: Math.min(selectionBox.start.y, selectionBox.current.y) - (containerRef.current?.getBoundingClientRect().top || 0),
+                                    width: Math.abs(selectionBox.current.x - selectionBox.start.x),
+                                    height: Math.abs(selectionBox.current.y - selectionBox.start.y)
+                                }}
+                            />
+                        )}
+
                         {/* --- WORLD (Contenedor Transformado) --- */}
                         <div
                             style={{
@@ -1398,7 +1512,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             </div>
 
                             {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
-                            {/* (Aquí irán los tokens en el futuro) */}
+                            {/* --- ITEMS / TOKENS LAYER --- */}
+
                             {/* --- ITEMS / TOKENS LAYER --- */}
                             {activeScenario?.items?.map(item => (
                                 <div
@@ -1419,9 +1534,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                                     {/* Visual Selection Ring & Drag State */}
                                     <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenId === item.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenIds.includes(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                                             {/* (Línea conectora y controles ahora unificados abajo) */}
-                                            {selectedTokenId === item.id && (
+                                            {selectedTokenIds.includes(item.id) && (
                                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                                             )}
                                         </div>
@@ -1432,7 +1547,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             draggable={false}
                                         />
                                         {/* Controles de Token (Superiores) */}
-                                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenId === item.id || 'group-hover:opacity-100 opacity-0'}`}>
+                                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
                                             <button
                                                 onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
                                                 className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
