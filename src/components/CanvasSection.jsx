@@ -105,6 +105,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [tokenOriginalPos, setTokenOriginalPos] = useState({}); // Mapa de posiciones originales { [id]: {x, y} }
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
+    const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
+    const resizeStartRef = useRef(null); // { x, y, width, height }
 
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
@@ -153,6 +155,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             }
         }
     }, [selectedTokenIds, rotatingTokenId, activeTab]);
+
+    // Listener para Sincronización en Tiempo Real (Multi-navegador)
+    useEffect(() => {
+        if (!activeScenario?.id) return;
+
+        // Suscribirse a cambios en el documento del escenario activo
+        const unsub = onSnapshot(doc(db, 'canvas_scenarios', activeScenario.id), (docSnap) => {
+            if (docSnap.exists()) {
+                const remoteData = docSnap.data();
+
+                setActiveScenario(current => {
+                    // Si no hay escenario actual o cambiamos de mapa entre medias, no hacer nada
+                    if (!current || current.id !== docSnap.id) return current;
+
+                    // Verificar si los items remotos son diferentes a los locales
+                    // Esto permite que si otro usuario (o tú en otro navegador) guarda cambios,
+                    // aparezcan aquí mágicamente sin recargar.
+                    // Comprobación simple para evitar re-renders si no hay cambios reales
+                    if (JSON.stringify(remoteData.items) !== JSON.stringify(current.items)) {
+                        console.log("🔄 Sincronizando tablero con datos remotos...");
+                        return { ...current, items: remoteData.items || [] };
+                    }
+                    return current;
+                });
+            }
+        });
+
+        return () => unsub();
+    }, [activeScenario?.id]); // Solo se reinicia si cambiamos de escenario base (ID)
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
     // Listener no pasivo para prevenir el scroll por defecto correctamente
     useEffect(() => {
@@ -347,6 +378,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             return;
         }
 
+        // --- Lógica de REDIMENSIÓN ---
+        if (resizingTokenId && activeScenario && resizeStartRef.current) {
+            const { startX, startY, startWidth, startHeight } = resizeStartRef.current;
+            const deltaX = (e.clientX - startX) / zoom;
+            const deltaY = (e.clientY - startY) / zoom; // Asumiendo aspect ratio libre o control
+
+            let newWidth = startWidth + deltaX;
+            let newHeight = startHeight + deltaY;
+
+            if (gridConfig.snapToGrid) {
+                const cellW = gridConfig.cellWidth;
+                const cellH = gridConfig.cellHeight;
+                // Snap a cuartos de celda (0.25, 0.5, 0.75, 1, 1.25...)
+                // Permitimos un tamaño mínimo de 0.25 (un cuarto de casilla)
+                const snapUnitW = cellW * 0.25;
+                const snapUnitH = cellH * 0.25;
+
+                newWidth = Math.max(snapUnitW, Math.round(newWidth / snapUnitW) * snapUnitW);
+                newHeight = Math.max(snapUnitH, Math.round(newHeight / snapUnitH) * snapUnitH);
+            } else {
+                // Mínimo 10px si no hay snap
+                newWidth = Math.max(10, newWidth);
+                newHeight = Math.max(10, newHeight);
+            }
+
+            setActiveScenario(prev => ({
+                ...prev,
+                items: prev.items.map(item =>
+                    item.id === resizingTokenId
+                        ? { ...item, width: newWidth, height: newHeight }
+                        : item
+                )
+            }));
+            return;
+        }
+
 
         if (!isDragging) return;
 
@@ -408,6 +475,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         setIsDragging(false);
         setDraggedTokenId(null); // Soltar token
         setRotatingTokenId(null); // Soltar rotación
+        setResizingTokenId(null); // Soltar resize
         setTokenOriginalPos({});
         document.body.style.cursor = 'default';
     };
@@ -415,7 +483,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
         const handleGlobalMouseUp = (e) => {
-            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || resizingTokenId) {
                 handleMouseUp(e);
             }
         };
@@ -727,6 +795,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Si click izquierdo, seleccionamos y preparamos arrastre
         if (e.button === 0) {
+            // Si estamos redimensionando, no iniciar arrastre
+            if (resizingTokenId) return;
+
             let newSelection = [...selectedTokenIds];
 
             // Si el token NO está ya seleccionado, lo añadimos o reemplazamos
@@ -796,6 +867,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             ...prev,
             items: prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
         }));
+    };
+
+    const handleResizeMouseDown = (e, item) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setResizingTokenId(item.id);
+        resizeStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startWidth: item.width,
+            startHeight: item.height
+        };
     };
 
     // Handler para click en el fondo del canvas (Deseleccionar y Selection Box)
@@ -1430,21 +1513,83 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
-                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded">
+                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded h-9">
                                                         <input
                                                             type="number"
                                                             value={Math.round(token.rotation || 0)}
                                                             onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
-                                                            className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-200 outline-none"
+                                                            className="w-full h-full bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
                                                         />
                                                         <span className="pr-3 text-slate-600 text-xs">°</span>
                                                     </div>
                                                 </div>
                                                 {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
-                                                <div className="space-y-2 opacity-50 cursor-not-allowed" title="Próximamente">
-                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Escala</label>
-                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded">
-                                                        <input disabled type="text" value="1x1" className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-500 outline-none" />
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tamaño</label>
+                                                    <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
+                                                        <button
+                                                            onClick={() => {
+                                                                // Lógica inteligente de decremento
+                                                                // Si > 1 celda, baja de 1 en 1. Si <= 1, baja de 0.25 en 0.25. Mínimo 0.25.
+                                                                if (gridConfig.snapToGrid) {
+                                                                    const cellW = gridConfig.cellWidth;
+                                                                    const cellH = gridConfig.cellHeight;
+                                                                    const currentCellsW = token.width / cellW;
+
+                                                                    // Calcular nuevo tamaño en celdas
+                                                                    let newCellsW = currentCellsW > 1 ? Math.floor(currentCellsW - 1) : currentCellsW - 0.25;
+                                                                    // Corregir si bajó demasiado al redondear o si ya estaba en 1.5 (floor(0.5)=>0 bad)
+                                                                    if (currentCellsW > 1 && newCellsW < 1) newCellsW = 1;
+                                                                    // Simplicidad: Restar 1 si >= 2, restar 0.25 si < 2.
+                                                                    newCellsW = (token.width / cellW) <= 1 ? (token.width / cellW) - 0.25 : (token.width / cellW) - 1;
+
+                                                                    // Asegurar mínimo 0.25
+                                                                    if (newCellsW < 0.25) newCellsW = 0.25;
+
+                                                                    updateItem(token.id, {
+                                                                        width: newCellsW * cellW,
+                                                                        height: newCellsW * cellH // Mantener ratio cuadrado por simplicidad en botón, o usar lógica separada
+                                                                    });
+                                                                } else {
+                                                                    const step = 20;
+                                                                    const newW = Math.max(10, token.width - step);
+                                                                    const newH = Math.max(10, token.height - step);
+                                                                    updateItem(token.id, { width: newW, height: newH });
+                                                                }
+                                                            }}
+                                                            className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-r border-slate-800 flex items-center justify-center"
+                                                            title="Reducir"
+                                                        >
+                                                            <FiMinus size={14} />
+                                                        </button>
+                                                        <span className="flex-1 text-center font-mono text-xs text-[#c8aa6e] flex items-center justify-center h-full">
+                                                            {gridConfig.snapToGrid
+                                                                ? `${parseFloat((token.width / gridConfig.cellWidth).toFixed(2))}x${parseFloat((token.height / gridConfig.cellHeight).toFixed(2))}`
+                                                                : `${Math.round(token.width)}px`
+                                                            }
+                                                        </span>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (gridConfig.snapToGrid) {
+                                                                    const cellW = gridConfig.cellWidth;
+                                                                    const cellH = gridConfig.cellHeight;
+                                                                    // Incrementar: 0.25 si < 1, 1 si >= 1
+                                                                    let newCellsW = (token.width / cellW) < 1 ? (token.width / cellW) + 0.25 : (token.width / cellW) + 1;
+
+                                                                    updateItem(token.id, {
+                                                                        width: newCellsW * cellW,
+                                                                        height: newCellsW * cellH
+                                                                    });
+                                                                } else {
+                                                                    const step = 20;
+                                                                    updateItem(token.id, { width: token.width + step, height: token.height + step });
+                                                                }
+                                                            }}
+                                                            className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-800 flex items-center justify-center"
+                                                            title="Aumentar"
+                                                        >
+                                                            <FiPlus size={14} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1677,7 +1822,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                                         {/* STATUS EFFECTS ONSCREEN */}
                                         {item.status && item.status.length > 0 && (
-                                            <div className="absolute top-0 -right-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-left">
+                                            <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
                                                 {item.status.slice(0, 4).map(statusId => {
                                                     const effect = DEFAULT_STATUS_EFFECTS[statusId];
                                                     if (!effect) return null;
@@ -1738,6 +1883,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 <Trash2 size={12} />
                                             </button>
                                         </div>
+
+                                        {/* RESIZE HANDLE (Bottom-Right) */}
+                                        {selectedTokenIds.includes(item.id) && !rotatingTokenId && (
+                                            <div
+                                                onMouseDown={(e) => handleResizeMouseDown(e, item)}
+                                                className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
+                                                title="Redimensionar (Click + Arrastrar)"
+                                            ></div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
