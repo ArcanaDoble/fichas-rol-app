@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2 } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -945,6 +945,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }));
     };
 
+    const addLightToCanvas = async (color = '#fff1ae') => {
+        if (!activeScenario) return;
+
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        const spawnX = WORLD_SIZE / 2 - 25;
+        const spawnY = WORLD_SIZE / 2 - 25;
+
+        const newLight = {
+            id: crypto.randomUUID(),
+            type: 'light',
+            name: 'Foco de Luz',
+            x: spawnX,
+            y: spawnY,
+            width: 50,
+            height: 50,
+            radius: 200, // Área de iluminación
+            color: color,
+            intensity: 0.8,
+            rotation: 0,
+            status: []
+        };
+
+        const updatedItems = [...(activeScenario.items || []), newLight];
+
+        setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+
+        try {
+            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                items: updatedItems,
+                lastModified: Date.now()
+            });
+        } catch (error) {
+            console.error("Error adding light:", error);
+        }
+    };
+
     const updateItem = (itemId, updates) => {
         setActiveScenario(prev => ({
             ...prev,
@@ -1436,6 +1472,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                                     {/* Tokens Grid */}
                                     <div className="grid grid-cols-3 gap-3">
+
+
                                         {tokens.map(token => (
                                             <div
                                                 key={token.id}
@@ -1734,13 +1772,57 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
                                             </div>
 
-                                            {/* RECURSOS Y ATRIBUTOS */}
-                                            <div className="pt-4 border-t border-slate-800/50">
-                                                <TokenResources
-                                                    token={token}
-                                                    onUpdate={(updates) => updateItem(token.id, updates)}
-                                                />
-                                            </div>
+                                            {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz) */}
+                                            {token.type !== 'light' && (
+                                                <div className="pt-4 border-t border-slate-800/50">
+                                                    <TokenResources
+                                                        token={token}
+                                                        onUpdate={(updates) => updateItem(token.id, updates)}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
+                                            {token.type === 'light' && (
+                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <h4 className="text-[10px] text-yellow-500/70 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                        <Sparkles size={12} /> Propiedades del Foco
+                                                    </h4>
+
+                                                    {/* Radio de Luz */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                            <span className="text-slate-500">Alcance (Px)</span>
+                                                            <span className="text-yellow-500 font-mono">{token.radius}px</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min="50" max="1000" step="10"
+                                                            value={token.radius || 200}
+                                                            onChange={(e) => updateItem(token.id, { radius: Number(e.target.value) })}
+                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                                                        />
+                                                    </div>
+
+                                                    {/* Color de la Luz */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                            <span className="text-slate-500">Tono de Iluminación</span>
+                                                            <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.color }}></div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            {['#fff1ae', '#ffafae', '#aebcff', '#ccffae', '#ffffff'].map(c => (
+                                                                <button
+                                                                    key={c}
+                                                                    onClick={() => updateItem(token.id, { color: c })}
+                                                                    className={`flex-1 h-8 rounded border transition-all ${token.color === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:border-white/30'}`}
+                                                                    style={{ backgroundColor: c }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Estados Alterados */}
                                             <div className="pt-4 border-t border-slate-800/50 space-y-3">
@@ -1788,7 +1870,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     </div>
 
                     {/* --- Controles de Zoom Flotantes --- */}
-                    <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-2 pointer-events-auto">
+                    <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
+                        {/* Botón para añadir LUZ (Linterna/Foco) */}
+                        <button
+                            onClick={() => addLightToCanvas()}
+                            className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                            title="Añadir Foco de Luz"
+                        >
+                            <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                        </button>
+
                         <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
                             <button
                                 onClick={() => setZoom(prev => Math.min(prev + 0.1, 5))}
@@ -1989,11 +2080,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     )}
                                                 </div>
 
-                                                <img
-                                                    src={item.img}
-                                                    className="w-full h-full object-contain drop-shadow-lg"
-                                                    draggable={false}
-                                                />
+                                                {/* Renderizado condicional según tipo de item */}
+                                                {item.type === 'light' ? (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        {/* Icono de bombilla o estrella para representar la luz */}
+                                                        <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
+                                                            <Sparkles className="w-4 h-4 text-yellow-900" />
+                                                        </div>
+                                                        {/* Círculo que visualiza el área de efecto */}
+                                                        <div
+                                                            className="absolute border-2 border-dashed border-yellow-500/20 rounded-full"
+                                                            style={{
+                                                                width: (item.radius || 200) * 2,
+                                                                height: (item.radius || 200) * 2,
+                                                                transform: `scale(${1 / zoom})` // Mantener círculo visible pero fino
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={item.img}
+                                                        className="w-full h-full object-contain drop-shadow-lg"
+                                                        draggable={false}
+                                                    />
+                                                )}
 
                                                 {/* Micro-HUD de Recursos Overlay */}
                                                 <TokenHUD
@@ -2118,17 +2228,67 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                 );
                             })}
 
-                            {/* DARKNESS OVERLAY (Capa de Oscuridad Global) */}
-                            {/* Se posiciona encima de tiles y tokens para efecto "noche". 
-                                z-index alto pero menor que los controles de UI si es posible, 
-                                aunque pointer-events-none permite interactuar igual. */}
-                            <div
-                                className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-300 ease-in-out z-30"
-                                style={{
-                                    opacity: gridConfig.ambientDarkness || 0,
-                                    // En el futuro aquí irán mask-images para las luces
-                                }}
-                            ></div>
+                            {/* DARKNESS OVERLAY (SVG Masked) */}
+                            <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                <svg width="100%" height="100%" className="overflow-visible">
+                                    <defs>
+                                        <mask id="darkness-mask">
+                                            {/* Fondo blanco: deja pasar la oscuridad (negro) */}
+                                            <rect width="100%" height="100%" fill="white" />
+
+                                            {/* Agujeros para cada LUZ: Negros en la máscara = transparentes en el resultado */}
+                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                                <radialGradient id={`grad-${light.id}`} key={`grad-${light.id}`}>
+                                                    <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                    <stop offset="80%" stopColor="black" stopOpacity="0.3" />
+                                                    <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                                </radialGradient>
+                                            ))}
+
+                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                                <circle
+                                                    key={`mask-circle-${light.id}`}
+                                                    cx={light.x + (light.width / 2)}
+                                                    cy={light.y + (light.height / 2)}
+                                                    r={light.radius || 200}
+                                                    fill={`url(#grad-${light.id})`}
+                                                />
+                                            ))}
+                                        </mask>
+                                    </defs>
+
+                                    {/* Rectángulo de oscuridad que usa la máscara */}
+                                    <rect
+                                        width="100%"
+                                        height="100%"
+                                        fill="black"
+                                        mask="url(#darkness-mask)"
+                                        style={{
+                                            opacity: gridConfig.ambientDarkness || 0,
+                                            transition: 'opacity 0.3s ease-in-out'
+                                        }}
+                                    />
+                                </svg>
+                            </div>
+
+                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor de la luz) */}
+                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                <div
+                                    key={`glow-${light.id}`}
+                                    className="absolute pointer-events-none transition-all duration-75"
+                                    style={{
+                                        left: light.x + light.width / 2,
+                                        top: light.y + light.height / 2,
+                                        width: (light.radius || 200) * 2,
+                                        height: (light.radius || 200) * 2,
+                                        transform: 'translate(-50%, -50%)',
+                                        background: `radial-gradient(circle, ${light.color}33 0%, transparent 70%)`,
+                                        borderRadius: '50%',
+                                        zIndex: 25,
+                                        mixBlendMode: 'screen'
+                                    }}
+                                />
+                            ))}
 
                         </div>
                     </div>
