@@ -4,6 +4,8 @@ import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown }
 import { BsDice6 } from 'react-icons/bs';
 import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2 } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
+import TokenResources from './TokenResources';
+import TokenHUD from './TokenHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -1599,6 +1601,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
                                             </div>
 
+                                            {/* RECURSOS Y ATRIBUTOS */}
+                                            <div className="pt-4 border-t border-slate-800/50">
+                                                <TokenResources
+                                                    token={token}
+                                                    onUpdate={(updates) => updateItem(token.id, updates)}
+                                                />
+                                            </div>
+
                                             {/* Estados Alterados */}
                                             <div className="pt-4 border-t border-slate-800/50 space-y-3">
                                                 <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
@@ -1850,6 +1860,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     src={item.img}
                                                     className="w-full h-full object-contain drop-shadow-lg"
                                                     draggable={false}
+                                                />
+
+                                                {/* Micro-HUD de Recursos Overlay */}
+                                                <TokenHUD
+                                                    stats={item.stats}
+                                                    width={item.width}
+                                                    height={item.height}
+                                                    isSelected={selectedTokenIds.includes(item.id)}
                                                 />
 
                                                 {/* STATUS EFFECTS ONSCREEN */}
