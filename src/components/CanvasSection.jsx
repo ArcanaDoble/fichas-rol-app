@@ -99,6 +99,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
+    const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
     const [tokens, setTokens] = useState([]);
     const [uploadingToken, setUploadingToken] = useState(false);
 
@@ -370,7 +371,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     let newX = original.x + deltaX;
                     let newY = original.y + deltaY;
 
-                    if (gridConfig.snapToGrid) {
+                    // El item puede tener su propia configuración de snap, si no, usa la global
+                    const shouldSnap = item.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
+
+                    if (shouldSnap) {
                         const cellW = gridConfig.cellWidth;
                         const cellH = gridConfig.cellHeight;
                         newX = Math.round(newX / cellW) * cellW;
@@ -395,7 +399,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             let newWidth = startWidth + deltaX;
             let newHeight = startHeight + deltaY;
 
-            if (gridConfig.snapToGrid) {
+            const item = activeScenario.items.find(i => i.id === resizingTokenId);
+            const shouldSnap = item?.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
+
+            if (shouldSnap) {
                 const cellW = gridConfig.cellWidth;
                 const cellH = gridConfig.cellHeight;
                 // Snap a cuartos de celda (0.25, 0.5, 0.75, 1, 1.25...)
@@ -458,8 +465,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 const selW = br.x - tl.x;
                 const selH = br.y - tl.y;
 
-                // Seleccionar items que intersecten
+                // Seleccionar items que intersecten y pertenezcan a la capa activa
                 const newSelected = activeScenario.items.filter(item => {
+                    const isLight = item.type === 'light';
+                    const isCorrectLayer = activeLayer === 'LIGHTING' ? isLight : !isLight;
+
+                    if (!isCorrectLayer) return false;
+
                     // Simple AABB intersection
                     return (
                         item.x < selX + selW &&
@@ -511,7 +523,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             window.removeEventListener('mouseup', handleGlobalMouseUp);
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
-    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox]);
+    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, activeLayer]);
 
     // Dummy state just to make linter happy if needed or unused var
     const [, setLoadingRotation] = useState(0);
@@ -964,6 +976,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             color: color,
             intensity: 0.8,
             rotation: 0,
+            snapToGrid: false, // Por defecto libre para luces
             status: []
         };
 
@@ -979,6 +992,191 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         } catch (error) {
             console.error("Error adding light:", error);
         }
+    };
+
+    // --- HELPER: renderItemJSX ---
+    // Usamos una función que devuelve JSX en lugar de un "Componente" de React definido dentro de otro,
+    // para evitar que los nodos DOM se destruyan y reconstruyan en cada renderizado (lo cual rompe el double-click).
+    const renderItemJSX = (item) => {
+        const original = tokenOriginalPos[item.id];
+        const isSelected = selectedTokenIds.includes(item.id);
+        const isLight = item.type === 'light';
+
+        // Lógica de visibilidad y bloqueo por capas
+        const isLightingLayer = activeLayer === 'LIGHTING';
+        const canInteract = isLightingLayer ? isLight : !isLight;
+        const opacity = isLightingLayer
+            ? (isLight ? 1 : 0.3) // En capa luces: luces 100%, tokens 30%
+            : (isLight ? 0 : 1);  // En capa mesa: luces 0%, tokens 100%
+
+        return (
+            <React.Fragment key={item.id}>
+                {/* GHOST TOKEN & LINE */}
+                {original && canInteract && (
+                    <>
+                        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                            <line
+                                x1={original.x + item.width / 2}
+                                y1={original.y + item.height / 2}
+                                x2={item.x + item.width / 2}
+                                y2={item.y + item.height / 2}
+                                stroke="#c8aa6e"
+                                strokeWidth="1.5"
+                                strokeDasharray="6 4"
+                                opacity="0.6"
+                            />
+                            <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
+                        </svg>
+                        <div
+                            className="absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 rounded-sm overflow-hidden"
+                            style={{
+                                transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
+                                width: `${item.width}px`,
+                                height: `${item.height}px`,
+                            }}
+                        >
+                            {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} />}
+                        </div>
+                    </>
+                )}
+
+                <div
+                    onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onDoubleClick={(e) => {
+                        if (!canInteract) return;
+                        e.stopPropagation();
+                        // Al hacer doble click, nos aseguramos que este item sea el seleccionado único para que el inspector lo reconozca
+                        setSelectedTokenIds([item.id]);
+                        lastSelectedIdRef.current = item.id;
+                        setActiveTab('INSPECTOR');
+                        setShowSettings(true);
+                    }}
+                    style={{
+                        transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
+                        width: `${item.width}px`,
+                        height: `${item.height}px`,
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        pointerEvents: canInteract ? 'auto' : 'none',
+                        cursor: canInteract ? 'grab' : 'default',
+                        zIndex: isLight ? 10 : 20, // Luces siempre debajo de tokens
+                        opacity: opacity,
+                        transition: 'opacity 0.3s ease'
+                    }}
+                    className="group"
+                >
+                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
+                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                            {isSelected && (
+                                <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
+                            )}
+                        </div>
+
+                        {isLight ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
+                                    <Sparkles className="w-4 h-4 text-yellow-900" />
+                                </div>
+                                {/* El radio de luz NO captura clics (pointer-events-none) */}
+                                <div
+                                    className="absolute border-2 border-dashed border-yellow-500/20 rounded-full pointer-events-none"
+                                    style={{
+                                        width: (item.radius || 200) * 2,
+                                        height: (item.radius || 200) * 2,
+                                        transform: `scale(${1 / zoom})`
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                        )}
+
+                        {/* Recursos (HUD) - Solo para tokens, no luces */}
+                        {!isLight && canInteract && (
+                            <TokenHUD
+                                stats={item.stats}
+                                width={item.width}
+                                height={item.height}
+                                isSelected={isSelected}
+                            />
+                        )}
+
+                        {/* Status Effects */}
+                        {item.status && item.status.length > 0 && !isLight && canInteract && (
+                            <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
+                                {item.status.slice(0, 4).map(statusId => {
+                                    const effect = DEFAULT_STATUS_EFFECTS[statusId];
+                                    if (!effect) return null;
+                                    const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+                                    return (
+                                        <div key={statusId} className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm" style={{ borderColor: effect.hex || '#c8aa6e', color: effect.hex || '#c8aa6e' }}>
+                                            <Icon size={12} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* MOVEMENT DISTANCE INDICATOR (Solo para tokens al arrastrar) */}
+                        {!isLight && canInteract && tokenOriginalPos[item.id] && (
+                            (() => {
+                                const original = tokenOriginalPos[item.id];
+                                const dx = Math.abs(item.x - original.x);
+                                const dy = Math.abs(item.y - original.y);
+                                const cellW = gridConfig.cellWidth || 50;
+                                const cellH = gridConfig.cellHeight || 50;
+
+                                // Distancia en casillas (Regla Chebyshev: Diagonal = 1)
+                                const moveX = Math.round(dx / cellW);
+                                const moveY = Math.round(dy / cellH);
+                                const distance = Math.max(moveX, moveY);
+
+                                if (distance === 0) return null;
+
+                                return (
+                                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
+                                        <div className="bg-black/80 backdrop-blur-md border border-yellow-500/50 rounded-full px-3 py-1 flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
+                                            {distance <= 5 ? (
+                                                <span className="text-xs leading-none flex gap-0.5">
+                                                    {Array(distance).fill('🟡').map((_, i) => (
+                                                        <span key={i} className="drop-shadow-md">🟡</span>
+                                                    ))}
+                                                </span>
+                                            ) : (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-xs leading-none drop-shadow-md">🟡</span>
+                                                    <span className="text-yellow-400 font-bold text-xs font-mono leading-none">x{distance}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()
+                        )}
+
+                        {/* Nombre */}
+                        <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                            <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
+                                {item.name}
+                            </span>
+                        </div>
+
+                        {/* Controles de Acción */}
+                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
+                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} />
+                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                        </div>
+
+                        {/* Resize Handle */}
+                        {isSelected && !rotatingTokenId && (
+                            <div onMouseDown={(e) => handleResizeMouseDown(e, item)} className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform" />
+                        )}
+                    </div>
+                </div>
+            </React.Fragment>
+        );
     };
 
     const updateItem = (itemId, updates) => {
@@ -1655,8 +1853,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                         {/* Header Inspector */}
                                         <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
-                                            <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
-                                                <img src={token.img} className="w-full h-full object-contain p-1" />
+                                            <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
+                                                {token.type === 'light' ? (
+                                                    <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                ) : (
+                                                    <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                )}
                                             </div>
                                             <div>
                                                 <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
@@ -1763,14 +1965,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 </div>
                                             </div>
 
-                                            {/* Future Links */}
-                                            <div className="pt-4 border-t border-slate-800/50">
-                                                <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
-                                                    <Activity size={14} />
-                                                    Ver Ficha de Personaje
-                                                </button>
-                                                <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
-                                            </div>
+                                            {/* Future Links (Solo para tokens) */}
+                                            {token.type !== 'light' && (
+                                                <div className="pt-4 border-t border-slate-800/50">
+                                                    <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
+                                                        <Activity size={14} />
+                                                        Ver Ficha de Personaje
+                                                    </button>
+                                                    <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
+                                                </div>
+                                            )}
 
                                             {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz) */}
                                             {token.type !== 'light' && (
@@ -1785,7 +1989,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
                                             {token.type === 'light' && (
                                                 <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-yellow-500/70 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                         <Sparkles size={12} /> Propiedades del Foco
                                                     </h4>
 
@@ -1793,15 +1997,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
                                                         <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                             <span className="text-slate-500">Alcance (Px)</span>
-                                                            <span className="text-yellow-500 font-mono">{token.radius}px</span>
+                                                            <span className="text-[#c8aa6e] font-mono">{token.radius}px</span>
                                                         </div>
                                                         <input
                                                             type="range"
                                                             min="50" max="1000" step="10"
                                                             value={token.radius || 200}
                                                             onChange={(e) => updateItem(token.id, { radius: Number(e.target.value) })}
-                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                                         />
+                                                    </div>
+
+                                                    {/* Snap Toggle para Luz */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
+                                                            <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => updateItem(token.id, { snapToGrid: !token.snapToGrid })}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                        >
+                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid ? 'left-7' : 'left-1'}`} />
+                                                        </button>
                                                     </div>
 
                                                     {/* Color de la Luz */}
@@ -1824,20 +2042,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 </div>
                                             )}
 
-                                            {/* Estados Alterados */}
-                                            <div className="pt-4 border-t border-slate-800/50 space-y-3">
-                                                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
-                                                <EstadoSelector
-                                                    selected={token.status || []}
-                                                    onToggle={(statusId) => {
-                                                        const currentStatus = token.status || [];
-                                                        const newStatus = currentStatus.includes(statusId)
-                                                            ? currentStatus.filter(s => s !== statusId)
-                                                            : [...currentStatus, statusId];
-                                                        updateItem(token.id, { status: newStatus });
-                                                    }}
-                                                />
-                                            </div>
+                                            {/* Estados Alterados (Solo para tokens) */}
+                                            {token.type !== 'light' && (
+                                                <div className="pt-4 border-t border-slate-800/50 space-y-3">
+                                                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
+                                                    <EstadoSelector
+                                                        selected={token.status || []}
+                                                        onToggle={(statusId) => {
+                                                            const currentStatus = token.status || [];
+                                                            const newStatus = currentStatus.includes(statusId)
+                                                                ? currentStatus.filter(s => s !== statusId)
+                                                                : [...currentStatus, statusId];
+                                                            updateItem(token.id, { status: newStatus });
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
 
                                         </div>
                                     </div>
@@ -1869,16 +2089,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         </div>
                     </div>
 
-                    {/* --- Controles de Zoom Flotantes --- */}
+                    {/* --- Controles de Capas y Zoom Flotantes --- */}
                     <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
-                        {/* Botón para añadir LUZ (Linterna/Foco) */}
-                        <button
-                            onClick={() => addLightToCanvas()}
-                            className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
-                            title="Añadir Foco de Luz"
-                        >
-                            <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
-                        </button>
+                        {/* Selector de Capas */}
+                        <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
+                            <button
+                                onClick={() => {
+                                    setActiveLayer('TABLETOP');
+                                    setSelectedTokenIds([]);
+                                }}
+                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                title="Capa de Mesa (Tokens)"
+                            >
+                                <LayoutGrid size={20} />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setActiveLayer('LIGHTING');
+                                    setSelectedTokenIds([]);
+                                }}
+                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                title="Capa de Iluminación"
+                            >
+                                <Lightbulb size={20} />
+                            </button>
+                        </div>
+
+                        {/* Botón para añadir LUZ (Solo visible en capa iluminación) */}
+                        <div className={`transition-all duration-300 transform ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                            <button
+                                onClick={() => addLightToCanvas()}
+                                className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                title="Añadir Foco de Luz"
+                            >
+                                <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                            </button>
+                        </div>
 
                         <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
                             <button
@@ -2018,215 +2264,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* --- ITEMS / TOKENS LAYER --- */}
 
                             {/* --- ITEMS / TOKENS LAYER --- */}
-                            {activeScenario?.items?.map(item => {
-                                const original = tokenOriginalPos[item.id];
-                                return (
-                                    <React.Fragment key={item.id}>
-                                        {/* GHOST TOKEN & LINE (Visual Aid when moving) */}
-                                        {original && (
-                                            <>
-                                                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
-                                                    <line
-                                                        x1={original.x + item.width / 2}
-                                                        y1={original.y + item.height / 2}
-                                                        x2={item.x + item.width / 2}
-                                                        y2={item.y + item.height / 2}
-                                                        stroke="#c8aa6e"
-                                                        strokeWidth="1.5"
-                                                        strokeDasharray="6 4"
-                                                        opacity="0.6"
-                                                    />
-                                                    <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
-                                                </svg>
-                                                <div
-                                                    className="absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 rounded-sm overflow-hidden"
-                                                    style={{
-                                                        transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
-                                                        width: `${item.width}px`,
-                                                        height: `${item.height}px`,
-                                                    }}
-                                                >
-                                                    <img src={item.img} className="w-full h-full object-contain" draggable={false} />
-                                                </div>
-                                            </>
-                                        )}
+                            {/* Renderizamos en dos pases para crear "Capas" reales */}
 
-                                        <div
-                                            onMouseDown={(e) => handleTokenMouseDown(e, item)}
-                                            onDoubleClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveTab('INSPECTOR');
-                                                setShowSettings(true);
-                                            }}
-                                            style={{
-                                                transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
-                                                width: `${item.width}px`,
-                                                height: `${item.height}px`,
-                                                position: 'absolute',
-                                                left: 0,
-                                                top: 0,
-                                                pointerEvents: 'auto', // Reactivar eventos para el token
-                                                cursor: 'grab'
-                                            }}
-                                            className="group"
-                                        >
+                            {/* CAPA 1: LUCES (Fondo) */}
+                            {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
 
-                                            {/* Visual Selection Ring & Drag State */}
-                                            <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                                                <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${selectedTokenIds.includes(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
-                                                    {/* (Línea conectora y controles ahora unificados abajo) */}
-                                                    {selectedTokenIds.includes(item.id) && (
-                                                        <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
-                                                    )}
-                                                </div>
-
-                                                {/* Renderizado condicional según tipo de item */}
-                                                {item.type === 'light' ? (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        {/* Icono de bombilla o estrella para representar la luz */}
-                                                        <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
-                                                            <Sparkles className="w-4 h-4 text-yellow-900" />
-                                                        </div>
-                                                        {/* Círculo que visualiza el área de efecto */}
-                                                        <div
-                                                            className="absolute border-2 border-dashed border-yellow-500/20 rounded-full"
-                                                            style={{
-                                                                width: (item.radius || 200) * 2,
-                                                                height: (item.radius || 200) * 2,
-                                                                transform: `scale(${1 / zoom})` // Mantener círculo visible pero fino
-                                                            }}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <img
-                                                        src={item.img}
-                                                        className="w-full h-full object-contain drop-shadow-lg"
-                                                        draggable={false}
-                                                    />
-                                                )}
-
-                                                {/* Micro-HUD de Recursos Overlay */}
-                                                <TokenHUD
-                                                    stats={item.stats}
-                                                    width={item.width}
-                                                    height={item.height}
-                                                    isSelected={selectedTokenIds.includes(item.id)}
-                                                />
-
-                                                {/* STATUS EFFECTS ONSCREEN */}
-                                                {item.status && item.status.length > 0 && (
-                                                    <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
-                                                        {item.status.slice(0, 4).map(statusId => {
-                                                            const effect = DEFAULT_STATUS_EFFECTS[statusId];
-                                                            if (!effect) return null;
-                                                            const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
-
-                                                            return (
-                                                                <div
-                                                                    key={statusId}
-                                                                    className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm"
-                                                                    style={{
-                                                                        borderColor: effect.hex || '#c8aa6e',
-                                                                        color: effect.hex || '#c8aa6e'
-                                                                    }}
-                                                                >
-                                                                    <Icon size={12} />
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {item.status.length > 4 && (
-                                                            <div className="w-5 h-5 bg-[#0b1120] rounded-full border border-slate-600 flex items-center justify-center shadow-sm text-[8px] text-slate-400 font-bold">
-                                                                +{item.status.length - 4}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* MOVEMENT DISTANCE INDICATOR (Solo al arrastrar) */}
-                                                {tokenOriginalPos[item.id] && (
-                                                    (() => {
-                                                        const original = tokenOriginalPos[item.id];
-                                                        const dx = Math.abs(item.x - original.x);
-                                                        const dy = Math.abs(item.y - original.y);
-                                                        const cellW = gridConfig.cellWidth || 50;
-                                                        const cellH = gridConfig.cellHeight || 50;
-
-                                                        // Distancia en casillas (Regla Chebyshev: Diagonal = 1)
-                                                        const moveX = Math.round(dx / cellW);
-                                                        const moveY = Math.round(dy / cellH);
-                                                        const distance = Math.max(moveX, moveY);
-
-                                                        if (distance === 0) return null;
-
-                                                        return (
-                                                            <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
-                                                                <div className="bg-black/80 backdrop-blur-md border border-yellow-500/50 rounded-full px-3 py-1 flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
-                                                                    {distance <= 5 ? (
-                                                                        <span className="text-xs leading-none flex gap-0.5">
-                                                                            {Array(distance).fill('🟡').map((_, i) => (
-                                                                                <span key={i} className="drop-shadow-md">🟡</span>
-                                                                            ))}
-                                                                        </span>
-                                                                    ) : (
-                                                                        <div className="flex items-center gap-1">
-                                                                            <span className="text-xs leading-none drop-shadow-md">🟡</span>
-                                                                            <span className="text-yellow-400 font-bold text-xs font-mono leading-none">x{distance}</span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })()
-                                                )}
-
-                                                {/* NOMBRE DEL TOKEN (Visible al seleccionar o hover) */}
-                                                <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
-                                                    <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
-                                                        {item.name}
-                                                    </span>
-                                                </div>
-
-                                                {/* Controles de Token (Superiores) */}
-                                                <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${selectedTokenIds.includes(item.id) || 'group-hover:opacity-100 opacity-0'}`}>
-
-
-                                                    <button
-                                                        onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }}
-                                                        className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
-                                                        title="Rotar 45°"
-                                                    >
-                                                        <RotateCw size={12} />
-                                                    </button>
-
-                                                    {/* Handle de Rotación Libre (Central) */}
-                                                    <div
-                                                        className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]"
-                                                        onMouseDown={(e) => handleRotationMouseDown(e, item)}
-                                                        title="Arrastrar para rotar libremente"
-                                                    />
-
-                                                    <button
-                                                        onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                                        className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
-                                                        title="Eliminar del mapa"
-                                                    >
-                                                        <Trash2 size={12} />
-                                                    </button>
-                                                </div>
-
-                                                {/* RESIZE HANDLE (Bottom-Right) */}
-                                                {selectedTokenIds.includes(item.id) && !rotatingTokenId && (
-                                                    <div
-                                                        onMouseDown={(e) => handleResizeMouseDown(e, item)}
-                                                        className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
-                                                        title="Redimensionar (Click + Arrastrar)"
-                                                    ></div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </React.Fragment>
-                                );
-                            })}
+                            {/* CAPA 2: TOKENS (Encima) */}
+                            {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
 
                             {/* DARKNESS OVERLAY (SVG Masked) */}
                             <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
