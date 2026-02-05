@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -21,6 +21,15 @@ const PRESET_COLORS = [
 
 const GRID_SIZE = 50; // Tamaño de la celda en px
 const WORLD_SIZE = 12000; // Tamaño del mundo canvas en px (Aumentado para mapas 4k)
+
+// Helpers matemáticos para Muros y Colisiones
+const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
+    const det = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+    if (det === 0) return false;
+    const lambda = ((y4 - y3) * (x4 - x1) + (x3 - x4) * (y4 - y1)) / det;
+    const gamma = ((y1 - y2) * (x4 - x1) + (x2 - x1) * (y4 - y1)) / det;
+    return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+};
 
 const CanvasThumbnail = ({ scenario }) => {
     const config = scenario.config || {};
@@ -114,6 +123,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
+
+    // Estado para Arrastre de Extremos de Muros
+    const [draggingWallHandle, setDraggingWallHandle] = useState(null); // { id, handleIndex: 1 | 2 }
+
+    // Estado para Dibujo de Muros
+    const [isDrawingWall, setIsDrawingWall] = useState(false);
+    const [wallDrawingStart, setWallDrawingStart] = useState(null); // { x, y } en Mundo
+    const [wallDrawingCurrent, setWallDrawingCurrent] = useState(null); // { x, y } en Mundo
 
     // Configuración de movimiento
 
@@ -298,10 +315,75 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         return { x: worldX, y: worldY };
     }
 
+    const snapToWallEndpoints = (worldPos) => {
+        let snappedPos = { ...worldPos };
+
+        // 1. Snap a la rejilla si está activo
+        if (gridConfig.snapToGrid) {
+            snappedPos.x = Math.round(snappedPos.x / gridConfig.cellWidth) * gridConfig.cellWidth;
+            snappedPos.y = Math.round(snappedPos.y / gridConfig.cellHeight) * gridConfig.cellHeight;
+        }
+
+        // 2. Snap a otros muros (prioritario sobre la rejilla si está cerca)
+        let minDistance = 15 / zoom; // Distancia de magnetismo
+        if (activeScenario?.items) {
+            activeScenario.items.filter(i => i.type === 'wall').forEach(wall => {
+                const d1 = Math.hypot(worldPos.x - wall.x1, worldPos.y - wall.y1);
+                const d2 = Math.hypot(worldPos.x - wall.x2, worldPos.y - wall.y2);
+                if (d1 < minDistance) {
+                    snappedPos = { x: wall.x1, y: wall.y1 };
+                    minDistance = d1;
+                }
+                if (d2 < minDistance) {
+                    snappedPos = { x: wall.x2, y: wall.y2 };
+                    minDistance = d2;
+                }
+            });
+        }
+
+        return snappedPos;
+    }
+
     const handleMouseMove = (e) => {
         // --- SELECTION BOX ---
         if (selectionBox) {
             setSelectionBox(prev => ({ ...prev, current: { x: e.clientX, y: e.clientY } }));
+            return;
+        }
+
+        // --- DIBUJO DE MUROS ---
+        if (isDrawingWall && wallDrawingStart) {
+            const worldPos = divToWorld(e.clientX, e.clientY);
+            const snappedPos = snapToWallEndpoints(worldPos);
+            setWallDrawingCurrent(snappedPos);
+            return;
+        }
+
+        // --- ARRASTRE DE EXTREMOS DE MUROS ---
+        if (draggingWallHandle && activeScenario) {
+            const worldPos = divToWorld(e.clientX, e.clientY);
+            const snappedPos = snapToWallEndpoints(worldPos);
+
+            const updatedItems = activeScenario.items.map(item => {
+                if (item.id === draggingWallHandle.id) {
+                    const newItem = { ...item };
+                    if (draggingWallHandle.handleIndex === 1) {
+                        newItem.x1 = snappedPos.x;
+                        newItem.y1 = snappedPos.y;
+                    } else {
+                        newItem.x2 = snappedPos.x;
+                        newItem.y2 = snappedPos.y;
+                    }
+                    // Recalcular bounding box para selección y arrastre global del muro
+                    newItem.x = Math.min(newItem.x1, newItem.x2);
+                    newItem.y = Math.min(newItem.y1, newItem.y2);
+                    newItem.width = Math.max(Math.abs(newItem.x2 - newItem.x1), 5);
+                    newItem.height = Math.max(Math.abs(newItem.y2 - newItem.y1), 5);
+                    return newItem;
+                }
+                return item;
+            });
+            setActiveScenario(prev => ({ ...prev, items: updatedItems }));
             return;
         }
 
@@ -381,6 +463,37 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         newY = Math.round(newY / cellH) * cellH;
                     }
 
+                    // --- COLISIONES CON MUROS (Solo para tokens en capa Mesa) ---
+                    if (item.type !== 'wall' && activeLayer === 'TABLETOP') {
+                        const walls = activeScenario.items.filter(i => i.type === 'wall');
+                        const charCenterStart = { x: original.x + item.width / 2, y: original.y + item.height / 2 };
+                        const charCenterEnd = { x: newX + item.width / 2, y: newY + item.height / 2 };
+
+                        const hasCollision = walls.some(wall =>
+                            linesIntersect(charCenterStart.x, charCenterStart.y, charCenterEnd.x, charCenterEnd.y, wall.x1, wall.y1, wall.x2, wall.y2)
+                        );
+
+                        if (hasCollision) {
+                            newX = original.x;
+                            newY = original.y;
+                        }
+                    }
+
+                    // Si es un muro, desplazamos sus puntos
+                    if (item.type === 'wall') {
+                        const dx = newX - item.x;
+                        const dy = newY - item.y;
+                        return {
+                            ...item,
+                            x: newX,
+                            y: newY,
+                            x1: item.x1 + dx,
+                            y1: item.y1 + dy,
+                            x2: item.x2 + dx,
+                            y2: item.y2 + dy
+                        };
+                    }
+
                     return { ...item, x: newX, y: newY };
                 }
                 return item;
@@ -429,7 +542,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             return;
         }
 
-
         if (!isDragging) return;
 
         // Lógica de paneo de CÁMARA
@@ -445,6 +557,39 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const handleMouseUp = (e) => {
+        // --- FINALIZAR DIBUJO DE MURO ---
+        if (isDrawingWall && wallDrawingStart && wallDrawingCurrent) {
+            const newWall = {
+                id: crypto.randomUUID(),
+                type: 'wall',
+                x1: wallDrawingStart.x,
+                y1: wallDrawingStart.y,
+                x2: wallDrawingCurrent.x,
+                y2: wallDrawingCurrent.y,
+                // Calculamos x, y, width, height para que el sistema de selección y arrastre lo reconozca
+                x: Math.min(wallDrawingStart.x, wallDrawingCurrent.x),
+                y: Math.min(wallDrawingStart.y, wallDrawingCurrent.y),
+                width: Math.max(Math.abs(wallDrawingCurrent.x - wallDrawingStart.x), 5),
+                height: Math.max(Math.abs(wallDrawingCurrent.y - wallDrawingStart.y), 5),
+                color: '#c8aa6e',
+                thickness: 4
+            };
+
+            // Solo añadir si tiene longitud mínima
+            if (Math.hypot(newWall.x2 - newWall.x1, newWall.y2 - newWall.y1) > 5) {
+                const updatedItems = [...(activeScenario.items || []), newWall];
+                setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                    items: updatedItems,
+                    lastModified: Date.now()
+                });
+            }
+
+            setWallDrawingStart(null);
+            setWallDrawingCurrent(null);
+            return;
+        }
+
         // --- FINALIZAR SELECCIÓN BOX ---
         if (selectionBox && activeScenario) {
             const containerRect = containerRef.current?.getBoundingClientRect();
@@ -468,7 +613,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 // Seleccionar items que intersecten y pertenezcan a la capa activa
                 const newSelected = activeScenario.items.filter(item => {
                     const isLight = item.type === 'light';
-                    const isCorrectLayer = activeLayer === 'LIGHTING' ? isLight : !isLight;
+                    const isWall = item.type === 'wall';
+                    const isCorrectLayer = activeLayer === 'LIGHTING' ? (isLight || isWall) : (!isLight && !isWall);
 
                     if (!isCorrectLayer) return false;
 
@@ -492,10 +638,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             return;
         }
 
+        if (draggingWallHandle && activeScenario) {
+            updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                items: activeScenario.items,
+                lastModified: Date.now()
+            });
+            setDraggingWallHandle(null);
+            return;
+        }
+
         setIsDragging(false);
         setDraggedTokenId(null); // Soltar token
         setRotatingTokenId(null); // Soltar rotación
         setResizingTokenId(null); // Soltar resize
+        setDraggingWallHandle(null); // Soltar extremo
         setTokenOriginalPos({});
         document.body.style.cursor = 'default';
     };
@@ -503,18 +659,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
         const handleGlobalMouseUp = (e) => {
-            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || resizingTokenId) {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || resizingTokenId || draggingWallHandle) {
                 handleMouseUp(e);
             }
         };
 
         const handleGlobalMouseMove = (e) => {
-            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle) {
                 handleMouseMove(e);
             }
         };
 
-        if (isDragging || draggedTokenId || rotatingTokenId || selectionBox) {
+        if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle) {
             window.addEventListener('mouseup', handleGlobalMouseUp);
             window.addEventListener('mousemove', handleGlobalMouseMove);
         }
@@ -523,7 +679,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             window.removeEventListener('mouseup', handleGlobalMouseUp);
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
-    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, activeLayer]);
+    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, draggingWallHandle, activeLayer]);
 
     // Dummy state just to make linter happy if needed or unused var
     const [, setLoadingRotation] = useState(0);
@@ -1001,13 +1157,144 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         const original = tokenOriginalPos[item.id];
         const isSelected = selectedTokenIds.includes(item.id);
         const isLight = item.type === 'light';
+        const isWall = item.type === 'wall';
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
-        const canInteract = isLightingLayer ? isLight : !isLight;
-        const opacity = isLightingLayer
-            ? (isLight ? 1 : 0.3) // En capa luces: luces 100%, tokens 30%
-            : (isLight ? 0 : 1);  // En capa mesa: luces 0%, tokens 100%
+        const canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+
+        let opacity = 1;
+        if (isLightingLayer) {
+            opacity = (isLight || isWall) ? 1 : 0.3;
+        } else {
+            if (isLight) opacity = 0;
+            else if (isWall) opacity = 0; // Muros invisibles en mesa (solo colisionan)
+            else opacity = 1;
+        }
+
+        // --- RENDERIZADO DE MURO ---
+        if (isWall) {
+            const visualLineColor = isSelected ? '#c8aa6e' : '#475569';
+            const colliderColor = '#1e293b';
+
+            return (
+                <div
+                    key={item.id}
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        transform: `translate(${item.x}px, ${item.y}px)`,
+                        pointerEvents: 'none', // El contenedor ya no captura clicks en su área rectangular
+                        zIndex: 15,
+                        opacity: opacity,
+                        transition: 'opacity 0.3s ease'
+                    }}
+                >
+                    <svg className="overflow-visible pointer-events-none">
+                        {/* Base del Collider (Línea gruesa oscura) - Sirve como Hitbox precisa */}
+                        <line
+                            x1={item.x1 - item.x}
+                            y1={item.y1 - item.y}
+                            x2={item.x2 - item.x}
+                            y2={item.y2 - item.y}
+                            stroke={colliderColor}
+                            strokeWidth={12} // Un poco más ancha para facilitar selección proactiva
+                            strokeLinecap="butt"
+                            opacity="0.6"
+                            className="pointer-events-auto cursor-grab active:cursor-grabbing"
+                            onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                        />
+                        {/* Línea Visual (Fina: Dorada o Gris) */}
+                        <line
+                            x1={item.x1 - item.x}
+                            y1={item.y1 - item.y}
+                            x2={item.x2 - item.x}
+                            y2={item.y2 - item.y}
+                            stroke={visualLineColor}
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            className="pointer-events-auto cursor-grab active:cursor-grabbing"
+                            onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                        />
+
+                        {/* Handles (Cuadrados y círculos mejorados para móvil) */}
+                        {isLightingLayer && (
+                            <>
+                                {/* Handle Punto 1 */}
+                                {isSelected && (
+                                    <circle
+                                        cx={item.x1 - item.x} cy={item.y1 - item.y}
+                                        r={14} fill="white" fillOpacity="0.05" stroke="white" strokeWidth={1}
+                                        className="pointer-events-auto cursor-crosshair"
+                                        onMouseDown={(e) => {
+                                            if (!canInteract) return;
+                                            handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                            setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                        }}
+                                    />
+                                )}
+                                <rect
+                                    x={item.x1 - item.x - 7}
+                                    y={item.y1 - item.y - 7}
+                                    width={14} height={14}
+                                    fill={colliderColor}
+                                    stroke={isSelected ? "white" : "#475569"}
+                                    strokeWidth={1.5}
+                                    className="pointer-events-auto cursor-crosshair"
+                                    onMouseDown={(e) => {
+                                        if (!canInteract) return;
+                                        handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                        setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                    }}
+                                />
+
+                                {/* Handle Punto 2 */}
+                                {isSelected && (
+                                    <circle
+                                        cx={item.x2 - item.x} cy={item.y2 - item.y}
+                                        r={14} fill="white" fillOpacity="0.05" stroke="white" strokeWidth={1}
+                                        className="pointer-events-auto cursor-crosshair"
+                                        onMouseDown={(e) => {
+                                            if (!canInteract) return;
+                                            handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                            setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                        }}
+                                    />
+                                )}
+                                <rect
+                                    x={item.x2 - item.x - 7}
+                                    y={item.y2 - item.y - 7}
+                                    width={14} height={14}
+                                    fill={colliderColor}
+                                    stroke={isSelected ? "white" : "#475569"}
+                                    strokeWidth={1.5}
+                                    className="pointer-events-auto cursor-crosshair"
+                                    onMouseDown={(e) => {
+                                        if (!canInteract) return;
+                                        handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                        setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                    }}
+                                />
+                            </>
+                        )}
+                    </svg>
+
+                    {/* Controles de Acción para Muros (Solo Borrar) */}
+                    {isSelected && isLightingLayer && (
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 rounded-full px-1 py-0.5 shadow-xl border border-red-500/30 flex items-center z-50">
+                            <button
+                                onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
+                                title="Eliminar Muro"
+                            >
+                                <Trash2 size={10} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
         return (
             <React.Fragment key={item.id}>
@@ -1202,6 +1489,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const handleCanvasBackgroundMouseDown = (e) => {
         // Solo si click izquierdo directo en el fondo
         if (e.button === 0 && !e.altKey && e.target === containerRef.current) {
+
+            // Si estamos en modo dibujo de muros (Solo en capa Iluminación)
+            if (isDrawingWall && activeLayer === 'LIGHTING') {
+                const worldPos = divToWorld(e.clientX, e.clientY);
+                const snapped = snapToWallEndpoints(worldPos);
+                setWallDrawingStart(snapped);
+                setWallDrawingCurrent(snapped);
+                return;
+            }
+
             if (!e.shiftKey) setSelectedTokenIds([]); // Limpiar selección si no es Shift
 
             // Verificación de dispositivo móvil (Touch o pantalla pequeña)
@@ -2091,38 +2388,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                     {/* --- Controles de Capas y Zoom Flotantes --- */}
                     <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
-                        {/* Selector de Capas */}
-                        <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('TABLETOP');
-                                    setSelectedTokenIds([]);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Mesa (Tokens)"
-                            >
-                                <LayoutGrid size={20} />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('LIGHTING');
-                                    setSelectedTokenIds([]);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Iluminación"
-                            >
-                                <Lightbulb size={20} />
-                            </button>
-                        </div>
 
-                        {/* Botón para añadir LUZ (Solo visible en capa iluminación) */}
-                        <div className={`transition-all duration-300 transform ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                        {/* Herramientas de Edición (Solo visibles en capa iluminación) */}
+                        <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                            {/* Herramienta Muros */}
+                            <button
+                                onClick={() => setIsDrawingWall(!isDrawingWall)}
+                                className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
+                                title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
+                            >
+                                <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                            </button>
+
+                            {/* Botón para añadir LUZ */}
                             <button
                                 onClick={() => addLightToCanvas()}
                                 className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
                                 title="Añadir Foco de Luz"
                             >
                                 <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                            </button>
+                        </div>
+
+                        {/* Selector de Capas */}
+                        <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
+                            <button
+                                onClick={() => {
+                                    setActiveLayer('LIGHTING');
+                                    setSelectedTokenIds([]);
+                                    setIsDrawingWall(false);
+                                }}
+                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                title="Capa de Iluminación"
+                            >
+                                <Lightbulb size={20} />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setActiveLayer('TABLETOP');
+                                    setSelectedTokenIds([]);
+                                    setIsDrawingWall(false);
+                                }}
+                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                title="Capa de Mesa (Tokens)"
+                            >
+                                <LayoutGrid size={20} />
                             </button>
                         </div>
 
@@ -2269,8 +2579,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* CAPA 1: LUCES (Fondo) */}
                             {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
 
-                            {/* CAPA 2: TOKENS (Encima) */}
+                            {/* CAPA 2: TOKENS Y MUROS (Encima) */}
                             {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
+
+                            {/* PREVISUALIZACIÓN DE MURO (DIBUJO) */}
+                            {isDrawingWall && wallDrawingStart && wallDrawingCurrent && (
+                                <div className="absolute inset-0 pointer-events-none z-40">
+                                    <svg width="100%" height="100%" className="overflow-visible">
+                                        {/* Línea de previsualización (Dorada discontinua) */}
+                                        <line
+                                            x1={wallDrawingStart.x}
+                                            y1={wallDrawingStart.y}
+                                            x2={wallDrawingCurrent.x}
+                                            y2={wallDrawingCurrent.y}
+                                            stroke="#c8aa6e"
+                                            strokeWidth="3"
+                                            strokeDasharray="6 4"
+                                            strokeLinecap="round"
+                                        />
+                                        {/* Handles de inicio y fin */}
+                                        <circle cx={wallDrawingStart.x} cy={wallDrawingStart.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
+                                        <rect x={wallDrawingStart.x - 4} y={wallDrawingStart.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
+
+                                        <circle cx={wallDrawingCurrent.x} cy={wallDrawingCurrent.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
+                                        <rect x={wallDrawingCurrent.x - 4} y={wallDrawingCurrent.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
+                                    </svg>
+                                </div>
+                            )}
 
                             {/* DARKNESS OVERLAY (SVG Masked) */}
                             <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
