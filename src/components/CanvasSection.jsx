@@ -1250,8 +1250,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             ...prev,
             items: prev.items.map(i => {
                 if (i.id === wallId) {
-                    const newType = i.wallType === 'door' ? 'solid' : 'door';
-                    return { ...i, wallType: newType, isOpen: false, isSecret: false };
+                    // Ciclo: solid -> door -> window -> solid
+                    let nextType = 'door';
+                    if (i.wallType === 'door') nextType = 'window';
+                    else if (i.wallType === 'window') nextType = 'solid';
+
+                    return { ...i, wallType: nextType, isOpen: false, isSecret: false };
                 }
                 return i;
             })
@@ -1345,10 +1349,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         } else {
             if (isLight) opacity = 0;
             else if (isWall) {
-                // Las puertas normales son visibles. Las secretas solo si están abiertas o si somos el Master editando (pero aquí estamos en vista mesa)
-                // Si es secreta y está cerrada, es invisible para el jugador
+                // Las puertas normales y VENTANAS son visibles. Las secretas solo si están abiertas.
                 const isSecretClosed = item.wallType === 'door' && item.isSecret && !item.isOpen;
-                opacity = (item.wallType === 'door' && !isSecretClosed) ? 1 : 0;
+                const isVisibleWall = (item.wallType === 'door' && !isSecretClosed) || item.wallType === 'window';
+                opacity = isVisibleWall ? 1 : 0;
             }
             else opacity = 1;
         }
@@ -1356,10 +1360,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         // --- RENDERIZADO DE MURO ---
         if (isWall) {
             const isDoor = item.wallType === 'door';
+            const isWindow = item.wallType === 'window';
             const isSecret = item.isSecret;
-            const visualLineColor = isSelected ? '#c8aa6e' : (isDoor ? (isSecret ? '#a855f7' : '#2dd4bf') : '#475569');
+
+            // Colores por tipo
+            const visualLineColor = isSelected ? '#c8aa6e' : (isDoor ? (isSecret ? '#a855f7' : '#2dd4bf') : (isWindow ? '#60a5fa' : '#475569'));
             const doorBaseColor = isSecret ? '#a855f7' : '#2dd4bf';
-            const colliderColor = isDoor ? (item.isOpen ? `${doorBaseColor}22` : doorBaseColor) : '#1e293b';
+            const colliderColor = isDoor ? (item.isOpen ? `${doorBaseColor}22` : doorBaseColor) : (isWindow ? '#60a5fa44' : '#1e293b');
 
             return (
                 <div
@@ -1384,11 +1391,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             stroke={colliderColor}
                             strokeWidth={Math.max(12, (item.thickness || 4) + 8)} // Hitbox generosa pero proporcional
                             strokeLinecap="butt"
-                            opacity={isDoor ? 0.2 : 0.4}
+                            opacity={isDoor ? 0.2 : (isWindow ? 0.3 : 0.4)}
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                         />
-                        {/* Línea Visual (Fina: Dorada o Gris o Cyan para Puertas) */}
+
+                        {/* Línea Visual Secundaría para Ventanas (Efecto doble línea de cristal) */}
+                        {isWindow && (
+                            <line
+                                x1={item.x1 - item.x}
+                                y1={item.y1 - item.y}
+                                x2={item.x2 - item.x}
+                                y2={item.y2 - item.y}
+                                stroke="#93c5fd"
+                                strokeWidth={Math.max(6, (item.thickness || 4))}
+                                strokeLinecap="round"
+                                opacity="0.4"
+                            />
+                        )}
+
+                        {/* Línea Visual Principal */}
                         <line
                             x1={item.x1 - item.x}
                             y1={item.y1 - item.y}
@@ -1477,10 +1499,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* Toggle Puerta/Muro */}
                             <button
                                 onMouseDown={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
-                                className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.wallType === 'door' ? 'border-teal-500 text-teal-400' : 'border-slate-500 text-slate-400'}`}
-                                title={item.wallType === 'door' ? "Convertir en Muro Sólido" : "Convertir en Puerta"}
+                                className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.wallType === 'door' ? 'border-teal-500 text-teal-400' : (item.wallType === 'window' ? 'border-blue-500 text-blue-400' : 'border-slate-500 text-slate-400')}`}
+                                title={item.wallType === 'door' ? "Convertir en Ventana" : (item.wallType === 'window' ? "Convertir en Muro Sólido" : "Convertir en Puerta")}
                             >
-                                {item.wallType === 'door' ? <DoorOpen size={14} /> : <Square size={14} />}
+                                {item.wallType === 'door' ? <DoorOpen size={14} /> : (item.wallType === 'window' ? <LayoutGrid size={14} /> : <Square size={14} />)}
                             </button>
 
                             {/* Toggle Secreta (Solo si es puerta) */}
@@ -3077,7 +3099,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
                                             const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
                                             const walls = activeScenario.items.filter(i =>
-                                                i.type === 'wall' && !(i.wallType === 'door' && i.isOpen)
+                                                i.type === 'wall' &&
+                                                !(i.wallType === 'door' && i.isOpen) &&
+                                                i.wallType !== 'window'
                                             );
 
                                             return (
