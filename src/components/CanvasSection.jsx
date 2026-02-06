@@ -1611,6 +1611,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             )}
                         </div>
 
+                        {/* Aura (Underneath the token) */}
+                        {!isLight && item.auraEnabled && (
+                            <div
+                                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none -z-10 ${item.auraStyle === 'pulse' ? 'animate-pulse' : ''}`}
+                                style={{
+                                    width: `${(item.auraRadius || 1) * gridConfig.cellWidth * 2}px`,
+                                    height: `${(item.auraRadius || 1) * gridConfig.cellHeight * 2}px`,
+                                    backgroundColor: item.auraColor || '#3b82f6',
+                                    opacity: item.auraOpacity || 0.35,
+                                    filter: 'blur(10px)',
+                                    transition: 'all 0.3s ease-in-out'
+                                }}
+                            />
+                        )}
+
                         {isLight ? (
                             <div className="w-full h-full flex items-center justify-center">
                                 <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
@@ -2042,9 +2057,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         </div>
                                         <button
                                             onClick={() => handleConfigChange('snapToGrid', !gridConfig.snapToGrid)}
-                                            className={`relative w-10 h-5 rounded-full transition-colors ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                            className={`relative w-12 h-6 rounded-full transition-all ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                         >
-                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${gridConfig.snapToGrid ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.snapToGrid ? 'left-7' : 'left-1'}`} />
                                         </button>
                                     </div>
 
@@ -2389,18 +2404,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         </div>
 
                                         {/* NIEBLA DE GUERRA (Fog of War) */}
-                                        <div className={`bg-[#0b1120] p-4 rounded border transition-all ${gridConfig.fogOfWar ? 'border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.1)]' : 'border-slate-800'}`}>
+                                        <div className={`bg-[#0b1120] p-4 rounded border transition-all ${gridConfig.fogOfWar ? 'border-[#c8aa6e]/50 shadow-[0_0_20px_rgba(200,170,110,0.1)]' : 'border-slate-800'}`}>
                                             <div className="flex items-center justify-between mb-2">
                                                 <div className="flex flex-col gap-1">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                                        <Activity size={12} className={gridConfig.fogOfWar ? 'text-purple-400' : 'text-slate-500'} />
+                                                        <Activity size={12} className={gridConfig.fogOfWar ? 'text-[#c8aa6e]' : 'text-slate-500'} />
                                                         Niebla de Guerra
                                                     </span>
                                                     <span className="text-[9px] text-slate-600">Oculta el mapa basado en la visión de los tokens</span>
                                                 </div>
                                                 <button
                                                     onClick={() => handleConfigChange('fogOfWar', !gridConfig.fogOfWar)}
-                                                    className={`w-12 h-6 rounded-full transition-all relative ${gridConfig.fogOfWar ? 'bg-purple-600' : 'bg-slate-700'}`}
+                                                    className={`w-12 h-6 rounded-full transition-all relative ${gridConfig.fogOfWar ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                                 >
                                                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.fogOfWar ? 'left-7' : 'left-1'}`} />
                                                 </button>
@@ -2547,7 +2562,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
                                             {token.type !== 'light' && token.type !== 'wall' && (
                                                 <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                         <Activity size={12} /> Visión y Niebla
                                                     </h4>
 
@@ -2559,9 +2574,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                             </div>
                                                             <button
                                                                 onClick={() => updateItem(token.id, { hasVision: !token.hasVision })}
-                                                                className={`w-10 h-5 rounded-full transition-all relative ${token.hasVision ? 'bg-purple-600' : 'bg-slate-700'}`}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.hasVision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                                             >
-                                                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${token.hasVision ? 'left-5.5' : 'left-0.5'}`} />
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasVision ? 'left-7' : 'left-1'}`} />
                                                             </button>
                                                         </div>
 
@@ -2569,20 +2584,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                             <div className="space-y-3 pt-2">
                                                                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                     <span className="text-slate-500">Radio de Visión</span>
-                                                                    <span className="text-purple-400 font-mono">{token.visionRadius || 300}px</span>
+                                                                    <span className="text-[#c8aa6e] font-mono">{token.visionRadius || 300}px</span>
                                                                 </div>
                                                                 <input
                                                                     type="range"
                                                                     min="50" max="1500" step="50"
                                                                     value={token.visionRadius || 300}
                                                                     onChange={(e) => updateItem(token.id, { visionRadius: Number(e.target.value) })}
-                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                                                 />
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             )}
+
+
 
                                             {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro) */}
                                             {token.type !== 'light' && token.type !== 'wall' && (
@@ -2593,6 +2610,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     />
                                                 </div>
                                             )}
+
+
 
                                             {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
                                             {token.type === 'light' && (
@@ -2641,7 +2660,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                         </div>
                                                         <button
                                                             onClick={() => updateItem(token.id, { flicker: !token.flicker })}
-                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.flicker ? 'bg-amber-600' : 'bg-slate-700'}`}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.flicker ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                                         >
                                                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.flicker ? 'left-7' : 'left-1'}`} />
                                                         </button>
@@ -2719,6 +2738,75 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                             updateItem(token.id, { status: newStatus });
                                                         }}
                                                     />
+                                                </div>
+                                            )}
+
+                                            {/* AURAS E INDICADORES (Solo para tokens reales) */}
+                                            {token.type !== 'light' && token.type !== 'wall' && (
+                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                        <Sparkles size={12} /> Aura de Estado
+                                                    </h4>
+
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Activar Aura</span>
+                                                                <span className="text-[8px] text-slate-600 italic">Efecto visual bajo el token</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { auraEnabled: !token.auraEnabled })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.auraEnabled ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraEnabled ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {token.auraEnabled && (
+                                                            <>
+                                                                {/* Color del Aura */}
+                                                                <div className="space-y-3 pt-2">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Color del Aura</span>
+                                                                    <div className="flex gap-2">
+                                                                        {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#a855f7', '#ffffff'].map(c => (
+                                                                            <button
+                                                                                key={c}
+                                                                                onClick={() => updateItem(token.id, { auraColor: c })}
+                                                                                className={`w-6 h-6 rounded-full border transition-all ${token.auraColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                                                                style={{ backgroundColor: c }}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Radio del Aura (en celdas) */}
+                                                                <div className="space-y-3 pt-2">
+                                                                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                        <span className="text-slate-500">Alcance (Celdas)</span>
+                                                                        <span className="text-[#c8aa6e] font-mono">{token.auraRadius || 1}</span>
+                                                                    </div>
+                                                                    <input
+                                                                        type="range"
+                                                                        min="0.5" max="5" step="0.5"
+                                                                        value={token.auraRadius || 1}
+                                                                        onChange={(e) => updateItem(token.id, { auraRadius: Number(e.target.value) })}
+                                                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                                    />
+                                                                </div>
+
+                                                                {/* Aura Pulsante */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Efecto Pulsante</span>
+                                                                    <button
+                                                                        onClick={() => updateItem(token.id, { auraStyle: token.auraStyle === 'pulse' ? 'solid' : 'pulse' })}
+                                                                        className={`w-12 h-6 rounded-full transition-all relative ${token.auraStyle === 'pulse' ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                    >
+                                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraStyle === 'pulse' ? 'left-7' : 'left-1'}`} />
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
 
