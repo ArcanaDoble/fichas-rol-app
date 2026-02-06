@@ -174,6 +174,37 @@ body {
   animation: highlight-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Animación de Parpadeo Orgánico para Antorchas/Luces */
+@keyframes light-flicker {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  25% {
+    opacity: 0.92;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 0.98;
+    transform: scale(1.04);
+  }
+
+  75% {
+    opacity: 0.95;
+    transform: scale(0.99);
+  }
+}
+
+.animate-flicker {
+  animation: light-flicker 3s infinite ease-in-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 .font-fantasy {
   font-family: 'Cinzel', serif;
 }

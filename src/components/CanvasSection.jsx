@@ -2630,6 +2630,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                         </button>
                                                     </div>
 
+                                                    {/* Parpadeo (Flicker) Toggle */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Animación de Parpadeo</span>
+                                                                <div className="bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[7px] px-1 rounded uppercase font-bold tracking-tighter">BETA</div>
+                                                            </div>
+                                                            <span className="text-[9px] text-slate-600">Simula el movimiento de una antorcha</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => updateItem(token.id, { flicker: !token.flicker })}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.flicker ? 'bg-amber-600' : 'bg-slate-700'}`}
+                                                        >
+                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.flicker ? 'left-7' : 'left-1'}`} />
+                                                        </button>
+                                                    </div>
+
                                                     {/* Color de la Luz */}
                                                     <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
                                                         <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
@@ -3009,6 +3026,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                                 cy={ly + (light.height / 2)}
                                                                 r={light.radius || 200}
                                                                 fill={`url(#grad-light-${light.id})`}
+                                                                className={light.flicker ? 'animate-flicker' : ''}
                                                             />
                                                         </g>
                                                     );
@@ -3067,6 +3085,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                                 cy={ly + (light.height / 2)}
                                                                 r={light.radius || 200}
                                                                 fill={`url(#grad-light-${light.id})`}
+                                                                className={light.flicker ? 'animate-flicker' : ''}
                                                             />
                                                         </g>
                                                     );
@@ -3160,6 +3179,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                         r={(light.radius || 200) * 1.5}
                                                         fill={`url(#visual-grad-${light.id})`}
                                                         style={{ mixBlendMode: 'screen' }}
+                                                        className={light.flicker ? 'animate-flicker' : ''}
                                                     />
                                                 </g>
                                             );
