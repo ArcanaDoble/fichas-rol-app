@@ -213,6 +213,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
     }, [selectedTokenIds, rotatingTokenId, activeTab]);
 
+
     // Listener para Sincronización en Tiempo Real (Multi-navegador)
     useEffect(() => {
         if (!activeScenario?.id) return;
@@ -789,7 +790,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         imageHeight: null,
         snapToGrid: false,
         ambientDarkness: 0, // 0 = Día (Transparente), 1 = Noche Total (Negro)
+        fogOfWar: false, // Control de Niebla de Guerra
     });
+
+    // --- CAMPOS DE MAPA CALCULADOS ---
+    // Usamos el tamaño de la rejilla (columnas * ancho) para asegurar que la niebla cubra todo el tablero
+    const mapBounds = {
+        width: (gridConfig.columns * gridConfig.cellWidth),
+        height: (gridConfig.rows * gridConfig.cellHeight),
+    };
+    // Añadimos un pequeño margen (bleed) de 4px para asegurar que no haya fugas en los bordes por redondeo
+    const bleed = 4;
+    const mapX = (WORLD_SIZE - mapBounds.width) / 2;
+    const mapY = (WORLD_SIZE - mapBounds.height) / 2;
+
+    // Calculamos si hay un "Observador" activo (un token seleccionado con visión)
+    // Esto se usa para el modo perspectiva del Master
+    const observerId = activeScenario?.items?.find(s =>
+        selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+    )?.id;
 
     const fileInputRef = useRef(null);
 
@@ -1141,7 +1160,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             rotation: 0,
             layer: 'TOKEN',
             name: 'Token', // Nombre por defecto
-            status: [] // Array de IDs de estados
+            status: [], // Array de IDs de estados
+            hasVision: true,
+            visionRadius: 300,
         };
 
         setActiveScenario(prev => ({
@@ -2243,9 +2264,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             </div>
 
                                             <p className="text-[9px] text-slate-600 mt-2 leading-relaxed">
-                                                Ajusta la opacidad de la capa de oscuridad.
-                                                <span className="text-slate-500 italic block mt-0.5">Las fuentes de luz (próximamente) recortarán esta oscuridad.</span>
+                                                Ajusta la opacidad de la capa de oscuridad ambiental.
                                             </p>
+                                        </div>
+
+                                        {/* NIEBLA DE GUERRA (Fog of War) */}
+                                        <div className={`bg-[#0b1120] p-4 rounded border transition-all ${gridConfig.fogOfWar ? 'border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.1)]' : 'border-slate-800'}`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                                        <Activity size={12} className={gridConfig.fogOfWar ? 'text-purple-400' : 'text-slate-500'} />
+                                                        Niebla de Guerra
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-600">Oculta el mapa basado en la visión de los tokens</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleConfigChange('fogOfWar', !gridConfig.fogOfWar)}
+                                                    className={`w-12 h-6 rounded-full transition-all relative ${gridConfig.fogOfWar ? 'bg-purple-600' : 'bg-slate-700'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.fogOfWar ? 'left-7' : 'left-1'}`} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2382,6 +2421,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                         Ver Ficha de Personaje
                                                     </button>
                                                     <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
+                                                </div>
+                                            )}
+
+                                            {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
+                                            {token.type !== 'light' && token.type !== 'wall' && (
+                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <h4 className="text-[10px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                        <Activity size={12} /> Visión y Niebla
+                                                    </h4>
+
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Emite Visión</span>
+                                                                <span className="text-[8px] text-slate-600 italic">Despeja la niebla alrededor</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { hasVision: !token.hasVision })}
+                                                                className={`w-10 h-5 rounded-full transition-all relative ${token.hasVision ? 'bg-purple-600' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${token.hasVision ? 'left-5.5' : 'left-0.5'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {token.hasVision && (
+                                                            <div className="space-y-3 pt-2">
+                                                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                    <span className="text-slate-500">Radio de Visión</span>
+                                                                    <span className="text-purple-400 font-mono">{token.visionRadius || 300}px</span>
+                                                                </div>
+                                                                <input
+                                                                    type="range"
+                                                                    min="50" max="1500" step="50"
+                                                                    value={token.visionRadius || 300}
+                                                                    onChange={(e) => updateItem(token.id, { visionRadius: Number(e.target.value) })}
+                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -2761,44 +2840,98 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                 <svg width="100%" height="100%" className="overflow-visible">
                                     <defs>
-                                        <mask id="darkness-mask">
-                                            {/* Fondo blanco: deja pasar la oscuridad (negro) */}
-                                            <rect width="100%" height="100%" fill="white" />
+                                        {/* MÁSCARA 1: ILUMINACIÓN (Solo Luces) */}
+                                        <mask id="lighting-mask">
+                                            <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                            {/* Si hay un observador, las luces de ambiente solo se ven si el observador las ve */}
+                                            <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                                {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                                    <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                        <circle
+                                                            cx={light.x + (light.width / 2)}
+                                                            cy={light.y + (light.height / 2)}
+                                                            r={light.radius || 200}
+                                                            fill={`url(#grad-light-${light.id})`}
+                                                        />
+                                                    </g>
+                                                ))}
+                                            </g>
+                                        </mask>
 
-                                            {/* Agujeros para cada LUZ */}
-                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                                <g key={`light-hole-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                    <circle
-                                                        cx={light.x + (light.width / 2)}
-                                                        cy={light.y + (light.height / 2)}
-                                                        r={light.radius || 200}
-                                                        fill={`url(#grad-${light.id})`}
-                                                    />
-                                                </g>
-                                            ))}
+                                        {/* MÁSCARA 2: NIEBLA DE GUERRA (Visión + Luces) */}
+                                        <mask id="fog-mask">
+                                            <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                            {/* Vision de los Tokens: Filtrado por selección para el Master */}
+                                            {(() => {
+                                                const hasTokenSelected = activeScenario?.items?.some(s =>
+                                                    selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+                                                );
+
+                                                return activeScenario?.items?.filter(i => {
+                                                    const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasVision;
+                                                    if (!isToken) return false;
+
+                                                    // Solo activamos el modo perspectiva si lo que hemos seleccionado es un token con visión
+                                                    if (hasTokenSelected) {
+                                                        return selectedTokenIds.includes(i.id);
+                                                    }
+                                                    return true;
+                                                }).map(token => (
+                                                    <g key={`vision-hole-fog-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                        <circle
+                                                            cx={token.x + (token.width / 2)}
+                                                            cy={token.y + (token.height / 2)}
+                                                            r={token.visionRadius || 300}
+                                                            fill={`url(#grad-vision-${token.id})`}
+                                                        />
+                                                    </g>
+                                                ));
+                                            })()}
+                                            {/* Luces (también revelan niebla siempre, pero filtradas por el observador) */}
+                                            <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                                {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                                    <g key={`light-hole-fog-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                        <circle
+                                                            cx={light.x + (light.width / 2)}
+                                                            cy={light.y + (light.height / 2)}
+                                                            r={light.radius || 200}
+                                                            fill={`url(#grad-light-${light.id})`}
+                                                        />
+                                                    </g>
+                                                ))}
+                                            </g>
                                         </mask>
 
                                         {/* Gradientes de Luz */}
                                         {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                            <radialGradient id={`grad-${light.id}`} key={`grad-${light.id}`}>
+                                            <radialGradient id={`grad-light-${light.id}`} key={`grad-light-${light.id}`}>
                                                 <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                 <stop offset="80%" stopColor="black" stopOpacity="0.3" />
                                                 <stop offset="100%" stopColor="black" stopOpacity="0" />
                                             </radialGradient>
                                         ))}
 
-                                        {/* Máscaras de Sombra por Luz */}
-                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                            const lx = light.x + light.width / 2;
-                                            const ly = light.y + light.height / 2;
+                                        {/* Gradientes de Visión */}
+                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
+                                            <radialGradient id={`grad-vision-${token.id}`} key={`grad-vision-${token.id}`}>
+                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                <stop offset="85%" stopColor="black" stopOpacity="0.8" />
+                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                            </radialGradient>
+                                        ))}
+
+                                        {/* Máscaras de Sombra por Luz y por Token */}
+                                        {activeScenario?.items?.filter(i => i.type === 'light' || (i.hasVision && i.type !== 'wall')).map(source => {
+                                            const lx = source.x + source.width / 2;
+                                            const ly = source.y + source.height / 2;
                                             const walls = activeScenario.items.filter(i => i.type === 'wall');
 
                                             return (
-                                                <mask id={`shadow-mask-${light.id}`} key={`shadow-mask-${light.id}`}>
-                                                    <rect width="100%" height="100%" fill="white" />
+                                                <mask id={`shadow-mask-${source.id}`} key={`shadow-mask-${source.id}`}>
+                                                    <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
                                                     {walls.map(wall => (
                                                         <polygon
-                                                            key={`shadow-${light.id}-${wall.id}`}
+                                                            key={`shadow-${source.id}-${wall.id}`}
                                                             points={calculateShadowPoints(lx, ly, wall.x1, wall.y1, wall.x2, wall.y2)}
                                                             fill="black"
                                                         />
@@ -2808,40 +2941,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         })}
                                     </defs>
 
-                                    {/* Rectángulo de oscuridad que usa la máscara */}
+                                    {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
                                     <rect
-                                        width="100%"
-                                        height="100%"
+                                        x={mapX - bleed}
+                                        y={mapY - bleed}
+                                        width={mapBounds.width + bleed * 2}
+                                        height={mapBounds.height + bleed * 2}
                                         fill="black"
-                                        mask="url(#darkness-mask)"
+                                        mask="url(#lighting-mask)"
                                         style={{
                                             opacity: gridConfig.ambientDarkness || 0,
                                             transition: 'opacity 0.3s ease-in-out'
                                         }}
                                     />
+
+                                    {/* CAPA 2: NIEBLA DE GUERRA (Línea de Visión) */}
+                                    {gridConfig.fogOfWar && (
+                                        <rect
+                                            x={mapX - bleed}
+                                            y={mapY - bleed}
+                                            width={mapBounds.width + bleed * 2}
+                                            height={mapBounds.height + bleed * 2}
+                                            fill="black"
+                                            mask="url(#fog-mask)"
+                                            style={{
+                                                opacity: activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8, // DM solo simula visión real si selecciona un token
+                                                transition: 'opacity 0.3s ease-in-out'
+                                            }}
+                                        />
+                                    )}
                                 </svg>
                             </div>
 
-                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor de la luz con sombras) */}
-                            <div className="absolute inset-0 pointer-events-none z-25 overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor en la capa superior) */}
+                            <div className="absolute inset-0 pointer-events-none z-[45] overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                 <svg width="100%" height="100%" className="overflow-visible">
-                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                        <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                            <defs>
-                                                <radialGradient id={`visual-grad-${light.id}`}>
-                                                    <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
-                                                    <stop offset="70%" stopColor={light.color} stopOpacity="0" />
-                                                </radialGradient>
-                                            </defs>
-                                            <circle
-                                                cx={light.x + light.width / 2}
-                                                cy={light.y + light.height / 2}
-                                                r={(light.radius || 200) * 1.5}
-                                                fill={`url(#visual-grad-${light.id})`}
-                                                style={{ mixBlendMode: 'screen' }}
-                                            />
-                                        </g>
-                                    ))}
+                                    <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                            <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                <defs>
+                                                    <radialGradient id={`visual-grad-${light.id}`}>
+                                                        <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
+                                                        <stop offset="70%" stopColor={light.color} stopOpacity="0" />
+                                                    </radialGradient>
+                                                </defs>
+                                                <circle
+                                                    cx={light.x + light.width / 2}
+                                                    cy={light.y + light.height / 2}
+                                                    r={(light.radius || 200) * 1.5}
+                                                    fill={`url(#visual-grad-${light.id})`}
+                                                    style={{ mixBlendMode: 'screen' }}
+                                                />
+                                            </g>
+                                        ))}
+                                    </g>
                                 </svg>
                             </div>
 
