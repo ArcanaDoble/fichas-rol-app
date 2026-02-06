@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -1251,7 +1251,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             items: prev.items.map(i => {
                 if (i.id === wallId) {
                     const newType = i.wallType === 'door' ? 'solid' : 'door';
-                    return { ...i, wallType: newType, isOpen: false };
+                    return { ...i, wallType: newType, isOpen: false, isSecret: false };
                 }
                 return i;
             })
@@ -1275,6 +1275,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
             return { ...prev, items: newItems };
         });
+    };
+
+    const toggleSecretWall = (wallId) => {
+        setActiveScenario(prev => ({
+            ...prev,
+            items: prev.items.map(i => {
+                if (i.id === wallId) {
+                    return { ...i, isSecret: !i.isSecret };
+                }
+                return i;
+            })
+        }));
     };
 
     const addLightToCanvas = async (color = '#fff1ae') => {
@@ -1333,8 +1345,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         } else {
             if (isLight) opacity = 0;
             else if (isWall) {
-                // Las puertas son visibles en mesa para que se puedan abrir
-                opacity = item.wallType === 'door' ? 1 : 0;
+                // Las puertas normales son visibles. Las secretas solo si están abiertas o si somos el Master editando (pero aquí estamos en vista mesa)
+                // Si es secreta y está cerrada, es invisible para el jugador
+                const isSecretClosed = item.wallType === 'door' && item.isSecret && !item.isOpen;
+                opacity = (item.wallType === 'door' && !isSecretClosed) ? 1 : 0;
             }
             else opacity = 1;
         }
@@ -1342,8 +1356,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         // --- RENDERIZADO DE MURO ---
         if (isWall) {
             const isDoor = item.wallType === 'door';
-            const visualLineColor = isSelected ? '#c8aa6e' : (isDoor ? '#2dd4bf' : '#475569');
-            const colliderColor = isDoor ? (item.isOpen ? '#2dd4bf22' : '#2dd4bf') : '#1e293b';
+            const isSecret = item.isSecret;
+            const visualLineColor = isSelected ? '#c8aa6e' : (isDoor ? (isSecret ? '#a855f7' : '#2dd4bf') : '#475569');
+            const doorBaseColor = isSecret ? '#a855f7' : '#2dd4bf';
+            const colliderColor = isDoor ? (item.isOpen ? `${doorBaseColor}22` : doorBaseColor) : '#1e293b';
 
             return (
                 <div
@@ -1467,6 +1483,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                 {item.wallType === 'door' ? <DoorOpen size={14} /> : <Square size={14} />}
                             </button>
 
+                            {/* Toggle Secreta (Solo si es puerta) */}
+                            {item.wallType === 'door' && (
+                                <button
+                                    onMouseDown={(e) => { e.stopPropagation(); toggleSecretWall(item.id); }}
+                                    className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.isSecret ? 'border-purple-500 text-purple-400' : 'border-slate-500 text-slate-400'}`}
+                                    title={item.isSecret ? "Hacer Puerta Visible" : "Hacer Puerta Secreta"}
+                                >
+                                    <EyeOff size={14} />
+                                </button>
+                            )}
+
                             {/* Borrar */}
                             <button
                                 onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
@@ -1478,20 +1505,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         </div>
                     )}
 
-                    {/* ICONO DE INTERACCIÓN DE PUERTA (Visible para el Master siempre en capa Iluminación o si no es invisible) */}
+                    {/* ICONO DE INTERACCIÓN DE PUERTA (Visible para el Master siempre, o para tokens si no es secreta/está abierta) */}
                     {item.wallType === 'door' && (
                         <button
                             onMouseDown={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
-                            className={`absolute z-[60] p-1.5 rounded-full border shadow-2xl transition-all hover:scale-125 active:scale-90 pointer-events-auto ${item.isOpen ? 'bg-teal-500/20 border-teal-500 text-teal-400' : 'bg-red-500/20 border-red-500 text-red-400'}`}
+                            className={`absolute z-[60] p-1.5 rounded-full border shadow-2xl transition-all hover:scale-125 active:scale-90 pointer-events-auto ${item.isOpen ? (isSecret ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-teal-500/20 border-teal-500 text-teal-400') : (isSecret ? 'bg-purple-900/40 border-purple-600 text-purple-500' : 'bg-red-500/20 border-red-500 text-red-400')}`}
                             style={{
                                 left: `${(item.x1 + item.x2) / 2 - item.x}px`,
                                 top: `${(item.y1 + item.y2) / 2 - item.y}px`,
                                 transform: 'translate(-50%, -50%)',
-                                opacity: isLightingLayer ? 1 : 0.8
+                                opacity: isLightingLayer ? 1 : (item.isSecret && !item.isOpen ? 0.3 : 0.8) // Master las ve tenues si son secretas y cerradas en mesa
                             }}
-                            title={item.isOpen ? "Cerrar Puerta" : "Abrir Puerta"}
+                            title={item.isOpen ? "Cerrar Puerta" : (item.isSecret ? "Abrir Puerta Secreta" : "Abrir Puerta")}
                         >
-                            {item.isOpen ? <DoorOpen size={16} /> : <DoorClosed size={16} />}
+                            {item.isOpen ? <DoorOpen size={16} /> : (item.isSecret ? <Lock size={16} /> : <DoorClosed size={16} />)}
                         </button>
                     )}
                 </div>
