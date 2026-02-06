@@ -31,6 +31,30 @@ const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
     return (0 <= lambda && lambda <= 1) && (0 <= gamma && gamma <= 1);
 };
 
+// Genera los puntos de un polígono de sombra proyectado
+const calculateShadowPoints = (lx, ly, x1, y1, x2, y2, projection = 10000) => {
+    // Calculamos la dirección del muro para extenderlo un poco (1px) y evitar fugas en las esquinas
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nudge = 1.5; // Pequeño margen para solapar sombras en las uniones
+
+    const nx1 = x1 - (dx / len) * nudge;
+    const ny1 = y1 - (dy / len) * nudge;
+    const nx2 = x2 + (dx / len) * nudge;
+    const ny2 = y2 + (dy / len) * nudge;
+
+    const angle1 = Math.atan2(ny1 - ly, nx1 - lx);
+    const angle2 = Math.atan2(ny2 - ly, nx2 - lx);
+
+    const px1 = nx1 + Math.cos(angle1) * projection;
+    const py1 = ny1 + Math.sin(angle1) * projection;
+    const px2 = nx2 + Math.cos(angle2) * projection;
+    const py2 = ny2 + Math.sin(angle2) * projection;
+
+    return `${nx1},${ny1} ${nx2},${ny2} ${px2},${py2} ${px1},${py1}`;
+};
+
 const lineRectIntersect = (x1, y1, x2, y2, rx, ry, rw, rh) => {
     // 1. Verificar si alguno de los puntos finales está dentro del rectángulo
     const isInside = (px, py) => px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
@@ -2741,25 +2765,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             {/* Fondo blanco: deja pasar la oscuridad (negro) */}
                                             <rect width="100%" height="100%" fill="white" />
 
-                                            {/* Agujeros para cada LUZ: Negros en la máscara = transparentes en el resultado */}
+                                            {/* Agujeros para cada LUZ */}
                                             {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                                <radialGradient id={`grad-${light.id}`} key={`grad-${light.id}`}>
-                                                    <stop offset="0%" stopColor="black" stopOpacity="1" />
-                                                    <stop offset="80%" stopColor="black" stopOpacity="0.3" />
-                                                    <stop offset="100%" stopColor="black" stopOpacity="0" />
-                                                </radialGradient>
-                                            ))}
-
-                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                                <circle
-                                                    key={`mask-circle-${light.id}`}
-                                                    cx={light.x + (light.width / 2)}
-                                                    cy={light.y + (light.height / 2)}
-                                                    r={light.radius || 200}
-                                                    fill={`url(#grad-${light.id})`}
-                                                />
+                                                <g key={`light-hole-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                    <circle
+                                                        cx={light.x + (light.width / 2)}
+                                                        cy={light.y + (light.height / 2)}
+                                                        r={light.radius || 200}
+                                                        fill={`url(#grad-${light.id})`}
+                                                    />
+                                                </g>
                                             ))}
                                         </mask>
+
+                                        {/* Gradientes de Luz */}
+                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                            <radialGradient id={`grad-${light.id}`} key={`grad-${light.id}`}>
+                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                <stop offset="80%" stopColor="black" stopOpacity="0.3" />
+                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                            </radialGradient>
+                                        ))}
+
+                                        {/* Máscaras de Sombra por Luz */}
+                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
+                                            const lx = light.x + light.width / 2;
+                                            const ly = light.y + light.height / 2;
+                                            const walls = activeScenario.items.filter(i => i.type === 'wall');
+
+                                            return (
+                                                <mask id={`shadow-mask-${light.id}`} key={`shadow-mask-${light.id}`}>
+                                                    <rect width="100%" height="100%" fill="white" />
+                                                    {walls.map(wall => (
+                                                        <polygon
+                                                            key={`shadow-${light.id}-${wall.id}`}
+                                                            points={calculateShadowPoints(lx, ly, wall.x1, wall.y1, wall.x2, wall.y2)}
+                                                            fill="black"
+                                                        />
+                                                    ))}
+                                                </mask>
+                                            );
+                                        })}
                                     </defs>
 
                                     {/* Rectángulo de oscuridad que usa la máscara */}
@@ -2776,24 +2822,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                 </svg>
                             </div>
 
-                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor de la luz) */}
-                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                <div
-                                    key={`glow-${light.id}`}
-                                    className="absolute pointer-events-none transition-all duration-75"
-                                    style={{
-                                        left: light.x + light.width / 2,
-                                        top: light.y + light.height / 2,
-                                        width: (light.radius || 200) * 2,
-                                        height: (light.radius || 200) * 2,
-                                        transform: 'translate(-50%, -50%)',
-                                        background: `radial-gradient(circle, ${light.color}33 0%, transparent 70%)`,
-                                        borderRadius: '50%',
-                                        zIndex: 25,
-                                        mixBlendMode: 'screen'
-                                    }}
-                                />
-                            ))}
+                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor de la luz con sombras) */}
+                            <div className="absolute inset-0 pointer-events-none z-25 overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                <svg width="100%" height="100%" className="overflow-visible">
+                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                        <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                            <defs>
+                                                <radialGradient id={`visual-grad-${light.id}`}>
+                                                    <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
+                                                    <stop offset="70%" stopColor={light.color} stopOpacity="0" />
+                                                </radialGradient>
+                                            </defs>
+                                            <circle
+                                                cx={light.x + light.width / 2}
+                                                cy={light.y + light.height / 2}
+                                                r={(light.radius || 200) * 1.5}
+                                                fill={`url(#visual-grad-${light.id})`}
+                                                style={{ mixBlendMode: 'screen' }}
+                                            />
+                                        </g>
+                                    ))}
+                                </svg>
+                            </div>
 
                         </div>
                     </div>
