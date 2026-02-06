@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -687,7 +687,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
             if (draggedTokenId && activeLayer === 'TABLETOP') {
-                const walls = activeScenario.items.filter(i => i.type === 'wall');
+                const walls = activeScenario.items.filter(i =>
+                    i.type === 'wall' && !(i.wallType === 'door' && i.isOpen)
+                );
                 let hasCollision = false;
 
                 finalItems = activeScenario.items.map(item => {
@@ -1243,6 +1245,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }));
     };
 
+    const toggleWallType = (wallId) => {
+        setActiveScenario(prev => ({
+            ...prev,
+            items: prev.items.map(i => {
+                if (i.id === wallId) {
+                    const newType = i.wallType === 'door' ? 'solid' : 'door';
+                    return { ...i, wallType: newType, isOpen: false };
+                }
+                return i;
+            })
+        }));
+    };
+
+    const toggleDoorOpen = (doorId) => {
+        setActiveScenario(prev => {
+            const newItems = prev.items.map(i => {
+                if (i.id === doorId) {
+                    return { ...i, isOpen: !i.isOpen };
+                }
+                return i;
+            });
+
+            // Actualizar Firebase
+            updateDoc(doc(db, 'canvas_scenarios', prev.id), {
+                items: newItems,
+                lastModified: Date.now()
+            });
+
+            return { ...prev, items: newItems };
+        });
+    };
+
     const addLightToCanvas = async (color = '#fff1ae') => {
         if (!activeScenario) return;
 
@@ -1304,8 +1338,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // --- RENDERIZADO DE MURO ---
         if (isWall) {
-            const visualLineColor = isSelected ? '#c8aa6e' : '#475569';
-            const colliderColor = '#1e293b';
+            const isDoor = item.wallType === 'door';
+            const visualLineColor = isSelected ? '#c8aa6e' : (isDoor ? '#2dd4bf' : '#475569');
+            const colliderColor = isDoor ? (item.isOpen ? '#2dd4bf22' : '#2dd4bf') : '#1e293b';
 
             return (
                 <div
@@ -1330,11 +1365,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             stroke={colliderColor}
                             strokeWidth={Math.max(12, (item.thickness || 4) + 8)} // Hitbox generosa pero proporcional
                             strokeLinecap="butt"
-                            opacity="0.4"
+                            opacity={isDoor ? 0.2 : 0.4}
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                         />
-                        {/* Línea Visual (Fina: Dorada o Gris) */}
+                        {/* Línea Visual (Fina: Dorada o Gris o Cyan para Puertas) */}
                         <line
                             x1={item.x1 - item.x}
                             y1={item.y1 - item.y}
@@ -1343,6 +1378,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             stroke={visualLineColor}
                             strokeWidth={Math.max(2, (item.thickness || 4) / 2)}
                             strokeLinecap="round"
+                            strokeDasharray={isDoor && item.isOpen ? "4 4" : "none"}
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                         />
@@ -1409,19 +1445,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         )}
                     </svg>
 
-                    {/* Controles de Acción para Muros (Solo Borrar - Posicionado en el centro del segmento) */}
+                    {/* Controles de Acción para Muros (Borrar y Tipo - Posicionado en el centro del segmento) */}
                     {isSelected && isLightingLayer && (
                         <div
-                            className="absolute bg-black/90 rounded-full p-1 shadow-xl border border-red-500/30 flex items-center z-50 hover:scale-110 active:scale-95 transition-transform cursor-pointer pointer-events-auto"
+                            className="absolute flex items-center gap-2 z-50 pointer-events-auto"
                             style={{
                                 left: `${(item.x1 + item.x2) / 2 - item.x}px`,
                                 top: `${(item.y1 + item.y2) / 2 - item.y}px`,
-                                transform: 'translate(-50%, -150%)' // Un poco arriba del centro exacto
+                                transform: 'translate(-50%, -150%)'
                             }}
-                            onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
                         >
-                            <Trash2 size={12} className="text-red-400 hover:text-red-200" />
+                            {/* Toggle Puerta/Muro */}
+                            <button
+                                onMouseDown={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
+                                className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.wallType === 'door' ? 'border-teal-500 text-teal-400' : 'border-slate-500 text-slate-400'}`}
+                                title={item.wallType === 'door' ? "Convertir en Muro Sólido" : "Convertir en Puerta"}
+                            >
+                                {item.wallType === 'door' ? <DoorOpen size={14} /> : <Square size={14} />}
+                            </button>
+
+                            {/* Borrar */}
+                            <button
+                                onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                className="bg-black/90 rounded-full p-2 shadow-xl border border-red-500/30 text-red-400 hover:text-red-200 hover:scale-110 active:scale-95 transition-all"
+                                title="Borrar Muro"
+                            >
+                                <Trash2 size={14} />
+                            </button>
                         </div>
+                    )}
+
+                    {/* ICONO DE INTERACCIÓN DE PUERTA (Visible para el Master siempre en capa Iluminación o si no es invisible) */}
+                    {item.wallType === 'door' && (
+                        <button
+                            onMouseDown={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
+                            className={`absolute z-[60] p-1.5 rounded-full border shadow-2xl transition-all hover:scale-125 active:scale-90 pointer-events-auto ${item.isOpen ? 'bg-teal-500/20 border-teal-500 text-teal-400' : 'bg-red-500/20 border-red-500 text-red-400'}`}
+                            style={{
+                                left: `${(item.x1 + item.x2) / 2 - item.x}px`,
+                                top: `${(item.y1 + item.y2) / 2 - item.y}px`,
+                                transform: 'translate(-50%, -50%)',
+                                opacity: isLightingLayer ? 1 : 0.8
+                            }}
+                            title={item.isOpen ? "Cerrar Puerta" : "Abrir Puerta"}
+                        >
+                            {item.isOpen ? <DoorOpen size={16} /> : <DoorClosed size={16} />}
+                        </button>
                     )}
                 </div>
             );
@@ -2947,7 +3015,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             const originalSource = tokenOriginalPos[source.id];
                                             const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
                                             const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
-                                            const walls = activeScenario.items.filter(i => i.type === 'wall');
+                                            const walls = activeScenario.items.filter(i =>
+                                                i.type === 'wall' && !(i.wallType === 'door' && i.isOpen)
+                                            );
 
                                             return (
                                                 <mask id={`shadow-mask-${source.id}`} key={`shadow-mask-${source.id}`}>
