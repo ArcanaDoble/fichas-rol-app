@@ -146,6 +146,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
     const [clipboard, setClipboard] = useState([]); // Portapapeles para copiar/pegar tokens
 
+    // Helper para normalizar coordenadas de eventos (Mouse vs Touch)
+    const getEventCoords = (e) => {
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+    };
+
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
@@ -388,15 +399,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     }
 
     const handleMouseMove = (e) => {
+        const { x: curX, y: curY } = getEventCoords(e);
+
         // --- SELECTION BOX ---
         if (selectionBox) {
-            setSelectionBox(prev => ({ ...prev, current: { x: e.clientX, y: e.clientY } }));
+            setSelectionBox(prev => ({ ...prev, current: { x: curX, y: curY } }));
             return;
         }
 
         // --- DIBUJO DE MUROS ---
         if (isDrawingWall && wallDrawingStart) {
-            const worldPos = divToWorld(e.clientX, e.clientY);
+            const worldPos = divToWorld(curX, curY);
             const snappedPos = snapToWallEndpoints(worldPos);
             setWallDrawingCurrent(snappedPos);
             return;
@@ -466,8 +479,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             const tokenScreenY = worldDivCenterY + (distFromCenterWorldY * zoom);
 
             // 4. Calcular Ángulo
-            const deltaX = e.clientX - tokenScreenX;
-            const deltaY = e.clientY - tokenScreenY;
+            const deltaX = curX - tokenScreenX;
+            const deltaY = curY - tokenScreenY;
 
             // atan2(y, x) da el ángulo en radianes desde el eje X positivo.
             // Queremos que "Arriba" (-Y) sea 0 grados (o la orientación base).
@@ -490,8 +503,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         if (draggedTokenId && activeScenario) {
             // Lógica de arrastre de TOKENS (Multiples)
-            const deltaX = (e.clientX - tokenDragStart.x) / zoom;
-            const deltaY = (e.clientY - tokenDragStart.y) / zoom;
+            const deltaX = (curX - tokenDragStart.x) / zoom;
+            const deltaY = (curY - tokenDragStart.y) / zoom;
 
             const newItems = activeScenario.items.map(item => {
                 if (selectedTokenIds.includes(item.id)) {
@@ -538,8 +551,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         // --- Lógica de REDIMENSIÓN ---
         if (resizingTokenId && activeScenario && resizeStartRef.current) {
             const { startX, startY, startWidth, startHeight } = resizeStartRef.current;
-            const deltaX = (e.clientX - startX) / zoom;
-            const deltaY = (e.clientY - startY) / zoom; // Asumiendo aspect ratio libre o control
+            const deltaX = (curX - startX) / zoom;
+            const deltaY = (curY - startY) / zoom; // Asumiendo aspect ratio libre o control
 
             let newWidth = startWidth + deltaX;
             let newHeight = startHeight + deltaY;
@@ -577,15 +590,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         if (!isDragging) return;
 
         // Lógica de paneo de CÁMARA
-        const deltaX = e.clientX - dragStartRef.current.x;
-        const deltaY = e.clientY - dragStartRef.current.y;
+        const deltaX = curX - dragStartRef.current.x;
+        const deltaY = curY - dragStartRef.current.y;
 
         setOffset(prev => ({
             x: prev.x + deltaX,
             y: prev.y + deltaY
         }));
 
-        dragStartRef.current = { x: e.clientX, y: e.clientY };
+        dragStartRef.current = { x: curX, y: curY };
     };
 
     const handleMouseUp = (e) => {
@@ -748,30 +761,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         document.body.style.cursor = 'default';
     };
 
-    // Efecto para listeners globales de mouse up/move para evitar que se pierda el drag al salir del div
+    // Efecto para listeners globales de mouse/touch up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
-        const handleGlobalMouseUp = (e) => {
+        const handleGlobalUp = (e) => {
             if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || resizingTokenId || draggingWallHandle) {
                 handleMouseUp(e);
             }
         };
 
-        const handleGlobalMouseMove = (e) => {
-            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle) {
+        const handleGlobalMove = (e) => {
+            if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle || resizingTokenId) {
                 handleMouseMove(e);
             }
         };
 
-        if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle) {
-            window.addEventListener('mouseup', handleGlobalMouseUp);
-            window.addEventListener('mousemove', handleGlobalMouseMove);
+        if (isDragging || draggedTokenId || rotatingTokenId || selectionBox || draggingWallHandle || resizingTokenId) {
+            window.addEventListener('mouseup', handleGlobalUp);
+            window.addEventListener('mousemove', handleGlobalMove);
+            window.addEventListener('touchend', handleGlobalUp);
+            window.addEventListener('touchmove', handleGlobalMove, { passive: false });
         }
 
         return () => {
-            window.removeEventListener('mouseup', handleGlobalMouseUp);
-            window.removeEventListener('mousemove', handleGlobalMouseMove);
+            window.removeEventListener('mouseup', handleGlobalUp);
+            window.removeEventListener('mousemove', handleGlobalMove);
+            window.removeEventListener('touchend', handleGlobalUp);
+            window.removeEventListener('touchmove', handleGlobalMove);
         };
-    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, draggingWallHandle, activeLayer]);
+    }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, draggingWallHandle, resizingTokenId, activeLayer]);
 
     // Dummy state just to make linter happy if needed or unused var
     const [, setLoadingRotation] = useState(0);
@@ -1174,10 +1191,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const handleTokenMouseDown = (e, token) => {
+        const { x: curX, y: curY } = getEventCoords(e);
+        const isTouch = e.type.startsWith('touch');
+
         e.stopPropagation(); // Evitar que el canvas inicie pan
 
-        // Si click izquierdo, seleccionamos y preparamos arrastre
-        if (e.button === 0) {
+        // Si click izquierdo o touch, seleccionamos y preparamos arrastre
+        if (isTouch || e.button === 0) {
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
@@ -1193,8 +1213,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 setSelectedTokenIds(newSelection);
             }
             // Si YA está seleccionado, si pulsamos Shift podríamos deseleccionarlo?
-            // Por simplicidad de arrastre, si ya está seleccionado y NO Shift, no hacemos nada (mantenemos grupo)
-            // Si Shift y ya está, podríamos quitarlo.
             else if (e.shiftKey) {
                 newSelection = newSelection.filter(id => id !== token.id);
                 setSelectedTokenIds(newSelection);
@@ -1202,7 +1220,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             }
 
             setDraggedTokenId(token.id);
-            setTokenDragStart({ x: e.clientX, y: e.clientY });
+            setTokenDragStart({ x: curX, y: curY });
 
             // Guardar posiciones originales de TODOS los seleccionados (incluyendo el nuevo si acabamos de seleccionarlo)
             // Nota: Usamos 'newSelection' para asegurar que tenemos la lista actualizada
@@ -1217,8 +1235,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const handleRotationMouseDown = (e, token) => {
+        const isTouch = e.type.startsWith('touch');
         e.stopPropagation();
-        if (e.button === 0) {
+        if (isTouch || e.button === 0) {
             setRotatingTokenId(token.id);
             // Para rotación, forzamos selección única del token rotado para evitar confusiones visuales
             setSelectedTokenIds([token.id]);
@@ -1422,6 +1441,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             strokeDasharray={isDoor && item.isOpen ? "4 4" : "none"}
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                            onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                         />
 
                         {/* Handles (Cuadrados y círculos mejorados para móvil) */}
@@ -1436,6 +1456,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         onMouseDown={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                            setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                        }}
+                                        onTouchStart={(e) => {
+                                            if (!canInteract) return;
+                                            handleTokenMouseDown(e, item);
                                             setDraggingWallHandle({ id: item.id, handleIndex: 1 });
                                         }}
                                     />
@@ -1453,6 +1478,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
                                         setDraggingWallHandle({ id: item.id, handleIndex: 1 });
                                     }}
+                                    onTouchStart={(e) => {
+                                        if (!canInteract) return;
+                                        handleTokenMouseDown(e, item);
+                                        setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                    }}
                                 />
 
                                 {/* Handle Punto 2 */}
@@ -1464,6 +1494,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         onMouseDown={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                            setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                        }}
+                                        onTouchStart={(e) => {
+                                            if (!canInteract) return;
+                                            handleTokenMouseDown(e, item);
                                             setDraggingWallHandle({ id: item.id, handleIndex: 2 });
                                         }}
                                     />
@@ -1479,6 +1514,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                     onMouseDown={(e) => {
                                         if (!canInteract) return;
                                         handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
+                                        setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                    }}
+                                    onTouchStart={(e) => {
+                                        if (!canInteract) return;
+                                        handleTokenMouseDown(e, item);
                                         setDraggingWallHandle({ id: item.id, handleIndex: 2 });
                                     }}
                                 />
@@ -1499,6 +1539,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* Toggle Puerta/Muro */}
                             <button
                                 onMouseDown={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
+                                onTouchStart={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
                                 className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.wallType === 'door' ? 'border-teal-500 text-teal-400' : (item.wallType === 'window' ? 'border-blue-500 text-blue-400' : 'border-slate-500 text-slate-400')}`}
                                 title={item.wallType === 'door' ? "Convertir en Ventana" : (item.wallType === 'window' ? "Convertir en Muro Sólido" : "Convertir en Puerta")}
                             >
@@ -1531,6 +1572,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     {item.wallType === 'door' && (
                         <button
                             onMouseDown={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
+                            onTouchStart={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
                             className={`absolute z-[60] p-1.5 rounded-full border shadow-2xl transition-all hover:scale-125 active:scale-90 pointer-events-auto ${item.isOpen ? (isSecret ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-teal-500/20 border-teal-500 text-teal-400') : (isSecret ? 'bg-purple-900/40 border-purple-600 text-purple-500' : 'bg-red-500/20 border-red-500 text-red-400')}`}
                             style={{
                                 left: `${(item.x1 + item.x2) / 2 - item.x}px`,
@@ -1580,6 +1622,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                 <div
                     onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
                         e.stopPropagation();
@@ -1717,14 +1760,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                         {/* Controles de Acción */}
                         <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
-                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
-                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} />
-                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
+                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => handleRotationMouseDown(e, item)} />
+                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
                         </div>
 
                         {/* Resize Handle */}
                         {isSelected && !rotatingTokenId && (
-                            <div onMouseDown={(e) => handleResizeMouseDown(e, item)} className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform" />
+                            <div
+                                onMouseDown={(e) => handleResizeMouseDown(e, item)}
+                                onTouchStart={(e) => handleResizeMouseDown(e, item)}
+                                className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
+                            />
                         )}
                     </div>
                 </div>
@@ -1753,12 +1800,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     // Handler para click en el fondo del canvas (Deseleccionar y Selection Box)
     const handleCanvasBackgroundMouseDown = (e) => {
-        // Solo si click izquierdo directo en el fondo
-        if (e.button === 0 && !e.altKey && e.target === containerRef.current) {
+        const { x: curX, y: curY } = getEventCoords(e);
+        const isTouch = e.type.startsWith('touch');
+
+        // Solo si click izquierdo directo en el fondo o touch
+        if ((isTouch || e.button === 0) && !e.altKey && e.target === containerRef.current) {
 
             // Si estamos en modo dibujo de muros (Solo en capa Iluminación)
             if (isDrawingWall && activeLayer === 'LIGHTING') {
-                const worldPos = divToWorld(e.clientX, e.clientY);
+                const worldPos = divToWorld(curX, curY);
                 const snapped = snapToWallEndpoints(worldPos);
                 setWallDrawingStart(snapped);
                 setWallDrawingCurrent(snapped);
@@ -1768,13 +1818,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             if (!e.shiftKey) setSelectedTokenIds([]); // Limpiar selección si no es Shift
 
             // Verificación de dispositivo móvil (Touch o pantalla pequeña)
-            const isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
+            const isMobile = isTouch || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
             if (isMobile) return;
 
             // Iniciar Selection Box
             setSelectionBox({
-                start: { x: e.clientX, y: e.clientY },
-                current: { x: e.clientX, y: e.clientY }
+                start: { x: curX, y: curY },
+                current: { x: curX, y: curY }
             });
         } else {
             handleMouseDown(e); // Mantener lógica de pan (Alt+Click o Middle Click)
@@ -1967,7 +2017,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                     {/* Panel Sidebar */}
                     <div className={`
-                    absolute top-0 right-0 h-full w-80 z-50 
+                    absolute top-0 right-0 h-full w-full sm:w-80 z-[100]
                     bg-[#0b1120] border-l border-[#c8aa6e]/30 shadow-2xl 
                     transform transition-transform duration-300 ease-out 
                     flex flex-col
@@ -2958,7 +3008,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     {/* --- VIEWPORT (Área visible) --- */}
                     <div
                         ref={containerRef}
-                        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+                        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing touch-none"
                         onMouseDown={handleCanvasBackgroundMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
