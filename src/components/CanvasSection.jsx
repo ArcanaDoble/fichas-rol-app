@@ -1332,7 +1332,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             opacity = (isLight || isWall) ? 1 : 0.3;
         } else {
             if (isLight) opacity = 0;
-            else if (isWall) opacity = 0; // Muros invisibles en mesa (solo colisionan)
+            else if (isWall) {
+                // Las puertas son visibles en mesa para que se puedan abrir
+                opacity = item.wallType === 'door' ? 1 : 0;
+            }
             else opacity = 1;
         }
 
@@ -2868,16 +2871,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             </div>
 
                             {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
-                            {/* --- ITEMS / TOKENS LAYER --- */}
+                            {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
+                            <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
+                                {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
+                            </div>
 
-                            {/* --- ITEMS / TOKENS LAYER --- */}
-                            {/* Renderizamos en dos pases para crear "Capas" reales */}
+                            {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
+                            {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
+                            <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                <svg width="100%" height="100%" className="overflow-visible pointer-events-none transition-all duration-300 relative">
+                                    {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
+                                    <rect
+                                        x={mapX - bleed}
+                                        y={mapY - bleed}
+                                        width={mapBounds.width + bleed * 2}
+                                        height={mapBounds.height + bleed * 2}
+                                        fill="black"
+                                        mask="url(#lighting-mask)"
+                                        style={{
+                                            opacity: gridConfig.ambientDarkness || 0,
+                                            transition: 'opacity 0.3s ease-in-out'
+                                        }}
+                                    />
 
-                            {/* CAPA 1: LUCES (Fondo) */}
-                            {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
-
-                            {/* CAPA 2: TOKENS Y MUROS (Encima) */}
-                            {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
+                                    {/* CAPA 2: NIEBLA DE GUERRA (Línea de Visión) */}
+                                    {gridConfig.fogOfWar && (
+                                        <rect
+                                            x={mapX - bleed}
+                                            y={mapY - bleed}
+                                            width={mapBounds.width + bleed * 2}
+                                            height={mapBounds.height + bleed * 2}
+                                            fill="black"
+                                            mask="url(#fog-mask)"
+                                            style={{
+                                                opacity: activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8,
+                                                transition: 'opacity 0.3s ease-in-out'
+                                            }}
+                                        />
+                                    )}
+                                </svg>
+                            </div>
 
                             {/* PREVISUALIZACIÓN DE MURO (DIBUJO) */}
                             {isDrawingWall && wallDrawingStart && wallDrawingCurrent && (
@@ -3047,35 +3081,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                         })}
                                     </defs>
 
-                                    {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
-                                    <rect
-                                        x={mapX - bleed}
-                                        y={mapY - bleed}
-                                        width={mapBounds.width + bleed * 2}
-                                        height={mapBounds.height + bleed * 2}
-                                        fill="black"
-                                        mask="url(#lighting-mask)"
-                                        style={{
-                                            opacity: gridConfig.ambientDarkness || 0,
-                                            transition: 'opacity 0.3s ease-in-out'
-                                        }}
-                                    />
 
-                                    {/* CAPA 2: NIEBLA DE GUERRA (Línea de Visión) */}
-                                    {gridConfig.fogOfWar && (
-                                        <rect
-                                            x={mapX - bleed}
-                                            y={mapY - bleed}
-                                            width={mapBounds.width + bleed * 2}
-                                            height={mapBounds.height + bleed * 2}
-                                            fill="black"
-                                            mask="url(#fog-mask)"
-                                            style={{
-                                                opacity: activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8, // DM solo simula visión real si selecciona un token
-                                                transition: 'opacity 0.3s ease-in-out'
-                                            }}
-                                        />
-                                    )}
                                 </svg>
                             </div>
 
