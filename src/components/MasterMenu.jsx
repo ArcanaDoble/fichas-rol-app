@@ -11,7 +11,8 @@ import {
     FiChevronRight,
     FiArrowLeft,
     FiStar,
-    FiUser
+    FiUser,
+    FiLayout
 } from 'react-icons/fi';
 import { FaSkull } from 'react-icons/fa';
 
@@ -70,6 +71,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             icon: FiTarget,
             features: ['Grid', 'Tokens', 'Táctico'],
             isNew: false,
+        },
+        {
+            id: 'canvas_beta',
+            title: 'Canvas (BETA)',
+            description: 'Nueva arquitectura del Canvas. Entorno de pruebas aislado.',
+            color: 'rose',
+            icon: FiLayout,
+            features: ['Beta', 'Dev', 'Test'],
+            isNew: true,
         },
         {
             id: 'minimap',

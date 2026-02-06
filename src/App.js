@@ -64,6 +64,7 @@ import { CharacterCreatorView } from './components/CharacterCreatorView';
 import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import MapCanvas from './components/MapCanvas';
+import CanvasSection from './components/CanvasSection';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
 import StatusEffectsManager from './components/StatusEffectsManager';
@@ -8842,6 +8843,16 @@ function App() {
   if (userType === 'master' && authenticated && !chosenView) {
     return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
   }
+
+  // --- Nueva Sección Canvas (BETA) ---
+  if (userType === 'master' && authenticated && chosenView === 'canvas_beta') {
+    return (
+      <CanvasSection
+        onBack={() => setChosenView(null)}
+      />
+    );
+  }
+
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return withTooltips(
       <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
