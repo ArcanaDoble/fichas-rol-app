@@ -28,7 +28,23 @@ const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
     if (det === 0) return false;
     const lambda = ((y4 - y3) * (x4 - x1) + (x3 - x4) * (y4 - y1)) / det;
     const gamma = ((y1 - y2) * (x4 - x1) + (x2 - x1) * (y4 - y1)) / det;
-    return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+    return (0 <= lambda && lambda <= 1) && (0 <= gamma && gamma <= 1);
+};
+
+const lineRectIntersect = (x1, y1, x2, y2, rx, ry, rw, rh) => {
+    // 1. Verificar si alguno de los puntos finales está dentro del rectángulo
+    const isInside = (px, py) => px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
+    if (isInside(x1, y1) || isInside(x2, y2)) return true;
+
+    // 2. Verificar intersección con los 4 lados del rectángulo
+    const sides = [
+        [rx, ry, rx + rw, ry], // Top
+        [rx + rw, ry, rx + rw, ry + rh], // Right
+        [rx + rw, ry + rh, rx, ry + rh], // Bottom
+        [rx, ry + rh, rx, ry] // Left
+    ];
+
+    return sides.some(side => linesIntersect(x1, y1, x2, y2, side[0], side[1], side[2], side[3]));
 };
 
 const CanvasThumbnail = ({ scenario }) => {
@@ -315,11 +331,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         return { x: worldX, y: worldY };
     }
 
-    const snapToWallEndpoints = (worldPos) => {
+    const snapToWallEndpoints = (worldPos, customSnapActive = null) => {
         let snappedPos = { ...worldPos };
 
+        const shouldSnap = customSnapActive !== null ? customSnapActive : gridConfig.snapToGrid;
+
         // 1. Snap a la rejilla si está activo
-        if (gridConfig.snapToGrid) {
+        if (shouldSnap) {
             snappedPos.x = Math.round(snappedPos.x / gridConfig.cellWidth) * gridConfig.cellWidth;
             snappedPos.y = Math.round(snappedPos.y / gridConfig.cellHeight) * gridConfig.cellHeight;
         }
@@ -362,7 +380,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         // --- ARRASTRE DE EXTREMOS DE MUROS ---
         if (draggingWallHandle && activeScenario) {
             const worldPos = divToWorld(e.clientX, e.clientY);
-            const snappedPos = snapToWallEndpoints(worldPos);
+
+            // Buscar el muro para ver si tiene snap individual
+            const wall = activeScenario.items.find(i => i.id === draggingWallHandle.id);
+            const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid);
 
             const updatedItems = activeScenario.items.map(item => {
                 if (item.id === draggingWallHandle.id) {
@@ -463,21 +484,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         newY = Math.round(newY / cellH) * cellH;
                     }
 
-                    // --- COLISIONES CON MUROS (Solo para tokens en capa Mesa) ---
-                    if (item.type !== 'wall' && activeLayer === 'TABLETOP') {
-                        const walls = activeScenario.items.filter(i => i.type === 'wall');
-                        const charCenterStart = { x: original.x + item.width / 2, y: original.y + item.height / 2 };
-                        const charCenterEnd = { x: newX + item.width / 2, y: newY + item.height / 2 };
 
-                        const hasCollision = walls.some(wall =>
-                            linesIntersect(charCenterStart.x, charCenterStart.y, charCenterEnd.x, charCenterEnd.y, wall.x1, wall.y1, wall.x2, wall.y2)
-                        );
-
-                        if (hasCollision) {
-                            newX = original.x;
-                            newY = original.y;
-                        }
-                    }
 
                     // Si es un muro, desplazamos sus puntos
                     if (item.type === 'wall') {
@@ -572,7 +579,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 width: Math.max(Math.abs(wallDrawingCurrent.x - wallDrawingStart.x), 5),
                 height: Math.max(Math.abs(wallDrawingCurrent.y - wallDrawingStart.y), 5),
                 color: '#c8aa6e',
-                thickness: 4
+                thickness: 4,
+                snapToGrid: true, // Por defecto los muros nuevos tienen snap
+                name: 'Muro'
             };
 
             // Solo añadir si tiene longitud mínima
@@ -647,11 +656,67 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             return;
         }
 
+        // --- FINALIZAR ARRASTRE / ROTACIÓN / REDIMENSIÓN DE TOKENS ---
+        if ((draggedTokenId || rotatingTokenId || resizingTokenId) && activeScenario) {
+            let finalItems = activeScenario.items;
+
+            // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
+            if (draggedTokenId && activeLayer === 'TABLETOP') {
+                const walls = activeScenario.items.filter(i => i.type === 'wall');
+                let hasCollision = false;
+
+                finalItems = activeScenario.items.map(item => {
+                    // Solo chequear colisión para tokens (no muros) que estaban seleccionados
+                    if (selectedTokenIds.includes(item.id) && item.type !== 'wall') {
+                        const original = tokenOriginalPos[item.id];
+                        if (original) {
+                            const charCenterStart = { x: original.x + item.width / 2, y: original.y + item.height / 2 };
+                            const charCenterEnd = { x: item.x + item.width / 2, y: item.y + item.height / 2 };
+
+                            const pathCollision = walls.some(wall =>
+                                linesIntersect(charCenterStart.x, charCenterStart.y, charCenterEnd.x, charCenterEnd.y, wall.x1, wall.y1, wall.x2, wall.y2)
+                            );
+                            const overlapCollision = walls.some(wall =>
+                                lineRectIntersect(wall.x1, wall.y1, wall.x2, wall.y2, item.x + 2, item.y + 2, item.width - 4, item.height - 4)
+                            );
+
+                            if (pathCollision || overlapCollision) {
+                                hasCollision = true;
+                                return { ...item, x: original.x, y: original.y };
+                            }
+                        }
+                    }
+                    return item;
+                });
+
+                if (hasCollision) {
+                    setActiveScenario(prev => ({ ...prev, items: finalItems }));
+                }
+            }
+
+            // Guardar el estado final en Firebase
+            try {
+                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                    items: finalItems,
+                    lastModified: Date.now()
+                });
+            } catch (error) {
+                console.error("Error saving moved items:", error);
+            }
+
+            setDraggedTokenId(null);
+            setRotatingTokenId(null);
+            setResizingTokenId(null);
+            setTokenOriginalPos({});
+            document.body.style.cursor = 'default';
+            return;
+        }
+
         setIsDragging(false);
-        setDraggedTokenId(null); // Soltar token
-        setRotatingTokenId(null); // Soltar rotación
-        setResizingTokenId(null); // Soltar resize
-        setDraggingWallHandle(null); // Soltar extremo
+        setDraggedTokenId(null);
+        setRotatingTokenId(null);
+        setResizingTokenId(null);
+        setDraggingWallHandle(null);
         setTokenOriginalPos({});
         document.body.style.cursor = 'default';
     };
@@ -819,6 +884,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                     } catch (error) {
                         console.error('Error al pegar tokens:', error);
+                    }
+                }
+            }
+
+            // DELETE / BACKSPACE (Eliminar seleccionados)
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedTokenIds.length > 0 && activeScenario) {
+                    const updatedItems = activeScenario.items.filter(item => !selectedTokenIds.includes(item.id));
+
+                    // Actualización Optimista
+                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                    setSelectedTokenIds([]);
+
+                    try {
+                        await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                            items: updatedItems,
+                            lastModified: Date.now()
+                        });
+                    } catch (error) {
+                        console.error('Error al eliminar items con teclado:', error);
                     }
                 }
             }
@@ -1192,16 +1277,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     }}
                 >
                     <svg className="overflow-visible pointer-events-none">
-                        {/* Base del Collider (Línea gruesa oscura) - Sirve como Hitbox precisa */}
                         <line
                             x1={item.x1 - item.x}
                             y1={item.y1 - item.y}
                             x2={item.x2 - item.x}
                             y2={item.y2 - item.y}
                             stroke={colliderColor}
-                            strokeWidth={12} // Un poco más ancha para facilitar selección proactiva
+                            strokeWidth={Math.max(12, (item.thickness || 4) + 8)} // Hitbox generosa pero proporcional
                             strokeLinecap="butt"
-                            opacity="0.6"
+                            opacity="0.4"
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                         />
@@ -1212,7 +1296,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             x2={item.x2 - item.x}
                             y2={item.y2 - item.y}
                             stroke={visualLineColor}
-                            strokeWidth={2}
+                            strokeWidth={Math.max(2, (item.thickness || 4) / 2)}
                             strokeLinecap="round"
                             className="pointer-events-auto cursor-grab active:cursor-grabbing"
                             onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
@@ -1280,16 +1364,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         )}
                     </svg>
 
-                    {/* Controles de Acción para Muros (Solo Borrar) */}
+                    {/* Controles de Acción para Muros (Solo Borrar - Posicionado en el centro del segmento) */}
                     {isSelected && isLightingLayer && (
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 rounded-full px-1 py-0.5 shadow-xl border border-red-500/30 flex items-center z-50">
-                            <button
-                                onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
-                                title="Eliminar Muro"
-                            >
-                                <Trash2 size={10} />
-                            </button>
+                        <div
+                            className="absolute bg-black/90 rounded-full p-1 shadow-xl border border-red-500/30 flex items-center z-50 hover:scale-110 active:scale-95 transition-transform cursor-pointer pointer-events-auto"
+                            style={{
+                                left: `${(item.x1 + item.x2) / 2 - item.x}px`,
+                                top: `${(item.y1 + item.y2) / 2 - item.y}px`,
+                                transform: 'translate(-50%, -150%)' // Un poco arriba del centro exacto
+                            }}
+                            onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                        >
+                            <Trash2 size={12} className="text-red-400 hover:text-red-200" />
                         </div>
                     )}
                 </div>
@@ -2153,6 +2239,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
                                                 {token.type === 'light' ? (
                                                     <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                ) : token.type === 'wall' ? (
+                                                    <PenTool className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
                                                 ) : (
                                                     <img src={token.img} className="w-full h-full object-contain p-1" />
                                                 )}
@@ -2262,8 +2350,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 </div>
                                             </div>
 
-                                            {/* Future Links (Solo para tokens) */}
-                                            {token.type !== 'light' && (
+                                            {/* Future Links (Solo para personas/tokens reales) */}
+                                            {token.type !== 'light' && token.type !== 'wall' && (
                                                 <div className="pt-4 border-t border-slate-800/50">
                                                     <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
                                                         <Activity size={14} />
@@ -2273,8 +2361,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 </div>
                                             )}
 
-                                            {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz) */}
-                                            {token.type !== 'light' && (
+                                            {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro) */}
+                                            {token.type !== 'light' && token.type !== 'wall' && (
                                                 <div className="pt-4 border-t border-slate-800/50">
                                                     <TokenResources
                                                         token={token}
@@ -2339,8 +2427,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                 </div>
                                             )}
 
-                                            {/* Estados Alterados (Solo para tokens) */}
-                                            {token.type !== 'light' && (
+                                            {/* CONFIGURACIÓN DE MURO (Solo si ES un muro) */}
+                                            {token.type === 'wall' && (
+                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                        <PenTool size={12} /> Propiedades del Muro
+                                                    </h4>
+
+                                                    {/* Snap Toggle para Muro */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
+                                                            <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => updateItem(token.id, { snapToGrid: token.snapToGrid === false ? true : false })}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid !== false ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                        >
+                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid !== false ? 'left-7' : 'left-1'}`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Grosor del Muro */}
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                            <span className="text-slate-500">Grosor del Collider</span>
+                                                            <span className="text-[#c8aa6e] font-mono">{token.thickness || 4}px</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min="1" max="20" step="1"
+                                                            value={token.thickness || 4}
+                                                            onChange={(e) => updateItem(token.id, { thickness: Number(e.target.value) })}
+                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Estados Alterados (Solo para tokens reales) */}
+                                            {token.type !== 'light' && token.type !== 'wall' && (
                                                 <div className="pt-4 border-t border-slate-800/50 space-y-3">
                                                     <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
                                                     <EstadoSelector
@@ -2674,6 +2800,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 </>
             )
             }
+
+
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
