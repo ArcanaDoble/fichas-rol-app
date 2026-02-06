@@ -2595,6 +2595,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                                 />
                                                             </div>
                                                         )}
+
+                                                        <div className="w-full h-px bg-slate-800/30 my-2"></div>
+
+                                                        {/* VISIÓN EN LA OSCURIDAD */}
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Visión en Oscuridad</span>
+                                                                    <div className="bg-[#c8aa6e]/10 border border-[#c8aa6e]/30 text-[#c8aa6e] text-[7px] px-1 rounded uppercase font-bold tracking-tighter">RACIAL</div>
+                                                                </div>
+                                                                <span className="text-[8px] text-slate-600 italic">Ignora la oscuridad ambiental</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { hasDarkvision: !token.hasDarkvision })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.hasDarkvision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasDarkvision ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {token.hasDarkvision && (
+                                                            <div className="space-y-3 pt-2">
+                                                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                    <span className="text-slate-500">Alcance Oscuridad</span>
+                                                                    <span className="text-[#c8aa6e] font-mono">{token.darkvisionRadius || 300}px</span>
+                                                                </div>
+                                                                <input
+                                                                    type="range"
+                                                                    min="50" max="1500" step="50"
+                                                                    value={token.darkvisionRadius || 300}
+                                                                    onChange={(e) => updateItem(token.id, { darkvisionRadius: Number(e.target.value) })}
+                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                                />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -3120,6 +3155,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     );
                                                 })}
                                             </g>
+
+                                            {/* VISIÓN EN LA OSCURIDAD: Substraemos las áreas que el observador ve en la oscuridad */}
+                                            {activeScenario?.items?.filter(i => {
+                                                const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
+                                                if (!isToken) return false;
+
+                                                // Si hay algo seleccionado (GM Mode / Player perspective), 
+                                                // solo mostramos la visión en oscuridad de lo que está seleccionado
+                                                if (selectedTokenIds.length > 0) {
+                                                    return selectedTokenIds.includes(i.id);
+                                                }
+                                                return true;
+                                            }).map(token => {
+                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                const original = tokenOriginalPos[token.id];
+                                                const tx = (isInteracting && original) ? original.x : token.x;
+                                                const ty = (isInteracting && original) ? original.y : token.y;
+
+                                                return (
+                                                    <g key={`darkvision-hole-ambient-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                        <circle
+                                                            cx={tx + (token.width / 2)}
+                                                            cy={ty + (token.height / 2)}
+                                                            r={token.darkvisionRadius || 300}
+                                                            fill={`url(#grad-darkvision-${token.id})`}
+                                                        />
+                                                    </g>
+                                                );
+                                            })}
                                         </mask>
 
                                         {/* MÁSCARA 2: NIEBLA DE GUERRA (Visión + Luces) */}
@@ -3199,8 +3263,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                             </radialGradient>
                                         ))}
 
-                                        {/* Máscaras de Sombra por Luz y por Token */}
-                                        {activeScenario?.items?.filter(i => i.type === 'light' || (i.hasVision && i.type !== 'wall')).map(source => {
+                                        {/* Gradientes de Visión en la Oscuridad */}
+                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
+                                            <radialGradient id={`grad-darkvision-${token.id}`} key={`grad-darkvision-${token.id}`}>
+                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                <stop offset="80%" stopColor="black" stopOpacity="0.4" />
+                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                            </radialGradient>
+                                        ))}
+
+                                        {/* Máscaras de Sombra por Luz y por Token (Visión y Visión en Oscuridad) */}
+                                        {activeScenario?.items?.filter(i => i.type === 'light' || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall')).map(source => {
                                             const isSourceInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(source.id);
                                             const originalSource = tokenOriginalPos[source.id];
                                             const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
@@ -3268,6 +3341,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                         fill={`url(#visual-grad-${light.id})`}
                                                         style={{ mixBlendMode: 'screen' }}
                                                         className={light.flicker ? 'animate-flicker' : ''}
+                                                    />
+                                                </g>
+                                            );
+                                        })}
+
+                                        {/* DARKVISION VISUAL TINT (Efecto sutil para diferenciar visión racial) */}
+                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
+                                            // Solo mostramos el tinte si está seleccionado (perspectiva activa)
+                                            if (selectedTokenIds.length > 0 && !selectedTokenIds.includes(token.id)) return null;
+
+                                            const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                            const original = tokenOriginalPos[token.id];
+                                            const tx = (isInteracting && original) ? original.x : token.x;
+                                            const ty = (isInteracting && original) ? original.y : token.y;
+
+                                            return (
+                                                <g key={`darkvision-glow-group-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                    <defs>
+                                                        <radialGradient id={`darkvision-visual-grad-${token.id}`}>
+                                                            <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.15" />
+                                                            <stop offset="80%" stopColor="#94a3b8" stopOpacity="0" />
+                                                        </radialGradient>
+                                                    </defs>
+                                                    <circle
+                                                        cx={tx + (token.width / 2)}
+                                                        cy={ty + (token.height / 2)}
+                                                        r={token.darkvisionRadius || 300}
+                                                        fill={`url(#darkvision-visual-grad-${token.id})`}
+                                                        style={{ mixBlendMode: 'soft-light' }}
                                                     />
                                                 </g>
                                             );
