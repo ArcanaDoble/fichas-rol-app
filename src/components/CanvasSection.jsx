@@ -926,10 +926,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const mapY = (WORLD_SIZE - mapBounds.height) / 2;
 
     // Calculamos si hay un "Observador" activo (un token seleccionado con visión)
-    // Para jugadores, forzamos que sea uno de sus tokens controlados.
+    // Para jugadores, el enfoque (perspectiva exclusiva) solo se activa si seleccionan sus tokens.
     const observerId = isPlayerView
-        ? (activeScenario?.items?.find(s => selectedTokenIds.includes(s.id) && s.controlledBy === playerName && s.hasVision)?.id
-            || activeScenario?.items?.find(s => s.controlledBy === playerName && s.hasVision)?.id)
+        ? activeScenario?.items?.find(s => selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision)?.id
         : activeScenario?.items?.find(s =>
             selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
         )?.id;
@@ -3498,7 +3497,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 fill="black"
                                                 mask="url(#fog-mask)"
                                                 style={{
-                                                    opacity: activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8,
+                                                    opacity: isPlayerView
+                                                        ? 1
+                                                        : (activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
                                                     transition: 'opacity 0.3s ease-in-out'
                                                 }}
                                             />
@@ -3565,8 +3566,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
                                                     if (!isToken) return false;
 
-                                                    // Si hay algo seleccionado (GM Mode / Player perspective), 
-                                                    // solo mostramos la visión en oscuridad de lo que está seleccionado
+                                                    // Restricción de Jugador: Solo ve su propia visión en oscuridad
+                                                    const isControlled = !isPlayerView || i.controlledBy?.includes(playerName);
+                                                    if (!isControlled) return false;
+
+                                                    // Si hay algo seleccionado (Focus Mode), solo mostramos esa visión
                                                     if (selectedTokenIds.length > 0) {
                                                         return selectedTokenIds.includes(i.id);
                                                     }
@@ -3595,20 +3599,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
                                                 {/* Vision de los Tokens: Filtrado por selección para el Master */}
                                                 {(() => {
-                                                    const hasTokenSelected = activeScenario?.items?.some(s =>
-                                                        selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+                                                    // Determinar qué tokens otorgan visión al rol actual
+                                                    const perspectiveTokens = activeScenario?.items?.filter(i =>
+                                                        i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
+                                                        (isPlayerView ? i.controlledBy?.includes(playerName) : true)
+                                                    ) || [];
+
+                                                    // ¿Hay una selección que deba forzar el enfoque (perspective focus)?
+                                                    const selectedVisionTokens = perspectiveTokens.filter(i =>
+                                                        selectedTokenIds.includes(i.id)
                                                     );
 
-                                                    return activeScenario?.items?.filter(i => {
-                                                        const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasVision;
-                                                        if (!isToken) return false;
+                                                    // Si el jugador selecciona tokens propios con visión, activamos el enfoque exclusivo
+                                                    const visibleTokens = selectedVisionTokens.length > 0 ? selectedVisionTokens : perspectiveTokens;
 
-                                                        // Solo activamos el modo perspectiva si lo que hemos seleccionado es un token con visión
-                                                        if (hasTokenSelected) {
-                                                            return selectedTokenIds.includes(i.id);
-                                                        }
-                                                        return true;
-                                                    }).map(token => {
+                                                    return visibleTokens.map(token => {
                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
                                                         const original = tokenOriginalPos[token.id];
                                                         const tx = (isInteracting && original) ? original.x : token.x;
