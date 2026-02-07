@@ -64,12 +64,12 @@ const CombatHUD = ({
                     </div>
 
                     {/* Contenedor de Botones */}
-                    <div className="bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-1.5 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                    <div className="bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-1.5 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden min-h-[76px] md:min-h-[128px] flex flex-col justify-center">
                         {/* Decoración de fondo */}
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none"></div>
 
                         <div
-                            className="flex items-center justify-center gap-1.5 md:gap-4 overflow-x-auto pb-0 md:pb-0 scrollbar-hide"
+                            className="flex items-center justify-center gap-1.5 md:gap-4 overflow-x-auto scrollbar-hide h-16 md:h-24 w-full"
                             style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
                         >
                             <style>{`
@@ -96,8 +96,8 @@ const CombatHUD = ({
                             ))}
 
                             {activeCategory !== 'ACCIONES' && (
-                                <div className="h-16 md:h-24 flex items-center justify-center text-slate-500 text-xs italic px-8">
-                                    Contenido de {activeCategory} próximamente...
+                                <div className="h-full flex items-center justify-center text-slate-500 text-[10px] md:text-xs italic px-8 uppercase tracking-widest">
+                                    {activeCategory} próximamente...
                                 </div>
                             )}
                         </div>
