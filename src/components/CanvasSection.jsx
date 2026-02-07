@@ -319,14 +319,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     const handleTouchMove = (e) => {
         if (e.touches.length === 2 && lastPinchDist.current !== null) {
-            // Pinch Zoom
+            // Pinch Zoom - Zoom focalizado en el punto medio de los dedos
             const newDist = getTouchDistance(e.touches);
             const delta = newDist - lastPinchDist.current;
+
+            // Coordenadas del punto medio en la pantalla
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+            // Coordenadas relativas al centro del viewport operativo
+            const rect = containerRef.current.getBoundingClientRect();
+            const viewCenterX = rect.left + rect.width / 2;
+            const viewCenterY = rect.top + rect.height / 2;
+            const sx = midX - viewCenterX;
+            const sy = midY - viewCenterY;
 
             // Sensibilidad del pinch
             const zoomDelta = delta * 0.005;
 
-            setZoom(prev => Math.min(Math.max(0.1, prev + zoomDelta), 4));
+            setZoom(prevZoom => {
+                const newZoom = Math.min(Math.max(0.1, prevZoom + zoomDelta), 4);
+                if (newZoom === prevZoom) return prevZoom;
+
+                const ratio = newZoom / prevZoom;
+
+                // Ajustar offset para que el punto bajo los dedos se mantenga en su sitio
+                setOffset(prevOffset => ({
+                    x: sx - (sx - prevOffset.x) * ratio,
+                    y: sy - (sy - prevOffset.y) * ratio
+                }));
+
+                return newZoom;
+            });
 
             lastPinchDist.current = newDist;
         } else if (e.touches.length === 1 && isDragging) {
@@ -341,7 +365,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             }));
 
             lastTouchPos.current = { x: touch.clientX, y: touch.clientY };
-            // No longer needed: dragStartRef.current = { x: touch.clientX, y: touch.clientY }; // Sync for consistency
         }
     };
 
