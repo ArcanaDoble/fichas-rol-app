@@ -758,6 +758,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     if (!isCorrectLayer) return false;
 
+                    // Restricción de Jugador: No permitir seleccionar tokens ajenos
+                    if (isPlayerView && !isLight && !isWall) {
+                        const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+                        if (!hasPermission) return false;
+                    } else if (isPlayerView && (isLight || isWall)) {
+                        return false;
+                    }
+
                     // Simple AABB intersection
                     return (
                         item.x < selX + selW &&
@@ -1113,7 +1121,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let initialCamera = scenario.camera;
 
         if (isPlayerView) {
-            const playerToken = scenario.items?.find(i => i.controlledBy === playerName);
+            const playerToken = scenario.items?.find(i => i.controlledBy?.includes(playerName));
             if (playerToken) {
                 const playerZoom = 1.2;
                 initialCamera = {
@@ -1316,7 +1324,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
-            if (isPlayerView && token.controlledBy !== playerName) {
+            const canMove = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+            if (!canMove) {
                 return;
             }
             // Si estamos redimensionando, no iniciar arrastre
@@ -1508,7 +1517,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // Restricciones de Jugador: Solo puede interactuar con lo que controla
         if (isPlayerView && !isLight && !isWall) {
-            if (item.controlledBy !== playerName) {
+            const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+            if (!hasPermission) {
                 canInteract = false;
             }
         } else if (isPlayerView && (isLight || isWall)) {
@@ -1807,6 +1817,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
+                            )}
+                            {item.controlledBy?.length > 0 && (
+                                <div className="absolute -top-2 -right-2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.5)] text-[#0b1120] rounded-full p-0.5 border border-white/20">
+                                    <Users size={8} />
+                                </div>
                             )}
                         </div>
 
@@ -2902,13 +2917,43 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 </div>
 
                                                 {/* Future Links (Solo para personas/tokens reales) */}
+                                                {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50">
-                                                        <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
-                                                            <Activity size={14} />
-                                                            Ver Ficha de Personaje
-                                                        </button>
-                                                        <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Users size={12} /> Control de Jugador
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {existingPlayers.map(player => {
+                                                                const isControlled = token.controlledBy?.includes(player);
+                                                                return (
+                                                                    <div
+                                                                        key={player}
+                                                                        onClick={() => {
+                                                                            const isSelf = isPlayerView && player === playerName;
+                                                                            if (isSelf && isControlled) return;
+
+                                                                            const currentControlled = token.controlledBy || [];
+                                                                            const nextControlled = isControlled
+                                                                                ? currentControlled.filter(p => p !== player)
+                                                                                : [...currentControlled, player];
+                                                                            updateItem(token.id, { controlledBy: nextControlled });
+                                                                        }}
+                                                                        className={`w-full flex items-center justify-between p-2 rounded border transition-all ${isControlled ? (isPlayerView && player === playerName ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]/50 cursor-not-allowed' : 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50') : 'bg-slate-900/50 border-slate-800 cursor-pointer'} ${isControlled ? 'text-[#f0e6d2]' : 'text-slate-500'}`}
+                                                                    >
+                                                                        <span className="text-[10px] font-bold uppercase tracking-wider">{player}</span>
+                                                                        {isControlled ? (
+                                                                            <Check className="w-3 h-3 text-[#c8aa6e]" />
+                                                                        ) : (
+                                                                            <div className="w-3 h-3 rounded-full border border-slate-700" />
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {existingPlayers.length === 0 && (
+                                                                <p className="text-[8px] text-slate-600 uppercase text-center italic">No hay jugadores disponibles</p>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 )}
 
