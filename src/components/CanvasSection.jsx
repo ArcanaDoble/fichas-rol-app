@@ -133,7 +133,7 @@ const SaveToast = ({ show, exiting, type = 'success' }) => {
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -238,6 +238,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
     }, [selectedTokenIds, rotatingTokenId, activeTab]);
 
+
+    // Effect to auto-load active scenario for players
+    useEffect(() => {
+        if (!isPlayerView) return;
+
+        console.log("🕵️ Player Mode: Listening for active scenario...");
+        const unsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const activeId = data.activeScenarioId;
+
+                if (activeId && activeId !== activeScenario?.id) {
+                    console.log("📍 Active scenario detected:", activeId);
+                    // We don't need a nested listener here because the sync listener below 
+                    // will handle updates once the ID matches.
+                    // But we need to LOAD the initial data to set activeScenario.
+                    const scenarioRef = doc(db, 'canvas_scenarios', activeId);
+                    onSnapshot(scenarioRef, (scenarioDoc) => {
+                        if (scenarioDoc.exists()) {
+                            loadScenario({ id: scenarioDoc.id, ...scenarioDoc.data() });
+                        }
+                    });
+                }
+            }
+        });
+
+        return () => unsub();
+    }, [isPlayerView, activeScenario?.id]);
 
     // Listener para Sincronización en Tiempo Real (Multi-navegador)
     useEffect(() => {
@@ -855,10 +883,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const mapY = (WORLD_SIZE - mapBounds.height) / 2;
 
     // Calculamos si hay un "Observador" activo (un token seleccionado con visión)
-    // Esto se usa para el modo perspectiva del Master
-    const observerId = activeScenario?.items?.find(s =>
-        selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
-    )?.id;
+    // Para jugadores, forzamos que sea uno de sus tokens controlados.
+    const observerId = isPlayerView
+        ? (activeScenario?.items?.find(s => selectedTokenIds.includes(s.id) && s.controlledBy === playerName && s.hasVision)?.id
+            || activeScenario?.items?.find(s => s.controlledBy === playerName && s.hasVision)?.id)
+        : activeScenario?.items?.find(s =>
+            selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+        )?.id;
 
     const fileInputRef = useRef(null);
 
@@ -1042,9 +1073,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const loadScenario = (scenario) => {
         setActiveScenario(scenario);
         if (scenario.config) setGridConfig(scenario.config);
-        if (scenario.camera) {
-            setZoom(scenario.camera.zoom);
-            setOffset(scenario.camera.offset);
+
+        // Determinar cámara inicial
+        let initialCamera = scenario.camera;
+
+        if (isPlayerView) {
+            const playerToken = scenario.items?.find(i => i.controlledBy === playerName);
+            if (playerToken) {
+                const playerZoom = 1.2;
+                initialCamera = {
+                    zoom: playerZoom,
+                    offset: {
+                        x: - (playerToken.x + playerToken.width / 2 - WORLD_SIZE / 2) * playerZoom,
+                        y: - (playerToken.y + playerToken.height / 2 - WORLD_SIZE / 2) * playerZoom
+                    }
+                };
+            }
+        }
+
+        if (initialCamera) {
+            setZoom(initialCamera.zoom);
+            setOffset(initialCamera.offset);
         }
         setViewMode('EDIT');
     };
@@ -1230,6 +1279,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
+            // Restricción de Jugador: No permitir interactuar con tokens ajenos
+            if (isPlayerView && token.controlledBy !== playerName) {
+                return;
+            }
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
@@ -1415,7 +1468,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
-        const canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+        let canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+
+        // Restricciones de Jugador: Solo puede interactuar con lo que controla
+        if (isPlayerView && !isLight && !isWall) {
+            if (item.controlledBy !== playerName) {
+                canInteract = false;
+            }
+        } else if (isPlayerView && (isLight || isWall)) {
+            // Jugadores no pueden tocar luces ni muros
+            canInteract = false;
+        }
 
         let opacity = 1;
         if (isLightingLayer) {
@@ -2037,11 +2100,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     {/* 1. Botón Salir (Flotante Arriba Izquierda) */}
                     <button
                         onClick={() => {
-                            setViewMode('LIBRARY');
-                            setActiveScenario(null);
+                            if (isPlayerView) {
+                                onBack();
+                            } else {
+                                setViewMode('LIBRARY');
+                                setActiveScenario(null);
+                            }
                         }}
                         className="absolute top-6 left-6 z-50 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
-                        title="Salir"
+                        title={isPlayerView ? "Volver a Ficha" : "Salir a la Biblioteca"}
                     >
                         <FiArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform font-bold" />
                     </button>
@@ -2085,12 +2152,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                     <Settings className="w-5 h-5 text-[#c8aa6e]" />
-                                    <input
-                                        type="text"
-                                        value={activeScenario?.name || ''}
-                                        onChange={(e) => setActiveScenario(prev => ({ ...prev, name: e.target.value }))}
-                                        className="bg-transparent border-none outline-none font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 focus:bg-white/5 rounded px-1"
-                                    />
+                                    {isPlayerView ? (
+                                        <span className="font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 truncate px-1">
+                                            {activeScenario?.name || 'Escenario'}
+                                        </span>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={activeScenario?.name || ''}
+                                            onChange={(e) => setActiveScenario(prev => ({ ...prev, name: e.target.value }))}
+                                            className="bg-transparent border-none outline-none font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 focus:bg-white/5 rounded px-1"
+                                        />
+                                    )}
                                 </div>
                             </div>
                             <button
@@ -2103,20 +2176,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                         {/* Sidebar Tabs */}
                         <div className="flex bg-[#0b1120] border-b border-slate-800 shrink-0 z-10">
-                            <button
-                                onClick={() => setActiveTab('CONFIG')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'CONFIG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <Settings className="w-4 h-4" />
-                                <span className="text-[8px] font-bold uppercase">Configuración</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('TOKENS')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <Sparkles className="w-4 h-4" />
-                                <span className="text-[8px] font-bold uppercase">Tokens</span>
-                            </button>
+                            {!isPlayerView && (
+                                <button
+                                    onClick={() => setActiveTab('CONFIG')}
+                                    className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'CONFIG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <Settings className="w-4 h-4" />
+                                    <span className="text-[8px] font-bold uppercase">Configuración</span>
+                                </button>
+                            )}
+                            {!isPlayerView && (
+                                <button
+                                    onClick={() => setActiveTab('TOKENS')}
+                                    className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <Sparkles className="w-4 h-4" />
+                                    <span className="text-[8px] font-bold uppercase">Tokens</span>
+                                </button>
+                            )}
+                            {isPlayerView && (
+                                <div className="flex-1 py-4 flex flex-col items-center gap-1 bg-[#c8aa6e]/5 text-[#c8aa6e] border-b-2 border-[#c8aa6e]">
+                                    <Activity className="w-4 h-4" />
+                                    <span className="text-[8px] font-bold uppercase">Jugador</span>
+                                </div>
+                            )}
                             {selectedTokenIds.length === 1 && (
                                 <button
                                     onClick={() => setActiveTab('INSPECTOR')}
@@ -2959,78 +3042,84 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         </div>
 
 
-                        <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
-                            <button
-                                onClick={saveCurrentScenario}
-                                disabled={isSaving}
-                                className={`group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                {/* EFECTO DE BRILLO (Shine effect) - Solo si no está guardando */}
-                                {!isSaving && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
+                        {!isPlayerView && (
+                            <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
+                                <button
+                                    onClick={saveCurrentScenario}
+                                    disabled={isSaving}
+                                    className={`group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                >
+                                    {/* EFECTO DE BRILLO (Shine effect) - Solo si no está guardando */}
+                                    {!isSaving && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
 
-                                <span className="relative z-10 drop-shadow-md flex items-center justify-center gap-3">
-                                    {isSaving ? (
-                                        <>
-                                            <RotateCw className="w-5 h-5 animate-spin" />
-                                            Guardando...
-                                        </>
-                                    ) : (
-                                        'Confirmar Cambios'
-                                    )}
-                                </span>
-                            </button>
-                        </div>
+                                    <span className="relative z-10 drop-shadow-md flex items-center justify-center gap-3">
+                                        {isSaving ? (
+                                            <>
+                                                <RotateCw className="w-5 h-5 animate-spin" />
+                                                Guardando...
+                                            </>
+                                        ) : (
+                                            'Confirmar Cambios'
+                                        )}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* --- Controles de Capas y Zoom Flotantes --- */}
                     <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
 
-                        {/* Herramientas de Edición (Solo visibles en capa iluminación) */}
-                        <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
-                            {/* Herramienta Muros */}
-                            <button
-                                onClick={() => setIsDrawingWall(!isDrawingWall)}
-                                className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
-                                title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
-                            >
-                                <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
-                            </button>
+                        {/* Herramientas de Edición (Solo visibles en capa iluminación y para Master) */}
+                        {!isPlayerView && (
+                            <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                                {/* Herramienta Muros */}
+                                <button
+                                    onClick={() => setIsDrawingWall(!isDrawingWall)}
+                                    className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
+                                    title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
+                                >
+                                    <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                </button>
 
-                            {/* Botón para añadir LUZ */}
-                            <button
-                                onClick={() => addLightToCanvas()}
-                                className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
-                                title="Añadir Foco de Luz"
-                            >
-                                <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
-                            </button>
-                        </div>
+                                {/* Botón para añadir LUZ */}
+                                <button
+                                    onClick={() => addLightToCanvas()}
+                                    className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                    title="Añadir Foco de Luz"
+                                >
+                                    <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                </button>
+                            </div>
+                        )}
 
-                        {/* Selector de Capas */}
-                        <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('LIGHTING');
-                                    setSelectedTokenIds([]);
-                                    setIsDrawingWall(false);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Iluminación"
-                            >
-                                <Lightbulb size={20} />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('TABLETOP');
-                                    setSelectedTokenIds([]);
-                                    setIsDrawingWall(false);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Mesa (Tokens)"
-                            >
-                                <LayoutGrid size={20} />
-                            </button>
-                        </div>
+                        {/* Selector de Capas (Sólo Master) */}
+                        {!isPlayerView && (
+                            <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
+                                <button
+                                    onClick={() => {
+                                        setActiveLayer('LIGHTING');
+                                        setSelectedTokenIds([]);
+                                        setIsDrawingWall(false);
+                                    }}
+                                    className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                    title="Capa de Iluminación"
+                                >
+                                    <Lightbulb size={20} />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setActiveLayer('TABLETOP');
+                                        setSelectedTokenIds([]);
+                                        setIsDrawingWall(false);
+                                    }}
+                                    className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                    title="Capa de Mesa (Tokens)"
+                                >
+                                    <LayoutGrid size={20} />
+                                </button>
+                            </div>
+                        )}
 
                         <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
                             <button

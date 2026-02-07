@@ -13,6 +13,7 @@ export const CharacterListView = ({
     onLaunchDiceCalculator,
     onLaunchSpeedSystem,
     onLaunchMinimap,
+    onLaunchCanvas,
     onLaunchMinigame
 }) => {
     return (
@@ -35,6 +36,7 @@ export const CharacterListView = ({
             onLaunchDiceCalculator={onLaunchDiceCalculator}
             onLaunchSpeedSystem={onLaunchSpeedSystem}
             onLaunchMinimap={onLaunchMinimap}
+            onLaunchCanvas={onLaunchCanvas}
 
             disableSidebar={false}
             backButtonLabel="Cerrar Sesión"
