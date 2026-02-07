@@ -32,12 +32,12 @@ const CombatHUD = ({
             <div className="w-full max-w-5xl mx-auto flex items-end justify-between px-2 md:px-8 pb-2 md:pb-6 pointer-events-auto relative">
 
                 {/* 1. RETRATO (Izquierda - Desktop Only) */}
-                <div className="relative z-20 hidden md:block group">
-                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-[#c8aa6e] bg-[#0b1120] overflow-hidden shadow-[0_0_20px_rgba(200,170,110,0.3)] relative">
+                <div className="relative z-20 hidden md:flex flex-col items-center justify-end h-32 w-32 group">
+                    <div className="w-32 h-32 rounded-full border-4 border-[#c8aa6e] bg-[#0b1120] overflow-hidden shadow-[0_0_20px_rgba(200,170,110,0.3)] relative shrink-0">
                         <img src={token.img} alt={token.name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 ring-inset ring-2 ring-black/20 rounded-full"></div>
                     </div>
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#0b1120] border border-[#c8aa6e] text-[#c8aa6e] text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg whitespace-nowrap">
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#0b1120] border border-[#c8aa6e] text-[#c8aa6e] text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg whitespace-nowrap z-30">
                         {token.name}
                     </div>
                 </div>
@@ -97,16 +97,35 @@ const CombatHUD = ({
                 </div>
 
                 {/* 3. BOTÓN FIN TURNO (Derecha - Desktop) */}
-                <div className="hidden md:block relative z-20 shrink-0">
+                <div className="hidden md:flex flex-col items-center justify-end relative z-20 shrink-0 h-32 w-32 group">
                     <button
                         onClick={onEndTurn}
-                        className="group w-28 h-28 rounded-full bg-gradient-to-br from-[#7f1d1d] to-[#450a0a] border-4 border-[#fca5a5]/30 hover:border-[#fca5a5] hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(127,29,29,0.5)] flex flex-col items-center justify-center transition-all"
+                        className="w-32 h-32 rounded-full bg-[#0b1120] border-4 border-[#c8aa6e] hover:border-[#f0e6d2] hover:scale-110 active:scale-95 shadow-[0_0_30px_rgba(200,170,110,0.2)] flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden group/btn"
                     >
-                        <Hourglass className="w-10 h-10 text-[#fca5a5] mb-1 group-hover:animate-spin-slow transition-transform" />
-                        <span className="text-[10px] font-black text-[#fca5a5] uppercase tracking-wider leading-none text-center">
-                            Fin<br />Turno
-                        </span>
+                        {/* Fondo con textura y brillo rojo central sutil */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-[#1a1b26] to-[#0b1120] pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-radial-gradient from-red-600/10 via-transparent to-transparent group-hover:from-red-600/30 transition-all duration-500"></div>
+
+                        {/* Anillo de profundidad igual al retrato */}
+                        <div className="absolute inset-0 ring-inset ring-2 ring-black/40 rounded-full pointer-events-none"></div>
+
+                        <div className="relative z-10 flex flex-col items-center">
+                            <Hourglass className="w-12 h-12 text-[#c8aa6e] group-hover:text-red-400 mb-1 transition-all duration-700 ease-in-out group-hover:rotate-[180deg]" />
+                            <span className="text-[10px] md:text-xs font-black text-[#c8aa6e] group-hover:text-[#f0e6d2] uppercase tracking-[0.2em] leading-none text-center transition-colors">
+                                Fin<br />Turno
+                            </span>
+                        </div>
+
+                        {/* Reflejo metálico suave mejorado */}
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-full">
+                            <div className="absolute top-0 -left-[150%] w-[100%] h-full bg-gradient-to-r from-transparent via-white/15 to-transparent -skew-x-[35deg] group-hover:left-[150%] transition-all duration-1000 ease-in-out"></div>
+                        </div>
                     </button>
+
+                    {/* Tag inferior simétrico al del nombre en el retrato */}
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#0b1120] border border-[#c8aa6e] text-[#c8aa6e] text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg whitespace-nowrap z-30 transition-all group-hover:bg-red-950 group-hover:text-red-400 group-hover:border-red-500 group-hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                        Pasar Turno
+                    </div>
                 </div>
 
             </div>
@@ -124,10 +143,10 @@ const CombatHUD = ({
             <div className="md:hidden absolute bottom-32 right-4 pointer-events-auto">
                 <button
                     onClick={onEndTurn}
-                    className="w-12 h-12 rounded-full border-2 border-[#c8aa6e] bg-[#7f1d1d] flex items-center justify-center shadow-lg active:scale-90 transition-transform overflow-hidden relative"
+                    className="group w-12 h-12 rounded-full border-2 border-[#c8aa6e] bg-[#7f1d1d] flex items-center justify-center shadow-lg active:scale-90 transition-all overflow-hidden relative"
                 >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                    <Hourglass className="w-5 h-5 text-[#fca5a5]" />
+                    <Hourglass className="w-5 h-5 text-[#fca5a5] transition-transform duration-700 ease-in-out group-active:rotate-[180deg]" />
                 </button>
             </div>
 
