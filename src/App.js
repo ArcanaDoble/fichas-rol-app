@@ -1967,6 +1967,18 @@ function App() {
       setShowPlayerMinimap(true);
     }
   }, [userType, setChosenView, setShowPlayerMinimap, setShowClassMinimap]);
+
+  const handleLaunchCanvas = useCallback((name) => {
+    if (name) {
+      setMinigamePlayerName(name);
+      setShowPlayerBattleMap(true);
+    } else if (userType === 'master') {
+      setChosenView('canvas');
+    } else {
+      setShowPlayerBattleMap(true);
+    }
+  }, [userType, setChosenView, setShowPlayerBattleMap]);
+
   // Páginas para el Mapa de Batalla
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -5823,305 +5835,8 @@ function App() {
       </React.Suspense>
     );
   }
-  // MAPA DE BATALLA PARA JUGADORES
-  if (userType === 'player' && nameEntered && showPlayerBattleMap) {
-    // Usar la página configurada como visible para jugadores por el Master
-    let effectivePage = null;
-    let effectivePageIndex = 0;
-    let playerHasToken = false;
 
-    if (playerVisiblePageId) {
-      // Buscar la página por ID
-      const pageIndex = pages.findIndex(
-        (page) => page.id === playerVisiblePageId
-      );
-      if (pageIndex !== -1) {
-        effectivePage = pages[pageIndex];
-        effectivePageIndex = pageIndex;
 
-        // Verificar si el jugador tiene un token asignado en esta página
-        const pageTokens = effectivePage?.tokens || [];
-        const normalized = playerName.trim().toLowerCase();
-        playerHasToken = pageTokens.some((token) =>
-          (token.controlledBy || '').trim().toLowerCase() === normalized
-        );
-      }
-    }
-
-    // Si no hay página visible configurada o no se encuentra, mostrar mensaje
-    if (!effectivePage) {
-      return withTooltips(
-        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
-          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-            <Boton
-              size="sm"
-              onClick={() => setShowPlayerBattleMap(false)}
-              className="bg-gray-700 hover:bg-gray-600"
-            >
-              ← Volver a Ficha
-            </Boton>
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">🗺️</div>
-              <h2 className="text-xl font-bold mb-2">Mapa no disponible</h2>
-              <p className="text-gray-400 mb-4">
-                El Master aún no ha configurado ningún mapa como visible para
-                jugadores.
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Si el jugador no tiene tokens asignados, no puede ver el mapa
-    if (!playerHasToken) {
-      return withTooltips(
-        <div className="h-screen flex flex-col bg-gray-900 text-gray-100 p-4 overflow-hidden">
-          <div className="sticky top-0 bg-gray-900 z-10 h-14 flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">🗺️ Mapa de Batalla</h1>
-            <Boton
-              size="sm"
-              onClick={() => setShowPlayerBattleMap(false)}
-              className="bg-gray-700 hover:bg-gray-600"
-            >
-              ← Volver a Ficha
-            </Boton>
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">🚫</div>
-              <h2 className="text-xl font-bold mb-2">Acceso Denegado</h2>
-              <p className="text-gray-400">
-                Acceso Denegado - No tienes ningún token asignado
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const handlePlayerShopConfigChange = (nextConfig) => {
-      const normalized = normalizeShopConfig(nextConfig);
-      const pageId = effectivePage?.id;
-      setPages((prev) => {
-        if (effectivePageIndex < 0 || effectivePageIndex >= prev.length) return prev;
-        const updated = [...prev];
-        updated[effectivePageIndex] = {
-          ...updated[effectivePageIndex],
-          shopConfig: normalized,
-        };
-        return updated;
-      });
-      if (pageId) {
-        updateDoc(doc(db, 'pages', pageId), { shopConfig: sanitize(normalized) }).catch((error) => {
-          console.error('Error actualizando tienda del jugador:', error);
-        });
-      }
-    };
-
-    return withTooltips(
-      <div className="h-screen flex flex-col bg-[#0b1120] text-gray-100 overflow-hidden font-['Lato']">
-        {/* Background Pattern */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
-        </div>
-
-        {/* Premium Header */}
-        <div className="relative z-10 sticky top-0 h-16 bg-[#0b1120]/95 border-b border-[#c8aa6e]/20 flex items-center justify-between px-6 shadow-lg backdrop-blur-sm flex-shrink-0">
-          <h1 className="text-2xl font-bold font-['Cinzel'] text-[#f0e6d2] tracking-wide flex items-center gap-3 drop-shadow-md">
-            <MapIcon className="w-8 h-8 text-[#c8aa6e] filter drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
-            Mapa de Batalla
-          </h1>
-          <div className="flex items-center gap-2">
-            <Boton
-              size="sm"
-              color="slate"
-              onClick={() => setShowPlayerBattleMap(false)}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft size={16} />
-              Volver a Ficha
-            </Boton>
-            <Boton
-              size="sm"
-              color="purple"
-              onClick={() => handleLaunchSpeedSystem(playerName)}
-              className="flex items-center gap-2"
-            >
-              <Zap size={16} />
-              Sistema de Velocidad
-            </Boton>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="relative z-10 flex-1 flex overflow-hidden p-4 gap-4">
-          {/* Map Card */}
-          <div
-            className="flex-1 flex flex-col min-w-0 rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-300"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
-              backdropFilter: 'blur(16px)',
-            }}
-          >
-            <div className="flex-1 relative bg-black/30 overflow-hidden">
-              <MapCanvas
-                userType="player"
-                playerName={playerName}
-                playerViewMode={true}
-                simulatedPlayer={playerName}
-                tokens={effectivePage?.tokens || []}
-                onTokensChange={(updater) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    const prev = updatedPages[effectivePageIndex].tokens || [];
-                    const next =
-                      typeof updater === 'function' ? updater(prev) : updater;
-                    const changed = diffTokens(prev, next);
-                    changed.forEach((tk) => {
-                      const normalizedUpdatedAt = normalizeTokenUpdatedAt(tk.updatedAt);
-                      const resolvedUpdatedAt =
-                        normalizedUpdatedAt ??
-                        (typeof tk.updatedAt === 'number'
-                          ? tk.updatedAt
-                          : Timestamp.now().toMillis());
-                      pendingTokenChangesRef.current.set(String(tk.id), {
-                        ...tk,
-                        updatedAt: resolvedUpdatedAt,
-                      });
-                    });
-                    updatedPages[effectivePageIndex].tokens = next;
-                    setPages(updatedPages);
-
-                    // Sincronizar cambios a Firebase para jugadores (movimiento, borrado, etc.)
-                    const pageId = playerVisiblePageId;
-                    if (pageId && changed.length > 0) {
-                      const tokensRef = collection(db, 'pages', pageId, 'tokens');
-                      const author = playerName || 'Jugador';
-                      changed.forEach((tk) => {
-                        const tokenId = String(tk.id);
-                        // Para saber si el jugador tenía control sobre el token borrado, lo buscamos en 'prev'
-                        const originalToken = prev.find(t => String(t.id) === tokenId);
-                        const isControlled = originalToken && originalToken.controlledBy === playerName;
-                        const isMaster = userType !== 'player';
-
-                        if (tk._deleted) {
-                          if (isMaster || isControlled) {
-                            deleteDoc(doc(tokensRef, tokenId)).catch(err => console.error('Error eliminando token:', err));
-                          }
-                        } else {
-                          // Solo permitir que el jugador actualice tokens que controla
-                          if (isMaster || tk.controlledBy === playerName) {
-                            const payload = {
-                              ...tk,
-                              updatedAt: serverTimestamp(),
-                              updatedBy: author,
-                            };
-                            setDoc(doc(tokensRef, tokenId), payload).catch(err => console.error('Error actualizando token:', err));
-                          }
-                        }
-                      });
-                    }
-                  }
-                }}
-                lines={effectivePage?.lines || []}
-                onLinesChange={(newLines) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    updatedPages[effectivePageIndex].lines = newLines;
-                    setPages(updatedPages);
-                  }
-                }}
-                walls={effectivePage?.walls || []}
-                onWallsChange={(newWalls) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    updatedPages[effectivePageIndex].walls = newWalls;
-                    setPages(updatedPages);
-                  }
-                }}
-                texts={effectivePage?.texts || []}
-                onTextsChange={(newTexts) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    updatedPages[effectivePageIndex].texts = newTexts;
-                    setPages(updatedPages);
-                  }
-                }}
-                tiles={effectivePage?.tiles || []}
-                onTilesChange={(newTiles) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    updatedPages[effectivePageIndex].tiles = newTiles;
-                    setPages(updatedPages);
-                  }
-                }}
-                ambientLights={effectivePage?.ambientLights || []}
-                onAmbientLightsChange={(newLights) => {
-                  const updatedPages = [...pages];
-                  if (updatedPages[effectivePageIndex]) {
-                    updatedPages[effectivePageIndex].ambientLights = newLights;
-                    setPages(updatedPages);
-                  }
-                }}
-                backgroundImage={effectivePage?.background}
-                imageSize={effectivePage?.imageSize}
-                gridCells={effectivePage?.gridCells}
-                gridSize={effectivePage?.gridSize || 50}
-                gridOffsetX={effectivePage?.gridOffsetX || 0}
-                gridOffsetY={effectivePage?.gridOffsetY || 0}
-                showGrid={
-                  effectivePage?.showGrid !== undefined
-                    ? effectivePage.showGrid
-                    : true
-                }
-                gridColor={effectivePage?.gridColor || '#ffffff'}
-                gridOpacity={
-                  effectivePage?.gridOpacity !== undefined
-                    ? Math.max(0, Math.min(1, effectivePage.gridOpacity))
-                    : 0.2
-                }
-                enableDarkness={effectivePage?.enableDarkness || false}
-                darknessOpacity={effectivePage?.darknessOpacity || 0.8}
-                shopConfig={effectivePage?.shopConfig}
-                onShopConfigChange={handlePlayerShopConfigChange}
-                activeLayer="fichas"
-                enemies={enemies}
-                players={[playerName]}
-                armas={armas}
-                armaduras={armaduras}
-                habilidades={habilidades}
-                highlightText={highlightText}
-                rarityColorMap={rarityColorMap}
-                isPlayerView={true}
-                pageId={playerVisiblePageId}
-              />
-            </div>
-          </div>
-
-          <div
-            className="w-80 flex-shrink-0 flex flex-col rounded-2xl border border-amber-500/20 shadow-[0_0_20px_rgba(0,0,0,0.4)] overflow-hidden"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(8, 12, 22, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%)',
-              backdropFilter: 'blur(16px)',
-            }}
-          >
-            <ChatPanel
-              playerName={playerName}
-              isMaster={false}
-              className="!w-full !h-full bg-transparent p-0"
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
   // LISTA DE CLASES PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerClassList) {
     return withTooltips(
@@ -6151,8 +5866,6 @@ function App() {
     );
   }
 
-
-
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     if (showCharacterCreator) {
@@ -6166,23 +5879,39 @@ function App() {
 
     return withTooltips(
       <div className="min-h-screen bg-[#0b1120]">
-        <CharacterListView
-          playerName={playerName}
-          armas={armas}
-          armaduras={armaduras}
-          habilidades={habilidades}
-          glossary={glossary}
-          rarityColorMap={rarityColorMap}
-          onLaunchMinigame={handleLaunchMinigame}
-          onLaunchDiceCalculator={handleLaunchDiceCalculator}
-          onLaunchSpeedSystem={handleLaunchSpeedSystem}
-          onLaunchMinimap={handleLaunchMinimap}
-          onBack={() => {
-            setNameEntered(false);
-            setPlayerName('');
-            setAuthenticated(false);
-          }}
-        />
+        {showPlayerBattleMap && (
+          <div className="fixed inset-0 z-[100]">
+            <CanvasSection
+              onBack={() => setShowPlayerBattleMap(false)}
+              playerName={playerName}
+              isPlayerView={true}
+              isMaster={false}
+              existingPlayers={existingPlayers}
+            />
+          </div>
+        )}
+
+        <div style={{ display: showPlayerBattleMap ? 'none' : 'block' }}>
+
+          <CharacterListView
+            playerName={playerName}
+            armas={armas}
+            armaduras={armaduras}
+            habilidades={habilidades}
+            glossary={glossary}
+            rarityColorMap={rarityColorMap}
+            onLaunchMinigame={handleLaunchMinigame}
+            onLaunchDiceCalculator={handleLaunchDiceCalculator}
+            onLaunchSpeedSystem={handleLaunchSpeedSystem}
+            onLaunchMinimap={handleLaunchMinimap}
+            onLaunchCanvas={handleLaunchCanvas}
+            onBack={() => {
+              setNameEntered(false);
+              setPlayerName('');
+              setAuthenticated(false);
+            }}
+          />
+        </div>
       </div>
     );
 
@@ -8849,6 +8578,7 @@ function App() {
     return (
       <CanvasSection
         onBack={() => setChosenView(null)}
+        existingPlayers={existingPlayers}
       />
     );
   }

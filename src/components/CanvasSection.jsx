@@ -2,13 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -133,7 +133,7 @@ const SaveToast = ({ show, exiting, type = 'success' }) => {
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [] }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -142,6 +142,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     // Estado para la Biblioteca de Escenarios
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
+    const [globalActiveId, setGlobalActiveId] = useState(null);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
 
@@ -172,7 +173,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     // Tabs del Sidebar
-    const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
+    const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
     const [tokens, setTokens] = useState([]);
     const [uploadingToken, setUploadingToken] = useState(false);
@@ -238,6 +239,68 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
     }, [selectedTokenIds, rotatingTokenId, activeTab]);
 
+
+    // Effect to sync global state and auto-load for players
+    useEffect(() => {
+        console.log("🕵️ Monitoring global canvas visibility...");
+        let activeScenarioUnsub = null;
+
+        const globalUnsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
+            const data = docSnap.exists() ? docSnap.data() : {};
+            const activeId = data.activeScenarioId || null;
+            setGlobalActiveId(activeId);
+
+            // If no active scenario, clear local state for players
+            if (isPlayerView && !activeId) {
+                setActiveScenario(null);
+                setViewMode('LIBRARY');
+                if (activeScenarioUnsub) activeScenarioUnsub();
+                return;
+            }
+
+            // If activeId changed or we don't have a listener yet
+            if (isPlayerView && activeId) {
+                if (activeScenarioUnsub) activeScenarioUnsub();
+
+                console.log("📍 Active scenario detected:", activeId);
+                const scenarioRef = doc(db, 'canvas_scenarios', activeId);
+                activeScenarioUnsub = onSnapshot(scenarioRef, (scenarioDoc) => {
+                    if (scenarioDoc.exists()) {
+                        const sData = { id: scenarioDoc.id, ...scenarioDoc.data() };
+                        const hasPermission = sData.allowedPlayers?.includes(playerName);
+
+                        if (hasPermission) {
+                            if (activeScenarioRef.current?.id !== sData.id) {
+                                loadScenario(sData);
+                            }
+                        } else {
+                            setActiveScenario(null);
+                            setViewMode('LIBRARY');
+                        }
+                    } else {
+                        setActiveScenario(null);
+                        setViewMode('LIBRARY');
+                    }
+                });
+            }
+        });
+
+        return () => {
+            globalUnsub();
+            if (activeScenarioUnsub) activeScenarioUnsub();
+        };
+    }, [isPlayerView, playerName]);
+
+    const setGlobalActiveScenario = async (scenarioId) => {
+        try {
+            await setDoc(doc(db, 'gameSettings', 'canvasVisibility'), {
+                activeScenarioId: scenarioId,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+        } catch (e) {
+            console.error("Error toggling active scenario:", e);
+        }
+    };
 
     // Listener para Sincronización en Tiempo Real (Multi-navegador)
     useEffect(() => {
@@ -319,14 +382,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     const handleTouchMove = (e) => {
         if (e.touches.length === 2 && lastPinchDist.current !== null) {
-            // Pinch Zoom
+            // Pinch Zoom - Zoom focalizado en el punto medio de los dedos
             const newDist = getTouchDistance(e.touches);
             const delta = newDist - lastPinchDist.current;
+
+            // Coordenadas del punto medio en la pantalla
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+            // Coordenadas relativas al centro del viewport operativo
+            const rect = containerRef.current.getBoundingClientRect();
+            const viewCenterX = rect.left + rect.width / 2;
+            const viewCenterY = rect.top + rect.height / 2;
+            const sx = midX - viewCenterX;
+            const sy = midY - viewCenterY;
 
             // Sensibilidad del pinch
             const zoomDelta = delta * 0.005;
 
-            setZoom(prev => Math.min(Math.max(0.1, prev + zoomDelta), 4));
+            setZoom(prevZoom => {
+                const newZoom = Math.min(Math.max(0.1, prevZoom + zoomDelta), 4);
+                if (newZoom === prevZoom) return prevZoom;
+
+                const ratio = newZoom / prevZoom;
+
+                // Ajustar offset para que el punto bajo los dedos se mantenga en su sitio
+                setOffset(prevOffset => ({
+                    x: sx - (sx - prevOffset.x) * ratio,
+                    y: sy - (sy - prevOffset.y) * ratio
+                }));
+
+                return newZoom;
+            });
 
             lastPinchDist.current = newDist;
         } else if (e.touches.length === 1 && isDragging) {
@@ -341,7 +428,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             }));
 
             lastTouchPos.current = { x: touch.clientX, y: touch.clientY };
-            // No longer needed: dragStartRef.current = { x: touch.clientX, y: touch.clientY }; // Sync for consistency
         }
     };
 
@@ -672,6 +758,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                     if (!isCorrectLayer) return false;
 
+                    // Restricción de Jugador: No permitir seleccionar tokens ajenos
+                    if (isPlayerView && !isLight && !isWall) {
+                        const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+                        if (!hasPermission) return false;
+                    } else if (isPlayerView && (isLight || isWall)) {
+                        return false;
+                    }
+
                     // Simple AABB intersection
                     return (
                         item.x < selX + selW &&
@@ -832,10 +926,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const mapY = (WORLD_SIZE - mapBounds.height) / 2;
 
     // Calculamos si hay un "Observador" activo (un token seleccionado con visión)
-    // Esto se usa para el modo perspectiva del Master
-    const observerId = activeScenario?.items?.find(s =>
-        selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
-    )?.id;
+    // Para jugadores, el enfoque (perspectiva exclusiva) solo se activa si seleccionan sus tokens.
+    const observerId = isPlayerView
+        ? activeScenario?.items?.find(s => selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision)?.id
+        : activeScenario?.items?.find(s =>
+            selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+        )?.id;
 
     const fileInputRef = useRef(null);
 
@@ -1019,9 +1115,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const loadScenario = (scenario) => {
         setActiveScenario(scenario);
         if (scenario.config) setGridConfig(scenario.config);
-        if (scenario.camera) {
-            setZoom(scenario.camera.zoom);
-            setOffset(scenario.camera.offset);
+
+        // Determinar cámara inicial
+        let initialCamera = scenario.camera;
+
+        if (isPlayerView) {
+            const playerToken = scenario.items?.find(i => i.controlledBy?.includes(playerName));
+            if (playerToken) {
+                const playerZoom = 1.2;
+                initialCamera = {
+                    zoom: playerZoom,
+                    offset: {
+                        x: - (playerToken.x + playerToken.width / 2 - WORLD_SIZE / 2) * playerZoom,
+                        y: - (playerToken.y + playerToken.height / 2 - WORLD_SIZE / 2) * playerZoom
+                    }
+                };
+            }
+        }
+
+        if (initialCamera) {
+            setZoom(initialCamera.zoom);
+            setOffset(initialCamera.offset);
         }
         setViewMode('EDIT');
     };
@@ -1078,6 +1192,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                 config: updatedConfig,
                 items: activeScenario.items || [], // Guardamos items
                 camera: { zoom, offset },
+                allowedPlayers: activeScenario.allowedPlayers || [],
                 lastModified: Date.now()
             });
 
@@ -1207,6 +1322,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
+            // Restricción de Jugador: No permitir interactuar con tokens ajenos
+            const canMove = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+            if (!canMove) {
+                return;
+            }
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
@@ -1392,7 +1512,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
-        const canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+        let canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+
+        // Restricciones de Jugador: Solo puede interactuar con lo que controla
+        if (isPlayerView && !isLight && !isWall) {
+            const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+            if (!hasPermission) {
+                canInteract = false;
+            }
+        } else if (isPlayerView && (isLight || isWall)) {
+            // Jugadores no pueden tocar luces ni muros
+            canInteract = false;
+        }
 
         let opacity = 1;
         if (isLightingLayer) {
@@ -1686,6 +1817,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                             )}
+                            {item.controlledBy?.length > 0 && (
+                                <div className="absolute -top-2 -right-2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.5)] text-[#0b1120] rounded-full p-0.5 border border-white/20">
+                                    <Users size={8} />
+                                </div>
+                            )}
                         </div>
 
                         {/* Aura (Underneath the token) */}
@@ -1908,66 +2044,108 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     animate={{ opacity: 1 }}
                     className="fixed inset-0 z-[60] bg-[#09090b] flex flex-col p-8 md:p-12 overflow-y-auto custom-scrollbar"
                 >
-                    <div className="max-w-6xl mx-auto w-full">
-                        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-                            <div>
-                                <button onClick={onBack} className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-widest text-xs mb-4 hover:translate-x-[-4px] transition-all">
-                                    <FiArrowLeft className="w-4 h-4" /> <b>VOLVER</b>
-                                </button>
-                                <h1 className="text-4xl md:text-5xl font-fantasy text-[#f0e6d2] tracking-tighter">BIBLIOTECA DE ENCUENTROS</h1>
-                                <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2"><b>Gestión de escenarios para el Canvas Beta</b></p>
-                            </div>
-                            <button onClick={createNewScenario} className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-widest rounded shadow-[0_0_20px_rgba(200,170,110,0.3)] hover:scale-105 transition-all">
-                                <Plus className="w-6 h-6" /> Nuevo Encuentro
-                            </button>
-                        </header>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-                            {scenarios.map(s => (
-                                <motion.div
-                                    layout
-                                    key={s.id}
-                                    onClick={() => loadScenario(s)}
-                                    className="group relative bg-[#0b1120] border border-slate-800 rounded-xl p-6 cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#161f32] transition-all overflow-hidden"
-                                >
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setItemToDelete(s); }}
-                                        className="absolute top-4 right-4 p-2 bg-[#0b1120]/80 border border-slate-700/50 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-900/20 hover:border-red-500/30 opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg backdrop-blur-sm"
-                                        title="Eliminar Encuentro"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                    <div className="flex gap-6 items-start">
-                                        <CanvasThumbnail scenario={s} />
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-[#f0e6d2] font-fantasy text-xl mb-1 truncate">{s.name}</h3>
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">
-                                                {s.config?.isInfinite ? 'Mapa Infinito' : `${Math.round(s.config?.columns)}x${Math.round(s.config?.rows)} Celdas`}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800 flex items-center justify-center">
-                                                    <LayoutGrid size={10} className="text-[#c8aa6e]" />
-                                                </div>
-                                                <span className="text-[9px] text-slate-400 font-bold uppercase">Escenario</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-6 flex items-center justify-between border-t border-slate-800/50 pt-4">
-                                        <span className="text-[9px] text-slate-600 font-mono">ID: {s.id.slice(-8)}</span>
-                                        <div className="flex gap-2">
-                                            <FiArrowLeft className="w-4 h-4 text-slate-500 rotate-180" />
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
-                            {scenarios.length === 0 && (
-                                <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-2xl">
-                                    <LayoutGrid className="w-16 h-16 mb-4 opacity-20" />
-                                    <p className="font-fantasy tracking-widest text-lg">SIN ENCUENTROS CREADOS</p>
-                                    <p className="text-xs uppercase mt-2 text-center px-4">Utiliza el botón superior para crear tu primer escenario táctico</p>
+                    <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col">
+                        {isPlayerView ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-[#c8aa6e]/20 blur-3xl rounded-full scale-150"></div>
+                                    <ShieldCheck size={80} className="text-[#c8aa6e] relative z-10 drop-shadow-[0_0_15px_rgba(200,170,110,0.5)]" />
                                 </div>
-                            )}
-                        </div>
+                                <div className="space-y-4 relative z-10">
+                                    <h2 className="text-4xl md:text-5xl font-fantasy text-[#f0e6d2] tracking-tighter uppercase whitespace-pre-line">
+                                        Esperando {playerName ? `a ${playerName}...` : 'al Master...'}
+                                    </h2>
+                                    <p className="text-[#c8aa6e] font-bold uppercase tracking-[0.4em] text-xs">
+                                        El encuentro aún no ha comenzado o no tienes acceso.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={onBack}
+                                    className="px-8 py-3 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] font-fantasy uppercase tracking-widest rounded hover:bg-[#c8aa6e]/10 transition-all"
+                                >
+                                    Volver a la ficha
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                                    <div>
+                                        <button onClick={onBack} className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-widest text-xs mb-4 hover:translate-x-[-4px] transition-all">
+                                            <FiArrowLeft className="w-4 h-4" /> <b>VOLVER</b>
+                                        </button>
+                                        <h1 className="text-4xl md:text-5xl font-fantasy text-[#f0e6d2] tracking-tighter">BIBLIOTECA DE ENCUENTROS</h1>
+                                        <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2"><b>Gestión de escenarios para el Canvas Beta</b></p>
+                                    </div>
+                                    <button onClick={createNewScenario} className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-widest rounded shadow-[0_0_20px_rgba(200,170,110,0.3)] hover:scale-105 transition-all">
+                                        <Plus className="w-6 h-6" /> Nuevo Encuentro
+                                    </button>
+                                </header>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+                                    {scenarios.map(s => (
+                                        <motion.div
+                                            layout
+                                            key={s.id}
+                                            onClick={() => loadScenario(s)}
+                                            className={`group relative bg-[#0b1120] border-2 rounded-xl p-6 cursor-pointer transition-all overflow-hidden ${globalActiveId === s.id ? 'border-[#c8aa6e] shadow-[0_0_30px_rgba(200,170,110,0.15)] bg-[#161f32]' : 'border-slate-800 hover:border-[#c8aa6e]/50 hover:bg-[#161f32]'}`}
+                                        >
+                                            {globalActiveId === s.id && (
+                                                <div className="absolute top-0 right-0 bg-[#c8aa6e] text-[#0b1120] text-[8px] font-bold uppercase px-3 py-1 rounded-bl-lg tracking-widest shadow-lg z-30">
+                                                    En vivo
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setItemToDelete(s); }}
+                                                className="absolute top-4 right-4 p-2 bg-[#0b1120]/80 border border-slate-700/50 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-900/20 hover:border-red-500/30 opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg backdrop-blur-sm"
+                                                title="Eliminar Encuentro"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <div className="flex gap-6 items-start">
+                                                <CanvasThumbnail scenario={s} />
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-[#f0e6d2] font-fantasy text-xl mb-1 truncate">{s.name}</h3>
+                                                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">
+                                                        {s.config?.isInfinite ? 'Mapa Infinito' : `${Math.round(s.config?.columns)}x${Math.round(s.config?.rows)} Celdas`}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800 flex items-center justify-center">
+                                                            <LayoutGrid size={10} className="text-[#c8aa6e]" />
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-400 font-bold uppercase">Escenario</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 flex items-center justify-between border-t border-slate-800/50 pt-4">
+                                                <span className="text-[9px] text-slate-600 font-mono">ID: {s.id.slice(-8)}</span>
+                                                <div className="flex gap-2">
+                                                    {/* Botón de Transmisión (Solo Master) */}
+                                                    {!isPlayerView && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setGlobalActiveScenario(globalActiveId === s.id ? null : s.id);
+                                                            }}
+                                                            className={`p-2 rounded-lg border transition-all ${globalActiveId === s.id ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
+                                                            title={globalActiveId === s.id ? "En transmisión - Haz clic para dejar de emitir" : "Transmitir a jugadores"}
+                                                        >
+                                                            {globalActiveId === s.id ? <Eye size={14} /> : <EyeOff size={14} />}
+                                                        </button>
+                                                    )}
+                                                    <FiArrowLeft className="w-4 h-4 text-slate-500 rotate-180" />
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                    {scenarios.length === 0 && (
+                                        <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-2xl">
+                                            <FolderOpen size={48} className="mb-4 opacity-20" />
+                                            <p className="font-fantasy tracking-widest">No hay escenarios guardados</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* DELETE CONFIRMATION MODAL */}
@@ -2004,1287 +2182,1461 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             )}
 
             {/* --- EDITOR DE ESCENARIOS --- */}
-            {activeScenario && (
-                <>
-                    {/* --- UI Overlay (Header & Controles) --- */}
+            {
+                activeScenario && (
+                    <>
+                        {/* --- UI Overlay (Header & Controles) --- */}
 
-                    {/* Gradient Background Header (Restored) */}
-                    <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0b1120] via-[#0b1120]/60 to-transparent z-30 pointer-events-none"></div>
+                        {/* Gradient Background Header (Restored) */}
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0b1120] via-[#0b1120]/60 to-transparent z-30 pointer-events-none"></div>
 
-                    {/* 1. Botón Salir (Flotante Arriba Izquierda) */}
-                    <button
-                        onClick={() => {
-                            setViewMode('LIBRARY');
-                            setActiveScenario(null);
-                        }}
-                        className="absolute top-6 left-6 z-50 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
-                        title="Salir"
-                    >
-                        <FiArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform font-bold" />
-                    </button>
+                        {/* 1. Botón Salir (Flotante Arriba Izquierda) */}
+                        <button
+                            onClick={() => {
+                                if (isPlayerView) {
+                                    onBack();
+                                } else {
+                                    setViewMode('LIBRARY');
+                                    setActiveScenario(null);
+                                }
+                            }}
+                            className="absolute top-6 left-6 z-50 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
+                            title={isPlayerView ? "Volver a Ficha" : "Salir a la Biblioteca"}
+                        >
+                            <FiArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform font-bold" />
+                        </button>
 
-                    {/* 2. Título (Flotante Arriba Centro - Minimalista) */}
-                    <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center opacity-80 width-full">
-                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] text-[#c8aa6e] whitespace-nowrap">
-                            <span className="h-px w-4 md:w-8 bg-gradient-to-r from-transparent to-[#c8aa6e]"></span>
-                            <span>Canvas Beta</span>
-                            <span className="h-px w-4 md:w-8 bg-gradient-to-l from-transparent to-[#c8aa6e]"></span>
+                        {/* 2. Título (Flotante Arriba Centro - Minimalista) */}
+                        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center opacity-80 width-full">
+                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] text-[#c8aa6e] whitespace-nowrap">
+                                <span className="h-px w-4 md:w-8 bg-gradient-to-r from-transparent to-[#c8aa6e]"></span>
+                                <span>Canvas Beta</span>
+                                <span className="h-px w-4 md:w-8 bg-gradient-to-l from-transparent to-[#c8aa6e]"></span>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
-                    <button
-                        onClick={() => setShowSettings(true)}
-                        className="absolute top-6 right-6 z-40 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
-                    >
-                        <BsDice6 size={24} className="group-hover:rotate-180 transition-transform duration-500" />
-                    </button>
+                        {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
+                        <button
+                            onClick={() => setShowSettings(true)}
+                            className="absolute top-6 right-6 z-40 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
+                        >
+                            <BsDice6 size={24} className="group-hover:rotate-180 transition-transform duration-500" />
+                        </button>
 
-                    {/* --- Sidebar de Configuración --- */}
-                    {/* Overlay para cerrar al hacer click fuera */}
-                    {showSettings && (
-                        <div
-                            className="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
-                            onClick={() => setShowSettings(false)}
-                        />
-                    )}
+                        {/* --- Sidebar de Configuración --- */}
+                        {/* Overlay para cerrar al hacer click fuera */}
+                        {showSettings && (
+                            <div
+                                className="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
+                                onClick={() => setShowSettings(false)}
+                            />
+                        )}
 
-                    {/* Panel Sidebar */}
-                    <div className={`
+                        {/* Panel Sidebar */}
+                        <div className={`
                     absolute top-0 right-0 h-full w-full sm:w-80 z-[100]
                     bg-[#0b1120] border-l border-[#c8aa6e]/30 shadow-2xl 
                     transform transition-transform duration-300 ease-out 
                     flex flex-col
                     ${showSettings ? 'translate-x-0' : 'translate-x-full'}
                 `}>
-                        {/* Sidebar Header */}
-                        <div className="p-4 border-b border-[#c8aa6e]/20 bg-[#161f32] flex items-center justify-between shadow-xl z-10">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <Settings className="w-5 h-5 text-[#c8aa6e]" />
-                                    <input
-                                        type="text"
-                                        value={activeScenario?.name || ''}
-                                        onChange={(e) => setActiveScenario(prev => ({ ...prev, name: e.target.value }))}
-                                        className="bg-transparent border-none outline-none font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 focus:bg-white/5 rounded px-1"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setShowSettings(false)}
-                                className="text-slate-400 hover:text-[#c8aa6e] transition-colors p-1"
-                            >
-                                <FiX size={24} />
-                            </button>
-                        </div>
-
-                        {/* Sidebar Tabs */}
-                        <div className="flex bg-[#0b1120] border-b border-slate-800 shrink-0 z-10">
-                            <button
-                                onClick={() => setActiveTab('CONFIG')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'CONFIG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <Settings className="w-4 h-4" />
-                                <span className="text-[8px] font-bold uppercase">Configuración</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('TOKENS')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <Sparkles className="w-4 h-4" />
-                                <span className="text-[8px] font-bold uppercase">Tokens</span>
-                            </button>
-                            {selectedTokenIds.length === 1 && (
-                                <button
-                                    onClick={() => setActiveTab('INSPECTOR')}
-                                    className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'INSPECTOR' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    <Edit2 className="w-4 h-4" />
-                                    <span className="text-[8px] font-bold uppercase">Inspector</span>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Sidebar Content Wrapper */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
-
-                            {/* --- TAB: CONFIGURACIÓN --- */}
-                            {activeTab === 'CONFIG' && (
-                                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                                    {/* 1. Modo de Mapa */}
-                                    <div className="space-y-3">
-                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                            <LayoutGrid className="w-3 h-3" />
-                                            Modo de Mapa
-                                        </h4>
-                                        <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[10px] font-bold font-fantasy shadow-inner">
-                                            <button
-                                                onClick={() => handleConfigChange('isInfinite', true)}
-                                                className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                            >
-                                                Infinito
-                                            </button>
-                                            <button
-                                                onClick={() => handleConfigChange('isInfinite', false)}
-                                                className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${!gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                            >
-                                                Finito
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Control de Snap */}
-                                    <div className="flex items-center justify-between bg-[#111827] p-3 rounded border border-slate-800">
-                                        <div className="flex items-center gap-2">
-                                            <LayoutGrid className="w-4 h-4 text-[#c8aa6e]" />
-                                            <span className="text-[10px] font-bold uppercase text-slate-400">Ajustar a Rejilla (Snap)</span>
-                                        </div>
-                                        <button
-                                            onClick={() => handleConfigChange('snapToGrid', !gridConfig.snapToGrid)}
-                                            className={`relative w-12 h-6 rounded-full transition-all ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                        >
-                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.snapToGrid ? 'left-7' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-
-                                    <div className="w-full h-px bg-slate-800/50"></div>
-
-                                    {/* 2. Fondo de Mapa */}
-                                    <div className="space-y-3">
-                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                            <Image className="w-3 h-3" />
-                                            Imagen de Fondo
-                                        </h4>
-
-                                        {!gridConfig.backgroundImage ? (
-                                            <div
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="border-2 border-dashed border-slate-700/50 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all group"
-                                            >
-                                                <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
-                                                <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Mapa</span>
-                                                <input
-                                                    type="file"
-                                                    ref={fileInputRef}
-                                                    onChange={handleImageUpload}
-                                                    className="hidden"
-                                                    accept="image/*"
-                                                />
-                                            </div>
+                            {/* Sidebar Header */}
+                            <div className="p-4 border-b border-[#c8aa6e]/20 bg-[#161f32] flex items-center justify-between shadow-xl z-10">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Settings className="w-5 h-5 text-[#c8aa6e]" />
+                                        {isPlayerView ? (
+                                            <span className="font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 truncate px-1">
+                                                {activeScenario?.name || 'Escenario'}
+                                            </span>
                                         ) : (
-                                            <div className="space-y-3">
-                                                <div className="relative w-full h-32 bg-[#0b1120] rounded-lg overflow-hidden border border-slate-700/50 group shadow-lg">
-                                                    <img src={gridConfig.backgroundImage} alt="Background Preview" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
-                                                        <span className="text-[10px] font-bold text-[#f0e6d2] uppercase tracking-[0.2em]">Vista Previa</span>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={clearBackgroundImage}
-                                                    className="w-full py-2.5 bg-red-900/10 border border-red-900/30 text-red-500 rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-red-900/20 transition-all font-sans"
-                                                >
-                                                    <Trash2 className="w-3 h-3" /> Eliminar Fondo
-                                                </button>
-                                            </div>
+                                            <input
+                                                type="text"
+                                                value={activeScenario?.name || ''}
+                                                onChange={(e) => setActiveScenario(prev => ({ ...prev, name: e.target.value }))}
+                                                className="bg-transparent border-none outline-none font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 focus:bg-white/5 rounded px-1"
+                                            />
                                         )}
                                     </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowSettings(false)}
+                                    className="text-slate-400 hover:text-[#c8aa6e] transition-colors p-1"
+                                >
+                                    <FiX size={24} />
+                                </button>
+                            </div>
 
-                                    <div className="w-full h-px bg-slate-800/50"></div>
+                            {/* Sidebar Tabs */}
+                            <div className="flex bg-[#0b1120] border-b border-slate-800 shrink-0 z-10">
+                                {!isPlayerView && (
+                                    <button
+                                        onClick={() => setActiveTab('CONFIG')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'CONFIG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Settings className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Configuración</span>
+                                    </button>
+                                )}
+                                {!isPlayerView && (
+                                    <button
+                                        onClick={() => setActiveTab('TOKENS')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Sparkles className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Tokens</span>
+                                    </button>
+                                )}
+                                {!isPlayerView && (
+                                    <button
+                                        onClick={() => setActiveTab('ACCESS')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'ACCESS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <ShieldCheck className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Acceso</span>
+                                    </button>
+                                )}
+                                {isPlayerView && (
+                                    <button
+                                        onClick={() => setActiveTab('TOKENS')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Sparkles className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Tokens</span>
+                                    </button>
+                                )}
+                                {selectedTokenIds.length === 1 && (
+                                    <button
+                                        onClick={() => setActiveTab('INSPECTOR')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'INSPECTOR' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Inspector</span>
+                                    </button>
+                                )}
+                            </div>
 
-                                    {/* 3. Dimensiones (Solo Finito) */}
-                                    {!gridConfig.isInfinite && (
-                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                            {/* Sidebar Content Wrapper */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
+                                {/* --- TAB: ACCESO (MASTER ONLY) --- */}
+                                {activeTab === 'ACCESS' && !isPlayerView && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        <div className="space-y-2">
                                             <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                                <Maximize className="w-3 h-3" />
-                                                Dimensiones (Celdas)
+                                                <Users className="w-3 h-3" />
+                                                Jugadores Autorizados
+                                            </h4>
+                                            <p className="text-[10px] text-slate-500 italic">Marca qué jugadores pueden ver este mapa.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {existingPlayers.map(player => {
+                                                const hasAccess = activeScenario?.allowedPlayers?.includes(player);
+                                                return (
+                                                    <div
+                                                        key={player}
+                                                        onClick={() => {
+                                                            const currentAllowed = activeScenario.allowedPlayers || [];
+                                                            const nextAllowed = hasAccess
+                                                                ? currentAllowed.filter(p => p !== player)
+                                                                : [...currentAllowed, player];
+                                                            setActiveScenario(prev => ({ ...prev, allowedPlayers: nextAllowed }));
+                                                        }}
+                                                        className={`w-full flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${hasAccess ? 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50 text-[#f0e6d2]' : 'bg-slate-900/50 border-slate-800 text-slate-500'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-2 h-2 rounded-full ${hasAccess ? 'bg-[#c8aa6e] shadow-[0_0_8px_#c8aa6e]' : 'bg-slate-700'}`} />
+                                                            <span className="font-fantasy tracking-widest text-sm uppercase">{player}</span>
+                                                        </div>
+                                                        {hasAccess ? (
+                                                            <ShieldCheck className="w-4 h-4 text-[#c8aa6e]" />
+                                                        ) : (
+                                                            <Lock className="w-4 h-4 opacity-30" />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            {existingPlayers.length === 0 && (
+                                                <div className="p-10 text-center border-2 border-dashed border-slate-800 rounded text-slate-600 text-[10px] uppercase font-bold tracking-widest">
+                                                    No hay jugadores detectados
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="p-4 rounded border border-[#c8aa6e]/20 bg-[#c8aa6e]/5 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Eye className="w-3 h-3 text-[#c8aa6e]" />
+                                                    <span className="text-[10px] font-bold uppercase text-[#c8aa6e]">Estado Global</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => setGlobalActiveScenario(globalActiveId === activeScenario?.id ? null : activeScenario?.id)}
+                                                    className={`px-3 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${globalActiveId === activeScenario?.id ? 'bg-red-900/20 text-red-500 border border-red-500/30' : 'bg-[#c8aa6e] text-[#0b1120] shadow-lg'}`}
+                                                >
+                                                    {globalActiveId === activeScenario?.id ? 'Dejar de Emitir' : 'Transmitir Ahora'}
+                                                </button>
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 leading-relaxed uppercase font-bold">
+                                                {globalActiveId === activeScenario?.id ? (
+                                                    <span className="text-green-500 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                                        En transmisión actual
+                                                    </span>
+                                                ) : (
+                                                    <span>Este encuentro está oculto para los jugadores.</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="text-[8px] text-slate-500 italic text-center uppercase tracking-widest px-4">
+                                            Recuerda guardar los cambios para actualizar los permisos de acceso.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* --- TAB: CONFIGURACIÓN (MASTER ONLY) --- */}
+                                {activeTab === 'CONFIG' && !isPlayerView && (
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        {/* 1. Modo de Mapa */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <LayoutGrid className="w-3 h-3" />
+                                                Modo de Mapa
+                                            </h4>
+                                            <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[10px] font-bold font-fantasy shadow-inner">
+                                                <button
+                                                    onClick={() => handleConfigChange('isInfinite', true)}
+                                                    className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                                >
+                                                    Infinito
+                                                </button>
+                                                <button
+                                                    onClick={() => handleConfigChange('isInfinite', false)}
+                                                    className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${!gridConfig.isInfinite ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                                >
+                                                    Finito
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Control de Snap */}
+                                        <div className="flex items-center justify-between bg-[#111827] p-3 rounded border border-slate-800">
+                                            <div className="flex items-center gap-2">
+                                                <LayoutGrid className="w-4 h-4 text-[#c8aa6e]" />
+                                                <span className="text-[10px] font-bold uppercase text-slate-400">Ajustar a Rejilla (Snap)</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleConfigChange('snapToGrid', !gridConfig.snapToGrid)}
+                                                className={`relative w-12 h-6 rounded-full transition-all ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.snapToGrid ? 'left-7' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="w-full h-px bg-slate-800/50"></div>
+
+                                        {/* 2. Fondo de Mapa */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Image className="w-3 h-3" />
+                                                Imagen de Fondo
+                                            </h4>
+
+                                            {!gridConfig.backgroundImage ? (
+                                                <div
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="border-2 border-dashed border-slate-700/50 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 transition-all group"
+                                                >
+                                                    <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
+                                                    <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Mapa</span>
+                                                    <input
+                                                        type="file"
+                                                        ref={fileInputRef}
+                                                        onChange={handleImageUpload}
+                                                        className="hidden"
+                                                        accept="image/*"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="relative w-full h-32 bg-[#0b1120] rounded-lg overflow-hidden border border-slate-700/50 group shadow-lg">
+                                                        <img src={gridConfig.backgroundImage} alt="Background Preview" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
+                                                            <span className="text-[10px] font-bold text-[#f0e6d2] uppercase tracking-[0.2em]">Vista Previa</span>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={clearBackgroundImage}
+                                                        className="w-full py-2.5 bg-red-900/10 border border-red-900/30 text-red-500 rounded text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-red-900/20 transition-all font-sans"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" /> Eliminar Fondo
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="w-full h-px bg-slate-800/50"></div>
+
+                                        {/* 3. Dimensiones (Solo Finito) */}
+                                        {!gridConfig.isInfinite && (
+                                            <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                                                <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                    <Maximize className="w-3 h-3" />
+                                                    Dimensiones (Celdas)
+                                                </h4>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                        <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
+                                                        <div className="flex items-center justify-between">
+                                                            <input
+                                                                type="number"
+                                                                value={gridConfig.columns}
+                                                                onChange={(e) => handleConfigChange('columns', Number(e.target.value))}
+                                                                className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                min="1" max="100"
+                                                            />
+                                                            <div className="flex flex-col gap-0.5 ml-2">
+                                                                <button onClick={() => handleConfigChange('columns', Math.min(100, gridConfig.columns + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                                <button onClick={() => handleConfigChange('columns', Math.max(1, gridConfig.columns - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
+                                                        <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Filas</span>
+                                                        <div className="flex items-center justify-between">
+                                                            <input
+                                                                type="number"
+                                                                value={gridConfig.rows}
+                                                                onChange={(e) => handleConfigChange('rows', Number(e.target.value))}
+                                                                className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                min="1" max="100"
+                                                            />
+                                                            <div className="flex flex-col gap-0.5 ml-2">
+                                                                <button onClick={() => handleConfigChange('rows', Math.min(100, gridConfig.rows + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                                <button onClick={() => handleConfigChange('rows', Math.max(1, gridConfig.rows - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-[9px] text-slate-600 text-right font-mono flex items-center justify-end gap-2 uppercase">
+                                                    <span className="w-1 h-1 rounded-full bg-slate-800"></span>
+                                                    TOTAL: {finiteGridWidth}x{finiteGridHeight}PX
+                                                </div>
+
+                                                <div className="w-full h-px bg-slate-800/50"></div>
+                                            </div>
+                                        )}
+
+                                        {/* 4. Tamaño de Celda */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Ruler className="w-3 h-3" />
+                                                Escala de Rejilla
                                             </h4>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
+                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Ancho (PX)</span>
                                                     <div className="flex items-center justify-between">
                                                         <input
                                                             type="number"
-                                                            value={gridConfig.columns}
-                                                            onChange={(e) => handleConfigChange('columns', Number(e.target.value))}
+                                                            value={gridConfig.cellWidth}
+                                                            onChange={(e) => handleConfigChange('cellWidth', Number(e.target.value))}
                                                             className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                            min="1" max="100"
+                                                            min="10" max="500"
                                                         />
                                                         <div className="flex flex-col gap-0.5 ml-2">
-                                                            <button onClick={() => handleConfigChange('columns', Math.min(100, gridConfig.columns + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                            <button onClick={() => handleConfigChange('columns', Math.max(1, gridConfig.columns - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('cellWidth', Math.min(500, gridConfig.cellWidth + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('cellWidth', Math.max(10, gridConfig.cellWidth - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Filas</span>
+                                                    <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Alto (PX)</span>
                                                     <div className="flex items-center justify-between">
                                                         <input
                                                             type="number"
-                                                            value={gridConfig.rows}
-                                                            onChange={(e) => handleConfigChange('rows', Number(e.target.value))}
+                                                            value={gridConfig.cellHeight}
+                                                            onChange={(e) => handleConfigChange('cellHeight', Number(e.target.value))}
                                                             className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                            min="1" max="100"
+                                                            min="10" max="500"
                                                         />
                                                         <div className="flex flex-col gap-0.5 ml-2">
-                                                            <button onClick={() => handleConfigChange('rows', Math.min(100, gridConfig.rows + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                            <button onClick={() => handleConfigChange('rows', Math.max(1, gridConfig.rows - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('cellHeight', Math.min(500, gridConfig.cellHeight + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
+                                                            <button onClick={() => handleConfigChange('cellHeight', Math.max(10, gridConfig.cellHeight - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
                                                         </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="text-[9px] text-slate-600 text-right font-mono flex items-center justify-end gap-2 uppercase">
-                                                <span className="w-1 h-1 rounded-full bg-slate-800"></span>
-                                                TOTAL: {finiteGridWidth}x{finiteGridHeight}PX
-                                            </div>
-
-                                            <div className="w-full h-px bg-slate-800/50"></div>
-                                        </div>
-                                    )}
-
-                                    {/* 4. Tamaño de Celda */}
-                                    <div className="space-y-4">
-                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                            <Ruler className="w-3 h-3" />
-                                            Escala de Rejilla
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                                <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Ancho (PX)</span>
-                                                <div className="flex items-center justify-between">
-                                                    <input
-                                                        type="number"
-                                                        value={gridConfig.cellWidth}
-                                                        onChange={(e) => handleConfigChange('cellWidth', Number(e.target.value))}
-                                                        className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                        min="10" max="500"
-                                                    />
-                                                    <div className="flex flex-col gap-0.5 ml-2">
-                                                        <button onClick={() => handleConfigChange('cellWidth', Math.min(500, gridConfig.cellWidth + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                        <button onClick={() => handleConfigChange('cellWidth', Math.max(10, gridConfig.cellWidth - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
-                                                <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Alto (PX)</span>
-                                                <div className="flex items-center justify-between">
-                                                    <input
-                                                        type="number"
-                                                        value={gridConfig.cellHeight}
-                                                        onChange={(e) => handleConfigChange('cellHeight', Number(e.target.value))}
-                                                        className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                        min="10" max="500"
-                                                    />
-                                                    <div className="flex flex-col gap-0.5 ml-2">
-                                                        <button onClick={() => handleConfigChange('cellHeight', Math.min(500, gridConfig.cellHeight + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
-                                                        <button onClick={() => handleConfigChange('cellHeight', Math.max(10, gridConfig.cellHeight - 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronDown size={14} /></button>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* --- TAB: TOKENS --- */}
-                            {activeTab === 'TOKENS' && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                        <Sparkles className="w-3 h-3" />
-                                        Biblioteca de Tokens
-                                    </h4>
+                                {/* --- TAB: TOKENS (MASTER ONLY) --- */}
+                                {activeTab === 'TOKENS' && !isPlayerView && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                            <Sparkles className="w-3 h-3" />
+                                            Biblioteca de Tokens
+                                        </h4>
 
-                                    {/* Upload Button */}
-                                    <label className={`
+                                        {/* Upload Button */}
+                                        <label className={`
                                         flex flex-col items-center justify-center w-full h-32 
                                         border-2 border-dashed border-slate-700/50 rounded-xl 
                                         cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5 
                                         transition-all group relative overflow-hidden
                                         ${uploadingToken ? 'pointer-events-none opacity-50' : ''}
                                     `}>
-                                        <input type="file" className="hidden" accept="image/*" onChange={handleTokenUpload} disabled={uploadingToken} />
-                                        {uploadingToken ? (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <RotateCw className="w-6 h-6 text-[#c8aa6e] animate-spin" />
-                                                <span className="text-[10px] uppercase font-bold text-[#c8aa6e]">Subiendo...</span>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
-                                                <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Nuevo Token</span>
-                                            </>
-                                        )}
-                                    </label>
-
-                                    {/* Tokens Grid */}
-                                    <div className="grid grid-cols-3 gap-3">
-
-
-                                        {tokens.map(token => (
-                                            <div
-                                                key={token.id}
-                                                className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors cursor-pointer"
-                                                onClick={() => addTokenToCanvas(token.url)} // Click to Add
-                                                title="Click para añadir al mapa"
-                                            >
-                                                <img src={token.url} alt={token.name} className="w-full h-full object-contain p-2" />
-
-                                                {/* Delete Button Overlay */}
-                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); deleteToken(token); }}
-                                                        className="p-1.5 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-200 transition-colors"
-                                                        title="Eliminar Token de Biblioteca"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
+                                            <input type="file" className="hidden" accept="image/*" onChange={handleTokenUpload} disabled={uploadingToken} />
+                                            {uploadingToken ? (
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <RotateCw className="w-6 h-6 text-[#c8aa6e] animate-spin" />
+                                                    <span className="text-[10px] uppercase font-bold text-[#c8aa6e]">Subiendo...</span>
                                                 </div>
-                                            </div>
-                                        ))}
-                                        {tokens.length === 0 && !uploadingToken && (
-                                            <div className="col-span-3 py-8 text-center text-slate-600 text-[10px] uppercase font-bold tracking-widest border border-dashed border-slate-800 rounded-lg">
-                                                Sin tokens
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                                            ) : (
+                                                <>
+                                                    <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
+                                                    <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Nuevo Token</span>
+                                                </>
+                                            )}
+                                        </label>
+
+                                        {/* Tokens Grid */}
+                                        <div className="grid grid-cols-3 gap-3">
 
 
+                                            {tokens.map(token => (
+                                                <div
+                                                    key={token.id}
+                                                    className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors cursor-pointer"
+                                                    onClick={() => addTokenToCanvas(token.url)} // Click to Add
+                                                    title="Click para añadir al mapa"
+                                                >
+                                                    <img src={token.url} alt={token.name} className="w-full h-full object-contain p-2" />
 
-                            <div className="w-full h-px bg-slate-800/50"></div>
-
-                            {/* 5. Estilo Visual */}
-                            {activeTab === 'CONFIG' && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                        <Palette className="w-3 h-3" />
-                                        Apariencia Visual
-                                    </h4>
-
-                                    <div className="space-y-6">
-                                        {/* Color y Grosor */}
-                                        <div className="grid grid-cols-1 gap-4">
-                                            <div className="bg-[#111827]/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Color de Línea</span>
-                                                    <span className="text-[10px] font-mono text-[#c8aa6e] uppercase tracking-widest">{gridConfig.color}</span>
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    {/* Custom Picker */}
-                                                    <div className="h-10 w-10 relative rounded overflow-hidden border border-slate-700/50 shrink-0 cursor-pointer hover:border-[#c8aa6e]/50 transition-all shadow-inner">
-                                                        <input
-                                                            type="color"
-                                                            value={gridConfig.color}
-                                                            onChange={(e) => handleConfigChange('color', e.target.value)}
-                                                            className="absolute -top-2 -left-2 w-14 h-14 border-none cursor-pointer p-0 opacity-0"
-                                                        />
-                                                        <div className="w-full h-full" style={{ backgroundColor: gridConfig.color }}></div>
-                                                    </div>
-                                                    {/* Presets */}
-                                                    <div className="flex-1 grid grid-cols-4 gap-2">
-                                                        {PRESET_COLORS.map(c => (
-                                                            <button
-                                                                key={c}
-                                                                onClick={() => handleConfigChange('color', c)}
-                                                                className={`h-full w-full rounded-sm transition-all ${gridConfig.color === c ? 'ring-2 ring-offset-2 ring-offset-[#0b1120] ring-[#c8aa6e] scale-105' : 'hover:opacity-80 hover:scale-105'}`}
-                                                                style={{ backgroundColor: c }}
-                                                            />
-                                                        ))}
+                                                    {/* Delete Button Overlay */}
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); deleteToken(token); }}
+                                                            className="p-1.5 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-200 transition-colors"
+                                                            title="Eliminar Token de Biblioteca"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="bg-[#0b1120] p-4 rounded border border-slate-800 hover:border-slate-700 transition-colors">
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Grosor (PX)</span>
-                                                    <span className="text-[10px] font-mono text-[#c8aa6e]">{gridConfig.lineWidth}PX</span>
+                                            ))}
+                                            {tokens.length === 0 && !uploadingToken && (
+                                                <div className="col-span-3 py-8 text-center text-slate-600 text-[10px] uppercase font-bold tracking-widest border border-dashed border-slate-800 rounded-lg">
+                                                    Sin tokens
                                                 </div>
-                                                <input
-                                                    type="range"
-                                                    min="0.5" max="10" step="0.5"
-                                                    value={gridConfig.lineWidth}
-                                                    onChange={(e) => handleConfigChange('lineWidth', Number(e.target.value))}
-                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Opacidad */}
-                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                                                <span>Opacidad de Rejilla</span>
-                                                <span className="font-mono text-[#c8aa6e]">{Math.round(gridConfig.opacity * 100)}%</span>
-                                            </div>
-                                            <input
-                                                type="range"
-                                                min="0" max="1" step="0.05"
-                                                value={gridConfig.opacity}
-                                                onChange={(e) => handleConfigChange('opacity', parseFloat(e.target.value))}
-                                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                            />
-                                        </div>
-
-                                        {/* Tipo de Línea */}
-                                        <div className="space-y-3">
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] block pl-1">Estilo de Trazo</span>
-                                            <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[9px] font-bold font-fantasy shadow-inner">
-                                                {['solid', 'dashed', 'dotted'].map(type => (
-                                                    <button
-                                                        key={type}
-                                                        onClick={() => handleConfigChange('lineType', type)}
-                                                        className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.lineType === type ? 'bg-[#c8aa6e] text-[#0b1120] shadow-md' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                                    >
-                                                        {type === 'solid' ? 'Sólido' : type === 'dashed' ? 'Guiones' : 'Puntos'}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="w-full h-px bg-slate-800/50"></div>
 
-                                    {/* 6. Iluminación / Atmósfera */}
-                                    <div className="space-y-4">
+
+                                <div className="w-full h-px bg-slate-800/50"></div>
+
+                                {/* 5. Estilo Visual (MASTER ONLY) --- */}
+                                {activeTab === 'CONFIG' && !isPlayerView && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                         <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full bg-slate-600 shadow-[0_0_10px_currentColor] flex items-center justify-center">
-                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                            </div>
-                                            Iluminación Global
+                                            <Palette className="w-3 h-3" />
+                                            Apariencia Visual
                                         </h4>
 
-                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Oscuridad Ambiental</span>
-                                                <span className="text-[10px] font-mono text-[#c8aa6e]">{Math.round((gridConfig.ambientDarkness || 0) * 100)}%</span>
-                                            </div>
-
-                                            {/* Slider Personalizado */}
-                                            <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden cursor-pointer group">
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="1"
-                                                    step="0.05"
-                                                    value={gridConfig.ambientDarkness || 0}
-                                                    onChange={(e) => handleConfigChange('ambientDarkness', parseFloat(e.target.value))}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                                />
-                                                {/* Barra de progreso visual */}
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-slate-600 to-black transition-all duration-100 ease-out"
-                                                    style={{ width: `${(gridConfig.ambientDarkness || 0) * 100}%` }}
-                                                ></div>
-
-                                                {/* Indicador de posición (Thumb) visual */}
-                                                <div
-                                                    className="absolute top-0 h-full w-1 bg-[#c8aa6e] pointer-events-none transition-all duration-100 ease-out shadow-[0_0_10px_#c8aa6e]"
-                                                    style={{ left: `${(gridConfig.ambientDarkness || 0) * 100}%`, transform: 'translateX(-50%)' }}
-                                                ></div>
-                                            </div>
-
-                                            <p className="text-[9px] text-slate-600 mt-2 leading-relaxed">
-                                                Ajusta la opacidad de la capa de oscuridad ambiental.
-                                            </p>
-                                        </div>
-
-                                        {/* NIEBLA DE GUERRA (Fog of War) */}
-                                        <div className={`bg-[#0b1120] p-4 rounded border transition-all ${gridConfig.fogOfWar ? 'border-[#c8aa6e]/50 shadow-[0_0_20px_rgba(200,170,110,0.1)]' : 'border-slate-800'}`}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                                        <Activity size={12} className={gridConfig.fogOfWar ? 'text-[#c8aa6e]' : 'text-slate-500'} />
-                                                        Niebla de Guerra
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-600">Oculta el mapa basado en la visión de los tokens</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleConfigChange('fogOfWar', !gridConfig.fogOfWar)}
-                                                    className={`w-12 h-6 rounded-full transition-all relative ${gridConfig.fogOfWar ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                >
-                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.fogOfWar ? 'left-7' : 'left-1'}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* --- TAB: INSPECTOR --- */}
-                            {activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
-                                const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
-                                if (!token) return null;
-
-                                return (
-                                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                                        {/* Header Inspector */}
-                                        <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
-                                            <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
-                                                {token.type === 'light' ? (
-                                                    <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
-                                                ) : token.type === 'wall' ? (
-                                                    <PenTool className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
-                                                ) : (
-                                                    <img src={token.img} className="w-full h-full object-contain p-1" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{token.layer} LAYER</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Properties Form */}
-                                        <div className="space-y-4">
-
-                                            {/* Name Input */}
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Nombre</label>
-                                                <input
-                                                    type="text"
-                                                    value={token.name}
-                                                    onChange={(e) => updateItem(token.id, { name: e.target.value })}
-                                                    className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
-                                                />
-                                            </div>
-
-                                            {/* Rotation & Size */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
-                                                    <div className="flex items-center bg-[#111827] border border-slate-800 rounded h-9">
-                                                        <input
-                                                            type="number"
-                                                            value={Math.round(token.rotation || 0)}
-                                                            onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
-                                                            className="w-full h-full bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
-                                                        />
-                                                        <span className="pr-3 text-slate-600 text-xs">°</span>
+                                        <div className="space-y-6">
+                                            {/* Color y Grosor */}
+                                            <div className="grid grid-cols-1 gap-4">
+                                                <div className="bg-[#111827]/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Color de Línea</span>
+                                                        <span className="text-[10px] font-mono text-[#c8aa6e] uppercase tracking-widest">{gridConfig.color}</span>
                                                     </div>
-                                                </div>
-                                                {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tamaño</label>
-                                                    <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
-                                                        <button
-                                                            onClick={() => {
-                                                                // Lógica inteligente de decremento
-                                                                // Si > 1 celda, baja de 1 en 1. Si <= 1, baja de 0.25 en 0.25. Mínimo 0.25.
-                                                                if (gridConfig.snapToGrid) {
-                                                                    const cellW = gridConfig.cellWidth;
-                                                                    const cellH = gridConfig.cellHeight;
-                                                                    const currentCellsW = token.width / cellW;
-
-                                                                    // Calcular nuevo tamaño en celdas
-                                                                    let newCellsW = currentCellsW > 1 ? Math.floor(currentCellsW - 1) : currentCellsW - 0.25;
-                                                                    // Corregir si bajó demasiado al redondear o si ya estaba en 1.5 (floor(0.5)=>0 bad)
-                                                                    if (currentCellsW > 1 && newCellsW < 1) newCellsW = 1;
-                                                                    // Simplicidad: Restar 1 si >= 2, restar 0.25 si < 2.
-                                                                    newCellsW = (token.width / cellW) <= 1 ? (token.width / cellW) - 0.25 : (token.width / cellW) - 1;
-
-                                                                    // Asegurar mínimo 0.25
-                                                                    if (newCellsW < 0.25) newCellsW = 0.25;
-
-                                                                    updateItem(token.id, {
-                                                                        width: newCellsW * cellW,
-                                                                        height: newCellsW * cellH // Mantener ratio cuadrado por simplicidad en botón, o usar lógica separada
-                                                                    });
-                                                                } else {
-                                                                    const step = 20;
-                                                                    const newW = Math.max(10, token.width - step);
-                                                                    const newH = Math.max(10, token.height - step);
-                                                                    updateItem(token.id, { width: newW, height: newH });
-                                                                }
-                                                            }}
-                                                            className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-r border-slate-800 flex items-center justify-center"
-                                                            title="Reducir"
-                                                        >
-                                                            <FiMinus size={14} />
-                                                        </button>
-                                                        <span className="flex-1 text-center font-mono text-xs text-[#c8aa6e] flex items-center justify-center h-full">
-                                                            {gridConfig.snapToGrid
-                                                                ? `${parseFloat((token.width / gridConfig.cellWidth).toFixed(2))}x${parseFloat((token.height / gridConfig.cellHeight).toFixed(2))}`
-                                                                : `${Math.round(token.width)}px`
-                                                            }
-                                                        </span>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (gridConfig.snapToGrid) {
-                                                                    const cellW = gridConfig.cellWidth;
-                                                                    const cellH = gridConfig.cellHeight;
-                                                                    // Incrementar: 0.25 si < 1, 1 si >= 1
-                                                                    let newCellsW = (token.width / cellW) < 1 ? (token.width / cellW) + 0.25 : (token.width / cellW) + 1;
-
-                                                                    updateItem(token.id, {
-                                                                        width: newCellsW * cellW,
-                                                                        height: newCellsW * cellH
-                                                                    });
-                                                                } else {
-                                                                    const step = 20;
-                                                                    updateItem(token.id, { width: token.width + step, height: token.height + step });
-                                                                }
-                                                            }}
-                                                            className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-800 flex items-center justify-center"
-                                                            title="Aumentar"
-                                                        >
-                                                            <FiPlus size={14} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Future Links (Solo para personas/tokens reales) */}
-                                            {token.type !== 'light' && token.type !== 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50">
-                                                    <button className="w-full py-3 bg-slate-800 text-slate-400 font-bold uppercase text-xs tracking-widest rounded border border-slate-700 hover:bg-slate-700 hover:text-slate-200 transition-all flex items-center justify-center gap-2">
-                                                        <Activity size={14} />
-                                                        Ver Ficha de Personaje
-                                                    </button>
-                                                    <p className="text-center text-[10px] text-slate-600 mt-2">Próximamente: Vinculación con sistema de fichas</p>
-                                                </div>
-                                            )}
-
-                                            {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
-                                            {token.type !== 'light' && token.type !== 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                        <Activity size={12} /> Visión y Niebla
-                                                    </h4>
-
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Emite Visión</span>
-                                                                <span className="text-[8px] text-slate-600 italic">Despeja la niebla alrededor</span>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => updateItem(token.id, { hasVision: !token.hasVision })}
-                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.hasVision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                            >
-                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasVision ? 'left-7' : 'left-1'}`} />
-                                                            </button>
+                                                    <div className="flex gap-3">
+                                                        {/* Custom Picker */}
+                                                        <div className="h-10 w-10 relative rounded overflow-hidden border border-slate-700/50 shrink-0 cursor-pointer hover:border-[#c8aa6e]/50 transition-all shadow-inner">
+                                                            <input
+                                                                type="color"
+                                                                value={gridConfig.color}
+                                                                onChange={(e) => handleConfigChange('color', e.target.value)}
+                                                                className="absolute -top-2 -left-2 w-14 h-14 border-none cursor-pointer p-0 opacity-0"
+                                                            />
+                                                            <div className="w-full h-full" style={{ backgroundColor: gridConfig.color }}></div>
                                                         </div>
-
-                                                        {token.hasVision && (
-                                                            <div className="space-y-3 pt-2">
-                                                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                                    <span className="text-slate-500">Radio de Visión</span>
-                                                                    <span className="text-[#c8aa6e] font-mono">{token.visionRadius || 300}px</span>
-                                                                </div>
-                                                                <input
-                                                                    type="range"
-                                                                    min="50" max="1500" step="50"
-                                                                    value={token.visionRadius || 300}
-                                                                    onChange={(e) => updateItem(token.id, { visionRadius: Number(e.target.value) })}
-                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                                                />
-                                                            </div>
-                                                        )}
-
-                                                        <div className="w-full h-px bg-slate-800/30 my-2"></div>
-
-                                                        {/* VISIÓN EN LA OSCURIDAD */}
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Visión en Oscuridad</span>
-                                                                    <div className="bg-[#c8aa6e]/10 border border-[#c8aa6e]/30 text-[#c8aa6e] text-[7px] px-1 rounded uppercase font-bold tracking-tighter">RACIAL</div>
-                                                                </div>
-                                                                <span className="text-[8px] text-slate-600 italic">Ignora la oscuridad ambiental</span>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => updateItem(token.id, { hasDarkvision: !token.hasDarkvision })}
-                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.hasDarkvision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                            >
-                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasDarkvision ? 'left-7' : 'left-1'}`} />
-                                                            </button>
-                                                        </div>
-
-                                                        {token.hasDarkvision && (
-                                                            <div className="space-y-3 pt-2">
-                                                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                                    <span className="text-slate-500">Alcance Oscuridad</span>
-                                                                    <span className="text-[#c8aa6e] font-mono">{token.darkvisionRadius || 300}px</span>
-                                                                </div>
-                                                                <input
-                                                                    type="range"
-                                                                    min="50" max="1500" step="50"
-                                                                    value={token.darkvisionRadius || 300}
-                                                                    onChange={(e) => updateItem(token.id, { darkvisionRadius: Number(e.target.value) })}
-                                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-
-
-
-                                            {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro) */}
-                                            {token.type !== 'light' && token.type !== 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50">
-                                                    <TokenResources
-                                                        token={token}
-                                                        onUpdate={(updates) => updateItem(token.id, updates)}
-                                                    />
-                                                </div>
-                                            )}
-
-
-
-                                            {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
-                                            {token.type === 'light' && (
-                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                        <Sparkles size={12} /> Propiedades del Foco
-                                                    </h4>
-
-                                                    {/* Radio de Luz */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                            <span className="text-slate-500">Alcance (Px)</span>
-                                                            <span className="text-[#c8aa6e] font-mono">{token.radius}px</span>
-                                                        </div>
-                                                        <input
-                                                            type="range"
-                                                            min="50" max="1000" step="10"
-                                                            value={token.radius || 200}
-                                                            onChange={(e) => updateItem(token.id, { radius: Number(e.target.value) })}
-                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                                        />
-                                                    </div>
-
-                                                    {/* Snap Toggle para Luz */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
-                                                        <div className="flex flex-col gap-1">
-                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
-                                                            <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => updateItem(token.id, { snapToGrid: !token.snapToGrid })}
-                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                        >
-                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid ? 'left-7' : 'left-1'}`} />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Parpadeo (Flicker) Toggle */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Animación de Parpadeo</span>
-                                                                <div className="bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[7px] px-1 rounded uppercase font-bold tracking-tighter">BETA</div>
-                                                            </div>
-                                                            <span className="text-[9px] text-slate-600">Simula el movimiento de una antorcha</span>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => updateItem(token.id, { flicker: !token.flicker })}
-                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.flicker ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                        >
-                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.flicker ? 'left-7' : 'left-1'}`} />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Color de la Luz */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                            <span className="text-slate-500">Tono de Iluminación</span>
-                                                            <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.color }}></div>
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            {['#fff1ae', '#ffafae', '#aebcff', '#ccffae', '#ffffff'].map(c => (
+                                                        {/* Presets */}
+                                                        <div className="flex-1 grid grid-cols-4 gap-2">
+                                                            {PRESET_COLORS.map(c => (
                                                                 <button
                                                                     key={c}
-                                                                    onClick={() => updateItem(token.id, { color: c })}
-                                                                    className={`flex-1 h-8 rounded border transition-all ${token.color === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:border-white/30'}`}
+                                                                    onClick={() => handleConfigChange('color', c)}
+                                                                    className={`h-full w-full rounded-sm transition-all ${gridConfig.color === c ? 'ring-2 ring-offset-2 ring-offset-[#0b1120] ring-[#c8aa6e] scale-105' : 'hover:opacity-80 hover:scale-105'}`}
                                                                     style={{ backgroundColor: c }}
                                                                 />
                                                             ))}
                                                         </div>
                                                     </div>
                                                 </div>
-                                            )}
 
-                                            {/* CONFIGURACIÓN DE MURO (Solo si ES un muro) */}
-                                            {token.type === 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                        <PenTool size={12} /> Propiedades del Muro
-                                                    </h4>
-
-                                                    {/* Snap Toggle para Muro */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
-                                                        <div className="flex flex-col gap-1">
-                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
-                                                            <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => updateItem(token.id, { snapToGrid: token.snapToGrid === false ? true : false })}
-                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid !== false ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                        >
-                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid !== false ? 'left-7' : 'left-1'}`} />
-                                                        </button>
+                                                <div className="bg-[#0b1120] p-4 rounded border border-slate-800 hover:border-slate-700 transition-colors">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Grosor (PX)</span>
+                                                        <span className="text-[10px] font-mono text-[#c8aa6e]">{gridConfig.lineWidth}PX</span>
                                                     </div>
-
-                                                    {/* Grosor del Muro */}
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                            <span className="text-slate-500">Grosor del Collider</span>
-                                                            <span className="text-[#c8aa6e] font-mono">{token.thickness || 4}px</span>
-                                                        </div>
-                                                        <input
-                                                            type="range"
-                                                            min="1" max="20" step="1"
-                                                            value={token.thickness || 4}
-                                                            onChange={(e) => updateItem(token.id, { thickness: Number(e.target.value) })}
-                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Estados Alterados (Solo para tokens reales) */}
-                                            {token.type !== 'light' && token.type !== 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50 space-y-3">
-                                                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
-                                                    <EstadoSelector
-                                                        selected={token.status || []}
-                                                        onToggle={(statusId) => {
-                                                            const currentStatus = token.status || [];
-                                                            const newStatus = currentStatus.includes(statusId)
-                                                                ? currentStatus.filter(s => s !== statusId)
-                                                                : [...currentStatus, statusId];
-                                                            updateItem(token.id, { status: newStatus });
-                                                        }}
+                                                    <input
+                                                        type="range"
+                                                        min="0.5" max="10" step="0.5"
+                                                        value={gridConfig.lineWidth}
+                                                        onChange={(e) => handleConfigChange('lineWidth', Number(e.target.value))}
+                                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                                     />
                                                 </div>
-                                            )}
+                                            </div>
 
-                                            {/* AURAS E INDICADORES (Solo para tokens reales) */}
-                                            {token.type !== 'light' && token.type !== 'wall' && (
-                                                <div className="pt-4 border-t border-slate-800/50 space-y-6">
-                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                        <Sparkles size={12} /> Aura de Estado
-                                                    </h4>
+                                            {/* Opacidad */}
+                                            <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                                                    <span>Opacidad de Rejilla</span>
+                                                    <span className="font-mono text-[#c8aa6e]">{Math.round(gridConfig.opacity * 100)}%</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0" max="1" step="0.05"
+                                                    value={gridConfig.opacity}
+                                                    onChange={(e) => handleConfigChange('opacity', parseFloat(e.target.value))}
+                                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                />
+                                            </div>
 
-                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Activar Aura</span>
-                                                                <span className="text-[8px] text-slate-600 italic">Efecto visual bajo el token</span>
+                                            {/* Tipo de Línea */}
+                                            <div className="space-y-3">
+                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] block pl-1">Estilo de Trazo</span>
+                                                <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[9px] font-bold font-fantasy shadow-inner">
+                                                    {['solid', 'dashed', 'dotted'].map(type => (
+                                                        <button
+                                                            key={type}
+                                                            onClick={() => handleConfigChange('lineType', type)}
+                                                            className={`flex-1 py-2.5 rounded transition-all uppercase tracking-widest ${gridConfig.lineType === type ? 'bg-[#c8aa6e] text-[#0b1120] shadow-md' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                                        >
+                                                            {type === 'solid' ? 'Sólido' : type === 'dashed' ? 'Guiones' : 'Puntos'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="w-full h-px bg-slate-800/50"></div>
+
+                                        {/* 6. Iluminación / Atmósfera */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full bg-slate-600 shadow-[0_0_10px_currentColor] flex items-center justify-center">
+                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                </div>
+                                                Iluminación Global
+                                            </h4>
+
+                                            <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Oscuridad Ambiental</span>
+                                                    <span className="text-[10px] font-mono text-[#c8aa6e]">{Math.round((gridConfig.ambientDarkness || 0) * 100)}%</span>
+                                                </div>
+
+                                                {/* Slider Personalizado */}
+                                                <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden cursor-pointer group">
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="1"
+                                                        step="0.05"
+                                                        value={gridConfig.ambientDarkness || 0}
+                                                        onChange={(e) => handleConfigChange('ambientDarkness', parseFloat(e.target.value))}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    />
+                                                    {/* Barra de progreso visual */}
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-slate-600 to-black transition-all duration-100 ease-out"
+                                                        style={{ width: `${(gridConfig.ambientDarkness || 0) * 100}%` }}
+                                                    ></div>
+
+                                                    {/* Indicador de posición (Thumb) visual */}
+                                                    <div
+                                                        className="absolute top-0 h-full w-1 bg-[#c8aa6e] pointer-events-none transition-all duration-100 ease-out shadow-[0_0_10px_#c8aa6e]"
+                                                        style={{ left: `${(gridConfig.ambientDarkness || 0) * 100}%`, transform: 'translateX(-50%)' }}
+                                                    ></div>
+                                                </div>
+
+                                                <p className="text-[9px] text-slate-600 mt-2 leading-relaxed">
+                                                    Ajusta la opacidad de la capa de oscuridad ambiental.
+                                                </p>
+                                            </div>
+
+                                            {/* NIEBLA DE GUERRA (Fog of War) */}
+                                            <div className={`bg-[#0b1120] p-4 rounded border transition-all ${gridConfig.fogOfWar ? 'border-[#c8aa6e]/50 shadow-[0_0_20px_rgba(200,170,110,0.1)]' : 'border-slate-800'}`}>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                                            <Activity size={12} className={gridConfig.fogOfWar ? 'text-[#c8aa6e]' : 'text-slate-500'} />
+                                                            Niebla de Guerra
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-600">Oculta el mapa basado en la visión de los tokens</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleConfigChange('fogOfWar', !gridConfig.fogOfWar)}
+                                                        className={`w-12 h-6 rounded-full transition-all relative ${gridConfig.fogOfWar ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.fogOfWar ? 'left-7' : 'left-1'}`} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+
+                                {/* --- TAB: TOKENS (PLAYER ONLY: List of controlled tokens) --- */}
+                                {activeTab === 'TOKENS' && isPlayerView && (() => {
+                                    const controlledTokens = activeScenario?.items?.filter(i =>
+                                        i.controlledBy?.includes(playerName) && i.type !== 'light' && i.type !== 'wall'
+                                    ) || [];
+
+                                    return (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                            <div className="space-y-2">
+                                                <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                    <Activity className="w-3 h-3" />
+                                                    Tus Tokens en Juego
+                                                </h4>
+                                                <p className="text-[10px] text-slate-500 italic">Lista de personajes bajo tu control en este escenario.</p>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {controlledTokens.map(token => (
+                                                    <div
+                                                        key={token.id}
+                                                        onClick={() => {
+                                                            setSelectedTokenIds([token.id]);
+                                                            setActiveTab('INSPECTOR');
+                                                        }}
+                                                        className={`group flex items-center gap-4 bg-[#111827] border p-3 rounded-lg transition-all cursor-pointer ${selectedTokenIds.includes(token.id) ? 'border-[#c8aa6e] bg-[#c8aa6e]/5' : 'border-slate-800 hover:border-slate-700'}`}
+                                                    >
+                                                        <div className="w-10 h-10 bg-[#0b1120] rounded border border-slate-800 overflow-hidden flex items-center justify-center">
+                                                            <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h5 className="text-[#f0e6d2] font-fantasy text-sm truncate uppercase tracking-wider">{token.name}</h5>
+                                                            <div className="flex items-center gap-2 text-[8px] font-bold text-slate-500 uppercase">
+                                                                {token.hasVision ? 'CON VISIÓN' : 'SIN VISIÓN'}
                                                             </div>
+                                                        </div>
+                                                        <Edit2 size={12} className="text-slate-600 group-hover:text-[#c8aa6e] transition-colors" />
+                                                    </div>
+                                                ))}
+
+                                                {controlledTokens.length === 0 && (
+                                                    <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/20">
+                                                        <ShieldOff size={32} className="text-slate-700" />
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Sin tokens asignados</p>
+                                                            <p className="text-[9px] text-slate-600 italic px-6 leading-relaxed">Pide al Master que te asigne el control de un personaje para poder interactuar.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {controlledTokens.length > 0 && (
+                                                <div className="p-4 bg-[#c8aa6e]/5 border border-[#c8aa6e]/20 rounded-lg">
+                                                    <p className="text-[9px] text-slate-400 leading-relaxed uppercase font-bold text-center">
+                                                        Haz clic en un personaje para abrir su <span className="text-[#c8aa6e]">foco e inspector</span>.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* --- TAB: INSPECTOR --- */}
+                                {activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
+                                    const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
+                                    if (!token) return null;
+
+                                    return (
+                                        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                            {/* Header Inspector */}
+                                            <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
+                                                <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
+                                                    {token.type === 'light' ? (
+                                                        <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                    ) : token.type === 'wall' ? (
+                                                        <PenTool className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                    ) : (
+                                                        <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{token.layer} LAYER</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Properties Form */}
+                                            <div className="space-y-4">
+
+                                                {/* Name Input */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Nombre</label>
+                                                    <input
+                                                        type="text"
+                                                        value={token.name}
+                                                        onChange={(e) => updateItem(token.id, { name: e.target.value })}
+                                                        className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
+                                                    />
+                                                </div>
+
+                                                {/* Rotation & Size */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
+                                                        <div className="flex items-center bg-[#111827] border border-slate-800 rounded h-9">
+                                                            <input
+                                                                type="number"
+                                                                value={Math.round(token.rotation || 0)}
+                                                                onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
+                                                                className="w-full h-full bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
+                                                            />
+                                                            <span className="pr-3 text-slate-600 text-xs">°</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tamaño</label>
+                                                        <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
                                                             <button
-                                                                onClick={() => updateItem(token.id, { auraEnabled: !token.auraEnabled })}
-                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.auraEnabled ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                onClick={() => {
+                                                                    // Lógica inteligente de decremento
+                                                                    // Si > 1 celda, baja de 1 en 1. Si <= 1, baja de 0.25 en 0.25. Mínimo 0.25.
+                                                                    if (gridConfig.snapToGrid) {
+                                                                        const cellW = gridConfig.cellWidth;
+                                                                        const cellH = gridConfig.cellHeight;
+                                                                        const currentCellsW = token.width / cellW;
+
+                                                                        // Calcular nuevo tamaño en celdas
+                                                                        let newCellsW = currentCellsW > 1 ? Math.floor(currentCellsW - 1) : currentCellsW - 0.25;
+                                                                        // Corregir si bajó demasiado al redondear o si ya estaba en 1.5 (floor(0.5)=>0 bad)
+                                                                        if (currentCellsW > 1 && newCellsW < 1) newCellsW = 1;
+                                                                        // Simplicidad: Restar 1 si >= 2, restar 0.25 si < 2.
+                                                                        newCellsW = (token.width / cellW) <= 1 ? (token.width / cellW) - 0.25 : (token.width / cellW) - 1;
+
+                                                                        // Asegurar mínimo 0.25
+                                                                        if (newCellsW < 0.25) newCellsW = 0.25;
+
+                                                                        updateItem(token.id, {
+                                                                            width: newCellsW * cellW,
+                                                                            height: newCellsW * cellH // Mantener ratio cuadrado por simplicidad en botón, o usar lógica separada
+                                                                        });
+                                                                    } else {
+                                                                        const step = 20;
+                                                                        const newW = Math.max(10, token.width - step);
+                                                                        const newH = Math.max(10, token.height - step);
+                                                                        updateItem(token.id, { width: newW, height: newH });
+                                                                    }
+                                                                }}
+                                                                className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-r border-slate-800 flex items-center justify-center"
+                                                                title="Reducir"
                                                             >
-                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraEnabled ? 'left-7' : 'left-1'}`} />
+                                                                <FiMinus size={14} />
+                                                            </button>
+                                                            <span className="flex-1 text-center font-mono text-xs text-[#c8aa6e] flex items-center justify-center h-full">
+                                                                {gridConfig.snapToGrid
+                                                                    ? `${parseFloat((token.width / gridConfig.cellWidth).toFixed(2))}x${parseFloat((token.height / gridConfig.cellHeight).toFixed(2))}`
+                                                                    : `${Math.round(token.width)}px`
+                                                                }
+                                                            </span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (gridConfig.snapToGrid) {
+                                                                        const cellW = gridConfig.cellWidth;
+                                                                        const cellH = gridConfig.cellHeight;
+                                                                        // Incrementar: 0.25 si < 1, 1 si >= 1
+                                                                        let newCellsW = (token.width / cellW) < 1 ? (token.width / cellW) + 0.25 : (token.width / cellW) + 1;
+
+                                                                        updateItem(token.id, {
+                                                                            width: newCellsW * cellW,
+                                                                            height: newCellsW * cellH
+                                                                        });
+                                                                    } else {
+                                                                        const step = 20;
+                                                                        updateItem(token.id, { width: token.width + step, height: token.height + step });
+                                                                    }
+                                                                }}
+                                                                className="h-full px-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-800 flex items-center justify-center"
+                                                                title="Aumentar"
+                                                            >
+                                                                <FiPlus size={14} />
                                                             </button>
                                                         </div>
+                                                    </div>
+                                                </div>
 
-                                                        {token.auraEnabled && (
-                                                            <>
-                                                                {/* Color del Aura */}
-                                                                <div className="space-y-3 pt-2">
-                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Color del Aura</span>
-                                                                    <div className="flex gap-2">
-                                                                        {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#a855f7', '#ffffff'].map(c => (
-                                                                            <button
-                                                                                key={c}
-                                                                                onClick={() => updateItem(token.id, { auraColor: c })}
-                                                                                className={`w-6 h-6 rounded-full border transition-all ${token.auraColor === c ? 'border-white scale-110' : 'border-transparent'}`}
-                                                                                style={{ backgroundColor: c }}
-                                                                            />
-                                                                        ))}
+                                                {/* Future Links (Solo para personas/tokens reales) */}
+                                                {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Users size={12} /> Control de Jugador
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {existingPlayers.map(player => {
+                                                                const isControlled = token.controlledBy?.includes(player);
+                                                                return (
+                                                                    <div
+                                                                        key={player}
+                                                                        onClick={() => {
+                                                                            const isSelf = isPlayerView && player === playerName;
+                                                                            if (isSelf && isControlled) return;
+
+                                                                            const currentControlled = token.controlledBy || [];
+                                                                            const nextControlled = isControlled
+                                                                                ? currentControlled.filter(p => p !== player)
+                                                                                : [...currentControlled, player];
+                                                                            updateItem(token.id, { controlledBy: nextControlled });
+                                                                        }}
+                                                                        className={`w-full flex items-center justify-between p-2 rounded border transition-all ${isControlled ? (isPlayerView && player === playerName ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]/50 cursor-not-allowed' : 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50') : 'bg-slate-900/50 border-slate-800 cursor-pointer'} ${isControlled ? 'text-[#f0e6d2]' : 'text-slate-500'}`}
+                                                                    >
+                                                                        <span className="text-[10px] font-bold uppercase tracking-wider">{player}</span>
+                                                                        {isControlled ? (
+                                                                            <Check className="w-3 h-3 text-[#c8aa6e]" />
+                                                                        ) : (
+                                                                            <div className="w-3 h-3 rounded-full border border-slate-700" />
+                                                                        )}
                                                                     </div>
-                                                                </div>
+                                                                );
+                                                            })}
+                                                            {existingPlayers.length === 0 && (
+                                                                <p className="text-[8px] text-slate-600 uppercase text-center italic">No hay jugadores disponibles</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
 
-                                                                {/* Radio del Aura (en celdas) */}
+                                                {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Activity size={12} /> Visión y Niebla
+                                                        </h4>
+
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Emite Visión</span>
+                                                                    <span className="text-[8px] text-slate-600 italic">Despeja la niebla alrededor</span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => updateItem(token.id, { hasVision: !token.hasVision })}
+                                                                    className={`w-12 h-6 rounded-full transition-all relative ${token.hasVision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasVision ? 'left-7' : 'left-1'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            {token.hasVision && (
                                                                 <div className="space-y-3 pt-2">
                                                                     <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
-                                                                        <span className="text-slate-500">Alcance (Celdas)</span>
-                                                                        <span className="text-[#c8aa6e] font-mono">{token.auraRadius || 1}</span>
+                                                                        <span className="text-slate-500">Radio de Visión</span>
+                                                                        <span className="text-[#c8aa6e] font-mono">{token.visionRadius || 300}px</span>
                                                                     </div>
                                                                     <input
                                                                         type="range"
-                                                                        min="0.5" max="5" step="0.5"
-                                                                        value={token.auraRadius || 1}
-                                                                        onChange={(e) => updateItem(token.id, { auraRadius: Number(e.target.value) })}
+                                                                        min="50" max="1500" step="50"
+                                                                        value={token.visionRadius || 300}
+                                                                        onChange={(e) => updateItem(token.id, { visionRadius: Number(e.target.value) })}
                                                                         className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                                                     />
                                                                 </div>
+                                                            )}
 
-                                                                {/* Aura Pulsante */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Efecto Pulsante</span>
-                                                                    <button
-                                                                        onClick={() => updateItem(token.id, { auraStyle: token.auraStyle === 'pulse' ? 'solid' : 'pulse' })}
-                                                                        className={`w-12 h-6 rounded-full transition-all relative ${token.auraStyle === 'pulse' ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
-                                                                    >
-                                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraStyle === 'pulse' ? 'left-7' : 'left-1'}`} />
-                                                                    </button>
+                                                            <div className="w-full h-px bg-slate-800/30 my-2"></div>
+
+                                                            {/* VISIÓN EN LA OSCURIDAD */}
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Visión en Oscuridad</span>
+                                                                        <div className="bg-[#c8aa6e]/10 border border-[#c8aa6e]/30 text-[#c8aa6e] text-[7px] px-1 rounded uppercase font-bold tracking-tighter">RACIAL</div>
+                                                                    </div>
+                                                                    <span className="text-[8px] text-slate-600 italic">Ignora la oscuridad ambiental</span>
                                                                 </div>
-                                                            </>
-                                                        )}
+                                                                <button
+                                                                    onClick={() => updateItem(token.id, { hasDarkvision: !token.hasDarkvision })}
+                                                                    className={`w-12 h-6 rounded-full transition-all relative ${token.hasDarkvision ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.hasDarkvision ? 'left-7' : 'left-1'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            {token.hasDarkvision && (
+                                                                <div className="space-y-3 pt-2">
+                                                                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                        <span className="text-slate-500">Alcance Oscuridad</span>
+                                                                        <span className="text-[#c8aa6e] font-mono">{token.darkvisionRadius || 300}px</span>
+                                                                    </div>
+                                                                    <input
+                                                                        type="range"
+                                                                        min="50" max="1500" step="50"
+                                                                        value={token.darkvisionRadius || 300}
+                                                                        onChange={(e) => updateItem(token.id, { darkvisionRadius: Number(e.target.value) })}
+                                                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
 
+
+
+                                                {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50">
+                                                        <TokenResources
+                                                            token={token}
+                                                            onUpdate={(updates) => updateItem(token.id, updates)}
+                                                        />
+                                                    </div>
+                                                )}
+
+
+
+                                                {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
+                                                {token.type === 'light' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Sparkles size={12} /> Propiedades del Foco
+                                                        </h4>
+
+                                                        {/* Radio de Luz */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className="text-slate-500">Alcance (Px)</span>
+                                                                <span className="text-[#c8aa6e] font-mono">{token.radius}px</span>
+                                                            </div>
+                                                            <input
+                                                                type="range"
+                                                                min="50" max="1000" step="10"
+                                                                value={token.radius || 200}
+                                                                onChange={(e) => updateItem(token.id, { radius: Number(e.target.value) })}
+                                                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                            />
+                                                        </div>
+
+                                                        {/* Snap Toggle para Luz */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
+                                                                <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { snapToGrid: !token.snapToGrid })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Parpadeo (Flicker) Toggle */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Animación de Parpadeo</span>
+                                                                    <div className="bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[7px] px-1 rounded uppercase font-bold tracking-tighter">BETA</div>
+                                                                </div>
+                                                                <span className="text-[9px] text-slate-600">Simula el movimiento de una antorcha</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { flicker: !token.flicker })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.flicker ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.flicker ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Color de la Luz */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className="text-slate-500">Tono de Iluminación</span>
+                                                                <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.color }}></div>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                {['#fff1ae', '#ffafae', '#aebcff', '#ccffae', '#ffffff'].map(c => (
+                                                                    <button
+                                                                        key={c}
+                                                                        onClick={() => updateItem(token.id, { color: c })}
+                                                                        className={`flex-1 h-8 rounded border transition-all ${token.color === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:border-white/30'}`}
+                                                                        style={{ backgroundColor: c }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* CONFIGURACIÓN DE MURO (Solo si ES un muro) */}
+                                                {token.type === 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <PenTool size={12} /> Propiedades del Muro
+                                                        </h4>
+
+                                                        {/* Snap Toggle para Muro */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
+                                                                <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { snapToGrid: token.snapToGrid === false ? true : false })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid !== false ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid !== false ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Grosor del Muro */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className="text-slate-500">Grosor del Collider</span>
+                                                                <span className="text-[#c8aa6e] font-mono">{token.thickness || 4}px</span>
+                                                            </div>
+                                                            <input
+                                                                type="range"
+                                                                min="1" max="20" step="1"
+                                                                value={token.thickness || 4}
+                                                                onChange={(e) => updateItem(token.id, { thickness: Number(e.target.value) })}
+                                                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Estados Alterados (Solo para tokens reales) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-3">
+                                                        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
+                                                        <EstadoSelector
+                                                            selected={token.status || []}
+                                                            onToggle={(statusId) => {
+                                                                const currentStatus = token.status || [];
+                                                                const newStatus = currentStatus.includes(statusId)
+                                                                    ? currentStatus.filter(s => s !== statusId)
+                                                                    : [...currentStatus, statusId];
+                                                                updateItem(token.id, { status: newStatus });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* AURAS E INDICADORES (Solo para tokens reales) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Sparkles size={12} /> Aura de Estado
+                                                        </h4>
+
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Activar Aura</span>
+                                                                    <span className="text-[8px] text-slate-600 italic">Efecto visual bajo el token</span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => updateItem(token.id, { auraEnabled: !token.auraEnabled })}
+                                                                    className={`w-12 h-6 rounded-full transition-all relative ${token.auraEnabled ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraEnabled ? 'left-7' : 'left-1'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            {token.auraEnabled && (
+                                                                <>
+                                                                    {/* Color del Aura */}
+                                                                    <div className="space-y-3 pt-2">
+                                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Color del Aura</span>
+                                                                        <div className="flex gap-2">
+                                                                            {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#a855f7', '#ffffff'].map(c => (
+                                                                                <button
+                                                                                    key={c}
+                                                                                    onClick={() => updateItem(token.id, { auraColor: c })}
+                                                                                    className={`w-6 h-6 rounded-full border transition-all ${token.auraColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                                                                    style={{ backgroundColor: c }}
+                                                                                />
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Radio del Aura (en celdas) */}
+                                                                    <div className="space-y-3 pt-2">
+                                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                            <span className="text-slate-500">Alcance (Celdas)</span>
+                                                                            <span className="text-[#c8aa6e] font-mono">{token.auraRadius || 1}</span>
+                                                                        </div>
+                                                                        <input
+                                                                            type="range"
+                                                                            min="0.5" max="5" step="0.5"
+                                                                            value={token.auraRadius || 1}
+                                                                            onChange={(e) => updateItem(token.id, { auraRadius: Number(e.target.value) })}
+                                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Aura Pulsante */}
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Efecto Pulsante</span>
+                                                                        <button
+                                                                            onClick={() => updateItem(token.id, { auraStyle: token.auraStyle === 'pulse' ? 'solid' : 'pulse' })}
+                                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.auraStyle === 'pulse' ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                        >
+                                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.auraStyle === 'pulse' ? 'left-7' : 'left-1'}`} />
+                                                                        </button>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })()}
+                                    );
+                                })()}
+                            </div>
+
+
+                            {!isPlayerView && (
+                                <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
+                                    <button
+                                        onClick={saveCurrentScenario}
+                                        disabled={isSaving}
+                                        className={`group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                    >
+                                        {/* EFECTO DE BRILLO (Shine effect) - Solo si no está guardando */}
+                                        {!isSaving && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
+
+                                        <span className="relative z-10 drop-shadow-md flex items-center justify-center gap-3">
+                                            {isSaving ? (
+                                                <>
+                                                    <RotateCw className="w-5 h-5 animate-spin" />
+                                                    Guardando...
+                                                </>
+                                            ) : (
+                                                'Confirmar Cambios'
+                                            )}
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
+                        {/* --- Controles de Capas y Zoom Flotantes --- */}
+                        <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
 
-                        <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
-                            <button
-                                onClick={saveCurrentScenario}
-                                disabled={isSaving}
-                                className={`group relative w-full py-5 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:shadow-[0_0_25px_rgba(200,170,110,0.5)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                {/* EFECTO DE BRILLO (Shine effect) - Solo si no está guardando */}
-                                {!isSaving && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
+                            {/* Herramientas de Edición (Solo visibles en capa iluminación y para Master) */}
+                            {!isPlayerView && (
+                                <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                                    {/* Herramienta Muros */}
+                                    <button
+                                        onClick={() => setIsDrawingWall(!isDrawingWall)}
+                                        className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
+                                        title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
+                                    >
+                                        <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
 
-                                <span className="relative z-10 drop-shadow-md flex items-center justify-center gap-3">
-                                    {isSaving ? (
-                                        <>
-                                            <RotateCw className="w-5 h-5 animate-spin" />
-                                            Guardando...
-                                        </>
-                                    ) : (
-                                        'Confirmar Cambios'
-                                    )}
-                                </span>
-                            </button>
-                        </div>
-                    </div>
+                                    {/* Botón para añadir LUZ */}
+                                    <button
+                                        onClick={() => addLightToCanvas()}
+                                        className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Foco de Luz"
+                                    >
+                                        <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+                                </div>
+                            )}
 
-                    {/* --- Controles de Capas y Zoom Flotantes --- */}
-                    <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
+                            {/* Selector de Capas (Sólo Master) */}
+                            {!isPlayerView && (
+                                <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
+                                    <button
+                                        onClick={() => {
+                                            setActiveLayer('LIGHTING');
+                                            setSelectedTokenIds([]);
+                                            setIsDrawingWall(false);
+                                        }}
+                                        className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                        title="Capa de Iluminación"
+                                    >
+                                        <Lightbulb size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setActiveLayer('TABLETOP');
+                                            setSelectedTokenIds([]);
+                                            setIsDrawingWall(false);
+                                        }}
+                                        className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                        title="Capa de Mesa (Tokens)"
+                                    >
+                                        <LayoutGrid size={20} />
+                                    </button>
+                                </div>
+                            )}
 
-                        {/* Herramientas de Edición (Solo visibles en capa iluminación) */}
-                        <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
-                            {/* Herramienta Muros */}
-                            <button
-                                onClick={() => setIsDrawingWall(!isDrawingWall)}
-                                className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
-                                title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
-                            >
-                                <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
-                            </button>
-
-                            {/* Botón para añadir LUZ */}
-                            <button
-                                onClick={() => addLightToCanvas()}
-                                className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
-                                title="Añadir Foco de Luz"
-                            >
-                                <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
-                            </button>
-                        </div>
-
-                        {/* Selector de Capas */}
-                        <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('LIGHTING');
-                                    setSelectedTokenIds([]);
-                                    setIsDrawingWall(false);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Iluminación"
-                            >
-                                <Lightbulb size={20} />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveLayer('TABLETOP');
-                                    setSelectedTokenIds([]);
-                                    setIsDrawingWall(false);
-                                }}
-                                className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
-                                title="Capa de Mesa (Tokens)"
-                            >
-                                <LayoutGrid size={20} />
-                            </button>
-                        </div>
-
-                        <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
-                            <button
-                                onClick={() => setZoom(prev => Math.min(prev + 0.1, 5))}
-                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                                title="Zoom In"
-                            >
-                                <FiPlus size={20} />
-                            </button>
-                            <div className="w-4 h-px bg-slate-700 my-1"></div>
-                            <button
-                                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.1))}
-                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                                title="Zoom Out"
-                            >
-                                <FiMinus size={20} />
-                            </button>
-                        </div>
-                        <div className="bg-[#1a1b26]/90 border border-[#c8aa6e]/20 rounded px-3 py-1 text-[10px] text-[#c8aa6e] text-center font-mono">
-                            {Math.round(zoom * 100)}%
-                        </div>
-                    </div>
-
-                    {/* --- Instrucciones Rápidas --- */}
-                    <div className="absolute bottom-8 left-8 z-50 pointer-events-none opacity-50">
-                        <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
-                            <FiMove />
-                            <span>Click Central + Arrastrar para Mover</span>
-                        </div>
-                    </div>
-
-                    {/* --- VIEWPORT (Área visible) --- */}
-                    <div
-                        ref={containerRef}
-                        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing touch-none"
-                        onMouseDown={handleCanvasBackgroundMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                        onTouchStart={handleTouchStart}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={handleTouchEnd}
-                        onContextMenu={(e) => e.preventDefault()}
-                    >
-                        {/* --- SELECTION BOX RENDER (Screen Space Overlay) --- */}
-                        {selectionBox && (
-                            <div
-                                className="absolute border border-[#c8aa6e] bg-[#c8aa6e]/10 pointer-events-none z-50"
-                                style={{
-                                    left: Math.min(selectionBox.start.x, selectionBox.current.x) - (containerRef.current?.getBoundingClientRect().left || 0),
-                                    top: Math.min(selectionBox.start.y, selectionBox.current.y) - (containerRef.current?.getBoundingClientRect().top || 0),
-                                    width: Math.abs(selectionBox.current.x - selectionBox.start.x),
-                                    height: Math.abs(selectionBox.current.y - selectionBox.start.y)
-                                }}
-                            />
-                        )}
-
-                        {/* --- WORLD (Contenedor Transformado) --- */}
-                        <div
-                            style={{
-                                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-                                width: `${WORLD_SIZE}px`,
-                                height: `${WORLD_SIZE}px`,
-                                transformOrigin: 'center center',
-                                position: 'absolute',
-                                left: '50%',
-                                top: '50%',
-                                marginLeft: `${-WORLD_SIZE / 2}px`,
-                                marginTop: `${-WORLD_SIZE / 2}px`,
-                                pointerEvents: 'none' // Evita interferir con los eventos del viewport
-                            }}
-                        >
-
-                            {/* --- GRID LAYER (SVG) --- */}
-                            {/* Contenedor del SVG: Si es finito, lo centramos en el mundo */}
-                            <div className={`absolute ${gridConfig.isInfinite ? 'inset-0' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'}`}
-                                style={!gridConfig.isInfinite ? { width: finiteGridWidth, height: finiteGridHeight } : {}}
-                            >
-                                <svg
-                                    width="100%"
-                                    height="100%"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="overflow-visible pointer-events-none transition-all duration-300 relative"
+                            <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
+                                <button
+                                    onClick={() => setZoom(prev => Math.min(prev + 0.1, 5))}
+                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                                    title="Zoom In"
                                 >
-                                    {/* IMAGEN DE FONDO (Solo si es finito y existe) */}
-                                    {!gridConfig.isInfinite && gridConfig.backgroundImage && (
-                                        <foreignObject width="100%" height="100%" x="0" y="0">
-                                            <img
-                                                src={gridConfig.backgroundImage}
-                                                alt="Map Background"
-                                                className="w-full h-full object-cover"
-                                                style={{ pointerEvents: 'none', userSelect: 'none' }}
-                                            />
-                                        </foreignObject>
-                                    )}
+                                    <FiPlus size={20} />
+                                </button>
+                                <div className="w-4 h-px bg-slate-700 my-1"></div>
+                                <button
+                                    onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.1))}
+                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                                    title="Zoom Out"
+                                >
+                                    <FiMinus size={20} />
+                                </button>
+                            </div>
+                            <div className="bg-[#1a1b26]/90 border border-[#c8aa6e]/20 rounded px-3 py-1 text-[10px] text-[#c8aa6e] text-center font-mono">
+                                {Math.round(zoom * 100)}%
+                            </div>
+                        </div>
 
-                                    <defs>
-                                        {/* Patrón de Rejilla Pequeña (La celda base) */}
-                                        <pattern
-                                            id="grid-pattern"
-                                            width={gridConfig.cellWidth}
-                                            height={gridConfig.cellHeight}
-                                            patternUnits="userSpaceOnUse"
-                                        >
-                                            {/* Líneas de la rejilla */}
-                                            <path
-                                                d={`M ${gridConfig.cellWidth} 0 L 0 0 0 ${gridConfig.cellHeight}`}
-                                                fill="none"
-                                                stroke={gridConfig.color}
-                                                strokeWidth={gridConfig.lineWidth}
-                                                strokeOpacity={gridConfig.opacity}
-                                                strokeDasharray={
-                                                    gridConfig.lineType === 'dashed' ? '5,5' :
-                                                        gridConfig.lineType === 'dotted' ? '1,3' :
-                                                            'none'
-                                                }
-                                            />
-                                        </pattern>
-                                    </defs>
+                        {/* --- Instrucciones Rápidas --- */}
+                        <div className="absolute bottom-8 left-8 z-50 pointer-events-none opacity-50">
+                            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+                                <FiMove />
+                                <span>Click Central + Arrastrar para Mover</span>
+                            </div>
+                        </div>
 
-                                    {/* Rectángulo que rellena con el patrón */}
-                                    <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+                        {/* --- VIEWPORT (Área visible) --- */}
+                        <div
+                            ref={containerRef}
+                            className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing touch-none"
+                            onMouseDown={handleCanvasBackgroundMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseUp}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            onContextMenu={(e) => e.preventDefault()}
+                        >
+                            {/* --- SELECTION BOX RENDER (Screen Space Overlay) --- */}
+                            {selectionBox && (
+                                <div
+                                    className="absolute border border-[#c8aa6e] bg-[#c8aa6e]/10 pointer-events-none z-50"
+                                    style={{
+                                        left: Math.min(selectionBox.start.x, selectionBox.current.x) - (containerRef.current?.getBoundingClientRect().left || 0),
+                                        top: Math.min(selectionBox.start.y, selectionBox.current.y) - (containerRef.current?.getBoundingClientRect().top || 0),
+                                        width: Math.abs(selectionBox.current.x - selectionBox.start.x),
+                                        height: Math.abs(selectionBox.current.y - selectionBox.start.y)
+                                    }}
+                                />
+                            )}
 
-                                    {/* Borde del Grid (Visible especialmente si es Finito) */}
-                                    <rect
+                            {/* --- WORLD (Contenedor Transformado) --- */}
+                            <div
+                                style={{
+                                    transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                                    width: `${WORLD_SIZE}px`,
+                                    height: `${WORLD_SIZE}px`,
+                                    transformOrigin: 'center center',
+                                    position: 'absolute',
+                                    left: '50%',
+                                    top: '50%',
+                                    marginLeft: `${-WORLD_SIZE / 2}px`,
+                                    marginTop: `${-WORLD_SIZE / 2}px`,
+                                    pointerEvents: 'none' // Evita interferir con los eventos del viewport
+                                }}
+                            >
+
+                                {/* --- GRID LAYER (SVG) --- */}
+                                {/* Contenedor del SVG: Si es finito, lo centramos en el mundo */}
+                                <div className={`absolute ${gridConfig.isInfinite ? 'inset-0' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'}`}
+                                    style={!gridConfig.isInfinite ? { width: finiteGridWidth, height: finiteGridHeight } : {}}
+                                >
+                                    <svg
                                         width="100%"
                                         height="100%"
-                                        fill="none"
-                                        stroke="#c8aa6e"
-                                        strokeWidth="2"
-                                        strokeOpacity={gridConfig.isInfinite ? "0.1" : "0.5"}
-                                    />
-                                </svg>
-                            </div>
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="overflow-visible pointer-events-none transition-all duration-300 relative"
+                                    >
+                                        {/* IMAGEN DE FONDO (Solo si es finito y existe) */}
+                                        {!gridConfig.isInfinite && gridConfig.backgroundImage && (
+                                            <foreignObject width="100%" height="100%" x="0" y="0">
+                                                <img
+                                                    src={gridConfig.backgroundImage}
+                                                    alt="Map Background"
+                                                    className="w-full h-full object-cover"
+                                                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                                                />
+                                            </foreignObject>
+                                        )}
 
-                            {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
-                            {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
-                            <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
-                                {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
-                            </div>
+                                        <defs>
+                                            {/* Patrón de Rejilla Pequeña (La celda base) */}
+                                            <pattern
+                                                id="grid-pattern"
+                                                width={gridConfig.cellWidth}
+                                                height={gridConfig.cellHeight}
+                                                patternUnits="userSpaceOnUse"
+                                            >
+                                                {/* Líneas de la rejilla */}
+                                                <path
+                                                    d={`M ${gridConfig.cellWidth} 0 L 0 0 0 ${gridConfig.cellHeight}`}
+                                                    fill="none"
+                                                    stroke={gridConfig.color}
+                                                    strokeWidth={gridConfig.lineWidth}
+                                                    strokeOpacity={gridConfig.opacity}
+                                                    strokeDasharray={
+                                                        gridConfig.lineType === 'dashed' ? '5,5' :
+                                                            gridConfig.lineType === 'dotted' ? '1,3' :
+                                                                'none'
+                                                    }
+                                                />
+                                            </pattern>
+                                        </defs>
 
-                            {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
-                            {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
-                            <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                <svg width="100%" height="100%" className="overflow-visible pointer-events-none transition-all duration-300 relative">
-                                    {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
-                                    <rect
-                                        x={mapX - bleed}
-                                        y={mapY - bleed}
-                                        width={mapBounds.width + bleed * 2}
-                                        height={mapBounds.height + bleed * 2}
-                                        fill="black"
-                                        mask="url(#lighting-mask)"
-                                        style={{
-                                            opacity: gridConfig.ambientDarkness || 0,
-                                            transition: 'opacity 0.3s ease-in-out'
-                                        }}
-                                    />
+                                        {/* Rectángulo que rellena con el patrón */}
+                                        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
 
-                                    {/* CAPA 2: NIEBLA DE GUERRA (Línea de Visión) */}
-                                    {gridConfig.fogOfWar && (
+                                        {/* Borde del Grid (Visible especialmente si es Finito) */}
+                                        <rect
+                                            width="100%"
+                                            height="100%"
+                                            fill="none"
+                                            stroke="#c8aa6e"
+                                            strokeWidth="2"
+                                            strokeOpacity={gridConfig.isInfinite ? "0.1" : "0.5"}
+                                        />
+                                    </svg>
+                                </div>
+
+                                {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
+                                {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
+                                <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                    {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
+                                    {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
+                                </div>
+
+                                {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
+                                {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
+                                <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                    <svg width="100%" height="100%" className="overflow-visible pointer-events-none transition-all duration-300 relative">
+                                        {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
                                         <rect
                                             x={mapX - bleed}
                                             y={mapY - bleed}
                                             width={mapBounds.width + bleed * 2}
                                             height={mapBounds.height + bleed * 2}
                                             fill="black"
-                                            mask="url(#fog-mask)"
+                                            mask="url(#lighting-mask)"
                                             style={{
-                                                opacity: activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8,
+                                                opacity: gridConfig.ambientDarkness || 0,
                                                 transition: 'opacity 0.3s ease-in-out'
                                             }}
                                         />
-                                    )}
-                                </svg>
-                            </div>
 
-                            {/* PREVISUALIZACIÓN DE MURO (DIBUJO) */}
-                            {isDrawingWall && wallDrawingStart && wallDrawingCurrent && (
-                                <div className="absolute inset-0 pointer-events-none z-40">
-                                    <svg width="100%" height="100%" className="overflow-visible">
-                                        {/* Línea de previsualización (Dorada discontinua) */}
-                                        <line
-                                            x1={wallDrawingStart.x}
-                                            y1={wallDrawingStart.y}
-                                            x2={wallDrawingCurrent.x}
-                                            y2={wallDrawingCurrent.y}
-                                            stroke="#c8aa6e"
-                                            strokeWidth="3"
-                                            strokeDasharray="6 4"
-                                            strokeLinecap="round"
-                                        />
-                                        {/* Handles de inicio y fin */}
-                                        <circle cx={wallDrawingStart.x} cy={wallDrawingStart.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
-                                        <rect x={wallDrawingStart.x - 4} y={wallDrawingStart.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
-
-                                        <circle cx={wallDrawingCurrent.x} cy={wallDrawingCurrent.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
-                                        <rect x={wallDrawingCurrent.x - 4} y={wallDrawingCurrent.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
+                                        {/* CAPA 2: NIEBLA DE GUERRA (Línea de Visión) */}
+                                        {gridConfig.fogOfWar && (
+                                            <rect
+                                                x={mapX - bleed}
+                                                y={mapY - bleed}
+                                                width={mapBounds.width + bleed * 2}
+                                                height={mapBounds.height + bleed * 2}
+                                                fill="black"
+                                                mask="url(#fog-mask)"
+                                                style={{
+                                                    opacity: isPlayerView
+                                                        ? 1
+                                                        : (activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
+                                                    transition: 'opacity 0.3s ease-in-out'
+                                                }}
+                                            />
+                                        )}
                                     </svg>
                                 </div>
-                            )}
 
-                            {/* DARKNESS OVERLAY (SVG Masked) */}
-                            <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                <svg width="100%" height="100%" className="overflow-visible">
-                                    <defs>
-                                        {/* MÁSCARA 1: ILUMINACIÓN (Solo Luces) */}
-                                        <mask id="lighting-mask">
-                                            <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
-                                            {/* Si hay un observador, las luces de ambiente solo se ven si el observador las ve */}
-                                            <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                                {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                    const original = tokenOriginalPos[light.id];
-                                                    const lx = (isInteracting && original) ? original.x : light.x;
-                                                    const ly = (isInteracting && original) ? original.y : light.y;
+                                {/* PREVISUALIZACIÓN DE MURO (DIBUJO) */}
+                                {isDrawingWall && wallDrawingStart && wallDrawingCurrent && (
+                                    <div className="absolute inset-0 pointer-events-none z-40">
+                                        <svg width="100%" height="100%" className="overflow-visible">
+                                            {/* Línea de previsualización (Dorada discontinua) */}
+                                            <line
+                                                x1={wallDrawingStart.x}
+                                                y1={wallDrawingStart.y}
+                                                x2={wallDrawingCurrent.x}
+                                                y2={wallDrawingCurrent.y}
+                                                stroke="#c8aa6e"
+                                                strokeWidth="3"
+                                                strokeDasharray="6 4"
+                                                strokeLinecap="round"
+                                            />
+                                            {/* Handles de inicio y fin */}
+                                            <circle cx={wallDrawingStart.x} cy={wallDrawingStart.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
+                                            <rect x={wallDrawingStart.x - 4} y={wallDrawingStart.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
 
-                                                    return (
-                                                        <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                            <circle
-                                                                cx={lx + (light.width / 2)}
-                                                                cy={ly + (light.height / 2)}
-                                                                r={light.radius || 200}
-                                                                fill={`url(#grad-light-${light.id})`}
-                                                                className={light.flicker ? 'animate-flicker' : ''}
-                                                            />
-                                                        </g>
-                                                    );
-                                                })}
-                                            </g>
+                                            <circle cx={wallDrawingCurrent.x} cy={wallDrawingCurrent.y} r={7} fill="none" stroke="white" strokeWidth={1.5} />
+                                            <rect x={wallDrawingCurrent.x - 4} y={wallDrawingCurrent.y - 4} width={8} height={8} fill="#1e293b" stroke="white" />
+                                        </svg>
+                                    </div>
+                                )}
 
-                                            {/* VISIÓN EN LA OSCURIDAD: Substraemos las áreas que el observador ve en la oscuridad */}
-                                            {activeScenario?.items?.filter(i => {
-                                                const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
-                                                if (!isToken) return false;
+                                {/* DARKNESS OVERLAY (SVG Masked) */}
+                                <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                    <svg width="100%" height="100%" className="overflow-visible">
+                                        <defs>
+                                            {/* MÁSCARA 1: ILUMINACIÓN (Solo Luces) */}
+                                            <mask id="lighting-mask">
+                                                <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                                {/* Si hay un observador, las luces de ambiente solo se ven si el observador las ve */}
+                                                <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
+                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                        const original = tokenOriginalPos[light.id];
+                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                        const ly = (isInteracting && original) ? original.y : light.y;
 
-                                                // Si hay algo seleccionado (GM Mode / Player perspective), 
-                                                // solo mostramos la visión en oscuridad de lo que está seleccionado
-                                                if (selectedTokenIds.length > 0) {
-                                                    return selectedTokenIds.includes(i.id);
-                                                }
-                                                return true;
-                                            }).map(token => {
-                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                const original = tokenOriginalPos[token.id];
-                                                const tx = (isInteracting && original) ? original.x : token.x;
-                                                const ty = (isInteracting && original) ? original.y : token.y;
+                                                        return (
+                                                            <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                <circle
+                                                                    cx={lx + (light.width / 2)}
+                                                                    cy={ly + (light.height / 2)}
+                                                                    r={light.radius || 200}
+                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                    className={light.flicker ? 'animate-flicker' : ''}
+                                                                />
+                                                            </g>
+                                                        );
+                                                    })}
+                                                </g>
 
-                                                return (
-                                                    <g key={`darkvision-hole-ambient-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
-                                                        <circle
-                                                            cx={tx + (token.width / 2)}
-                                                            cy={ty + (token.height / 2)}
-                                                            r={token.darkvisionRadius || 300}
-                                                            fill={`url(#grad-darkvision-${token.id})`}
-                                                        />
-                                                    </g>
-                                                );
-                                            })}
-                                        </mask>
-
-                                        {/* MÁSCARA 2: NIEBLA DE GUERRA (Visión + Luces) */}
-                                        <mask id="fog-mask">
-                                            <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
-                                            {/* Vision de los Tokens: Filtrado por selección para el Master */}
-                                            {(() => {
-                                                const hasTokenSelected = activeScenario?.items?.some(s =>
-                                                    selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
-                                                );
-
-                                                return activeScenario?.items?.filter(i => {
-                                                    const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasVision;
+                                                {/* VISIÓN EN LA OSCURIDAD: Substraemos las áreas que el observador ve en la oscuridad */}
+                                                {activeScenario?.items?.filter(i => {
+                                                    const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
                                                     if (!isToken) return false;
 
-                                                    // Solo activamos el modo perspectiva si lo que hemos seleccionado es un token con visión
-                                                    if (hasTokenSelected) {
+                                                    // Restricción de Jugador: Solo ve su propia visión en oscuridad
+                                                    const isControlled = !isPlayerView || i.controlledBy?.includes(playerName);
+                                                    if (!isControlled) return false;
+
+                                                    // Si hay algo seleccionado (Focus Mode), solo mostramos esa visión
+                                                    if (selectedTokenIds.length > 0) {
                                                         return selectedTokenIds.includes(i.id);
                                                     }
                                                     return true;
@@ -3295,177 +3647,215 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                                                     const ty = (isInteracting && original) ? original.y : token.y;
 
                                                     return (
-                                                        <g key={`vision-hole-fog-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                        <g key={`darkvision-hole-ambient-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
                                                             <circle
                                                                 cx={tx + (token.width / 2)}
                                                                 cy={ty + (token.height / 2)}
-                                                                r={token.visionRadius || 300}
-                                                                fill={`url(#grad-vision-${token.id})`}
-                                                            />
-                                                        </g>
-                                                    );
-                                                });
-                                            })()}
-                                            {/* Luces (también revelan niebla siempre, pero filtradas por el observador) */}
-                                            <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                                {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                    const original = tokenOriginalPos[light.id];
-                                                    const lx = (isInteracting && original) ? original.x : light.x;
-                                                    const ly = (isInteracting && original) ? original.y : light.y;
-
-                                                    return (
-                                                        <g key={`light-hole-fog-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                            <circle
-                                                                cx={lx + (light.width / 2)}
-                                                                cy={ly + (light.height / 2)}
-                                                                r={light.radius || 200}
-                                                                fill={`url(#grad-light-${light.id})`}
-                                                                className={light.flicker ? 'animate-flicker' : ''}
+                                                                r={token.darkvisionRadius || 300}
+                                                                fill={`url(#grad-darkvision-${token.id})`}
                                                             />
                                                         </g>
                                                     );
                                                 })}
-                                            </g>
-                                        </mask>
+                                            </mask>
 
-                                        {/* Gradientes de Luz */}
-                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
-                                            <radialGradient id={`grad-light-${light.id}`} key={`grad-light-${light.id}`}>
-                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
-                                                <stop offset="80%" stopColor="black" stopOpacity="0.3" />
-                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
-                                            </radialGradient>
-                                        ))}
+                                            {/* MÁSCARA 2: NIEBLA DE GUERRA (Visión + Luces) */}
+                                            <mask id="fog-mask">
+                                                <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                                {/* Vision de los Tokens: Filtrado por selección para el Master */}
+                                                {(() => {
+                                                    // Determinar qué tokens otorgan visión al rol actual
+                                                    const perspectiveTokens = activeScenario?.items?.filter(i =>
+                                                        i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
+                                                        (isPlayerView ? i.controlledBy?.includes(playerName) : true)
+                                                    ) || [];
 
-                                        {/* Gradientes de Visión */}
-                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
-                                            <radialGradient id={`grad-vision-${token.id}`} key={`grad-vision-${token.id}`}>
-                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
-                                                <stop offset="85%" stopColor="black" stopOpacity="0.8" />
-                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
-                                            </radialGradient>
-                                        ))}
+                                                    // ¿Hay una selección que deba forzar el enfoque (perspective focus)?
+                                                    const selectedVisionTokens = perspectiveTokens.filter(i =>
+                                                        selectedTokenIds.includes(i.id)
+                                                    );
 
-                                        {/* Gradientes de Visión en la Oscuridad */}
-                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
-                                            <radialGradient id={`grad-darkvision-${token.id}`} key={`grad-darkvision-${token.id}`}>
-                                                <stop offset="0%" stopColor="black" stopOpacity="1" />
-                                                <stop offset="80%" stopColor="black" stopOpacity="0.4" />
-                                                <stop offset="100%" stopColor="black" stopOpacity="0" />
-                                            </radialGradient>
-                                        ))}
+                                                    // Si el jugador selecciona tokens propios con visión, activamos el enfoque exclusivo
+                                                    const visibleTokens = selectedVisionTokens.length > 0 ? selectedVisionTokens : perspectiveTokens;
 
-                                        {/* Máscaras de Sombra por Luz y por Token (Visión y Visión en Oscuridad) */}
-                                        {activeScenario?.items?.filter(i => i.type === 'light' || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall')).map(source => {
-                                            const isSourceInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(source.id);
-                                            const originalSource = tokenOriginalPos[source.id];
-                                            const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
-                                            const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
-                                            const walls = activeScenario.items.filter(i =>
-                                                i.type === 'wall' &&
-                                                !(i.wallType === 'door' && i.isOpen) &&
-                                                i.wallType !== 'window'
-                                            );
-
-                                            return (
-                                                <mask id={`shadow-mask-${source.id}`} key={`shadow-mask-${source.id}`}>
-                                                    <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
-                                                    {walls.map(wall => {
-                                                        const isWallInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(wall.id);
-                                                        const originalWall = tokenOriginalPos[wall.id];
-
-                                                        let x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
-                                                        if (isWallInteracting && originalWall) {
-                                                            const dx = wall.x - originalWall.x;
-                                                            const dy = wall.y - originalWall.y;
-                                                            x1 -= dx; y1 -= dy;
-                                                            x2 -= dx; y2 -= dy;
-                                                        }
+                                                    return visibleTokens.map(token => {
+                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                        const original = tokenOriginalPos[token.id];
+                                                        const tx = (isInteracting && original) ? original.x : token.x;
+                                                        const ty = (isInteracting && original) ? original.y : token.y;
 
                                                         return (
-                                                            <polygon
-                                                                key={`shadow-${source.id}-${wall.id}`}
-                                                                points={calculateShadowPoints(lx, ly, x1, y1, x2, y2)}
-                                                                fill="black"
-                                                            />
+                                                            <g key={`vision-hole-fog-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                                <circle
+                                                                    cx={tx + (token.width / 2)}
+                                                                    cy={ty + (token.height / 2)}
+                                                                    r={token.visionRadius || 300}
+                                                                    fill={`url(#grad-vision-${token.id})`}
+                                                                />
+                                                            </g>
+                                                        );
+                                                    });
+                                                })()}
+                                                {/* Luces (también revelan niebla siempre, pero filtradas por el observador) */}
+                                                <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
+                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                        const original = tokenOriginalPos[light.id];
+                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                        const ly = (isInteracting && original) ? original.y : light.y;
+
+                                                        return (
+                                                            <g key={`light-hole-fog-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                <circle
+                                                                    cx={lx + (light.width / 2)}
+                                                                    cy={ly + (light.height / 2)}
+                                                                    r={light.radius || 200}
+                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                    className={light.flicker ? 'animate-flicker' : ''}
+                                                                />
+                                                            </g>
                                                         );
                                                     })}
-                                                </mask>
-                                            );
-                                        })}
-                                    </defs>
-
-
-                                </svg>
-                            </div>
-
-                            {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor en la capa superior) */}
-                            <div className="absolute inset-0 pointer-events-none z-[45] overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                <svg width="100%" height="100%" className="overflow-visible">
-                                    <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                        {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                            const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                            const original = tokenOriginalPos[light.id];
-                                            const lx = (isInteracting && original) ? original.x : light.x;
-                                            const ly = (isInteracting && original) ? original.y : light.y;
-
-                                            return (
-                                                <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                    <defs>
-                                                        <radialGradient id={`visual-grad-${light.id}`}>
-                                                            <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
-                                                            <stop offset="70%" stopColor={light.color} stopOpacity="0" />
-                                                        </radialGradient>
-                                                    </defs>
-                                                    <circle
-                                                        cx={lx + light.width / 2}
-                                                        cy={ly + light.height / 2}
-                                                        r={(light.radius || 200) * 1.5}
-                                                        fill={`url(#visual-grad-${light.id})`}
-                                                        style={{ mixBlendMode: 'screen' }}
-                                                        className={light.flicker ? 'animate-flicker' : ''}
-                                                    />
                                                 </g>
-                                            );
-                                        })}
+                                            </mask>
 
-                                        {/* DARKVISION VISUAL TINT (Efecto sutil para diferenciar visión racial) */}
-                                        {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
-                                            // Solo mostramos el tinte si está seleccionado (perspectiva activa)
-                                            if (selectedTokenIds.length > 0 && !selectedTokenIds.includes(token.id)) return null;
+                                            {/* Gradientes de Luz */}
+                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                                <radialGradient id={`grad-light-${light.id}`} key={`grad-light-${light.id}`}>
+                                                    <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                    <stop offset="80%" stopColor="black" stopOpacity="0.3" />
+                                                    <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                                </radialGradient>
+                                            ))}
 
-                                            const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                            const original = tokenOriginalPos[token.id];
-                                            const tx = (isInteracting && original) ? original.x : token.x;
-                                            const ty = (isInteracting && original) ? original.y : token.y;
+                                            {/* Gradientes de Visión */}
+                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
+                                                <radialGradient id={`grad-vision-${token.id}`} key={`grad-vision-${token.id}`}>
+                                                    <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                    <stop offset="85%" stopColor="black" stopOpacity="0.8" />
+                                                    <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                                </radialGradient>
+                                            ))}
 
-                                            return (
-                                                <g key={`darkvision-glow-group-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
-                                                    <defs>
-                                                        <radialGradient id={`darkvision-visual-grad-${token.id}`}>
-                                                            <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.15" />
-                                                            <stop offset="80%" stopColor="#94a3b8" stopOpacity="0" />
-                                                        </radialGradient>
-                                                    </defs>
-                                                    <circle
-                                                        cx={tx + (token.width / 2)}
-                                                        cy={ty + (token.height / 2)}
-                                                        r={token.darkvisionRadius || 300}
-                                                        fill={`url(#darkvision-visual-grad-${token.id})`}
-                                                        style={{ mixBlendMode: 'soft-light' }}
-                                                    />
-                                                </g>
-                                            );
-                                        })}
-                                    </g>
-                                </svg>
+                                            {/* Gradientes de Visión en la Oscuridad */}
+                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
+                                                <radialGradient id={`grad-darkvision-${token.id}`} key={`grad-darkvision-${token.id}`}>
+                                                    <stop offset="0%" stopColor="black" stopOpacity="1" />
+                                                    <stop offset="80%" stopColor="black" stopOpacity="0.4" />
+                                                    <stop offset="100%" stopColor="black" stopOpacity="0" />
+                                                </radialGradient>
+                                            ))}
+
+                                            {/* Máscaras de Sombra por Luz y por Token (Visión y Visión en Oscuridad) */}
+                                            {activeScenario?.items?.filter(i => i.type === 'light' || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall')).map(source => {
+                                                const isSourceInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(source.id);
+                                                const originalSource = tokenOriginalPos[source.id];
+                                                const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
+                                                const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
+                                                const walls = activeScenario.items.filter(i =>
+                                                    i.type === 'wall' &&
+                                                    !(i.wallType === 'door' && i.isOpen) &&
+                                                    i.wallType !== 'window'
+                                                );
+
+                                                return (
+                                                    <mask id={`shadow-mask-${source.id}`} key={`shadow-mask-${source.id}`}>
+                                                        <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                                        {walls.map(wall => {
+                                                            const isWallInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(wall.id);
+                                                            const originalWall = tokenOriginalPos[wall.id];
+
+                                                            let x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
+                                                            if (isWallInteracting && originalWall) {
+                                                                const dx = wall.x - originalWall.x;
+                                                                const dy = wall.y - originalWall.y;
+                                                                x1 -= dx; y1 -= dy;
+                                                                x2 -= dx; y2 -= dy;
+                                                            }
+
+                                                            return (
+                                                                <polygon
+                                                                    key={`shadow-${source.id}-${wall.id}`}
+                                                                    points={calculateShadowPoints(lx, ly, x1, y1, x2, y2)}
+                                                                    fill="black"
+                                                                />
+                                                            );
+                                                        })}
+                                                    </mask>
+                                                );
+                                            })}
+                                        </defs>
+
+
+                                    </svg>
+                                </div>
+
+                                {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor en la capa superior) */}
+                                <div className="absolute inset-0 pointer-events-none z-[45] overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                    <svg width="100%" height="100%" className="overflow-visible">
+                                        <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
+                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
+                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                const original = tokenOriginalPos[light.id];
+                                                const lx = (isInteracting && original) ? original.x : light.x;
+                                                const ly = (isInteracting && original) ? original.y : light.y;
+
+                                                return (
+                                                    <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                        <defs>
+                                                            <radialGradient id={`visual-grad-${light.id}`}>
+                                                                <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
+                                                                <stop offset="70%" stopColor={light.color} stopOpacity="0" />
+                                                            </radialGradient>
+                                                        </defs>
+                                                        <circle
+                                                            cx={lx + light.width / 2}
+                                                            cy={ly + light.height / 2}
+                                                            r={(light.radius || 200) * 1.5}
+                                                            fill={`url(#visual-grad-${light.id})`}
+                                                            style={{ mixBlendMode: 'screen' }}
+                                                            className={light.flicker ? 'animate-flicker' : ''}
+                                                        />
+                                                    </g>
+                                                );
+                                            })}
+
+                                            {/* DARKVISION VISUAL TINT (Efecto sutil para diferenciar visión racial) */}
+                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
+                                                // Solo mostramos el tinte si está seleccionado (perspectiva activa)
+                                                if (selectedTokenIds.length > 0 && !selectedTokenIds.includes(token.id)) return null;
+
+                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                const original = tokenOriginalPos[token.id];
+                                                const tx = (isInteracting && original) ? original.x : token.x;
+                                                const ty = (isInteracting && original) ? original.y : token.y;
+
+                                                return (
+                                                    <g key={`darkvision-glow-group-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                        <defs>
+                                                            <radialGradient id={`darkvision-visual-grad-${token.id}`}>
+                                                                <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.15" />
+                                                                <stop offset="80%" stopColor="#94a3b8" stopOpacity="0" />
+                                                            </radialGradient>
+                                                        </defs>
+                                                        <circle
+                                                            cx={tx + (token.width / 2)}
+                                                            cy={ty + (token.height / 2)}
+                                                            r={token.darkvisionRadius || 300}
+                                                            fill={`url(#darkvision-visual-grad-${token.id})`}
+                                                            style={{ mixBlendMode: 'soft-light' }}
+                                                        />
+                                                    </g>
+                                                );
+                                            })}
+                                        </g>
+                                    </svg>
+                                </div>
+
                             </div>
-
                         </div>
-                    </div>
-                </>
-            )
+                    </>
+                )
             }
 
 
