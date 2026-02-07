@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -173,7 +173,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     // Tabs del Sidebar
-    const [activeTab, setActiveTab] = useState('CONFIG'); // 'CONFIG' | 'TOKENS'
+    const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
     const [tokens, setTokens] = useState([]);
     const [uploadingToken, setUploadingToken] = useState(false);
@@ -2046,7 +2046,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 >
                     <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col">
                         {isPlayerView ? (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 animate-pulse">
+                            <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8">
                                 <div className="relative">
                                     <div className="absolute inset-0 bg-[#c8aa6e]/20 blur-3xl rounded-full scale-150"></div>
                                     <ShieldCheck size={80} className="text-[#c8aa6e] relative z-10 drop-shadow-[0_0_15px_rgba(200,170,110,0.5)]" />
@@ -2063,7 +2063,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     onClick={onBack}
                                     className="px-8 py-3 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] font-fantasy uppercase tracking-widest rounded hover:bg-[#c8aa6e]/10 transition-all"
                                 >
-                                    Volver a Ficha
+                                    Volver a la ficha
                                 </button>
                             </div>
                         ) : (
@@ -2297,10 +2297,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     </button>
                                 )}
                                 {isPlayerView && (
-                                    <div className="flex-1 py-4 flex flex-col items-center gap-1 bg-[#c8aa6e]/5 text-[#c8aa6e] border-b-2 border-[#c8aa6e]">
-                                        <Activity className="w-4 h-4" />
-                                        <span className="text-[8px] font-bold uppercase">Jugador</span>
-                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab('TOKENS')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'TOKENS' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Sparkles className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Tokens</span>
+                                    </button>
                                 )}
                                 {selectedTokenIds.length === 1 && (
                                     <button
@@ -2315,8 +2318,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                             {/* Sidebar Content Wrapper */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
-                                {/* --- TAB: ACCESO --- */}
-                                {activeTab === 'ACCESS' && (
+                                {/* --- TAB: ACCESO (MASTER ONLY) --- */}
+                                {activeTab === 'ACCESS' && !isPlayerView && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                         <div className="space-y-2">
                                             <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
@@ -2391,8 +2394,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     </div>
                                 )}
 
-                                {/* --- TAB: CONFIGURACIÓN --- */}
-                                {activeTab === 'CONFIG' && (
+                                {/* --- TAB: CONFIGURACIÓN (MASTER ONLY) --- */}
+                                {activeTab === 'CONFIG' && !isPlayerView && (
                                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                         {/* 1. Modo de Mapa */}
                                         <div className="space-y-3">
@@ -2568,8 +2571,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     </div>
                                 )}
 
-                                {/* --- TAB: TOKENS --- */}
-                                {activeTab === 'TOKENS' && (
+                                {/* --- TAB: TOKENS (MASTER ONLY) --- */}
+                                {activeTab === 'TOKENS' && !isPlayerView && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                         <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
                                             <Sparkles className="w-3 h-3" />
@@ -2636,8 +2639,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                 <div className="w-full h-px bg-slate-800/50"></div>
 
-                                {/* 5. Estilo Visual */}
-                                {activeTab === 'CONFIG' && (
+                                {/* 5. Estilo Visual (MASTER ONLY) --- */}
+                                {activeTab === 'CONFIG' && !isPlayerView && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                         <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
                                             <Palette className="w-3 h-3" />
@@ -2791,6 +2794,68 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         </div>
                                     </div>
                                 )}
+
+
+                                {/* --- TAB: TOKENS (PLAYER ONLY: List of controlled tokens) --- */}
+                                {activeTab === 'TOKENS' && isPlayerView && (() => {
+                                    const controlledTokens = activeScenario?.items?.filter(i =>
+                                        i.controlledBy?.includes(playerName) && i.type !== 'light' && i.type !== 'wall'
+                                    ) || [];
+
+                                    return (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                            <div className="space-y-2">
+                                                <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                    <Activity className="w-3 h-3" />
+                                                    Tus Tokens en Juego
+                                                </h4>
+                                                <p className="text-[10px] text-slate-500 italic">Lista de personajes bajo tu control en este escenario.</p>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {controlledTokens.map(token => (
+                                                    <div
+                                                        key={token.id}
+                                                        onClick={() => {
+                                                            setSelectedTokenIds([token.id]);
+                                                            setActiveTab('INSPECTOR');
+                                                        }}
+                                                        className={`group flex items-center gap-4 bg-[#111827] border p-3 rounded-lg transition-all cursor-pointer ${selectedTokenIds.includes(token.id) ? 'border-[#c8aa6e] bg-[#c8aa6e]/5' : 'border-slate-800 hover:border-slate-700'}`}
+                                                    >
+                                                        <div className="w-10 h-10 bg-[#0b1120] rounded border border-slate-800 overflow-hidden flex items-center justify-center">
+                                                            <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h5 className="text-[#f0e6d2] font-fantasy text-sm truncate uppercase tracking-wider">{token.name}</h5>
+                                                            <div className="flex items-center gap-2 text-[8px] font-bold text-slate-500 uppercase">
+                                                                {token.hasVision ? 'CON VISIÓN' : 'SIN VISIÓN'}
+                                                            </div>
+                                                        </div>
+                                                        <Edit2 size={12} className="text-slate-600 group-hover:text-[#c8aa6e] transition-colors" />
+                                                    </div>
+                                                ))}
+
+                                                {controlledTokens.length === 0 && (
+                                                    <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/20">
+                                                        <ShieldOff size={32} className="text-slate-700" />
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Sin tokens asignados</p>
+                                                            <p className="text-[9px] text-slate-600 italic px-6 leading-relaxed">Pide al Master que te asigne el control de un personaje para poder interactuar.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {controlledTokens.length > 0 && (
+                                                <div className="p-4 bg-[#c8aa6e]/5 border border-[#c8aa6e]/20 rounded-lg">
+                                                    <p className="text-[9px] text-slate-400 leading-relaxed uppercase font-bold text-center">
+                                                        Haz clic en un personaje para abrir su <span className="text-[#c8aa6e]">foco e inspector</span>.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* --- TAB: INSPECTOR --- */}
                                 {activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {

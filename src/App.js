@@ -5835,18 +5835,7 @@ function App() {
       </React.Suspense>
     );
   }
-  // MAPA DE BATALLA PARA JUGADORES
-  if (userType === 'player' && nameEntered && showPlayerBattleMap) {
-    return withTooltips(
-      <CanvasSection
-        onBack={() => setShowPlayerBattleMap(false)}
-        playerName={playerName}
-        isPlayerView={true}
-        isMaster={false}
-        existingPlayers={existingPlayers}
-      />
-    );
-  }
+
 
   // LISTA DE CLASES PARA JUGADORES
   if (userType === 'player' && nameEntered && showPlayerClassList) {
@@ -5877,8 +5866,6 @@ function App() {
     );
   }
 
-
-
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
     if (showCharacterCreator) {
@@ -5892,24 +5879,39 @@ function App() {
 
     return withTooltips(
       <div className="min-h-screen bg-[#0b1120]">
-        <CharacterListView
-          playerName={playerName}
-          armas={armas}
-          armaduras={armaduras}
-          habilidades={habilidades}
-          glossary={glossary}
-          rarityColorMap={rarityColorMap}
-          onLaunchMinigame={handleLaunchMinigame}
-          onLaunchDiceCalculator={handleLaunchDiceCalculator}
-          onLaunchSpeedSystem={handleLaunchSpeedSystem}
-          onLaunchMinimap={handleLaunchMinimap}
-          onLaunchCanvas={handleLaunchCanvas}
-          onBack={() => {
-            setNameEntered(false);
-            setPlayerName('');
-            setAuthenticated(false);
-          }}
-        />
+        {showPlayerBattleMap && (
+          <div className="fixed inset-0 z-[100]">
+            <CanvasSection
+              onBack={() => setShowPlayerBattleMap(false)}
+              playerName={playerName}
+              isPlayerView={true}
+              isMaster={false}
+              existingPlayers={existingPlayers}
+            />
+          </div>
+        )}
+
+        <div style={{ display: showPlayerBattleMap ? 'none' : 'block' }}>
+
+          <CharacterListView
+            playerName={playerName}
+            armas={armas}
+            armaduras={armaduras}
+            habilidades={habilidades}
+            glossary={glossary}
+            rarityColorMap={rarityColorMap}
+            onLaunchMinigame={handleLaunchMinigame}
+            onLaunchDiceCalculator={handleLaunchDiceCalculator}
+            onLaunchSpeedSystem={handleLaunchSpeedSystem}
+            onLaunchMinimap={handleLaunchMinimap}
+            onLaunchCanvas={handleLaunchCanvas}
+            onBack={() => {
+              setNameEntered(false);
+              setPlayerName('');
+              setAuthenticated(false);
+            }}
+          />
+        </div>
       </div>
     );
 
