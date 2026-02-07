@@ -5843,6 +5843,7 @@ function App() {
         playerName={playerName}
         isPlayerView={true}
         isMaster={false}
+        existingPlayers={existingPlayers}
       />
     );
   }
@@ -8575,6 +8576,7 @@ function App() {
     return (
       <CanvasSection
         onBack={() => setChosenView(null)}
+        existingPlayers={existingPlayers}
       />
     );
   }
