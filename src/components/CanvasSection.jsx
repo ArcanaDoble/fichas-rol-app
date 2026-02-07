@@ -137,7 +137,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     // Estado para la Biblioteca de Escenarios
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
+    const activeScenarioRef = useRef(null);
+    useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
+    const lastActionTimeRef = useRef(0);
     const [showToast, setShowToast] = useState(false);
     const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
@@ -416,14 +420,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
 
         // --- ARRASTRE DE EXTREMOS DE MUROS ---
-        if (draggingWallHandle && activeScenario) {
-            const worldPos = divToWorld(e.clientX, e.clientY);
+        if (draggingWallHandle && activeScenarioRef.current) {
+            const currentScenario = activeScenarioRef.current;
+            const worldPos = divToWorld(curX, curY);
 
             // Buscar el muro para ver si tiene snap individual
-            const wall = activeScenario.items.find(i => i.id === draggingWallHandle.id);
+            const wall = currentScenario.items.find(i => i.id === draggingWallHandle.id);
             const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid);
 
-            const updatedItems = activeScenario.items.map(item => {
+            const updatedItems = currentScenario.items.map(item => {
                 if (item.id === draggingWallHandle.id) {
                     const newItem = { ...item };
                     if (draggingWallHandle.handleIndex === 1) {
@@ -447,26 +452,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
 
         // --- ROTACIÓN LIBRE ---
-        if (rotatingTokenId && activeScenario) {
+        if (rotatingTokenId && activeScenarioRef.current) {
+            const currentScenario = activeScenarioRef.current;
             const containerRect = containerRef.current?.getBoundingClientRect();
             if (!containerRect) return;
 
             // Encontrar el token
-            const token = activeScenario.items.find(t => t.id === rotatingTokenId);
+            const token = currentScenario.items.find(t => t.id === rotatingTokenId);
             if (!token) return;
-
-            // Calcular el Centro del Token en Coordenadas de Pantalla
-            // ScreenX = (WorldCenterX + TokenWorldX + TokenWidth/2 - WorldSize/2) * zoom + offset.x
-            // Simplificado: CenterScreen = WorldDivCenterScreen + (TokenLocalPosFromCenter * zoom)
 
             // 1. Centro del WorldDiv en Pantalla
             const worldDivCenterX = containerRect.width / 2 + offset.x;
             const worldDivCenterY = containerRect.height / 2 + offset.y;
 
-            // 2. Posición del Token respecto al centro del mundo (0,0 del mundo es su centro geométrico en CSS layout, pero item.x/y son coords desde top-left 0,0?)
-            // Revisando `spawnX` logic: item.x/y son coordenadas dentro del div de tamaño WORLD_SIZE.
-            // 0,0 es top-left del WORLD_SIZE.
-            // Centro del token relativo al top-left del mundo:
+            // 2. Posición del Token respecto al centro del mundo
             const tokenCenterX_World = token.x + token.width / 2;
             const tokenCenterY_World = token.y + token.height / 2;
 
@@ -482,16 +481,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             const deltaX = curX - tokenScreenX;
             const deltaY = curY - tokenScreenY;
 
-            // atan2(y, x) da el ángulo en radianes desde el eje X positivo.
-            // Queremos que "Arriba" (-Y) sea 0 grados (o la orientación base).
-            // Normal atan2: Right=0, Down=90, Left=180, Up=-90.
-            // Queremos Up=0. 
-            // -90 + 90 = 0.
             let angleDeg = (Math.atan2(deltaY, deltaX) * 180 / Math.PI) + 90;
 
             setLoadingRotation(angleDeg); // Update Rotation
 
-            const newItems = activeScenario.items.map(i => {
+            const newItems = currentScenario.items.map(i => {
                 if (i.id === rotatingTokenId) {
                     return { ...i, rotation: angleDeg };
                 }
@@ -501,12 +495,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             return;
         }
 
-        if (draggedTokenId && activeScenario) {
+        if (draggedTokenId && activeScenarioRef.current) {
+            const currentScenario = activeScenarioRef.current;
             // Lógica de arrastre de TOKENS (Multiples)
             const deltaX = (curX - tokenDragStart.x) / zoom;
             const deltaY = (curY - tokenDragStart.y) / zoom;
 
-            const newItems = activeScenario.items.map(item => {
+            const newItems = currentScenario.items.map(item => {
                 if (selectedTokenIds.includes(item.id)) {
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
                     let newX = original.x + deltaX;
@@ -521,8 +516,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                         newX = Math.round(newX / cellW) * cellW;
                         newY = Math.round(newY / cellH) * cellH;
                     }
-
-
 
                     // Si es un muro, desplazamos sus puntos
                     if (item.type === 'wall') {
@@ -549,7 +542,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
 
         // --- Lógica de REDIMENSIÓN ---
-        if (resizingTokenId && activeScenario && resizeStartRef.current) {
+        if (resizingTokenId && activeScenarioRef.current && resizeStartRef.current) {
+            const currentScenario = activeScenarioRef.current;
             const { startX, startY, startWidth, startHeight } = resizeStartRef.current;
             const deltaX = (curX - startX) / zoom;
             const deltaY = (curY - startY) / zoom; // Asumiendo aspect ratio libre o control
@@ -557,7 +551,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             let newWidth = startWidth + deltaX;
             let newHeight = startHeight + deltaY;
 
-            const item = activeScenario.items.find(i => i.id === resizingTokenId);
+            const item = currentScenario.items.find(i => i.id === resizingTokenId);
             const shouldSnap = item?.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
 
             if (shouldSnap) {
@@ -695,17 +689,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         }
 
         // --- FINALIZAR ARRASTRE / ROTACIÓN / REDIMENSIÓN DE TOKENS ---
-        if ((draggedTokenId || rotatingTokenId || resizingTokenId) && activeScenario) {
-            let finalItems = activeScenario.items;
+        if ((draggedTokenId || rotatingTokenId || resizingTokenId) && activeScenarioRef.current) {
+            const currentScenario = activeScenarioRef.current;
+            let finalItems = currentScenario.items;
 
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
             if (draggedTokenId && activeLayer === 'TABLETOP') {
-                const walls = activeScenario.items.filter(i =>
+                const walls = currentScenario.items.filter(i =>
                     i.type === 'wall' && !(i.wallType === 'door' && i.isOpen)
                 );
                 let hasCollision = false;
 
-                finalItems = activeScenario.items.map(item => {
+                finalItems = currentScenario.items.map(item => {
                     // Solo chequear colisión para tokens (no muros) que estaban seleccionados
                     if (selectedTokenIds.includes(item.id) && item.type !== 'wall') {
                         const original = tokenOriginalPos[item.id];
@@ -736,7 +731,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
             // Guardar el estado final en Firebase
             try {
-                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
                     items: finalItems,
                     lastModified: Date.now()
                 });
@@ -1195,6 +1190,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
         const isTouch = e.type.startsWith('touch');
 
         e.stopPropagation(); // Evitar que el canvas inicie pan
+        if (isTouch) e.preventDefault(); // Evitar double-firing y emulación de mouse
 
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
@@ -1222,14 +1218,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             setDraggedTokenId(token.id);
             setTokenDragStart({ x: curX, y: curY });
 
-            // Guardar posiciones originales de TODOS los seleccionados (incluyendo el nuevo si acabamos de seleccionarlo)
-            // Nota: Usamos 'newSelection' para asegurar que tenemos la lista actualizada
+            // Guardar posiciones originales de TODOS los seleccionados
             const originals = {};
-            activeScenario.items.forEach(i => {
-                if (newSelection.includes(i.id)) {
-                    originals[i.id] = { x: i.x, y: i.y };
-                }
-            });
+            const currentScenario = activeScenarioRef.current || activeScenario;
+            if (currentScenario) {
+                currentScenario.items.forEach(i => {
+                    if (newSelection.includes(i.id)) {
+                        originals[i.id] = { x: i.x, y: i.y };
+                    }
+                });
+            }
             setTokenOriginalPos(originals);
         }
     };
@@ -1245,6 +1243,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const deleteItem = (itemId) => {
+        const now = Date.now();
+        if (now - lastActionTimeRef.current < 300) return;
+        lastActionTimeRef.current = now;
+
         setActiveScenario(prev => ({
             ...prev,
             items: prev.items.filter(i => i.id !== itemId)
@@ -1253,6 +1255,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const rotateItem = (itemId, angle) => {
+        const now = Date.now();
+        if (now - lastActionTimeRef.current < 300) return;
+        lastActionTimeRef.current = now;
+
         setActiveScenario(prev => ({
             ...prev,
             items: prev.items.map(i => {
@@ -1265,6 +1271,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const toggleWallType = (wallId) => {
+        const now = Date.now();
+        if (now - lastActionTimeRef.current < 300) return;
+        lastActionTimeRef.current = now;
+
         setActiveScenario(prev => ({
             ...prev,
             items: prev.items.map(i => {
@@ -1282,6 +1292,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const toggleDoorOpen = (doorId) => {
+        const now = Date.now();
+        if (now - lastActionTimeRef.current < 300) return;
+        lastActionTimeRef.current = now;
+
         setActiveScenario(prev => {
             const newItems = prev.items.map(i => {
                 if (i.id === doorId) {
@@ -1301,6 +1315,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     };
 
     const toggleSecretWall = (wallId) => {
+        const now = Date.now();
+        if (now - lastActionTimeRef.current < 300) return;
+        lastActionTimeRef.current = now;
+
         setActiveScenario(prev => ({
             ...prev,
             items: prev.items.map(i => {
@@ -1539,7 +1557,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* Toggle Puerta/Muro */}
                             <button
                                 onMouseDown={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
-                                onTouchStart={(e) => { e.stopPropagation(); toggleWallType(item.id); }}
+                                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); toggleWallType(item.id); }}
                                 className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.wallType === 'door' ? 'border-teal-500 text-teal-400' : (item.wallType === 'window' ? 'border-blue-500 text-blue-400' : 'border-slate-500 text-slate-400')}`}
                                 title={item.wallType === 'door' ? "Convertir en Ventana" : (item.wallType === 'window' ? "Convertir en Muro Sólido" : "Convertir en Puerta")}
                             >
@@ -1550,6 +1568,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {item.wallType === 'door' && (
                                 <button
                                     onMouseDown={(e) => { e.stopPropagation(); toggleSecretWall(item.id); }}
+                                    onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); toggleSecretWall(item.id); }}
                                     className={`bg-black/90 rounded-full p-2 shadow-xl border transition-all hover:scale-110 active:scale-95 ${item.isSecret ? 'border-purple-500 text-purple-400' : 'border-slate-500 text-slate-400'}`}
                                     title={item.isSecret ? "Hacer Puerta Visible" : "Hacer Puerta Secreta"}
                                 >
@@ -1560,6 +1579,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                             {/* Borrar */}
                             <button
                                 onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }}
                                 className="bg-black/90 rounded-full p-2 shadow-xl border border-red-500/30 text-red-400 hover:text-red-200 hover:scale-110 active:scale-95 transition-all"
                                 title="Borrar Muro"
                             >
@@ -1572,7 +1592,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     {item.wallType === 'door' && (
                         <button
                             onMouseDown={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
-                            onTouchStart={(e) => { e.stopPropagation(); toggleDoorOpen(item.id); }}
+                            onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); toggleDoorOpen(item.id); }}
                             className={`absolute z-[60] p-1.5 rounded-full border shadow-2xl transition-all hover:scale-125 active:scale-90 pointer-events-auto ${item.isOpen ? (isSecret ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-teal-500/20 border-teal-500 text-teal-400') : (isSecret ? 'bg-purple-900/40 border-purple-600 text-purple-500' : 'bg-red-500/20 border-red-500 text-red-400')}`}
                             style={{
                                 left: `${(item.x1 + item.x2) / 2 - item.x}px`,
@@ -1760,9 +1780,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
                         {/* Controles de Acción */}
                         <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
-                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
-                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => handleRotationMouseDown(e, item)} />
-                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
+                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
+                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
                         </div>
 
                         {/* Resize Handle */}
