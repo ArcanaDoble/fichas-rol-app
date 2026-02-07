@@ -52,7 +52,7 @@ const CombatHUD = ({
                                 <button
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.id)}
-                                    className={`px-4 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
+                                    className={`px-3 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
                                         ? 'bg-[#c8aa6e] text-[#0b1120]'
                                         : 'text-[#c8aa6e] hover:bg-[#c8aa6e]/10'
                                         }`}
@@ -64,24 +64,32 @@ const CombatHUD = ({
                     </div>
 
                     {/* Contenedor de Botones */}
-                    <div className="bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-2 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                    <div className="bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-1.5 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden">
                         {/* Decoración de fondo */}
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none"></div>
 
-                        <div className="flex items-center justify-center gap-2 md:gap-4 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+                        <div
+                            className="flex items-center justify-center gap-1.5 md:gap-4 overflow-x-auto pb-0 md:pb-0 scrollbar-hide"
+                            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+                        >
+                            <style>{`
+                                .scrollbar-hide::-webkit-scrollbar {
+                                    display: none;
+                                }
+                            `}</style>
                             {activeCategory === 'ACCIONES' && actions.map(action => (
                                 <button
                                     key={action.id}
                                     onClick={() => onAction && onAction(action.id)}
-                                    className="group relative flex flex-col items-center justify-center w-20 h-16 md:w-32 md:h-24 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 rounded-lg transition-all active:scale-95 shrink-0"
+                                    className="group relative flex flex-col items-center justify-center w-[78px] h-16 md:w-32 md:h-24 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 rounded-lg transition-all active:scale-95 shrink-0"
                                 >
-                                    <action.icon className="w-5 h-5 md:w-8 md:h-8 text-slate-400 group-hover:text-[#c8aa6e] mb-1 md:mb-2 transition-colors" />
+                                    <action.icon className="w-[18px] h-[18px] md:w-8 md:h-8 text-slate-400 group-hover:text-[#c8aa6e] mb-1 md:mb-2 transition-colors" />
                                     <span className="text-[9px] md:text-[10px] font-bold text-slate-400 group-hover:text-[#f0e6d2] uppercase tracking-wider transition-colors">
                                         {action.label}
                                     </span>
 
-                                    {/* Tooltip Hover Effect */}
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-black/90 text-[#f0e6d2] text-xs p-2 rounded border border-[#c8aa6e]/30 pointer-events-none z-50 text-center">
+                                    {/* Tooltip Hover Effect (Solo MD+) */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden md:group-hover:block w-48 bg-black/90 text-[#f0e6d2] text-xs p-2 rounded border border-[#c8aa6e]/30 pointer-events-none z-50 text-center">
                                         {action.description}
                                     </div>
                                 </button>
