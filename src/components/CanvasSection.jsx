@@ -33,6 +33,11 @@ const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
 
 // Genera los puntos de un polígono de sombra proyectado
 const calculateShadowPoints = (lx, ly, x1, y1, x2, y2, projection = 10000) => {
+    // Protección contra valores no numéricos que romperían el SVG en móvil
+    if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) {
+        return "0,0 0,0 0,0 0,0";
+    }
+
     // Calculamos la dirección del muro para extenderlo un poco (1px) y evitar fugas en las esquinas
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -151,8 +156,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     const [clipboard, setClipboard] = useState([]); // Portapapeles para copiar/pegar tokens
 
     // Helper para normalizar coordenadas de eventos (Mouse vs Touch)
-    const getEventCoords = (e) => {
+    const getEventCoords = (e, identifier = null) => {
         if (e.touches && e.touches.length > 0) {
+            if (identifier !== null) {
+                const touch = Array.from(e.touches).find(t => t.identifier === identifier);
+                if (touch) return { x: touch.clientX, y: touch.clientY };
+                // Si el toque específico ya no está, usamos el primero como fallback razonable
+            }
             return { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
         if (e.changedTouches && e.changedTouches.length > 0) {
@@ -169,7 +179,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
 
     // Estado para Drag & Drop de Tokens en el Canvas
     const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
-    const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0 }); // Posición inicial del mouse
+    const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0, identifier: null }); // Posición inicial del mouse/touch
     const [tokenOriginalPos, setTokenOriginalPos] = useState({}); // Mapa de posiciones originales { [id]: {x, y} }
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
@@ -403,7 +413,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
     }
 
     const handleMouseMove = (e) => {
-        const { x: curX, y: curY } = getEventCoords(e);
+        const { x: curX, y: curY } = getEventCoords(e, tokenDragStart.identifier);
 
         // --- SELECTION BOX ---
         if (selectionBox) {
@@ -506,6 +516,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
                     let newX = original.x + deltaX;
                     let newY = original.y + deltaY;
+
+                    // Protección contra NaN/Infinity en móvil (Evita que las luces se 'apaguen' al salir del mundo)
+                    if (!Number.isFinite(newX) || !Number.isFinite(newY)) return item;
 
                     // El item puede tener su propia configuración de snap, si no, usa la global
                     const shouldSnap = item.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
@@ -1216,7 +1229,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm' }) => {
             }
 
             setDraggedTokenId(token.id);
-            setTokenDragStart({ x: curX, y: curY });
+            const touchId = (isTouch && e.touches && e.touches[0]) ? e.touches[0].identifier : null;
+            setTokenDragStart({ x: curX, y: curY, identifier: touchId });
 
             // Guardar posiciones originales de TODOS los seleccionados
             const originals = {};
