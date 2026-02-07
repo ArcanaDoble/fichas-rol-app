@@ -6,6 +6,7 @@ import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, 
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
+import CombatHUD from './CombatHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -3340,7 +3341,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         </div>
 
                         {/* --- Controles de Capas y Zoom Flotantes --- */}
-                        <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
+                        <div className="absolute bottom-48 md:bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
 
                             {/* Herramientas de Edición (Solo visibles en capa iluminación y para Master) */}
                             {!isPlayerView && (
@@ -3859,6 +3860,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
 
+
+
+            {/* --- COMBAT HUD (PLAYER VIEW) --- */}
+            {isPlayerView && activeScenario && (() => {
+                const myTokens = activeScenario.items?.filter(i =>
+                    i.controlledBy?.includes(playerName) && i.type !== 'light' && i.type !== 'wall'
+                ) || [];
+
+                // Prioridad: 1. Seleccionado que controlo, 2. El primero de mi lista
+                const selectedControlled = myTokens.find(t => selectedTokenIds.includes(t.id));
+                const hudToken = selectedControlled || myTokens[0];
+
+                if (hudToken) {
+                    return (
+                        <CombatHUD
+                            token={hudToken}
+                            onAction={(action) => console.log("Action:", action)}
+                            onEndTurn={() => console.log("Turn Ended")}
+                        />
+                    );
+                }
+                return null;
+            })()}
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
