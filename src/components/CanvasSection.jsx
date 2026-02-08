@@ -235,7 +235,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Si no hay selección o hay múltiple, reseteamos la referencia
             lastSelectedIdRef.current = null;
             if (selectedTokenIds.length === 0 && activeTab === 'INSPECTOR') {
-                setActiveTab('CONFIG');
+                setActiveTab(isPlayerView ? 'TOKENS' : 'CONFIG');
             }
         }
     }, [selectedTokenIds, rotatingTokenId, activeTab]);
@@ -926,13 +926,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const mapX = (WORLD_SIZE - mapBounds.width) / 2;
     const mapY = (WORLD_SIZE - mapBounds.height) / 2;
 
-    // Calculamos si hay un "Observador" activo (un token seleccionado con visión)
-    // Para jugadores, el enfoque (perspectiva exclusiva) solo se activa si seleccionan sus tokens.
-    const observerId = isPlayerView
-        ? activeScenario?.items?.find(s => selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision)?.id
-        : activeScenario?.items?.find(s =>
-            selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
-        )?.id;
+    // Calculamos los "Observadores" activos (tokens seleccionados con visión)
+    // Para jugadores: SOLO se activa cuando seleccionan tokens específicos (no hay fallback)
+    // Ahora soporta múltiples tokens seleccionados para mostrar la unión de sus visiones
+    const observerIds = isPlayerView
+        ? (activeScenario?.items || []).filter(s => s && selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision).map(s => s.id)
+        : (activeScenario?.items || []).filter(s =>
+            s && selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+        ).map(s => s.id);
+
+    // Para compatibilidad: si hay un solo observer, usamos su ID directamente
+    const observerId = observerIds.length === 1 ? observerIds[0] : null;
 
     const fileInputRef = useRef(null);
 
@@ -2218,7 +2222,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
                         <button
-                            onClick={() => setShowSettings(true)}
+                            onClick={() => {
+                                if (selectedTokenIds.length === 0) {
+                                    setActiveTab(isPlayerView ? 'TOKENS' : 'CONFIG');
+                                }
+                                setShowSettings(true);
+                            }}
                             className="absolute top-6 right-6 z-40 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
                         >
                             <BsDice6 size={24} className="group-hover:rotate-180 transition-transform duration-500" />
@@ -3094,6 +3103,75 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 </div>
                                                             )}
                                                         </div>
+
+                                                        {/* LUZ DEL TOKEN */}
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                                        <Lightbulb size={12} /> Emitir Luz
+                                                                    </h4>
+                                                                    <span className="text-[8px] text-slate-600 italic">El token actúa como una fuente de luz</span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => updateItem(token.id, { emitsLight: !token.emitsLight })}
+                                                                    className={`w-12 h-6 rounded-full transition-all relative ${token.emitsLight ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.emitsLight ? 'left-7' : 'left-1'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            {token.emitsLight && (
+                                                                <div className="space-y-6 pt-2 border-t border-slate-800/50 mt-2">
+                                                                    {/* Radio de Luz */}
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                            <span className="text-slate-500">Alcance de Luz (Px)</span>
+                                                                            <span className="text-[#c8aa6e] font-mono">{token.lightRadius || 200}px</span>
+                                                                        </div>
+                                                                        <input
+                                                                            type="range"
+                                                                            min="50" max="1000" step="10"
+                                                                            value={token.lightRadius || 200}
+                                                                            onChange={(e) => updateItem(token.id, { lightRadius: Number(e.target.value) })}
+                                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Parpadeo (Flicker) Toggle */}
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex flex-col gap-1">
+                                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Parpadeo</span>
+                                                                            <span className="text-[8px] text-slate-600">Simula una antorcha</span>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => updateItem(token.id, { lightFlicker: !token.lightFlicker })}
+                                                                            className={`w-12 h-6 rounded-full transition-all relative ${token.lightFlicker ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                                        >
+                                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.lightFlicker ? 'left-7' : 'left-1'}`} />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* Color de la Luz */}
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                            <span className="text-slate-500">Color de Luz</span>
+                                                                            <div className="w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: token.lightColor || '#fff1ae' }}></div>
+                                                                        </div>
+                                                                        <div className="flex gap-1.5">
+                                                                            {['#fff1ae', '#ffafae', '#aebcff', '#ccffae', '#ffffff'].map(c => (
+                                                                                <button
+                                                                                    key={c}
+                                                                                    onClick={() => updateItem(token.id, { lightColor: c })}
+                                                                                    className={`flex-1 h-6 rounded border transition-all ${(token.lightColor || '#fff1ae') === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:border-white/30'}`}
+                                                                                    style={{ backgroundColor: c }}
+                                                                                />
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 )}
 
@@ -3531,8 +3609,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    {activeScenario?.items?.filter(i => i.type === 'light').map(item => renderItemJSX(item))}
-                                    {activeScenario?.items?.filter(i => i.type !== 'light').map(item => renderItemJSX(item))}
+                                    {(activeScenario?.items || []).filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
+                                    {(activeScenario?.items || []).filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
                                 </div>
 
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
@@ -3565,7 +3643,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 style={{
                                                     opacity: isPlayerView
                                                         ? 1
-                                                        : (activeScenario?.items?.some(s => selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
+                                                        : ((activeScenario?.items || []).some(s => s && selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
                                                     transition: 'opacity 0.3s ease-in-out'
                                                 }}
                                             />
@@ -3605,30 +3683,146 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             {/* MÁSCARA 1: ILUMINACIÓN (Solo Luces) */}
                                             <mask id="lighting-mask">
                                                 <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
-                                                {/* Si hay un observador, las luces de ambiente solo se ven si el observador las ve */}
-                                                <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                        const original = tokenOriginalPos[light.id];
-                                                        const lx = (isInteracting && original) ? original.x : light.x;
-                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                {/* Luces de Ambiente: Solo visibles si están en LoS de la perspectiva actual */}
+                                                {(isPlayerView && selectedTokenIds.length === 0) ? (
+                                                    // VISTA GLOBAL JUGADOR: La luz es visible si cualquiera de sus tokens la ve
+                                                    (() => {
+                                                        const myTokens = (activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision);
+                                                        const lights = (activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight));
 
-                                                        return (
-                                                            <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                                <circle
-                                                                    cx={lx + (light.width / 2)}
-                                                                    cy={ly + (light.height / 2)}
-                                                                    r={light.radius || 200}
-                                                                    fill={`url(#grad-light-${light.id})`}
-                                                                    className={light.flicker ? 'animate-flicker' : ''}
-                                                                />
+                                                        return myTokens.map(token => (
+                                                            <g key={`global-lighting-pov-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                                {lights.map(light => {
+                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const lx = (isInteracting && original) ? original.x : light.x;
+                                                                    const ly = (isInteracting && original) ? original.y : light.y;
+                                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                    const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                    return (
+                                                                        <g key={`light-hole-ambient-${light.id}-${token.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                            <circle
+                                                                                cx={lx + (light.width / 2)}
+                                                                                cy={ly + (light.height / 2)}
+                                                                                r={lRadius}
+                                                                                fill={`url(#grad-light-${light.id})`}
+                                                                                className={lFlicker ? 'animate-flicker' : ''}
+                                                                            />
+                                                                        </g>
+                                                                    );
+                                                                })}
                                                             </g>
-                                                        );
-                                                    })}
-                                                </g>
+                                                        ));
+                                                    })()
+                                                ) : (
+                                                    // VISTA EXCLUSIVA O MASTER (soporta múltiples tokens seleccionados)
+                                                    (() => {
+                                                        // Obtener todos los tokens seleccionados con visión
+                                                        const selectedVisionTokens = observerIds.length > 0
+                                                            ? (activeScenario?.items || []).filter(t => t && observerIds.includes(t.id))
+                                                            : [];
+
+                                                        const allLights = (activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight));
+
+                                                        if (selectedVisionTokens.length === 0) {
+                                                            // Sin token seleccionado: master ve todas las luces sin recorte de visión
+                                                            return (
+                                                                <g>
+                                                                    {allLights.map(light => {
+                                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                        const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                        return (
+                                                                            <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                                <circle
+                                                                                    cx={lx + (light.width / 2)}
+                                                                                    cy={ly + (light.height / 2)}
+                                                                                    r={lRadius}
+                                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                                    className={lFlicker ? 'animate-flicker' : ''}
+                                                                                />
+                                                                            </g>
+                                                                        );
+                                                                    })}
+                                                                </g>
+                                                            );
+                                                        }
+
+                                                        // Con tokens seleccionados: mostrar UNIÓN de sus visiones
+                                                        // Calcular posiciones (usando original durante arrastre)
+                                                        const tokenPositions = selectedVisionTokens.map(token => {
+                                                            const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                            const originalToken = tokenOriginalPos[token.id];
+                                                            return {
+                                                                token,
+                                                                x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
+                                                                y: (isInteractingToken && originalToken) ? originalToken.y : token.y,
+                                                            };
+                                                        });
+
+                                                        // Filtrar luces visibles para CUALQUIERA de los tokens seleccionados
+                                                        const visibleLights = allLights.filter(light => {
+                                                            if (!light) return false;
+                                                            const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                            return tokenPositions.some(({ token, x, y }) => {
+                                                                if (!token) return false;
+                                                                const dist = Math.hypot(x - light.x, y - light.y);
+                                                                const visibleRange = (token.visionRadius || 300) + lRadius;
+                                                                return dist < visibleRange;
+                                                            });
+                                                        });
+
+                                                        // Renderizar la unión de las visiones de todos los tokens seleccionados
+                                                        return tokenPositions.map(({ token, x, y }) => (
+                                                            <g key={`multi-lighting-pov-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                                <defs>
+                                                                    <mask id={`multi-vision-mask-ambient-${token.id}`}>
+                                                                        <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="black" />
+                                                                        <g mask={`url(#shadow-mask-${token.id})`}>
+                                                                            <circle
+                                                                                cx={x + (token.width / 2)}
+                                                                                cy={y + (token.height / 2)}
+                                                                                r={token.visionRadius || 300}
+                                                                                fill="white"
+                                                                            />
+                                                                        </g>
+                                                                    </mask>
+                                                                </defs>
+                                                                <g mask={`url(#multi-vision-mask-ambient-${token.id})`}>
+                                                                    {visibleLights.map(light => {
+                                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                        const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                        return (
+                                                                            <g key={`light-hole-ambient-${light.id}-${token.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                                <circle
+                                                                                    cx={lx + (light.width / 2)}
+                                                                                    cy={ly + (light.height / 2)}
+                                                                                    r={lRadius}
+                                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                                    className={lFlicker ? 'animate-flicker' : ''}
+                                                                                />
+                                                                            </g>
+                                                                        );
+                                                                    })}
+                                                                </g>
+                                                            </g>
+                                                        ));
+                                                    })()
+                                                )}
 
                                                 {/* VISIÓN EN LA OSCURIDAD: Substraemos las áreas que el observador ve en la oscuridad */}
-                                                {activeScenario?.items?.filter(i => {
+                                                {(activeScenario?.items || []).filter(i => {
+                                                    if (!i) return false;
                                                     const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
                                                     if (!isToken) return false;
 
@@ -3648,14 +3842,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     const ty = (isInteracting && original) ? original.y : token.y;
 
                                                     return (
-                                                        <g key={`darkvision-hole-ambient-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
-                                                            <circle
-                                                                cx={tx + (token.width / 2)}
-                                                                cy={ty + (token.height / 2)}
-                                                                r={token.darkvisionRadius || 300}
-                                                                fill={`url(#grad-darkvision-${token.id})`}
-                                                            />
-                                                        </g>
+                                                        <AnimatePresence key={`darkvision-presence-${token.id}`}>
+                                                            <motion.g
+                                                                key={`darkvision-hole-ambient-${token.id}`}
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                exit={{ opacity: 0 }}
+                                                                transition={{ duration: 0.3 }}
+                                                                mask={`url(#shadow-mask-${token.id})`}
+                                                            >
+                                                                <circle
+                                                                    cx={tx + (token.width / 2)}
+                                                                    cy={ty + (token.height / 2)}
+                                                                    r={token.darkvisionRadius || 300}
+                                                                    fill={`url(#grad-darkvision-${token.id})`}
+                                                                />
+                                                            </motion.g>
+                                                        </AnimatePresence>
                                                     );
                                                 })}
                                             </mask>
@@ -3666,10 +3869,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 {/* Vision de los Tokens: Filtrado por selección para el Master */}
                                                 {(() => {
                                                     // Determinar qué tokens otorgan visión al rol actual
-                                                    const perspectiveTokens = activeScenario?.items?.filter(i =>
-                                                        i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
+                                                    const perspectiveTokens = (activeScenario?.items || []).filter(i =>
+                                                        i && i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
                                                         (isPlayerView ? i.controlledBy?.includes(playerName) : true)
-                                                    ) || [];
+                                                    );
 
                                                     // ¿Hay una selección que deba forzar el enfoque (perspective focus)?
                                                     const selectedVisionTokens = perspectiveTokens.filter(i =>
@@ -3679,49 +3882,238 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     // Si el jugador selecciona tokens propios con visión, activamos el enfoque exclusivo
                                                     const visibleTokens = selectedVisionTokens.length > 0 ? selectedVisionTokens : perspectiveTokens;
 
-                                                    return visibleTokens.map(token => {
-                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                        const original = tokenOriginalPos[token.id];
-                                                        const tx = (isInteracting && original) ? original.x : token.x;
-                                                        const ty = (isInteracting && original) ? original.y : token.y;
+                                                    return (
+                                                        <AnimatePresence>
+                                                            {visibleTokens.map(token => {
+                                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                                const original = tokenOriginalPos[token.id];
+                                                                const tx = (isInteracting && original) ? original.x : token.x;
+                                                                const ty = (isInteracting && original) ? original.y : token.y;
 
-                                                        return (
-                                                            <g key={`vision-hole-fog-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
-                                                                <circle
-                                                                    cx={tx + (token.width / 2)}
-                                                                    cy={ty + (token.height / 2)}
-                                                                    r={token.visionRadius || 300}
-                                                                    fill={`url(#grad-vision-${token.id})`}
-                                                                />
-                                                            </g>
-                                                        );
-                                                    });
+                                                                return (
+                                                                    <motion.g
+                                                                        key={`vision-hole-fog-${token.id}`}
+                                                                        initial={{ opacity: 0 }}
+                                                                        animate={{ opacity: 1 }}
+                                                                        exit={{ opacity: 0 }}
+                                                                        transition={{ duration: 0.3 }}
+                                                                        mask={`url(#shadow-mask-${token.id})`}
+                                                                    >
+                                                                        <circle
+                                                                            cx={tx + (token.width / 2)}
+                                                                            cy={ty + (token.height / 2)}
+                                                                            r={token.visionRadius || 300}
+                                                                            fill={`url(#grad-vision-${token.id})`}
+                                                                        />
+                                                                    </motion.g>
+                                                                );
+                                                            })}
+                                                        </AnimatePresence>
+                                                    );
                                                 })()}
                                                 {/* Luces (también revelan niebla siempre, pero filtradas por el observador) */}
-                                                <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                                    {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                        const original = tokenOriginalPos[light.id];
-                                                        const lx = (isInteracting && original) ? original.x : light.x;
-                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                {/* Para jugadores: recortamos las luces al área de visión combinada de sus tokens */}
+                                                {isPlayerView && (() => {
+                                                    // Calcular los tokens con visión que el jugador está usando actualmente
+                                                    const allMyTokens = (activeScenario?.items || []).filter(t =>
+                                                        t && t.controlledBy?.includes(playerName) && t.hasVision
+                                                    );
 
+                                                    // Priorizar selección si existe
+                                                    const selectedMyTokens = allMyTokens.filter(t => selectedTokenIds.includes(t.id));
+                                                    const myVisionTokens = selectedMyTokens.length > 0 ? selectedMyTokens : allMyTokens;
+
+                                                    if (myVisionTokens.length === 0) return null;
+
+                                                    // Filtrar luces que estén al alcance de los tokens EN FOCO (usando posición original durante arrastre)
+                                                    const visibleLights = (activeScenario?.items || []).filter(i => {
+                                                        if (!i || (i.type !== 'light' && !i.emitsLight)) return false;
+                                                        const lRadius = (i.type === 'light' ? i.radius : i.lightRadius) || 200;
+                                                        return myVisionTokens.some(token => {
+                                                            if (!token) return false;
+                                                            const isInteractingT = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                            const originalT = tokenOriginalPos[token.id];
+                                                            const tokenX = (isInteractingT && originalT) ? originalT.x : token.x;
+                                                            const tokenY = (isInteractingT && originalT) ? originalT.y : token.y;
+                                                            const dist = Math.hypot(tokenX - i.x, tokenY - i.y);
+                                                            const visibleRange = (token.visionRadius || 300) + lRadius;
+                                                            return dist < visibleRange;
+                                                        });
+                                                    });
+
+                                                    return (
+                                                        <g>
+                                                            {/* Máscara de revelado progresivo para luces (reemplaza al clipPath para permitir fade) */}
+                                                            <defs>
+                                                                <mask id="player-vision-mask-lights">
+                                                                    <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="black" />
+                                                                    <AnimatePresence>
+                                                                        {myVisionTokens.map(token => {
+                                                                            const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                                            const original = tokenOriginalPos[token.id];
+                                                                            const tx = (isInteracting && original) ? original.x : token.x;
+                                                                            const ty = (isInteracting && original) ? original.y : token.y;
+                                                                            return (
+                                                                                <motion.g
+                                                                                    key={`vision-mask-light-${token.id}`}
+                                                                                    initial={{ opacity: 0 }}
+                                                                                    animate={{ opacity: 1 }}
+                                                                                    exit={{ opacity: 0 }}
+                                                                                    transition={{ duration: 0.3 }}
+                                                                                    mask={`url(#shadow-mask-${token.id})`}
+                                                                                >
+                                                                                    <circle
+                                                                                        cx={tx + (token.width / 2)}
+                                                                                        cy={ty + (token.height / 2)}
+                                                                                        r={token.visionRadius || 300}
+                                                                                        fill="white"
+                                                                                    />
+                                                                                </motion.g>
+                                                                            );
+                                                                        })}
+                                                                    </AnimatePresence>
+                                                                </mask>
+                                                            </defs>
+
+                                                            {/* Luces filtradas y animadas, ahora bajo la máscara de revelado progresivo */}
+                                                            <g mask="url(#player-vision-mask-lights)">
+                                                                <AnimatePresence>
+                                                                    {visibleLights.map(light => {
+                                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                        const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                        return (
+                                                                            <motion.g
+                                                                                key={`light-hole-fog-${light.id}`}
+                                                                                initial={{ opacity: 0 }}
+                                                                                animate={{ opacity: 1 }}
+                                                                                exit={{ opacity: 0 }}
+                                                                                transition={{ duration: 0.3 }}
+                                                                                mask={`url(#shadow-mask-${light.id})`}
+                                                                            >
+                                                                                <circle
+                                                                                    cx={lx + (light.width / 2)}
+                                                                                    cy={ly + (light.height / 2)}
+                                                                                    r={lRadius}
+                                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                                    className={lFlicker ? 'animate-flicker' : ''}
+                                                                                />
+                                                                            </motion.g>
+                                                                        );
+                                                                    })}
+                                                                </AnimatePresence>
+                                                            </g>
+                                                        </g>
+                                                    );
+                                                })()}
+                                                {/* Master: recorta luces al área de visión de los tokens seleccionados (soporta múltiples) */}
+                                                {!isPlayerView && (() => {
+                                                    // Obtener todos los tokens seleccionados con visión
+                                                    const selectedVisionTokens = observerIds.length > 0
+                                                        ? (activeScenario?.items || []).filter(t => t && observerIds.includes(t.id))
+                                                        : [];
+
+                                                    const allLights = (activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight));
+
+                                                    if (selectedVisionTokens.length === 0) {
+                                                        // Sin token seleccionado: master ve todas las luces sin recorte de visión
                                                         return (
-                                                            <g key={`light-hole-fog-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                                <circle
-                                                                    cx={lx + (light.width / 2)}
-                                                                    cy={ly + (light.height / 2)}
-                                                                    r={light.radius || 200}
-                                                                    fill={`url(#grad-light-${light.id})`}
-                                                                    className={light.flicker ? 'animate-flicker' : ''}
-                                                                />
+                                                            <g>
+                                                                {allLights.map(light => {
+                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const lx = (isInteracting && original) ? original.x : light.x;
+                                                                    const ly = (isInteracting && original) ? original.y : light.y;
+                                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                    const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                    return (
+                                                                        <g key={`light-hole-fog-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                            <circle
+                                                                                cx={lx + (light.width / 2)}
+                                                                                cy={ly + (light.height / 2)}
+                                                                                r={lRadius}
+                                                                                fill={`url(#grad-light-${light.id})`}
+                                                                                className={lFlicker ? 'animate-flicker' : ''}
+                                                                            />
+                                                                        </g>
+                                                                    );
+                                                                })}
                                                             </g>
                                                         );
-                                                    })}
-                                                </g>
+                                                    }
+
+                                                    // Con tokens seleccionados: mostrar UNIÓN de sus visiones
+                                                    const tokenPositions = selectedVisionTokens.map(token => {
+                                                        const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                        const originalToken = tokenOriginalPos[token.id];
+                                                        return {
+                                                            token,
+                                                            x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
+                                                            y: (isInteractingToken && originalToken) ? originalToken.y : token.y,
+                                                        };
+                                                    });
+
+                                                    // Filtrar luces visibles para CUALQUIERA de los tokens seleccionados
+                                                    const visibleLights = allLights.filter(light => {
+                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                        return tokenPositions.some(({ token, x, y }) => {
+                                                            const dist = Math.hypot(x - light.x, y - light.y);
+                                                            const visibleRange = (token.visionRadius || 300) + lRadius;
+                                                            return dist < visibleRange;
+                                                        });
+                                                    });
+
+                                                    // Renderizar la unión de las visiones
+                                                    return tokenPositions.map(({ token, x, y }) => (
+                                                        <g key={`multi-fog-pov-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                            <defs>
+                                                                <mask id={`multi-vision-mask-lights-${token.id}`}>
+                                                                    <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="black" />
+                                                                    <g mask={`url(#shadow-mask-${token.id})`}>
+                                                                        <circle
+                                                                            cx={x + (token.width / 2)}
+                                                                            cy={y + (token.height / 2)}
+                                                                            r={token.visionRadius || 300}
+                                                                            fill="white"
+                                                                        />
+                                                                    </g>
+                                                                </mask>
+                                                            </defs>
+                                                            <g mask={`url(#multi-vision-mask-lights-${token.id})`}>
+                                                                {visibleLights.map(light => {
+                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const lx = (isInteracting && original) ? original.x : light.x;
+                                                                    const ly = (isInteracting && original) ? original.y : light.y;
+                                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                    const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                    return (
+                                                                        <g key={`light-hole-fog-${light.id}-${token.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                            <circle
+                                                                                cx={lx + (light.width / 2)}
+                                                                                cy={ly + (light.height / 2)}
+                                                                                r={lRadius}
+                                                                                fill={`url(#grad-light-${light.id})`}
+                                                                                className={lFlicker ? 'animate-flicker' : ''}
+                                                                            />
+                                                                        </g>
+                                                                    );
+                                                                })}
+                                                            </g>
+                                                        </g>
+                                                    ));
+                                                })()}
+
                                             </mask>
 
                                             {/* Gradientes de Luz */}
-                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => (
+                                            {(activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight)).map(light => (
                                                 <radialGradient id={`grad-light-${light.id}`} key={`grad-light-${light.id}`}>
                                                     <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                     <stop offset="80%" stopColor="black" stopOpacity="0.3" />
@@ -3730,7 +4122,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             ))}
 
                                             {/* Gradientes de Visión */}
-                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
+                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
                                                 <radialGradient id={`grad-vision-${token.id}`} key={`grad-vision-${token.id}`}>
                                                     <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                     <stop offset="85%" stopColor="black" stopOpacity="0.8" />
@@ -3739,7 +4131,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             ))}
 
                                             {/* Gradientes de Visión en la Oscuridad */}
-                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
+                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
                                                 <radialGradient id={`grad-darkvision-${token.id}`} key={`grad-darkvision-${token.id}`}>
                                                     <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                     <stop offset="80%" stopColor="black" stopOpacity="0.4" />
@@ -3748,13 +4140,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             ))}
 
                                             {/* Máscaras de Sombra por Luz y por Token (Visión y Visión en Oscuridad) */}
-                                            {activeScenario?.items?.filter(i => i.type === 'light' || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall')).map(source => {
+                                            {(activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall'))).map(source => {
                                                 const isSourceInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(source.id);
                                                 const originalSource = tokenOriginalPos[source.id];
                                                 const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
                                                 const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
-                                                const walls = activeScenario.items.filter(i =>
-                                                    i.type === 'wall' &&
+                                                const walls = (activeScenario?.items || []).filter(i =>
+                                                    i && i.type === 'wall' &&
                                                     !(i.wallType === 'door' && i.isOpen) &&
                                                     i.wallType !== 'window'
                                                 );
@@ -3794,35 +4186,230 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor en la capa superior) */}
                                 <div className="absolute inset-0 pointer-events-none z-[45] overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                     <svg width="100%" height="100%" className="overflow-visible">
-                                        <g mask={observerId ? `url(#shadow-mask-${observerId})` : undefined}>
-                                            {activeScenario?.items?.filter(i => i.type === 'light').map(light => {
-                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                const original = tokenOriginalPos[light.id];
-                                                const lx = (isInteracting && original) ? original.x : light.x;
-                                                const ly = (isInteracting && original) ? original.y : light.y;
+                                        {isPlayerView && selectedTokenIds.length === 0 && (
+                                            <defs>
+                                                <mask id="player-global-perspective-mask">
+                                                    <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                    {(activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision).map(token => (
+                                                        <g key={`global-p-mask-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                            <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="white" />
+                                                        </g>
+                                                    ))}
+                                                </mask>
+                                            </defs>
+                                        )}
+                                        <g mask={(isPlayerView && selectedTokenIds.length === 0) ? "url(#player-global-perspective-mask)" : undefined}>
+                                            {/* Para jugadores: recortamos los glows a la visión */}
+                                            {isPlayerView && (() => {
+                                                const allMyTokens = (activeScenario?.items || []).filter(t =>
+                                                    t && t.controlledBy?.includes(playerName) && t.hasVision
+                                                );
+
+                                                // Priorizar selección si existe
+                                                const selectedMyTokens = allMyTokens.filter(t => selectedTokenIds.includes(t.id));
+                                                const myVisionTokens = selectedMyTokens.length > 0 ? selectedMyTokens : allMyTokens;
+
+                                                if (myVisionTokens.length === 0) return null;
+
+                                                // Filtrar luces (usando posición original durante arrastre)
+                                                const visibleLights = (activeScenario?.items || []).filter(i => {
+                                                    if (!i || (i.type !== 'light' && !i.emitsLight)) return false;
+                                                    const lRadius = (i.type === 'light' ? i.radius : i.lightRadius) || 200;
+                                                    return myVisionTokens.some(token => {
+                                                        if (!token) return false;
+                                                        const isInteractingT = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                        const originalT = tokenOriginalPos[token.id];
+                                                        const tokenX = (isInteractingT && originalT) ? originalT.x : token.x;
+                                                        const tokenY = (isInteractingT && originalT) ? originalT.y : token.y;
+                                                        const dist = Math.hypot(tokenX - i.x, tokenY - i.y);
+                                                        const visibleRange = (token.visionRadius || 300) + lRadius;
+                                                        return dist < visibleRange;
+                                                    });
+                                                });
 
                                                 return (
-                                                    <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                    <>
                                                         <defs>
-                                                            <radialGradient id={`visual-grad-${light.id}`}>
-                                                                <stop offset="0%" stopColor={light.color} stopOpacity="0.4" />
-                                                                <stop offset="70%" stopColor={light.color} stopOpacity="0" />
-                                                            </radialGradient>
+                                                            <mask id="player-vision-mask-glows">
+                                                                <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                                {myVisionTokens.map(token => {
+                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                                    const original = tokenOriginalPos[token.id];
+                                                                    const tx = (isInteracting && original) ? original.x : token.x;
+                                                                    const ty = (isInteracting && original) ? original.y : token.y;
+                                                                    return (
+                                                                        <g
+                                                                            key={`vision-mask-glow-${token.id}`}
+                                                                            mask={`url(#shadow-mask-${token.id})`}
+                                                                        >
+                                                                            <circle
+                                                                                cx={tx + (token.width / 2)}
+                                                                                cy={ty + (token.height / 2)}
+                                                                                r={token.visionRadius || 300}
+                                                                                fill="white"
+                                                                            />
+                                                                        </g>
+                                                                    );
+                                                                })}
+                                                            </mask>
                                                         </defs>
-                                                        <circle
-                                                            cx={lx + light.width / 2}
-                                                            cy={ly + light.height / 2}
-                                                            r={(light.radius || 200) * 1.5}
-                                                            fill={`url(#visual-grad-${light.id})`}
-                                                            style={{ mixBlendMode: 'screen' }}
-                                                            className={light.flicker ? 'animate-flicker' : ''}
-                                                        />
-                                                    </g>
+                                                        <g mask="url(#player-vision-mask-glows)">
+                                                            <AnimatePresence>
+                                                                {visibleLights.map(light => {
+                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const lx = (isInteracting && original) ? original.x : light.x;
+                                                                    const ly = (isInteracting && original) ? original.y : light.y;
+                                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                    const lColor = (light.type === 'light' ? light.color : light.lightColor) || '#fff1ae';
+                                                                    const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                    return (
+                                                                        <motion.g
+                                                                            key={`glow-group-${light.id}`}
+                                                                            initial={{ opacity: 0 }}
+                                                                            animate={{ opacity: 1 }}
+                                                                            exit={{ opacity: 0 }}
+                                                                            transition={{ duration: 0.3 }}
+                                                                            mask={`url(#shadow-mask-${light.id})`}
+                                                                        >
+                                                                            <defs>
+                                                                                <radialGradient id={`visual-grad-${light.id}`}>
+                                                                                    <stop offset="0%" stopColor={lColor} stopOpacity="0.4" />
+                                                                                    <stop offset="70%" stopColor={lColor} stopOpacity="0" />
+                                                                                </radialGradient>
+                                                                            </defs>
+                                                                            <circle
+                                                                                cx={lx + light.width / 2}
+                                                                                cy={ly + light.height / 2}
+                                                                                r={lRadius * 1.5}
+                                                                                fill={`url(#visual-grad-${light.id})`}
+                                                                                style={{ mixBlendMode: 'screen' }}
+                                                                                className={lFlicker ? 'animate-flicker' : ''}
+                                                                            />
+                                                                        </motion.g>
+                                                                    );
+                                                                })}
+                                                            </AnimatePresence>
+                                                        </g>
+                                                    </>
                                                 );
-                                            })}
+                                            })()}
+                                            {/* Master: recorta glows a la visión de los tokens seleccionados (soporta múltiples) */}
+                                            {!isPlayerView && (() => {
+                                                // Obtener todos los tokens seleccionados con visión
+                                                const selectedVisionTokens = observerIds.length > 0
+                                                    ? activeScenario?.items?.filter(t => observerIds.includes(t.id)) || []
+                                                    : [];
+
+                                                const allLights = (activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight));
+
+                                                if (selectedVisionTokens.length === 0) {
+                                                    // Sin token seleccionado: master ve todos los glows sin recorte
+                                                    return allLights.map(light => {
+                                                        const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                        const original = tokenOriginalPos[light.id];
+                                                        const lx = (isInteracting && original) ? original.x : light.x;
+                                                        const ly = (isInteracting && original) ? original.y : light.y;
+                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                        const lColor = (light.type === 'light' ? light.color : light.lightColor) || '#fff1ae';
+                                                        const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                        return (
+                                                            <g key={`glow-group-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                <defs>
+                                                                    <radialGradient id={`visual-grad-${light.id}`}>
+                                                                        <stop offset="0%" stopColor={lColor} stopOpacity="0.4" />
+                                                                        <stop offset="70%" stopColor={lColor} stopOpacity="0" />
+                                                                    </radialGradient>
+                                                                </defs>
+                                                                <circle
+                                                                    cx={lx + light.width / 2}
+                                                                    cy={ly + light.height / 2}
+                                                                    r={lRadius * 1.5}
+                                                                    fill={`url(#visual-grad-${light.id})`}
+                                                                    style={{ mixBlendMode: 'screen' }}
+                                                                    className={lFlicker ? 'animate-flicker' : ''}
+                                                                />
+                                                            </g>
+                                                        );
+                                                    });
+                                                }
+
+                                                // Con tokens seleccionados: mostrar UNIÓN de sus visiones
+                                                const tokenPositions = selectedVisionTokens.map(token => {
+                                                    const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
+                                                    const originalToken = tokenOriginalPos[token.id];
+                                                    return {
+                                                        token,
+                                                        x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
+                                                        y: (isInteractingToken && originalToken) ? originalToken.y : token.y,
+                                                    };
+                                                });
+
+                                                // Filtrar luces visibles para CUALQUIERA de los tokens seleccionados
+                                                const visibleLights = allLights.filter(light => {
+                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                    return tokenPositions.some(({ token, x, y }) => {
+                                                        const dist = Math.hypot(x - light.x, y - light.y);
+                                                        const visibleRange = (token.visionRadius || 300) + lRadius;
+                                                        return dist < visibleRange;
+                                                    });
+                                                });
+
+                                                // Renderizar la unión de las visiones
+                                                return tokenPositions.map(({ token, x, y }) => (
+                                                    <g key={`multi-glow-pov-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                        <defs>
+                                                            <mask id={`multi-vision-mask-glows-${token.id}`}>
+                                                                <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                                <g mask={`url(#shadow-mask-${token.id})`}>
+                                                                    <circle
+                                                                        cx={x + (token.width / 2)}
+                                                                        cy={y + (token.height / 2)}
+                                                                        r={token.visionRadius || 300}
+                                                                        fill="white"
+                                                                    />
+                                                                </g>
+                                                            </mask>
+                                                        </defs>
+                                                        <g mask={`url(#multi-vision-mask-glows-${token.id})`}>
+                                                            {visibleLights.map(light => {
+                                                                const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
+                                                                const original = tokenOriginalPos[light.id];
+                                                                const lx = (isInteracting && original) ? original.x : light.x;
+                                                                const ly = (isInteracting && original) ? original.y : light.y;
+                                                                const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                const lColor = (light.type === 'light' ? light.color : light.lightColor) || '#fff1ae';
+                                                                const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                return (
+                                                                    <g key={`glow-group-${light.id}-${token.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                        <defs>
+                                                                            <radialGradient id={`visual-grad-${light.id}-${token.id}`}>
+                                                                                <stop offset="0%" stopColor={lColor} stopOpacity="0.4" />
+                                                                                <stop offset="70%" stopColor={lColor} stopOpacity="0" />
+                                                                            </radialGradient>
+                                                                        </defs>
+                                                                        <circle
+                                                                            cx={lx + light.width / 2}
+                                                                            cy={ly + light.height / 2}
+                                                                            r={lRadius * 1.5}
+                                                                            fill={`url(#visual-grad-${light.id}-${token.id})`}
+                                                                            style={{ mixBlendMode: 'screen' }}
+                                                                            className={lFlicker ? 'animate-flicker' : ''}
+                                                                        />
+                                                                    </g>
+                                                                );
+                                                            })}
+                                                        </g>
+                                                    </g>
+                                                ));
+                                            })()}
+
 
                                             {/* DARKVISION VISUAL TINT (Efecto sutil para diferenciar visión racial) */}
-                                            {activeScenario?.items?.filter(i => i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
+                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
                                                 // Solo mostramos el tinte si está seleccionado (perspectiva activa)
                                                 if (selectedTokenIds.length > 0 && !selectedTokenIds.includes(token.id)) return null;
 
@@ -3850,7 +4437,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 );
                                             })}
                                         </g>
-                                    </svg>
+                                    </svg >
                                 </div>
 
                             </div>
