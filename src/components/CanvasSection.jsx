@@ -3685,35 +3685,63 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
                                                 {/* Luces de Ambiente: Solo visibles si están en LoS de la perspectiva actual */}
                                                 {(isPlayerView && selectedTokenIds.length === 0) ? (
-                                                    // VISTA GLOBAL JUGADOR: La luz es visible si cualquiera de sus tokens la ve
+                                                    // VISTA GLOBAL JUGADOR: Optimización O(N+M)
                                                     (() => {
                                                         const myTokens = (activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision);
                                                         const lights = (activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight));
 
-                                                        return myTokens.map(token => (
-                                                            <g key={`global-lighting-pov-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
-                                                                {lights.map(light => {
-                                                                    const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                    const original = tokenOriginalPos[light.id];
-                                                                    const lx = (isInteracting && original) ? original.x : light.x;
-                                                                    const ly = (isInteracting && original) ? original.y : light.y;
-                                                                    const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
-                                                                    const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+                                                        if (myTokens.length === 0) return null;
 
-                                                                    return (
-                                                                        <g key={`light-hole-ambient-${light.id}-${token.id}`} mask={`url(#shadow-mask-${light.id})`}>
-                                                                            <circle
-                                                                                cx={lx + (light.width / 2)}
-                                                                                cy={ly + (light.height / 2)}
-                                                                                r={lRadius}
-                                                                                fill={`url(#grad-light-${light.id})`}
-                                                                                className={lFlicker ? 'animate-flicker' : ''}
-                                                                            />
-                                                                        </g>
-                                                                    );
-                                                                })}
+                                                        return (
+                                                            <g>
+                                                                <defs>
+                                                                    <mask id="player-global-vision-union">
+                                                                        {/* 1. Fondo negro (oculto por defecto) */}
+                                                                        <rect
+                                                                            x={mapX - bleed}
+                                                                            y={mapY - bleed}
+                                                                            width={mapBounds.width + bleed * 2}
+                                                                            height={mapBounds.height + bleed * 2}
+                                                                            fill="black"
+                                                                        />
+                                                                        {/* 2. Sumamos (Lighten) las visiones de cada token */}
+                                                                        {/* Al dibujar blanco sobre el fondo negro, revelamos el área */}
+                                                                        {/* La máscara de sombra recorta la visión (paredes) */}
+                                                                        {myTokens.map(token => (
+                                                                            <g key={`vision-adder-${token.id}`} mask={`url(#shadow-mask-${token.id})`}>
+                                                                                <rect
+                                                                                    x={mapX - bleed}
+                                                                                    y={mapY - bleed}
+                                                                                    width={mapBounds.width + bleed * 2}
+                                                                                    height={mapBounds.height + bleed * 2}
+                                                                                    fill="white"
+                                                                                />
+                                                                            </g>
+                                                                        ))}
+                                                                    </mask>
+                                                                </defs>
+
+                                                                {/* 3. Renderizamos las luces UNA sola vez, recortadas por la unión de visiones */}
+                                                                <g mask="url(#player-global-vision-union)">
+                                                                    {lights.map(light => {
+                                                                        const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
+                                                                        const lFlicker = (light.type === 'light' ? light.flicker : light.lightFlicker);
+
+                                                                        return (
+                                                                            <g key={`light-hole-ambient-${light.id}`} mask={`url(#shadow-mask-${light.id})`}>
+                                                                                <circle
+                                                                                    cx={light.x + (light.width / 2)}
+                                                                                    cy={light.y + (light.height / 2)}
+                                                                                    r={lRadius}
+                                                                                    fill={`url(#grad-light-${light.id})`}
+                                                                                    className={lFlicker ? 'animate-flicker' : ''}
+                                                                                />
+                                                                            </g>
+                                                                        );
+                                                                    })}
+                                                                </g>
                                                             </g>
-                                                        ));
+                                                        );
                                                     })()
                                                 ) : (
                                                     // VISTA EXCLUSIVA O MASTER (soporta múltiples tokens seleccionados)
