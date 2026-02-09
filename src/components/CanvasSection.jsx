@@ -3969,11 +3969,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         });
                                                     });
 
+                                                    // Generar un ID único para la máscara basado en la versión del escenario
+                                                    // Esto fuerza al navegador (especialmente en móvil/Chrome) a repintar la máscara cuando cambia algo (ej. abrir puerta)
+                                                    const maskVer = activeScenario?.lastModified || Date.now();
+                                                    const maskId = `player-vision-mask-lights-${maskVer}`;
+
                                                     return (
                                                         <g>
                                                             {/* Máscara de revelado progresivo para luces (reemplaza al clipPath para permitir fade) */}
                                                             <defs>
-                                                                <mask id="player-vision-mask-lights">
+                                                                <mask id={maskId}>
                                                                     <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="black" />
                                                                     <AnimatePresence>
                                                                         {myVisionTokens.map(token => {
@@ -4004,7 +4009,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </defs>
 
                                                             {/* Luces filtradas y animadas, ahora bajo la máscara de revelado progresivo */}
-                                                            <g mask="url(#player-vision-mask-lights)">
+                                                            <g mask={`url(#${maskId})`}>
                                                                 <AnimatePresence>
                                                                     {visibleLights.map(light => {
                                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
