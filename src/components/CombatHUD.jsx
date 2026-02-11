@@ -64,12 +64,12 @@ const CombatHUD = ({
                     </div>
 
                     {/* Contenedor de Botones */}
-                    <div className="bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-1.5 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden min-h-[76px] md:min-h-[128px] flex flex-col justify-center">
+                    <div className="w-full bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-1.5 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden min-h-[76px] md:min-h-[128px] flex flex-col justify-center">
                         {/* Decoración de fondo */}
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none"></div>
 
                         <div
-                            className="flex items-center justify-center gap-1.5 md:gap-4 overflow-x-auto scrollbar-hide h-16 md:h-24 w-full"
+                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto scrollbar-hide h-16 md:h-24 w-full"
                             style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
                         >
                             <style>{`
@@ -81,7 +81,7 @@ const CombatHUD = ({
                                 <button
                                     key={action.id}
                                     onClick={() => onAction && onAction(action.id)}
-                                    className="group relative flex flex-col items-center justify-center w-[78px] h-16 md:w-32 md:h-24 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 rounded-lg transition-all active:scale-95 shrink-0"
+                                    className="group relative flex flex-col items-center justify-center flex-1 h-16 md:flex-none md:w-32 md:h-24 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 rounded-lg transition-all active:scale-95"
                                 >
                                     <action.icon className="w-[18px] h-[18px] md:w-8 md:h-8 text-slate-400 group-hover:text-[#c8aa6e] mb-1 md:mb-2 transition-colors" />
                                     <span className="text-[9px] md:text-[10px] font-bold text-slate-400 group-hover:text-[#f0e6d2] uppercase tracking-wider transition-colors">
@@ -96,7 +96,7 @@ const CombatHUD = ({
                             ))}
 
                             {activeCategory !== 'ACCIONES' && (
-                                <div className="h-full flex items-center justify-center text-slate-500 text-[10px] md:text-xs italic px-8 uppercase tracking-widest">
+                                <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px] md:text-xs italic px-8 uppercase tracking-widest">
                                     {activeCategory} próximamente...
                                 </div>
                             )}
