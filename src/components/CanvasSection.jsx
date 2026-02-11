@@ -188,6 +188,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
     const resizeStartRef = useRef(null); // { x, y, width, height }
 
+    // Detección de móvil para deshabilitar ciertas funcionalidades problemáticas
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
 
@@ -425,10 +433,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             lastPinchDist.current = newDist;
         } else if (e.touches.length === 1 && isDragging) {
-            // Pan
+            // Pan (con factor de suavizado para móvil)
             const touch = e.touches[0];
-            const deltaX = touch.clientX - lastTouchPos.current.x;
-            const deltaY = touch.clientY - lastTouchPos.current.y;
+            const rawDeltaX = touch.clientX - lastTouchPos.current.x;
+            const rawDeltaY = touch.clientY - lastTouchPos.current.y;
+
+            // Factor de amortiguación para que el movimiento en móvil sea más controlado
+            const dampingFactor = 0.7;
+            const deltaX = rawDeltaX * dampingFactor;
+            const deltaY = rawDeltaY * dampingFactor;
 
             setOffset(prev => ({
                 x: prev.x + deltaX,
@@ -1947,8 +1960,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
                         </div>
 
-                        {/* Resize Handle */}
-                        {isSelected && !rotatingTokenId && (
+                        {/* Resize Handle (Deshabilitado en móvil por errores de ux/redimensionado) */}
+                        {isSelected && !rotatingTokenId && !isMobile && (
                             <div
                                 onMouseDown={(e) => handleResizeMouseDown(e, item)}
                                 onTouchStart={(e) => handleResizeMouseDown(e, item)}
@@ -1970,11 +1983,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const handleResizeMouseDown = (e, item) => {
         e.stopPropagation();
-        e.preventDefault();
+        if (!e.type.startsWith('touch')) e.preventDefault();
+
         setResizingTokenId(item.id);
+        const { x, y } = getEventCoords(e);
+
         resizeStartRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
+            startX: x,
+            startY: y,
             startWidth: item.width,
             startHeight: item.height
         };
@@ -3440,27 +3456,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         </div>
 
                         {/* --- Controles de Capas y Zoom Flotantes --- */}
-                        <div className="absolute bottom-48 md:bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-auto">
+                        <div className="absolute bottom-56 md:bottom-8 right-4 md:right-8 z-50 flex flex-col gap-2 md:gap-3 pointer-events-auto items-end">
 
                             {/* Herramientas de Edición (Solo visibles en capa iluminación y para Master) */}
                             {!isPlayerView && (
-                                <div className={`transition-all duration-300 transform flex flex-col gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                                <div className={`transition-all duration-300 transform flex flex-col gap-2 md:gap-3 ${activeLayer === 'LIGHTING' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
                                     {/* Herramienta Muros */}
                                     <button
                                         onClick={() => setIsDrawingWall(!isDrawingWall)}
-                                        className={`w-12 h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
+                                        className={`w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${isDrawingWall ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
                                         title={isDrawingWall ? "Dejar de Dibujar Muros" : "Dibujar Muros"}
                                     >
-                                        <PenTool className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                        <PenTool className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
                                     </button>
 
                                     {/* Botón para añadir LUZ */}
                                     <button
                                         onClick={() => addLightToCanvas()}
-                                        className="w-12 h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
                                         title="Añadir Foco de Luz"
                                     >
-                                        <Lightbulb className="w-6 h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                        <Lightbulb className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
                                     </button>
                                 </div>
                             )}
@@ -3474,10 +3490,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             setSelectedTokenIds([]);
                                             setIsDrawingWall(false);
                                         }}
-                                        className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                        className={`w-8 h-8 md:w-10 md:h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'LIGHTING' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
                                         title="Capa de Iluminación"
                                     >
-                                        <Lightbulb size={20} />
+                                        <Lightbulb size={16} className="md:hidden" />
+                                        <Lightbulb size={20} className="hidden md:block" />
                                     </button>
                                     <button
                                         onClick={() => {
@@ -3485,35 +3502,125 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             setSelectedTokenIds([]);
                                             setIsDrawingWall(false);
                                         }}
-                                        className={`w-10 h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                        className={`w-8 h-8 md:w-10 md:h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'TABLETOP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
                                         title="Capa de Mesa (Tokens)"
                                     >
-                                        <LayoutGrid size={20} />
+                                        <LayoutGrid size={16} className="md:hidden" />
+                                        <LayoutGrid size={20} className="hidden md:block" />
                                     </button>
                                 </div>
                             )}
 
-                            <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
-                                <button
-                                    onClick={() => setZoom(prev => Math.min(prev + 0.1, 5))}
-                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                                    title="Zoom In"
-                                >
-                                    <FiPlus size={20} />
-                                </button>
-                                <div className="w-4 h-px bg-slate-700 my-1"></div>
-                                <button
-                                    onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.1))}
-                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                                    title="Zoom Out"
-                                >
-                                    <FiMinus size={20} />
-                                </button>
-                            </div>
-                            <div className="bg-[#1a1b26]/90 border border-[#c8aa6e]/20 rounded px-3 py-1 text-[10px] text-[#c8aa6e] text-center font-mono">
-                                {Math.round(zoom * 100)}%
+                            {/* ═══ ZOOM: Versión Desktop — Botones Verticales Clásicos ═══ */}
+                            <div className="hidden md:flex flex-col items-center gap-3">
+                                <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
+                                    <button
+                                        onClick={() => setZoom(prev => Math.min(prev + 0.1, 5))}
+                                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                                        title="Zoom In"
+                                    >
+                                        <FiPlus size={20} />
+                                    </button>
+                                    <div className="w-4 h-px bg-slate-700 my-1"></div>
+                                    <button
+                                        onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.1))}
+                                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                                        title="Zoom Out"
+                                    >
+                                        <FiMinus size={20} />
+                                    </button>
+                                </div>
+                                <div className="bg-[#1a1b26]/90 border border-[#c8aa6e]/20 rounded px-3 py-1 text-[10px] text-[#c8aa6e] text-center font-mono">
+                                    {Math.round(zoom * 100)}%
+                                </div>
                             </div>
                         </div>
+
+                        {/* ═══ ZOOM RULER: Versión Móvil — Regla Vertical Derecha ═══ */}
+                        {(() => {
+                            const RULER_MIN = 0.2, RULER_MAX = 3.0;
+                            const logMin = Math.log(RULER_MIN), logMax = Math.log(RULER_MAX);
+                            const getPos = (z) => (1 - (Math.log(Math.max(RULER_MIN, Math.min(RULER_MAX, z))) - logMin) / (logMax - logMin)) * 100;
+                            const getZoomFromPos = (pct) => Math.exp(logMax - (pct / 100) * (logMax - logMin));
+                            const ticks = [
+                                { z: 0.25, label: null },
+                                { z: 0.5, label: '50' },
+                                { z: 0.75, label: null },
+                                { z: 1.0, label: '100' },
+                                { z: 1.5, label: null },
+                                { z: 2.0, label: '200' },
+                                { z: 2.5, label: null },
+                                { z: 3.0, label: '300' },
+                            ];
+                            const currentPos = getPos(zoom);
+
+                            const handleRulerTouch = (e) => {
+                                const touch = e.touches?.[0] || e.changedTouches?.[0];
+                                if (!touch) return;
+                                const ruler = e.currentTarget;
+                                const rect = ruler.getBoundingClientRect();
+                                const relY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
+                                const newZoom = getZoomFromPos(relY * 100);
+                                setZoom(Math.round(newZoom * 10) / 10);
+                            };
+
+                            return (
+                                <div
+                                    className="md:hidden absolute right-0 top-20 z-50 pointer-events-auto"
+                                    style={{ bottom: '14.5rem' }}
+                                >
+                                    <div
+                                        className="relative h-full w-10 flex items-center justify-end pr-1"
+                                        onTouchStart={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
+                                        onTouchMove={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
+                                    >
+                                        {/* Línea central de la regla */}
+                                        <div className="absolute right-2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#c8aa6e]/25 to-transparent"></div>
+
+                                        {/* Marcas de la regla */}
+                                        {ticks.map(tick => {
+                                            const pos = getPos(tick.z);
+                                            const isMajor = tick.label !== null;
+                                            return (
+                                                <div
+                                                    key={tick.z}
+                                                    className="absolute flex items-center justify-end"
+                                                    style={{ top: `${pos}%`, right: '4px', transform: 'translateY(-50%)' }}
+                                                >
+                                                    {/* Label */}
+                                                    {isMajor && (
+                                                        <span className="text-[7px] font-mono text-[#c8aa6e]/30 mr-1.5 select-none">
+                                                            {tick.label}
+                                                        </span>
+                                                    )}
+                                                    {/* Tick mark */}
+                                                    <div
+                                                        className={`h-px ${isMajor ? 'w-2.5 bg-[#c8aa6e]/40' : 'w-1.5 bg-[#c8aa6e]/15'}`}
+                                                    ></div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Indicador de zoom actual (diamante dorado) */}
+                                        <div
+                                            className="absolute flex items-center transition-all duration-150 ease-out"
+                                            style={{ top: `${currentPos}%`, right: '0px', transform: 'translateY(-50%)' }}
+                                        >
+                                            {/* Etiqueta del porcentaje */}
+                                            <div className="flex items-center justify-center h-5 bg-[#0b1120]/90 backdrop-blur-sm border border-[#c8aa6e]/40 rounded px-1.5 shadow-[0_0_10px_rgba(0,0,0,0.4)]">
+                                                <span className="text-[8px] font-bold font-mono text-[#c8aa6e] tabular-nums select-none leading-none">
+                                                    {Math.round(zoom * 100)}%
+                                                </span>
+                                            </div>
+                                            {/* Línea conectora */}
+                                            <div className="w-1 h-px bg-[#c8aa6e]/40"></div>
+                                            {/* Diamante indicador */}
+                                            <div className="w-1.5 h-1.5 bg-[#c8aa6e] rotate-45 shadow-[0_0_4px_rgba(200,170,110,0.6)] shrink-0 translate-y-px"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* --- Instrucciones Rápidas --- */}
                         <div className="absolute bottom-8 left-8 z-50 pointer-events-none opacity-50">
