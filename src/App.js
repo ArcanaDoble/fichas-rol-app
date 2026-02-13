@@ -5908,6 +5908,13 @@ function App() {
               existingPlayers={existingPlayers}
               characterData={playerCharacterData}
               onOpenCharacterSheet={handleOpenCharacterSheet}
+              armas={armas}
+              armaduras={armaduras}
+              habilidades={habilidades}
+              accesorios={accesorios}
+              glossary={glossary}
+              rarityColorMap={rarityColorMap}
+              highlightText={highlightText}
             />
           </div>
         )}
@@ -8611,12 +8618,12 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return withTooltips(
-      <BestiaryView onBack={() => setChosenView(null)} />
+      <BestiaryView onBack={() => setChosenView(null)} highlightText={highlightText} />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'status_effects') {
     return withTooltips(
-      <StatusEffectsManager onBack={() => setChosenView(null)} />
+      <StatusEffectsManager onBack={() => setChosenView(null)} highlightText={highlightText} />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'classes') {
@@ -8655,6 +8662,13 @@ function App() {
       <CanvasSection
         onBack={() => setChosenView(null)}
         existingPlayers={existingPlayers}
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        accesorios={accesorios} // Pass accessories catalog
+        glossary={glossary}
+        rarityColorMap={rarityColorMap}
+        highlightText={highlightText}
       />
     );
   }
@@ -9972,7 +9986,13 @@ function App() {
                                 </p>
                                 {h.rasgos && h.rasgos.length > 0 && (
                                   <p>
-                                    <strong>Rasgos:</strong> {h.rasgos.join(', ')}
+                                    <strong>Rasgos:</strong>{' '}
+                                    {h.rasgos.map((r, ri) => (
+                                      <React.Fragment key={ri}>
+                                        {highlightText(r)}
+                                        {ri < h.rasgos.length - 1 ? ', ' : ''}
+                                      </React.Fragment>
+                                    ))}
                                   </p>
                                 )}
                                 <p>

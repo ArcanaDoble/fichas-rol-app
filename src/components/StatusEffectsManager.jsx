@@ -92,7 +92,7 @@ EstadoImg.propTypes = {
     hex: PropTypes.string,
 };
 
-const StatusEffectsManager = ({ onBack }) => {
+const StatusEffectsManager = ({ onBack, highlightText }) => {
     const [effects, setEffects] = useState({});
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -405,7 +405,7 @@ const StatusEffectsManager = ({ onBack }) => {
                                                 {effect.label}
                                             </h3>
                                             <p className="text-sm text-slate-400 leading-relaxed font-light line-clamp-3">
-                                                {effect.desc}
+                                                {highlightText ? highlightText(effect.desc) : effect.desc}
                                             </p>
                                         </div>
 

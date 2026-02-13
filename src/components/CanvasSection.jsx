@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Zap, Gem, Search, Package } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -143,7 +143,418 @@ const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => 
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null }) => {
+// --- Helper: Resolve item image (mirrors LoadoutView getObjectImage) ---
+const getObjectImage = (item) => {
+    if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) return item.icon;
+    const name = (item.name || item.nombre || '').toLowerCase();
+    const type = (item.type || '').toLowerCase();
+    const category = (item.category || '').toLowerCase();
+    const target = `${name} ${type} ${category}`;
+    // Weapons
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
+    if (target.includes('antorcha')) return '/armas/antorcha.png';
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
+    if (name.includes('pistola')) return '/armas/pistola.png';
+    if (name.includes('rifle')) return '/armas/rifle.png';
+    if (name.includes('escopeta')) return '/armas/escopeta.png';
+    if (name.includes('granarco')) return '/armas/arco_largo.png';
+    if (name.includes('arco')) return '/armas/arco_corto.png';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
+    if (name.includes('clava')) return '/armas/clava.png';
+    if (name.includes('jabalina')) return '/armas/jabalina.png';
+    if (name.includes('lanza')) return '/armas/lanza.png';
+    if (name.includes('daga')) return '/armas/daga.png';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
+    if (name.includes('honda')) return '/armas/honda.png';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
+    if (name.includes('estoque')) return '/armas/estoque.png';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
+    if (name.includes('espada larga')) return '/armas/espada_larga.png';
+    if (name.includes('espada corta')) return '/armas/espada_corta.png';
+    if (name.includes('mandoble')) return '/armas/mandoble.png';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
+    if (name.includes('espada')) return '/armas/espada_de_acero.png';
+    if (name.includes('fauces')) return '/armas/fauces.png';
+    if (name.includes('garras')) return '/armas/garras.png';
+    // Objects
+    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
+    if (target.includes('comida')) return '/objetos/comida.png';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
+    if (target.includes('libro')) return '/objetos/libro.png';
+    if (target.includes('llave')) return '/objetos/llave.png';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
+    if (target.includes('pergamino')) return '/objetos/pergamino.png';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
+    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.png';
+    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.png';
+    if (target.includes('recurso')) return '/objetos/recurso.jpg';
+    if (target.includes('accesorio')) return '/objetos/accesorio.png';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
+    // Armor
+    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
+    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
+    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
+    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
+    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
+    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
+    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
+    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
+    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
+    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
+    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
+    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
+    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
+    if (target.includes('armadura')) return '/objetos/armadura.png';
+    // Accessories
+    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
+    return null;
+};
+
+// --- Helper: Get rarity visual info ---
+const getRarityInfo = (rareza) => {
+    const r = (rareza || '').toLowerCase();
+    if (r.includes('legendari')) return { border: 'border-orange-500/50', text: 'text-orange-400', glow: 'from-orange-900/80', stripe: 'bg-orange-500' };
+    if (r.includes('épic') || r.includes('epic')) return { border: 'border-purple-500/50', text: 'text-purple-400', glow: 'from-purple-900/80', stripe: 'bg-purple-500' };
+    if (r.includes('rar')) return { border: 'border-blue-500/50', text: 'text-blue-400', glow: 'from-blue-900/80', stripe: 'bg-blue-500' };
+    if (r.includes('poco com')) return { border: 'border-green-500/50', text: 'text-green-400', glow: 'from-green-900/80', stripe: 'bg-green-500' };
+    return { border: 'border-slate-700', text: 'text-slate-500', glow: 'from-slate-800', stripe: 'bg-slate-600' };
+};
+
+// --- Normalize glossary word (mirrors LoadoutView) ---
+const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+// =============================================================================
+// EquipmentSection — Inventory-style equipment panel for canvas inspector
+// Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
+// =============================================================================
+const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem }) => {
+    const [addCat, setAddCat] = useState('weapons');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const searchInputRef = useRef(null);
+
+    // Find current category config
+    const currentCat = categories.find(c => c.id === addCat) || categories[0];
+    const filteredItems = useMemo(() => {
+        const list = currentCat?.items || [];
+        if (!searchTerm) return list.slice(0, 50);
+        const q = searchTerm.toLowerCase();
+        return list.filter(i => (i.nombre || i.name || '').toLowerCase().includes(q)).slice(0, 50);
+    }, [currentCat, searchTerm]);
+
+    useEffect(() => {
+        if (isAddOpen && searchInputRef.current) {
+            setTimeout(() => searchInputRef.current?.focus(), 80);
+        }
+    }, [isAddOpen, addCat]);
+
+    // Render a trait pill with optional glossary tooltip
+    const renderTrait = (t, i) => {
+        const traitName = (typeof t === 'string' ? t : String(t)).trim();
+        if (!traitName) return null;
+        const normalizedTrait = normalizeGlossaryWord(traitName);
+        const glossaryEntry = (glossary || []).find(g => normalizeGlossaryWord(g.word) === normalizedTrait);
+        if (glossaryEntry) {
+            return (
+                <span
+                    key={i}
+                    className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/90 text-[#f0e6d2] border border-slate-700 uppercase cursor-help hover:border-[#c8aa6e] transition-colors shadow-sm"
+                    data-tooltip-id="trait-tooltip"
+                    data-tooltip-content={glossaryEntry.info}
+                    style={glossaryEntry.color ? { color: glossaryEntry.color } : {}}
+                >
+                    {traitName}
+                </span>
+            );
+        }
+        return (
+            <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
+                {traitName}
+            </span>
+        );
+    };
+
+    // Type icon map
+    const typeIcons = { weapon: Sword, armor: Shield, access: Gem, power: Zap, ability: Zap };
+
+    return (
+        <div className="pt-4 border-t border-slate-800/50 space-y-4">
+            {/* Section Header — matches LoadoutView title style */}
+            <div className="flex items-center gap-3">
+                <Sword className="w-4 h-4 text-[#c8aa6e]" />
+                <h3 className="text-[#c8aa6e] font-['Cinzel'] text-xs tracking-[0.15em] uppercase">
+                    Equipamiento
+                </h3>
+                <div className="flex-1 h-px bg-gradient-to-r from-[#c8aa6e]/30 to-transparent" />
+                {equippedItems.length > 0 && (
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#c8aa6e]/10 text-[#c8aa6e] border border-[#c8aa6e]/20">
+                        {equippedItems.length}
+                    </span>
+                )}
+            </div>
+
+            {/* Equipped Items — Inventory card style */}
+            {equippedItems.length > 0 ? (
+                <div className="space-y-2">
+                    {equippedItems.map((item, idx) => {
+                        const rarity = getRarityInfo(item.rareza);
+                        const rarityColor = rarityColorMap[item.rareza] || '#94a3b8';
+                        const itemImage = getObjectImage(item);
+                        const TypeIcon = typeIcons[item.type] || Package;
+                        const traits = item.rasgos ? (Array.isArray(item.rasgos) ? item.rasgos : item.rasgos.toString().split(',')) : (item.traits ? item.traits.toString().split(',') : []);
+
+                        return (
+                            <div
+                                key={idx}
+                                className={`relative bg-[#161f32] border ${rarity.border} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300`}
+                            >
+                                {/* Rarity stripe (left edge) */}
+                                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe}`} />
+
+                                <div className="flex">
+                                    {/* Left Column — Image or Icon */}
+                                    <div className="w-16 shrink-0 relative overflow-hidden">
+                                        {itemImage ? (
+                                            <>
+                                                <img
+                                                    src={itemImage}
+                                                    alt={item.nombre || item.name}
+                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#161f32]" />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                                            </>
+                                        ) : (
+                                            <div className={`absolute inset-0 bg-gradient-to-br ${rarity.glow} via-[#161f32] to-[#161f32] flex items-center justify-center`}>
+                                                <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60`} />
+                                            </div>
+                                        )}
+                                        {/* Rarity badge overlay */}
+                                        {item.rareza && item.rareza.toLowerCase() !== 'común' && (
+                                            <div className="absolute bottom-1 left-1 z-10">
+                                                <span className={`text-[7px] uppercase font-bold ${rarity.text} bg-black/60 px-1 py-0.5 rounded`}>
+                                                    {item.rareza}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right Column — Content */}
+                                    <div className="flex-1 min-w-0 p-2 pl-2.5 flex flex-col">
+                                        {/* Name */}
+                                        <span
+                                            className="text-[11px] font-['Cinzel'] uppercase tracking-wider font-bold truncate leading-tight"
+                                            style={{ color: rarityColor }}
+                                        >
+                                            {item.nombre || item.name}
+                                        </span>
+
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1 text-[9px]">
+                                            {(item.dano || item.damage) && (
+                                                <div>
+                                                    <span className="text-slate-500 uppercase font-bold">Daño:</span>{' '}
+                                                    <span className="text-red-300 font-mono">{item.dano || item.damage}</span>
+                                                </div>
+                                            )}
+                                            {(item.defensa || item.defense) && (
+                                                <div>
+                                                    <span className="text-slate-500 uppercase font-bold">Defensa:</span>{' '}
+                                                    <span className="text-blue-300 font-mono">{item.defensa || item.defense}</span>
+                                                </div>
+                                            )}
+                                            {(item.alcance || item.range) && (
+                                                <div>
+                                                    <span className="text-slate-500 uppercase font-bold mr-1">Alc:</span>
+                                                    <span className="text-slate-300">{item.alcance || item.range}</span>
+                                                </div>
+                                            )}
+                                            {(item.consumo || item.consumption) && (
+                                                <div>
+                                                    <span className="text-slate-500 uppercase font-bold mr-1">Coste:</span>
+                                                    <span>{item.consumo || item.consumption}</span>
+                                                </div>
+                                            )}
+                                            {item.poder && (
+                                                <div>
+                                                    <span className="text-slate-500 uppercase font-bold">Poder:</span>{' '}
+                                                    <span className="text-purple-300 font-mono">{item.poder}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Traits */}
+                                        {traits.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                                {traits.map((t, i) => renderTrait(t, i))}
+                                            </div>
+                                        )}
+
+                                        {/* Description */}
+                                        {(item.detail || item.description || item.descripcion) && (
+                                            <div className="mt-auto pt-1">
+                                                <p className="text-[9px] text-emerald-100/50 italic leading-relaxed font-serif border-l-2 border-emerald-500/20 pl-1.5 line-clamp-2">
+                                                    "{item.detail || item.description || item.descripcion}"
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Delete button */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onRemoveItem && onRemoveItem(idx);
+                                    }}
+                                    className="absolute top-1.5 right-1.5 p-1 bg-red-500/10 hover:bg-red-500/30 text-red-400/70 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all z-20"
+                                    title="Eliminar"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+
+                                {/* Hover Glow Sweep */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center gap-2 py-5 px-3 rounded-lg border border-dashed border-slate-800 bg-slate-900/30">
+                    <div className="w-10 h-10 rounded-full bg-slate-800/50 flex items-center justify-center">
+                        <Package size={18} className="text-slate-600" />
+                    </div>
+                    <p className="text-[10px] text-slate-600 text-center leading-relaxed">
+                        Sin equipamiento.<br />
+                        <span className="text-slate-500">Usa el panel de abajo para añadir.</span>
+                    </p>
+                </div>
+            )}
+
+            {/* Add Item Panel — mirroring LoadoutView "Agregar al inventario" */}
+            <div className="rounded-lg border border-slate-700/60 overflow-hidden bg-[#0f172a]">
+                {/* Toggle header */}
+                <button
+                    onClick={() => { setIsAddOpen(!isAddOpen); setSearchTerm(''); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-800/30 transition-all"
+                >
+                    <Plus size={14} className={`text-[#c8aa6e] transition-transform duration-200 ${isAddOpen ? 'rotate-45' : ''}`} />
+                    <span className="text-[10px] text-[#c8aa6e] font-['Cinzel'] uppercase tracking-[0.15em] flex-1">
+                        Agregar al equipamiento
+                    </span>
+                    <ChevronDown size={12} className={`text-slate-500 transition-transform duration-200 ${isAddOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isAddOpen && (
+                    <div className="border-t border-slate-800/80">
+                        {/* Category tabs */}
+                        <div className="flex gap-1 p-2 border-b border-slate-800/50 overflow-x-auto">
+                            {categories.map(cat => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => { setAddCat(cat.id); setSearchTerm(''); }}
+                                    className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${addCat === cat.id
+                                            ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] border border-[#c8aa6e]/40'
+                                            : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-slate-700'
+                                        }`}
+                                >
+                                    {cat.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Search input */}
+                        <div className="p-2 border-b border-slate-800/50">
+                            <div className="flex items-center gap-2 bg-black/40 rounded-md px-3 py-1.5 border border-slate-700/50 focus-within:border-[#c8aa6e]/40 transition-colors">
+                                <Search size={13} className="text-slate-500 shrink-0" />
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    placeholder={`Buscar ${currentCat?.label || ''}...`}
+                                    className="flex-1 bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600 min-w-0"
+                                />
+                                {searchTerm && (
+                                    <button onClick={() => setSearchTerm('')} className="text-slate-600 hover:text-slate-300 transition-colors">
+                                        <X size={12} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Results */}
+                        <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                            {filteredItems.length === 0 ? (
+                                <div className="py-6 flex flex-col items-center gap-2 text-slate-600">
+                                    <Search size={20} className="opacity-30" />
+                                    <p className="text-[10px] italic">Sin resultados</p>
+                                </div>
+                            ) : (
+                                filteredItems.map((item, idx) => {
+                                    const rarityColor = rarityColorMap[item.rareza] || '#94a3b8';
+                                    const subInfo = item.dano || item.defensa || item.poder || item.alcance || '';
+                                    return (
+                                        <div
+                                            key={item.id || idx}
+                                            className="flex items-center gap-2.5 px-3 py-2 border-b border-slate-800/30 last:border-b-0 hover:bg-white/[0.03] transition-all group"
+                                        >
+                                            <div
+                                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                style={{ backgroundColor: rarityColor, boxShadow: `0 0 6px ${rarityColor}60` }}
+                                            />
+                                            <div className="flex flex-col min-w-0 flex-1">
+                                                <span className="text-[11px] font-semibold truncate" style={{ color: rarityColor }}>
+                                                    {item.nombre || item.name}
+                                                </span>
+                                                {subInfo && <span className="text-[9px] text-slate-600 truncate">{subInfo}</span>}
+                                            </div>
+                                            <button
+                                                onClick={() => { onAddItem && onAddItem(item, currentCat.type); }}
+                                                className="px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider rounded bg-[#c8aa6e]/15 text-[#c8aa6e] border border-[#c8aa6e]/30 hover:bg-[#c8aa6e]/30 hover:border-[#c8aa6e]/60 transition-all active:scale-95 shrink-0"
+                                            >
+                                                Agregar
+                                            </button>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-3 py-1.5 border-t border-slate-800/50 flex justify-between items-center">
+                            <span className="text-[9px] text-slate-600 font-mono">{filteredItems.length} resultado{filteredItems.length !== 1 ? 's' : ''}</span>
+                            <button
+                                onClick={() => { setIsAddOpen(false); setSearchTerm(''); }}
+                                className="text-[9px] text-slate-500 hover:text-slate-300 uppercase font-bold tracking-wider transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null, armas = [], armaduras = [], habilidades = [], accesorios = [], glossary = [], rarityColorMap = {}, highlightText = (t) => t }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -2120,11 +2531,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         );
     };
 
-    const updateItem = (itemId, updates) => {
-        setActiveScenario(prev => ({
-            ...prev,
-            items: prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
-        }));
+    const updateItem = (itemId, updates, persist = false) => {
+        setActiveScenario(prev => {
+            const newItems = prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i);
+
+            if (persist && prev.id) {
+                updateDoc(doc(db, 'canvas_scenarios', prev.id), {
+                    items: newItems,
+                    lastModified: Date.now()
+                }).catch(err => console.error("Error persisting item update:", err));
+            }
+
+            return { ...prev, items: newItems };
+        });
     };
 
     const handleResizeMouseDown = (e, item) => {
@@ -3587,6 +4006,37 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                 )}
 
+                                                {/* SECCIÓN DE EQUIPAMIENTO */}
+                                                {(token.type !== 'light' && token.type !== 'wall') && (() => {
+                                                    const equippedItems = token.equippedItems || [];
+
+                                                    // Category tabs for adding items — mirrors LoadoutView
+                                                    const categories = [
+                                                        { id: 'weapons', label: 'Armas', items: armas, type: 'weapon' },
+                                                        { id: 'armor', label: 'Armaduras', items: armaduras, type: 'armor' },
+                                                        { id: 'abilities', label: 'Habilidades', items: habilidades, type: 'power' },
+                                                        { id: 'accessories', label: 'Accesorios', items: accesorios, type: 'access' },
+                                                    ];
+
+                                                    return (
+                                                        <EquipmentSection
+                                                            equippedItems={equippedItems}
+                                                            categories={categories}
+                                                            rarityColorMap={rarityColorMap}
+                                                            glossary={glossary}
+                                                            highlightText={highlightText}
+                                                            onAddItem={(item, type) => {
+                                                                const newItems = [...equippedItems, { ...item, type }];
+                                                                updateItem(token.id, { equippedItems: newItems }, true);
+                                                            }}
+                                                            onRemoveItem={(idx) => {
+                                                                const newItems = [...equippedItems];
+                                                                newItems.splice(idx, 1);
+                                                                updateItem(token.id, { equippedItems: newItems }, true);
+                                                            }}
+                                                        />
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     );
