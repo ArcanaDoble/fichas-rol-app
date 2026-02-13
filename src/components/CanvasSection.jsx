@@ -470,8 +470,8 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                     key={cat.id}
                                     onClick={() => { setAddCat(cat.id); setSearchTerm(''); }}
                                     className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${addCat === cat.id
-                                            ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] border border-[#c8aa6e]/40'
-                                            : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-slate-700'
+                                        ? 'bg-[#c8aa6e]/20 text-[#c8aa6e] border border-[#c8aa6e]/40'
+                                        : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-slate-700'
                                         }`}
                                 >
                                     {cat.label}
@@ -1672,6 +1672,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             });
         }
 
+        // Extract equipped items from character sheet slots into token format
+        // Character sheet format: { mainHand: item, offHand: item, body: item, belt_0: item, accessory_0: item, ... }
+        // Token format: flat array with type on each item
+        const tokenEquippedItems = [];
+        if (characterData.equippedItems && typeof characterData.equippedItems === 'object') {
+            const slotTypeMap = {
+                mainHand: 'weapon',
+                offHand: 'weapon',
+                body: 'armor',
+            };
+            Object.entries(characterData.equippedItems).forEach(([slot, item]) => {
+                if (!item || slot === 'beltSlotCount') return; // skip non-item keys
+                let type = slotTypeMap[slot];
+                if (!type) {
+                    if (slot.startsWith('belt_')) type = 'access';
+                    else if (slot.startsWith('accessory_')) type = 'access';
+                    else type = 'weapon'; // fallback
+                }
+                tokenEquippedItems.push({ ...item, type });
+            });
+        }
+
+        // Also add any inventory items (equipment array) that aren't already equipped
+        // This gives the master visibility into what the player carries
+        const tokenInventory = Array.isArray(characterData.equipment) ? characterData.equipment : [];
+
         // Calculate spawn position (center of the map)
         const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
         const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
@@ -1693,6 +1719,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             isCircular: true, // Mark as circular for portrait-style rendering
             attributes: tokenAttributes,
             stats: tokenStats,
+            equippedItems: tokenEquippedItems,
+            inventory: tokenInventory,
         };
 
         console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
