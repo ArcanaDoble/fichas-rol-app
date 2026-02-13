@@ -110,7 +110,7 @@ const EnemyCard = ({ enemy, onClick }) => {
     );
 };
 
-const BestiaryView = ({ onBack, readOnly = false }) => {
+const BestiaryView = ({ onBack, readOnly = false, highlightText }) => {
     const [enemies, setEnemies] = useState(INITIAL_ENEMIES);
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreating, setIsCreating] = useState(false);
@@ -339,6 +339,7 @@ const BestiaryView = ({ onBack, readOnly = false }) => {
                         onUpdate={readOnly ? undefined : handleUpdateEnemy}
                         onDelete={readOnly ? undefined : () => handleDeleteEnemy(selectedEnemy.id)}
                         readOnly={readOnly}
+                        highlightText={highlightText}
                     />
                 )}
             </AnimatePresence>

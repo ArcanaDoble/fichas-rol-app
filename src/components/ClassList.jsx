@@ -4447,6 +4447,8 @@ const ClassList = ({
                                 attributes: editingClass.attributes || {},
                                 stats: editingClass.stats || {},
                                 tags: editingClass.tags || [],
+                                equipment: editingClass.equipment || [],
+                                equippedItems: editingClass.equippedItems || {},
                               });
                             }
                           }}

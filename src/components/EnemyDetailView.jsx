@@ -151,6 +151,7 @@ const EditableField = ({
     type = 'text',
     autoSelect = true,
     showEditIcon = true,
+    displayRenderer = null,
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const inputRef = useRef(null);
@@ -218,7 +219,7 @@ const EditableField = ({
                     className="relative cursor-pointer flex items-center gap-2"
                 >
                     <span className={`${textClassName} ${isPlaceholder ? 'opacity-50 italic' : ''}`}>
-                        {displayValue}
+                        {displayRenderer ? displayRenderer(displayValue) : displayValue}
                     </span>
                     {showEditIcon && <FiEdit2 className="w-3 h-3 text-slate-500 opacity-0 group-hover/edit:opacity-100 transition-opacity" />}
                 </div>
@@ -227,7 +228,7 @@ const EditableField = ({
     );
 };
 
-export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay }) => {
+export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay, highlightText }) => {
     // Initial State Setup with Fallbacks for Attributes and Stats
     const [localEnemy, setLocalEnemy] = useState(() => {
         const initial = { ...enemy };
@@ -594,6 +595,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay }) 
                                 textClassName="text-lg text-slate-300 leading-relaxed font-serif italic"
                                 inputClassName="bg-[#1a0505] text-lg text-slate-300 font-serif italic border-red-900/30"
                                 placeholder='"Descripción de la criatura..."'
+                                displayRenderer={highlightText}
                             />
                         </div>
                     </div>
@@ -674,6 +676,7 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay }) 
                                                         textClassName="text-slate-400 font-serif text-[10px] cursor-text hover:text-slate-300 transition-colors leading-snug line-clamp-4 italic"
                                                         inputClassName="text-slate-300 font-serif text-[10px] bg-black/50 border-red-500/50 min-h-[60px] italic"
                                                         placeholder="Descripción..."
+                                                        displayRenderer={highlightText}
                                                     />
                                                 </div>
                                             );
