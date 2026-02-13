@@ -4419,7 +4419,20 @@ const ClassList = ({
 
                       {/* Actions */}
                       <div className="mt-auto space-y-4">
-                        <button className="w-full group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right">
+                        <button
+                          onClick={() => {
+                            if (onLaunchCanvas) {
+                              onLaunchCanvas(editingClass.name, {
+                                name: editingClass.name,
+                                avatar: editingClass.avatar || editingClass.portraitSource || editingClass.image || '',
+                                attributes: editingClass.attributes || {},
+                                stats: editingClass.stats || {},
+                                tags: editingClass.tags || [],
+                              });
+                            }
+                          }}
+                          className="w-full group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right"
+                        >
                           <span className="relative z-10 flex items-center justify-center gap-3">
                             Jugar Aventura
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

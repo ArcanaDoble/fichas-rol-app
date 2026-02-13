@@ -1968,7 +1968,12 @@ function App() {
     }
   }, [userType, setChosenView, setShowPlayerMinimap, setShowClassMinimap]);
 
-  const handleLaunchCanvas = useCallback((name) => {
+  const [playerCharacterData, setPlayerCharacterData] = useState(null);
+
+  const handleLaunchCanvas = useCallback((name, characterData = null) => {
+    if (characterData) {
+      setPlayerCharacterData(characterData);
+    }
     if (name) {
       setMinigamePlayerName(name);
       setShowPlayerBattleMap(true);
@@ -5882,11 +5887,12 @@ function App() {
         {showPlayerBattleMap && (
           <div className="fixed inset-0 z-[100]">
             <CanvasSection
-              onBack={() => setShowPlayerBattleMap(false)}
+              onBack={() => { setShowPlayerBattleMap(false); setPlayerCharacterData(null); }}
               playerName={playerName}
               isPlayerView={true}
               isMaster={false}
               existingPlayers={existingPlayers}
+              characterData={playerCharacterData}
             />
           </div>
         )}

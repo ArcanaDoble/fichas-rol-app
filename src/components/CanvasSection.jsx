@@ -134,7 +134,7 @@ const SaveToast = ({ show, exiting, type = 'success' }) => {
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [] }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -1145,7 +1145,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let initialCamera = scenario.camera;
 
         if (isPlayerView) {
-            const playerToken = scenario.items?.find(i => i.controlledBy?.includes(playerName));
+            // Prefer the token matching the current character name, fall back to any controlled token
+            const charName = characterData?.name;
+            const playerToken = charName
+                ? (scenario.items?.find(i => i.controlledBy?.includes(playerName) && i.name === charName)
+                    || scenario.items?.find(i => i.controlledBy?.includes(playerName)))
+                : scenario.items?.find(i => i.controlledBy?.includes(playerName));
             if (playerToken) {
                 const playerZoom = 1.2;
                 initialCamera = {
@@ -1164,6 +1169,125 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
         setViewMode('EDIT');
     };
+
+    // Auto-create player token when entering with character data
+    const hasCreatedAutoToken = useRef(false);
+    useEffect(() => {
+        if (!isPlayerView || !characterData || !activeScenario?.id || hasCreatedAutoToken.current) return;
+
+        const characterName = characterData.name || playerName;
+
+        // Check if this specific character already has a token in this scenario
+        // Allows the same player to have multiple tokens from different character sheets
+        const existingToken = activeScenario.items?.find(i =>
+            i.controlledBy?.includes(playerName) && i.name === characterName
+        );
+        if (existingToken) {
+            hasCreatedAutoToken.current = true;
+            return;
+        }
+
+        // Map character attributes to token attributes format (e.g. { destreza: 'D8' } -> { destreza: 'd8' })
+        const tokenAttributes = {};
+        if (characterData.attributes) {
+            const attrKeyMap = {
+                'Destreza': 'destreza', 'destreza': 'destreza',
+                'Vigor': 'vigor', 'vigor': 'vigor',
+                'Intelecto': 'intelecto', 'intelecto': 'intelecto',
+                'Voluntad': 'voluntad', 'voluntad': 'voluntad',
+            };
+            Object.entries(characterData.attributes).forEach(([key, value]) => {
+                const mappedKey = attrKeyMap[key] || key.toLowerCase();
+                if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
+                    // Normalize dice value format (D8 -> d8, etc)
+                    const dieValue = typeof value === 'string' ? value.toLowerCase() : value;
+                    tokenAttributes[mappedKey] = dieValue;
+                }
+            });
+        }
+
+        // Map character stats to token stats format
+        // Character sheet format: { postura: { current: 3, max: 4 }, vida: { current: 4, max: 4 }, ... }
+        // Token format: { postura: { current: 3, max: 4 }, ... }
+        const tokenStats = {};
+        if (characterData.stats) {
+            const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
+            Object.entries(characterData.stats).forEach(([key, value]) => {
+                const mappedKey = key.toLowerCase();
+                if (validStats.includes(mappedKey) && value && typeof value === 'object') {
+                    const max = value.max ?? 0;
+                    const current = value.current ?? max;
+                    tokenStats[mappedKey] = {
+                        current: Math.min(current, 10),
+                        max: Math.min(max, 10),
+                    };
+                }
+            });
+        }
+
+        // Extract status effects from character tags
+        // Tags can contain special keywords like 'minijuego', 'canvas', etc. — we only want status effect IDs
+        const STATUS_EFFECT_IDS = [
+            'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
+            'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+            'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
+        ];
+        const tokenStatus = [];
+        if (characterData.tags && Array.isArray(characterData.tags)) {
+            characterData.tags.forEach(tag => {
+                const normalizedTag = tag.toLowerCase().trim();
+                if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
+                    tokenStatus.push(normalizedTag);
+                }
+            });
+        }
+
+        // Calculate spawn position (center of the map)
+        const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
+        const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
+
+        const newToken = {
+            id: `token-${Date.now()}-${playerName}`,
+            x: spawnX,
+            y: spawnY,
+            width: gridConfig.cellWidth,
+            height: gridConfig.cellHeight,
+            img: characterData.avatar || '',
+            rotation: 0,
+            layer: 'TOKEN',
+            name: characterData.name || playerName,
+            status: tokenStatus,
+            hasVision: true,
+            visionRadius: 300,
+            controlledBy: [playerName],
+            isCircular: true, // Mark as circular for portrait-style rendering
+            attributes: tokenAttributes,
+            stats: tokenStats,
+        };
+
+        console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
+
+        setActiveScenario(prev => ({
+            ...prev,
+            items: [...(prev.items || []), newToken]
+        }));
+
+        // Center camera on the new token
+        const playerZoom = 1.2;
+        setZoom(playerZoom);
+        setOffset({
+            x: -(spawnX + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
+            y: -(spawnY + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
+        });
+
+        hasCreatedAutoToken.current = true;
+
+        // Save the new token to Firebase
+        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            items: [...(activeScenario.items || []), newToken]
+        }).catch(err => console.error('Error saving auto-created token:', err));
+
+    }, [isPlayerView, characterData, activeScenario?.id, playerName]);
 
     const saveCurrentScenario = async () => {
         if (!activeScenario) {
@@ -1798,7 +1922,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
                         </svg>
                         <div
-                            className="absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 rounded-sm overflow-hidden"
+                            className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                             style={{
                                 transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
                                 width: `${item.width}px`,
@@ -1838,7 +1962,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     className="group"
                 >
                     <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                             )}
@@ -1880,7 +2004,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 />
                             </div>
                         ) : (
-                            <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                            item.isCircular ? (
+                                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]">
+                                    <img src={item.img} className="w-full h-full object-cover" draggable={false} />
+                                </div>
+                            ) : (
+                                <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                            )
                         )}
 
                         {/* Recursos (HUD) - Solo para tokens, no luces */}
@@ -3028,6 +3158,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 </div>
 
                                                 {/* Future Links (Solo para personas/tokens reales) */}
+                                                {/* FORMA CIRCULAR */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Forma Circular</span>
+                                                                <span className="text-[8px] text-slate-600 italic">Retrato redondo estilo personaje</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { isCircular: !token.isCircular })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.isCircular ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.isCircular ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
