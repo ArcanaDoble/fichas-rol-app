@@ -14,7 +14,8 @@ export const CharacterListView = ({
     onLaunchSpeedSystem,
     onLaunchMinimap,
     onLaunchCanvas,
-    onLaunchMinigame
+    onLaunchMinigame,
+    initialCharacterName = null,
 }) => {
     return (
         <ClassList
@@ -25,6 +26,7 @@ export const CharacterListView = ({
             CreatorComponent={CharacterCreatorView}
             creatorLabel="Personaje"
             isPlayerMode={true}
+            initialCharacterName={initialCharacterName}
 
             armas={armas}
             armaduras={armaduras}

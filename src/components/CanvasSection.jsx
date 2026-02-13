@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -95,33 +95,42 @@ const CanvasThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show, exiting, type = 'success' }) => {
-    console.log("🍞 Rendering SaveToast - show:", show, "exiting:", exiting, "type:", type);
+const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => {
     if (!show) return null;
 
-    // Configuración según el tipo (éxito o error)
+    // Configuración según el tipo
     const isSuccess = type === 'success';
-    const mainText = isSuccess ? "PROGRESO\nGUARDADO" : "ERROR AL\nGUARDAR";
-    const subText = isSuccess ? "Encuentro Sincronizado" : "Error de Conexión";
+    const isError = type === 'error';
+    const isInfo = type === 'info';
+    const isWarning = type === 'warning';
+
+    const mainText = message || (isSuccess ? "PROGRESO\nGUARDADO" : isError ? "ERROR AL\nGUARDAR" : "INFORMACIÓN");
+    const subText = subMessage || (isSuccess ? "Encuentro Sincronizado" : isError ? "Error de Conexión" : isWarning ? "Acción No Disponible" : "Aviso del Sistema");
 
     // Clases dinámicas
-    const borderColor = isSuccess ? "border-[#c8aa6e]" : "border-red-500";
-    const titleColor = isSuccess ? "text-[#f0e6d2]" : "text-red-500";
-    const subtextColor = isSuccess ? "text-[#c8aa6e]" : "text-red-400";
-    const iconContainer = isSuccess ? "border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)]" : "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
-    const barColor = isSuccess ? "bg-[#c8aa6e]/50" : "bg-red-500/50";
+    const borderColor = isError ? "border-red-500" : isWarning ? "border-amber-500" : isInfo ? "border-sky-500" : "border-[#c8aa6e]";
+    const titleColor = isError ? "text-red-500" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
+    const subtextColor = isError ? "text-red-400" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
+    const iconContainer = isError
+        ? "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+        : isWarning
+            ? "border-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+            : isInfo
+                ? "border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(14,165,233,0.2)]"
+                : "border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)]";
+    const barColor = isError ? "bg-red-500/50" : isWarning ? "bg-amber-500/50" : isInfo ? "bg-sky-500/50" : "bg-[#c8aa6e]/50";
 
     return (
         <div className={`fixed top-12 left-1/2 z-[999] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
             <div className={`relative bg-[#0b1120] border ${borderColor} px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg`}>
                 {/* Icon */}
                 <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
-                    {isSuccess ? <Check className="w-5 h-5 text-[#c8aa6e]" /> : <X className="w-5 h-5 text-red-500" />}
+                    {isError ? <X className="w-5 h-5 text-red-500" /> : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-500" /> : isInfo ? <Shield className="w-5 h-5 text-sky-500" /> : <Check className="w-5 h-5 text-[#c8aa6e]" />}
                 </div>
 
                 {/* Text */}
                 <div className="flex flex-col">
-                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line`}>
+                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line uppercase`}>
                         {mainText}
                     </h3>
                     <div className="flex items-center gap-2">
@@ -134,7 +143,7 @@ const SaveToast = ({ show, exiting, type = 'success' }) => {
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [] }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -152,6 +161,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [showToast, setShowToast] = useState(false);
     const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastSubMessage, setToastSubMessage] = useState('');
+
+    const triggerToast = useCallback((message = '', subMessage = '', type = 'success') => {
+        setToastType(type);
+        setToastMessage(message);
+        setToastSubMessage(subMessage);
+        setShowToast(true);
+        setToastExiting(false);
+    }, []);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
@@ -1145,7 +1164,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let initialCamera = scenario.camera;
 
         if (isPlayerView) {
-            const playerToken = scenario.items?.find(i => i.controlledBy?.includes(playerName));
+            // Prefer the token matching the current character name, fall back to any controlled token
+            const charName = characterData?.name;
+            const playerToken = charName
+                ? (scenario.items?.find(i => i.controlledBy?.includes(playerName) && i.name === charName)
+                    || scenario.items?.find(i => i.controlledBy?.includes(playerName)))
+                : scenario.items?.find(i => i.controlledBy?.includes(playerName));
             if (playerToken) {
                 const playerZoom = 1.2;
                 initialCamera = {
@@ -1165,6 +1189,125 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setViewMode('EDIT');
     };
 
+    // Auto-create player token when entering with character data
+    const hasCreatedAutoToken = useRef(false);
+    useEffect(() => {
+        if (!isPlayerView || !characterData || !activeScenario?.id || hasCreatedAutoToken.current) return;
+
+        const characterName = characterData.name || playerName;
+
+        // Check if this specific character already has a token in this scenario
+        // Allows the same player to have multiple tokens from different character sheets
+        const existingToken = activeScenario.items?.find(i =>
+            i.controlledBy?.includes(playerName) && i.name === characterName
+        );
+        if (existingToken) {
+            hasCreatedAutoToken.current = true;
+            return;
+        }
+
+        // Map character attributes to token attributes format (e.g. { destreza: 'D8' } -> { destreza: 'd8' })
+        const tokenAttributes = {};
+        if (characterData.attributes) {
+            const attrKeyMap = {
+                'Destreza': 'destreza', 'destreza': 'destreza',
+                'Vigor': 'vigor', 'vigor': 'vigor',
+                'Intelecto': 'intelecto', 'intelecto': 'intelecto',
+                'Voluntad': 'voluntad', 'voluntad': 'voluntad',
+            };
+            Object.entries(characterData.attributes).forEach(([key, value]) => {
+                const mappedKey = attrKeyMap[key] || key.toLowerCase();
+                if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
+                    // Normalize dice value format (D8 -> d8, etc)
+                    const dieValue = typeof value === 'string' ? value.toLowerCase() : value;
+                    tokenAttributes[mappedKey] = dieValue;
+                }
+            });
+        }
+
+        // Map character stats to token stats format
+        // Character sheet format: { postura: { current: 3, max: 4 }, vida: { current: 4, max: 4 }, ... }
+        // Token format: { postura: { current: 3, max: 4 }, ... }
+        const tokenStats = {};
+        if (characterData.stats) {
+            const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
+            Object.entries(characterData.stats).forEach(([key, value]) => {
+                const mappedKey = key.toLowerCase();
+                if (validStats.includes(mappedKey) && value && typeof value === 'object') {
+                    const max = value.max ?? 0;
+                    const current = value.current ?? max;
+                    tokenStats[mappedKey] = {
+                        current: Math.min(current, 10),
+                        max: Math.min(max, 10),
+                    };
+                }
+            });
+        }
+
+        // Extract status effects from character tags
+        // Tags can contain special keywords like 'minijuego', 'canvas', etc. — we only want status effect IDs
+        const STATUS_EFFECT_IDS = [
+            'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
+            'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+            'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
+        ];
+        const tokenStatus = [];
+        if (characterData.tags && Array.isArray(characterData.tags)) {
+            characterData.tags.forEach(tag => {
+                const normalizedTag = tag.toLowerCase().trim();
+                if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
+                    tokenStatus.push(normalizedTag);
+                }
+            });
+        }
+
+        // Calculate spawn position (center of the map)
+        const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
+        const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
+
+        const newToken = {
+            id: `token-${Date.now()}-${playerName}`,
+            x: spawnX,
+            y: spawnY,
+            width: gridConfig.cellWidth,
+            height: gridConfig.cellHeight,
+            img: characterData.avatar || '',
+            rotation: 0,
+            layer: 'TOKEN',
+            name: characterData.name || playerName,
+            status: tokenStatus,
+            hasVision: true,
+            visionRadius: 300,
+            controlledBy: [playerName],
+            isCircular: true, // Mark as circular for portrait-style rendering
+            attributes: tokenAttributes,
+            stats: tokenStats,
+        };
+
+        console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
+
+        setActiveScenario(prev => ({
+            ...prev,
+            items: [...(prev.items || []), newToken]
+        }));
+
+        // Center camera on the new token
+        const playerZoom = 1.2;
+        setZoom(playerZoom);
+        setOffset({
+            x: -(spawnX + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
+            y: -(spawnY + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
+        });
+
+        hasCreatedAutoToken.current = true;
+
+        // Save the new token to Firebase
+        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            items: [...(activeScenario.items || []), newToken]
+        }).catch(err => console.error('Error saving auto-created token:', err));
+
+    }, [isPlayerView, characterData, activeScenario?.id, playerName]);
+
     const saveCurrentScenario = async () => {
         if (!activeScenario) {
             console.warn("⚠️ Intento de guardado sin escenario activo");
@@ -1175,9 +1318,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         console.log("💾 Iniciando guardado de escenario:", activeScenario.name);
 
         // Feedback visual inmediato
-        setToastType('success');
-        setShowToast(true);
-        setToastExiting(false);
+        triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
             let finalBackgroundImage = gridConfig.backgroundImage;
@@ -1798,7 +1939,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
                         </svg>
                         <div
-                            className="absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 rounded-sm overflow-hidden"
+                            className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                             style={{
                                 transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
                                 width: `${item.width}px`,
@@ -1816,7 +1957,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
                         e.stopPropagation();
-                        // Al hacer doble click, nos aseguramos que este item sea el seleccionado único para que el inspector lo reconozca
                         setSelectedTokenIds([item.id]);
                         lastSelectedIdRef.current = item.id;
                         setActiveTab('INSPECTOR');
@@ -1838,7 +1978,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     className="group"
                 >
                     <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] rounded-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                             )}
@@ -1880,7 +2020,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 />
                             </div>
                         ) : (
-                            <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                            item.isCircular ? (
+                                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]">
+                                    <img src={item.img} className="w-full h-full object-cover" draggable={false} />
+                                </div>
+                            ) : (
+                                <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                            )
                         )}
 
                         {/* Recursos (HUD) - Solo para tokens, no luces */}
@@ -3028,6 +3174,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 </div>
 
                                                 {/* Future Links (Solo para personas/tokens reales) */}
+                                                {/* FORMA CIRCULAR */}
+                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Forma Circular</span>
+                                                                <span className="text-[8px] text-slate-600 italic">Retrato redondo estilo personaje</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { isCircular: !token.isCircular })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.isCircular ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.isCircular ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
@@ -4617,11 +4781,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const hudToken = selectedControlled || myTokens[0];
 
                 if (hudToken) {
+                    const canOpenSheet = !!hudToken.isCircular;
+
+                    const handlePortraitClick = (charName) => {
+                        if (canOpenSheet && onOpenCharacterSheet) {
+                            onOpenCharacterSheet(charName);
+                        } else {
+                            // Feedback visual de advertencia
+                            triggerToast(
+                                "Token sin ficha vinculada",
+                                "Esta entidad no tiene archivo de personaje",
+                                'warning'
+                            );
+                        }
+                    };
+
                     return (
                         <CombatHUD
                             token={hudToken}
                             onAction={(action) => console.log("Action:", action)}
                             onEndTurn={() => console.log("Turn Ended")}
+                            onPortraitClick={handlePortraitClick}
+                            canOpenSheet={canOpenSheet}
                         />
                     );
                 }
@@ -4629,7 +4810,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             })()}
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
-            <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
+            <SaveToast
+                show={showToast}
+                exiting={toastExiting}
+                type={toastType}
+                message={toastMessage}
+                subMessage={toastSubMessage}
+            />
         </div >
     );
 };

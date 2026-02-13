@@ -1493,8 +1493,10 @@ const ClassList = ({
   CreatorComponent = ClassCreatorView,
   creatorLabel = "Campeón",
   isPlayerMode = false,
+  initialCharacterName = null,
 }) => {
   const [classes, setClasses] = useState([]);
+  const [isAutoOpening, setIsAutoOpening] = useState(!!initialCharacterName);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1638,6 +1640,23 @@ const ClassList = ({
       isMounted = false;
     };
   }, [collectionPath, ownerFilter]); // Added dependencies to refetch if props change
+
+  // Auto-open a specific character when initialCharacterName is provided
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (!initialCharacterName || hasAutoOpened.current || classes.length === 0) return;
+
+    const targetClass = classes.find(c => c.name === initialCharacterName);
+    if (targetClass) {
+      openClassDetails(targetClass);
+      hasAutoOpened.current = true;
+      // Small timeout to ensure transition starts smoothly
+      setTimeout(() => setIsAutoOpening(false), 50);
+    } else {
+      // If we finished loading but didn't find the character, just show the list
+      setIsAutoOpening(false);
+    }
+  }, [initialCharacterName, classes]);
 
   const highlightText = useCallback(
     (rawValue) => {
@@ -4419,7 +4438,20 @@ const ClassList = ({
 
                       {/* Actions */}
                       <div className="mt-auto space-y-4">
-                        <button className="w-full group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right">
+                        <button
+                          onClick={() => {
+                            if (onLaunchCanvas) {
+                              onLaunchCanvas(editingClass.name, {
+                                name: editingClass.name,
+                                avatar: editingClass.avatar || editingClass.portraitSource || editingClass.image || '',
+                                attributes: editingClass.attributes || {},
+                                stats: editingClass.stats || {},
+                                tags: editingClass.tags || [],
+                              });
+                            }
+                          }}
+                          className="w-full group relative px-10 py-4 bg-gradient-to-b from-[#c8aa6e] to-[#b45309] hover:to-[#d97706] text-[#0b1120] font-['Cinzel'] font-bold text-xl uppercase tracking-[0.15em] transition-all transform hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(200,170,110,0.4)] clip-slant-right"
+                        >
                           <span className="relative z-10 flex items-center justify-center gap-3">
                             Jugar Aventura
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5028,7 +5060,26 @@ const ClassList = ({
       />
 
       <AnimatePresence mode="wait">
-        {!selectedClass ? (
+        {isAutoOpening ? (
+          <motion.div
+            key="auto-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-[#09090b]"
+          >
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-[#c8aa6e]/20 border-t-[#c8aa6e] rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FiRefreshCw className="w-6 h-6 text-[#c8aa6e] opacity-40" />
+              </div>
+            </div>
+            <div className="mt-8 text-center">
+              <h2 className="font-['Cinzel'] text-[#c8aa6e] text-xl font-bold tracking-[0.2em] uppercase">Consultando Archivo</h2>
+              <p className="text-slate-500 text-sm mt-2 font-light tracking-widest uppercase">Cargando datos de {initialCharacterName}...</p>
+            </div>
+          </motion.div>
+        ) : !selectedClass ? (
           <motion.div
             key="list-view"
             initial={{ opacity: 0, x: -20 }}
