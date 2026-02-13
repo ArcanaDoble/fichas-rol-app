@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
+import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock } from 'lucide-react';
 
 const CombatHUD = ({
     token,
     onAction,
     onEndTurn,
+    onPortraitClick,
+    canOpenSheet = true,
     isActive = true // Si es el turno del jugador o no (visual)
 }) => {
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
@@ -32,14 +34,35 @@ const CombatHUD = ({
             <div className="w-full max-w-5xl mx-auto flex items-end justify-between px-2 md:px-8 pb-2 md:pb-6 pointer-events-auto relative">
 
                 {/* 1. RETRATO (Izquierda - Desktop Only) */}
-                <div className="relative z-20 hidden md:flex flex-col items-center justify-end h-32 w-32 group">
-                    <div className="w-32 h-32 rounded-full border-4 border-[#c8aa6e] bg-[#0b1120] overflow-hidden shadow-[0_0_20px_rgba(200,170,110,0.3)] relative shrink-0">
+                <div
+                    className={`relative z-20 hidden md:flex flex-col items-center justify-end h-32 w-32 group ${canOpenSheet ? 'cursor-pointer' : 'cursor-default'}`}
+                    onClick={() => onPortraitClick && onPortraitClick(token.name)}
+                >
+                    <div className={`w-32 h-32 rounded-full border-4 bg-[#0b1120] overflow-hidden relative shrink-0 transition-all duration-300 ${canOpenSheet
+                        ? 'border-[#c8aa6e] shadow-[0_0_20px_rgba(200,170,110,0.3)] group-hover:shadow-[0_0_30px_rgba(200,170,110,0.5)] group-hover:border-[#f0e6d2] group-active:scale-95'
+                        : 'border-slate-700 opacity-60 grayscale'
+                        }`}>
                         <img src={token.img} alt={token.name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 ring-inset ring-2 ring-black/20 rounded-full"></div>
+                        {canOpenSheet && <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full"></div>}
+
+                        {/* Indicador de "No vinculado" */}
+                        {!canOpenSheet && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                <Lock className="w-8 h-8 text-slate-500 opacity-50" />
+                            </div>
+                        )}
                     </div>
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#0b1120] border border-[#c8aa6e] text-[#c8aa6e] text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg whitespace-nowrap z-30">
+                    <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 border text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg whitespace-nowrap z-30 transition-colors ${canOpenSheet ? 'bg-[#0b1120] border-[#c8aa6e] text-[#c8aa6e]' : 'bg-slate-900 border-slate-700 text-slate-500'
+                        }`}>
                         {token.name}
                     </div>
+
+                    {!canOpenSheet && (
+                        <div className="absolute bottom-full mb-4 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 border border-slate-700 text-slate-400 text-[9px] px-2 py-1 rounded uppercase tracking-tighter whitespace-nowrap pointer-events-none">
+                            Ficha no vinculada
+                        </div>
+                    )}
                 </div>
 
                 {/* 2. BARRA DE ACCIONES (Centro) */}
@@ -141,9 +164,20 @@ const CombatHUD = ({
             {/* --- MOBILE OVERLAYS (Flotantes sobre el HUD) --- */}
 
             {/* 1. Retrato Móvil (Izquierda) */}
-            <div className="md:hidden absolute bottom-32 left-4 pointer-events-none">
-                <div className="w-12 h-12 rounded-full border-2 border-[#c8aa6e] bg-[#0b1120] overflow-hidden shadow-lg">
+            <div
+                className={`md:hidden absolute bottom-32 left-4 pointer-events-auto ${canOpenSheet ? 'cursor-pointer' : 'cursor-default'}`}
+                onClick={() => onPortraitClick && onPortraitClick(token.name)}
+            >
+                <div className={`w-12 h-12 rounded-full border-2 bg-[#0b1120] overflow-hidden shadow-lg transition-all duration-200 ${canOpenSheet
+                    ? 'border-[#c8aa6e] active:scale-90 hover:border-[#f0e6d2] hover:shadow-[0_0_15px_rgba(200,170,110,0.4)]'
+                    : 'border-slate-700 grayscale opacity-60'
+                    }`}>
                     <img src={token.img} alt={token.name} className="w-full h-full object-cover" />
+                    {!canOpenSheet && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Lock className="w-3 h-3 text-slate-500" />
+                        </div>
+                    )}
                 </div>
             </div>
 

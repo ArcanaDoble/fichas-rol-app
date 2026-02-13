@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -95,33 +95,42 @@ const CanvasThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show, exiting, type = 'success' }) => {
-    console.log("🍞 Rendering SaveToast - show:", show, "exiting:", exiting, "type:", type);
+const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => {
     if (!show) return null;
 
-    // Configuración según el tipo (éxito o error)
+    // Configuración según el tipo
     const isSuccess = type === 'success';
-    const mainText = isSuccess ? "PROGRESO\nGUARDADO" : "ERROR AL\nGUARDAR";
-    const subText = isSuccess ? "Encuentro Sincronizado" : "Error de Conexión";
+    const isError = type === 'error';
+    const isInfo = type === 'info';
+    const isWarning = type === 'warning';
+
+    const mainText = message || (isSuccess ? "PROGRESO\nGUARDADO" : isError ? "ERROR AL\nGUARDAR" : "INFORMACIÓN");
+    const subText = subMessage || (isSuccess ? "Encuentro Sincronizado" : isError ? "Error de Conexión" : isWarning ? "Acción No Disponible" : "Aviso del Sistema");
 
     // Clases dinámicas
-    const borderColor = isSuccess ? "border-[#c8aa6e]" : "border-red-500";
-    const titleColor = isSuccess ? "text-[#f0e6d2]" : "text-red-500";
-    const subtextColor = isSuccess ? "text-[#c8aa6e]" : "text-red-400";
-    const iconContainer = isSuccess ? "border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)]" : "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
-    const barColor = isSuccess ? "bg-[#c8aa6e]/50" : "bg-red-500/50";
+    const borderColor = isError ? "border-red-500" : isWarning ? "border-amber-500" : isInfo ? "border-sky-500" : "border-[#c8aa6e]";
+    const titleColor = isError ? "text-red-500" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
+    const subtextColor = isError ? "text-red-400" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
+    const iconContainer = isError
+        ? "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+        : isWarning
+            ? "border-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+            : isInfo
+                ? "border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(14,165,233,0.2)]"
+                : "border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)]";
+    const barColor = isError ? "bg-red-500/50" : isWarning ? "bg-amber-500/50" : isInfo ? "bg-sky-500/50" : "bg-[#c8aa6e]/50";
 
     return (
         <div className={`fixed top-12 left-1/2 z-[999] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
             <div className={`relative bg-[#0b1120] border ${borderColor} px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg`}>
                 {/* Icon */}
                 <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
-                    {isSuccess ? <Check className="w-5 h-5 text-[#c8aa6e]" /> : <X className="w-5 h-5 text-red-500" />}
+                    {isError ? <X className="w-5 h-5 text-red-500" /> : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-500" /> : isInfo ? <Shield className="w-5 h-5 text-sky-500" /> : <Check className="w-5 h-5 text-[#c8aa6e]" />}
                 </div>
 
                 {/* Text */}
                 <div className="flex flex-col">
-                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line`}>
+                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line uppercase`}>
                         {mainText}
                     </h3>
                     <div className="flex items-center gap-2">
@@ -134,7 +143,7 @@ const SaveToast = ({ show, exiting, type = 'success' }) => {
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null }) => {
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -152,6 +161,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [showToast, setShowToast] = useState(false);
     const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastSubMessage, setToastSubMessage] = useState('');
+
+    const triggerToast = useCallback((message = '', subMessage = '', type = 'success') => {
+        setToastType(type);
+        setToastMessage(message);
+        setToastSubMessage(subMessage);
+        setShowToast(true);
+        setToastExiting(false);
+    }, []);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
@@ -1299,9 +1318,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         console.log("💾 Iniciando guardado de escenario:", activeScenario.name);
 
         // Feedback visual inmediato
-        setToastType('success');
-        setShowToast(true);
-        setToastExiting(false);
+        triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
             let finalBackgroundImage = gridConfig.backgroundImage;
@@ -1940,7 +1957,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
                         e.stopPropagation();
-                        // Al hacer doble click, nos aseguramos que este item sea el seleccionado único para que el inspector lo reconozca
                         setSelectedTokenIds([item.id]);
                         lastSelectedIdRef.current = item.id;
                         setActiveTab('INSPECTOR');
@@ -4765,11 +4781,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const hudToken = selectedControlled || myTokens[0];
 
                 if (hudToken) {
+                    const canOpenSheet = !!hudToken.isCircular;
+
+                    const handlePortraitClick = (charName) => {
+                        if (canOpenSheet && onOpenCharacterSheet) {
+                            onOpenCharacterSheet(charName);
+                        } else {
+                            // Feedback visual de advertencia
+                            triggerToast(
+                                "Token sin ficha vinculada",
+                                "Esta entidad no tiene archivo de personaje",
+                                'warning'
+                            );
+                        }
+                    };
+
                     return (
                         <CombatHUD
                             token={hudToken}
                             onAction={(action) => console.log("Action:", action)}
                             onEndTurn={() => console.log("Turn Ended")}
+                            onPortraitClick={handlePortraitClick}
+                            canOpenSheet={canOpenSheet}
                         />
                     );
                 }
@@ -4777,7 +4810,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             })()}
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
-            <SaveToast show={showToast} exiting={toastExiting} type={toastType} />
+            <SaveToast
+                show={showToast}
+                exiting={toastExiting}
+                type={toastType}
+                message={toastMessage}
+                subMessage={toastSubMessage}
+            />
         </div >
     );
 };

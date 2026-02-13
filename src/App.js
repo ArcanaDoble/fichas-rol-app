@@ -1969,6 +1969,20 @@ function App() {
   }, [userType, setChosenView, setShowPlayerMinimap, setShowClassMinimap]);
 
   const [playerCharacterData, setPlayerCharacterData] = useState(null);
+  const [characterSheetOverlayName, setCharacterSheetOverlayName] = useState(null);
+  const [sheetOverlayVisible, setSheetOverlayVisible] = useState(false);
+
+  const handleOpenCharacterSheet = useCallback((charName) => {
+    setCharacterSheetOverlayName(charName);
+    // Trigger fade-in on next frame
+    requestAnimationFrame(() => setSheetOverlayVisible(true));
+  }, []);
+
+  const handleCloseCharacterSheet = useCallback(() => {
+    setSheetOverlayVisible(false);
+    // Wait for fade-out animation to complete before unmounting
+    setTimeout(() => setCharacterSheetOverlayName(null), 300);
+  }, []);
 
   const handleLaunchCanvas = useCallback((name, characterData = null) => {
     if (characterData) {
@@ -5893,7 +5907,63 @@ function App() {
               isMaster={false}
               existingPlayers={existingPlayers}
               characterData={playerCharacterData}
+              onOpenCharacterSheet={handleOpenCharacterSheet}
             />
+          </div>
+        )}
+
+        {/* Character Sheet Overlay (triggered by clicking portrait token) */}
+        {characterSheetOverlayName && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center"
+            style={{
+              opacity: sheetOverlayVisible ? 1 : 0,
+              transition: 'opacity 300ms ease-in-out',
+              pointerEvents: sheetOverlayVisible ? 'auto' : 'none',
+            }}
+          >
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={handleCloseCharacterSheet}
+            />
+
+            {/* Sheet Container */}
+            <div
+              className="relative w-full h-full overflow-hidden"
+              style={{
+                transform: sheetOverlayVisible ? 'scale(1)' : 'scale(0.97)',
+                transition: 'transform 300ms ease-in-out',
+              }}
+            >
+              <CharacterListView
+                playerName={playerName}
+                armas={armas}
+                armaduras={armaduras}
+                habilidades={habilidades}
+                glossary={glossary}
+                rarityColorMap={rarityColorMap}
+                onLaunchMinigame={handleLaunchMinigame}
+                onLaunchDiceCalculator={handleLaunchDiceCalculator}
+                onLaunchSpeedSystem={handleLaunchSpeedSystem}
+                onLaunchMinimap={handleLaunchMinimap}
+                onLaunchCanvas={handleLaunchCanvas}
+                onBack={handleCloseCharacterSheet}
+                initialCharacterName={characterSheetOverlayName}
+              />
+
+              {/* Close Button */}
+              <button
+                onClick={handleCloseCharacterSheet}
+                className="fixed top-6 right-6 z-[210] w-12 h-12 rounded-full bg-[#1a1b26]/90 border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_25px_rgba(200,170,110,0.3)] transition-all duration-300 backdrop-blur-md"
+                title="Volver al Canvas"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 
