@@ -236,6 +236,124 @@ const getRarityInfo = (rareza) => {
     return { border: 'border-slate-700', text: 'text-slate-500', glow: 'from-slate-800', stripe: 'bg-slate-600' };
 };
 
+// --- Helper: Transform character sheet data into token format ---
+const syncTokenWithSheet = (token, sheetData) => {
+    if (!sheetData) return token;
+
+    // Map character attributes to token attributes format
+    const tokenAttributes = {};
+    if (sheetData.attributes) {
+        const attrKeyMap = {
+            'Destreza': 'destreza', 'destreza': 'destreza',
+            'Vigor': 'vigor', 'vigor': 'vigor',
+            'Intelecto': 'intelecto', 'intelecto': 'intelecto',
+            'Voluntad': 'voluntad', 'voluntad': 'voluntad',
+        };
+        Object.entries(sheetData.attributes).forEach(([key, value]) => {
+            const mappedKey = attrKeyMap[key] || key.toLowerCase();
+            if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
+                tokenAttributes[mappedKey] = typeof value === 'string' ? value.toLowerCase() : value;
+            }
+        });
+    }
+
+    // Map character stats to token stats format
+    const tokenStats = {};
+    if (sheetData.stats) {
+        const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
+        Object.entries(sheetData.stats).forEach(([key, value]) => {
+            const mappedKey = key.toLowerCase();
+            if (validStats.includes(mappedKey) && value && typeof value === 'object') {
+                const max = value.max ?? 0;
+                const current = value.current ?? max;
+                tokenStats[mappedKey] = {
+                    current: Math.min(current, 10),
+                    max: Math.min(max, 10),
+                };
+            }
+        });
+    }
+
+    // Extract status effects from character tags
+    const STATUS_EFFECT_IDS = [
+        'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
+        'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+        'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
+    ];
+    const tokenStatus = [];
+    if (sheetData.tags && Array.isArray(sheetData.tags)) {
+        sheetData.tags.forEach(tag => {
+            const normalizedTag = tag.toLowerCase().trim();
+            if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
+                tokenStatus.push(normalizedTag);
+            }
+        });
+    }
+
+    // Helper to flatten item (extract from .payload if present)
+    const flattenItem = (item) => {
+        if (!item) return null;
+        if (item.payload) {
+            return { ...item.payload, ...item, payload: undefined };
+        }
+        return item;
+    };
+
+    // Extract equipped items from character sheet slots into token format
+    const tokenEquippedItems = [];
+    if (sheetData.equippedItems && typeof sheetData.equippedItems === 'object') {
+        const slotTypeMap = {
+            mainHand: 'weapon',
+            offHand: 'weapon',
+            body: 'armor',
+        };
+        Object.entries(sheetData.equippedItems).forEach(([slot, item]) => {
+            if (!item || slot === 'beltSlotCount') return; // skip non-item keys
+
+            const flattened = flattenItem(item);
+            if (!flattened) return;
+
+            let type = slotTypeMap[slot];
+            if (!type) {
+                if (slot.startsWith('belt_')) type = 'access';
+                else if (slot.startsWith('accessory_')) type = 'access';
+                else type = flattened.type || 'weapon'; // fallback
+            }
+            tokenEquippedItems.push({ ...flattened, type });
+        });
+    }
+
+    // Extract inventory items (equipment)
+    // sheetData.equipment can be an array OR an object with categories { weapons: [], armor: [], ... }
+    let tokenInventory = [];
+    const rawEquipment = sheetData.equipment || sheetData.equipo;
+    if (rawEquipment) {
+        if (Array.isArray(rawEquipment)) {
+            tokenInventory = rawEquipment.map(flattenItem).filter(Boolean);
+        } else if (typeof rawEquipment === 'object') {
+            Object.values(rawEquipment).forEach(categoryList => {
+                if (Array.isArray(categoryList)) {
+                    categoryList.forEach(item => {
+                        const flattened = flattenItem(item);
+                        if (flattened) tokenInventory.push(flattened);
+                    });
+                }
+            });
+        }
+    }
+
+    return {
+        ...token,
+        img: sheetData.avatar || sheetData.portraitSource || sheetData.image || token.img,
+        name: sheetData.name || token.name,
+        status: tokenStatus,
+        attributes: tokenAttributes,
+        stats: tokenStats,
+        equippedItems: tokenEquippedItems,
+        inventory: tokenInventory,
+    };
+};
+
 // --- Normalize glossary word (mirrors LoadoutView) ---
 const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
@@ -243,7 +361,7 @@ const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NF
 // EquipmentSection — Inventory-style equipment panel for canvas inspector
 // Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
 // =============================================================================
-const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem }) => {
+const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem, isPlayerView = false }) => {
     const [addCat, setAddCat] = useState('weapons');
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -253,10 +371,15 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
     const currentCat = categories.find(c => c.id === addCat) || categories[0];
     const filteredItems = useMemo(() => {
         const list = currentCat?.items || [];
-        if (!searchTerm) return list.slice(0, 50);
+        // Limit results to prevent spoilers for players when not searching
+        if (!searchTerm) {
+            const limit = isPlayerView ? 4 : 50;
+            return list.slice(0, limit);
+        }
         const q = searchTerm.toLowerCase();
+        // Even with search, limit to 50 for performance and cleanliness
         return list.filter(i => (i.nombre || i.name || '').toLowerCase().includes(q)).slice(0, 50);
-    }, [currentCat, searchTerm]);
+    }, [currentCat, searchTerm, isPlayerView]);
 
     useEffect(() => {
         if (isAddOpen && searchInputRef.current) {
@@ -324,35 +447,48 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 key={idx}
                                 className={`relative bg-[#161f32] border ${rarity.border} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300`}
                             >
+                                {/* Dynamic Background Gradient (Hover Effect) — mirrors LoadoutView */}
+                                <div className={`absolute inset-0 bg-gradient-to-r ${rarity.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+
+                                {/* Stardust/Noise Texture Overlay */}
+                                <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700 z-0 pointer-events-none"
+                                    style={{
+                                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E")`,
+                                        backgroundSize: '100px 100px'
+                                    }}
+                                ></div>
+
                                 {/* Rarity stripe (left edge) */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe}`} />
+                                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe} z-10`} />
 
                                 <div className="flex">
-                                    {/* Left Column — Image or Icon */}
-                                    <div className="w-16 shrink-0 relative overflow-hidden">
-                                        {itemImage ? (
+                                    {/* Left Column — Image or Icon (mirrors LoadoutView style) */}
+                                    <div className="w-16 bg-black/50 relative shrink-0 ml-[3px] flex flex-col z-10 overflow-hidden">
+                                        {itemImage && (
                                             <>
                                                 <img
                                                     src={itemImage}
                                                     alt={item.nombre || item.name}
                                                     className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
                                                 />
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#161f32]" />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                                             </>
-                                        ) : (
-                                            <div className={`absolute inset-0 bg-gradient-to-br ${rarity.glow} via-[#161f32] to-[#161f32] flex items-center justify-center`}>
-                                                <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60`} />
-                                            </div>
                                         )}
-                                        {/* Rarity badge overlay */}
-                                        {item.rareza && item.rareza.toLowerCase() !== 'común' && (
-                                            <div className="absolute bottom-1 left-1 z-10">
-                                                <span className={`text-[7px] uppercase font-bold ${rarity.text} bg-black/60 px-1 py-0.5 rounded`}>
+                                        <div className="w-full h-full flex flex-col items-center justify-center relative z-20 py-2">
+                                            {!itemImage && (
+                                                <div className="mb-1">
+                                                    <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]`} />
+                                                </div>
+                                            )}
+                                            {/* Rarity Label — clean text style like LoadoutView */}
+                                            {item.rareza && item.rareza.toLowerCase() !== 'común' ? (
+                                                <span className={`text-[8px] uppercase font-bold ${rarity.text} text-center leading-tight px-1 drop-shadow-md`}>
                                                     {item.rareza}
                                                 </span>
-                                            </div>
-                                        )}
+                                            ) : (
+                                                !itemImage && <div className="w-6 h-[1px] bg-slate-700/50 mt-1"></div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Right Column — Content */}
@@ -534,6 +670,16 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                         </div>
                                     );
                                 })
+                            )}
+
+                            {/* Spoiler prevention hint for players */}
+                            {isPlayerView && !searchTerm && (currentCat?.items?.length || 0) > 4 && (
+                                <div className="py-2.5 px-4 flex flex-col items-center bg-slate-900/40 border-t border-slate-800/30">
+                                    <div className="flex items-center gap-1.5 text-slate-500 opacity-60">
+                                        <Search size={10} />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.1em]">Búsqueda requerida</span>
+                                    </div>
+                                </div>
                             )}
                         </div>
 
@@ -1602,126 +1748,58 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // Auto-create player token when entering with character data
     const hasCreatedAutoToken = useRef(false);
+    // Auto-create OR sync player token on join / characterData change
     useEffect(() => {
-        if (!isPlayerView || !characterData || !activeScenario?.id || hasCreatedAutoToken.current) return;
+        if (!isPlayerView || !characterData || !activeScenario?.id) return;
 
         const characterName = characterData.name || playerName;
 
         // Check if this specific character already has a token in this scenario
-        // Allows the same player to have multiple tokens from different character sheets
         const existingToken = activeScenario.items?.find(i =>
             i.controlledBy?.includes(playerName) && i.name === characterName
         );
+
         if (existingToken) {
-            hasCreatedAutoToken.current = true;
+            // Sincronizar el token existente si acaba de entrar o los datos han cambiado
+            if (!hasCreatedAutoToken.current) {
+                const syncedToken = syncTokenWithSheet(existingToken, characterData);
+
+                // Solo guardamos si hay una diferencia real
+                if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
+                    console.log('🔄 Sincronizando token existente al entrar:', characterName);
+                    const updatedItems = activeScenario.items.map(i => i.id === existingToken.id ? syncedToken : i);
+                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                    updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                        .catch(err => console.error('Error al sincronizar token existente:', err));
+                }
+                hasCreatedAutoToken.current = true;
+            }
             return;
         }
 
-        // Map character attributes to token attributes format (e.g. { destreza: 'D8' } -> { destreza: 'd8' })
-        const tokenAttributes = {};
-        if (characterData.attributes) {
-            const attrKeyMap = {
-                'Destreza': 'destreza', 'destreza': 'destreza',
-                'Vigor': 'vigor', 'vigor': 'vigor',
-                'Intelecto': 'intelecto', 'intelecto': 'intelecto',
-                'Voluntad': 'voluntad', 'voluntad': 'voluntad',
-            };
-            Object.entries(characterData.attributes).forEach(([key, value]) => {
-                const mappedKey = attrKeyMap[key] || key.toLowerCase();
-                if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
-                    // Normalize dice value format (D8 -> d8, etc)
-                    const dieValue = typeof value === 'string' ? value.toLowerCase() : value;
-                    tokenAttributes[mappedKey] = dieValue;
-                }
-            });
-        }
-
-        // Map character stats to token stats format
-        // Character sheet format: { postura: { current: 3, max: 4 }, vida: { current: 4, max: 4 }, ... }
-        // Token format: { postura: { current: 3, max: 4 }, ... }
-        const tokenStats = {};
-        if (characterData.stats) {
-            const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
-            Object.entries(characterData.stats).forEach(([key, value]) => {
-                const mappedKey = key.toLowerCase();
-                if (validStats.includes(mappedKey) && value && typeof value === 'object') {
-                    const max = value.max ?? 0;
-                    const current = value.current ?? max;
-                    tokenStats[mappedKey] = {
-                        current: Math.min(current, 10),
-                        max: Math.min(max, 10),
-                    };
-                }
-            });
-        }
-
-        // Extract status effects from character tags
-        // Tags can contain special keywords like 'minijuego', 'canvas', etc. — we only want status effect IDs
-        const STATUS_EFFECT_IDS = [
-            'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
-            'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
-            'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
-        ];
-        const tokenStatus = [];
-        if (characterData.tags && Array.isArray(characterData.tags)) {
-            characterData.tags.forEach(tag => {
-                const normalizedTag = tag.toLowerCase().trim();
-                if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
-                    tokenStatus.push(normalizedTag);
-                }
-            });
-        }
-
-        // Extract equipped items from character sheet slots into token format
-        // Character sheet format: { mainHand: item, offHand: item, body: item, belt_0: item, accessory_0: item, ... }
-        // Token format: flat array with type on each item
-        const tokenEquippedItems = [];
-        if (characterData.equippedItems && typeof characterData.equippedItems === 'object') {
-            const slotTypeMap = {
-                mainHand: 'weapon',
-                offHand: 'weapon',
-                body: 'armor',
-            };
-            Object.entries(characterData.equippedItems).forEach(([slot, item]) => {
-                if (!item || slot === 'beltSlotCount') return; // skip non-item keys
-                let type = slotTypeMap[slot];
-                if (!type) {
-                    if (slot.startsWith('belt_')) type = 'access';
-                    else if (slot.startsWith('accessory_')) type = 'access';
-                    else type = 'weapon'; // fallback
-                }
-                tokenEquippedItems.push({ ...item, type });
-            });
-        }
-
-        // Also add any inventory items (equipment array) that aren't already equipped
-        // This gives the master visibility into what the player carries
-        const tokenInventory = Array.isArray(characterData.equipment) ? characterData.equipment : [];
+        if (hasCreatedAutoToken.current) return;
 
         // Calculate spawn position (center of the map)
         const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
         const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
 
-        const newToken = {
+        // Crear nuevo token base
+        const baseToken = {
             id: `token-${Date.now()}-${playerName}`,
             x: spawnX,
             y: spawnY,
             width: gridConfig.cellWidth,
             height: gridConfig.cellHeight,
-            img: characterData.avatar || '',
             rotation: 0,
             layer: 'TOKEN',
-            name: characterData.name || playerName,
-            status: tokenStatus,
             hasVision: true,
             visionRadius: 300,
             controlledBy: [playerName],
-            isCircular: true, // Mark as circular for portrait-style rendering
-            attributes: tokenAttributes,
-            stats: tokenStats,
-            equippedItems: tokenEquippedItems,
-            inventory: tokenInventory,
+            isCircular: true,
         };
+
+        // Enriquecer con los datos de la ficha usando el helper
+        const newToken = syncTokenWithSheet(baseToken, characterData);
 
         console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
 
@@ -1745,7 +1823,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: [...(activeScenario.items || []), newToken]
         }).catch(err => console.error('Error saving auto-created token:', err));
 
-    }, [isPlayerView, characterData, activeScenario?.id, playerName]);
+    }, [isPlayerView, characterData, activeScenario?.id, playerName, gridConfig]);
+
+    // Listener para sincronización en tiempo real desde edición de fichas
+    useEffect(() => {
+        const handleSyncEvent = (e) => {
+            const { name, sheet } = e.detail || {};
+            if (!name || !sheet || !activeScenario?.id) return;
+
+            const currentItems = activeScenario.items || [];
+            let hasChanges = false;
+
+            const updatedItems = currentItems.map(item => {
+                // Sincronizamos cualquier token que coincida con el nombre de la ficha guardada
+                // Esto ayuda tanto a jugadores como a Master (con PNJs o Clases)
+                if (item.name === name && item.layer === 'TOKEN') {
+                    const synced = syncTokenWithSheet(item, sheet);
+                    if (JSON.stringify(synced) !== JSON.stringify(item)) {
+                        hasChanges = true;
+                        return synced;
+                    }
+                }
+                return item;
+            });
+
+            if (hasChanges) {
+                console.log('🔄 Sincronización en tiempo real detectada para:', name);
+                setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                    .catch(err => console.error('Error al sincronizar token en tiempo real:', err));
+            }
+        };
+
+        window.addEventListener('playerSheetSaved', handleSyncEvent);
+        return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
+    }, [activeScenario]);
+
 
     const saveCurrentScenario = async () => {
         if (!activeScenario) {
@@ -1760,48 +1873,54 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
-            let finalBackgroundImage = gridConfig.backgroundImage;
-            let finalImageHash = gridConfig.backgroundImageHash;
-
-            // Si hay un archivo pendiente, lo subimos a Storage primero
-            if (pendingImageFile) {
-                console.log("📤 Subiendo imagen pesada a Firebase Storage...");
-                const { url, hash } = await getOrUploadFile(pendingImageFile, 'CanvasMaps');
-
-                // Si ya había una imagen diferente antes, liberamos la referencia anterior
-                if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
-                    console.log("♻️ Liberando imagen anterior de Storage...");
-                    await releaseFile(gridConfig.backgroundImageHash);
-                }
-
-                finalBackgroundImage = url;
-                finalImageHash = hash;
-
-                // Actualizamos el estado local
-                setGridConfig(prev => ({
-                    ...prev,
-                    backgroundImage: url,
-                    backgroundImageHash: hash
-                }));
-                setPendingImageFile(null);
-            }
-
-            const updatedConfig = {
-                ...gridConfig,
-                backgroundImage: finalBackgroundImage,
-                backgroundImageHash: finalImageHash
+            const savePayload = {
+                items: activeScenario.items || [],
+                lastModified: Date.now()
             };
 
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
-                name: activeScenario.name,
-                config: updatedConfig,
-                items: activeScenario.items || [], // Guardamos items
-                camera: { zoom, offset },
-                allowedPlayers: activeScenario.allowedPlayers || [],
-                lastModified: Date.now()
-            });
+            // Si no es vista de jugador (es Master), guardamos toda la configuración y metadatos
+            if (!isPlayerView) {
+                let finalBackgroundImage = gridConfig.backgroundImage;
+                let finalImageHash = gridConfig.backgroundImageHash;
 
-            console.log("✅ Escenario guardado correctamente con imagen persistente");
+                // Si hay un archivo pendiente, lo subimos a Storage primero
+                if (pendingImageFile) {
+                    console.log("📤 Subiendo imagen pesada a Firebase Storage...");
+                    const { url, hash } = await getOrUploadFile(pendingImageFile, 'CanvasMaps');
+
+                    // Si ya había una imagen diferente antes, liberamos la referencia anterior
+                    if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
+                        console.log("♻️ Liberando imagen anterior de Storage...");
+                        await releaseFile(gridConfig.backgroundImageHash);
+                    }
+
+                    finalBackgroundImage = url;
+                    finalImageHash = hash;
+
+                    // Actualizamos el estado local
+                    setGridConfig(prev => ({
+                        ...prev,
+                        backgroundImage: url,
+                        backgroundImageHash: hash
+                    }));
+                    setPendingImageFile(null);
+                }
+
+                const updatedConfig = {
+                    ...gridConfig,
+                    backgroundImage: finalBackgroundImage,
+                    backgroundImageHash: finalImageHash
+                };
+
+                savePayload.name = activeScenario.name;
+                savePayload.config = updatedConfig;
+                savePayload.camera = { zoom, offset };
+                savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
+            }
+
+            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), savePayload);
+
+            console.log(`✅ Escenario guardado correctamente (${isPlayerView ? 'Jugador' : 'Master'})`);
         } catch (error) {
             console.error("❌ Error al guardar escenario:", error);
             setToastType('error');
@@ -3505,19 +3624,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     return (
                                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                             {/* Header Inspector */}
-                                            <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
-                                                <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
+                                            {/* Header Inspector — Centered between lines (using tab border as top) */}
+                                            <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
+                                                <div className="w-20 h-20 bg-[#0b1120] rounded-xl border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative group ring-1 ring-slate-800/40">
                                                     {token.type === 'light' ? (
-                                                        <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                        <Sparkles className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'wall' ? (
-                                                        <PenTool className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                        <PenTool className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : (
-                                                        <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                        <img src={token.img} className="w-full h-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-110" />
                                                     )}
                                                 </div>
-                                                <div>
-                                                    <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
-                                                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{token.layer} LAYER</span>
+                                                <div className="space-y-1.5">
+                                                    <h4 className="text-[#f0e6d2] font-fantasy text-2xl tracking-widest uppercase drop-shadow-lg leading-none">
+                                                        {token.name}
+                                                    </h4>
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <div className="h-[1px] w-4 bg-gradient-to-r from-transparent to-[#c8aa6e]/40" />
+                                                        <span className="text-[10px] text-[#c8aa6e]/60 uppercase font-black tracking-[0.25em]">
+                                                            {token.layer} Layer
+                                                        </span>
+                                                        <div className="h-[1px] w-4 bg-gradient-to-l from-transparent to-[#c8aa6e]/40" />
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -4053,6 +4181,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             rarityColorMap={rarityColorMap}
                                                             glossary={glossary}
                                                             highlightText={highlightText}
+                                                            isPlayerView={isPlayerView}
                                                             onAddItem={(item, type) => {
                                                                 const newItems = [...equippedItems, { ...item, type }];
                                                                 updateItem(token.id, { equippedItems: newItems }, true);
@@ -4072,7 +4201,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
 
 
-                            {!isPlayerView && (
+                            {activeScenario && (
                                 <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
                                     <button
                                         onClick={saveCurrentScenario}
