@@ -208,6 +208,51 @@ const TokenResources = ({ token, onUpdate }) => {
                     })}
                 </div>
             </div>
+
+            {/* SECCIÓN 3: VELOCIDAD ACUMULADA */}
+            <div className="space-y-3">
+                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest pl-1">Velocidad</h4>
+                <div className="bg-[#0b1120] border border-slate-800/50 rounded-lg p-2.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#c8aa6e] shadow-[0_0_5px_#c8aa6e]"></div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Acumulada</span>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex items-center gap-1 bg-black/40 rounded px-1 border border-slate-800/50">
+                            <button onClick={() => onUpdate({ velocidad: Math.max(0, (token.velocidad || 0) - 1) })} className="text-slate-500 hover:text-white p-1 outline-none"><FiMinus size={10} /></button>
+                            <span className="text-[9px] font-mono text-[#c8aa6e] w-4 text-center font-bold">{token.velocidad || 0}</span>
+                            <button onClick={() => onUpdate({ velocidad: (token.velocidad || 0) + 1 })} className="text-slate-500 hover:text-white p-1 outline-none"><FiPlus size={10} /></button>
+                        </div>
+                    </div>
+
+                    {/* Visual counter bar */}
+                    <div className="flex gap-1 h-5 w-full">
+                        {Array.from({ length: Math.max(10, (token.velocidad || 0)) }).map((_, idx) => {
+                            const isFilled = idx < (token.velocidad || 0);
+                            return (
+                                <button
+                                    key={idx}
+                                    onClick={() => onUpdate({ velocidad: idx + 1 === (token.velocidad || 0) ? idx : idx + 1 })}
+                                    className={`
+                                        flex-1 rounded-sm border transition-all duration-200 outline-none
+                                        ${isFilled
+                                            ? 'bg-opacity-80 border-opacity-50 hover:bg-opacity-100 shadow-[0_0_8px_-2px_currentColor]'
+                                            : 'bg-transparent border-slate-800 hover:bg-slate-800/50'
+                                        }
+                                    `}
+                                    style={{
+                                        backgroundColor: isFilled ? '#c8aa6e' : undefined,
+                                        borderColor: isFilled ? '#c8aa6e' : undefined,
+                                        color: '#c8aa6e'
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

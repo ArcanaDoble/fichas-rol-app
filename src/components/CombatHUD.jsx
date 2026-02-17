@@ -42,7 +42,7 @@ const CombatHUD = ({
                         ? 'border-[#c8aa6e] shadow-[0_0_20px_rgba(200,170,110,0.3)] group-hover:shadow-[0_0_30px_rgba(200,170,110,0.5)] group-hover:border-[#f0e6d2] group-active:scale-95'
                         : 'border-slate-700 opacity-60 grayscale'
                         }`}>
-                        <img src={token.img} alt={token.name} className="w-full h-full object-cover" />
+                        <img src={token.portrait || token.img} alt={token.name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 ring-inset ring-2 ring-black/20 rounded-full"></div>
                         {canOpenSheet && <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full"></div>}
 
@@ -172,7 +172,7 @@ const CombatHUD = ({
                     ? 'border-[#c8aa6e] active:scale-90 hover:border-[#f0e6d2] hover:shadow-[0_0_15px_rgba(200,170,110,0.4)]'
                     : 'border-slate-700 grayscale opacity-60'
                     }`}>
-                    <img src={token.img} alt={token.name} className="w-full h-full object-cover" />
+                    <img src={token.portrait || token.img} alt={token.name} className="w-full h-full object-cover" />
                     {!canOpenSheet && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                             <Lock className="w-3 h-3 text-slate-500" />

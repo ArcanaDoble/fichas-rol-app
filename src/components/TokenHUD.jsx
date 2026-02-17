@@ -10,7 +10,7 @@ import React from 'react';
  * 
  * Ingenio y Cordura NO se muestran en el token (solo en Inspector).
  */
-const TokenHUD = ({ stats, width, height }) => {
+const TokenHUD = ({ stats, velocidad = 0, width, height }) => {
     if (!stats) return null;
 
     // Umbrales de tamaño
@@ -83,8 +83,6 @@ const TokenHUD = ({ stats, width, height }) => {
             <div className="absolute bottom-1 left-0 w-full flex justify-center z-20 pointer-events-none">
                 {renderPips('postura', '#10b981', 'horizontal', 'center')}
             </div>
-
-            {/* Ingenio y Cordura: ELIMINADOS del HUD */}
 
         </div>
     );

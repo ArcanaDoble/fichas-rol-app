@@ -4459,6 +4459,7 @@ const ClassList = ({
                                 tags: editingClass.tags || [],
                                 equipment: editingClass.equipment || [],
                                 equippedItems: editingClass.equippedItems || {},
+                                id: editingClass.id,
                               });
                             }
                           }}
