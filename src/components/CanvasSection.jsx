@@ -880,6 +880,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const [availableCharacters, setAvailableCharacters] = useState([]);
 
+    // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
+    const [pendingTurnState, setPendingTurnState] = useState(null);
+    // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
     // Fetch available characters for Master or Player linking
     useEffect(() => {
         let unsubClasses = () => { };
@@ -1377,6 +1381,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return item;
             });
 
+            // LOGIC ADDED: Update pending cost LIVE while dragging
+            if (gridConfig.isCombatActive && draggedTokenId) {
+                const draggedItem = newItems.find(i => i.id === draggedTokenId);
+                const original = tokenOriginalPos[draggedTokenId];
+
+                if (draggedItem && original) {
+                    setPendingTurnState(prev => {
+                        const isSameToken = prev && prev.tokenId === draggedTokenId;
+                        const turnStartX = isSameToken ? prev.startX : original.x;
+                        const turnStartY = isSameToken ? prev.startY : original.y;
+
+                        const dx = Math.abs(draggedItem.x - turnStartX);
+                        const dy = Math.abs(draggedItem.y - turnStartY);
+                        const cellW = gridConfig.cellWidth || 50;
+                        const cellH = gridConfig.cellHeight || 50;
+                        const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                        const base = isSameToken ? prev : {
+                            tokenId: draggedTokenId,
+                            startX: original.x,
+                            startY: original.y,
+                            actionCost: 0,
+                            actions: []
+                        };
+
+                        // Avoid update if cost hasn't changed to key performance reasonable
+                        if (isSameToken && prev.moveCost === distance) return prev;
+
+                        return {
+                            ...base,
+                            moveCost: distance
+                        };
+                    });
+                }
+            }
+
             setActiveScenario(prev => ({ ...prev, items: newItems }));
             return;
         }
@@ -1576,22 +1616,59 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
                 }
 
-                // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO ---
+                // --- GESTIÓN DE MOVIMIENTO EN MODO COMBATE (PENDIENTE) ---
+                if (gridConfig.isCombatActive && isPlayerView) {
+                    const token = finalItems.find(i => i.id === draggedTokenId);
+                    const original = tokenOriginalPos[draggedTokenId];
+                    if (token && original && (token.x !== original.x || token.y !== original.y)) {
+                        setPendingTurnState(prev => {
+                            // Si ya hay un estado pendiente para este token, el inicio del turno es el startX guardado.
+                            // Si no, el inicio es la posición original de este arrastre.
+                            const isSameToken = prev && prev.tokenId === draggedTokenId;
+                            const turnStartX = isSameToken ? prev.startX : original.x;
+                            const turnStartY = isSameToken ? prev.startY : original.y;
+
+                            const dx = Math.abs(token.x - turnStartX);
+                            const dy = Math.abs(token.y - turnStartY);
+                            const cellW = gridConfig.cellWidth || 50;
+                            const cellH = gridConfig.cellHeight || 50;
+                            const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                            const base = prev && prev.tokenId === draggedTokenId ? prev : {
+                                tokenId: draggedTokenId,
+                                startX: original.x,
+                                startY: original.y,
+                                actionCost: 0,
+                                actions: []
+                            };
+                            return {
+                                ...base,
+                                x: token.x,
+                                y: token.y,
+                                moveCost: distance
+                            };
+                        });
+
+                        setDraggedTokenId(null);
+                        setTokenOriginalPos({});
+                        document.body.style.cursor = 'default';
+                        return; // No persistimos a Firebase aún
+                    }
+                }
+
+                // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO (MODO NORMAL O MASTER) ---
                 finalItems = finalItems.map(item => {
                     if (selectedTokenIds.includes(item.id) && item.type !== 'wall' && item.type !== 'light') {
                         const original = tokenOriginalPos[item.id];
                         if (original) {
-                            // Solo sumamos si el item NO colisionó (si colisionó, x/y volvieron a original en el map anterior)
                             if (item.x !== original.x || item.y !== original.y) {
                                 const dx = Math.abs(item.x - original.x);
                                 const dy = Math.abs(item.y - original.y);
                                 const cellW = gridConfig.cellWidth || 50;
                                 const cellH = gridConfig.cellHeight || 50;
-                                const moveX = Math.round(dx / cellW);
-                                const moveY = Math.round(dy / cellH);
-                                const distance = Math.max(moveX, moveY);
+                                const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
 
-                                if (distance > 0) {
+                                if (distance > 0 && gridConfig.isCombatActive) {
                                     return { ...item, velocidad: (item.velocidad || 0) + distance };
                                 }
                             }
@@ -1601,7 +1678,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 });
             }
 
-            // Guardar el estado final en Firebase
+            // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate)
             try {
                 updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
                     items: finalItems,
@@ -1677,6 +1754,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         snapToGrid: false,
         ambientDarkness: 0, // 0 = Día (Transparente), 1 = Noche Total (Negro)
         fogOfWar: false, // Control de Niebla de Guerra
+        isCombatActive: false, // Modo por turnos dinámico
     });
 
     // --- CAMPOS DE MAPA CALCULADOS ---
@@ -2269,10 +2347,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
-            const canMove = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
-            if (!canMove) {
-                return;
+            const isOwner = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+            if (!isOwner) return;
+
+            // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
+            if (gridConfig.isCombatActive && activeLayer === 'TABLETOP') {
+                const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
+                const combatTokens = currentItems.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+
+                if ((token.velocidad || 0) > minVel) {
+                    // No es tu turno, pero el Master puede mover cualquier cosa
+                    if (isPlayerView) {
+                        triggerToast("No es tu turno", "Debes esperar a que tu velocidad sea la más baja", 'warning');
+                        return;
+                    }
+                }
             }
+
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
@@ -2757,32 +2849,55 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return (
             <React.Fragment key={item.id}>
-                {/* GHOST TOKEN & LINE */}
-                {original && canInteract && (
+                {/* GHOST TOKEN & LINE (DRAG O TURNO PENDIENTE) */}
+                {(original || (pendingTurnState && pendingTurnState.tokenId === item.id)) && canInteract && (
                     <>
-                        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
-                            <line
-                                x1={original.x + item.width / 2}
-                                y1={original.y + item.height / 2}
-                                x2={item.x + item.width / 2}
-                                y2={item.y + item.height / 2}
-                                stroke="#c8aa6e"
-                                strokeWidth="1.5"
-                                strokeDasharray="6 4"
-                                opacity="0.6"
-                            />
-                            <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
-                        </svg>
-                        <div
-                            className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
-                            style={{
-                                transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
-                                width: `${item.width}px`,
-                                height: `${item.height}px`,
-                            }}
-                        >
-                            {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} />}
-                        </div>
+                        {(() => {
+                            // PRIORIDAD: Si hay un estado pendiente, el inicio del turno es SIEMPRE startX del estado pendiente.
+                            // Si estamos arrastrando por primera vez (sin estado pendiente previo), usamos original.x
+                            let startX, startY;
+
+                            if (pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                startX = pendingTurnState.startX;
+                                startY = pendingTurnState.startY;
+                            } else if (original) {
+                                startX = original.x;
+                                startY = original.y;
+                            }
+
+                            const currentX = item.x;
+                            const currentY = item.y;
+
+                            if (startX === undefined || (startX === currentX && startY === currentY)) return null;
+
+                            return (
+                                <>
+                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                                        <line
+                                            x1={startX + item.width / 2}
+                                            y1={startY + item.height / 2}
+                                            x2={currentX + item.width / 2}
+                                            y2={currentY + item.height / 2}
+                                            stroke="#c8aa6e"
+                                            strokeWidth="1.5"
+                                            strokeDasharray="6 4"
+                                            opacity="0.6"
+                                        />
+                                        <circle cx={startX + item.width / 2} cy={startY + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
+                                    </svg>
+                                    <div
+                                        className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                        style={{
+                                            transform: `translate(${startX}px, ${startY}px) rotate(${item.rotation}deg)`,
+                                            width: `${item.width}px`,
+                                            height: `${item.height}px`,
+                                        }}
+                                    >
+                                        {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </>
                 )}
 
@@ -2825,13 +2940,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             )}
 
                             {/* Indicador de Velocidad (Derecha) */}
-                            {item.velocidad > 0 && (
-                                <div className="absolute -top-[1px] -right-[1px] translate-x-1/2 -translate-y-1/2 w-[14px] h-[14px] flex items-center justify-center rounded-full bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] border border-white/20 z-40 pointer-events-none">
-                                    <span className="text-[9px] font-black leading-none font-mono">
-                                        {item.velocidad}
-                                    </span>
-                                </div>
-                            )}
+                            {(() => {
+                                const currentVel = item.velocidad || 0;
+                                const pendingVel = (pendingTurnState && pendingTurnState.tokenId === item.id)
+                                    ? (pendingTurnState.moveCost + pendingTurnState.actionCost)
+                                    : 0;
+                                const totalVel = currentVel + pendingVel;
+
+                                if (totalVel <= 0) return null;
+
+                                return (
+                                    <div className={`absolute -top-[1px] -right-[1px] translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] flex flex-col items-center justify-center rounded-full shadow-[0_0_10px_rgba(200,170,110,0.4)] border border-white/20 z-40 pointer-events-none ${pendingVel > 0 ? 'bg-[#ef4444]' : 'bg-[#c8aa6e]'} transition-colors`}>
+                                        <span className={`text-[8px] font-black leading-none font-mono ${pendingVel > 0 ? 'text-white' : 'text-[#0b1120]'}`}>
+                                            {totalVel}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
                             {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
@@ -3122,6 +3247,113 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } catch (error) {
             console.error("Error resetting speed:", error);
             triggerToast("Error", "No se pudo reiniciar la velocidad", 'error');
+        }
+    };
+
+    const handleCombatAction = (tokenId, actionId, data = null) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario) return;
+
+        const token = scenario.items.find(i => i.id === tokenId);
+        if (!token) return;
+
+        let cost = 0;
+        let actionName = "";
+
+        if (actionId === 'attack') {
+            // Si nos pasan el arma específica, la usamos. Si no, buscamos la primera por defecto.
+            const weapon = data || (token.equippedItems || []).find(i => i.type === 'weapon');
+            cost = Number(weapon?.velocidad || weapon?.vel || 2);
+            actionName = `Ataque con ${weapon?.nombre || weapon?.name || 'Arma'}`;
+        } else if (actionId === 'dodge') {
+            cost = 2;
+            actionName = "Esquivar";
+        } else if (actionId === 'help') {
+            cost = 1;
+            actionName = "Ayudar";
+        } else if (actionId === 'dash') {
+            triggerToast("Correr no disponible", "Implementaremos la lógica de doble movimiento más adelante", 'info');
+            return;
+        }
+
+        if (cost > 0) {
+            setPendingTurnState(prev => {
+                const base = prev && prev.tokenId === tokenId ? prev : {
+                    tokenId: tokenId,
+                    startX: token.x,
+                    startY: token.y,
+                    x: token.x,
+                    y: token.y,
+                    moveCost: 0,
+                    actionCost: 0,
+                    actions: [] // Changed from actionNames to actions (objects)
+                };
+
+                const newActions = [...(base.actions || []), { name: actionName, cost }];
+
+                return {
+                    ...base,
+                    actionCost: base.actionCost + cost,
+                    actions: newActions
+                };
+            });
+            // Toast is now handled by the HUD notification, but we can keep a small one or remove it.
+            // keeping it for now as "feedback"
+            // triggerToast("Acción añadida", `${actionName} (+${cost} 🟡)`, 'success'); 
+        }
+    };
+
+    const handleCancelAction = (tokenId, index) => {
+        setPendingTurnState(prev => {
+            if (!prev || prev.tokenId !== tokenId) return prev;
+
+            const actions = [...(prev.actions || [])];
+            if (index < 0 || index >= actions.length) return prev;
+
+            const removedAction = actions[index];
+            actions.splice(index, 1);
+
+            return {
+                ...prev,
+                actionCost: prev.actionCost - removedAction.cost,
+                actions: actions
+            };
+        });
+    };
+
+    const handleEndTurn = (tokenId) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario) return;
+
+        const token = scenario.items.find(i => i.id === tokenId);
+        if (!token) return;
+
+        const pending = pendingTurnState && pendingTurnState.tokenId === tokenId ? pendingTurnState : null;
+        const moveCost = pending ? pending.moveCost : 0;
+        const actionCost = pending ? pending.actionCost : 0;
+
+        // Si no ha hecho nada, el coste mínimo de pasar turno es 1
+        const finalCost = (moveCost + actionCost) || 1;
+        const finalX = pending ? pending.x : token.x;
+        const finalY = pending ? pending.y : token.y;
+
+        const newItems = scenario.items.map(i =>
+            i.id === tokenId
+                ? { ...i, x: finalX, y: finalY, velocidad: (token.velocidad || 0) + finalCost }
+                : i
+        );
+
+        setActiveScenario(prev => ({ ...prev, items: newItems }));
+        setPendingTurnState(null);
+
+        try {
+            updateDoc(doc(db, 'canvas_scenarios', scenario.id), {
+                items: newItems,
+                lastModified: Date.now()
+            });
+            triggerToast("Turno Finalizado", `Total: +${finalCost} 🟡`, 'success');
+        } catch (error) {
+            console.error("Error ending turn:", error);
         }
     };
 
@@ -3534,6 +3766,37 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 className={`relative w-12 h-6 rounded-full transition-all ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                             >
                                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.snapToGrid ? 'left-7' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="w-full h-px bg-slate-800/50"></div>
+
+                                        {/* 1.5 Gestión de Encuentro (Combate Dinámico) */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Activity className="w-3 h-3" />
+                                                Gestión de Encuentro
+                                            </h4>
+
+                                            <div className="flex items-center justify-between bg-[#0b1120] p-4 rounded-lg border border-[#c8aa6e]/20 shadow-lg">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] font-bold uppercase text-[#f0e6d2]">Modo Combate</span>
+                                                    <span className="text-[8px] text-slate-500 uppercase">Habilita costes de velocidad</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleConfigChange('isCombatActive', !gridConfig.isCombatActive)}
+                                                    className={`relative w-12 h-6 rounded-full transition-all duration-300 ${gridConfig.isCombatActive ? 'bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)]' : 'bg-slate-800'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${gridConfig.isCombatActive ? 'left-7' : 'left-1'}`} />
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                onClick={resetAllSpeed}
+                                                className="w-full py-3 bg-[#161f32] border border-slate-700/50 text-slate-400 rounded text-[9px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] transition-all group"
+                                            >
+                                                <RotateCw className="w-3.5 h-3.5 group-active:rotate-180 transition-transform duration-500" />
+                                                Reiniciar Cronología
                                             </button>
                                         </div>
 
@@ -4923,8 +5186,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    {(activeScenario?.items || []).filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
-                                    {(activeScenario?.items || []).filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
+                                    {(() => {
+                                        const items = (activeScenario?.items || []).map(item => {
+                                            // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
+                                            if (pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                                if (draggedTokenId !== item.id) {
+                                                    return { ...item, x: pendingTurnState.x, y: pendingTurnState.y };
+                                                }
+                                            }
+                                            return item;
+                                        });
+                                        return (
+                                            <>
+                                                {items.filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
+                                                {items.filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
@@ -5800,9 +6078,45 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 // Prioridad: 1. Seleccionado que controlo, 2. El primero de mi lista
                 const selectedControlled = myTokens.find(t => selectedTokenIds.includes(t.id));
-                const hudToken = selectedControlled || myTokens[0];
+                const rawHudToken = selectedControlled || myTokens[0];
 
-                if (hudToken) {
+                if (rawHudToken) {
+                    // Fusionamos datos de la ficha vinculada (si existe) para tener las armas
+                    let hudToken = rawHudToken;
+                    if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
+                        const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
+                        if (charData) {
+                            const eq = charData.equippedItems || {};
+                            // Extraemos las armas de las manos (objeto -> array) y aseguramos que tengan tipo
+                            const hands = [eq.mainHand, eq.offHand]
+                                .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre)) // Filter valid items with names
+                                .map(i => ({ ...i, type: i.type || 'weapon' })); // Ensure type is present
+
+                            // Extraemos habilidades que hagan daño o sean ofensivas de diversas fuentes
+                            // 1. De equipment.abilities (si existe)
+                            const equipmentAbilities = charData.equipment?.abilities || [];
+                            // 2. De abilities (si existe en la raíz)
+                            const rootAbilities = charData.abilities || [];
+                            // 3. De features/actionData (donde suelen estar los talentos activos)
+                            const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
+
+                            const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
+
+                            const damagingAbilities = allAbilitiesSource.filter(a =>
+                                (a.damage || a.dano || a.actionType === 'attack') &&
+                                !hands.find(h => h.id === a.id) // Evitar duplicados si por alguna razón están en manos
+                            );
+
+                            // Aseguramos que las habilidades tengan un tipo identificable
+                            const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
+
+                            hudToken = {
+                                ...rawHudToken,
+                                equippedItems: [...hands, ...formattedAbilities],
+                                // stats: charData.stats || rawHudToken.stats 
+                            };
+                        }
+                    }
                     const canOpenSheet = !!hudToken.linkedCharacterId;
 
                     const handlePortraitClick = (charName) => {
@@ -5821,10 +6135,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return (
                         <CombatHUD
                             token={hudToken}
-                            onAction={(action) => console.log("Action:", action)}
-                            onEndTurn={() => console.log("Turn Ended")}
+                            onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
+                            onEndTurn={() => handleEndTurn(hudToken.id)}
                             onPortraitClick={handlePortraitClick}
                             canOpenSheet={canOpenSheet}
+                            pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
+                            pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
+                            onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                            isActive={(() => {
+                                if (!gridConfig.isCombatActive) return true;
+                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+                                return (hudToken.velocidad || 0) === minVel;
+                            })()}
                         />
                     );
                 }
