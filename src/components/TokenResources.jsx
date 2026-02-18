@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { FiChevronDown, FiPlus, FiMinus } from 'react-icons/fi';
+import { Shield, Activity, Footprints } from 'lucide-react';
 
 const ATTRIBUTES = [
     { id: 'destreza', label: 'Destreza', short: 'DES' },
@@ -87,8 +88,10 @@ const TokenResources = ({ token, onUpdate }) => {
         <div className="space-y-6" ref={dropdownRef}>
 
             {/* SECCIÓN 1: ATRIBUTOS (CDs) */}
-            <div className="space-y-2">
-                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest pl-1">Atributos (CD)</h4>
+            <div className="space-y-4">
+                <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest pl-1 flex items-center gap-2">
+                    <Shield size={12} /> Atributos (CD)
+                </h4>
                 <div className="grid grid-cols-4 gap-2">
                     {ATTRIBUTES.map(attr => {
                         const currentDie = getAttributeDie(attr.id);
@@ -133,7 +136,9 @@ const TokenResources = ({ token, onUpdate }) => {
 
             {/* SECCIÓN 2: RECURSOS (BARRAS) */}
             <div className="space-y-4">
-                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest pl-1">Recursos</h4>
+                <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest pl-1 flex items-center gap-2">
+                    <Activity size={12} /> Recursos
+                </h4>
 
                 <div className="space-y-3">
                     {RESOURCES.map(res => {
@@ -163,46 +168,44 @@ const TokenResources = ({ token, onUpdate }) => {
                                 </div>
 
                                 {/* BLOCKS RENDERER */}
-                                <div className="flex gap-1 h-5 w-full">
-                                    {Array.from({ length: stat.max }).map((_, idx) => {
-                                        const isFilled = idx < stat.current;
-                                        return (
-                                            <button
-                                                key={idx}
-                                                // Click logic: If click on filled, set to this index (remove aboves). If click on empty, set to idx + 1.
-                                                // Actually standard: Click idx -> sets value to idx + 1. 
-                                                // If click on the last filled one, maybe toggle off? 
-                                                // Better: Click on block N sets Value to N+1. 
-                                                // To clear all? Click on 0 again? Or separate clear?
-                                                // Let's allow clicking first block to toggle 0/1.
-                                                onClick={() => {
-                                                    const clickedValue = idx + 1;
-                                                    // Si hago click en el que ya es el máximo actual, lo apago (resto 1)
-                                                    // Ejemplo: current=3. Click en bloque 3. Nuevo current = 2.
-                                                    if (clickedValue === stat.current) {
-                                                        updateStat(res.id, 'current', clickedValue - 1);
-                                                    } else {
-                                                        // Si no, seteo el valor hasta donde hice click
-                                                        updateStat(res.id, 'current', clickedValue);
-                                                    }
-                                                }}
-                                                className={`
-                                                    flex-1 rounded-sm border transition-all duration-200 outline-none
-                                                    ${isFilled
-                                                        ? `bg-opacity-80 border-opacity-50 hover:bg-opacity-100 shadow-[0_0_8px_-2px_currentColor]`
-                                                        : 'bg-transparent border-slate-800 hover:bg-slate-800/50'
-                                                    }
-                                                `}
-                                                style={{
-                                                    backgroundColor: isFilled ? res.color : undefined,
-                                                    borderColor: isFilled ? res.color : undefined,
-                                                    color: res.color // for shadow usage
-                                                }}
-                                            />
-                                        );
-                                    })}
-                                    {/* Relleno visual si max < 10 para mantener grid? No, user said visual blocks. Flex-1 fills width. */}
-                                </div>
+                                {stat.max === 0 ? (
+                                    <div className="flex h-5 w-full items-center justify-center border border-dashed border-slate-800/30 rounded bg-black/20">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest italic">
+                                            Sin {res.label.toLowerCase()}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1 h-5 w-full">
+                                        {Array.from({ length: stat.max }).map((_, idx) => {
+                                            const isFilled = idx < stat.current;
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => {
+                                                        const clickedValue = idx + 1;
+                                                        if (clickedValue === stat.current) {
+                                                            updateStat(res.id, 'current', clickedValue - 1);
+                                                        } else {
+                                                            updateStat(res.id, 'current', clickedValue);
+                                                        }
+                                                    }}
+                                                    className={`
+                                                        flex-1 rounded-sm border transition-all duration-200 outline-none
+                                                        ${isFilled
+                                                            ? `bg-opacity-80 border-opacity-50 hover:bg-opacity-100 shadow-[0_0_8px_-2px_currentColor]`
+                                                            : 'bg-transparent border-slate-800 hover:bg-slate-800/50'
+                                                        }
+                                                    `}
+                                                    style={{
+                                                        backgroundColor: isFilled ? res.color : undefined,
+                                                        borderColor: isFilled ? res.color : undefined,
+                                                        color: res.color // for shadow usage
+                                                    }}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -211,7 +214,9 @@ const TokenResources = ({ token, onUpdate }) => {
 
             {/* SECCIÓN 3: VELOCIDAD ACUMULADA */}
             <div className="space-y-3">
-                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest pl-1">Velocidad</h4>
+                <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest pl-1 flex items-center gap-2">
+                    <Footprints size={12} /> Velocidad
+                </h4>
                 <div className="bg-[#0b1120] border border-slate-800/50 rounded-lg p-2.5 space-y-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">

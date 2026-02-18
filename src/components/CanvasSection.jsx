@@ -2,14 +2,21 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Zap, Gem, Search, Package, Link } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Zap, Gem, Search, Package, Link, Flame, Footprints } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
-import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc, query, where } from 'firebase/firestore';
+import { db, storage } from '../firebase';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
+
+// --- Constants ---
+const STATUS_EFFECT_IDS = [
+    'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
+    'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+    'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
+];
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -378,11 +385,6 @@ const syncTokenWithSheet = (token, sheetData) => {
     }
 
     // Extract status effects from character tags
-    const STATUS_EFFECT_IDS = [
-        'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
-        'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
-        'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
-    ];
     const tokenStatus = [];
     if (sheetData.tags && Array.isArray(sheetData.tags)) {
         sheetData.tags.forEach(tag => {
@@ -526,19 +528,15 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
 
     return (
         <div className="pt-4 border-t border-slate-800/50 space-y-4">
-            {/* Section Header — matches LoadoutView title style */}
-            <div className="flex items-center gap-3">
-                <Sword className="w-4 h-4 text-[#c8aa6e]" />
-                <h3 className="text-[#c8aa6e] font-['Cinzel'] text-xs tracking-[0.15em] uppercase">
-                    Equipamiento
-                </h3>
-                <div className="flex-1 h-px bg-gradient-to-r from-[#c8aa6e]/30 to-transparent" />
+            {/* Section Header — standardized with other sections */}
+            <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                <Sword size={12} /> Equipamiento
                 {equippedItems.length > 0 && (
-                    <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#c8aa6e]/10 text-[#c8aa6e] border border-[#c8aa6e]/20">
+                    <span className="ml-auto text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#c8aa6e]/10 text-[#c8aa6e] border border-[#c8aa6e]/20">
                         {equippedItems.length}
                     </span>
                 )}
-            </div>
+            </h4>
 
             {/* Equipped Items — Inventory card style */}
             {equippedItems.length > 0 ? (
@@ -2091,6 +2089,58 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), savePayload);
+
+            // 🔗 SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
+            if (activeScenario.items && activeScenario.items.length > 0) {
+                console.log("🔗 Iniciando sincronización inversa con fichas vinculadas...");
+                const syncPromises = activeScenario.items
+                    .filter(token => token.linkedCharacterId)
+                    .map(async (token) => {
+                        const charId = token.linkedCharacterId;
+                        const char = availableCharacters.find(c => c.id === charId);
+                        if (!char) return;
+
+                        const collectionName = char._isTemplate ? 'classes' : 'characters';
+                        const charRef = doc(db, collectionName, charId);
+
+                        // Preparar payload de actualización para la ficha
+                        const charUpdate = {};
+
+                        // 1. Atributos (destreza, vigor, intelecto, voluntad)
+                        if (token.attributes) {
+                            charUpdate.attributes = { ...(char.attributes || {}), ...token.attributes };
+                        }
+
+                        // 2. Estadísticas (Vida, Armadura, Postura, etc)
+                        if (token.stats) {
+                            charUpdate.stats = { ...(char.stats || {}), ...token.stats };
+                        }
+
+                        // 3. Estados -> Tags
+                        if (token.status) {
+                            // Mantener tags que no son condicionantes de batalla (ej: historia, rasgos)
+                            const currentTags = char.tags || [];
+                            const otherTags = currentTags.filter(tag => !STATUS_EFFECT_IDS.includes(tag.toLowerCase().trim()));
+                            charUpdate.tags = [...otherTags, ...token.status];
+                        }
+
+                        // 4. Velocidad
+                        if (token.velocidad !== undefined) {
+                            charUpdate.velocidad = token.velocidad;
+                        }
+
+                        try {
+                            if (Object.keys(charUpdate).length > 0) {
+                                await updateDoc(charRef, charUpdate);
+                                console.log(`✅ Ficha ${char.name} sincronizada correctamente desde el Canvas`);
+                            }
+                        } catch (err) {
+                            console.error(`❌ Error sincronizando ficha ${char.name}:`, err);
+                        }
+                    });
+
+                await Promise.all(syncPromises);
+            }
 
             console.log(`✅ Escenario guardado correctamente (${isPlayerView ? 'Jugador' : 'Master'})`);
         } catch (error) {
@@ -3946,6 +3996,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                             {/* Properties Form */}
                                             <div className="space-y-4">
+                                                <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2 mb-2">
+                                                    <Settings size={12} /> Propiedades
+                                                </h4>
 
                                                 {/* Name Input */}
                                                 <div className="space-y-2">
@@ -3973,7 +4026,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                     {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
                                                     <div className="space-y-2">
-                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tamaño</label>
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Maximize size={10} className="text-[#c8aa6e]" /> Tamaño
+                                                        </label>
                                                         <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
                                                             <button
                                                                 onClick={() => {
@@ -4165,12 +4220,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                            <Activity size={12} /> Visión y Niebla
+                                                            <Eye size={12} /> Visión y Niebla
                                                         </h4>
 
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Emite Visión</span>
@@ -4254,7 +4309,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
 
                                                             {token.emitsLight && (
-                                                                <div className="space-y-6 pt-2 border-t border-slate-800/50 mt-2">
+                                                                <div className="space-y-4 pt-2 border-t border-slate-800/50 mt-2">
                                                                     {/* Radio de Luz */}
                                                                     <div className="space-y-3">
                                                                         <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
@@ -4323,13 +4378,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
                                                 {token.type === 'light' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Sparkles size={12} /> Propiedades del Foco
                                                         </h4>
 
                                                         {/* Radio de Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Alcance (Px)</span>
                                                                 <span className="text-[#c8aa6e] font-mono">{token.radius}px</span>
@@ -4344,7 +4399,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Snap Toggle para Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
                                                                 <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
@@ -4358,7 +4413,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Parpadeo (Flicker) Toggle */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Animación de Parpadeo</span>
@@ -4375,7 +4430,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Color de la Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Tono de Iluminación</span>
                                                                 <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.color }}></div>
@@ -4396,13 +4451,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* CONFIGURACIÓN DE MURO (Solo si ES un muro) */}
                                                 {token.type === 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <PenTool size={12} /> Propiedades del Muro
                                                         </h4>
 
                                                         {/* Snap Toggle para Muro */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
                                                                 <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
@@ -4416,7 +4471,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Grosor del Muro */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Grosor del Collider</span>
                                                                 <span className="text-[#c8aa6e] font-mono">{token.thickness || 4}px</span>
@@ -4435,7 +4490,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 {/* Estados Alterados (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-3">
-                                                        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Flame size={12} /> Estados Alterados
+                                                        </h4>
                                                         <EstadoSelector
                                                             selected={token.status || []}
                                                             onToggle={(statusId) => {
@@ -4451,12 +4508,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* AURAS E INDICADORES (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Sparkles size={12} /> Aura de Estado
                                                         </h4>
 
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Activar Aura</span>
