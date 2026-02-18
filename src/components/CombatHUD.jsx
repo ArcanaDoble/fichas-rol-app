@@ -315,7 +315,7 @@ const CombatHUD = ({
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none rounded-xl md:rounded-2xl"></div>
 
                         <div
-                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 w-full"
+                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 max-w-0 min-w-full"
                             style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
                         >
                             <style>{`
@@ -330,10 +330,10 @@ const CombatHUD = ({
                                     <button
                                         onClick={() => handleActionClick(action.id)}
                                         className={`relative flex flex-col items-center justify-center h-16 w-24 md:w-32 md:h-24 bg-[#161f32] border rounded-lg transition-all ${action.id === 'dash'
-                                                ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
-                                                : isActive
-                                                    ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
-                                                    : 'cursor-not-allowed opacity-50 border-slate-700/50'
+                                            ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
+                                            : isActive
+                                                ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
+                                                : 'cursor-not-allowed opacity-50 border-slate-700/50'
                                             }`}
                                     >
                                         <action.icon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${isActive ? 'text-slate-400 group-hover:text-[#c8aa6e]' : 'text-slate-600'}`} />
