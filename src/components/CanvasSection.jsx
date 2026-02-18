@@ -2,14 +2,21 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Zap, Gem, Search, Package } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
-import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { db, storage } from '../firebase';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
+
+// --- Constants ---
+const STATUS_EFFECT_IDS = [
+    'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
+    'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+    'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
+];
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -95,9 +102,29 @@ const CanvasThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => {
-    if (!show) return null;
+const panelVariants = {
+    initial: { opacity: 0, y: -40, scale: 0.9, filter: 'blur(10px)' },
+    animate: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        filter: 'blur(0px)',
+        transition: {
+            type: "spring",
+            stiffness: 400,
+            damping: 30
+        }
+    },
+    exit: {
+        opacity: 0,
+        y: -20,
+        scale: 0.9,
+        filter: 'blur(8px)',
+        transition: { duration: 0.3 }
+    }
+};
 
+const SaveToast = ({ show, type = 'success', message, subMessage }) => {
     // Configuración según el tipo
     const isSuccess = type === 'success';
     const isError = type === 'error';
@@ -108,9 +135,9 @@ const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => 
     const subText = subMessage || (isSuccess ? "Encuentro Sincronizado" : isError ? "Error de Conexión" : isWarning ? "Acción No Disponible" : "Aviso del Sistema");
 
     // Clases dinámicas
-    const borderColor = isError ? "border-red-500" : isWarning ? "border-amber-500" : isInfo ? "border-sky-500" : "border-[#c8aa6e]";
-    const titleColor = isError ? "text-red-500" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
-    const subtextColor = isError ? "text-red-400" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
+    const borderColor = isError ? "border-red-500/50" : isWarning ? "border-amber-500/50" : isInfo ? "border-sky-500/50" : "border-[#c8aa6e]/50";
+    const titleColor = isError ? "text-red-400" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
+    const subtextColor = isError ? "text-red-400/70" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
     const iconContainer = isError
         ? "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
         : isWarning
@@ -121,23 +148,139 @@ const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => 
     const barColor = isError ? "bg-red-500/50" : isWarning ? "bg-amber-500/50" : isInfo ? "bg-sky-500/50" : "bg-[#c8aa6e]/50";
 
     return (
-        <div className={`fixed top-12 left-1/2 z-[999] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
-            <div className={`relative bg-[#0b1120] border ${borderColor} px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg`}>
-                {/* Icon */}
-                <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
-                    {isError ? <X className="w-5 h-5 text-red-500" /> : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-500" /> : isInfo ? <Shield className="w-5 h-5 text-sky-500" /> : <Check className="w-5 h-5 text-[#c8aa6e]" />}
-                </div>
+        <div className="fixed top-12 left-1/2 z-[1000] -translate-x-1/2 pointer-events-none">
+            <AnimatePresence>
+                {show && (
+                    <motion.div
+                        variants={panelVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className={`relative bg-[#0b1120]/80 backdrop-blur-xl border ${borderColor} px-10 py-5 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[400px] flex items-center gap-6 rounded-2xl overflow-hidden`}
+                    >
+                        {/* Shimmer Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
 
-                {/* Text */}
-                <div className="flex flex-col">
-                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line uppercase`}>
-                        {mainText}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <div className={`h-[1px] w-6 ${barColor}`}></div>
-                        <span className={`${subtextColor} text-[9px] font-bold uppercase tracking-[0.2em]`}>{subText}</span>
-                    </div>
-                </div>
+                        {/* Icon */}
+                        <div className={`w-12 h-12 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
+                            {isError ? <X className="w-6 h-6 text-red-500" /> : isWarning ? <AlertTriangle className="w-6 h-6 text-amber-500" /> : isInfo ? <Shield className="w-6 h-6 text-sky-500" /> : <Check className="w-6 h-6 text-[#c8aa6e]" />}
+                        </div>
+
+                        {/* Text */}
+                        <div className="flex flex-col relative z-10">
+                            <h3 className={`${titleColor} font-fantasy text-2xl leading-none tracking-[0.1em] text-left mb-1.5 whitespace-pre-line uppercase drop-shadow-sm`}>
+                                {mainText}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <div className={`h-[1px] w-8 ${barColor}`}></div>
+                                <span className={`${subtextColor} text-[10px] font-bold uppercase tracking-[0.25em]`}>{subText}</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+// =============================================================================
+// SpeedTimeline — Minimal horizontal initiative tracker based on SPEED
+// Aesthetic: Matches the dark-fantasy gold/slate palette of the canvas UI
+// =============================================================================
+const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset }) => {
+    const sortedTokens = useMemo(() => {
+        return [...tokens].sort((a, b) => (a.velocidad || 0) - (b.velocidad || 0));
+    }, [tokens]);
+
+    if (sortedTokens.length === 0) return null;
+
+    const minVel = sortedTokens[0].velocidad || 0;
+
+    return (
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[45] pointer-events-none flex flex-col items-center gap-1.5">
+            {/* Main pill */}
+            <div
+                className="flex items-center gap-0.5 bg-[#0b1120]/80 backdrop-blur-sm border border-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.2)] ring-1 ring-[#c8aa6e]/10 rounded-lg px-1.5 py-1 pointer-events-auto"
+                style={{ maxWidth: 'min(85vw, 500px)' }}
+            >
+                <AnimatePresence>
+                    {sortedTokens.map((token, idx) => {
+                        const isNext = idx === 0 || token.velocidad === minVel;
+                        const isSelectedToken = selectedId === token.id;
+                        const vel = token.velocidad || 0;
+                        return (
+                            <motion.div
+                                layout
+                                key={token.id}
+                                className="flex items-center shrink-0"
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 8 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                            >
+                                <div
+                                    onClick={() => onSelect(token.id)}
+                                    className="relative group cursor-pointer"
+                                >
+                                    {/* Portrait ring */}
+                                    <div className={`
+                                        w-7 h-7 md:w-8 md:h-8 rounded-full overflow-hidden transition-all duration-200
+                                        ${isNext
+                                            ? 'ring-[1.5px] ring-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.25)]'
+                                            : 'ring-1 ring-slate-700/60 opacity-60 grayscale-[30%]'
+                                        }
+                                        ${isSelectedToken ? 'ring-white/80 opacity-100 grayscale-0 scale-105' : ''}
+                                    `}>
+                                        <img
+                                            src={token.portrait || token.img}
+                                            className="w-full h-full object-cover"
+                                            draggable={false}
+                                            alt=""
+                                        />
+                                    </div>
+
+                                    {/* Speed counter — small badge bottom-right */}
+                                    <div className={`
+                                        absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center
+                                        rounded-full text-[7px] font-bold leading-none px-[3px]
+                                        ${isNext
+                                            ? 'bg-[#c8aa6e] text-[#0b1120] shadow-[0_0_4px_rgba(200,170,110,0.4)]'
+                                            : 'bg-slate-800 text-slate-400 border border-slate-700/50'
+                                        }
+                                    `}>
+                                        {vel}
+                                    </div>
+
+                                    {/* Active indicator */}
+                                    {isNext && idx === 0 && (
+                                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#c8aa6e] shadow-[0_0_4px_#c8aa6e]" />
+                                    )}
+
+                                    {/* Tooltip */}
+                                    <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0b1120] border border-slate-800 rounded px-1.5 py-0.5 text-[8px] text-slate-300 whitespace-nowrap z-[110] pointer-events-none font-bold tracking-wider uppercase">
+                                        {token.name} · {vel}🟡
+                                    </div>
+                                </div>
+
+                                {/* Connector line */}
+                                {idx < sortedTokens.length - 1 && (
+                                    <div className="mx-0.5 w-2 md:w-3 h-px bg-slate-700/20" />
+                                )}
+                            </motion.div>
+                        );
+                    })}
+                </AnimatePresence>
+
+                {/* Reset button — inline, icon-only for master */}
+                {!isPlayerView && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onReset(); }}
+                        className="ml-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                        title="Reiniciar Velocidad Global"
+                    >
+                        <RotateCw size={10} />
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -236,6 +379,124 @@ const getRarityInfo = (rareza) => {
     return { border: 'border-slate-700', text: 'text-slate-500', glow: 'from-slate-800', stripe: 'bg-slate-600' };
 };
 
+// --- Helper: Transform character sheet data into token format ---
+const syncTokenWithSheet = (token, sheetData) => {
+    if (!sheetData) return token;
+
+    // Map character attributes to token attributes format
+    const tokenAttributes = {};
+    if (sheetData.attributes) {
+        const attrKeyMap = {
+            'Destreza': 'destreza', 'destreza': 'destreza',
+            'Vigor': 'vigor', 'vigor': 'vigor',
+            'Intelecto': 'intelecto', 'intelecto': 'intelecto',
+            'Voluntad': 'voluntad', 'voluntad': 'voluntad',
+        };
+        Object.entries(sheetData.attributes).forEach(([key, value]) => {
+            const mappedKey = attrKeyMap[key] || key.toLowerCase();
+            if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
+                tokenAttributes[mappedKey] = typeof value === 'string' ? value.toLowerCase() : value;
+            }
+        });
+    }
+
+    // Map character stats to token stats format
+    const tokenStats = {};
+    if (sheetData.stats) {
+        const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
+        Object.entries(sheetData.stats).forEach(([key, value]) => {
+            const mappedKey = key.toLowerCase();
+            if (validStats.includes(mappedKey) && value && typeof value === 'object') {
+                const max = value.max ?? 0;
+                const current = value.current ?? max;
+                tokenStats[mappedKey] = {
+                    current: Math.min(current, 10),
+                    max: Math.min(max, 10),
+                };
+            }
+        });
+    }
+
+    // Extract status effects from character tags
+    const tokenStatus = [];
+    if (sheetData.tags && Array.isArray(sheetData.tags)) {
+        sheetData.tags.forEach(tag => {
+            const normalizedTag = tag.toLowerCase().trim();
+            if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
+                tokenStatus.push(normalizedTag);
+            }
+        });
+    }
+
+    // Helper to flatten item (extract from .payload if present)
+    const flattenItem = (item) => {
+        if (!item) return null;
+        if (item.payload) {
+            return { ...item.payload, ...item, payload: undefined };
+        }
+        return item;
+    };
+
+    // Extract equipped items from character sheet slots into token format
+    const tokenEquippedItems = [];
+    if (sheetData.equippedItems && typeof sheetData.equippedItems === 'object') {
+        const slotTypeMap = {
+            mainHand: 'weapon',
+            offHand: 'weapon',
+            body: 'armor',
+        };
+        Object.entries(sheetData.equippedItems).forEach(([slot, item]) => {
+            if (!item || slot === 'beltSlotCount') return; // skip non-item keys
+
+            const flattened = flattenItem(item);
+            if (!flattened) return;
+
+            let type = slotTypeMap[slot];
+            if (!type) {
+                if (slot.startsWith('belt_')) type = 'access';
+                else if (slot.startsWith('accessory_')) type = 'access';
+                else type = flattened.type || 'weapon'; // fallback
+            }
+            tokenEquippedItems.push({ ...flattened, type });
+        });
+    }
+
+    // Extract inventory items (equipment)
+    // sheetData.equipment can be an array OR an object with categories { weapons: [], armor: [], ... }
+    let tokenInventory = [];
+    const rawEquipment = sheetData.equipment || sheetData.equipo;
+    if (rawEquipment) {
+        if (Array.isArray(rawEquipment)) {
+            tokenInventory = rawEquipment.map(flattenItem).filter(Boolean);
+        } else if (typeof rawEquipment === 'object') {
+            Object.values(rawEquipment).forEach(categoryList => {
+                if (Array.isArray(categoryList)) {
+                    categoryList.forEach(item => {
+                        const flattened = flattenItem(item);
+                        if (flattened) tokenInventory.push(flattened);
+                    });
+                }
+            });
+        }
+    }
+
+    return {
+        ...token,
+        // Mantener la imagen del canvas si ya existe, de lo contrario usar la de la ficha
+        img: token.img || sheetData.avatar || sheetData.portraitSource || sheetData.image,
+        // El retrato siempre usa la imagen de la ficha (si existe) para el inspector/HUD
+        portrait: sheetData.avatar || sheetData.portraitSource || sheetData.image || token.portrait || token.img,
+        name: sheetData.name || token.name,
+        status: tokenStatus,
+        attributes: tokenAttributes,
+        stats: tokenStats,
+        equippedItems: tokenEquippedItems,
+        inventory: tokenInventory,
+        velocidad: token.velocidad || 0,
+        linkedCharacterId: sheetData.id || token.linkedCharacterId || null,
+    };
+};
+
 // --- Normalize glossary word (mirrors LoadoutView) ---
 const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
@@ -243,7 +504,7 @@ const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NF
 // EquipmentSection — Inventory-style equipment panel for canvas inspector
 // Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
 // =============================================================================
-const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem }) => {
+const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem, isPlayerView = false }) => {
     const [addCat, setAddCat] = useState('weapons');
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -253,10 +514,15 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
     const currentCat = categories.find(c => c.id === addCat) || categories[0];
     const filteredItems = useMemo(() => {
         const list = currentCat?.items || [];
-        if (!searchTerm) return list.slice(0, 50);
+        // Limit results to prevent spoilers for players when not searching
+        if (!searchTerm) {
+            const limit = isPlayerView ? 4 : 50;
+            return list.slice(0, limit);
+        }
         const q = searchTerm.toLowerCase();
+        // Even with search, limit to 50 for performance and cleanliness
         return list.filter(i => (i.nombre || i.name || '').toLowerCase().includes(q)).slice(0, 50);
-    }, [currentCat, searchTerm]);
+    }, [currentCat, searchTerm, isPlayerView]);
 
     useEffect(() => {
         if (isAddOpen && searchInputRef.current) {
@@ -295,19 +561,15 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
 
     return (
         <div className="pt-4 border-t border-slate-800/50 space-y-4">
-            {/* Section Header — matches LoadoutView title style */}
-            <div className="flex items-center gap-3">
-                <Sword className="w-4 h-4 text-[#c8aa6e]" />
-                <h3 className="text-[#c8aa6e] font-['Cinzel'] text-xs tracking-[0.15em] uppercase">
-                    Equipamiento
-                </h3>
-                <div className="flex-1 h-px bg-gradient-to-r from-[#c8aa6e]/30 to-transparent" />
+            {/* Section Header — standardized with other sections */}
+            <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                <Sword size={12} /> Equipamiento
                 {equippedItems.length > 0 && (
-                    <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#c8aa6e]/10 text-[#c8aa6e] border border-[#c8aa6e]/20">
+                    <span className="ml-auto text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#c8aa6e]/10 text-[#c8aa6e] border border-[#c8aa6e]/20">
                         {equippedItems.length}
                     </span>
                 )}
-            </div>
+            </h4>
 
             {/* Equipped Items — Inventory card style */}
             {equippedItems.length > 0 ? (
@@ -324,35 +586,48 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 key={idx}
                                 className={`relative bg-[#161f32] border ${rarity.border} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300`}
                             >
+                                {/* Dynamic Background Gradient (Hover Effect) — mirrors LoadoutView */}
+                                <div className={`absolute inset-0 bg-gradient-to-r ${rarity.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+
+                                {/* Stardust/Noise Texture Overlay */}
+                                <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700 z-0 pointer-events-none"
+                                    style={{
+                                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E")`,
+                                        backgroundSize: '100px 100px'
+                                    }}
+                                ></div>
+
                                 {/* Rarity stripe (left edge) */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe}`} />
+                                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe} z-10`} />
 
                                 <div className="flex">
-                                    {/* Left Column — Image or Icon */}
-                                    <div className="w-16 shrink-0 relative overflow-hidden">
-                                        {itemImage ? (
+                                    {/* Left Column — Image or Icon (mirrors LoadoutView style) */}
+                                    <div className="w-16 bg-black/50 relative shrink-0 ml-[3px] flex flex-col z-10 overflow-hidden">
+                                        {itemImage && (
                                             <>
                                                 <img
                                                     src={itemImage}
                                                     alt={item.nombre || item.name}
                                                     className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
                                                 />
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#161f32]" />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                                             </>
-                                        ) : (
-                                            <div className={`absolute inset-0 bg-gradient-to-br ${rarity.glow} via-[#161f32] to-[#161f32] flex items-center justify-center`}>
-                                                <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60`} />
-                                            </div>
                                         )}
-                                        {/* Rarity badge overlay */}
-                                        {item.rareza && item.rareza.toLowerCase() !== 'común' && (
-                                            <div className="absolute bottom-1 left-1 z-10">
-                                                <span className={`text-[7px] uppercase font-bold ${rarity.text} bg-black/60 px-1 py-0.5 rounded`}>
+                                        <div className="w-full h-full flex flex-col items-center justify-center relative z-20 py-2">
+                                            {!itemImage && (
+                                                <div className="mb-1">
+                                                    <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]`} />
+                                                </div>
+                                            )}
+                                            {/* Rarity Label — clean text style like LoadoutView */}
+                                            {item.rareza && item.rareza.toLowerCase() !== 'común' ? (
+                                                <span className={`text-[8px] uppercase font-bold ${rarity.text} text-center leading-tight px-1 drop-shadow-md`}>
                                                     {item.rareza}
                                                 </span>
-                                            </div>
-                                        )}
+                                            ) : (
+                                                !itemImage && <div className="w-6 h-[1px] bg-slate-700/50 mt-1"></div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Right Column — Content */}
@@ -535,6 +810,16 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                     );
                                 })
                             )}
+
+                            {/* Spoiler prevention hint for players */}
+                            {isPlayerView && !searchTerm && (currentCat?.items?.length || 0) > 4 && (
+                                <div className="py-2.5 px-4 flex flex-col items-center bg-slate-900/40 border-t border-slate-800/30">
+                                    <div className="flex items-center gap-1.5 text-slate-500 opacity-60">
+                                        <Search size={10} />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.1em]">Búsqueda requerida</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Footer */}
@@ -570,7 +855,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const lastActionTimeRef = useRef(0);
     const [showToast, setShowToast] = useState(false);
-    const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
     const [toastMessage, setToastMessage] = useState('');
     const [toastSubMessage, setToastSubMessage] = useState('');
@@ -580,7 +864,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setToastMessage(message);
         setToastSubMessage(subMessage);
         setShowToast(true);
-        setToastExiting(false);
     }, []);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
@@ -626,6 +909,67 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    const [availableCharacters, setAvailableCharacters] = useState([]);
+
+    const tokenOriginalPosRef = useRef({});
+    useEffect(() => { tokenOriginalPosRef.current = tokenOriginalPos; }, [tokenOriginalPos]);
+
+    // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
+    const [pendingTurnState, setPendingTurnState] = useState(null);
+    // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
+    // --- MASTER COMBAT HUD TOGGLE ---
+    const [showMasterCombatHUD, setShowMasterCombatHUD] = useState(false);
+    const lastMasterHudTokenIdRef = useRef(null); // Recuerda el último token para el HUD del master
+
+    // Refs para acceder a estados actualizados dentro de onSnapshot sin re-suscripciones
+    const draggedTokenIdRef = useRef(null);
+    useEffect(() => { draggedTokenIdRef.current = draggedTokenId; }, [draggedTokenId]);
+    const selectedTokenIdsRef = useRef([]);
+    useEffect(() => { selectedTokenIdsRef.current = selectedTokenIds; }, [selectedTokenIds]);
+    const rotatingTokenIdRef = useRef(null);
+    useEffect(() => { rotatingTokenIdRef.current = rotatingTokenId; }, [rotatingTokenId]);
+    const resizingTokenIdRef = useRef(null);
+    useEffect(() => { resizingTokenIdRef.current = resizingTokenId; }, [resizingTokenId]);
+    const pendingTurnStateRef = useRef(null);
+    useEffect(() => { pendingTurnStateRef.current = pendingTurnState; }, [pendingTurnState]);
+
+    // Fetch available characters for Master or Player linking
+    useEffect(() => {
+        let unsubClasses = () => { };
+        let unsubChars = () => { };
+
+        if (isMaster) {
+            // Master loads archetypes (NPCs) and all player characters
+            unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+                const classesData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: true }));
+                setAvailableCharacters(prev => {
+                    const other = prev.filter(c => !c._isTemplate);
+                    return [...classesData, ...other];
+                });
+            });
+            unsubChars = onSnapshot(collection(db, 'characters'), (snap) => {
+                const charsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: false }));
+                setAvailableCharacters(prev => {
+                    const other = prev.filter(c => c._isTemplate);
+                    return [...other, ...charsData];
+                });
+            });
+        } else if (playerName) {
+            // Player only gets their own characters from the 'characters' collection
+            const q = query(collection(db, 'characters'), where('owner', '==', playerName));
+            unsubChars = onSnapshot(q, (snapshot) => {
+                const chars = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setAvailableCharacters(chars);
+            });
+        }
+
+        return () => {
+            unsubClasses();
+            unsubChars();
+        };
+    }, [isMaster, playerName]);
+
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
 
@@ -648,13 +992,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         if (showToast) {
             const duration = toastType === 'success' ? 3000 : 4000;
-            const timer1 = setTimeout(() => setToastExiting(true), duration);
-            const timer2 = setTimeout(() => setShowToast(false), duration + 300);
-
-            return () => {
-                clearTimeout(timer1);
-                clearTimeout(timer2);
-            };
+            const timer = setTimeout(() => setShowToast(false), duration);
+            return () => clearTimeout(timer);
         }
     }, [showToast, toastType]);
 
@@ -749,6 +1088,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const unsub = onSnapshot(doc(db, 'canvas_scenarios', activeScenario.id), (docSnap) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
+
+                // --- DETECCIÓN DE CONFLICTOS PARA JUGADORES ---
+                // Si el Master mueve una ficha que nosotros estamos manipulando, cancelamos nuestra interacción
+                // local para evitar saltos visuales (snap-back) y desincronización de turnos.
+                if (isPlayerView && activeScenarioRef.current && remoteData.lastModified > (activeScenarioRef.current.lastModified || 0)) {
+                    const remoteItems = remoteData.items || [];
+                    let hasConflict = false;
+
+                    // 1. Conflicto con Arrastre (Individual o Múltiple)
+                    if (draggedTokenIdRef.current) {
+                        const idsToCheck = selectedTokenIdsRef.current.length > 0 ? selectedTokenIdsRef.current : [draggedTokenIdRef.current];
+                        const movedExternally = idsToCheck.some(id => {
+                            const remoteItem = remoteItems.find(i => i.id === id);
+                            const original = tokenOriginalPosRef.current[id];
+                            return remoteItem && original && (remoteItem.x !== original.x || remoteItem.y !== original.y);
+                        });
+
+                        if (movedExternally) {
+                            console.warn("⚠️ Master movió fichas en drag. Cancelando.");
+                            setDraggedTokenId(null);
+                            setRotatingTokenId(null);
+                            setResizingTokenId(null);
+                            setTokenOriginalPos({});
+                            document.body.style.cursor = 'default';
+                            triggerToast("Movimiento Interrumpido", "El Master ha movido las fichas", 'warning');
+                            hasConflict = true;
+                        }
+                    }
+
+                    // 2. Conflicto con Turno Pendiente (Combat Mode)
+                    if (!hasConflict && pendingTurnStateRef.current) {
+                        const id = pendingTurnStateRef.current.tokenId;
+                        const remoteItem = remoteItems.find(i => i.id === id);
+                        const startX = pendingTurnStateRef.current.startX;
+                        const startY = pendingTurnStateRef.current.startY;
+                        if (remoteItem && (remoteItem.x !== startX || remoteItem.y !== startY)) {
+                            setPendingTurnState(null);
+                            triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
+                            hasConflict = true;
+                        }
+                    }
+
+                    // 3. Conflicto con Rotación o Redimensión
+                    if (!hasConflict && (rotatingTokenIdRef.current || resizingTokenIdRef.current)) {
+                        const id = rotatingTokenIdRef.current || resizingTokenIdRef.current;
+                        const remoteItem = remoteItems.find(i => i.id === id);
+                        const localBaseline = activeScenarioRef.current.items.find(i => i.id === id);
+                        if (remoteItem && localBaseline && (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)) {
+                            setRotatingTokenId(null);
+                            setResizingTokenId(null);
+                            triggerToast("Interacción Interrumpida", "El Master ha movido la ficha", 'warning');
+                        }
+                    }
+                }
 
                 // --- Sincronización de Items (Tokens) ---
                 setActiveScenario(current => {
@@ -1087,6 +1480,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return item;
             });
 
+            // LOGIC ADDED: Update pending cost LIVE while dragging (ONLY for players)
+            if (gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
+                const draggedItem = newItems.find(i => i.id === draggedTokenId);
+                const original = tokenOriginalPos[draggedTokenId];
+
+                if (draggedItem && original) {
+                    setPendingTurnState(prev => {
+                        const isSameToken = prev && prev.tokenId === draggedTokenId;
+                        const turnStartX = isSameToken ? prev.startX : original.x;
+                        const turnStartY = isSameToken ? prev.startY : original.y;
+
+                        const dx = Math.abs(draggedItem.x - turnStartX);
+                        const dy = Math.abs(draggedItem.y - turnStartY);
+                        const cellW = gridConfig.cellWidth || 50;
+                        const cellH = gridConfig.cellHeight || 50;
+                        const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                        const base = isSameToken ? prev : {
+                            tokenId: draggedTokenId,
+                            startX: original.x,
+                            startY: original.y,
+                            actionCost: 0,
+                            actions: []
+                        };
+
+                        // Avoid update if cost hasn't changed to key performance reasonable
+                        if (isSameToken && prev.moveCost === distance) return prev;
+
+                        return {
+                            ...base,
+                            moveCost: distance
+                        };
+                    });
+                }
+            }
+
             setActiveScenario(prev => ({ ...prev, items: newItems }));
             return;
         }
@@ -1285,9 +1714,70 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (hasCollision) {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
                 }
+
+                // --- GESTIÓN DE MOVIMIENTO EN MODO COMBATE (PENDIENTE) ---
+                if (gridConfig.isCombatActive && isPlayerView) {
+                    const token = finalItems.find(i => i.id === draggedTokenId);
+                    const original = tokenOriginalPos[draggedTokenId];
+                    if (token && original && (token.x !== original.x || token.y !== original.y)) {
+                        setPendingTurnState(prev => {
+                            // Si ya hay un estado pendiente para este token, el inicio del turno es el startX guardado.
+                            // Si no, el inicio es la posición original de este arrastre.
+                            const isSameToken = prev && prev.tokenId === draggedTokenId;
+                            const turnStartX = isSameToken ? prev.startX : original.x;
+                            const turnStartY = isSameToken ? prev.startY : original.y;
+
+                            const dx = Math.abs(token.x - turnStartX);
+                            const dy = Math.abs(token.y - turnStartY);
+                            const cellW = gridConfig.cellWidth || 50;
+                            const cellH = gridConfig.cellHeight || 50;
+                            const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                            const base = prev && prev.tokenId === draggedTokenId ? prev : {
+                                tokenId: draggedTokenId,
+                                startX: original.x,
+                                startY: original.y,
+                                actionCost: 0,
+                                actions: []
+                            };
+                            return {
+                                ...base,
+                                x: token.x,
+                                y: token.y,
+                                moveCost: distance
+                            };
+                        });
+
+                        setDraggedTokenId(null);
+                        setTokenOriginalPos({});
+                        document.body.style.cursor = 'default';
+                        return; // No persistimos a Firebase aún
+                    }
+                }
+
+                // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO (MODO NORMAL O MASTER) ---
+                finalItems = finalItems.map(item => {
+                    if (selectedTokenIds.includes(item.id) && item.type !== 'wall' && item.type !== 'light') {
+                        const original = tokenOriginalPos[item.id];
+                        if (original) {
+                            if (item.x !== original.x || item.y !== original.y) {
+                                const dx = Math.abs(item.x - original.x);
+                                const dy = Math.abs(item.y - original.y);
+                                const cellW = gridConfig.cellWidth || 50;
+                                const cellH = gridConfig.cellHeight || 50;
+                                const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                                if (distance > 0 && gridConfig.isCombatActive) {
+                                    return { ...item, velocidad: (item.velocidad || 0) + distance };
+                                }
+                            }
+                        }
+                    }
+                    return item;
+                });
             }
 
-            // Guardar el estado final en Firebase
+            // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate)
             try {
                 updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
                     items: finalItems,
@@ -1301,6 +1791,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setRotatingTokenId(null);
             setResizingTokenId(null);
             setTokenOriginalPos({});
+
+            // Si el master mueve un token que tenía un estado de turno pendiente, lo limpiamos
+            if (!isPlayerView && pendingTurnState) {
+                setPendingTurnState(null);
+            }
+
             document.body.style.cursor = 'default';
             return;
         }
@@ -1363,6 +1859,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         snapToGrid: false,
         ambientDarkness: 0, // 0 = Día (Transparente), 1 = Noche Total (Negro)
         fogOfWar: false, // Control de Niebla de Guerra
+        isCombatActive: false, // Modo por turnos dinámico
     });
 
     // --- CAMPOS DE MAPA CALCULADOS ---
@@ -1602,126 +2099,58 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // Auto-create player token when entering with character data
     const hasCreatedAutoToken = useRef(false);
+    // Auto-create OR sync player token on join / characterData change
     useEffect(() => {
-        if (!isPlayerView || !characterData || !activeScenario?.id || hasCreatedAutoToken.current) return;
+        if (!isPlayerView || !characterData || !activeScenario?.id) return;
 
         const characterName = characterData.name || playerName;
 
         // Check if this specific character already has a token in this scenario
-        // Allows the same player to have multiple tokens from different character sheets
         const existingToken = activeScenario.items?.find(i =>
             i.controlledBy?.includes(playerName) && i.name === characterName
         );
+
         if (existingToken) {
-            hasCreatedAutoToken.current = true;
+            // Sincronizar el token existente si acaba de entrar o los datos han cambiado
+            if (!hasCreatedAutoToken.current) {
+                const syncedToken = syncTokenWithSheet(existingToken, characterData);
+
+                // Solo guardamos si hay una diferencia real
+                if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
+                    console.log('🔄 Sincronizando token existente al entrar:', characterName);
+                    const updatedItems = activeScenario.items.map(i => i.id === existingToken.id ? syncedToken : i);
+                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                    updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                        .catch(err => console.error('Error al sincronizar token existente:', err));
+                }
+                hasCreatedAutoToken.current = true;
+            }
             return;
         }
 
-        // Map character attributes to token attributes format (e.g. { destreza: 'D8' } -> { destreza: 'd8' })
-        const tokenAttributes = {};
-        if (characterData.attributes) {
-            const attrKeyMap = {
-                'Destreza': 'destreza', 'destreza': 'destreza',
-                'Vigor': 'vigor', 'vigor': 'vigor',
-                'Intelecto': 'intelecto', 'intelecto': 'intelecto',
-                'Voluntad': 'voluntad', 'voluntad': 'voluntad',
-            };
-            Object.entries(characterData.attributes).forEach(([key, value]) => {
-                const mappedKey = attrKeyMap[key] || key.toLowerCase();
-                if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
-                    // Normalize dice value format (D8 -> d8, etc)
-                    const dieValue = typeof value === 'string' ? value.toLowerCase() : value;
-                    tokenAttributes[mappedKey] = dieValue;
-                }
-            });
-        }
-
-        // Map character stats to token stats format
-        // Character sheet format: { postura: { current: 3, max: 4 }, vida: { current: 4, max: 4 }, ... }
-        // Token format: { postura: { current: 3, max: 4 }, ... }
-        const tokenStats = {};
-        if (characterData.stats) {
-            const validStats = ['postura', 'armadura', 'vida', 'ingenio', 'cordura'];
-            Object.entries(characterData.stats).forEach(([key, value]) => {
-                const mappedKey = key.toLowerCase();
-                if (validStats.includes(mappedKey) && value && typeof value === 'object') {
-                    const max = value.max ?? 0;
-                    const current = value.current ?? max;
-                    tokenStats[mappedKey] = {
-                        current: Math.min(current, 10),
-                        max: Math.min(max, 10),
-                    };
-                }
-            });
-        }
-
-        // Extract status effects from character tags
-        // Tags can contain special keywords like 'minijuego', 'canvas', etc. — we only want status effect IDs
-        const STATUS_EFFECT_IDS = [
-            'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
-            'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
-            'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
-        ];
-        const tokenStatus = [];
-        if (characterData.tags && Array.isArray(characterData.tags)) {
-            characterData.tags.forEach(tag => {
-                const normalizedTag = tag.toLowerCase().trim();
-                if (STATUS_EFFECT_IDS.includes(normalizedTag)) {
-                    tokenStatus.push(normalizedTag);
-                }
-            });
-        }
-
-        // Extract equipped items from character sheet slots into token format
-        // Character sheet format: { mainHand: item, offHand: item, body: item, belt_0: item, accessory_0: item, ... }
-        // Token format: flat array with type on each item
-        const tokenEquippedItems = [];
-        if (characterData.equippedItems && typeof characterData.equippedItems === 'object') {
-            const slotTypeMap = {
-                mainHand: 'weapon',
-                offHand: 'weapon',
-                body: 'armor',
-            };
-            Object.entries(characterData.equippedItems).forEach(([slot, item]) => {
-                if (!item || slot === 'beltSlotCount') return; // skip non-item keys
-                let type = slotTypeMap[slot];
-                if (!type) {
-                    if (slot.startsWith('belt_')) type = 'access';
-                    else if (slot.startsWith('accessory_')) type = 'access';
-                    else type = 'weapon'; // fallback
-                }
-                tokenEquippedItems.push({ ...item, type });
-            });
-        }
-
-        // Also add any inventory items (equipment array) that aren't already equipped
-        // This gives the master visibility into what the player carries
-        const tokenInventory = Array.isArray(characterData.equipment) ? characterData.equipment : [];
+        if (hasCreatedAutoToken.current) return;
 
         // Calculate spawn position (center of the map)
         const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
         const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
 
-        const newToken = {
+        // Crear nuevo token base
+        const baseToken = {
             id: `token-${Date.now()}-${playerName}`,
             x: spawnX,
             y: spawnY,
             width: gridConfig.cellWidth,
             height: gridConfig.cellHeight,
-            img: characterData.avatar || '',
             rotation: 0,
             layer: 'TOKEN',
-            name: characterData.name || playerName,
-            status: tokenStatus,
             hasVision: true,
             visionRadius: 300,
             controlledBy: [playerName],
-            isCircular: true, // Mark as circular for portrait-style rendering
-            attributes: tokenAttributes,
-            stats: tokenStats,
-            equippedItems: tokenEquippedItems,
-            inventory: tokenInventory,
+            isCircular: true,
         };
+
+        // Enriquecer con los datos de la ficha usando el helper
+        const newToken = syncTokenWithSheet(baseToken, characterData);
 
         console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
 
@@ -1745,7 +2174,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: [...(activeScenario.items || []), newToken]
         }).catch(err => console.error('Error saving auto-created token:', err));
 
-    }, [isPlayerView, characterData, activeScenario?.id, playerName]);
+    }, [isPlayerView, characterData, activeScenario?.id, playerName, gridConfig]);
+
+    // Listener para sincronización en tiempo real desde edición de fichas
+    useEffect(() => {
+        const handleSyncEvent = (e) => {
+            const { name, sheet } = e.detail || {};
+            if (!name || !sheet || !activeScenario?.id) return;
+
+            const currentItems = activeScenario.items || [];
+            let hasChanges = false;
+
+            const updatedItems = currentItems.map(item => {
+                // Sincronizamos por ID vinculado (prioridad) o por nombre (fallback)
+                const isMatch = (item.linkedCharacterId && item.linkedCharacterId === sheet.id) ||
+                    (!item.linkedCharacterId && item.name === name);
+
+                if (isMatch && item.layer === 'TOKEN') {
+                    const synced = syncTokenWithSheet(item, sheet);
+                    if (JSON.stringify(synced) !== JSON.stringify(item)) {
+                        hasChanges = true;
+                        return synced;
+                    }
+                }
+                return item;
+            });
+
+            if (hasChanges) {
+                console.log('🔄 Sincronización en tiempo real detectada para:', name);
+                setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                    .catch(err => console.error('Error al sincronizar token en tiempo real:', err));
+            }
+        };
+
+        window.addEventListener('playerSheetSaved', handleSyncEvent);
+        return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
+    }, [activeScenario]);
+
 
     const saveCurrentScenario = async () => {
         if (!activeScenario) {
@@ -1760,56 +2226,110 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
-            let finalBackgroundImage = gridConfig.backgroundImage;
-            let finalImageHash = gridConfig.backgroundImageHash;
-
-            // Si hay un archivo pendiente, lo subimos a Storage primero
-            if (pendingImageFile) {
-                console.log("📤 Subiendo imagen pesada a Firebase Storage...");
-                const { url, hash } = await getOrUploadFile(pendingImageFile, 'CanvasMaps');
-
-                // Si ya había una imagen diferente antes, liberamos la referencia anterior
-                if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
-                    console.log("♻️ Liberando imagen anterior de Storage...");
-                    await releaseFile(gridConfig.backgroundImageHash);
-                }
-
-                finalBackgroundImage = url;
-                finalImageHash = hash;
-
-                // Actualizamos el estado local
-                setGridConfig(prev => ({
-                    ...prev,
-                    backgroundImage: url,
-                    backgroundImageHash: hash
-                }));
-                setPendingImageFile(null);
-            }
-
-            const updatedConfig = {
-                ...gridConfig,
-                backgroundImage: finalBackgroundImage,
-                backgroundImageHash: finalImageHash
+            const savePayload = {
+                items: activeScenario.items || [],
+                lastModified: Date.now()
             };
 
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
-                name: activeScenario.name,
-                config: updatedConfig,
-                items: activeScenario.items || [], // Guardamos items
-                camera: { zoom, offset },
-                allowedPlayers: activeScenario.allowedPlayers || [],
-                lastModified: Date.now()
-            });
+            // Si no es vista de jugador (es Master), guardamos toda la configuración y metadatos
+            if (!isPlayerView) {
+                let finalBackgroundImage = gridConfig.backgroundImage;
+                let finalImageHash = gridConfig.backgroundImageHash;
 
-            console.log("✅ Escenario guardado correctamente con imagen persistente");
+                // Si hay un archivo pendiente, lo subimos a Storage primero
+                if (pendingImageFile) {
+                    console.log("📤 Subiendo imagen pesada a Firebase Storage...");
+                    const { url, hash } = await getOrUploadFile(pendingImageFile, 'CanvasMaps');
+
+                    // Si ya había una imagen diferente antes, liberamos la referencia anterior
+                    if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
+                        console.log("♻️ Liberando imagen anterior de Storage...");
+                        await releaseFile(gridConfig.backgroundImageHash);
+                    }
+
+                    finalBackgroundImage = url;
+                    finalImageHash = hash;
+
+                    // Actualizamos el estado local
+                    setGridConfig(prev => ({
+                        ...prev,
+                        backgroundImage: url,
+                        backgroundImageHash: hash
+                    }));
+                    setPendingImageFile(null);
+                }
+
+                const updatedConfig = {
+                    ...gridConfig,
+                    backgroundImage: finalBackgroundImage,
+                    backgroundImageHash: finalImageHash
+                };
+
+                savePayload.name = activeScenario.name;
+                savePayload.config = updatedConfig;
+                savePayload.camera = { zoom, offset };
+                savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
+            }
+
+            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), savePayload);
+
+            // 🔗 SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
+            if (activeScenario.items && activeScenario.items.length > 0) {
+                console.log("🔗 Iniciando sincronización inversa con fichas vinculadas...");
+                const syncPromises = activeScenario.items
+                    .filter(token => token.linkedCharacterId)
+                    .map(async (token) => {
+                        const charId = token.linkedCharacterId;
+                        const char = availableCharacters.find(c => c.id === charId);
+                        if (!char) return;
+
+                        const collectionName = char._isTemplate ? 'classes' : 'characters';
+                        const charRef = doc(db, collectionName, charId);
+
+                        // Preparar payload de actualización para la ficha
+                        const charUpdate = {};
+
+                        // 1. Atributos (destreza, vigor, intelecto, voluntad)
+                        if (token.attributes) {
+                            charUpdate.attributes = { ...(char.attributes || {}), ...token.attributes };
+                        }
+
+                        // 2. Estadísticas (Vida, Armadura, Postura, etc)
+                        if (token.stats) {
+                            charUpdate.stats = { ...(char.stats || {}), ...token.stats };
+                        }
+
+                        // 3. Estados -> Tags
+                        if (token.status) {
+                            // Mantener tags que no son condicionantes de batalla (ej: historia, rasgos)
+                            const currentTags = char.tags || [];
+                            const otherTags = currentTags.filter(tag => !STATUS_EFFECT_IDS.includes(tag.toLowerCase().trim()));
+                            charUpdate.tags = [...otherTags, ...token.status];
+                        }
+
+                        // 4. Velocidad
+                        if (token.velocidad !== undefined) {
+                            charUpdate.velocidad = token.velocidad;
+                        }
+
+                        try {
+                            if (Object.keys(charUpdate).length > 0) {
+                                await updateDoc(charRef, charUpdate);
+                                console.log(`✅ Ficha ${char.name} sincronizada correctamente desde el Canvas`);
+                            }
+                        } catch (err) {
+                            console.error(`❌ Error sincronizando ficha ${char.name}:`, err);
+                        }
+                    });
+
+                await Promise.all(syncPromises);
+            }
+
+            console.log(`✅ Escenario guardado correctamente (${isPlayerView ? 'Jugador' : 'Master'})`);
         } catch (error) {
             console.error("❌ Error al guardar escenario:", error);
             setToastType('error');
-            setShowToast(false);
-            setTimeout(() => {
-                setShowToast(true);
-                setToastExiting(false);
-            }, 50);
+            setShowToast(true);
         } finally {
             setIsSaving(false);
         }
@@ -1928,10 +2448,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
-            const canMove = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
-            if (!canMove) {
-                return;
+            const isOwner = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+            if (!isOwner) return;
+
+            // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
+            if (gridConfig.isCombatActive && activeLayer === 'TABLETOP') {
+                const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
+                const combatTokens = currentItems.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+
+                if ((token.velocidad || 0) > minVel) {
+                    // No es tu turno, pero el Master puede mover cualquier cosa
+                    if (isPlayerView) {
+                        triggerToast("No es tu turno", "Debes esperar a que tu velocidad sea la más baja", 'warning');
+                        return;
+                    }
+                }
             }
+
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
@@ -1979,6 +2513,61 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Para rotación, forzamos selección única del token rotado para evitar confusiones visuales
             setSelectedTokenIds([token.id]);
         }
+    };
+
+    const linkCharacter = (tokenId, charData) => {
+        const token = activeScenario.items.find(i => i.id === tokenId);
+        if (!token || !charData) return;
+
+        // Perform synchronization
+        const syncedToken = syncTokenWithSheet(token, charData);
+
+        // Add owner to controlledBy if not present
+        let newControlledBy = [...(token.controlledBy || [])];
+        if (charData.owner && !newControlledBy.includes(charData.owner)) {
+            newControlledBy.push(charData.owner);
+        }
+
+        const finalToken = {
+            ...syncedToken,
+            linkedCharacterId: charData.id,
+            controlledBy: newControlledBy,
+            isCircular: true // Forzar circular si se vincula a ficha para consistencia visual por defecto
+        };
+
+        const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
+        setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+            .then(() => {
+                triggerToast(
+                    "Vínculo establecido",
+                    `Token vinculado a ${charData.name}`,
+                    'success'
+                );
+            })
+            .catch(err => console.error('Error al vincular personaje:', err));
+    };
+
+    const unlinkCharacter = (tokenId) => {
+        const token = activeScenario.items.find(i => i.id === tokenId);
+        if (!token) return;
+
+        const finalToken = {
+            ...token,
+            linkedCharacterId: null
+        };
+
+        const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
+        setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+            .then(() => {
+                triggerToast(
+                    "Vínculo eliminado",
+                    "El token ya no está vinculado a una ficha",
+                    'info'
+                );
+            })
+            .catch(err => console.error('Error al desvincular personaje:', err));
     };
 
     const deleteItem = (itemId) => {
@@ -2361,32 +2950,55 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return (
             <React.Fragment key={item.id}>
-                {/* GHOST TOKEN & LINE */}
-                {original && canInteract && (
+                {/* GHOST TOKEN & LINE (DRAG O TURNO PENDIENTE) */}
+                {(original || (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)) && canInteract && (
                     <>
-                        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
-                            <line
-                                x1={original.x + item.width / 2}
-                                y1={original.y + item.height / 2}
-                                x2={item.x + item.width / 2}
-                                y2={item.y + item.height / 2}
-                                stroke="#c8aa6e"
-                                strokeWidth="1.5"
-                                strokeDasharray="6 4"
-                                opacity="0.6"
-                            />
-                            <circle cx={original.x + item.width / 2} cy={original.y + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
-                        </svg>
-                        <div
-                            className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
-                            style={{
-                                transform: `translate(${original.x}px, ${original.y}px) rotate(${item.rotation}deg)`,
-                                width: `${item.width}px`,
-                                height: `${item.height}px`,
-                            }}
-                        >
-                            {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} />}
-                        </div>
+                        {(() => {
+                            // PRIORIDAD: Si hay un estado pendiente, el inicio del turno es SIEMPRE startX del estado pendiente.
+                            // Si estamos arrastrando por primera vez (sin estado pendiente previo), usamos original.x
+                            let startX, startY;
+
+                            if (pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                startX = pendingTurnState.startX;
+                                startY = pendingTurnState.startY;
+                            } else if (original) {
+                                startX = original.x;
+                                startY = original.y;
+                            }
+
+                            const currentX = item.x;
+                            const currentY = item.y;
+
+                            if (startX === undefined || (startX === currentX && startY === currentY)) return null;
+
+                            return (
+                                <>
+                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                                        <line
+                                            x1={startX + item.width / 2}
+                                            y1={startY + item.height / 2}
+                                            x2={currentX + item.width / 2}
+                                            y2={currentY + item.height / 2}
+                                            stroke="#c8aa6e"
+                                            strokeWidth="1.5"
+                                            strokeDasharray="6 4"
+                                            opacity="0.6"
+                                        />
+                                        <circle cx={startX + item.width / 2} cy={startY + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
+                                    </svg>
+                                    <div
+                                        className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                        style={{
+                                            transform: `translate(${startX}px, ${startY}px) rotate(${item.rotation}deg)`,
+                                            width: `${item.width}px`,
+                                            height: `${item.height}px`,
+                                        }}
+                                    >
+                                        {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </>
                 )}
 
@@ -2417,14 +3029,77 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     className="group"
                 >
                     <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                        <div className={`absolute -inset-1 border-2 border-[#c8aa6e] ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                        <div className={`absolute -inset-1 z-50 border-2 border-[#c8aa6e] ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                             )}
+                            {/* Indicador de Compartido (Izquierda) */}
                             {item.controlledBy?.length > 0 && (
-                                <div className="absolute -top-2 -right-2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.5)] text-[#0b1120] rounded-full p-0.5 border border-white/20">
+                                <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
                                     <Users size={8} />
                                 </div>
+                            )}
+
+                            {/* Indicador de Velocidad (Derecha) */}
+                            {(() => {
+                                const currentVel = item.velocidad || 0;
+                                const pendingVel = (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)
+                                    ? (pendingTurnState.moveCost + pendingTurnState.actionCost)
+                                    : 0;
+                                const totalVel = currentVel + pendingVel;
+
+                                if (totalVel <= 0) return null;
+
+                                return (
+                                    <div className={`absolute -top-[1px] -right-[1px] translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] flex flex-col items-center justify-center rounded-full shadow-[0_0_10px_rgba(200,170,110,0.4)] border border-white/20 z-40 pointer-events-none ${pendingVel > 0 ? 'bg-[#ef4444]' : 'bg-[#c8aa6e]'} transition-colors`}>
+                                        <span className={`text-[8px] font-black leading-none font-mono ${pendingVel > 0 ? 'text-white' : 'text-[#0b1120]'}`}>
+                                            {totalVel}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
+                            {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
+                            {item.status && item.status.length > 0 && (
+                                (() => {
+                                    const isLargeToken = item.width > gridConfig.cellWidth || item.height > gridConfig.cellHeight;
+                                    const maxStatuses = isLargeToken ? 6 : 3;
+                                    const hasSharedIcon = item.controlledBy?.length > 0;
+
+                                    // Apilados siempre de arriba a abajo (justify-start)
+                                    // Tokens grandes (2x2+): Muestran hasta 6 gap-1
+                                    // Tokens pequeños (1x1): Muestran hasta 3 gap-1 (para que quepan bien sin justify-between forzado)
+
+                                    const statusCount = Math.min(item.status.length, maxStatuses);
+                                    const isFull = statusCount === maxStatuses;
+
+                                    let layoutClasses = '';
+                                    if (isLargeToken) {
+                                        layoutClasses = isFull
+                                            ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-2 h-[calc(100%+8px)] justify-between')
+                                            : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-1' : '-top-2 justify-start gap-1');
+                                    } else {
+                                        layoutClasses = isFull
+                                            ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-3.5 h-[calc(100%+12px)] justify-between')
+                                            : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-[5px]' : '-top-3.5 justify-start gap-[5px]');
+                                    }
+
+                                    return (
+                                        <div className={`absolute -left-[1px] -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none ${layoutClasses}`}>
+                                            {item.status.slice(0, maxStatuses).map(statusId => {
+                                                const effect = DEFAULT_STATUS_EFFECTS[statusId];
+                                                if (!effect) return null;
+                                                const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+                                                return (
+                                                    <div key={statusId} className="relative w-3 h-3 shrink-0 aspect-square bg-[#0b1120] rounded-full border border-white/20 shadow-sm" style={{ borderColor: effect.hex || '#c8aa6e', color: effect.hex || '#c8aa6e' }}>
+                                                        <Icon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[7px] h-[7px]" strokeWidth={2.5} />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()
                             )}
                         </div>
 
@@ -2478,21 +3153,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             />
                         )}
 
-                        {/* Status Effects */}
-                        {item.status && item.status.length > 0 && !isLight && canInteract && (
-                            <div className="absolute top-0 -left-3 flex flex-col items-center gap-1 pointer-events-none z-40 transform scale-75 origin-top-right">
-                                {item.status.slice(0, 4).map(statusId => {
-                                    const effect = DEFAULT_STATUS_EFFECTS[statusId];
-                                    if (!effect) return null;
-                                    const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
-                                    return (
-                                        <div key={statusId} className="w-5 h-5 bg-[#0b1120] rounded-full border flex items-center justify-center shadow-sm" style={{ borderColor: effect.hex || '#c8aa6e', color: effect.hex || '#c8aa6e' }}>
-                                            <Icon size={12} />
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
 
                         {/* MOVEMENT DISTANCE INDICATOR (Solo para tokens al arrastrar) */}
                         {!isLight && canInteract && tokenOriginalPos[item.id] && (
@@ -2670,6 +3330,134 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const maskVersion = doorStateHash;
 
+    const resetAllSpeed = () => {
+        if (!activeScenarioRef.current) return;
+        const currentScenario = activeScenarioRef.current;
+        const newItems = currentScenario.items.map(i =>
+            (i.type !== 'wall' && i.type !== 'light') ? { ...i, velocidad: 0 } : i
+        );
+        setActiveScenario(prev => ({ ...prev, items: newItems }));
+
+        // Persistir a Firebase
+        try {
+            updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+                items: newItems,
+                lastModified: Date.now()
+            });
+            triggerToast("Velocidad Reiniciada", "Todos los contadores han vuelto a 0", 'info');
+        } catch (error) {
+            console.error("Error resetting speed:", error);
+            triggerToast("Error", "No se pudo reiniciar la velocidad", 'error');
+        }
+    };
+
+    const handleCombatAction = (tokenId, actionId, data = null) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario) return;
+
+        const token = scenario.items.find(i => i.id === tokenId);
+        if (!token) return;
+
+        let cost = 0;
+        let actionName = "";
+
+        if (actionId === 'attack') {
+            // Si nos pasan el arma específica, la usamos. Si no, buscamos la primera por defecto.
+            const weapon = data || (token.equippedItems || []).find(i => i.type === 'weapon');
+            cost = Number(weapon?.velocidad || weapon?.vel || 2);
+            actionName = `Ataque con ${weapon?.nombre || weapon?.name || 'Arma'}`;
+        } else if (actionId === 'dodge') {
+            cost = 2;
+            actionName = "Esquivar";
+        } else if (actionId === 'help') {
+            cost = 1;
+            actionName = "Ayudar";
+        } else if (actionId === 'dash') {
+            triggerToast("Correr no disponible", "Implementaremos la lógica de doble movimiento más adelante", 'info');
+            return;
+        }
+
+        if (cost > 0) {
+            setPendingTurnState(prev => {
+                const base = prev && prev.tokenId === tokenId ? prev : {
+                    tokenId: tokenId,
+                    startX: token.x,
+                    startY: token.y,
+                    x: token.x,
+                    y: token.y,
+                    moveCost: 0,
+                    actionCost: 0,
+                    actions: [] // Changed from actionNames to actions (objects)
+                };
+
+                const newActions = [...(base.actions || []), { name: actionName, cost }];
+
+                return {
+                    ...base,
+                    actionCost: base.actionCost + cost,
+                    actions: newActions
+                };
+            });
+            // Toast is now handled by the HUD notification, but we can keep a small one or remove it.
+            // keeping it for now as "feedback"
+            // triggerToast("Acción añadida", `${actionName} (+${cost} 🟡)`, 'success'); 
+        }
+    };
+
+    const handleCancelAction = (tokenId, index) => {
+        setPendingTurnState(prev => {
+            if (!prev || prev.tokenId !== tokenId) return prev;
+
+            const actions = [...(prev.actions || [])];
+            if (index < 0 || index >= actions.length) return prev;
+
+            const removedAction = actions[index];
+            actions.splice(index, 1);
+
+            return {
+                ...prev,
+                actionCost: prev.actionCost - removedAction.cost,
+                actions: actions
+            };
+        });
+    };
+
+    const handleEndTurn = (tokenId) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario) return;
+
+        const token = scenario.items.find(i => i.id === tokenId);
+        if (!token) return;
+
+        const pending = pendingTurnState && pendingTurnState.tokenId === tokenId ? pendingTurnState : null;
+        const moveCost = pending ? pending.moveCost : 0;
+        const actionCost = pending ? pending.actionCost : 0;
+
+        // Si no ha hecho nada, el coste mínimo de pasar turno es 1
+        const finalCost = (moveCost + actionCost) || 1;
+        const finalX = pending ? pending.x : token.x;
+        const finalY = pending ? pending.y : token.y;
+
+        const newItems = scenario.items.map(i =>
+            i.id === tokenId
+                ? { ...i, x: finalX, y: finalY, velocidad: (token.velocidad || 0) + finalCost }
+                : i
+        );
+
+        setActiveScenario(prev => ({ ...prev, items: newItems }));
+        setPendingTurnState(null);
+
+        try {
+            updateDoc(doc(db, 'canvas_scenarios', scenario.id), {
+                items: newItems,
+                lastModified: Date.now()
+            });
+            triggerToast("Turno Finalizado", `Total: +${finalCost} 🟡`, 'success');
+        } catch (error) {
+            console.error("Error ending turn:", error);
+        }
+    };
+
     return (
         <div className="h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none">
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
@@ -2842,13 +3630,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         </button>
 
                         {/* 2. Título (Flotante Arriba Centro - Minimalista) */}
-                        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center opacity-80 width-full">
-                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] text-[#c8aa6e] whitespace-nowrap">
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center opacity-30 width-full">
+                            <div className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] text-[#c8aa6e] whitespace-nowrap">
                                 <span className="h-px w-4 md:w-8 bg-gradient-to-r from-transparent to-[#c8aa6e]"></span>
                                 <span>Canvas Beta</span>
                                 <span className="h-px w-4 md:w-8 bg-gradient-to-l from-transparent to-[#c8aa6e]"></span>
                             </div>
                         </div>
+
+                        {/* --- SPEED TIMELINE --- */}
+                        <SpeedTimeline
+                            tokens={(activeScenario?.items || []).filter(i => i && i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats))}
+                            selectedId={selectedTokenIds[0]}
+                            onSelect={(id) => setSelectedTokenIds([id])}
+                            isPlayerView={isPlayerView}
+                            onReset={resetAllSpeed}
+                        />
 
                         {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
                         <button
@@ -3070,6 +3867,37 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 className={`relative w-12 h-6 rounded-full transition-all ${gridConfig.snapToGrid ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                             >
                                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.snapToGrid ? 'left-7' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="w-full h-px bg-slate-800/50"></div>
+
+                                        {/* 1.5 Gestión de Encuentro (Combate Dinámico) */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Activity className="w-3 h-3" />
+                                                Gestión de Encuentro
+                                            </h4>
+
+                                            <div className="flex items-center justify-between bg-[#0b1120] p-4 rounded-lg border border-[#c8aa6e]/20 shadow-lg">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] font-bold uppercase text-[#f0e6d2]">Modo Combate</span>
+                                                    <span className="text-[8px] text-slate-500 uppercase">Habilita costes de velocidad</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleConfigChange('isCombatActive', !gridConfig.isCombatActive)}
+                                                    className={`relative w-12 h-6 rounded-full transition-all duration-300 ${gridConfig.isCombatActive ? 'bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)]' : 'bg-slate-800'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${gridConfig.isCombatActive ? 'left-7' : 'left-1'}`} />
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                onClick={resetAllSpeed}
+                                                className="w-full py-3 bg-[#161f32] border border-slate-700/50 text-slate-400 rounded text-[9px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] transition-all group"
+                                            >
+                                                <RotateCw className="w-3.5 h-3.5 group-active:rotate-180 transition-transform duration-500" />
+                                                Reiniciar Cronología
                                             </button>
                                         </div>
 
@@ -3463,7 +4291,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         className={`group flex items-center gap-4 bg-[#111827] border p-3 rounded-lg transition-all cursor-pointer ${selectedTokenIds.includes(token.id) ? 'border-[#c8aa6e] bg-[#c8aa6e]/5' : 'border-slate-800 hover:border-slate-700'}`}
                                                     >
                                                         <div className="w-10 h-10 bg-[#0b1120] rounded border border-slate-800 overflow-hidden flex items-center justify-center">
-                                                            <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                            <img src={token.portrait || token.img} className="w-full h-full object-contain p-1" />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <h5 className="text-[#f0e6d2] font-fantasy text-sm truncate uppercase tracking-wider">{token.name}</h5>
@@ -3505,24 +4333,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     return (
                                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                             {/* Header Inspector */}
-                                            <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
-                                                <div className="w-16 h-16 bg-[#0b1120] rounded border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e]">
+                                            {/* Header Inspector — Centered between lines (using tab border as top) */}
+                                            <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
+                                                <div className="w-20 h-20 bg-[#0b1120] rounded-xl border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative group ring-1 ring-slate-800/40">
                                                     {token.type === 'light' ? (
-                                                        <Sparkles className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                        <Sparkles className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'wall' ? (
-                                                        <PenTool className="w-8 h-8 drop-shadow-[0_0_8px_currentColor]" />
+                                                        <PenTool className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : (
-                                                        <img src={token.img} className="w-full h-full object-contain p-1" />
+                                                        <img src={token.portrait || token.img} className="w-full h-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-110" />
                                                     )}
                                                 </div>
-                                                <div>
-                                                    <h4 className="text-[#f0e6d2] font-fantasy text-lg tracking-wide truncate max-w-[150px]">{token.name}</h4>
-                                                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{token.layer} LAYER</span>
+                                                <div className="space-y-1.5">
+                                                    <h4 className="text-[#f0e6d2] font-fantasy text-2xl tracking-widest uppercase drop-shadow-lg leading-none">
+                                                        {token.name}
+                                                    </h4>
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <div className="h-[1px] w-4 bg-gradient-to-r from-transparent to-[#c8aa6e]/40" />
+                                                        <span className="text-[10px] text-[#c8aa6e]/60 uppercase font-black tracking-[0.25em]">
+                                                            {token.layer} Layer
+                                                        </span>
+                                                        <div className="h-[1px] w-4 bg-gradient-to-l from-transparent to-[#c8aa6e]/40" />
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             {/* Properties Form */}
                                             <div className="space-y-4">
+                                                <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2 mb-2">
+                                                    <Settings size={12} /> Propiedades
+                                                </h4>
 
                                                 {/* Name Input */}
                                                 <div className="space-y-2">
@@ -3535,7 +4375,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     />
                                                 </div>
 
-                                                {/* Rotation & Size */}
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
@@ -3551,7 +4390,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                     {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
                                                     <div className="space-y-2">
-                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tamaño</label>
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Maximize size={10} className="text-[#c8aa6e]" /> Tamaño
+                                                        </label>
                                                         <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
                                                             <button
                                                                 onClick={() => {
@@ -3676,17 +4517,79 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 <p className="text-[8px] text-slate-600 uppercase text-center italic">No hay jugadores disponibles</p>
                                                             )}
                                                         </div>
+
+                                                        {/* Vínculo de Entidad / Vinculación */}
+                                                        {(isMaster || (token.controlledBy?.includes(playerName) && playerName)) && (
+                                                            <div className="space-y-3 p-3 bg-slate-800/20 rounded border border-slate-800/40">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Link size={10} className="text-[#c8aa6e]/70" />
+                                                                    <span className="text-[9px] text-[#c8aa6e] font-bold uppercase tracking-widest">Vinculación de Ficha</span>
+                                                                </div>
+                                                                {token.linkedCharacterId ? (
+                                                                    <div className="flex items-center justify-between gap-3 bg-[#0b1120] p-2.5 rounded border border-[#c8aa6e]/30 shadow-inner">
+                                                                        <div className="flex items-center gap-2.5 overflow-hidden">
+                                                                            <div className="w-7 h-7 rounded bg-slate-900 border border-slate-800 overflow-hidden shrink-0">
+                                                                                <img
+                                                                                    src={availableCharacters?.find(c => c.id === token.linkedCharacterId)?.avatar || token.img}
+                                                                                    className="w-full h-full object-contain p-0.5"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex flex-col min-w-0">
+                                                                                <span className="text-[11px] text-[#f0e6d2] truncate font-bold uppercase tracking-wider">
+                                                                                    {availableCharacters?.find(c => c.id === token.linkedCharacterId)?.name || 'Archivo Vinculado'}
+                                                                                </span>
+                                                                                <span className="text-[8px] text-slate-500 font-bold uppercase">Sincronizado</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Solo permitir desvincular si eres el Master o el dueño de esa ficha específica */}
+                                                                        {(isMaster || availableCharacters.some(c => c.id === token.linkedCharacterId)) && (
+                                                                            <button
+                                                                                onClick={() => unlinkCharacter(token.id)}
+                                                                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/10 hover:text-red-400 text-slate-600 transition-all"
+                                                                                title="Desvincular Personaje"
+                                                                            >
+                                                                                <X size={14} />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    availableCharacters.length > 0 ? (
+                                                                        <div className="relative group">
+                                                                            <select
+                                                                                onChange={(e) => {
+                                                                                    const char = availableCharacters.find(c => c.id === e.target.value);
+                                                                                    if (char) linkCharacter(token.id, char);
+                                                                                }}
+                                                                                className="w-full bg-[#0b1120] border border-slate-800 rounded pl-3 pr-10 py-2 text-[10px] text-slate-400 focus:border-[#c8aa6e] outline-none transition-all cursor-pointer hover:bg-slate-900 appearance-none font-bold uppercase tracking-wider"
+                                                                                value=""
+                                                                            >
+                                                                                <option value="" disabled>Seleccionar personaje...</option>
+                                                                                {availableCharacters.map(char => (
+                                                                                    <option key={char.id} value={char.id} className="bg-[#0b1120] text-slate-200">
+                                                                                        {(char.name || 'Sin nombre').toUpperCase()}
+                                                                                        {isMaster && ` (${char._isTemplate ? 'NPC' : (char.owner || 'JUGADOR')})`}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none group-hover:text-[#c8aa6e] transition-colors" />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p className="text-[8px] text-slate-600 italic text-center uppercase tracking-tighter">No tienes fichas compatibles para este token</p>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 
                                                 {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                            <Activity size={12} /> Visión y Niebla
+                                                            <Eye size={12} /> Visión y Niebla
                                                         </h4>
 
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Emite Visión</span>
@@ -3770,7 +4673,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
 
                                                             {token.emitsLight && (
-                                                                <div className="space-y-6 pt-2 border-t border-slate-800/50 mt-2">
+                                                                <div className="space-y-4 pt-2 border-t border-slate-800/50 mt-2">
                                                                     {/* Radio de Luz */}
                                                                     <div className="space-y-3">
                                                                         <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
@@ -3839,13 +4742,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* CONFIGURACIÓN DE LUZ (Solo si ES una luz) */}
                                                 {token.type === 'light' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Sparkles size={12} /> Propiedades del Foco
                                                         </h4>
 
                                                         {/* Radio de Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Alcance (Px)</span>
                                                                 <span className="text-[#c8aa6e] font-mono">{token.radius}px</span>
@@ -3860,7 +4763,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Snap Toggle para Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
                                                                 <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
@@ -3874,7 +4777,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Parpadeo (Flicker) Toggle */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Animación de Parpadeo</span>
@@ -3891,7 +4794,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Color de la Luz */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Tono de Iluminación</span>
                                                                 <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.color }}></div>
@@ -3912,13 +4815,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* CONFIGURACIÓN DE MURO (Solo si ES un muro) */}
                                                 {token.type === 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <PenTool size={12} /> Propiedades del Muro
                                                         </h4>
 
                                                         {/* Snap Toggle para Muro */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-1">
                                                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
                                                                 <span className="text-[9px] text-slate-600">Ajuste magnético a las celdas</span>
@@ -3932,7 +4835,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
 
                                                         {/* Grosor del Muro */}
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Grosor del Collider</span>
                                                                 <span className="text-[#c8aa6e] font-mono">{token.thickness || 4}px</span>
@@ -3951,7 +4854,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 {/* Estados Alterados (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-3">
-                                                        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estados Alterados</h4>
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Flame size={12} /> Estados Alterados
+                                                        </h4>
                                                         <EstadoSelector
                                                             selected={token.status || []}
                                                             onToggle={(statusId) => {
@@ -3967,12 +4872,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* AURAS E INDICADORES (Solo para tokens reales) */}
                                                 {token.type !== 'light' && token.type !== 'wall' && (
-                                                    <div className="pt-4 border-t border-slate-800/50 space-y-6">
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Sparkles size={12} /> Aura de Estado
                                                         </h4>
 
-                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-4">
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Activar Aura</span>
@@ -4053,6 +4958,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             rarityColorMap={rarityColorMap}
                                                             glossary={glossary}
                                                             highlightText={highlightText}
+                                                            isPlayerView={isPlayerView}
                                                             onAddItem={(item, type) => {
                                                                 const newItems = [...equippedItems, { ...item, type }];
                                                                 updateItem(token.id, { equippedItems: newItems }, true);
@@ -4072,7 +4978,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
 
 
-                            {!isPlayerView && (
+                            {activeScenario && (
                                 <div className="p-6 bg-[#09090b] border-t border-[#c8aa6e]/20 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
                                     <button
                                         onClick={saveCurrentScenario}
@@ -4179,90 +5085,92 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         </div>
 
                         {/* ═══ ZOOM RULER: Versión Móvil — Regla Vertical Derecha ═══ */}
-                        {(() => {
-                            const RULER_MIN = 0.2, RULER_MAX = 3.0;
-                            const logMin = Math.log(RULER_MIN), logMax = Math.log(RULER_MAX);
-                            const getPos = (z) => (1 - (Math.log(Math.max(RULER_MIN, Math.min(RULER_MAX, z))) - logMin) / (logMax - logMin)) * 100;
-                            const getZoomFromPos = (pct) => Math.exp(logMax - (pct / 100) * (logMax - logMin));
-                            const ticks = [
-                                { z: 0.25, label: null },
-                                { z: 0.5, label: '50' },
-                                { z: 0.75, label: null },
-                                { z: 1.0, label: '100' },
-                                { z: 1.5, label: null },
-                                { z: 2.0, label: '200' },
-                                { z: 2.5, label: null },
-                                { z: 3.0, label: '300' },
-                            ];
-                            const currentPos = getPos(zoom);
+                        {
+                            (() => {
+                                const RULER_MIN = 0.2, RULER_MAX = 3.0;
+                                const logMin = Math.log(RULER_MIN), logMax = Math.log(RULER_MAX);
+                                const getPos = (z) => (1 - (Math.log(Math.max(RULER_MIN, Math.min(RULER_MAX, z))) - logMin) / (logMax - logMin)) * 100;
+                                const getZoomFromPos = (pct) => Math.exp(logMax - (pct / 100) * (logMax - logMin));
+                                const ticks = [
+                                    { z: 0.25, label: null },
+                                    { z: 0.5, label: '50' },
+                                    { z: 0.75, label: null },
+                                    { z: 1.0, label: '100' },
+                                    { z: 1.5, label: null },
+                                    { z: 2.0, label: '200' },
+                                    { z: 2.5, label: null },
+                                    { z: 3.0, label: '300' },
+                                ];
+                                const currentPos = getPos(zoom);
 
-                            const handleRulerTouch = (e) => {
-                                const touch = e.touches?.[0] || e.changedTouches?.[0];
-                                if (!touch) return;
-                                const ruler = e.currentTarget;
-                                const rect = ruler.getBoundingClientRect();
-                                const relY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
-                                const newZoom = getZoomFromPos(relY * 100);
-                                setZoom(Math.round(newZoom * 10) / 10);
-                            };
+                                const handleRulerTouch = (e) => {
+                                    const touch = e.touches?.[0] || e.changedTouches?.[0];
+                                    if (!touch) return;
+                                    const ruler = e.currentTarget;
+                                    const rect = ruler.getBoundingClientRect();
+                                    const relY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
+                                    const newZoom = getZoomFromPos(relY * 100);
+                                    setZoom(Math.round(newZoom * 10) / 10);
+                                };
 
-                            return (
-                                <div
-                                    className="md:hidden absolute right-0 top-20 z-50 pointer-events-auto"
-                                    style={{ bottom: '14.5rem' }}
-                                >
+                                return (
                                     <div
-                                        className="relative h-full w-10 flex items-center justify-end pr-1"
-                                        onTouchStart={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
-                                        onTouchMove={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
+                                        className="md:hidden absolute right-0 top-20 z-50 pointer-events-auto"
+                                        style={{ bottom: '14.5rem' }}
                                     >
-                                        {/* Línea central de la regla */}
-                                        <div className="absolute right-2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#c8aa6e]/25 to-transparent"></div>
-
-                                        {/* Marcas de la regla */}
-                                        {ticks.map(tick => {
-                                            const pos = getPos(tick.z);
-                                            const isMajor = tick.label !== null;
-                                            return (
-                                                <div
-                                                    key={tick.z}
-                                                    className="absolute flex items-center justify-end"
-                                                    style={{ top: `${pos}%`, right: '4px', transform: 'translateY(-50%)' }}
-                                                >
-                                                    {/* Label */}
-                                                    {isMajor && (
-                                                        <span className="text-[7px] font-mono text-[#c8aa6e]/30 mr-1.5 select-none">
-                                                            {tick.label}
-                                                        </span>
-                                                    )}
-                                                    {/* Tick mark */}
-                                                    <div
-                                                        className={`h-px ${isMajor ? 'w-2.5 bg-[#c8aa6e]/40' : 'w-1.5 bg-[#c8aa6e]/15'}`}
-                                                    ></div>
-                                                </div>
-                                            );
-                                        })}
-
-                                        {/* Indicador de zoom actual (diamante dorado) */}
                                         <div
-                                            className="absolute flex items-center transition-all duration-150 ease-out"
-                                            style={{ top: `${currentPos}%`, right: '0px', transform: 'translateY(-50%)' }}
+                                            className="relative h-full w-10 flex items-center justify-end pr-1"
+                                            onTouchStart={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
+                                            onTouchMove={(e) => { e.stopPropagation(); handleRulerTouch(e); }}
                                         >
-                                            {/* Etiqueta del porcentaje */}
-                                            <div className="flex items-center justify-center h-5 bg-[#0b1120]/90 backdrop-blur-sm border border-[#c8aa6e]/40 rounded px-1.5 shadow-[0_0_10px_rgba(0,0,0,0.4)]">
-                                                <span className="text-[8px] font-bold font-mono text-[#c8aa6e] tabular-nums select-none leading-none">
-                                                    {Math.round(zoom * 100)}%
-                                                </span>
+                                            {/* Línea central de la regla */}
+                                            <div className="absolute right-2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#c8aa6e]/25 to-transparent"></div>
+
+                                            {/* Marcas de la regla */}
+                                            {ticks.map(tick => {
+                                                const pos = getPos(tick.z);
+                                                const isMajor = tick.label !== null;
+                                                return (
+                                                    <div
+                                                        key={tick.z}
+                                                        className="absolute flex items-center justify-end"
+                                                        style={{ top: `${pos}%`, right: '4px', transform: 'translateY(-50%)' }}
+                                                    >
+                                                        {/* Label */}
+                                                        {isMajor && (
+                                                            <span className="text-[7px] font-mono text-[#c8aa6e]/30 mr-1.5 select-none">
+                                                                {tick.label}
+                                                            </span>
+                                                        )}
+                                                        {/* Tick mark */}
+                                                        <div
+                                                            className={`h-px ${isMajor ? 'w-2.5 bg-[#c8aa6e]/40' : 'w-1.5 bg-[#c8aa6e]/15'}`}
+                                                        ></div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Indicador de zoom actual (diamante dorado) */}
+                                            <div
+                                                className="absolute flex items-center transition-all duration-150 ease-out"
+                                                style={{ top: `${currentPos}%`, right: '0px', transform: 'translateY(-50%)' }}
+                                            >
+                                                {/* Etiqueta del porcentaje */}
+                                                <div className="flex items-center justify-center h-5 bg-[#0b1120]/90 backdrop-blur-sm border border-[#c8aa6e]/40 rounded px-1.5 shadow-[0_0_10px_rgba(0,0,0,0.4)]">
+                                                    <span className="text-[8px] font-bold font-mono text-[#c8aa6e] tabular-nums select-none leading-none">
+                                                        {Math.round(zoom * 100)}%
+                                                    </span>
+                                                </div>
+                                                {/* Línea conectora */}
+                                                <div className="w-1 h-px bg-[#c8aa6e]/40"></div>
+                                                {/* Diamante indicador */}
+                                                <div className="w-1.5 h-1.5 bg-[#c8aa6e] rotate-45 shadow-[0_0_4px_rgba(200,170,110,0.6)] shrink-0 translate-y-px"></div>
                                             </div>
-                                            {/* Línea conectora */}
-                                            <div className="w-1 h-px bg-[#c8aa6e]/40"></div>
-                                            {/* Diamante indicador */}
-                                            <div className="w-1.5 h-1.5 bg-[#c8aa6e] rotate-45 shadow-[0_0_4px_rgba(200,170,110,0.6)] shrink-0 translate-y-px"></div>
                                         </div>
                                     </div>
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()
+                        }
 
                         {/* --- Instrucciones Rápidas --- */}
                         <div className="absolute bottom-8 left-8 z-50 pointer-events-none opacity-50">
@@ -4379,8 +5287,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    {(activeScenario?.items || []).filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
-                                    {(activeScenario?.items || []).filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
+                                    {(() => {
+                                        const items = (activeScenario?.items || []).map(item => {
+                                            // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
+                                            if (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                                if (draggedTokenId !== item.id) {
+                                                    return { ...item, x: pendingTurnState.x, y: pendingTurnState.y };
+                                                }
+                                            }
+                                            return item;
+                                        });
+                                        return (
+                                            <>
+                                                {items.filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
+                                                {items.filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
@@ -5256,10 +6179,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 // Prioridad: 1. Seleccionado que controlo, 2. El primero de mi lista
                 const selectedControlled = myTokens.find(t => selectedTokenIds.includes(t.id));
-                const hudToken = selectedControlled || myTokens[0];
+                const rawHudToken = selectedControlled || myTokens[0];
 
-                if (hudToken) {
-                    const canOpenSheet = !!hudToken.isCircular;
+                if (rawHudToken) {
+                    // Fusionamos datos de la ficha vinculada (si existe) para tener las armas
+                    let hudToken = rawHudToken;
+                    if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
+                        const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
+                        if (charData) {
+                            const eq = charData.equippedItems || {};
+                            // Extraemos las armas de las manos (objeto -> array) y aseguramos que tengan tipo
+                            const hands = [eq.mainHand, eq.offHand]
+                                .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre)) // Filter valid items with names
+                                .map(i => ({ ...i, type: i.type || 'weapon' })); // Ensure type is present
+
+                            // Extraemos habilidades que hagan daño o sean ofensivas de diversas fuentes
+                            // 1. De equipment.abilities (si existe)
+                            const equipmentAbilities = charData.equipment?.abilities || [];
+                            // 2. De abilities (si existe en la raíz)
+                            const rootAbilities = charData.abilities || [];
+                            // 3. De features/actionData (donde suelen estar los talentos activos)
+                            const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
+
+                            const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
+
+                            const damagingAbilities = allAbilitiesSource.filter(a =>
+                                (a.damage || a.dano || a.actionType === 'attack') &&
+                                !hands.find(h => h.id === a.id) // Evitar duplicados si por alguna razón están en manos
+                            );
+
+                            // Aseguramos que las habilidades tengan un tipo identificable
+                            const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
+
+                            hudToken = {
+                                ...rawHudToken,
+                                equippedItems: [...hands, ...formattedAbilities],
+                                // stats: charData.stats || rawHudToken.stats 
+                            };
+                        }
+                    }
+                    const canOpenSheet = !!hudToken.linkedCharacterId;
 
                     const handlePortraitClick = (charName) => {
                         if (canOpenSheet && onOpenCharacterSheet) {
@@ -5277,20 +6236,181 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return (
                         <CombatHUD
                             token={hudToken}
-                            onAction={(action) => console.log("Action:", action)}
-                            onEndTurn={() => console.log("Turn Ended")}
+                            onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
+                            onEndTurn={() => handleEndTurn(hudToken.id)}
                             onPortraitClick={handlePortraitClick}
                             canOpenSheet={canOpenSheet}
+                            pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
+                            pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
+                            onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                            isActive={(() => {
+                                if (!gridConfig.isCombatActive) return true;
+                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+                                return (hudToken.velocidad || 0) === minVel;
+                            })()}
                         />
                     );
                 }
                 return null;
             })()}
 
+            {/* --- MASTER COMBAT HUD (Optional Toggle) --- */}
+            {!isPlayerView && activeScenario && (() => {
+                // Determinar el token a mostrar: seleccionado actual O último seleccionado (como jugadores)
+                const allCombatTokens = (activeScenario.items || []).filter(i =>
+                    i.type !== 'light' && i.type !== 'wall' && (i.isCircular || i.stats || i.name)
+                );
+                const selectedControlled = allCombatTokens.find(t => selectedTokenIds.includes(t.id));
+
+                // Si hay token seleccionado, actualizamos la referencia
+                if (selectedControlled) {
+                    lastMasterHudTokenIdRef.current = selectedControlled.id;
+                }
+
+                // Prioridad: 1. Token seleccionado actual, 2. Último token seleccionado
+                const rawHudToken = selectedControlled || allCombatTokens.find(t => t.id === lastMasterHudTokenIdRef.current) || null;
+
+                return (
+                    <>
+                        {/* Toggle Button — solo flecha, centro inferior */}
+                        <AnimatePresence mode="wait">
+                            {!showMasterCombatHUD && (
+                                <motion.div
+                                    key="master-hud-fab"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none"
+                                >
+                                    <button
+                                        onClick={() => setShowMasterCombatHUD(true)}
+                                        className="pointer-events-auto px-5 py-1.5 rounded-xl bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 hover:border-[#c8aa6e]/70 shadow-[0_0_20px_rgba(0,0,0,0.4)] transition-all duration-200 active:scale-95 group"
+                                        title="Abrir HUD de Combate"
+                                    >
+                                        <ChevronUp className="w-4 h-4 text-[#c8aa6e]/60 group-hover:text-[#f0e6d2] transition-all duration-200 group-hover:-translate-y-0.5" />
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* CombatHUD del master */}
+                        <AnimatePresence mode="wait">
+                            {showMasterCombatHUD && (() => {
+                                if (!rawHudToken) {
+                                    // Sin token seleccionado ni recordado
+                                    return (
+                                        <motion.div
+                                            key="master-hud-empty"
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 20 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none pb-6"
+                                        >
+                                            <div className="pointer-events-auto bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/30 rounded-2xl px-8 py-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col items-center gap-3 max-w-sm mx-auto relative">
+                                                <button
+                                                    onClick={() => setShowMasterCombatHUD(false)}
+                                                    className="absolute top-2 right-2 text-slate-500 hover:text-[#c8aa6e] transition-colors p-1"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                                <Swords className="w-8 h-8 text-[#c8aa6e]/50" />
+                                                <span className="text-slate-400 text-xs text-center uppercase tracking-widest">
+                                                    Selecciona un token en el mapa<br />para usar el HUD de combate
+                                                </span>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                }
+
+                                // Fusionamos datos de la ficha vinculada
+                                let hudToken = rawHudToken;
+                                if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
+                                    const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
+                                    if (charData) {
+                                        const eq = charData.equippedItems || {};
+                                        const hands = [eq.mainHand, eq.offHand]
+                                            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
+                                            .map(i => ({ ...i, type: i.type || 'weapon' }));
+
+                                        const equipmentAbilities = charData.equipment?.abilities || [];
+                                        const rootAbilities = charData.abilities || [];
+                                        const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
+                                        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
+                                        const damagingAbilities = allAbilitiesSource.filter(a =>
+                                            (a.damage || a.dano || a.actionType === 'attack') &&
+                                            !hands.find(h => h.id === a.id)
+                                        );
+                                        const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
+
+                                        hudToken = {
+                                            ...rawHudToken,
+                                            equippedItems: [...hands, ...formattedAbilities],
+                                        };
+                                    }
+                                }
+
+                                const canOpenSheet = !!hudToken.linkedCharacterId;
+                                const handlePortraitClick = (charName) => {
+                                    if (canOpenSheet && onOpenCharacterSheet) {
+                                        onOpenCharacterSheet(charName);
+                                    } else {
+                                        triggerToast(
+                                            "Token sin ficha vinculada",
+                                            "Esta entidad no tiene archivo de personaje",
+                                            'warning'
+                                        );
+                                    }
+                                };
+
+                                return (
+                                    <motion.div
+                                        key="master-hud-active"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 20 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="relative"
+                                    >
+                                        {/* Botón de plegar HUD — solo flecha */}
+                                        <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-0.5">
+                                            <button
+                                                onClick={() => setShowMasterCombatHUD(false)}
+                                                className="pointer-events-auto px-4 py-0.5 rounded-t-lg bg-[#0b1120]/80 border-x border-t border-[#c8aa6e]/15 hover:border-[#c8aa6e]/40 transition-all duration-200 active:scale-95 group"
+                                                title="Cerrar HUD de Combate"
+                                            >
+                                                <ChevronDown className="w-3.5 h-3.5 text-[#c8aa6e]/40 group-hover:text-[#c8aa6e] transition-all duration-200 group-hover:translate-y-0.5" />
+                                            </button>
+                                        </div>
+                                        <CombatHUD
+                                            token={hudToken}
+                                            onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
+                                            onEndTurn={() => handleEndTurn(hudToken.id)}
+                                            onPortraitClick={handlePortraitClick}
+                                            canOpenSheet={canOpenSheet}
+                                            pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
+                                            pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
+                                            onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                                            isActive={(() => {
+                                                if (!gridConfig.isCombatActive) return true;
+                                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+                                                return (hudToken.velocidad || 0) === minVel;
+                                            })()}
+                                        />
+                                    </motion.div>
+                                );
+                            })()}
+                        </AnimatePresence>
+                    </>
+                );
+            })()}
+
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast
                 show={showToast}
-                exiting={toastExiting}
                 type={toastType}
                 message={toastMessage}
                 subMessage={toastSubMessage}

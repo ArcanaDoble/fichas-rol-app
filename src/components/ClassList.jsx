@@ -2454,6 +2454,16 @@ const ClassList = ({
       setSelectedClass(savedData);
       setEditingClass(deepClone(savedData));
 
+      // Notificar a toda la aplicación que se ha guardado una ficha
+      // Esto permite que el Canvas se sincronice en tiempo real
+      window.dispatchEvent(new CustomEvent('playerSheetSaved', {
+        detail: {
+          name: savedData.name,
+          sheet: savedData,
+          collection: collectionPath
+        }
+      }));
+
       // Mostrar éxito
       setSaveButtonState('success');
       setTimeout(() => setSaveButtonState('idle'), 2000);
@@ -4449,6 +4459,7 @@ const ClassList = ({
                                 tags: editingClass.tags || [],
                                 equipment: editingClass.equipment || [],
                                 equippedItems: editingClass.equippedItems || {},
+                                id: editingClass.id,
                               });
                             }
                           }}

@@ -4030,8 +4030,20 @@ function App() {
 
     const handler = (e) => {
       const { name, sheet } = e.detail || {};
-      if (name !== playerName) return;
-      updateFromSheet(sheet);
+
+      // Actualizar la ficha principal del jugador si coincide con el usuario actual
+      if (name === playerName) {
+        updateFromSheet(sheet);
+      }
+
+      // Sincronizar los datos del personaje cargado en el Canvas si es el que se acaba de guardar
+      // Esto permite que al editar una ficha desde el Canvas, los cambios se reflejen en el token
+      setPlayerCharacterData(prev => {
+        if (prev && prev.name === name) {
+          return sheet;
+        }
+        return prev;
+      });
     };
 
     const storageHandler = (e) => {

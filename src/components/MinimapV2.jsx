@@ -125,28 +125,61 @@ const ScenarioThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show, exiting }) => {
-    if (!show) return null;
+const panelVariants = {
+    initial: { opacity: 0, y: -40, scale: 0.9, filter: 'blur(10px)' },
+    animate: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        filter: 'blur(0px)',
+        transition: {
+            type: "spring",
+            stiffness: 400,
+            damping: 30
+        }
+    },
+    exit: {
+        opacity: 0,
+        y: -20,
+        scale: 0.9,
+        filter: 'blur(8px)',
+        transition: { duration: 0.3 }
+    }
+};
+
+const SaveToast = ({ show }) => {
     return (
-        <div className={`fixed top-12 left-1/2 z-[100] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
-            <div className="relative bg-[#0b1120] border border-[#c8aa6e] px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg">
+        <div className="fixed top-12 left-1/2 z-[1000] -translate-x-1/2 pointer-events-none">
+            <AnimatePresence>
+                {show && (
+                    <motion.div
+                        variants={panelVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="relative bg-[#0b1120]/80 backdrop-blur-xl border border-[#c8aa6e]/50 px-10 py-5 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[400px] flex items-center gap-6 rounded-2xl overflow-hidden"
+                    >
+                        {/* Shimmer Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
 
-                {/* Icon */}
-                <div className="w-10 h-10 rounded-full border border-[#c8aa6e] flex items-center justify-center bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)] shrink-0">
-                    <Check className="w-5 h-5 text-[#c8aa6e]" />
-                </div>
+                        {/* Icon */}
+                        <div className="w-12 h-12 rounded-full border border-[#c8aa6e] bg-[#c8aa6e]/10 shadow-[0_0_15px_rgba(200,170,110,0.2)] flex items-center justify-center shrink-0">
+                            <Check className="w-6 h-6 text-[#c8aa6e]" />
+                        </div>
 
-                {/* Text */}
-                <div className="flex flex-col">
-                    <h3 className="text-[#f0e6d2] font-fantasy text-xl leading-none tracking-widest text-left mb-1">
-                        PROGRESO<br />GUARDADO
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <div className="h-[1px] w-6 bg-[#c8aa6e]/50"></div>
-                        <span className="text-[#c8aa6e] text-[9px] font-bold uppercase tracking-[0.2em]">Cuadrante Sincronizado</span>
-                    </div>
-                </div>
-            </div>
+                        {/* Text */}
+                        <div className="flex flex-col relative z-10">
+                            <h3 className="text-[#f0e6d2] font-fantasy text-2xl leading-none tracking-[0.1em] text-left mb-1.5 whitespace-pre-line uppercase drop-shadow-sm">
+                                PROGRESO<br />GUARDADO
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <div className="h-[1px] w-8 bg-[#c8aa6e]/50"></div>
+                                <span className="text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.25em]">Cuadrante Sincronizado</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
@@ -269,9 +302,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
         await setDoc(doc(db, 'minimap_scenarios', activeScenario.id), sanitized);
 
         setShowToast(true);
-        setToastExiting(false);
-        setTimeout(() => setToastExiting(true), 3000); // Trigger exit animation
-        setTimeout(() => setShowToast(false), 3300); // Unmount after animation
+        setTimeout(() => setShowToast(false), 3000);
     };
 
     const updateActiveScenario = (updates) => {

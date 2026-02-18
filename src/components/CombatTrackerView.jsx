@@ -202,6 +202,30 @@ const CombatantCard = ({ combatant, onUpdate, onRemove, onViewDetails, onOpencon
     );
 };
 
+const modalVariants = {
+    initial: { opacity: 0, scale: 0.9, y: 30, filter: 'blur(10px)' },
+    animate: {
+        opacity: 1,
+        scale: 1,
+        y: 0,
+        filter: 'blur(0px)',
+        transition: { type: "spring", stiffness: 400, damping: 30 }
+    },
+    exit: {
+        opacity: 0,
+        scale: 0.95,
+        y: 20,
+        filter: 'blur(5px)',
+        transition: { duration: 0.2 }
+    }
+};
+
+const overlayVariants = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 }
+};
+
 export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
     const [combatants, setCombatants] = useState([]);
     const [allEnemies, setAllEnemies] = useState([]);
@@ -364,24 +388,25 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
             <AnimatePresence>
                 {conditionPickerTarget && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/80 z-[70] backdrop-blur-sm flex items-center justify-center p-4"
+                        variants={overlayVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="fixed inset-0 bg-black/80 z-[70] backdrop-blur-md flex items-center justify-center p-4"
                         onClick={() => setConditionPickerTarget(null)}
                     >
                         <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="bg-[#0b1120] border border-red-900/50 rounded-lg shadow-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto custom-scrollbar"
+                            variants={modalVariants}
+                            className="bg-[#0b1120]/95 border border-[#c8aa6e]/30 rounded-2xl shadow-2xl p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto custom-scrollbar relative"
                             onClick={e => e.stopPropagation()}
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="font-['Cinzel'] font-bold text-lg text-slate-200 uppercase">Estados Alterados</h3>
-                                <button onClick={() => setConditionPickerTarget(null)} className="text-slate-500 hover:text-white"><FiX /></button>
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/50 to-transparent" />
+
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="font-['Cinzel'] font-bold text-xl text-[#f0e6d2] uppercase tracking-wider">Estados Alterados</h3>
+                                <button onClick={() => setConditionPickerTarget(null)} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-1"><FiX size={20} /></button>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {CONDITIONS.map(({ id, icon: Icon, color, label }) => {
                                     const isActive = (conditionPickerTarget.conditions || []).includes(id);
                                     return (
@@ -389,15 +414,15 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                                             key={id}
                                             onClick={() => toggleConditionForTarget(id)}
                                             className={`
-                                                flex flex-col items-center justify-center p-3 rounded-lg border transition-all gap-2 relative overflow-hidden group
+                                                flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-3 relative overflow-hidden group
                                                 ${isActive
-                                                    ? 'bg-slate-800/80 border-slate-500 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]'
-                                                    : 'bg-transparent border-slate-800 hover:border-slate-600 hover:bg-slate-900'}
+                                                    ? 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50 shadow-[0_0_20px_rgba(200,170,110,0.15)]'
+                                                    : 'bg-black/40 border-slate-800 hover:border-[#c8aa6e]/30 hover:bg-black/60'}
                                             `}
                                         >
-                                            <Icon className={`w-8 h-8 ${color.split(' ')[0]} ${isActive ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]' : 'opacity-70 group-hover:opacity-100'} transition-all`} />
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>{label}</span>
-                                            {isActive && <div className={`absolute inset-0 border-2 ${color.split(' ')[1]} rounded-lg opacity-50`}></div>}
+                                            <Icon className={`w-10 h-10 ${color.split(' ')[0]} ${isActive ? 'drop-shadow-[0_0_12px_currentColor]' : 'opacity-40 group-hover:opacity-100'} transition-all`} />
+                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-[#f0e6d2]' : 'text-slate-500 group-hover:text-slate-300'}`}>{label}</span>
+                                            {isActive && <div className={`absolute inset-0 border-2 ${color.split(' ')[1]} rounded-xl opacity-30`}></div>}
                                         </button>
                                     );
                                 })}
@@ -410,9 +435,17 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
             {/* Detail View Modal */}
             <AnimatePresence>
                 {detailEnemy && (
-                    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                        <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] overflow-hidden rounded-lg shadow-2xl border border-red-900/50 flex flex-col">
-                            {/* NOTE: Close button removed as requested, relying on the internal one from EnemyDetailView */}
+                    <motion.div
+                        variants={overlayVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    >
+                        <motion.div
+                            variants={modalVariants}
+                            className="relative w-full h-full max-w-[95vw] max-h-[95vh] overflow-hidden rounded-2xl shadow-2xl border border-red-900/50 flex flex-col bg-[#0b1120]"
+                        >
                             <EnemyDetailView
                                 enemy={detailEnemy}
                                 onClose={() => setDetailEnemy(null)}
@@ -422,8 +455,8 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                                 }}
                                 onDelete={() => { }}
                             />
-                        </div>
-                    </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
@@ -431,51 +464,54 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
             <AnimatePresence>
                 {showAddModal && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/80 z-[70] backdrop-blur-sm flex items-center justify-center p-4"
+                        variants={overlayVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="fixed inset-0 bg-black/80 z-[70] backdrop-blur-md flex items-center justify-center p-4"
                         onClick={() => setShowAddModal(false)}
                     >
                         <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="bg-[#0b1120] w-full max-w-2xl h-[80vh] rounded-lg border border-red-900/50 shadow-2xl flex flex-col overflow-hidden"
+                            variants={modalVariants}
+                            className="bg-[#0b1120]/95 w-full max-w-2xl h-[80vh] rounded-2xl border border-[#c8aa6e]/30 shadow-2xl flex flex-col overflow-hidden relative"
                             onClick={e => e.stopPropagation()}
                         >
-                            <div className="p-4 border-b border-red-900/30 flex items-center gap-4 bg-[#1a0505]">
-                                <FiSearch className="text-red-500" />
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/50 to-transparent" />
+
+                            <div className="p-6 border-b border-[#c8aa6e]/20 flex items-center gap-4 bg-[#161f32]/50 backdrop-blur-md">
+                                <FiSearch className="text-[#c8aa6e] w-5 h-5" />
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder="BUSCAR ENEMIGO..."
-                                    className="bg-transparent border-none outline-none text-red-100 placeholder-red-900/50 font-['Cinzel'] font-bold text-lg w-full"
+                                    className="bg-transparent border-none outline-none text-[#f0e6d2] placeholder-[#c8aa6e]/30 font-['Cinzel'] font-bold text-xl w-full"
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                 />
-                                <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-white"><FiX /></button>
+                                <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-white transition-colors p-2"><FiX size={20} /></button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 custom-scrollbar">
                                 {filteredEnemies.map(enemy => (
                                     <div
                                         key={enemy.id}
                                         onClick={() => addCombatant(enemy)}
-                                        className="group flex items-center gap-3 p-3 bg-[#050b14] border border-white/5 hover:border-red-500 rounded cursor-pointer transition-all hover:bg-red-900/10"
+                                        className="group flex items-center gap-4 p-4 bg-[#050b14]/50 border border-white/5 hover:border-[#c8aa6e]/50 rounded-xl cursor-pointer transition-all hover:bg-[#c8aa6e]/5"
                                     >
-                                        <div className="w-12 h-12 bg-black rounded overflow-hidden shrink-0 border border-white/10 group-hover:border-red-500/50">
+                                        <div className="w-16 h-16 bg-black rounded-lg overflow-hidden shrink-0 border border-white/10 group-hover:border-[#c8aa6e]/50 shadow-lg">
                                             {enemy.image ? (
                                                 <img src={enemy.image} className="w-full h-full object-cover" alt="" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center"><Skull className="w-6 h-6 text-slate-700" /></div>
+                                                <div className="w-full h-full flex items-center justify-center bg-[#1a1b26]"><Skull className="w-8 h-8 text-[#c8aa6e]/20" /></div>
                                             )}
                                         </div>
-                                        <div className="min-w-0">
-                                            <h4 className="font-['Cinzel'] font-bold text-slate-200 truncate group-hover:text-red-400">{enemy.name}</h4>
-                                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{enemy.type}</p>
+                                        <div className="min-w-0 flex-1">
+                                            <h4 className="font-['Cinzel'] font-bold text-lg text-[#f0e6d2] truncate group-hover:text-[#c8aa6e] transition-colors">{enemy.name}</h4>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{enemy.type}</p>
                                         </div>
-                                        <FiPlus className="ml-auto opacity-0 group-hover:opacity-100 text-red-500" />
+                                        <div className="w-8 h-8 rounded-full border border-[#c8aa6e]/30 flex items-center justify-center text-[#c8aa6e] opacity-0 group-hover:opacity-100 transition-all">
+                                            <FiPlus size={16} />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
