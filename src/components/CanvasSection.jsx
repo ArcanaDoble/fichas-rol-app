@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Zap, Gem, Search, Package, Link, Flame, Footprints } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -917,6 +917,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
+    // --- MASTER COMBAT HUD TOGGLE ---
+    const [showMasterCombatHUD, setShowMasterCombatHUD] = useState(false);
+    const lastMasterHudTokenIdRef = useRef(null); // Recuerda el último token para el HUD del master
 
     // Refs para acceder a estados actualizados dentro de onSnapshot sin re-suscripciones
     const draggedTokenIdRef = useRef(null);
@@ -6249,6 +6253,159 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     );
                 }
                 return null;
+            })()}
+
+            {/* --- MASTER COMBAT HUD (Optional Toggle) --- */}
+            {!isPlayerView && activeScenario && (() => {
+                // Determinar el token a mostrar: seleccionado actual O último seleccionado (como jugadores)
+                const allCombatTokens = (activeScenario.items || []).filter(i =>
+                    i.type !== 'light' && i.type !== 'wall' && (i.isCircular || i.stats || i.name)
+                );
+                const selectedControlled = allCombatTokens.find(t => selectedTokenIds.includes(t.id));
+
+                // Si hay token seleccionado, actualizamos la referencia
+                if (selectedControlled) {
+                    lastMasterHudTokenIdRef.current = selectedControlled.id;
+                }
+
+                // Prioridad: 1. Token seleccionado actual, 2. Último token seleccionado
+                const rawHudToken = selectedControlled || allCombatTokens.find(t => t.id === lastMasterHudTokenIdRef.current) || null;
+
+                return (
+                    <>
+                        {/* Toggle Button — solo flecha, centro inferior */}
+                        <AnimatePresence mode="wait">
+                            {!showMasterCombatHUD && (
+                                <motion.div
+                                    key="master-hud-fab"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none"
+                                >
+                                    <button
+                                        onClick={() => setShowMasterCombatHUD(true)}
+                                        className="pointer-events-auto px-5 py-1.5 rounded-xl bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 hover:border-[#c8aa6e]/70 shadow-[0_0_20px_rgba(0,0,0,0.4)] transition-all duration-200 active:scale-95 group"
+                                        title="Abrir HUD de Combate"
+                                    >
+                                        <ChevronUp className="w-4 h-4 text-[#c8aa6e]/60 group-hover:text-[#f0e6d2] transition-all duration-200 group-hover:-translate-y-0.5" />
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* CombatHUD del master */}
+                        <AnimatePresence mode="wait">
+                            {showMasterCombatHUD && (() => {
+                                if (!rawHudToken) {
+                                    // Sin token seleccionado ni recordado
+                                    return (
+                                        <motion.div
+                                            key="master-hud-empty"
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 20 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none pb-6"
+                                        >
+                                            <div className="pointer-events-auto bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/30 rounded-2xl px-8 py-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col items-center gap-3 max-w-sm mx-auto relative">
+                                                <button
+                                                    onClick={() => setShowMasterCombatHUD(false)}
+                                                    className="absolute top-2 right-2 text-slate-500 hover:text-[#c8aa6e] transition-colors p-1"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                                <Swords className="w-8 h-8 text-[#c8aa6e]/50" />
+                                                <span className="text-slate-400 text-xs text-center uppercase tracking-widest">
+                                                    Selecciona un token en el mapa<br />para usar el HUD de combate
+                                                </span>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                }
+
+                                // Fusionamos datos de la ficha vinculada
+                                let hudToken = rawHudToken;
+                                if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
+                                    const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
+                                    if (charData) {
+                                        const eq = charData.equippedItems || {};
+                                        const hands = [eq.mainHand, eq.offHand]
+                                            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
+                                            .map(i => ({ ...i, type: i.type || 'weapon' }));
+
+                                        const equipmentAbilities = charData.equipment?.abilities || [];
+                                        const rootAbilities = charData.abilities || [];
+                                        const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
+                                        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
+                                        const damagingAbilities = allAbilitiesSource.filter(a =>
+                                            (a.damage || a.dano || a.actionType === 'attack') &&
+                                            !hands.find(h => h.id === a.id)
+                                        );
+                                        const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
+
+                                        hudToken = {
+                                            ...rawHudToken,
+                                            equippedItems: [...hands, ...formattedAbilities],
+                                        };
+                                    }
+                                }
+
+                                const canOpenSheet = !!hudToken.linkedCharacterId;
+                                const handlePortraitClick = (charName) => {
+                                    if (canOpenSheet && onOpenCharacterSheet) {
+                                        onOpenCharacterSheet(charName);
+                                    } else {
+                                        triggerToast(
+                                            "Token sin ficha vinculada",
+                                            "Esta entidad no tiene archivo de personaje",
+                                            'warning'
+                                        );
+                                    }
+                                };
+
+                                return (
+                                    <motion.div
+                                        key="master-hud-active"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 20 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="relative"
+                                    >
+                                        {/* Botón de plegar HUD — solo flecha */}
+                                        <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-0.5">
+                                            <button
+                                                onClick={() => setShowMasterCombatHUD(false)}
+                                                className="pointer-events-auto px-4 py-0.5 rounded-t-lg bg-[#0b1120]/80 border-x border-t border-[#c8aa6e]/15 hover:border-[#c8aa6e]/40 transition-all duration-200 active:scale-95 group"
+                                                title="Cerrar HUD de Combate"
+                                            >
+                                                <ChevronDown className="w-3.5 h-3.5 text-[#c8aa6e]/40 group-hover:text-[#c8aa6e] transition-all duration-200 group-hover:translate-y-0.5" />
+                                            </button>
+                                        </div>
+                                        <CombatHUD
+                                            token={hudToken}
+                                            onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
+                                            onEndTurn={() => handleEndTurn(hudToken.id)}
+                                            onPortraitClick={handlePortraitClick}
+                                            canOpenSheet={canOpenSheet}
+                                            pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
+                                            pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
+                                            onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                                            isActive={(() => {
+                                                if (!gridConfig.isCombatActive) return true;
+                                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
+                                                return (hudToken.velocidad || 0) === minVel;
+                                            })()}
+                                        />
+                                    </motion.div>
+                                );
+                            })()}
+                        </AnimatePresence>
+                    </>
+                );
             })()}
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
