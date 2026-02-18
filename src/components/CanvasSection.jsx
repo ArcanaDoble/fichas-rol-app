@@ -102,9 +102,29 @@ const CanvasThumbnail = ({ scenario }) => {
     );
 };
 
-const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => {
-    if (!show) return null;
+const panelVariants = {
+    initial: { opacity: 0, y: -40, scale: 0.9, filter: 'blur(10px)' },
+    animate: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        filter: 'blur(0px)',
+        transition: {
+            type: "spring",
+            stiffness: 400,
+            damping: 30
+        }
+    },
+    exit: {
+        opacity: 0,
+        y: -20,
+        scale: 0.9,
+        filter: 'blur(8px)',
+        transition: { duration: 0.3 }
+    }
+};
 
+const SaveToast = ({ show, type = 'success', message, subMessage }) => {
     // Configuración según el tipo
     const isSuccess = type === 'success';
     const isError = type === 'error';
@@ -115,9 +135,9 @@ const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => 
     const subText = subMessage || (isSuccess ? "Encuentro Sincronizado" : isError ? "Error de Conexión" : isWarning ? "Acción No Disponible" : "Aviso del Sistema");
 
     // Clases dinámicas
-    const borderColor = isError ? "border-red-500" : isWarning ? "border-amber-500" : isInfo ? "border-sky-500" : "border-[#c8aa6e]";
-    const titleColor = isError ? "text-red-500" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
-    const subtextColor = isError ? "text-red-400" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
+    const borderColor = isError ? "border-red-500/50" : isWarning ? "border-amber-500/50" : isInfo ? "border-sky-500/50" : "border-[#c8aa6e]/50";
+    const titleColor = isError ? "text-red-400" : isWarning ? "text-amber-100" : isInfo ? "text-sky-100" : "text-[#f0e6d2]";
+    const subtextColor = isError ? "text-red-400/70" : isWarning ? "text-amber-500" : isInfo ? "text-sky-400" : "text-[#c8aa6e]";
     const iconContainer = isError
         ? "border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
         : isWarning
@@ -128,24 +148,37 @@ const SaveToast = ({ show, exiting, type = 'success', message, subMessage }) => 
     const barColor = isError ? "bg-red-500/50" : isWarning ? "bg-amber-500/50" : isInfo ? "bg-sky-500/50" : "bg-[#c8aa6e]/50";
 
     return (
-        <div className={`fixed top-12 left-1/2 z-[999] origin-top -translate-x-1/2 ${exiting ? 'animate-toast-exit' : 'animate-toast-enter'}`}>
-            <div className={`relative bg-[#0b1120] border ${borderColor} px-8 py-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[380px] flex items-center gap-5 rounded-lg`}>
-                {/* Icon */}
-                <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
-                    {isError ? <X className="w-5 h-5 text-red-500" /> : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-500" /> : isInfo ? <Shield className="w-5 h-5 text-sky-500" /> : <Check className="w-5 h-5 text-[#c8aa6e]" />}
-                </div>
+        <div className="fixed top-12 left-1/2 z-[1000] -translate-x-1/2 pointer-events-none">
+            <AnimatePresence>
+                {show && (
+                    <motion.div
+                        variants={panelVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className={`relative bg-[#0b1120]/80 backdrop-blur-xl border ${borderColor} px-10 py-5 shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-[400px] flex items-center gap-6 rounded-2xl overflow-hidden`}
+                    >
+                        {/* Shimmer Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
 
-                {/* Text */}
-                <div className="flex flex-col">
-                    <h3 className={`${titleColor} font-fantasy text-xl leading-none tracking-widest text-left mb-1 whitespace-pre-line uppercase`}>
-                        {mainText}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <div className={`h-[1px] w-6 ${barColor}`}></div>
-                        <span className={`${subtextColor} text-[9px] font-bold uppercase tracking-[0.2em]`}>{subText}</span>
-                    </div>
-                </div>
-            </div>
+                        {/* Icon */}
+                        <div className={`w-12 h-12 rounded-full border flex items-center justify-center shrink-0 ${iconContainer}`}>
+                            {isError ? <X className="w-6 h-6 text-red-500" /> : isWarning ? <AlertTriangle className="w-6 h-6 text-amber-500" /> : isInfo ? <Shield className="w-6 h-6 text-sky-500" /> : <Check className="w-6 h-6 text-[#c8aa6e]" />}
+                        </div>
+
+                        {/* Text */}
+                        <div className="flex flex-col relative z-10">
+                            <h3 className={`${titleColor} font-fantasy text-2xl leading-none tracking-[0.1em] text-left mb-1.5 whitespace-pre-line uppercase drop-shadow-sm`}>
+                                {mainText}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <div className={`h-[1px] w-8 ${barColor}`}></div>
+                                <span className={`${subtextColor} text-[10px] font-bold uppercase tracking-[0.25em]`}>{subText}</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
@@ -822,7 +855,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const lastActionTimeRef = useRef(0);
     const [showToast, setShowToast] = useState(false);
-    const [toastExiting, setToastExiting] = useState(false);
     const [toastType, setToastType] = useState('success');
     const [toastMessage, setToastMessage] = useState('');
     const [toastSubMessage, setToastSubMessage] = useState('');
@@ -832,7 +864,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setToastMessage(message);
         setToastSubMessage(subMessage);
         setShowToast(true);
-        setToastExiting(false);
     }, []);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
@@ -880,9 +911,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const [availableCharacters, setAvailableCharacters] = useState([]);
 
+    const tokenOriginalPosRef = useRef({});
+    useEffect(() => { tokenOriginalPosRef.current = tokenOriginalPos; }, [tokenOriginalPos]);
+
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
+    // Refs para acceder a estados actualizados dentro de onSnapshot sin re-suscripciones
+    const draggedTokenIdRef = useRef(null);
+    useEffect(() => { draggedTokenIdRef.current = draggedTokenId; }, [draggedTokenId]);
+    const selectedTokenIdsRef = useRef([]);
+    useEffect(() => { selectedTokenIdsRef.current = selectedTokenIds; }, [selectedTokenIds]);
+    const rotatingTokenIdRef = useRef(null);
+    useEffect(() => { rotatingTokenIdRef.current = rotatingTokenId; }, [rotatingTokenId]);
+    const resizingTokenIdRef = useRef(null);
+    useEffect(() => { resizingTokenIdRef.current = resizingTokenId; }, [resizingTokenId]);
+    const pendingTurnStateRef = useRef(null);
+    useEffect(() => { pendingTurnStateRef.current = pendingTurnState; }, [pendingTurnState]);
 
     // Fetch available characters for Master or Player linking
     useEffect(() => {
@@ -942,13 +988,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         if (showToast) {
             const duration = toastType === 'success' ? 3000 : 4000;
-            const timer1 = setTimeout(() => setToastExiting(true), duration);
-            const timer2 = setTimeout(() => setShowToast(false), duration + 300);
-
-            return () => {
-                clearTimeout(timer1);
-                clearTimeout(timer2);
-            };
+            const timer = setTimeout(() => setShowToast(false), duration);
+            return () => clearTimeout(timer);
         }
     }, [showToast, toastType]);
 
@@ -1043,6 +1084,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const unsub = onSnapshot(doc(db, 'canvas_scenarios', activeScenario.id), (docSnap) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
+
+                // --- DETECCIÓN DE CONFLICTOS PARA JUGADORES ---
+                // Si el Master mueve una ficha que nosotros estamos manipulando, cancelamos nuestra interacción
+                // local para evitar saltos visuales (snap-back) y desincronización de turnos.
+                if (isPlayerView && activeScenarioRef.current && remoteData.lastModified > (activeScenarioRef.current.lastModified || 0)) {
+                    const remoteItems = remoteData.items || [];
+                    let hasConflict = false;
+
+                    // 1. Conflicto con Arrastre (Individual o Múltiple)
+                    if (draggedTokenIdRef.current) {
+                        const idsToCheck = selectedTokenIdsRef.current.length > 0 ? selectedTokenIdsRef.current : [draggedTokenIdRef.current];
+                        const movedExternally = idsToCheck.some(id => {
+                            const remoteItem = remoteItems.find(i => i.id === id);
+                            const original = tokenOriginalPosRef.current[id];
+                            return remoteItem && original && (remoteItem.x !== original.x || remoteItem.y !== original.y);
+                        });
+
+                        if (movedExternally) {
+                            console.warn("⚠️ Master movió fichas en drag. Cancelando.");
+                            setDraggedTokenId(null);
+                            setRotatingTokenId(null);
+                            setResizingTokenId(null);
+                            setTokenOriginalPos({});
+                            document.body.style.cursor = 'default';
+                            triggerToast("Movimiento Interrumpido", "El Master ha movido las fichas", 'warning');
+                            hasConflict = true;
+                        }
+                    }
+
+                    // 2. Conflicto con Turno Pendiente (Combat Mode)
+                    if (!hasConflict && pendingTurnStateRef.current) {
+                        const id = pendingTurnStateRef.current.tokenId;
+                        const remoteItem = remoteItems.find(i => i.id === id);
+                        const startX = pendingTurnStateRef.current.startX;
+                        const startY = pendingTurnStateRef.current.startY;
+                        if (remoteItem && (remoteItem.x !== startX || remoteItem.y !== startY)) {
+                            setPendingTurnState(null);
+                            triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
+                            hasConflict = true;
+                        }
+                    }
+
+                    // 3. Conflicto con Rotación o Redimensión
+                    if (!hasConflict && (rotatingTokenIdRef.current || resizingTokenIdRef.current)) {
+                        const id = rotatingTokenIdRef.current || resizingTokenIdRef.current;
+                        const remoteItem = remoteItems.find(i => i.id === id);
+                        const localBaseline = activeScenarioRef.current.items.find(i => i.id === id);
+                        if (remoteItem && localBaseline && (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)) {
+                            setRotatingTokenId(null);
+                            setResizingTokenId(null);
+                            triggerToast("Interacción Interrumpida", "El Master ha movido la ficha", 'warning');
+                        }
+                    }
+                }
 
                 // --- Sincronización de Items (Tokens) ---
                 setActiveScenario(current => {
@@ -1381,8 +1476,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return item;
             });
 
-            // LOGIC ADDED: Update pending cost LIVE while dragging
-            if (gridConfig.isCombatActive && draggedTokenId) {
+            // LOGIC ADDED: Update pending cost LIVE while dragging (ONLY for players)
+            if (gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
                 const draggedItem = newItems.find(i => i.id === draggedTokenId);
                 const original = tokenOriginalPos[draggedTokenId];
 
@@ -1692,6 +1787,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setRotatingTokenId(null);
             setResizingTokenId(null);
             setTokenOriginalPos({});
+
+            // Si el master mueve un token que tenía un estado de turno pendiente, lo limpiamos
+            if (!isPlayerView && pendingTurnState) {
+                setPendingTurnState(null);
+            }
+
             document.body.style.cursor = 'default';
             return;
         }
@@ -2224,11 +2325,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } catch (error) {
             console.error("❌ Error al guardar escenario:", error);
             setToastType('error');
-            setShowToast(false);
-            setTimeout(() => {
-                setShowToast(true);
-                setToastExiting(false);
-            }, 50);
+            setShowToast(true);
         } finally {
             setIsSaving(false);
         }
@@ -2850,7 +2947,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return (
             <React.Fragment key={item.id}>
                 {/* GHOST TOKEN & LINE (DRAG O TURNO PENDIENTE) */}
-                {(original || (pendingTurnState && pendingTurnState.tokenId === item.id)) && canInteract && (
+                {(original || (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)) && canInteract && (
                     <>
                         {(() => {
                             // PRIORIDAD: Si hay un estado pendiente, el inicio del turno es SIEMPRE startX del estado pendiente.
@@ -2942,7 +3039,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             {/* Indicador de Velocidad (Derecha) */}
                             {(() => {
                                 const currentVel = item.velocidad || 0;
-                                const pendingVel = (pendingTurnState && pendingTurnState.tokenId === item.id)
+                                const pendingVel = (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)
                                     ? (pendingTurnState.moveCost + pendingTurnState.actionCost)
                                     : 0;
                                 const totalVel = currentVel + pendingVel;
@@ -5189,7 +5286,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     {(() => {
                                         const items = (activeScenario?.items || []).map(item => {
                                             // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
-                                            if (pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                            if (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id) {
                                                 if (draggedTokenId !== item.id) {
                                                     return { ...item, x: pendingTurnState.x, y: pendingTurnState.y };
                                                 }
@@ -6157,7 +6254,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast
                 show={showToast}
-                exiting={toastExiting}
                 type={toastType}
                 message={toastMessage}
                 subMessage={toastSubMessage}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ToastContext = createContext();
 
@@ -9,6 +10,23 @@ export const useToast = () => {
     throw new Error('useToast debe usarse dentro de ToastProvider');
   }
   return context;
+};
+
+const panelVariants = {
+  initial: { opacity: 0, y: 20, scale: 0.95, filter: 'blur(8px)' },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.95,
+    filter: 'blur(4px)',
+    transition: { duration: 0.2 }
+  }
 };
 
 const Toast = ({ toast, onRemove }) => {
@@ -36,44 +54,47 @@ const Toast = ({ toast, onRemove }) => {
   };
 
   const colors = {
-    success: 'bg-green-600 border-green-500 text-green-100',
-    error: 'bg-red-600 border-red-500 text-red-100',
-    warning: 'bg-yellow-600 border-yellow-500 text-yellow-100',
-    info: 'bg-blue-600 border-blue-500 text-blue-100',
+    success: 'bg-green-600/90 border-green-500/50 text-green-50 shadow-green-900/20',
+    error: 'bg-red-600/90 border-red-500/50 text-red-50 shadow-red-900/20',
+    warning: 'bg-yellow-600/90 border-yellow-500/50 text-yellow-50 shadow-yellow-900/20',
+    info: 'bg-blue-600/90 border-blue-500/50 text-blue-50 shadow-blue-900/20',
   };
 
   return (
-    <div
+    <motion.div
+      variants={panelVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      layout
       className={`
         relative flex items-center gap-3 p-4 mb-3
-        rounded-lg border shadow-lg
-        transform transition-all duration-300 ease-in-out
-        animate-in slide-in-from-right-full
+        rounded-xl border backdrop-blur-xl shadow-2xl
         ${colors[toast.type]}
       `}
     >
       <div className="flex-shrink-0">
         {icons[toast.type]}
       </div>
-      
+
       <div className="flex-1 min-w-0">
         {toast.title && (
-          <p className="font-semibold text-sm">
+          <p className="font-bold text-sm tracking-tight">
             {toast.title}
           </p>
         )}
-        <p className="text-sm opacity-90">
+        <p className="text-sm opacity-90 font-medium leading-tight">
           {toast.message}
         </p>
       </div>
-      
+
       {toast.dismissible !== false && (
         <button
           onClick={() => onRemove(toast.id)}
           className="
-            flex-shrink-0 p-1 rounded
-            hover:bg-black/20 transition-colors
-            focus:outline-none focus:ring-2 focus:ring-white/50
+            flex-shrink-0 p-1.5 rounded-full
+            hover:bg-white/20 transition-all
+            focus:outline-none active:scale-90
           "
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,34 +102,34 @@ const Toast = ({ toast, onRemove }) => {
           </svg>
         </button>
       )}
-      
+
       {/* Progress bar para auto-dismiss */}
       {toast.duration && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b-lg overflow-hidden">
-          <div
-            className="h-full bg-white/30 transition-all ease-linear"
-            style={{
-              animation: `shrink ${toast.duration}ms linear forwards`,
-            }}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b-xl overflow-hidden">
+          <motion.div
+            initial={{ width: '100%' }}
+            animate={{ width: '0%' }}
+            transition={{ duration: toast.duration / 1000, ease: 'linear' }}
+            className="h-full bg-white/40"
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
 const ToastContainer = ({ toasts, removeToast }) => {
-  if (toasts.length === 0) return null;
-
   return createPortal(
-    <div className="fixed top-4 right-4 z-50 max-w-sm w-full">
-      {toasts.map((toast) => (
-        <Toast
-          key={toast.id}
-          toast={toast}
-          onRemove={removeToast}
-        />
-      ))}
+    <div className="fixed top-6 right-6 z-[9999] max-w-sm w-full flex flex-col items-end">
+      <AnimatePresence mode="popLayout">
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            toast={toast}
+            onRemove={removeToast}
+          />
+        ))}
+      </AnimatePresence>
     </div>,
     document.body
   );

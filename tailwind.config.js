@@ -21,11 +21,16 @@ module.exports = {
           '0%, 100%': { boxShadow: '0 0 4px rgba(255,255,255,0.4)' },
           '50%': { boxShadow: '0 0 12px rgba(255,255,255,1)' },
         },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%) skewX(-15deg)' },
+          '30%, 100%': { transform: 'translateX(250%) skewX(-15deg)' },
+        },
       },
       animation: {
         shake: 'shake 0.3s ease-in-out',
         gradient: 'gradient 3s ease infinite',
         glow: 'glow 1.5s ease-in-out infinite',
+        shimmer: 'shimmer 3s infinite',
       },
     },
   },
