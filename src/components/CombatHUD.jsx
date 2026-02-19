@@ -69,20 +69,51 @@ const CombatHUD = ({
     ];
 
     const panelVariants = {
-        initial: { opacity: 0, y: 30, scale: 0.98, filter: 'blur(8px)' },
+        initial: {
+            opacity: 0,
+            y: 30,
+            scale: 0.98,
+            filter: 'blur(8px)',
+            height: 0
+        },
         animate: {
             opacity: 1,
             y: 0,
             scale: 1,
             filter: 'blur(0px)',
-            transition: { duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }
+            height: 'auto',
+            transition: {
+                type: "spring",
+                stiffness: 300,
+                damping: 30,
+                mass: 1
+            }
         },
         exit: {
             opacity: 0,
-            y: 20,
-            scale: 0.98,
-            filter: 'blur(4px)',
-            transition: { duration: 0.3, ease: 'easeIn' }
+            y: -5,
+            scale: 0.96,
+            filter: 'blur(3px)',
+            height: 0,
+            transition: {
+                duration: 0.25,
+                ease: [0.4, 0, 0.2, 1]
+            }
+        }
+    };
+
+    // Animación ultra-suave para acciones pendientes: solo opacidad y escala, sin desplazamiento vertical
+    const pendingActionVariants = {
+        initial: { opacity: 0, scale: 0.92 },
+        animate: {
+            opacity: 1,
+            scale: 1,
+            transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }
+        },
+        exit: {
+            opacity: 0,
+            scale: 0.95,
+            transition: { duration: 0.25, ease: [0.4, 0, 1, 1] }
         }
     };
 
@@ -170,108 +201,108 @@ const CombatHUD = ({
                         {/* ---------------------------------------------------------- */}
                         {/*                     VERSIÓN UNIFICADA                      */}
                         {/* ---------------------------------------------------------- */}
-                        <div className="absolute bottom-full flex flex-col-reverse items-center w-full pointer-events-none gap-2 md:gap-[10px]">
+                        <div className="absolute bottom-[calc(100%-4px)] md:bottom-full flex flex-col-reverse items-center w-full pointer-events-none gap-2 md:gap-[10px] z-0">
 
                             {/* 1. Selector de Ataque (Unificado) */}
                             <AnimatePresence>
                                 {selectedActionId === 'attack' && attackOptions.length > 1 && (
-                                    <div className="relative pointer-events-auto translate-y-[8px] md:translate-y-[1px]">
-                                        <motion.div
-                                            variants={panelVariants}
-                                            initial="initial"
-                                            animate="animate"
-                                            exit="exit"
-                                            className="origin-bottom focus:outline-none"
-                                        >
-                                            <div className="w-[200px] md:w-80 bg-[#0b1120]/98 backdrop-blur-3xl border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-                                                <div className="bg-[#c8aa6e] px-3 py-2 md:px-4 md:py-3 flex justify-between items-center shrink-0 shadow-lg">
-                                                    <div className="flex items-center gap-2">
-                                                        <Sword size={14} className="text-[#0b1120]" />
-                                                        <span className="text-[#0b1120] text-[10px] md:text-[11px] font-black uppercase tracking-widest">
-                                                            Selecciona Ataque
-                                                        </span>
-                                                    </div>
-                                                    <button onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors">
-                                                        <X size={16} className="md:w-[18px] md:h-[18px]" />
-                                                    </button>
+                                    <motion.div
+                                        key="attack-selector"
+                                        variants={panelVariants}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] focus:outline-none overflow-hidden"
+                                    >
+                                        <div className="w-[200px] md:w-80 bg-[#0b1120]/98 backdrop-blur-3xl border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                            <div className="bg-[#c8aa6e] px-3 py-2 md:px-4 md:py-3 flex justify-between items-center shrink-0 shadow-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <Sword size={14} className="text-[#0b1120]" />
+                                                    <span className="text-[#0b1120] text-[10px] md:text-[11px] font-black uppercase tracking-widest">
+                                                        Selecciona Ataque
+                                                    </span>
                                                 </div>
-                                                <div className="p-1.5 md:p-2 pb-3 md:pb-4 flex flex-col gap-1.5 md:gap-2 max-h-[300px] md:max-h-[460px] overflow-y-auto custom-scrollbar bg-black/40 border-b border-[#c8aa6e]/20">
-                                                    {attackOptions.map((item, idx) => {
-                                                        const getRarityHeaderColor = (rareza = '') => {
-                                                            const r = rareza.toLowerCase();
-                                                            if (r.includes('legendari')) return 'text-orange-400';
-                                                            if (r.includes('épic') || r.includes('epic')) return 'text-purple-400';
-                                                            if (r.includes('rar')) return 'text-blue-400';
-                                                            if (r.includes('poco com')) return 'text-green-400';
-                                                            return 'text-[#f0e6d2]';
-                                                        };
-                                                        const getItemImage = (i) => {
-                                                            if (i.img || i.icon) return i.img || i.icon;
-                                                            const name = (i.name || i.nombre || '').toLowerCase();
-                                                            if (name.includes('fauces')) return '/armas/fauces.png';
-                                                            if (name.includes('garras')) return '/armas/garras.png';
-                                                            if (name.includes('hacha')) return '/armas/hacha_de_guerra.png';
-                                                            if (name.includes('alabarda')) return '/armas/alabarda.png';
-                                                            if (name.includes('espada')) return '/armas/espada_de_acero.png';
-                                                            if (name.includes('daga')) return '/armas/daga.png';
-                                                            if (name.includes('arco')) return '/armas/arco_corto.png';
-                                                            return null;
-                                                        };
-                                                        const itemImg = getItemImage(item);
-                                                        const nameColorClass = getRarityHeaderColor(item.rareza || '');
-                                                        return (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={() => {
-                                                                    onAction('attack', item);
-                                                                    setSelectedActionId(null);
-                                                                }}
-                                                                className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border border-white/5 hover:border-[#c8aa6e]/30 shadow-lg"
-                                                            >
-                                                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
-                                                                    {itemImg ? (
-                                                                        <img src={itemImg} alt="" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
-                                                                    ) : (
-                                                                        item.type === 'ability' ? <Sparkles size={16} className="text-purple-400 md:w-5 md:h-5" /> : <Sword size={16} className="text-slate-600 md:w-5 md:h-5" />
+                                                <button onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors">
+                                                    <X size={16} className="md:w-[18px] md:h-[18px]" />
+                                                </button>
+                                            </div>
+                                            <div className="p-1.5 md:p-2 pb-3 md:pb-4 flex flex-col gap-1.5 md:gap-2 max-h-[300px] md:max-h-[460px] overflow-y-auto custom-scrollbar bg-black/40 border-b border-[#c8aa6e]/20">
+                                                {attackOptions.map((item, idx) => {
+                                                    const getRarityHeaderColor = (rareza = '') => {
+                                                        const r = rareza.toLowerCase();
+                                                        if (r.includes('legendari')) return 'text-orange-400';
+                                                        if (r.includes('épic') || r.includes('epic')) return 'text-purple-400';
+                                                        if (r.includes('rar')) return 'text-blue-400';
+                                                        if (r.includes('poco com')) return 'text-green-400';
+                                                        return 'text-[#f0e6d2]';
+                                                    };
+                                                    const getItemImage = (i) => {
+                                                        if (i.img || i.icon) return i.img || i.icon;
+                                                        const name = (i.name || i.nombre || '').toLowerCase();
+                                                        if (name.includes('fauces')) return '/armas/fauces.png';
+                                                        if (name.includes('garras')) return '/armas/garras.png';
+                                                        if (name.includes('hacha')) return '/armas/hacha_de_guerra.png';
+                                                        if (name.includes('alabarda')) return '/armas/alabarda.png';
+                                                        if (name.includes('espada')) return '/armas/espada_de_acero.png';
+                                                        if (name.includes('daga')) return '/armas/daga.png';
+                                                        if (name.includes('arco')) return '/armas/arco_corto.png';
+                                                        return null;
+                                                    };
+                                                    const itemImg = getItemImage(item);
+                                                    const nameColorClass = getRarityHeaderColor(item.rareza || '');
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                onAction('attack', item);
+                                                                setSelectedActionId(null);
+                                                            }}
+                                                            className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border border-white/5 hover:border-[#c8aa6e]/30 shadow-lg"
+                                                        >
+                                                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
+                                                                {itemImg ? (
+                                                                    <img src={itemImg} alt="" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
+                                                                ) : (
+                                                                    item.type === 'ability' ? <Sparkles size={16} className="text-purple-400 md:w-5 md:h-5" /> : <Sword size={16} className="text-slate-600 md:w-5 md:h-5" />
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
+                                                                    {item.name || item.nombre}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5 md:gap-2">
+                                                                    <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
+                                                                        {item.velocidad || item.vel || 2}🟡
+                                                                    </span>
+                                                                    {(item.damage || item.dano) && (
+                                                                        <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
+                                                                            {item.damage || item.dano}
+                                                                        </span>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex flex-col flex-1 min-w-0">
-                                                                    <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
-                                                                        {item.name || item.nombre}
-                                                                    </span>
-                                                                    <div className="flex items-center gap-1.5 md:gap-2">
-                                                                        <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
-                                                                            {item.velocidad || item.vel || 2}🟡
-                                                                        </span>
-                                                                        {(item.damage || item.dano) && (
-                                                                            <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
-                                                                                {item.damage || item.dano}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <ChevronUp className="rotate-90 text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-colors w-3 h-3 md:w-4 md:h-4" />
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
+                                                            </div>
+                                                            <ChevronUp className="rotate-90 text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-colors w-3 h-3 md:w-4 md:h-4" />
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
-                                        </motion.div>
-                                    </div>
+                                        </div>
+                                    </motion.div>
                                 )}
                             </AnimatePresence>
 
                             {/* 2. Notificaciones Pendientes (Unificado) */}
-                            <div className={`flex flex-col-reverse items-center gap-2 pointer-events-auto transition-all duration-500 w-[200px] md:w-full max-w-sm px-0 md:px-4 ${selectedActionId !== 'attack' ? 'mb-[10px]' : ''}`}>
+                            <div
+                                className={`flex flex-col-reverse items-center gap-2 pointer-events-auto w-[200px] md:w-full max-w-sm px-0 md:px-4 transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${selectedActionId === 'attack' ? 'mb-0' : 'mb-2.5 md:mb-4'}`}
+                            >
                                 <AnimatePresence>
                                     {pendingActions.map((action, index) => (
                                         <motion.div
                                             key={action.id || index}
-                                            variants={panelVariants}
+                                            variants={pendingActionVariants}
                                             initial="initial"
                                             animate="animate"
                                             exit="exit"
-                                            layout
                                             className="flex items-center justify-between gap-3 bg-black/80 backdrop-blur-md border border-red-500/50 text-red-100 px-4 py-3 rounded-xl shadow-2xl w-full origin-bottom"
                                         >
                                             <div className="flex flex-col">
@@ -315,7 +346,7 @@ const CombatHUD = ({
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none rounded-xl md:rounded-2xl"></div>
 
                         <div
-                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 w-full"
+                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 max-w-0 min-w-full"
                             style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
                         >
                             <style>{`
@@ -330,10 +361,10 @@ const CombatHUD = ({
                                     <button
                                         onClick={() => handleActionClick(action.id)}
                                         className={`relative flex flex-col items-center justify-center h-16 w-24 md:w-32 md:h-24 bg-[#161f32] border rounded-lg transition-all ${action.id === 'dash'
-                                                ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
-                                                : isActive
-                                                    ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
-                                                    : 'cursor-not-allowed opacity-50 border-slate-700/50'
+                                            ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
+                                            : isActive
+                                                ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
+                                                : 'cursor-not-allowed opacity-50 border-slate-700/50'
                                             }`}
                                     >
                                         <action.icon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${isActive ? 'text-slate-400 group-hover:text-[#c8aa6e]' : 'text-slate-600'}`} />

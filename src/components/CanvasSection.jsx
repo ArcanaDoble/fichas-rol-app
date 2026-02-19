@@ -2020,6 +2020,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             items: updatedItems,
                             lastModified: Date.now()
                         });
+                        // Feedback de sincronización automática
+                        triggerToast("Selección Eliminada", "El tablero se ha sincronizado", 'info');
                     } catch (error) {
                         console.error('Error al eliminar items con teclado:', error);
                     }
@@ -2570,16 +2572,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             .catch(err => console.error('Error al desvincular personaje:', err));
     };
 
-    const deleteItem = (itemId) => {
+    const deleteItem = async (itemId) => {
         const now = Date.now();
         if (now - lastActionTimeRef.current < 300) return;
         lastActionTimeRef.current = now;
 
+        if (!activeScenario) return;
+
+        const updatedItems = (activeScenario.items || []).filter(i => i.id !== itemId);
+
         setActiveScenario(prev => ({
             ...prev,
-            items: prev.items.filter(i => i.id !== itemId)
+            items: updatedItems
         }));
         setSelectedTokenIds(prev => prev.filter(id => id !== itemId));
+
+        try {
+            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                items: updatedItems,
+                lastModified: Date.now()
+            });
+            triggerToast("Elemento Eliminado", "El cambio se ha sincronizado", 'info');
+        } catch (error) {
+            console.error("Error al eliminar item del canvas:", error);
+        }
     };
 
     const rotateItem = (itemId, angle) => {
@@ -4971,6 +4987,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         />
                                                     );
                                                 })()}
+
+                                                {/* BOTÓN ELIMINAR TOKEN DEL CANVAS */}
+                                                {!isPlayerView && (
+                                                    <div className="pt-8 pb-4 border-t border-slate-800/50">
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm(`¿Eliminar "${token.name}" de este encuentro?`)) {
+                                                                    deleteItem(token.id);
+                                                                }
+                                                            }}
+                                                            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-red-950/20 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 transition-all duration-300 group"
+                                                        >
+                                                            <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
+                                                            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Eliminar del Escenario</span>
+                                                        </button>
+                                                        <p className="text-[8px] text-slate-600 text-center mt-3 uppercase tracking-tighter">
+                                                            Esta acción quitará el token del mapa y sincronizará con todos los jugadores.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
