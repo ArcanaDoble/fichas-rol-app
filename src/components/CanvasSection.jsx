@@ -9,7 +9,7 @@ import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { db, storage } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, serverTimestamp } from 'firebase/firestore';
 
 // --- Constants ---
 const STATUS_EFFECT_IDS = [
@@ -1026,6 +1026,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const globalUnsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
             const activeId = data.activeScenarioId || null;
+            console.log("📡 canvasVisibility updated — activeScenarioId:", activeId);
             setGlobalActiveId(activeId);
 
             // If no active scenario, clear local state for players
@@ -1070,13 +1071,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     }, [isPlayerView, playerName]);
 
     const setGlobalActiveScenario = async (scenarioId) => {
+        console.log("🎬 setGlobalActiveScenario called with:", scenarioId);
         try {
             await setDoc(doc(db, 'gameSettings', 'canvasVisibility'), {
                 activeScenarioId: scenarioId,
                 updatedAt: serverTimestamp()
             }, { merge: true });
+            console.log("✅ Global scenario updated successfully:", scenarioId);
+            triggerToast(
+                scenarioId ? "Transmisión Activada" : "Transmisión Detenida",
+                scenarioId ? "Los jugadores pueden ver el escenario" : "Escenario oculto para jugadores",
+                'success'
+            );
         } catch (e) {
-            console.error("Error toggling active scenario:", e);
+            console.error("❌ Error toggling active scenario:", e);
+            triggerToast("Error de Transmisión", e.message || "No se pudo actualizar", 'error');
         }
     };
 
@@ -3523,7 +3532,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
                                     {scenarios.map(s => (
                                         <motion.div
-                                            layout
+                                            layoutId={`scenario-card-${s.id}`}
                                             key={s.id}
                                             onClick={() => loadScenario(s)}
                                             className={`group relative bg-[#0b1120] border-2 rounded-xl p-6 cursor-pointer transition-all overflow-hidden ${globalActiveId === s.id ? 'border-[#c8aa6e] shadow-[0_0_30px_rgba(200,170,110,0.15)] bg-[#161f32]' : 'border-slate-800 hover:border-[#c8aa6e]/50 hover:bg-[#161f32]'}`}
@@ -3561,8 +3570,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     {/* Botón de Transmisión (Solo Master) */}
                                                     {!isPlayerView && (
                                                         <button
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onMouseDown={(e) => e.stopPropagation()}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
+                                                                e.preventDefault();
+                                                                console.log("🔘 Transmit button clicked for scenario:", s.id);
                                                                 setGlobalActiveScenario(globalActiveId === s.id ? null : s.id);
                                                             }}
                                                             className={`p-2 rounded-lg border transition-all ${globalActiveId === s.id ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}

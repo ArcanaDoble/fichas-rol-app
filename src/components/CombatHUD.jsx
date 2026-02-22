@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X } from 'lucide-react';
 
@@ -15,6 +15,36 @@ const CombatHUD = ({
 }) => {
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
     const [selectedActionId, setSelectedActionId] = useState(null); // Para submenús (ej: elegir arma)
+    const [isEndingTurn, setIsEndingTurn] = useState(false);
+    const endTurnTimerRef = useRef(null);
+
+    // Mobile end-turn: hold-to-confirm pattern
+    // Press down → animation starts + timer begins
+    // Release before timer → cancel (player changed their mind)
+    // Hold until timer fires → vibrate + end turn
+    const handleEndTurnPressStart = useCallback(() => {
+        if (isEndingTurn || !onEndTurn) return;
+        setIsEndingTurn(true);
+
+        endTurnTimerRef.current = setTimeout(() => {
+            // Haptic feedback on supported mobile devices
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+            onEndTurn();
+            endTurnTimerRef.current = null;
+            setIsEndingTurn(false);
+        }, 600); // 600ms — synced with the 700ms CSS rotation
+    }, [isEndingTurn, onEndTurn]);
+
+    const handleEndTurnPressEnd = useCallback(() => {
+        // If timer hasn't fired yet, cancel everything
+        if (endTurnTimerRef.current) {
+            clearTimeout(endTurnTimerRef.current);
+            endTurnTimerRef.current = null;
+        }
+        setIsEndingTurn(false);
+    }, []);
 
     if (!token) return null;
 
@@ -448,11 +478,20 @@ const CombatHUD = ({
 
             <div className={`md:hidden absolute bottom-32 right-4 pointer-events-auto transition-all duration-500 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}>
                 <button
-                    onClick={onEndTurn}
-                    className="group w-14 h-14 rounded-full border-2 border-[#c8aa6e] bg-[#7f1d1d] flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.3)] active:scale-90 transition-all overflow-hidden relative"
+                    onTouchStart={handleEndTurnPressStart}
+                    onTouchEnd={handleEndTurnPressEnd}
+                    onTouchCancel={handleEndTurnPressEnd}
+                    onPointerDown={handleEndTurnPressStart}
+                    onPointerUp={handleEndTurnPressEnd}
+                    onPointerLeave={handleEndTurnPressEnd}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`group w-14 h-14 rounded-full border-2 bg-[#7f1d1d] flex items-center justify-center transition-all overflow-hidden relative touch-manipulation select-none ${isEndingTurn
+                        ? 'border-red-400 scale-95 shadow-[0_0_25px_rgba(239,68,68,0.5)]'
+                        : 'border-[#c8aa6e] shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                        }`}
                 >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                    <Hourglass className="w-6 h-6 text-[#fca5a5] transition-transform duration-700 ease-in-out group-active:rotate-[180deg]" />
+                    <Hourglass className={`w-6 h-6 text-[#fca5a5] transition-transform duration-700 ease-in-out ${isEndingTurn ? 'rotate-[180deg]' : ''}`} />
                 </button>
             </div>
         </div>
