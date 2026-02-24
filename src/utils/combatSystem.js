@@ -105,9 +105,8 @@ export const rollAttack = (weapon, attributes) => {
             normalizedDie = '1' + normalizedDie;
         }
 
-        let attrRes;
-        if (hasCritical) attrRes = rollExpressionCritical(normalizedDie);
-        else attrRes = rollExpression(normalizedDie);
+        // Los dados de atributos NUNCA tienen capacidad de crítico (explosión)
+        const attrRes = rollExpression(normalizedDie);
 
         extraTotal += attrRes.total;
 
@@ -130,9 +129,18 @@ export const rollAttack = (weapon, attributes) => {
 
 export const getSpeedConsumption = (equipment) => {
     if (!equipment) return 0;
-    const consumo = equipment.consumo || '';
-    const yellowDotCount = (consumo.match(/🟡/g) || []).length;
+    // Check all possible fields for either dots or numbers (consumo, consumption, velocidad, vel, cost, coste)
+    const rawValue = String(
+        equipment.consumo ||
+        equipment.consumption ||
+        equipment.velocidad ||
+        equipment.vel ||
+        equipment.cost ||
+        equipment.coste ||
+        ''
+    );
+    const yellowDotCount = (rawValue.match(/🟡/g) || []).length;
     if (yellowDotCount) return yellowDotCount;
-    const parsed = parseInt(consumo, 10);
+    const parsed = parseInt(rawValue, 10);
     return isNaN(parsed) ? 0 : parsed;
 };

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X } from 'lucide-react';
+import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
+import { parseAttrBonuses } from '../utils/combatSystem';
 
 const ItemImage = ({ src, type, name }) => {
     const [error, setError] = React.useState(false);
@@ -145,8 +146,8 @@ const CombatHUD = ({
 
     const categories = [
         { id: 'ACCIONES', label: 'Acciones' },
-        { id: 'CLASE', label: 'Clase' },
-        { id: 'OBJETOS', label: 'Objetos' }
+        { id: 'CLASE', label: 'Clase', icon: Sparkles },
+        { id: 'OBJETOS', label: 'Objetos', icon: Backpack }
     ];
 
     const actions = [
@@ -362,6 +363,18 @@ const CombatHUD = ({
 
                                                     const itemImg = getItemImage(item);
                                                     const nameColorClass = getRarityHeaderColor(item.rareza || '');
+
+                                                    // Parse traits for attribute dice visualization
+                                                    const traits = item.rasgos || item.traits || item.properties || [];
+                                                    const attrBonuses = parseAttrBonuses(traits);
+
+                                                    const attrColorMap = {
+                                                        destreza: '#4ade80',
+                                                        intelecto: '#60a5fa',
+                                                        voluntad: '#c084fc',
+                                                        vigor: '#f87171'
+                                                    };
+
                                                     return (
                                                         <button
                                                             key={idx}
@@ -387,6 +400,32 @@ const CombatHUD = ({
                                                                             {item.damage || item.dano}
                                                                         </span>
                                                                     )}
+
+                                                                    {/* Attribute Dice Icons */}
+                                                                    <div className="flex gap-1 ml-1 overflow-x-auto scrollbar-hide">
+                                                                        {attrBonuses.map((bonus, bIdx) => (
+                                                                            <div
+                                                                                key={bIdx}
+                                                                                className="flex items-center gap-0.5"
+                                                                            >
+                                                                                {Array.from({ length: bonus.mult }).map((_, mIdx) => (
+                                                                                    <div
+                                                                                        key={mIdx}
+                                                                                        className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center"
+                                                                                        style={{
+                                                                                            borderColor: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                            color: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                            backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
+                                                                                        }}
+                                                                                    >
+                                                                                        <span className="text-[6px] md:text-[7px] font-black">
+                                                                                            {bonus.attr.charAt(0).toUpperCase()}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <ChevronUp className="rotate-90 text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-colors w-3 h-3 md:w-4 md:h-4" />
@@ -494,11 +533,71 @@ const CombatHUD = ({
                                 </div>
                             ))}
 
-                            {activeCategory !== 'ACCIONES' && (
-                                <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px] md:text-xs italic px-8 uppercase tracking-widest">
-                                    Módulo de {activeCategory} próximamente...
-                                </div>
-                            )}
+                            {activeCategory === 'CLASE' && (() => {
+                                const classAbilities = items.filter(i =>
+                                    (i.type === 'ability' || i._category === 'abilities') &&
+                                    !(i.damage || i.dano || i.actionType === 'attack')
+                                );
+
+                                if (classAbilities.length === 0) {
+                                    return (
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
+                                            <Sparkles size={24} className="opacity-20" />
+                                            <span className="text-[10px] uppercase tracking-widest italic">Sin habilidades de clase</span>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
+                                        {classAbilities.map((ability, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => onAction('ability', ability)}
+                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-purple-500/30 rounded-lg hover:bg-purple-900/20 transition-all shrink-0 group active:scale-95"
+                                            >
+                                                <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400 mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                    {ability.name || ability.nombre}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+
+                            {activeCategory === 'OBJETOS' && (() => {
+                                const objectItems = items.filter(i =>
+                                    (i.type === 'item' || i.type === 'consumable' || i.type === 'backpack' || i._category === 'consumables') &&
+                                    i.type !== 'weapon'
+                                );
+
+                                if (objectItems.length === 0) {
+                                    return (
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
+                                            <Backpack size={24} className="opacity-20" />
+                                            <span className="text-[10px] uppercase tracking-widest italic">Mochila vacía</span>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
+                                        {objectItems.map((obj, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => onAction('use_item', obj)}
+                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-blue-500/30 rounded-lg hover:bg-blue-900/20 transition-all shrink-0 group active:scale-95"
+                                            >
+                                                <Backpack className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                    {obj.name || obj.nombre}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

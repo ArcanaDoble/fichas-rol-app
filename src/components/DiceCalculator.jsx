@@ -3,7 +3,7 @@ import Boton from './Boton';
 import Input from './Input';
 import { rollExpression } from '../utils/dice';
 
-const SPECIAL_TRAIT_COLOR = '#ef4444';
+const SPECIAL_TRAIT_COLOR = '#ea580c'; // Dorado Rojizo para dados críticos
 
 const DiceCalculator = ({ playerName, onBack }) => {
 

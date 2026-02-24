@@ -855,6 +855,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
     const [globalActiveId, setGlobalActiveId] = useState(null);
+    const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
 
@@ -892,6 +893,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return { x: e.clientX, y: e.clientY };
     };
 
+    // Helper para enriquecer tokens con datos de la ficha (armas, atributos, etc.)
+    const enrichTokenWithCharacterData = useCallback((rawToken) => {
+        if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
+        const charData = availableCharacters.find(c => c.id === rawToken.linkedCharacterId);
+        if (!charData) return rawToken;
+
+        // Helper crucial para aplanar items que vienen de la ficha (a veces los datos están en .payload)
+        const flattenItem = (item) => {
+            if (!item) return null;
+            if (item.payload) {
+                return { ...item.payload, ...item, payload: undefined };
+            }
+            return item;
+        };
+
+        const eq = charData.equippedItems || {};
+        const hands = [eq.mainHand, eq.offHand]
+            .map(flattenItem)
+            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
+            .map(i => ({ ...i, type: i.type || 'weapon' }));
+
+        const equipmentAbilities = (charData.equipment?.abilities || []).map(flattenItem);
+        const rootAbilities = (charData.abilities || []).map(flattenItem);
+        const activeTalents = (charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || []).map(flattenItem);
+        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents].filter(Boolean);
+
+        const formattedAbilities = allAbilitiesSource.map(a => ({ ...a, type: 'ability' }));
+        const rawInventory = charData.inventory || charData.backpackItems || [];
+        const formattedInventory = (Array.isArray(rawInventory) ? rawInventory : []).map(flattenItem).filter(Boolean).map(i => ({ ...i, type: i.type || 'item' }));
+
+        return {
+            ...rawToken,
+            attributes: charData.attributes || charData.atributos || rawToken.attributes,
+            stats: charData.stats || rawToken.stats,
+            equippedItems: [...hands, ...formattedAbilities, ...formattedInventory],
+        };
+    }, [availableCharacters]);
+
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
@@ -915,7 +954,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    const [availableCharacters, setAvailableCharacters] = useState([]);
 
     const tokenOriginalPosRef = useRef({});
     useEffect(() => { tokenOriginalPosRef.current = tokenOriginalPos; }, [tokenOriginalPos]);
@@ -953,30 +991,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let unsubClasses = () => { };
         let unsubChars = () => { };
 
-        if (isMaster) {
-            // Master loads archetypes (NPCs) and all player characters
-            unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
-                const classesData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: true }));
-                setAvailableCharacters(prev => {
-                    const other = prev.filter(c => !c._isTemplate);
-                    return [...classesData, ...other];
-                });
+        // Todos los participantes del canvas necesitan acceso a los personajes y clases 
+        // para que el HUD de combate y las reacciones funcionen sincronizadas y con datos completos.
+        unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+            const classesData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: true }));
+            setAvailableCharacters(prev => {
+                const other = prev.filter(c => !c._isTemplate);
+                return [...classesData, ...other];
             });
-            unsubChars = onSnapshot(collection(db, 'characters'), (snap) => {
-                const charsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: false }));
-                setAvailableCharacters(prev => {
-                    const other = prev.filter(c => c._isTemplate);
-                    return [...other, ...charsData];
-                });
+        });
+
+        unsubChars = onSnapshot(collection(db, 'characters'), (snap) => {
+            const charsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: false }));
+            setAvailableCharacters(prev => {
+                const other = prev.filter(c => c._isTemplate);
+                return [...other, ...charsData];
             });
-        } else if (playerName) {
-            // Player only gets their own characters from the 'characters' collection
-            const q = query(collection(db, 'characters'), where('owner', '==', playerName));
-            unsubChars = onSnapshot(q, (snapshot) => {
-                const chars = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setAvailableCharacters(chars);
-            });
-        }
+        });
 
         return () => {
             unsubClasses();
@@ -1291,7 +1322,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         container.addEventListener('wheel', onWheel, { passive: false });
         return () => container.removeEventListener('wheel', onWheel);
-    }, [activeScenario]); // Re-vincular cuando cambia el escenario activo y se monta el viewport
+    }, [activeScenario?.id]); // Solo re-vincular si cambia de ID de escenario, no en cada movimiento
 
     // Handlers de Touch para Zoom (Pinch) y Pan (Igual que MinimapV2)
     const lastPinchDist = useRef(null);
@@ -1866,7 +1897,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 const cellH = gridConfig.cellHeight || 50;
                                 const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
 
-                                if (distance > 0 && gridConfig.isCombatActive) {
+                                if (distance > 0) {
                                     return { ...item, velocidad: (item.velocidad || 0) + distance };
                                 }
                             }
@@ -2034,22 +2065,48 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     // --- LOGICA DE BIBLIOTECA (Firebase) ---
+    // Optimizacion Critica: Solo escuchar la base de datos entera de escenarios si estamos viéndola.
     useEffect(() => {
+        if (viewMode !== 'LIBRARY') return;
+
+        console.log("📚 Conectando a Biblioteca de Escenarios...");
         const unsub = onSnapshot(collection(db, 'canvas_scenarios'), (snap) => {
-            const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Se omiten los arrays pesados de los items para la vista del listado de menús (Ahorro VRAM/RAM masivo)
+            const loaded = snap.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    name: data.name,
+                    lastModified: data.lastModified,
+                    config: data.config,
+                    preview: data.preview,
+                    ownerId: data.ownerId,
+                    allowedPlayers: data.allowedPlayers
+                };
+            });
             setScenarios(loaded.sort((a, b) => b.lastModified - a.lastModified));
         });
-        return () => unsub();
-    }, []);
+        return () => {
+            console.log("📚 Desconectando de Biblioteca de Escenarios...");
+            unsub();
+        };
+    }, [viewMode]);
 
     // --- SUSCRIPCIÓN A TOKENS (Firebase) ---
+    // Optimización: Solo descargar el índice completo de tokens si la pestaña de la barra lateral está en 'TOKENS'.
     useEffect(() => {
+        if (activeTab !== 'TOKENS') return;
+
+        console.log("🪙 Conectando a Biblioteca de Tokens...");
         const unsub = onSnapshot(collection(db, 'canvas_tokens'), (snap) => {
             const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setTokens(loaded.sort((a, b) => b.createdAt - a.createdAt));
         });
-        return () => unsub();
-    }, []);
+        return () => {
+            console.log("🪙 Desconectando de Biblioteca de Tokens...");
+            unsub();
+        };
+    }, [activeTab]);
 
     // --- KEYBOARD SHORTCUTS (Copy/Paste) ---
     useEffect(() => {
@@ -2295,9 +2352,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         const handleSyncEvent = (e) => {
             const { name, sheet } = e.detail || {};
-            if (!name || !sheet || !activeScenario?.id) return;
+            const currentScenario = activeScenarioRef.current;
 
-            const currentItems = activeScenario.items || [];
+            if (!name || !sheet || !currentScenario?.id) return;
+
+            const currentItems = currentScenario.items || [];
             let hasChanges = false;
 
             const updatedItems = currentItems.map(item => {
@@ -2318,14 +2377,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (hasChanges) {
                 console.log('🔄 Sincronización en tiempo real detectada para:', name);
                 setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), { items: updatedItems })
                     .catch(err => console.error('Error al sincronizar token en tiempo real:', err));
             }
         };
 
         window.addEventListener('playerSheetSaved', handleSyncEvent);
         return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
-    }, [activeScenario]);
+    }, []); // Dependencias vacías: usamos activeScenarioRef para leer sin re-bindear el evento
 
 
     const saveCurrentScenario = async () => {
@@ -3705,7 +3764,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const resolveCombatEvent = async (event) => {
         if (event.status === 'resolviendo') return;
-        await updateDoc(doc(db, 'combat_events', event.id), { status: 'resolviendo' });
+
+        try {
+            await updateDoc(doc(db, 'combat_events', event.id), { status: 'resolviendo' });
+        } catch (error) {
+            // Si el documento ya no existe (porque otro cliente o pestaña ya lo resolvió y borró), 
+            // ignoramos el error en vez de colapsar la app.
+            console.warn("Se intentó resolver un evento ya procesado o borrado:", event.id);
+            return;
+        }
 
         const scenario = activeScenarioRef.current || activeScenario;
         const attackerToken = scenario.items.find(i => i.id === event.attackerId);
@@ -3723,6 +3790,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 detail.rolls.forEach((r, rIdx) => {
                     attackerDice.push({
                         value: typeof r === 'object' ? r.value : r,
+                        critical: typeof r === 'object' ? r.critical : false,
                         matchedAttr: detail.matchedAttr || null,
                         id: `${dIdx}-${rIdx}`
                     });
@@ -3731,9 +3799,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 attackerDice.push({
                     value: detail.value || detail.total || 0,
                     matchedAttr: detail.matchedAttr,
+                    critical: false,
                     id: `${dIdx}-0`
                 });
             }
+        });
+
+        attackerDice.sort((a, b) => {
+            const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
+            const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
+            return rankA - rankB;
         });
 
         let logText = "";
@@ -3747,6 +3822,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let counterDamage = 0;
         let blocksLost = { postura: 0, armadura: 0, vida: 0 };
         let evadedDiceIds = [];
+        let defenderDice = [];
+        let defenderTotal = 0;
 
         if (event.reactionType === 'evadir') {
             evadedDiceIds = event.reactionData.evadedDiceIds || [];
@@ -3771,6 +3848,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
             const defenderRoll = rollAttack(event.reactionData.weapon, defenderAttrs);
+            defenderTotal = defenderRoll.total;
+
+            // Extract defender dice details
+            (defenderRoll.details || []).forEach((detail, dIdx) => {
+                if (detail.type === 'dice') {
+                    detail.rolls.forEach((r, rIdx) => {
+                        defenderDice.push({
+                            value: typeof r === 'object' ? r.value : r,
+                            matchedAttr: detail.matchedAttr || null,
+                            id: `def-${dIdx}-${rIdx}`
+                        });
+                    });
+                } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
+                    defenderDice.push({
+                        value: detail.value || detail.total || 0,
+                        matchedAttr: detail.matchedAttr,
+                        id: `def-${dIdx}-0`
+                    });
+                }
+            });
+
             const diff = event.attackerRollResult.total - defenderRoll.total;
             const yellowCost = event.reactionData.yellowCost || 0;
 
@@ -3821,6 +3919,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             weaponName: event.weapon?.nombre || event.weapon?.name || null,
             attackTotal: event.attackerRollResult.total,
             attackerDice,
+            defenderDice,
+            defenderTotal,
             reactionType: event.reactionType || 'recibir',
             evadedDiceIds,
             finalDamage,
@@ -4300,55 +4400,99 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
 
                                                             {/* Results Section */}
-                                                            <div className="flex items-center gap-4 py-2 px-1 border-y border-slate-900/50">
-                                                                <div className="flex gap-1.5">
-                                                                    {(entry.attackerDice || []).map((die, i) => {
-                                                                        const wasEvaded = (entry.evadedDiceIds || []).includes(die.id);
-                                                                        const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
+                                                            <div className="space-y-2 border-y border-slate-900/50 py-2">
+                                                                <div className="flex items-center gap-4 px-1">
+                                                                    <div className="flex gap-1.5">
+                                                                        {(entry.attackerDice || []).map((die, i) => {
+                                                                            const wasEvaded = (entry.evadedDiceIds || []).includes(die.id);
+                                                                            const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
 
-                                                                        // Use inline styles to avoid Tailwind purging dynamic classes
-                                                                        const attrColorMap = {
-                                                                            destreza: { color: '#4ade80' },
-                                                                            intelecto: { color: '#60a5fa' },
-                                                                            voluntad: { color: '#c084fc' },
-                                                                            vigor: { color: '#f87171' },
-                                                                        };
+                                                                            const attrColorMap = {
+                                                                                destreza: { color: '#4ade80' },
+                                                                                intelecto: { color: '#60a5fa' },
+                                                                                voluntad: { color: '#c084fc' },
+                                                                                vigor: { color: '#f87171' },
+                                                                            };
 
-                                                                        const attrStyle = (!wasEvaded && matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
+                                                                            const attrStyle = (!wasEvaded && matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
 
-                                                                        if (wasEvaded) {
+                                                                            // Render distinctively if critical
+                                                                            if (wasEvaded) {
+                                                                                return (
+                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all line-through"
+                                                                                        style={{ borderColor: 'rgba(127,29,29,0.2)', color: 'rgba(127,29,29,0.4)', backgroundColor: 'transparent', boxShadow: 'none' }}
+                                                                                        title={die.critical ? "Dado Crítico (Evadido)" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)} (Evadido)` : "Dado de Arma (Evadido)"}>
+                                                                                        {die.value}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+
+                                                                            // Estilo Dorado Rojizo para el log de combate si el dado es Crítico
                                                                             return (
-                                                                                <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all line-through"
-                                                                                    style={{ borderColor: 'rgba(127,29,29,0.2)', color: 'rgba(127,29,29,0.4)', backgroundColor: 'transparent', boxShadow: 'none' }}>
+                                                                                <span key={i} className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all ${die.critical ? 'shadow-[0_0_6px_rgba(234,88,12,0.3)] bg-gradient-to-br from-transparent to-[#ea580c]/10' : ''}`}
+                                                                                    title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                                                    style={die.critical ? {
+                                                                                        borderColor: '#ea580c',
+                                                                                        color: '#ea580c',
+                                                                                    } : attrStyle ? {
+                                                                                        backgroundColor: 'transparent',
+                                                                                        borderColor: attrStyle.color,
+                                                                                        color: attrStyle.color,
+                                                                                        boxShadow: 'none',
+                                                                                    } : {
+                                                                                        borderColor: 'rgba(200,170,110,0.2)',
+                                                                                        color: 'rgba(200,170,110,0.8)',
+                                                                                        backgroundColor: 'transparent',
+                                                                                    }}>
                                                                                     {die.value}
                                                                                 </span>
                                                                             );
-                                                                        }
-
-                                                                        return (
-                                                                            <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all"
-                                                                                style={attrStyle ? {
-                                                                                    backgroundColor: 'transparent',
-                                                                                    borderColor: attrStyle.color,
-                                                                                    color: attrStyle.color,
-                                                                                    boxShadow: 'none',
-                                                                                } : {
-                                                                                    borderColor: 'rgba(200,170,110,0.2)',
-                                                                                    color: 'rgba(200,170,110,0.8)',
-                                                                                    backgroundColor: 'transparent',
-                                                                                }}>
-                                                                                {die.value}
-                                                                            </span>
-                                                                        );
-                                                                    })}
+                                                                        })}
+                                                                    </div>
+                                                                    <div className="h-4 w-[1px] bg-slate-800" />
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
+                                                                        <span className="text-[#f0e6d2] text-xs font-bold">{entry.attackTotal}</span>
+                                                                    </div>
                                                                 </div>
 
-                                                                <div className="h-4 w-[1px] bg-slate-800" />
+                                                                {entry.reactionType === 'parar' && entry.defenderDice && (
+                                                                    <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-2">
+                                                                        <div className="flex gap-1.5">
+                                                                            {entry.defenderDice.map((die, i) => {
+                                                                                const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
+                                                                                const attrColorMap = {
+                                                                                    destreza: { color: '#4ade80' },
+                                                                                    intelecto: { color: '#60a5fa' },
+                                                                                    voluntad: { color: '#c084fc' },
+                                                                                    vigor: { color: '#f87171' },
+                                                                                };
+                                                                                const attrStyle = matchedAttr && attrColorMap[matchedAttr] ? attrColorMap[matchedAttr] : null;
 
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
-                                                                    <span className="text-[#f0e6d2] text-xs font-bold">{entry.attackTotal}</span>
-                                                                </div>
+                                                                                return (
+                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all"
+                                                                                        style={attrStyle ? {
+                                                                                            backgroundColor: 'transparent',
+                                                                                            borderColor: attrStyle.color,
+                                                                                            color: attrStyle.color,
+                                                                                            boxShadow: 'none',
+                                                                                        } : {
+                                                                                            borderColor: 'rgba(96,165,250,0.2)',
+                                                                                            color: 'rgba(96,165,250,0.8)',
+                                                                                            backgroundColor: 'transparent',
+                                                                                        }}>
+                                                                                        {die.value}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                        <div className="h-4 w-[1px] bg-slate-800" />
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[9px] text-blue-500/60 uppercase font-bold tracking-widest">Parada</span>
+                                                                            <span className="text-blue-400 text-xs font-bold">{entry.defenderTotal}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
                                                             {/* Reaction Descriptive Text */}
@@ -6968,42 +7112,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const rawHudToken = selectedControlled || myTokens[0];
 
                 if (rawHudToken) {
-                    // Fusionamos datos de la ficha vinculada (si existe) para tener las armas
-                    let hudToken = rawHudToken;
-                    if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
-                        const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
-                        if (charData) {
-                            const eq = charData.equippedItems || {};
-                            // Extraemos las armas de las manos (objeto -> array) y aseguramos que tengan tipo
-                            const hands = [eq.mainHand, eq.offHand]
-                                .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre)) // Filter valid items with names
-                                .map(i => ({ ...i, type: i.type || 'weapon' })); // Ensure type is present
-
-                            // Extraemos habilidades que hagan daño o sean ofensivas de diversas fuentes
-                            // 1. De equipment.abilities (si existe)
-                            const equipmentAbilities = charData.equipment?.abilities || [];
-                            // 2. De abilities (si existe en la raíz)
-                            const rootAbilities = charData.abilities || [];
-                            // 3. De features/actionData (donde suelen estar los talentos activos)
-                            const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
-
-                            const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
-
-                            const damagingAbilities = allAbilitiesSource.filter(a =>
-                                (a.damage || a.dano || a.actionType === 'attack') &&
-                                !hands.find(h => h.id === a.id) // Evitar duplicados si por alguna razón están en manos
-                            );
-
-                            // Aseguramos que las habilidades tengan un tipo identificable
-                            const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
-
-                            hudToken = {
-                                ...rawHudToken,
-                                equippedItems: [...hands, ...formattedAbilities],
-                                // stats: charData.stats || rawHudToken.stats 
-                            };
-                        }
-                    }
+                    const hudToken = enrichTokenWithCharacterData(rawHudToken);
                     const canOpenSheet = !!hudToken.linkedCharacterId;
 
                     const handlePortraitClick = (charName) => {
@@ -7130,31 +7239,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 }
 
                                 // Fusionamos datos de la ficha vinculada
-                                let hudToken = rawHudToken;
-                                if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
-                                    const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
-                                    if (charData) {
-                                        const eq = charData.equippedItems || {};
-                                        const hands = [eq.mainHand, eq.offHand]
-                                            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
-                                            .map(i => ({ ...i, type: i.type || 'weapon' }));
-
-                                        const equipmentAbilities = charData.equipment?.abilities || [];
-                                        const rootAbilities = charData.abilities || [];
-                                        const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
-                                        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
-                                        const damagingAbilities = allAbilitiesSource.filter(a =>
-                                            (a.damage || a.dano || a.actionType === 'attack') &&
-                                            !hands.find(h => h.id === a.id)
-                                        );
-                                        const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
-
-                                        hudToken = {
-                                            ...rawHudToken,
-                                            equippedItems: [...hands, ...formattedAbilities],
-                                        };
-                                    }
-                                }
+                                const hudToken = enrichTokenWithCharacterData(rawHudToken);
 
                                 const canOpenSheet = !!hudToken.linkedCharacterId;
                                 const handlePortraitClick = (charName) => {
@@ -7217,7 +7302,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 {incomingCombatEvent && (
                     <CombatReactionModal
                         event={incomingCombatEvent.event}
-                        targetToken={incomingCombatEvent.targetToken}
+                        targetToken={enrichTokenWithCharacterData(incomingCombatEvent.targetToken)}
                         onReact={handleReaction}
                     />
                 )}
