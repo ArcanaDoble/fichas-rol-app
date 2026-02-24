@@ -1,0 +1,152 @@
+commit f1d9b9974b4675d273fe5a34fef4b7278ee24d79
+Author: ArcanaDoble <arcanadoble@gmail.com>
+Date:   Sun Feb 22 16:58:07 2026 +0100
+
+    Fix for the master stage broadcast button. Additionally, the shift end clock animation on mobile has been adjusted.
+
+diff --git a/src/components/CanvasSection.jsx b/src/components/CanvasSection.jsx
+index 2b0a762..225662b 100644
+--- a/src/components/CanvasSection.jsx
++++ b/src/components/CanvasSection.jsx
+@@ -9,7 +9,7 @@ import TokenHUD from './TokenHUD';
+ import CombatHUD from './CombatHUD';
+ import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
+ import { db, storage } from '../firebase';
+-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
++import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, serverTimestamp } from 'firebase/firestore';
+ 
+ // --- Constants ---
+ const STATUS_EFFECT_IDS = [
+@@ -1026,6 +1026,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+         const globalUnsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
+             const data = docSnap.exists() ? docSnap.data() : {};
+             const activeId = data.activeScenarioId || null;
++            console.log("📡 canvasVisibility updated — activeScenarioId:", activeId);
+             setGlobalActiveId(activeId);
+ 
+             // If no active scenario, clear local state for players
+@@ -1070,13 +1071,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+     }, [isPlayerView, playerName]);
+ 
+     const setGlobalActiveScenario = async (scenarioId) => {
++        console.log("🎬 setGlobalActiveScenario called with:", scenarioId);
+         try {
+             await setDoc(doc(db, 'gameSettings', 'canvasVisibility'), {
+                 activeScenarioId: scenarioId,
+                 updatedAt: serverTimestamp()
+             }, { merge: true });
++            console.log("✅ Global scenario updated successfully:", scenarioId);
++            triggerToast(
++                scenarioId ? "Transmisión Activada" : "Transmisión Detenida",
++                scenarioId ? "Los jugadores pueden ver el escenario" : "Escenario oculto para jugadores",
++                'success'
++            );
+         } catch (e) {
+-            console.error("Error toggling active scenario:", e);
++            console.error("❌ Error toggling active scenario:", e);
++            triggerToast("Error de Transmisión", e.message || "No se pudo actualizar", 'error');
+         }
+     };
+ 
+@@ -3523,7 +3532,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+                                     {scenarios.map(s => (
+                                         <motion.div
+-                                            layout
++                                            layoutId={`scenario-card-${s.id}`}
+                                             key={s.id}
+                                             onClick={() => loadScenario(s)}
+                                             className={`group relative bg-[#0b1120] border-2 rounded-xl p-6 cursor-pointer transition-all overflow-hidden ${globalActiveId === s.id ? 'border-[#c8aa6e] shadow-[0_0_30px_rgba(200,170,110,0.15)] bg-[#161f32]' : 'border-slate-800 hover:border-[#c8aa6e]/50 hover:bg-[#161f32]'}`}
+@@ -3561,8 +3570,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+                                                     {/* Botón de Transmisión (Solo Master) */}
+                                                     {!isPlayerView && (
+                                                         <button
++                                                            onPointerDown={(e) => e.stopPropagation()}
++                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                             onClick={(e) => {
+                                                                 e.stopPropagation();
++                                                                e.preventDefault();
++                                                                console.log("🔘 Transmit button clicked for scenario:", s.id);
+                                                                 setGlobalActiveScenario(globalActiveId === s.id ? null : s.id);
+                                                             }}
+                                                             className={`p-2 rounded-lg border transition-all ${globalActiveId === s.id ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
+
+commit 3070c6c584ff258c292b53c9844d7a65c31fdf77
+Author: ArcanaDoble <arcanadoble@gmail.com>
+Date:   Thu Feb 19 14:13:37 2026 +0100
+
+    Adjustment of weapon action animation and weapon selection menu.
+
+diff --git a/src/components/CanvasSection.jsx b/src/components/CanvasSection.jsx
+index cc43f00..2b0a762 100644
+--- a/src/components/CanvasSection.jsx
++++ b/src/components/CanvasSection.jsx
+@@ -2020,6 +2020,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+                             items: updatedItems,
+                             lastModified: Date.now()
+                         });
++                        // Feedback de sincronización automática
++                        triggerToast("Selección Eliminada", "El tablero se ha sincronizado", 'info');
+                     } catch (error) {
+                         console.error('Error al eliminar items con teclado:', error);
+                     }
+@@ -2570,16 +2572,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+             .catch(err => console.error('Error al desvincular personaje:', err));
+     };
+ 
+-    const deleteItem = (itemId) => {
++    const deleteItem = async (itemId) => {
+         const now = Date.now();
+         if (now - lastActionTimeRef.current < 300) return;
+         lastActionTimeRef.current = now;
+ 
++        if (!activeScenario) return;
++
++        const updatedItems = (activeScenario.items || []).filter(i => i.id !== itemId);
++
+         setActiveScenario(prev => ({
+             ...prev,
+-            items: prev.items.filter(i => i.id !== itemId)
++            items: updatedItems
+         }));
+         setSelectedTokenIds(prev => prev.filter(id => id !== itemId));
++
++        try {
++            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
++                items: updatedItems,
++                lastModified: Date.now()
++            });
++            triggerToast("Elemento Eliminado", "El cambio se ha sincronizado", 'info');
++        } catch (error) {
++            console.error("Error al eliminar item del canvas:", error);
++        }
+     };
+ 
+     const rotateItem = (itemId, angle) => {
+@@ -4971,6 +4987,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
+                                                         />
+                                                     );
+                                                 })()}
++
++                                                {/* BOTÓN ELIMINAR TOKEN DEL CANVAS */}
++                                                {!isPlayerView && (
++                                                    <div className="pt-8 pb-4 border-t border-slate-800/50">
++                                                        <button
++                                                            onClick={() => {
++                                                                if (confirm(`¿Eliminar "${token.name}" de este encuentro?`)) {
++                                                                    deleteItem(token.id);
++                                                                }
++                                                            }}
++                                                            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-red-950/20 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 transition-all duration-300 group"
++                                                        >
++                                                            <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
++                                                            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Eliminar del Escenario</span>
++                                                        </button>
++                                                        <p className="text-[8px] text-slate-600 text-center mt-3 uppercase tracking-tighter">
++                                                            Esta acción quitará el token del mapa y sincronizará con todos los jugadores.
++                                                        </p>
++                                                    </div>
++                                                )}
+                                             </div>
+                                         </div>
+                                     );
