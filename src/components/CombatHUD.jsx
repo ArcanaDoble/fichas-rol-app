@@ -1,6 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X } from 'lucide-react';
+import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
+import { parseAttrBonuses } from '../utils/combatSystem';
+
+const ItemImage = ({ src, type, name }) => {
+    const [error, setError] = React.useState(false);
+    if (!src || error) {
+        return type === 'ability'
+            ? <Sparkles size={16} className="text-purple-400 md:w-5 md:h-5" />
+            : <Sword size={16} className="text-slate-600 md:w-5 md:h-5" />;
+    }
+    return (
+        <img
+            src={src}
+            alt={name}
+            onError={() => setError(true)}
+            className="w-full h-full object-cover group-hover/item:scale-110 transition-transform"
+        />
+    );
+};
 
 const CombatHUD = ({
     token,
@@ -11,42 +29,113 @@ const CombatHUD = ({
     isActive = true, // Si es el turno del jugador o no (visual)
     pendingCost = 0, // Coste acumulado en este turno no confirmado
     pendingActions = [], // Array de nombres de acciones pendientes
-    onCancelAction // Función para cancelar una acción pendiente
+    onCancelAction, // Función para cancelar una acción pendiente
+    forceWeaponMenu = false, // Nueva prop para forzar la apertura del menú de armas
+    targetDistance = null // Distancia al objetivo actual (en casillas)
 }) => {
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
     const [selectedActionId, setSelectedActionId] = useState(null); // Para submenús (ej: elegir arma)
+    const [isEndingTurn, setIsEndingTurn] = useState(false);
+    const endTurnTimerRef = useRef(null);
+
+    // Mapa de alcances según la especificación del usuario
+    const RANGE_MAP = {
+        'toque': 1,
+        'cercano': 2,
+        'intermedio': 3,
+        'lejano': 4,
+        'extremo': 5
+    };
+
+    // Efecto para forzar la apertura del menú de armas si se solicita externamente (ej: tras seleccionar objetivo)
+    React.useEffect(() => {
+        if (forceWeaponMenu) {
+            setSelectedActionId('attack');
+            setActiveCategory('ACCIONES');
+        }
+    }, [forceWeaponMenu]);
+
+    // Mobile end-turn: hold-to-confirm pattern
+    // Press down → animation starts + timer begins
+    // Release before timer → cancel (player changed their mind)
+    // Hold until timer fires → vibrate + end turn
+    const handleEndTurnPressStart = useCallback(() => {
+        if (isEndingTurn || !onEndTurn) return;
+        setIsEndingTurn(true);
+
+        endTurnTimerRef.current = setTimeout(() => {
+            // Haptic feedback on supported mobile devices
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+            onEndTurn();
+            endTurnTimerRef.current = null;
+            setIsEndingTurn(false);
+        }, 600); // 600ms — synced with the 700ms CSS rotation
+    }, [isEndingTurn, onEndTurn]);
+
+    const handleEndTurnPressEnd = useCallback(() => {
+        // If timer hasn't fired yet, cancel everything
+        if (endTurnTimerRef.current) {
+            clearTimeout(endTurnTimerRef.current);
+            endTurnTimerRef.current = null;
+        }
+        setIsEndingTurn(false);
+    }, []);
 
     if (!token) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
     const items = Array.isArray(token.equippedItems) ? token.equippedItems : [];
-    const attackOptions = items.filter(i =>
+    let attackOptions = items.filter(i =>
         i.type === 'weapon' ||
         i.type === 'ability' ||
         (i._category === 'abilities' && (i.damage || i.dano))
     );
 
+    if (targetDistance !== null) {
+        attackOptions = attackOptions.filter(item => {
+            const alcRaw = item.alc || item.alcance || item.range || item.Alcance || item.Range || item.payload?.range || item.payload?.alcance || item.payload?.alc;
+            if (!alcRaw) return true; // Si no tiene alcance definido, asumimos que es especial/siempre disponible (o de toque)
+
+            const alcValue = alcRaw.toString().toLowerCase().trim();
+
+            let mappedRange = undefined;
+            if (alcValue.includes('toque')) mappedRange = RANGE_MAP['toque'];
+            else if (alcValue.includes('cercano')) mappedRange = RANGE_MAP['cercano'];
+            else if (alcValue.includes('intermedio')) mappedRange = RANGE_MAP['intermedio'];
+            else if (alcValue.includes('lejano')) mappedRange = RANGE_MAP['lejano'];
+            else if (alcValue.includes('extremo')) mappedRange = RANGE_MAP['extremo'];
+
+            // Check if string contains one of the keywords
+            if (mappedRange !== undefined) {
+                return mappedRange >= targetDistance;
+            }
+
+            // 1. Si es un número directo o lo contiene
+            const digitMatch = alcValue.match(/\d+/);
+            if (digitMatch) {
+                return parseInt(digitMatch[0], 10) >= targetDistance;
+            }
+
+            // Fallback: Si no se reconoce pero es una habilidad, permitimos (pueden ser efectos de área o especiales)
+            // Si es arma y no se reconoce el texto, por seguridad permitimos 1 casilla
+            return item.type === 'ability' ? true : 1 >= targetDistance;
+        });
+    }
+
     const handleActionClick = (actionId) => {
         if (!isActive || !onAction) return;
 
         if (actionId === 'attack') {
-            // Lógica de selección de arma/habilidad
-            if (attackOptions.length > 1) {
-                // Si hay más de 1 opción, abrimos selector
-                if (selectedActionId === 'attack') {
-                    setSelectedActionId(null); // Toggle off
-                } else {
-                    setSelectedActionId('attack');
-                }
-            } else if (attackOptions.length === 1) {
-                // Solo 1 opción, acción directa
-                onAction('attack', attackOptions[0]);
+            // Si ya está seleccionado (menú abierto), lo cerramos y notificamos cancelación
+            if (selectedActionId === 'attack') {
                 setSelectedActionId(null);
-            } else {
-                // Sin armas (desarmado o genérico)
-                onAction('attack', null);
-                setSelectedActionId(null);
+                onAction('cancel_targeting');
+                return;
             }
+            // Primer paso: informar al canvas que queremos iniciar un ataque (apuntar)
+            onAction('attack');
         } else {
             if (actionId === 'dash') return; // Temporarily disable Dash
             // Otras acciones (Dodge, Help) son directas
@@ -57,8 +146,8 @@ const CombatHUD = ({
 
     const categories = [
         { id: 'ACCIONES', label: 'Acciones' },
-        { id: 'CLASE', label: 'Clase' },
-        { id: 'OBJETOS', label: 'Objetos' }
+        { id: 'CLASE', label: 'Clase', icon: Sparkles },
+        { id: 'OBJETOS', label: 'Objetos', icon: Backpack }
     ];
 
     const actions = [
@@ -205,7 +294,7 @@ const CombatHUD = ({
 
                             {/* 1. Selector de Ataque (Unificado) */}
                             <AnimatePresence>
-                                {selectedActionId === 'attack' && attackOptions.length > 1 && (
+                                {selectedActionId === 'attack' && (
                                     <motion.div
                                         key="attack-selector"
                                         variants={panelVariants}
@@ -227,7 +316,12 @@ const CombatHUD = ({
                                                 </button>
                                             </div>
                                             <div className="p-1.5 md:p-2 pb-3 md:pb-4 flex flex-col gap-1.5 md:gap-2 max-h-[300px] md:max-h-[460px] overflow-y-auto custom-scrollbar bg-black/40 border-b border-[#c8aa6e]/20">
-                                                {attackOptions.map((item, idx) => {
+                                                {attackOptions.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center p-6 text-center text-[#c8aa6e]/60 italic gap-3 mt-4 mb-4">
+                                                        <Sword size={32} className="opacity-30" />
+                                                        <span className="text-xs">Ningún arma o habilidad tiene alcance suficiente.</span>
+                                                    </div>
+                                                ) : attackOptions.map((item, idx) => {
                                                     const getRarityHeaderColor = (rareza = '') => {
                                                         const r = rareza.toLowerCase();
                                                         if (r.includes('legendari')) return 'text-orange-400';
@@ -241,15 +335,46 @@ const CombatHUD = ({
                                                         const name = (i.name || i.nombre || '').toLowerCase();
                                                         if (name.includes('fauces')) return '/armas/fauces.png';
                                                         if (name.includes('garras')) return '/armas/garras.png';
-                                                        if (name.includes('hacha')) return '/armas/hacha_de_guerra.png';
+                                                        if (name.includes('hacha')) {
+                                                            if (name.includes('mano')) return '/armas/hacha_de_mano.png';
+                                                            return '/armas/hacha_de_mano.png'; // Fallback to existing hacha
+                                                        }
                                                         if (name.includes('alabarda')) return '/armas/alabarda.png';
-                                                        if (name.includes('espada')) return '/armas/espada_de_acero.png';
+                                                        if (name.includes('espada')) {
+                                                            if (name.includes('corta')) return '/armas/espada_corta.png';
+                                                            if (name.includes('bastarda')) return '/armas/espada_bastarda.png';
+                                                            if (name.includes('hierro')) return '/armas/espada_de_hierro.png';
+                                                            if (name.includes('larga')) return '/armas/espada_larga.png';
+                                                            return '/armas/espada_de_acero.png';
+                                                        }
                                                         if (name.includes('daga')) return '/armas/daga.png';
-                                                        if (name.includes('arco')) return '/armas/arco_corto.png';
+                                                        if (name.includes('arco')) {
+                                                            if (name.includes('largo')) return '/armas/arco_largo.png';
+                                                            return '/armas/arco_corto.png';
+                                                        }
+                                                        if (name.includes('ballesta')) {
+                                                            if (name.includes('mano')) return '/armas/ballesta_de_mano.png';
+                                                            if (name.includes('ligera')) return '/armas/ballesta_ligera.png';
+                                                            return '/armas/ballesta_pesada.png';
+                                                        }
                                                         return null;
                                                     };
+
+
                                                     const itemImg = getItemImage(item);
                                                     const nameColorClass = getRarityHeaderColor(item.rareza || '');
+
+                                                    // Parse traits for attribute dice visualization
+                                                    const traits = item.rasgos || item.traits || item.properties || [];
+                                                    const attrBonuses = parseAttrBonuses(traits);
+
+                                                    const attrColorMap = {
+                                                        destreza: '#4ade80',
+                                                        intelecto: '#60a5fa',
+                                                        voluntad: '#c084fc',
+                                                        vigor: '#f87171'
+                                                    };
+
                                                     return (
                                                         <button
                                                             key={idx}
@@ -260,11 +385,7 @@ const CombatHUD = ({
                                                             className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border border-white/5 hover:border-[#c8aa6e]/30 shadow-lg"
                                                         >
                                                             <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
-                                                                {itemImg ? (
-                                                                    <img src={itemImg} alt="" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
-                                                                ) : (
-                                                                    item.type === 'ability' ? <Sparkles size={16} className="text-purple-400 md:w-5 md:h-5" /> : <Sword size={16} className="text-slate-600 md:w-5 md:h-5" />
-                                                                )}
+                                                                <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
                                                             </div>
                                                             <div className="flex flex-col flex-1 min-w-0">
                                                                 <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
@@ -279,6 +400,32 @@ const CombatHUD = ({
                                                                             {item.damage || item.dano}
                                                                         </span>
                                                                     )}
+
+                                                                    {/* Attribute Dice Icons */}
+                                                                    <div className="flex gap-1 ml-1 overflow-x-auto scrollbar-hide">
+                                                                        {attrBonuses.map((bonus, bIdx) => (
+                                                                            <div
+                                                                                key={bIdx}
+                                                                                className="flex items-center gap-0.5"
+                                                                            >
+                                                                                {Array.from({ length: bonus.mult }).map((_, mIdx) => (
+                                                                                    <div
+                                                                                        key={mIdx}
+                                                                                        className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center"
+                                                                                        style={{
+                                                                                            borderColor: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                            color: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                            backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
+                                                                                        }}
+                                                                                    >
+                                                                                        <span className="text-[6px] md:text-[7px] font-black">
+                                                                                            {bonus.attr.charAt(0).toUpperCase()}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <ChevronUp className="rotate-90 text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-colors w-3 h-3 md:w-4 md:h-4" />
@@ -386,11 +533,71 @@ const CombatHUD = ({
                                 </div>
                             ))}
 
-                            {activeCategory !== 'ACCIONES' && (
-                                <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px] md:text-xs italic px-8 uppercase tracking-widest">
-                                    Módulo de {activeCategory} próximamente...
-                                </div>
-                            )}
+                            {activeCategory === 'CLASE' && (() => {
+                                const classAbilities = items.filter(i =>
+                                    (i.type === 'ability' || i._category === 'abilities') &&
+                                    !(i.damage || i.dano || i.actionType === 'attack')
+                                );
+
+                                if (classAbilities.length === 0) {
+                                    return (
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
+                                            <Sparkles size={24} className="opacity-20" />
+                                            <span className="text-[10px] uppercase tracking-widest italic">Sin habilidades de clase</span>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
+                                        {classAbilities.map((ability, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => onAction('ability', ability)}
+                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-purple-500/30 rounded-lg hover:bg-purple-900/20 transition-all shrink-0 group active:scale-95"
+                                            >
+                                                <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400 mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                    {ability.name || ability.nombre}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+
+                            {activeCategory === 'OBJETOS' && (() => {
+                                const objectItems = items.filter(i =>
+                                    (i.type === 'item' || i.type === 'consumable' || i.type === 'backpack' || i._category === 'consumables') &&
+                                    i.type !== 'weapon'
+                                );
+
+                                if (objectItems.length === 0) {
+                                    return (
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
+                                            <Backpack size={24} className="opacity-20" />
+                                            <span className="text-[10px] uppercase tracking-widest italic">Mochila vacía</span>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
+                                        {objectItems.map((obj, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => onAction('use_item', obj)}
+                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-blue-500/30 rounded-lg hover:bg-blue-900/20 transition-all shrink-0 group active:scale-95"
+                                            >
+                                                <Backpack className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                    {obj.name || obj.nombre}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -448,11 +655,20 @@ const CombatHUD = ({
 
             <div className={`md:hidden absolute bottom-32 right-4 pointer-events-auto transition-all duration-500 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}>
                 <button
-                    onClick={onEndTurn}
-                    className="group w-14 h-14 rounded-full border-2 border-[#c8aa6e] bg-[#7f1d1d] flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.3)] active:scale-90 transition-all overflow-hidden relative"
+                    onTouchStart={handleEndTurnPressStart}
+                    onTouchEnd={handleEndTurnPressEnd}
+                    onTouchCancel={handleEndTurnPressEnd}
+                    onPointerDown={handleEndTurnPressStart}
+                    onPointerUp={handleEndTurnPressEnd}
+                    onPointerLeave={handleEndTurnPressEnd}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`group w-14 h-14 rounded-full border-2 bg-[#7f1d1d] flex items-center justify-center transition-all overflow-hidden relative touch-manipulation select-none ${isEndingTurn
+                        ? 'border-red-400 scale-95 shadow-[0_0_25px_rgba(239,68,68,0.5)]'
+                        : 'border-[#c8aa6e] shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                        }`}
                 >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                    <Hourglass className="w-6 h-6 text-[#fca5a5] transition-transform duration-700 ease-in-out group-active:rotate-[180deg]" />
+                    <Hourglass className={`w-6 h-6 text-[#fca5a5] transition-transform duration-700 ease-in-out ${isEndingTurn ? 'rotate-[180deg]' : ''}`} />
                 </button>
             </div>
         </div>

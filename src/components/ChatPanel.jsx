@@ -9,7 +9,7 @@ import { rollExpression } from '../utils/dice';
 import highlightBattleText from '../utils/highlightBattleText';
 import { getPlayerColor, MASTER_COLOR } from '../utils/playerColors';
 
-const SPECIAL_TRAIT_COLOR = '#ef4444';
+const SPECIAL_TRAIT_COLOR = '#ea580c'; // Dorado Rojizo para dados críticos
 const ChatPanel = ({ playerName = '', isMaster = false }) => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');

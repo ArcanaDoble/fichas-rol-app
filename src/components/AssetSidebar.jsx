@@ -20,7 +20,7 @@ import Input from './Input';
 import { rollExpression } from '../utils/dice';
 import highlightBattleText from '../utils/highlightBattleText';
 
-const SPECIAL_TRAIT_COLOR = '#ef4444';
+const SPECIAL_TRAIT_COLOR = '#ea580c'; // Dorado Rojizo para dados críticos
 
 const MASTER_COLOR = "#FFD700";
 

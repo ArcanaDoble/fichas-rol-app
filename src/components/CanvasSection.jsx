@@ -7,9 +7,13 @@ import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
+import CombatReactionModal from './CombatReactionModal';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
+import { rollAttack } from '../utils/combatSystem';
 import { db, storage } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
+import { nanoid } from 'nanoid';
+import { parseDieValue } from '../utils/damage';
 
 // --- Constants ---
 const STATUS_EFFECT_IDS = [
@@ -385,14 +389,16 @@ const syncTokenWithSheet = (token, sheetData) => {
 
     // Map character attributes to token attributes format
     const tokenAttributes = {};
-    if (sheetData.attributes) {
+    const sourceAttributes = { ...(sheetData.atributos || {}), ...(sheetData.attributes || {}) };
+
+    if (Object.keys(sourceAttributes).length > 0) {
         const attrKeyMap = {
             'Destreza': 'destreza', 'destreza': 'destreza',
             'Vigor': 'vigor', 'vigor': 'vigor',
             'Intelecto': 'intelecto', 'intelecto': 'intelecto',
             'Voluntad': 'voluntad', 'voluntad': 'voluntad',
         };
-        Object.entries(sheetData.attributes).forEach(([key, value]) => {
+        Object.entries(sourceAttributes).forEach(([key, value]) => {
             const mappedKey = attrKeyMap[key] || key.toLowerCase();
             if (['destreza', 'vigor', 'intelecto', 'voluntad'].includes(mappedKey)) {
                 tokenAttributes[mappedKey] = typeof value === 'string' ? value.toLowerCase() : value;
@@ -849,6 +855,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
     const [globalActiveId, setGlobalActiveId] = useState(null);
+    const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
 
@@ -886,6 +893,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return { x: e.clientX, y: e.clientY };
     };
 
+    // Helper para enriquecer tokens con datos de la ficha (armas, atributos, etc.)
+    const enrichTokenWithCharacterData = useCallback((rawToken) => {
+        if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
+        const charData = availableCharacters.find(c => c.id === rawToken.linkedCharacterId);
+        if (!charData) return rawToken;
+
+        // Helper crucial para aplanar items que vienen de la ficha (a veces los datos están en .payload)
+        const flattenItem = (item) => {
+            if (!item) return null;
+            if (item.payload) {
+                return { ...item.payload, ...item, payload: undefined };
+            }
+            return item;
+        };
+
+        const eq = charData.equippedItems || {};
+        const hands = [eq.mainHand, eq.offHand]
+            .map(flattenItem)
+            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
+            .map(i => ({ ...i, type: i.type || 'weapon' }));
+
+        const equipmentAbilities = (charData.equipment?.abilities || []).map(flattenItem);
+        const rootAbilities = (charData.abilities || []).map(flattenItem);
+        const activeTalents = (charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || []).map(flattenItem);
+        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents].filter(Boolean);
+
+        const formattedAbilities = allAbilitiesSource.map(a => ({ ...a, type: 'ability' }));
+        const rawInventory = charData.inventory || charData.backpackItems || [];
+        const formattedInventory = (Array.isArray(rawInventory) ? rawInventory : []).map(flattenItem).filter(Boolean).map(i => ({ ...i, type: i.type || 'item' }));
+
+        return {
+            ...rawToken,
+            attributes: charData.attributes || charData.atributos || rawToken.attributes,
+            stats: charData.stats || rawToken.stats,
+            equippedItems: [...hands, ...formattedAbilities, ...formattedInventory],
+        };
+    }, [availableCharacters]);
+
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
@@ -909,14 +954,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    const [availableCharacters, setAvailableCharacters] = useState([]);
 
     const tokenOriginalPosRef = useRef({});
     useEffect(() => { tokenOriginalPosRef.current = tokenOriginalPos; }, [tokenOriginalPos]);
 
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
+    const [incomingCombatEvent, setIncomingCombatEvent] = useState(null);
+    const [combatLog, setCombatLog] = useState([]);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
+    // --- TARGETING STATE ---
+    const [targetingState, setTargetingState] = useState(null);
+    // { attackerId, actionId, data, phase: 'targeting' | 'weapon_selection' }
+
+    const [focusedTargetId, setFocusedTargetId] = useState(null); // ID del token fijado como objetivo
 
     // --- MASTER COMBAT HUD TOGGLE ---
     const [showMasterCombatHUD, setShowMasterCombatHUD] = useState(false);
@@ -939,30 +991,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let unsubClasses = () => { };
         let unsubChars = () => { };
 
-        if (isMaster) {
-            // Master loads archetypes (NPCs) and all player characters
-            unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
-                const classesData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: true }));
-                setAvailableCharacters(prev => {
-                    const other = prev.filter(c => !c._isTemplate);
-                    return [...classesData, ...other];
-                });
+        // Todos los participantes del canvas necesitan acceso a los personajes y clases 
+        // para que el HUD de combate y las reacciones funcionen sincronizadas y con datos completos.
+        unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+            const classesData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: true }));
+            setAvailableCharacters(prev => {
+                const other = prev.filter(c => !c._isTemplate);
+                return [...classesData, ...other];
             });
-            unsubChars = onSnapshot(collection(db, 'characters'), (snap) => {
-                const charsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: false }));
-                setAvailableCharacters(prev => {
-                    const other = prev.filter(c => c._isTemplate);
-                    return [...other, ...charsData];
-                });
+        });
+
+        unsubChars = onSnapshot(collection(db, 'characters'), (snap) => {
+            const charsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id, _isTemplate: false }));
+            setAvailableCharacters(prev => {
+                const other = prev.filter(c => c._isTemplate);
+                return [...other, ...charsData];
             });
-        } else if (playerName) {
-            // Player only gets their own characters from the 'characters' collection
-            const q = query(collection(db, 'characters'), where('owner', '==', playerName));
-            unsubChars = onSnapshot(q, (snapshot) => {
-                const chars = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setAvailableCharacters(chars);
-            });
-        }
+        });
 
         return () => {
             unsubClasses();
@@ -1011,6 +1056,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } else {
             // Si no hay selección o hay múltiple, reseteamos la referencia
             lastSelectedIdRef.current = null;
+            setTargetingState(null); // Cancelar targeting si cambia la selección
+            setFocusedTargetId(null);
             if (selectedTokenIds.length === 0 && activeTab === 'INSPECTOR') {
                 setActiveTab(isPlayerView ? 'TOKENS' : 'CONFIG');
             }
@@ -1026,6 +1073,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const globalUnsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
             const activeId = data.activeScenarioId || null;
+            console.log("📡 canvasVisibility updated — activeScenarioId:", activeId);
             setGlobalActiveId(activeId);
 
             // If no active scenario, clear local state for players
@@ -1070,13 +1118,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     }, [isPlayerView, playerName]);
 
     const setGlobalActiveScenario = async (scenarioId) => {
+        console.log("🎬 setGlobalActiveScenario called with:", scenarioId);
         try {
             await setDoc(doc(db, 'gameSettings', 'canvasVisibility'), {
                 activeScenarioId: scenarioId,
                 updatedAt: serverTimestamp()
             }, { merge: true });
+            console.log("✅ Global scenario updated successfully:", scenarioId);
+            triggerToast(
+                scenarioId ? "Transmisión Activada" : "Transmisión Detenida",
+                scenarioId ? "Los jugadores pueden ver el escenario" : "Escenario oculto para jugadores",
+                'success'
+            );
         } catch (e) {
-            console.error("Error toggling active scenario:", e);
+            console.error("❌ Error toggling active scenario:", e);
+            triggerToast("Error de Transmisión", e.message || "No se pudo actualizar", 'error');
         }
     };
 
@@ -1178,6 +1234,80 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return () => unsub();
     }, [activeScenario?.id]); // Solo se reinicia si cambiamos de escenario base (ID)
+
+    // --- Listener de Eventos de Combate Inminentes (Defensa Activa) ---
+    useEffect(() => {
+        if (!activeScenario?.id) return;
+        // Tanto jugadores como el master necesitan escuchar: 
+        // jugador necesita playerName, master no lo tiene pero debe escuchar igual
+        if (isPlayerView && !playerName) return;
+
+        const q = query(
+            collection(db, 'combat_events'),
+            where('scenarioId', '==', activeScenario.id),
+            where('status', '==', 'esperando_reaccion')
+        );
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    const eventData = { id: change.doc.id, ...change.doc.data() };
+                    const items = activeScenarioRef.current?.items || activeScenario.items || [];
+                    const targetToken = items.find(i => i.id === eventData.targetId);
+
+                    if (targetToken) {
+                        const isMasterView = !isPlayerView;
+                        const isControlledByMe = isPlayerView && playerName && targetToken.controlledBy?.includes(playerName);
+                        // Master recibe eventos de tokens que NO están controlados por ningún jugador (NPCs)
+                        const isMasterNPC = isMasterView && (!targetToken.controlledBy || targetToken.controlledBy.length === 0);
+
+                        if (isControlledByMe || isMasterNPC) {
+                            setIncomingCombatEvent({ event: eventData, targetToken });
+                        }
+                    }
+                } else if (change.type === 'removed') {
+                    setIncomingCombatEvent(prev => prev?.event.id === change.doc.id ? null : prev);
+                }
+            });
+        });
+
+        return () => unsub();
+    }, [activeScenario?.id, playerName, isPlayerView]);
+
+    // --- Motor de Resolución de Combate (Solo Master) ---
+    useEffect(() => {
+        if (isPlayerView || !activeScenario?.id) return;
+
+        const q = query(
+            collection(db, 'combat_events'),
+            where('scenarioId', '==', activeScenario.id),
+            where('status', 'in', ['evadir_pendiente', 'parar_pendiente', 'recibir_pendiente'])
+        );
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            snapshot.docs.forEach((docSnap) => {
+                const event = { id: docSnap.id, ...docSnap.data() };
+                resolveCombatEvent(event);
+            });
+        });
+
+        return () => unsub();
+    }, [isPlayerView, activeScenario?.id]);
+
+    // --- Listener de Combat Log (últimas 3 entradas) ---
+    useEffect(() => {
+        if (!activeScenario?.id) return;
+        const q = query(
+            collection(db, 'combat_log'),
+            orderBy('timestamp', 'desc'),
+            limit(3)
+        );
+        const unsub = onSnapshot(q, (snapshot) => {
+            const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCombatLog(entries);
+        });
+        return () => unsub();
+    }, [activeScenario?.id]);
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
     // Listener no pasivo para prevenir el scroll por defecto correctamente
     useEffect(() => {
@@ -1192,7 +1322,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         container.addEventListener('wheel', onWheel, { passive: false });
         return () => container.removeEventListener('wheel', onWheel);
-    }, [activeScenario]); // Re-vincular cuando cambia el escenario activo y se monta el viewport
+    }, [activeScenario?.id]); // Solo re-vincular si cambia de ID de escenario, no en cada movimiento
 
     // Handlers de Touch para Zoom (Pinch) y Pan (Igual que MinimapV2)
     const lastPinchDist = useRef(null);
@@ -1767,7 +1897,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 const cellH = gridConfig.cellHeight || 50;
                                 const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
 
-                                if (distance > 0 && gridConfig.isCombatActive) {
+                                if (distance > 0) {
                                     return { ...item, velocidad: (item.velocidad || 0) + distance };
                                 }
                             }
@@ -1777,14 +1907,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 });
             }
 
-            // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate)
-            try {
-                updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
-                    items: finalItems,
-                    lastModified: Date.now()
+            // Evaluar si hubo cambios reales respecto al inicio del drag para evitar writes innecesarios que rompen previsiones de movimiento
+            let shouldSaveToFirebase = false;
+            if (rotatingTokenId || resizingTokenId) {
+                shouldSaveToFirebase = true;
+            } else if (draggedTokenId) {
+                shouldSaveToFirebase = selectedTokenIds.some(id => {
+                    const original = tokenOriginalPos[id];
+                    const current = finalItems.find(i => i.id === id);
+                    return original && current && (original.x !== current.x || original.y !== current.y);
                 });
-            } catch (error) {
-                console.error("Error saving moved items:", error);
+            }
+
+            // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate y si de verdad se movió algo)
+            if (shouldSaveToFirebase) {
+                try {
+                    updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+                        items: finalItems,
+                        lastModified: Date.now()
+                    });
+                } catch (error) {
+                    console.error("Error saving moved items:", error);
+                }
             }
 
             setDraggedTokenId(null);
@@ -1921,22 +2065,48 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     // --- LOGICA DE BIBLIOTECA (Firebase) ---
+    // Optimizacion Critica: Solo escuchar la base de datos entera de escenarios si estamos viéndola.
     useEffect(() => {
+        if (viewMode !== 'LIBRARY') return;
+
+        console.log("📚 Conectando a Biblioteca de Escenarios...");
         const unsub = onSnapshot(collection(db, 'canvas_scenarios'), (snap) => {
-            const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Se omiten los arrays pesados de los items para la vista del listado de menús (Ahorro VRAM/RAM masivo)
+            const loaded = snap.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    name: data.name,
+                    lastModified: data.lastModified,
+                    config: data.config,
+                    preview: data.preview,
+                    ownerId: data.ownerId,
+                    allowedPlayers: data.allowedPlayers
+                };
+            });
             setScenarios(loaded.sort((a, b) => b.lastModified - a.lastModified));
         });
-        return () => unsub();
-    }, []);
+        return () => {
+            console.log("📚 Desconectando de Biblioteca de Escenarios...");
+            unsub();
+        };
+    }, [viewMode]);
 
     // --- SUSCRIPCIÓN A TOKENS (Firebase) ---
+    // Optimización: Solo descargar el índice completo de tokens si la pestaña de la barra lateral está en 'TOKENS'.
     useEffect(() => {
+        if (activeTab !== 'TOKENS') return;
+
+        console.log("🪙 Conectando a Biblioteca de Tokens...");
         const unsub = onSnapshot(collection(db, 'canvas_tokens'), (snap) => {
             const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setTokens(loaded.sort((a, b) => b.createdAt - a.createdAt));
         });
-        return () => unsub();
-    }, []);
+        return () => {
+            console.log("🪙 Desconectando de Biblioteca de Tokens...");
+            unsub();
+        };
+    }, [activeTab]);
 
     // --- KEYBOARD SHORTCUTS (Copy/Paste) ---
     useEffect(() => {
@@ -2182,9 +2352,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         const handleSyncEvent = (e) => {
             const { name, sheet } = e.detail || {};
-            if (!name || !sheet || !activeScenario?.id) return;
+            const currentScenario = activeScenarioRef.current;
 
-            const currentItems = activeScenario.items || [];
+            if (!name || !sheet || !currentScenario?.id) return;
+
+            const currentItems = currentScenario.items || [];
             let hasChanges = false;
 
             const updatedItems = currentItems.map(item => {
@@ -2205,14 +2377,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (hasChanges) {
                 console.log('🔄 Sincronización en tiempo real detectada para:', name);
                 setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+                updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), { items: updatedItems })
                     .catch(err => console.error('Error al sincronizar token en tiempo real:', err));
             }
         };
 
         window.addEventListener('playerSheetSaved', handleSyncEvent);
         return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
-    }, [activeScenario]);
+    }, []); // Dependencias vacías: usamos activeScenarioRef para leer sin re-bindear el evento
 
 
     const saveCurrentScenario = async () => {
@@ -2447,11 +2619,45 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         e.stopPropagation(); // Evitar que el canvas inicie pan
         if (isTouch) e.preventDefault(); // Evitar double-firing y emulación de mouse
 
+        // --- LÓGICA DE TARGETING (ATAQUE) ---
+        // Mantenemos la lógica activa tanto en fase 'targeting' como 'weapon_selection' para evitar clicks accidentales al fondo
+        if (targetingState && (targetingState.phase === 'targeting' || targetingState.phase === 'weapon_selection')) {
+            if (token.id === targetingState.attackerId) {
+                triggerToast("Objetivo no válido", "No puedes atacarte a ti mismo", 'warning');
+                setTargetingState(null);
+                setFocusedTargetId(null);
+                return;
+            }
+
+            // Si ya estamos en weapon_selection y pinchamos en OTRA ficha, permitimos cambiar el objetivo
+            if (token.id !== focusedTargetId) {
+                setFocusedTargetId(token.id);
+                setTargetingState(prev => ({ ...prev, phase: 'weapon_selection', targetId: token.id }));
+                triggerToast("Objetivo Fijado", "Elige un arma para realizar el ataque", 'success');
+            }
+
+            // Siempre retornamos aquí para evitar que el evento active la selección normal o el drag del token
+            return;
+        }
+
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
             const isOwner = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
+
+            // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
+            if (isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
+                const totalPendingCost = (pendingTurnState.moveCost || 0) + (pendingTurnState.actionCost || 0);
+                if (totalPendingCost > 0) {
+                    triggerToast("Turno en progreso", "Termina las acciones de tu otro token antes de cambiar", 'warning');
+                    return;
+                } else {
+                    // El jugador canceló el movimiento regresando la ficha a su origen y no hizo acciones.
+                    // Limpiamos el estado pendiente fantasma y permitimos seleccionar al otro token.
+                    setPendingTurnState(null);
+                }
+            }
 
             // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
             if (gridConfig.isCombatActive && activeLayer === 'TABLETOP') {
@@ -2724,8 +2930,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isLightingLayer = activeLayer === 'LIGHTING';
         let canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
 
-        // Restricciones de Jugador: Solo puede interactuar con lo que controla
-        if (isPlayerView && !isLight && !isWall) {
+        // Si estamos en targeting (apuntando o eligiendo arma), TODOS los tokens son interactuables como objetivos.
+        // Importante: Esto previene que el click en un enemigo "atraviese" la ficha hacia el fondo y cancele la acción en móvil.
+        const isTargetingActive = targetingState && (targetingState.phase === 'targeting' || targetingState.phase === 'weapon_selection');
+        if (isTargetingActive && !isLight && !isWall) {
+            canInteract = true;
+        } else if (isPlayerView && !isLight && !isWall) {
             const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
             if (!hasPermission) {
                 canInteract = false;
@@ -3012,6 +3222,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     >
                                         {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
                                     </div>
+
+                                    {/* --- INDICADOR DE TARGETING: Eliminado de aquí y movido a Capa Global al final de la sección del mapa --- */}
                                 </>
                             );
                         })()}
@@ -3022,7 +3234,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onDoubleClick={(e) => {
-                        if (!canInteract) return;
+                        // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
+                        const hasPermission = !isPlayerView || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        if (!hasPermission) return;
+
                         e.stopPropagation();
                         setSelectedTokenIds([item.id]);
                         lastSelectedIdRef.current = item.id;
@@ -3037,7 +3252,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         left: 0,
                         top: 0,
                         pointerEvents: canInteract ? 'auto' : 'none',
-                        cursor: canInteract ? 'grab' : 'default',
+                        cursor: (targetingState && !isLight && !isWall) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
                         zIndex: isLight ? 10 : 20, // Luces siempre debajo de tokens
                         opacity: opacity,
                         transition: 'opacity 0.3s ease'
@@ -3049,6 +3264,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             {isSelected && (
                                 <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
                             )}
+
                             {/* Indicador de Compartido (Izquierda) */}
                             {item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
@@ -3215,11 +3431,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         </div>
 
                         {/* Controles de Acción */}
-                        <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
-                            <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
-                            <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
-                            <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
-                        </div>
+                        {(!isPlayerView || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
+                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                                <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
+                                <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
+                                <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                            </div>
+                        )}
 
                         {/* Resize Handle (Deshabilitado en móvil por errores de ux/redimensionado) */}
                         {isSelected && !rotatingTokenId && !isMobile && (
@@ -3269,6 +3487,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const handleCanvasBackgroundMouseDown = (e) => {
         const { x: curX, y: curY } = getEventCoords(e);
         const isTouch = e.type.startsWith('touch');
+
+        // Si estamos en targeting, un clic en el fondo cancela el modo
+        if (targetingState) {
+            setTargetingState(null);
+            setFocusedTargetId(null);
+            triggerToast("Acción Cancelada", "Selección de objetivo interrumpida", 'info');
+            return;
+        }
 
         // Solo si click izquierdo directo en el fondo o touch
         if ((isTouch || e.button === 0) && !e.altKey && e.target === containerRef.current) {
@@ -3374,15 +3600,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const token = scenario.items.find(i => i.id === tokenId);
         if (!token) return;
 
+        // --- LÓGICA DE TARGETING / CANCELACIÓN ---
+        if (actionId === 'cancel_targeting') {
+            setTargetingState(null);
+            setFocusedTargetId(null);
+            return;
+        }
+
+        if (actionId === 'attack') {
+            // Fase 1: Iniciar targeting si no hay nada en marcha
+            if (!targetingState) {
+                setTargetingState({ attackerId: tokenId, actionId, phase: 'targeting' });
+                triggerToast("Busca Objetivo", "Selecciona una ficha para atacar", 'info');
+                return;
+            }
+
+            // Fase 2: Si ya teníamos un objetivo fijado y ahora elegimos el arma (esto vendrá del Combat HUD)
+            if (targetingState.phase === 'weapon_selection') {
+                // Si data es null, es un ataque genérico (sin arma específica elegida)
+                completeCombatAction(tokenId, actionId, scenario.items.find(i => i.id === focusedTargetId), data);
+                setTargetingState(null);
+                setFocusedTargetId(null);
+                return;
+            }
+        }
+
         let cost = 0;
         let actionName = "";
 
-        if (actionId === 'attack') {
-            // Si nos pasan el arma específica, la usamos. Si no, buscamos la primera por defecto.
-            const weapon = data || (token.equippedItems || []).find(i => i.type === 'weapon');
-            cost = Number(weapon?.velocidad || weapon?.vel || 2);
-            actionName = `Ataque con ${weapon?.nombre || weapon?.name || 'Arma'}`;
-        } else if (actionId === 'dodge') {
+        if (actionId === 'dodge') {
             cost = 2;
             actionName = "Esquivar";
         } else if (actionId === 'help') {
@@ -3394,30 +3640,55 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         if (cost > 0) {
-            setPendingTurnState(prev => {
-                const base = prev && prev.tokenId === tokenId ? prev : {
-                    tokenId: tokenId,
-                    startX: token.x,
-                    startY: token.y,
-                    x: token.x,
-                    y: token.y,
-                    moveCost: 0,
-                    actionCost: 0,
-                    actions: [] // Changed from actionNames to actions (objects)
-                };
-
-                const newActions = [...(base.actions || []), { name: actionName, cost }];
-
-                return {
-                    ...base,
-                    actionCost: base.actionCost + cost,
-                    actions: newActions
-                };
-            });
-            // Toast is now handled by the HUD notification, but we can keep a small one or remove it.
-            // keeping it for now as "feedback"
-            // triggerToast("Acción añadida", `${actionName} (+${cost} 🟡)`, 'success'); 
+            updatePendingTurnActions(tokenId, token, actionName, cost);
         }
+    };
+
+    const completeCombatAction = (attackerId, actionId, targetToken, data = null) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario) return;
+
+        const attackerToken = scenario.items.find(i => i.id === attackerId);
+        if (!attackerToken) return;
+
+        let cost = 0;
+        let actionName = "";
+
+        if (actionId === 'attack') {
+            const weapon = data || (attackerToken.equippedItems || []).find(i => i.type === 'weapon');
+            cost = Number(weapon?.velocidad || weapon?.vel || 2);
+            actionName = `Ataque a ${targetToken.name} (${weapon?.nombre || weapon?.name || 'Arma'})`;
+
+            // Aquí podríamos disparar efectos visuales, tirar dados, etc.
+            triggerToast("¡Ataque!", `${attackerToken.name} ataca a ${targetToken.name} con ${weapon?.nombre || 'arma'}`, 'success');
+        }
+
+        if (cost > 0) {
+            updatePendingTurnActions(attackerId, attackerToken, actionName, cost, { targetId: targetToken.id, actionId, weapon: actionId === 'attack' ? (data || (attackerToken.equippedItems || []).find(i => i.type === 'weapon')) : null });
+        }
+    };
+
+    const updatePendingTurnActions = (tokenId, token, actionName, cost, metadata = {}) => {
+        setPendingTurnState(prev => {
+            const base = prev && prev.tokenId === tokenId ? prev : {
+                tokenId: tokenId,
+                startX: token.x,
+                startY: token.y,
+                x: token.x,
+                y: token.y,
+                moveCost: 0,
+                actionCost: 0,
+                actions: []
+            };
+
+            const newActions = [...(base.actions || []), { name: actionName, cost, ...metadata }];
+
+            return {
+                ...base,
+                actionCost: base.actionCost + cost,
+                actions: newActions
+            };
+        });
     };
 
     const handleCancelAction = (tokenId, index) => {
@@ -3438,7 +3709,256 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
     };
 
-    const handleEndTurn = (tokenId) => {
+    const applyCombatCalculations = (token, damage) => {
+        const posturaUmbral = parseDieValue(token.attributes?.destreza || 'd6') || 1;
+        const vidaUmbral = parseDieValue(token.attributes?.vigor || 'd6') || 1;
+
+        let remainingBlocks = Math.floor(damage / posturaUmbral);
+        if (remainingBlocks === 0 && damage >= posturaUmbral) remainingBlocks = 1;
+
+        let lostPostura = 0;
+        let lostArmadura = 0;
+        let lostVida = 0;
+
+        let currentPostura = token.stats?.postura?.current || 0;
+        let currentArmadura = token.stats?.armadura?.current || 0;
+        let currentVida = token.stats?.vida?.current || 0;
+
+        lostPostura = Math.min(remainingBlocks, currentPostura);
+        currentPostura -= lostPostura;
+        remainingBlocks -= lostPostura;
+
+        if (remainingBlocks > 0) {
+            lostArmadura = Math.min(remainingBlocks, currentArmadura);
+            currentArmadura -= lostArmadura;
+            remainingBlocks -= lostArmadura;
+        }
+
+        if (remainingBlocks > 0) {
+            // Reevaluamos bloques para Vida si usa otro umbral? 
+            // El usuario dice: "Si tiene destreza d8 umbral postura 8. Vigor d6 umbral Vida 6".
+            // Para simplificar recalculamos bloques de vida con su umbral si sobran bloques de postura/armadura
+            const damageForVida = remainingBlocks * posturaUmbral;
+            const vidaBlocks = Math.floor(damageForVida / vidaUmbral);
+
+            lostVida = Math.min(vidaBlocks, currentVida);
+            currentVida -= lostVida;
+        }
+
+        const newStatus = [...(token.status || [])];
+        if (currentPostura === 0 && !newStatus.includes('derribado')) {
+            newStatus.push('derribado');
+        }
+
+        return {
+            stats: {
+                ...token.stats,
+                postura: { ...token.stats.postura, current: currentPostura },
+                armadura: { ...token.stats.armadura, current: currentArmadura },
+                vida: { ...token.stats.vida, current: currentVida },
+            },
+            status: newStatus,
+            lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida }
+        };
+    };
+
+    const resolveCombatEvent = async (event) => {
+        if (event.status === 'resolviendo') return;
+
+        try {
+            await updateDoc(doc(db, 'combat_events', event.id), { status: 'resolviendo' });
+        } catch (error) {
+            // Si el documento ya no existe (porque otro cliente o pestaña ya lo resolvió y borró), 
+            // ignoramos el error en vez de colapsar la app.
+            console.warn("Se intentó resolver un evento ya procesado o borrado:", event.id);
+            return;
+        }
+
+        const scenario = activeScenarioRef.current || activeScenario;
+        const attackerToken = scenario.items.find(i => i.id === event.attackerId);
+        const targetToken = scenario.items.find(i => i.id === event.targetId);
+
+        if (!attackerToken || !targetToken) {
+            await deleteDoc(doc(db, 'combat_events', event.id));
+            return;
+        }
+
+        // Extraer dados individuales del atacante para el log visual
+        const attackerDice = [];
+        (event.attackerRollResult?.details || []).forEach((detail, dIdx) => {
+            if (detail.type === 'dice') {
+                detail.rolls.forEach((r, rIdx) => {
+                    attackerDice.push({
+                        value: typeof r === 'object' ? r.value : r,
+                        critical: typeof r === 'object' ? r.critical : false,
+                        matchedAttr: detail.matchedAttr || null,
+                        id: `${dIdx}-${rIdx}`
+                    });
+                });
+            } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
+                attackerDice.push({
+                    value: detail.value || detail.total || 0,
+                    matchedAttr: detail.matchedAttr,
+                    critical: false,
+                    id: `${dIdx}-0`
+                });
+            }
+        });
+
+        attackerDice.sort((a, b) => {
+            const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
+            const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
+            return rankA - rankB;
+        });
+
+        let logText = "";
+        let finalItems = [...scenario.items];
+        const updateTokenInList = (id, updates) => {
+            finalItems = finalItems.map(item => item.id === id ? { ...item, ...updates } : item);
+        };
+
+        // Variables para el log rico
+        let finalDamage = 0;
+        let counterDamage = 0;
+        let blocksLost = { postura: 0, armadura: 0, vida: 0 };
+        let evadedDiceIds = [];
+        let defenderDice = [];
+        let defenderTotal = 0;
+
+        if (event.reactionType === 'evadir') {
+            evadedDiceIds = event.reactionData.evadedDiceIds || [];
+            let newTotal = 0;
+            const details = JSON.parse(JSON.stringify(event.attackerRollResult.details));
+            details.forEach((detail, dIdx) => {
+                if (detail.type === 'dice') {
+                    const filteredRolls = detail.rolls.filter((_, rIdx) => !evadedDiceIds.includes(`${dIdx}-${rIdx}`));
+                    detail.rolls = filteredRolls;
+                    detail.subtotal = filteredRolls.reduce((sum, r) => sum + (typeof r === 'object' ? r.value : r), 0);
+                    newTotal += detail.subtotal;
+                } else if (detail.type === 'modifier') {
+                    newTotal += detail.value;
+                }
+            });
+
+            finalDamage = newTotal;
+            const res = applyCombatCalculations(targetToken, newTotal);
+            blocksLost = res.lost;
+            updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + (event.reactionData.yellowCost || 0) });
+            logText = `${targetToken.name} evadió dados de ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+        } else if (event.reactionType === 'parar') {
+            const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
+            const defenderRoll = rollAttack(event.reactionData.weapon, defenderAttrs);
+            defenderTotal = defenderRoll.total;
+
+            // Extract defender dice details
+            (defenderRoll.details || []).forEach((detail, dIdx) => {
+                if (detail.type === 'dice') {
+                    detail.rolls.forEach((r, rIdx) => {
+                        defenderDice.push({
+                            value: typeof r === 'object' ? r.value : r,
+                            matchedAttr: detail.matchedAttr || null,
+                            id: `def-${dIdx}-${rIdx}`
+                        });
+                    });
+                } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
+                    defenderDice.push({
+                        value: detail.value || detail.total || 0,
+                        matchedAttr: detail.matchedAttr,
+                        id: `def-${dIdx}-0`
+                    });
+                }
+            });
+
+            const diff = event.attackerRollResult.total - defenderRoll.total;
+            const yellowCost = event.reactionData.yellowCost || 0;
+
+            if (diff === 0) {
+                finalDamage = 0;
+                updateTokenInList(targetToken.id, { velocidad: (targetToken.velocidad || 0) + yellowCost });
+                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
+                logText = `${targetToken.name} realizó una parada perfecta con ${defWeaponName}.`;
+            } else if (diff > 0) {
+                finalDamage = diff;
+                const res = applyCombatCalculations(targetToken, diff);
+                blocksLost = res.lost;
+                updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + yellowCost });
+                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
+                logText = `${targetToken.name} paró con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            } else {
+                counterDamage = Math.abs(diff);
+                const res = applyCombatCalculations(attackerToken, counterDamage);
+                blocksLost = res.lost;
+                updateTokenInList(attackerToken.id, { stats: res.stats, status: res.status });
+                updateTokenInList(targetToken.id, { velocidad: (targetToken.velocidad || 0) + yellowCost });
+                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
+                logText = `¡${targetToken.name} paró con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+            }
+        } else {
+            finalDamage = event.attackerRollResult.total;
+            const res = applyCombatCalculations(targetToken, event.attackerRollResult.total);
+            blocksLost = res.lost;
+            updateTokenInList(targetToken.id, { stats: res.stats, status: res.status });
+            logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+        }
+
+        await updateDoc(doc(db, 'canvas_scenarios', scenario.id), { items: finalItems, lastModified: Date.now() });
+
+        // Escribir en el chat
+        const chatRef = doc(db, 'assetSidebar', 'chat');
+        const chatSnap = await getDoc(chatRef);
+        if (chatSnap.exists()) {
+            const messages = chatSnap.data().messages || [];
+            messages.push({ id: nanoid(), author: "Combate", text: logText, timestamp: Date.now() });
+            await updateDoc(chatRef, { messages });
+        }
+
+        // Escribir entrada rica en combat_log
+        const combatLogEntry = {
+            attackerName: attackerToken.name,
+            targetName: targetToken.name,
+            weaponName: event.weapon?.nombre || event.weapon?.name || null,
+            attackTotal: event.attackerRollResult.total,
+            attackerDice,
+            defenderDice,
+            defenderTotal,
+            reactionType: event.reactionType || 'recibir',
+            evadedDiceIds,
+            finalDamage,
+            counterDamage,
+            defenderWeapon: event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
+            blocksLost,
+            damage: finalDamage,
+            timestamp: serverTimestamp()
+        };
+
+        await addDoc(collection(db, 'combat_log'), combatLogEntry);
+
+        // Limpiar entradas antiguas (máximo 3)
+        try {
+            const allLogsQuery = query(collection(db, 'combat_log'), orderBy('timestamp', 'desc'));
+            const allSnap = await getDocs(allLogsQuery);
+            const docsToDelete = allSnap.docs.slice(3);
+            for (const d of docsToDelete) {
+                await deleteDoc(doc(db, 'combat_log', d.id));
+            }
+        } catch (err) {
+            console.warn('Error limpiando combat_log antiguo:', err);
+        }
+
+        await deleteDoc(doc(db, 'combat_events', event.id));
+    };
+
+    const handleReaction = async (reaction) => {
+        if (!incomingCombatEvent) return;
+        await updateDoc(doc(db, 'combat_events', incomingCombatEvent.event.id), {
+            status: `${reaction.type}_pendiente`,
+            reactionType: reaction.type,
+            reactionData: reaction.data
+        });
+        setIncomingCombatEvent(null);
+    };
+
+    const handleEndTurn = async (tokenId) => {
         const scenario = activeScenarioRef.current || activeScenario;
         if (!scenario) return;
 
@@ -3449,10 +3969,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const moveCost = pending ? pending.moveCost : 0;
         const actionCost = pending ? pending.actionCost : 0;
 
-        // Si no ha hecho nada, el coste mínimo de pasar turno es 1
         const finalCost = (moveCost + actionCost) || 1;
         const finalX = pending ? pending.x : token.x;
         const finalY = pending ? pending.y : token.y;
+
+        // Crear eventos de combate
+        if (pending && pending.actions) {
+            for (const action of pending.actions) {
+                if (action.actionId === 'attack' && action.targetId) {
+                    const targetToken = scenario.items.find(i => i.id === action.targetId);
+                    if (targetToken) {
+                        const attackerAttrs = token.attributes || token.atributos || {};
+                        const attackerRollResult = rollAttack(action.weapon, attackerAttrs);
+                        await addDoc(collection(db, 'combat_events'), {
+                            attackerId: token.id,
+                            attackerName: token.name,
+                            targetId: targetToken.id,
+                            targetName: targetToken.name,
+                            attackerRollResult,
+                            weapon: action.weapon || null,
+                            status: 'esperando_reaccion',
+                            scenarioId: scenario.id,
+                            timestamp: serverTimestamp(),
+                            attackerVel: token.velocidad || 0,
+                            targetVel: targetToken.velocidad || 0,
+                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0))
+                        });
+                    }
+                }
+            }
+        }
 
         const newItems = scenario.items.map(i =>
             i.id === tokenId
@@ -3464,7 +4010,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setPendingTurnState(null);
 
         try {
-            updateDoc(doc(db, 'canvas_scenarios', scenario.id), {
+            await updateDoc(doc(db, 'canvas_scenarios', scenario.id), {
                 items: newItems,
                 lastModified: Date.now()
             });
@@ -3475,7 +4021,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     return (
-        <div className="h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none">
+        <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
             {viewMode === 'LIBRARY' && !activeScenario && (
                 <motion.div
@@ -3523,7 +4069,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
                                     {scenarios.map(s => (
                                         <motion.div
-                                            layout
+                                            layoutId={`scenario-card-${s.id}`}
                                             key={s.id}
                                             onClick={() => loadScenario(s)}
                                             className={`group relative bg-[#0b1120] border-2 rounded-xl p-6 cursor-pointer transition-all overflow-hidden ${globalActiveId === s.id ? 'border-[#c8aa6e] shadow-[0_0_30px_rgba(200,170,110,0.15)] bg-[#161f32]' : 'border-slate-800 hover:border-[#c8aa6e]/50 hover:bg-[#161f32]'}`}
@@ -3561,8 +4107,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     {/* Botón de Transmisión (Solo Master) */}
                                                     {!isPlayerView && (
                                                         <button
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onMouseDown={(e) => e.stopPropagation()}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
+                                                                e.preventDefault();
+                                                                console.log("🔘 Transmit button clicked for scenario:", s.id);
                                                                 setGlobalActiveScenario(globalActiveId === s.id ? null : s.id);
                                                             }}
                                                             className={`p-2 rounded-lg border transition-all ${globalActiveId === s.id ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
@@ -3767,10 +4317,225 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         <span className="text-[8px] font-bold uppercase">Inspector</span>
                                     </button>
                                 )}
+                                <button
+                                    onClick={() => setActiveTab('COMBAT_LOG')}
+                                    className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'COMBAT_LOG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <Swords className="w-4 h-4" />
+                                    <span className="text-[8px] font-bold uppercase">Logs</span>
+                                </button>
                             </div>
 
                             {/* Sidebar Content Wrapper */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
+                                {/* --- TAB: COMBAT LOG (EVERYONE) --- */}
+                                {activeTab === 'COMBAT_LOG' && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        <div className="space-y-2">
+                                            <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                <Swords className="w-3 h-3" />
+                                                Registro de Combate
+                                            </h4>
+                                            <p className="text-[10px] text-slate-500 italic">Últimos ataques y resoluciones.</p>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            {combatLog.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center text-center gap-3 py-16 opacity-30">
+                                                    <Swords className="w-12 h-12 text-slate-600 mb-2" />
+                                                    <p className="text-slate-500 text-[10px] uppercase font-bold tracking-[0.3em]">Sin registros</p>
+                                                </div>
+                                            ) : (
+                                                combatLog.map((entry) => {
+                                                    const isCounter = entry.reactionType === 'parar' && entry.counterDamage > 0;
+                                                    const isPerfect = entry.reactionType === 'parar' && entry.damage === 0 && !isCounter;
+                                                    const totalBlocks = (entry.blocksLost?.postura || 0) + (entry.blocksLost?.armadura || 0) + (entry.blocksLost?.vida || 0);
+
+                                                    const accentColor = entry.reactionType === 'evadir' ? '#eab308' :
+                                                        entry.reactionType === 'parar' ? '#3b82f6' : '#ef4444';
+
+                                                    return (
+                                                        <motion.div
+                                                            key={entry.id}
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            className="relative pl-4 space-y-3"
+                                                        >
+                                                            {/* Accent Line */}
+                                                            <div
+                                                                className="absolute left-0 top-1 bottom-1 w-[1px] opacity-40"
+                                                                style={{ backgroundColor: accentColor }}
+                                                            />
+
+                                                            {/* Header Row */}
+                                                            <div className="flex items-center justify-between text-[10px] tracking-tight">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-slate-500 font-mono opacity-60">
+                                                                        {new Date(entry.timestamp?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                    </span>
+                                                                    <div className="w-1 h-1 rounded-full opacity-40" style={{ backgroundColor: accentColor }} />
+                                                                    <span className="text-slate-400 font-bold uppercase tracking-wider">
+                                                                        Resolución
+                                                                    </span>
+                                                                </div>
+                                                                <Swords className="w-3 h-3 text-slate-600" />
+                                                            </div>
+
+                                                            {/* Main Text */}
+                                                            <div className="space-y-1.5 px-0.5">
+                                                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                                                    <span className="text-red-400 font-fantasy text-sm uppercase tracking-wide">{entry.attackerName}</span>
+                                                                    <span className="text-slate-600 text-[9px] font-bold uppercase tracking-widest">Ataca a</span>
+                                                                    <span className="text-blue-400 font-fantasy text-sm uppercase tracking-wide">{entry.targetName}</span>
+                                                                </div>
+
+                                                                {entry.weaponName && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-3 h-[1px] bg-slate-800" />
+                                                                        <span className="text-[9px] text-slate-500 italic lowercase tracking-wider">
+                                                                            usando {entry.weaponName}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Results Section */}
+                                                            <div className="space-y-2 border-y border-slate-900/50 py-2">
+                                                                <div className="flex items-center gap-4 px-1">
+                                                                    <div className="flex gap-1.5">
+                                                                        {(entry.attackerDice || []).map((die, i) => {
+                                                                            const wasEvaded = (entry.evadedDiceIds || []).includes(die.id);
+                                                                            const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
+
+                                                                            const attrColorMap = {
+                                                                                destreza: { color: '#4ade80' },
+                                                                                intelecto: { color: '#60a5fa' },
+                                                                                voluntad: { color: '#c084fc' },
+                                                                                vigor: { color: '#f87171' },
+                                                                            };
+
+                                                                            const attrStyle = (!wasEvaded && matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
+
+                                                                            // Render distinctively if critical
+                                                                            if (wasEvaded) {
+                                                                                return (
+                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all line-through"
+                                                                                        style={{ borderColor: 'rgba(127,29,29,0.2)', color: 'rgba(127,29,29,0.4)', backgroundColor: 'transparent', boxShadow: 'none' }}
+                                                                                        title={die.critical ? "Dado Crítico (Evadido)" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)} (Evadido)` : "Dado de Arma (Evadido)"}>
+                                                                                        {die.value}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+
+                                                                            // Estilo Dorado Rojizo para el log de combate si el dado es Crítico
+                                                                            return (
+                                                                                <span key={i} className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all ${die.critical ? 'shadow-[0_0_6px_rgba(234,88,12,0.3)] bg-gradient-to-br from-transparent to-[#ea580c]/10' : ''}`}
+                                                                                    title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                                                    style={die.critical ? {
+                                                                                        borderColor: '#ea580c',
+                                                                                        color: '#ea580c',
+                                                                                    } : attrStyle ? {
+                                                                                        backgroundColor: 'transparent',
+                                                                                        borderColor: attrStyle.color,
+                                                                                        color: attrStyle.color,
+                                                                                        boxShadow: 'none',
+                                                                                    } : {
+                                                                                        borderColor: 'rgba(200,170,110,0.2)',
+                                                                                        color: 'rgba(200,170,110,0.8)',
+                                                                                        backgroundColor: 'transparent',
+                                                                                    }}>
+                                                                                    {die.value}
+                                                                                </span>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                    <div className="h-4 w-[1px] bg-slate-800" />
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
+                                                                        <span className="text-[#f0e6d2] text-xs font-bold">{entry.attackTotal}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {entry.reactionType === 'parar' && entry.defenderDice && (
+                                                                    <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-2">
+                                                                        <div className="flex gap-1.5">
+                                                                            {entry.defenderDice.map((die, i) => {
+                                                                                const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
+                                                                                const attrColorMap = {
+                                                                                    destreza: { color: '#4ade80' },
+                                                                                    intelecto: { color: '#60a5fa' },
+                                                                                    voluntad: { color: '#c084fc' },
+                                                                                    vigor: { color: '#f87171' },
+                                                                                };
+                                                                                const attrStyle = matchedAttr && attrColorMap[matchedAttr] ? attrColorMap[matchedAttr] : null;
+
+                                                                                return (
+                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all"
+                                                                                        style={attrStyle ? {
+                                                                                            backgroundColor: 'transparent',
+                                                                                            borderColor: attrStyle.color,
+                                                                                            color: attrStyle.color,
+                                                                                            boxShadow: 'none',
+                                                                                        } : {
+                                                                                            borderColor: 'rgba(96,165,250,0.2)',
+                                                                                            color: 'rgba(96,165,250,0.8)',
+                                                                                            backgroundColor: 'transparent',
+                                                                                        }}>
+                                                                                        {die.value}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                        <div className="h-4 w-[1px] bg-slate-800" />
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[9px] text-blue-500/60 uppercase font-bold tracking-widest">Parada</span>
+                                                                            <span className="text-blue-400 text-xs font-bold">{entry.defenderTotal}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Reaction Descriptive Text */}
+                                                            <div className="px-1 text-[11px] leading-relaxed">
+                                                                {entry.reactionType === 'evadir' && (
+                                                                    <p className="text-slate-300">
+                                                                        <span className="text-yellow-500/80 mr-1.5 italic font-bold">Evasión:</span>
+                                                                        Evadió {(entry.evadedDiceIds || []).length} dados e impactó con <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
+                                                                    </p>
+                                                                )}
+                                                                {entry.reactionType === 'parar' && (
+                                                                    <p className="text-slate-300">
+                                                                        <span className="text-blue-400/80 mr-1.5 italic font-bold">Parada:</span>
+                                                                        {isPerfect ? `Desvió completamente el ataque con ${entry.defenderWeapon || 'su arma'}.` :
+                                                                            isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${entry.defenderWeapon || 'su arma'}.` :
+                                                                                `Parada parcial con ${entry.defenderWeapon || 'su arma'}, recibió ${entry.finalDamage} de daño.`}
+                                                                    </p>
+                                                                )}
+                                                                {entry.reactionType === 'recibir' && (
+                                                                    <p className="text-slate-400">
+                                                                        <span className="text-red-500/80 mr-1.5 italic font-bold">Impacto:</span>
+                                                                        Recibió el golpe de lleno por <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Damage Badges */}
+                                                            {totalBlocks > 0 ? (
+                                                                <div className="flex gap-2 px-1 pt-1 opacity-80">
+                                                                    {entry.blocksLost?.postura > 0 && <span className="text-[9px] text-emerald-500/80 border-b border-emerald-900/40 pb-0.5">-{entry.blocksLost.postura} Postura</span>}
+                                                                    {entry.blocksLost?.armadura > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{entry.blocksLost.armadura} Armadura</span>}
+                                                                    {entry.blocksLost?.vida > 0 && <span className="text-[9px] text-red-500/80 border-b border-red-900/40 pb-0.5">-{entry.blocksLost.vida} Vida</span>}
+                                                                </div>
+                                                            ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (
+                                                                <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider">Sin daño a bloques</div>
+                                                            )}
+                                                        </motion.div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* --- TAB: ACCESO (MASTER ONLY) --- */}
                                 {activeTab === 'ACCESS' && !isPlayerView && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -6198,6 +6963,135 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     </svg >
                                 </div>
 
+                                {/* --- CAPA GLOBAL DE TARGETING (Fuera de Niebla de Guerra y de Permisos) --- */}
+                                <div className="absolute inset-0 z-[100] pointer-events-none">
+                                    {/* --- LÍNEAS TÁCTICAS DE ATAQUE --- */}
+                                    <svg className="absolute inset-0 w-full h-full overflow-visible">
+                                        {(() => {
+                                            const items = activeScenario?.items || [];
+                                            const attackPairs = [];
+
+                                            // 1. Objetivo enfocado actualmente (Targeting Phase)
+                                            if (targetingState && focusedTargetId) {
+                                                const attacker = items.find(i => i.id === targetingState.attackerId);
+                                                const target = items.find(i => i.id === focusedTargetId);
+                                                if (attacker && target) attackPairs.push({ attacker, target, isFocused: true });
+                                            }
+
+                                            // 2. Objetivos en acciones pendientes (Turn Phase)
+                                            if (pendingTurnState?.actions) {
+                                                const attacker = items.find(i => i.id === pendingTurnState.tokenId);
+                                                if (attacker) {
+                                                    const uniqueTargetIds = new Set();
+                                                    pendingTurnState.actions.forEach(a => {
+                                                        if (a.targetId && !uniqueTargetIds.has(a.targetId)) {
+                                                            const target = items.find(i => i.id === a.targetId);
+                                                            if (target) {
+                                                                attackPairs.push({ attacker, target, isFocused: false });
+                                                                uniqueTargetIds.add(a.targetId);
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            }
+
+                                            return attackPairs.map((pair, idx) => {
+                                                const { attacker, target, isFocused } = pair;
+                                                const x1 = attacker.x + attacker.width / 2;
+                                                const y1 = attacker.y + attacker.height / 2;
+                                                const x2 = target.x + target.width / 2;
+                                                const y2 = target.y + target.height / 2;
+
+                                                const dx = Math.abs(target.x - attacker.x);
+                                                const dy = Math.abs(target.y - attacker.y);
+                                                const cellW = gridConfig.cellWidth || 50;
+                                                const cellH = gridConfig.cellHeight || 50;
+                                                const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                                                return (
+                                                    <g key={`attack-path-${idx}`}>
+                                                        {/* Línea de trayectoria */}
+                                                        <line
+                                                            x1={x1} y1={y1} x2={x2} y2={y2}
+                                                            stroke="#ef4444"
+                                                            strokeWidth={isFocused ? "2" : "1.5"}
+                                                            strokeDasharray="10 6"
+                                                            className={isFocused ? "animate-pulse" : "opacity-50"}
+                                                        />
+                                                        {/* Círculos en los extremos para rematar la línea */}
+                                                        <circle cx={x1} cy={y1} r="3" fill="#ef4444" className={isFocused ? "animate-pulse" : "opacity-50"} />
+                                                        <circle cx={x2} cy={y2} r="3" fill="#ef4444" className={isFocused ? "animate-pulse" : "opacity-50"} />
+
+                                                        {/* Etiqueta de Distancia en el punto medio */}
+                                                        {distance > 0 && (
+                                                            <foreignObject
+                                                                x={(x1 * 0.4 + x2 * 0.6) - 15}
+                                                                y={(y1 * 0.4 + y2 * 0.6) - 10}
+                                                                width="30" height="20"
+                                                                className="overflow-visible"
+                                                            >
+                                                                <div className="flex items-center justify-center w-full h-full">
+                                                                    <div className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.4)] flex items-center gap-0.5">
+                                                                        {distance}
+                                                                        <span className="text-[6px] opacity-70">C</span>
+                                                                    </div>
+                                                                </div>
+                                                            </foreignObject>
+                                                        )}
+                                                    </g>
+                                                );
+                                            });
+                                        })()}
+                                    </svg>
+                                    {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall').map(item => {
+                                        // Caso A: Estamos en fase de elegir objetivo (targeting)
+                                        const isFocused = focusedTargetId === item.id;
+                                        // Caso B: El objetivo ya está fijado en una acción pendiente de este turno
+                                        const isPendingTarget = pendingTurnState?.actions?.some(a => a.targetId === item.id);
+
+                                        if (!isFocused && !isPendingTarget) return null;
+
+                                        return (
+                                            <div
+                                                key={`global-targeting-${item.id}`}
+                                                className={`absolute pointer-events-none transition-all duration-300
+                                                    ${isFocused
+                                                        ? 'border-4 border-red-500 animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.8)] z-[101]'
+                                                        : 'border-[3px] border-red-500/70 shadow-[0_0_15px_rgba(239,68,68,0.4)] z-[100]'
+                                                    }
+                                                    ${item.isCircular ? 'rounded-full' : 'rounded-sm'}
+                                                `}
+                                                style={{
+                                                    transformOrigin: 'center center',
+                                                    transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
+                                                    width: `${item.width}px`,
+                                                    height: `${item.height}px`,
+                                                    left: 0,
+                                                    top: 0
+                                                }}
+                                            >
+                                                {/* Etiqueta superior */}
+                                                <div className={`
+                                                    absolute left-1/2 -translate-x-1/2 rounded-full font-bold uppercase tracking-widest shadow-lg whitespace-nowrap
+                                                    ${isFocused
+                                                        ? '-top-8 bg-red-600 text-white text-[9px] px-3 py-1 scale-110'
+                                                        : '-top-6 bg-red-500/90 text-white text-[7px] px-2 py-0.5 opacity-80'
+                                                    }
+                                                `}>
+                                                    {isFocused ? 'Objetivo fijado' : 'Objetivo'}
+                                                </div>
+
+                                                {/* Efecto de mira/crosshair adicional para selección activa */}
+                                                {isFocused && (
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-40">
+                                                        <div className="absolute h-[150%] w-[1px] bg-red-500"></div>
+                                                        <div className="absolute w-[150%] h-[1px] bg-red-500"></div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </>
@@ -6218,42 +7112,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const rawHudToken = selectedControlled || myTokens[0];
 
                 if (rawHudToken) {
-                    // Fusionamos datos de la ficha vinculada (si existe) para tener las armas
-                    let hudToken = rawHudToken;
-                    if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
-                        const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
-                        if (charData) {
-                            const eq = charData.equippedItems || {};
-                            // Extraemos las armas de las manos (objeto -> array) y aseguramos que tengan tipo
-                            const hands = [eq.mainHand, eq.offHand]
-                                .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre)) // Filter valid items with names
-                                .map(i => ({ ...i, type: i.type || 'weapon' })); // Ensure type is present
-
-                            // Extraemos habilidades que hagan daño o sean ofensivas de diversas fuentes
-                            // 1. De equipment.abilities (si existe)
-                            const equipmentAbilities = charData.equipment?.abilities || [];
-                            // 2. De abilities (si existe en la raíz)
-                            const rootAbilities = charData.abilities || [];
-                            // 3. De features/actionData (donde suelen estar los talentos activos)
-                            const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
-
-                            const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
-
-                            const damagingAbilities = allAbilitiesSource.filter(a =>
-                                (a.damage || a.dano || a.actionType === 'attack') &&
-                                !hands.find(h => h.id === a.id) // Evitar duplicados si por alguna razón están en manos
-                            );
-
-                            // Aseguramos que las habilidades tengan un tipo identificable
-                            const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
-
-                            hudToken = {
-                                ...rawHudToken,
-                                equippedItems: [...hands, ...formattedAbilities],
-                                // stats: charData.stats || rawHudToken.stats 
-                            };
-                        }
-                    }
+                    const hudToken = enrichTokenWithCharacterData(rawHudToken);
                     const canOpenSheet = !!hudToken.linkedCharacterId;
 
                     const handlePortraitClick = (charName) => {
@@ -6269,16 +7128,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
                     };
 
+                    // Calculamos la distancia al objetivo fijado para validar el alcance de las armas
+                    const targetDistance = (targetingState?.phase === 'weapon_selection' && focusedTargetId)
+                        ? (() => {
+                            const items = activeScenario?.items || [];
+                            const attacker = items.find(i => i.id === targetingState.attackerId);
+                            const target = items.find(i => i.id === focusedTargetId);
+                            if (!attacker || !target) return null;
+                            const dx = Math.abs(target.x - attacker.x);
+                            const dy = Math.abs(target.y - attacker.y);
+                            const cellW = gridConfig.cellWidth || 50;
+                            const cellH = gridConfig.cellHeight || 50;
+                            // Regla Chebyshev
+                            return Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                        })()
+                        : null;
+
                     return (
                         <CombatHUD
                             token={hudToken}
                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
                             onEndTurn={() => handleEndTurn(hudToken.id)}
                             onPortraitClick={handlePortraitClick}
-                            canOpenSheet={canOpenSheet}
-                            pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
-                            pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
-                            onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                            canOpenSheet={!!(availableCharacters.find(c => c.name === hudToken.name))}
+                            pendingCost={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
+                            pendingActions={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
+                            onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
+                            forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
+                            targetDistance={targetDistance}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
                                 const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
@@ -6362,31 +7239,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 }
 
                                 // Fusionamos datos de la ficha vinculada
-                                let hudToken = rawHudToken;
-                                if (rawHudToken.linkedCharacterId && availableCharacters.length > 0) {
-                                    const charData = availableCharacters.find(c => c.id === rawHudToken.linkedCharacterId);
-                                    if (charData) {
-                                        const eq = charData.equippedItems || {};
-                                        const hands = [eq.mainHand, eq.offHand]
-                                            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
-                                            .map(i => ({ ...i, type: i.type || 'weapon' }));
-
-                                        const equipmentAbilities = charData.equipment?.abilities || [];
-                                        const rootAbilities = charData.abilities || [];
-                                        const activeTalents = charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || [];
-                                        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents];
-                                        const damagingAbilities = allAbilitiesSource.filter(a =>
-                                            (a.damage || a.dano || a.actionType === 'attack') &&
-                                            !hands.find(h => h.id === a.id)
-                                        );
-                                        const formattedAbilities = damagingAbilities.map(a => ({ ...a, type: 'ability' }));
-
-                                        hudToken = {
-                                            ...rawHudToken,
-                                            equippedItems: [...hands, ...formattedAbilities],
-                                        };
-                                    }
-                                }
+                                const hudToken = enrichTokenWithCharacterData(rawHudToken);
 
                                 const canOpenSheet = !!hudToken.linkedCharacterId;
                                 const handlePortraitClick = (charName) => {
@@ -6429,6 +7282,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
                                             pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                                            forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
                                                 const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
@@ -6443,6 +7297,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     </>
                 );
             })()}
+
+            <AnimatePresence>
+                {incomingCombatEvent && (
+                    <CombatReactionModal
+                        event={incomingCombatEvent.event}
+                        targetToken={enrichTokenWithCharacterData(incomingCombatEvent.targetToken)}
+                        onReact={handleReaction}
+                    />
+                )}
+            </AnimatePresence>
+
+
 
             {/* Mensaje de Guardado (Toast) - Al final para estar siempre en el z-index superior */}
             <SaveToast
