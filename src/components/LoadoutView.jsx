@@ -151,6 +151,7 @@ const getObjectImage = (item) => {
 
     // Accessories
     if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
+    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
 
     return null;
 };
@@ -1536,13 +1537,6 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                     {/* Icon - Hide if image exists */}
                                                                     {!accessoryImage && (
                                                                         <Gem className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
-                                                                    )}
-
-                                                                    {/* Rarity Badge - Hide if common */}
-                                                                    {equippedAccessory.rareza && equippedAccessory.rareza.toLowerCase() !== 'común' && (
-                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}>
-                                                                            {equippedAccessory.rareza}
-                                                                        </span>
                                                                     )}
 
                                                                     {/* Name */}
