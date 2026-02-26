@@ -370,6 +370,7 @@ const getObjectImage = (item) => {
     if (target.includes('armadura')) return '/objetos/armadura.png';
     // Accessories
     if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
+    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
     return null;
 };
 
