@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
-import { parseAttrBonuses } from '../utils/combatSystem';
+import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 
 const ItemImage = ({ src, type, name }) => {
     const [error, setError] = React.useState(false);
@@ -393,7 +393,7 @@ const CombatHUD = ({
                                                                 </span>
                                                                 <div className="flex items-center gap-1.5 md:gap-2">
                                                                     <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
-                                                                        {item.velocidad || item.vel || 2}🟡
+                                                                        {getSpeedConsumption(item)}🟡
                                                                     </span>
                                                                     {(item.damage || item.dano) && (
                                                                         <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
