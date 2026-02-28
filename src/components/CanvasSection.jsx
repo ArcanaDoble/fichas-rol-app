@@ -4011,6 +4011,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (targetToken) {
                         const attackerAttrs = token.attributes || token.atributos || {};
                         const attackerRollResult = rollAttack(action.weapon, attackerAttrs);
+                        // Calcular distancia real (AABB) entre bordes de los tokens, no solo entre centros
+                        // Esto soluciona que atacar a tokens gigantes requiera estar "encima" de ellos
+                        const getDistanceInCells = (t1, t2) => {
+                            // Encontrar bordes en X
+                            const t1Left = t1.x;
+                            const t1Right = t1.x + t1.width;
+                            const t2Left = t2.x;
+                            const t2Right = t2.x + t2.width;
+
+                            // Encontrar bordes en Y
+                            const t1Top = t1.y;
+                            const t1Bottom = t1.y + t1.height;
+                            const t2Top = t2.y;
+                            const t2Bottom = t2.y + t2.height;
+
+                            // Calcular distancias entre bordes (0 si se solapan o están adyacentes tocándose sin grid gap)
+                            const dx = Math.max(0, t1Left - t2Right, t2Left - t1Right);
+                            const dy = Math.max(0, t1Top - t2Bottom, t2Top - t1Bottom);
+
+                            // Convertir a celdas
+                            const cellW = gridConfig.cellWidth || 50;
+                            const cellH = gridConfig.cellHeight || 50;
+
+                            // Si los bordes se tocan (dx=0, dy=0), la distancia es 1 celda (adyacente)
+                            // Si se solapan fuertemente, consideramos 0 (encima).
+                            // Redondeamos para acomodar imperfecciones de posicionamiento.
+                            let distCells = Math.max(Math.ceil(dx / cellW), Math.ceil(dy / cellH));
+
+                            // Fix: si no están encima pero se tocan los bordes, la distancia euclidiana de casillas de rol es 1.
+                            if (distCells === 0) {
+                                // Double check if they are actually exactly adjacent vs overlapping
+                                if (t1Right === t2Left || t1Left === t2Right || t1Bottom === t2Top || t1Top === t2Bottom) {
+                                    distCells = 1;
+                                }
+                            }
+
+                            return distCells;
+                        };
+
+                        const actualDistance = getDistanceInCells(token, targetToken);
+
                         await addDoc(collection(db, 'combat_events'), {
                             attackerId: token.id,
                             attackerName: token.name,
@@ -4023,7 +4064,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             timestamp: serverTimestamp(),
                             attackerVel: token.velocidad || 0,
                             targetVel: targetToken.velocidad || 0,
-                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0))
+                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0)),
+                            distanceBetweenTokens: actualDistance
                         });
                     }
                 }
