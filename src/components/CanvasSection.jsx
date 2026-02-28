@@ -961,7 +961,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
-    const [incomingCombatEvent, setIncomingCombatEvent] = useState(null);
+    const [combatEventQueue, setCombatEventQueue] = useState([]);
+    const [resolvedEventCount, setResolvedEventCount] = useState(0);
     const [combatLog, setCombatLog] = useState([]);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
 
@@ -1259,15 +1260,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (targetToken) {
                         const isMasterView = !isPlayerView;
                         const isControlledByMe = isPlayerView && playerName && targetToken.controlledBy?.includes(playerName);
-                        // Master recibe eventos de tokens que NO están controlados por ningún jugador (NPCs)
                         const isMasterNPC = isMasterView && (!targetToken.controlledBy || targetToken.controlledBy.length === 0);
 
                         if (isControlledByMe || isMasterNPC) {
-                            setIncomingCombatEvent({ event: eventData, targetToken });
+                            // Añadir al final de la cola si no existe ya
+                            setCombatEventQueue(prev => {
+                                if (prev.some(e => e.event.id === eventData.id)) return prev;
+                                // Si la cola estaba vacía, reiniciar contador de resueltos
+                                if (prev.length === 0) setResolvedEventCount(0);
+                                return [...prev, { event: eventData, targetToken }];
+                            });
                         }
                     }
                 } else if (change.type === 'removed') {
-                    setIncomingCombatEvent(prev => prev?.event.id === change.doc.id ? null : prev);
+                    // Limpiar de la cola si Firebase lo elimina externamente Y nosotros no lo hemos resuelto aún.
+                    // Si ya se ha resuelto localmente, handleReaction se encarga de quitarlo.
+                    setCombatEventQueue(prev => {
+                        return prev.filter(e => {
+                            // Si el evento retirado ya no está en la base de datos pero está en el frente de nuestra cola 
+                            // asumiendo que el usuario ya ha reaccionado o lo hará, no lo vaciamos abruptamente.
+                            // Solo se purgan si los eventos borrados NO son el que estamos viendo actualmente.
+                            if (e.event.id === change.doc.id) {
+                                return prev.indexOf(e) === 0; // Keep it if it's the current one being resolved locally
+                            }
+                            return true;
+                        });
+                    });
                 }
             });
         });
@@ -3950,13 +3968,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleReaction = async (reaction) => {
-        if (!incomingCombatEvent) return;
-        await updateDoc(doc(db, 'combat_events', incomingCombatEvent.event.id), {
-            status: `${reaction.type}_pendiente`,
-            reactionType: reaction.type,
-            reactionData: reaction.data
-        });
-        setIncomingCombatEvent(null);
+        if (combatEventQueue.length === 0) return;
+        const currentEvent = combatEventQueue[0];
+
+        try {
+            await updateDoc(doc(db, 'combat_events', currentEvent.event.id), {
+                status: `${reaction.type}_pendiente`,
+                reactionType: reaction.type,
+                reactionData: reaction.data
+            });
+        } catch (err) {
+            console.warn('Evento de combate ya procesado o eliminado:', currentEvent.event.id);
+        }
+
+        // Modificación visual: no avanzar inmediatamente a la siguiente pantalla sin asegurar
+        // que la BD ya ha recibido el estatus pendiente. 
+        // Eliminamos el evento actual de la cola ahora que ha sido procesado "localmente".
+        setResolvedEventCount(prev => prev + 1);
+        setCombatEventQueue(prev => prev.filter(e => e.event.id !== currentEvent.event.id));
     };
 
     const handleEndTurn = async (tokenId) => {
@@ -7300,11 +7329,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             })()}
 
             <AnimatePresence>
-                {incomingCombatEvent && (
+                {combatEventQueue.length > 0 && (
                     <CombatReactionModal
-                        event={incomingCombatEvent.event}
-                        targetToken={enrichTokenWithCharacterData(incomingCombatEvent.targetToken)}
+                        key={combatEventQueue[0].event.id}
+                        event={combatEventQueue[0].event}
+                        targetToken={enrichTokenWithCharacterData(combatEventQueue[0].targetToken)}
                         onReact={handleReaction}
+                        queueTotal={combatEventQueue.length + resolvedEventCount}
+                        queueResolved={resolvedEventCount}
+                        queueCurrent={resolvedEventCount}
                     />
                 )}
             </AnimatePresence>

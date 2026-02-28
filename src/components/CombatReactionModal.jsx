@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Shield, FastForward, Sword, Zap, X } from 'lucide-react';
+import { Shield, FastForward, Sword, Zap, X, Check } from 'lucide-react';
 import { getSpeedConsumption, rollAttack } from '../utils/combatSystem';
 
-const CombatReactionModal = ({ event, targetToken, onReact }) => {
+const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
     const [selectedDiceIndices, setSelectedDiceIndices] = useState([]);
     const [reactionType, setReactionType] = useState(null); // 'evadir', 'parar', 'recibir'
     const [selectedWeapon, setSelectedWeapon] = useState('');
@@ -47,9 +47,6 @@ const CombatReactionModal = ({ event, targetToken, onReact }) => {
 
     const yellowSpeed = targetToken?.velocidad ?? 0;
 
-    // Asumimos que podemos acceder al atacante por event.attackerToken (si se pasara),
-    // pero la diferencia de velocidad se calcula con la velocidad de ambos.
-    // Necesitamos que el evento nos pase la diffVelocidad o las velocidades.
     const diffVelocidad = event?.diffVelocidad ?? 0;
     const canEvade = diffVelocidad <= 1;
 
@@ -79,6 +76,8 @@ const CombatReactionModal = ({ event, targetToken, onReact }) => {
 
     if (!event) return null;
 
+    const showQueue = queueTotal > 1;
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-[#1a1b26] border-2 border-red-900/50 rounded-lg p-6 max-w-lg w-full shadow-2xl shadow-red-900/20 relative overflow-hidden">
@@ -86,6 +85,41 @@ const CombatReactionModal = ({ event, targetToken, onReact }) => {
                 <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
                 <div className="relative z-10">
+
+                    {/* === COLA DE ATAQUES (Progress Tracker) === */}
+                    {showQueue && (
+                        <div className="mb-4 pb-4 border-b border-red-900/30">
+                            <p className="text-[9px] text-slate-500 uppercase tracking-[0.3em] font-bold text-center mb-2.5">
+                                Ataques Pendientes — {queueCurrent + 1} de {queueTotal}
+                            </p>
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                {Array.from({ length: queueTotal }, (_, i) => {
+                                    const isResolved = i < queueResolved;
+                                    const isCurrent = i === queueCurrent;
+                                    const isPending = i > queueCurrent;
+
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`
+                                                w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all duration-300
+                                                ${isResolved
+                                                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                                    : isCurrent
+                                                        ? 'bg-red-500/20 border-red-500 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.4)] animate-pulse'
+                                                        : 'bg-slate-800/50 border-slate-700 text-slate-600'
+                                                }
+                                            `}
+                                            title={isResolved ? `Ataque ${i + 1} — Resuelto` : isCurrent ? `Ataque ${i + 1} — Actual` : `Ataque ${i + 1} — Pendiente`}
+                                        >
+                                            {isResolved ? <Check size={13} strokeWidth={3} /> : i + 1}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
                         ¡Ataque Inminente!
                     </h2>
