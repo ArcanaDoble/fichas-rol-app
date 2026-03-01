@@ -1160,7 +1160,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const movedExternally = idsToCheck.some(id => {
                             const remoteItem = remoteItems.find(i => i.id === id);
                             const original = tokenOriginalPosRef.current[id];
-                            return remoteItem && original && (remoteItem.x !== original.x || remoteItem.y !== original.y);
+                            const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+
+                            // Si la posición remota es distinta a la original Y distinta a la que tenemos nosotros ahora mismo,
+                            // es que alguien externo (el Master) ha cambiado la ficha de sitio.
+                            return remoteItem && original && localCurrent &&
+                                (remoteItem.x !== original.x || remoteItem.y !== original.y) &&
+                                (remoteItem.x !== localCurrent.x || remoteItem.y !== localCurrent.y);
                         });
 
                         if (movedExternally) {
@@ -1181,10 +1187,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const remoteItem = remoteItems.find(i => i.id === id);
                         const startX = pendingTurnStateRef.current.startX;
                         const startY = pendingTurnStateRef.current.startY;
-                        if (remoteItem && (remoteItem.x !== startX || remoteItem.y !== startY)) {
-                            setPendingTurnState(null);
-                            triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
-                            hasConflict = true;
+                        const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+
+                        if (remoteItem && localCurrent && (remoteItem.x !== startX || remoteItem.y !== startY)) {
+                            // Validar si el cambio remoto coincide con nuestra posición "provisional" local.
+                            // Si coinciden, es que nosotros mismos hemos subido el cambio (ej: al abrir una puerta)
+                            // y no debemos reiniciar el turno.
+                            if (remoteItem.x !== localCurrent.x || remoteItem.y !== localCurrent.y) {
+                                setPendingTurnState(null);
+                                triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
+                                hasConflict = true;
+                            }
                         }
                     }
 
@@ -1193,6 +1206,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const id = rotatingTokenIdRef.current || resizingTokenIdRef.current;
                         const remoteItem = remoteItems.find(i => i.id === id);
                         const localBaseline = activeScenarioRef.current.items.find(i => i.id === id);
+
+                        // Solo hay conflicto si la posición remota ha cambiado respecto a lo que tenemos localmente
                         if (remoteItem && localBaseline && (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)) {
                             setRotatingTokenId(null);
                             setResizingTokenId(null);
@@ -1205,16 +1220,48 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 setActiveScenario(current => {
                     if (!current || current.id !== docSnap.id) return current;
 
-                    // Si hay cambios en los items o en lastModified (importante para actualizar máscaras de sombra)
-                    const itemsChanged = JSON.stringify(remoteData.items) !== JSON.stringify(current.items);
+                    const remoteItems = remoteData.items || [];
+
+                    // Si somos jugadores, protegemos los tokens que estamos manipulando localmente
+                    // para que los snapshots remotos no nos "borren" el movimiento de un turno pendiente
+                    // o de un arrastre en curso.
+                    const mergedItems = isPlayerView ? remoteItems.map(remote => {
+                        const localItem = current.items.find(i => i.id === remote.id);
+                        if (!localItem) return remote;
+
+                        // Caso 1: Mi ficha en un Turno Pendiente (Preservamos posición/velocidad local)
+                        if (pendingTurnStateRef.current && remote.id === pendingTurnStateRef.current.tokenId) {
+                            return {
+                                ...remote,
+                                x: localItem.x,
+                                y: localItem.y,
+                                rotation: localItem.rotation,
+                                velocidad: localItem.velocidad
+                            };
+                        }
+
+                        // Caso 2: Fichas que estoy arrastrando activamente (Preservamos posición local)
+                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
+                            return {
+                                ...remote,
+                                x: localItem.x,
+                                y: localItem.y,
+                                rotation: localItem.rotation
+                            };
+                        }
+
+                        return remote;
+                    }) : remoteItems;
+
+                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(current.items);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
-                        console.log("🔄 Sincronizando tablero con datos remotos...", { itemsChanged, lastModifiedChanged });
+                        console.log("🔄 Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
-                            items: remoteData.items || [],
-                            lastModified: remoteData.lastModified // Crucial para invalidar máscaras de sombra
+                            items: mergedItems,
+                            lastModified: remoteData.lastModified
                         };
                     }
                     return current;
@@ -2873,9 +2920,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return i;
             });
 
-            // Actualizar Firebase
+            // Actualizar Firebase (Sincronizamos la puerta, pero limpiamos posiciones provisionales de tokens)
+            const firebaseItems = newItems.map(item => {
+                if (isPlayerView && pendingTurnStateRef.current && item.id === pendingTurnStateRef.current.tokenId) {
+                    return {
+                        ...item,
+                        x: pendingTurnStateRef.current.startX,
+                        y: pendingTurnStateRef.current.startY
+                    };
+                }
+                return item;
+            });
+
             updateDoc(doc(db, 'canvas_scenarios', prev.id), {
-                items: newItems,
+                items: firebaseItems,
                 lastModified: Date.now()
             });
 
