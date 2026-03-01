@@ -120,156 +120,165 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                         </div>
                     )}
 
-                    <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
-                        ¡Ataque Inminente!
-                    </h2>
-                    <p className="text-center text-slate-300 mb-6">
-                        <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
-                    </p>
+                    <div className="flex flex-col max-h-[70vh]">
+                        {/* ZONA SUPERIOR (ESTÁTICA) */}
+                        <div className="shrink-0">
+                            <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                ¡Ataque Inminente!
+                            </h2>
+                            <p className="text-center text-slate-300 mb-6">
+                                <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
+                            </p>
+                        </div>
 
-                    <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-4 mb-6">
-                        <p className="text-sm text-[#c8aa6e] uppercase tracking-widest mb-3 text-center">Dados del Atacante</p>
-                        <div className="flex flex-wrap gap-3 justify-center">
-                            {attackerDice.map((die) => {
-                                const isSelected = selectedDiceIndices.includes(die.id);
+                        {/* ZONA SCROLLABLE (DADOS Y BOTONES DE REACCIÓN) */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
+                            <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-4">
+                                <p className="text-sm text-[#c8aa6e] uppercase tracking-widest mb-3 text-center">Dados del Atacante</p>
+                                <div className="flex flex-wrap gap-3 justify-center">
+                                    {attackerDice.map((die) => {
+                                        const isSelected = selectedDiceIndices.includes(die.id);
 
-                                // Use inline styles to avoid Tailwind purging dynamic classes
-                                const attrColorMap = {
-                                    destreza: { color: '#4ade80' },
-                                    intelecto: { color: '#60a5fa' },
-                                    voluntad: { color: '#c084fc' },
-                                    vigor: { color: '#f87171' },
-                                };
+                                        // Use inline styles to avoid Tailwind purging dynamic classes
+                                        const attrColorMap = {
+                                            destreza: { color: '#4ade80' },
+                                            intelecto: { color: '#60a5fa' },
+                                            voluntad: { color: '#c084fc' },
+                                            vigor: { color: '#f87171' },
+                                        };
 
-                                const matchedAttr = die.matchedAttr ? die.matchedAttr.trim().toLowerCase() : null;
-                                const attrStyle = (matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
+                                        const matchedAttr = die.matchedAttr ? die.matchedAttr.trim().toLowerCase() : null;
+                                        const attrStyle = (matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
 
-                                const baseStyle = die.isCrit ? {
-                                    backgroundColor: 'rgba(234, 88, 12, 0.15)', // Dorado rojizo (#ea580c)
-                                    borderColor: '#ea580c',
-                                    color: '#ea580c',
-                                    boxShadow: '0 0 10px rgba(234,88,12,0.3)',
-                                } : attrStyle ? {
-                                    backgroundColor: 'transparent',
-                                    borderColor: attrStyle.color,
-                                    color: attrStyle.color,
-                                    boxShadow: 'none',
-                                } : {
-                                    backgroundColor: '#c8aa6e',
-                                    borderColor: '#f0e6d2',
-                                    color: '#0b1120',
-                                };
+                                        const baseStyle = die.isCrit ? {
+                                            backgroundColor: 'rgba(234, 88, 12, 0.15)', // Dorado rojizo (#ea580c)
+                                            borderColor: '#ea580c',
+                                            color: '#ea580c',
+                                            boxShadow: '0 0 10px rgba(234,88,12,0.3)',
+                                        } : attrStyle ? {
+                                            backgroundColor: 'transparent',
+                                            borderColor: attrStyle.color,
+                                            color: attrStyle.color,
+                                            boxShadow: 'none',
+                                        } : {
+                                            backgroundColor: '#c8aa6e',
+                                            borderColor: '#f0e6d2',
+                                            color: '#0b1120',
+                                        };
 
-                                const selectedStyle = {
-                                    backgroundColor: 'rgba(127,29,29,0.8)',
-                                    borderColor: '#ef4444',
-                                    color: '#fecaca',
-                                    opacity: 0.5,
-                                    boxShadow: 'none',
-                                };
+                                        const selectedStyle = {
+                                            backgroundColor: 'rgba(127,29,29,0.8)',
+                                            borderColor: '#ef4444',
+                                            color: '#fecaca',
+                                            opacity: 0.5,
+                                            boxShadow: 'none',
+                                        };
 
-                                return (
-                                    <div
-                                        key={die.id}
-                                        onClick={() => reactionType === 'evadir' && toggleDie(die.id)}
-                                        className={`w-12 h-12 flex items-center justify-center rounded-lg text-xl font-bold font-fantasy border-2 transition-all relative ${reactionType === 'evadir' ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
-                                        style={isSelected ? selectedStyle : baseStyle}
-                                        title={die.isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
-                                    >
-                                        {die.value}
-                                        {die.isCrit && <span className="absolute -top-3 -right-2 text-[#ea580c] text-[10px] font-sans tracking-tight font-bold drop-shadow-md pointer-events-none uppercase bg-black/60 px-1 rounded border border-[#ea580c]/50">CRIT</span>}
-                                        {isSelected && <X className="absolute text-red-500 w-8 h-8" />}
+                                        return (
+                                            <div
+                                                key={die.id}
+                                                onClick={() => reactionType === 'evadir' && toggleDie(die.id)}
+                                                className={`w-12 h-12 flex items-center justify-center rounded-lg text-xl font-bold font-fantasy border-2 transition-all relative ${reactionType === 'evadir' ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
+                                                style={isSelected ? selectedStyle : baseStyle}
+                                                title={die.isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                            >
+                                                {die.value}
+                                                {die.isCrit && <span className="absolute -top-3 -right-2 text-[#ea580c] text-[10px] font-sans tracking-tight font-bold drop-shadow-md pointer-events-none uppercase bg-black/60 px-1 rounded border border-[#ea580c]/50">CRIT</span>}
+                                                {isSelected && <X className="absolute text-red-500 w-8 h-8" />}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                                {reactionType === 'evadir' && (
+                                    <p className="text-center text-xs text-slate-400 mt-3">Toca los dados que quieras eludir (Coste: 1🟡 por dado)</p>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3">
+                                {/* BOTÓN EVADIR */}
+                                <button
+                                    onClick={() => { setReactionType('evadir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
+                                    disabled={!canEvade}
+                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'evadir' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
+                                        } ${!canEvade ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+                                >
+                                    <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
+                                        <FastForward size={18} /> Evadir
                                     </div>
-                                )
-                            })}
+                                    <span className="text-xs text-slate-400 mt-1">Requiere V.Diff ≤ 1</span>
+                                </button>
+
+                                {/* BOTÓN PARAR */}
+                                <button
+                                    onClick={() => {
+                                        setReactionType('parar');
+                                        setSelectedWeapon(weapons[0] ? getWeaponId(weapons[0], 0) : '');
+                                        setSelectedDiceIndices([]);
+                                    }}
+                                    disabled={weapons.length === 0}
+                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
+                                        } ${weapons.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
+                                        <Sword size={18} /> Parar
+                                    </div>
+                                    <span className="text-xs text-slate-400 mt-1">Contraataca con tu propia arma</span>
+                                </button>
+
+                                {/* BOTÓN RECIBIR */}
+                                <button
+                                    onClick={() => { setReactionType('recibir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
+                                    className={`flex items-center justify-center gap-2 p-3 rounded border transition-all ${reactionType === 'recibir' ? 'bg-red-900/40 border-red-500 text-red-200' : 'bg-black/40 border-slate-700 hover:border-slate-500 text-slate-300'
+                                        }`}
+                                >
+                                    <Shield size={18} /> Recibir Golpe
+                                </button>
+                            </div>
+
+                            {/* SELECTOR DE ARMA (Si es Parar) */}
+                            {reactionType === 'parar' && weapons.length > 0 && (
+                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
+                                        Selecciona el arma para parar:
+                                    </label>
+                                    <div className="flex flex-col gap-2">
+                                        {weapons.map((w, idx) => {
+                                            const currentId = getWeaponId(w, idx);
+                                            return (
+                                                <WeaponCard
+                                                    key={currentId}
+                                                    weapon={w}
+                                                    isSelected={selectedWeapon === currentId}
+                                                    onSelect={() => setSelectedWeapon(currentId)}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        {reactionType === 'evadir' && (
-                            <p className="text-center text-xs text-slate-400 mt-3">Toca los dados que quieras eludir (Coste: 1🟡 por dado)</p>
-                        )}
-                    </div>
 
-                    <div className="grid grid-cols-1 gap-3 mb-6">
-                        {/* BOTÓN EVADIR */}
-                        <button
-                            onClick={() => { setReactionType('evadir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
-                            disabled={!canEvade}
-                            className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'evadir' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
-                                } ${!canEvade ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
-                        >
-                            <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
-                                <FastForward size={18} /> Evadir
+                        {/* ZONA INFERIOR (ESTÁTICA Y SIEMPRE VISIBLE) */}
+                        <div className="shrink-0 flex justify-between items-center pt-5 border-t border-red-900/30 bg-[#1a1b26]">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Costo de Reacción</span>
+                                <div className="text-lg font-fantasy text-yellow-500 flex items-center gap-1.5 leading-none">
+                                    {reactionType === 'evadir' ? `-${selectedDiceIndices.length}` :
+                                        reactionType === 'parar' && selectedWeapon ? `-${(() => {
+                                            const w = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
+                                            return getSpeedConsumption(w);
+                                        })()}` : '0'}
+                                    <span className="text-base">🟡</span>
+                                </div>
                             </div>
-                            <span className="text-xs text-slate-400 mt-1">Requiere V.Diff ≤ 1</span>
-                        </button>
-
-                        {/* BOTÓN PARAR */}
-                        <button
-                            onClick={() => {
-                                setReactionType('parar');
-                                setSelectedWeapon(weapons[0] ? getWeaponId(weapons[0], 0) : '');
-                                setSelectedDiceIndices([]);
-                            }}
-                            disabled={weapons.length === 0}
-                            className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
-                                } ${weapons.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
-                                <Sword size={18} /> Parar
-                            </div>
-                            <span className="text-xs text-slate-400 mt-1">Contraataca con tu propia arma</span>
-                        </button>
-
-                        {/* BOTÓN RECIBIR */}
-                        <button
-                            onClick={() => { setReactionType('recibir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
-                            className={`flex items-center justify-center gap-2 p-3 rounded border transition-all ${reactionType === 'recibir' ? 'bg-red-900/40 border-red-500 text-red-200' : 'bg-black/40 border-slate-700 hover:border-slate-500 text-slate-300'
-                                }`}
-                        >
-                            <Shield size={18} /> Recibir Golpe
-                        </button>
-                    </div>
-
-                    {/* SELECTOR DE ARMA (Si es Parar) */}
-                    {reactionType === 'parar' && weapons.length > 0 && (
-                        <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
-                                Selecciona el arma para parar:
-                            </label>
-                            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                                {weapons.map((w, idx) => {
-                                    const currentId = getWeaponId(w, idx);
-                                    return (
-                                        <WeaponCard
-                                            key={currentId}
-                                            weapon={w}
-                                            isSelected={selectedWeapon === currentId}
-                                            onSelect={() => setSelectedWeapon(currentId)}
-                                        />
-                                    );
-                                })}
-                            </div>
+                            <button
+                                onClick={handleConfirm}
+                                disabled={!reactionType || (reactionType === 'parar' && !selectedWeapon)}
+                                className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
+                            >
+                                Confirmar
+                            </button>
                         </div>
-                    )}
-
-                    <div className="flex justify-between items-center pt-5 border-t border-red-900/30">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Costo de Reacción</span>
-                            <div className="text-lg font-fantasy text-yellow-500 flex items-center gap-1.5 leading-none">
-                                {reactionType === 'evadir' ? `-${selectedDiceIndices.length}` :
-                                    reactionType === 'parar' && selectedWeapon ? `-${(() => {
-                                        const w = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
-                                        return getSpeedConsumption(w);
-                                    })()}` : '0'}
-                                <span className="text-base">🟡</span>
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleConfirm}
-                            disabled={!reactionType || (reactionType === 'parar' && !selectedWeapon)}
-                            className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
-                        >
-                            Confirmar
-                        </button>
                     </div>
                 </div>
             </div>

@@ -7384,6 +7384,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     }
                                 };
 
+                                // Calculamos la distancia al objetivo fijado para validar el alcance de las armas también para el máster
+                                const targetDistance = (targetingState?.phase === 'weapon_selection' && focusedTargetId)
+                                    ? (() => {
+                                        const items = activeScenario?.items || [];
+                                        const attacker = items.find(i => i.id === targetingState.attackerId);
+                                        const target = items.find(i => i.id === focusedTargetId);
+                                        if (!attacker || !target) return null;
+                                        const dx = Math.abs(target.x - attacker.x);
+                                        const dy = Math.abs(target.y - attacker.y);
+                                        const cellW = gridConfig.cellWidth || 50;
+                                        const cellH = gridConfig.cellHeight || 50;
+                                        // Regla Chebyshev
+                                        return Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                                    })()
+                                    : null;
+
                                 return (
                                     <motion.div
                                         key="master-hud-active"
@@ -7413,6 +7429,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
                                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
+                                            targetDistance={targetDistance}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
                                                 const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
