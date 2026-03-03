@@ -1009,11 +1009,19 @@ function App() {
         } else {
           setShowVersionBlock(false);
         }
+      } else {
+        // Si el documento no existe aún, no bloqueamos nada
+        setShowVersionBlock(false);
       }
+    }, (error) => {
+      // Si hay error de permisos o red, no bloqueamos la app
+      console.warn('[VersionGuardian] Error escuchando versión, continuando sin bloqueo:', error.message);
+      setShowVersionBlock(false);
     });
 
     return () => unsub();
-  }, [userType]);
+  }, []);
+
 
   // 2. Si soy el Master, actualizo la versión oficial al entrar
   useEffect(() => {
