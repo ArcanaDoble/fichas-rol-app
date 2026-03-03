@@ -931,29 +931,108 @@ const EQUIPMENT_CATEGORY_HISTORY_LABEL = {
   armors: 'armadura',
   powers: 'habilidad',
 };
-function App() {
-  // --- Guardian de Versión (Previene caché antiguo y evita sobrescrituras por código viejo) ---
-  useEffect(() => {
-    const checkVersion = async () => {
-      try {
-        const response = await fetch('/index.html?cb=' + Date.now(), { cache: 'no-store' });
-        const text = await response.text();
-        const match = text.match(/<meta name="app-build-id" content="([^"]+)"/);
-        const serverVersion = match ? match[1] : null;
-        const localVersion = document.querySelector('meta[name="app-build-id"]')?.content;
 
-        if (serverVersion && localVersion && serverVersion !== localVersion) {
-          console.warn(`[VersionGuardian] Nueva versión detectada en servidor (${serverVersion}) vs Local (${localVersion}). Recargando...`);
-          window.location.reload();
+// --- Componente de Aviso de Versión ---
+const VersionNotice = ({ current, target }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/95 backdrop-blur-md p-6 text-center"
+  >
+    <div className="max-w-md w-full bg-gray-800 border border-amber-500/30 rounded-2xl p-8 shadow-[0_0_50px_rgba(245,158,11,0.15)]">
+      <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+        <Zap className="text-amber-400 w-8 h-8 animate-pulse" />
+      </div>
+      <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
+        Sincronización de Versión
+      </h2>
+      <p className="text-gray-400 mb-8 leading-relaxed">
+        Se ha detectado una versión más reciente del sistema del Master ({target}).
+        <br />
+        <span className="text-amber-500/80 text-sm mt-2 block">
+          Tu versión: {current}
+        </span>
+      </p>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 justify-center text-amber-400 font-medium">
+          <div className="w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+          Actualizando código...
+        </div>
+        <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 3.5, ease: "linear" }}
+            className="h-full bg-gradient-to-r from-amber-600 to-amber-400"
+          />
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-500 mt-8 uppercase tracking-widest">
+        No es necesario borrar la caché manualmente
+      </p>
+    </div>
+  </motion.div>
+);
+
+// --- Identificador de Versión Local (Basado en la fecha/hora de este código) ---
+const APP_VERSION = "20240303-1130";
+
+function App() {
+  // --- Guardian de Versión (Bloqueo si el Master sube una versión nueva) ---
+  const [showVersionBlock, setShowVersionBlock] = useState(false);
+  const [remoteVersion, setRemoteVersion] = useState(null);
+
+  useEffect(() => {
+    // 1. Escuchar la versión oficial en Firestore
+    const unsub = onSnapshot(doc(db, 'config', 'app_state'), (docSnap) => {
+      if (docSnap.exists()) {
+        const targetVersion = docSnap.data().minVersion;
+        setRemoteVersion(targetVersion);
+
+        // Bloquear si mi versión es distinta a la requerida (y existe una requerida)
+        if (targetVersion && targetVersion !== APP_VERSION) {
+          console.warn(`[VersionGuardian] Desfase detectado: Local(${APP_VERSION}) vs Server(${targetVersion})`);
+          setShowVersionBlock(true);
+        } else {
+          setShowVersionBlock(false);
         }
-      } catch (e) {
-        // Fallar silenciosamente si no hay red
       }
-    };
-    checkVersion();
-    const interval = setInterval(checkVersion, 15 * 60 * 1000); // 15 min
-    return () => clearInterval(interval);
-  }, []);
+    });
+
+    return () => unsub();
+  }, [userType]);
+
+  // 2. Si soy el Master, actualizo la versión oficial al entrar
+  useEffect(() => {
+    if (authenticated && userType === 'master') {
+      const updateOfficialVersion = async () => {
+        try {
+          await setDoc(doc(db, 'config', 'app_state'), {
+            minVersion: APP_VERSION,
+            lastUpdatedBy: 'Master',
+            timestamp: serverTimestamp()
+          }, { merge: true });
+          console.log(`[VersionGuardian] Marcando versión ${APP_VERSION} como oficial.`);
+        } catch (err) {
+          console.error("Error actualizando versión oficial:", err);
+        }
+      };
+      updateOfficialVersion();
+    }
+  }, [authenticated, userType]);
+
+  // 3. Efecto de recarga automática al detectar bloqueo
+  useEffect(() => {
+    if (showVersionBlock) {
+      // Pequeño retardo para que el jugador vea el mensaje antes de que la web parpadee
+      const timer = setTimeout(() => {
+        window.location.reload(true);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [showVersionBlock]);
 
   // ───────────────────────────────────────────────────────────
   // STATES
@@ -965,6 +1044,12 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
   const [loginTransition, setLoginTransition] = useState(false);
+
+  // Renderizado del Bloqueo de Versión (Prioritario sobre todo lo demás)
+  if (showVersionBlock) {
+    return <VersionNotice current={APP_VERSION} target={remoteVersion} />;
+  }
+
 
   const handleLogin = () => {
     if (passwordInput === MASTER_PASSWORD) {
