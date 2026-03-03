@@ -492,9 +492,9 @@ const CombatHUD = ({
                                                                                     setSelectedActionId(null);
                                                                                     setSelectedAttackItemIdx(null);
                                                                                 }}
-                                                                                className="w-full py-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white text-[11px] md:text-xs font-fantasy uppercase tracking-[0.2em] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-2"
+                                                                                className="w-full py-2 md:py-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white text-[10px] md:text-xs font-fantasy uppercase tracking-[0.1em] md:tracking-[0.2em] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1.5 md:gap-2"
                                                                             >
-                                                                                <Sword size={14} /> Confirmar Ataque
+                                                                                <Sword size={14} className="hidden md:block" /> Confirmar Ataque
                                                                             </button>
                                                                         </div>
                                                                     </motion.div>

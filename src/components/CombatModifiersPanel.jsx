@@ -58,7 +58,7 @@ const CombatModifiersPanel = ({
             >
                 <div className="flex items-center justify-center gap-2 text-[#c8aa6e]">
                     <Sparkles className="w-4 h-4" />
-                    <span className="font-fantasy text-sm uppercase tracking-[0.2em] font-bold">Modificadores</span>
+                    <span className="font-fantasy text-xs md:text-sm uppercase tracking-[0.1em] md:tracking-[0.2em] font-bold">Modificadores</span>
                 </div>
                 {hasAnyModifiers && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
