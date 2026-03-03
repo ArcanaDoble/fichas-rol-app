@@ -964,6 +964,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [pendingTurnState, setPendingTurnState] = useState(null);
     const [combatEventQueue, setCombatEventQueue] = useState([]);
     const [resolvedEventCount, setResolvedEventCount] = useState(0);
+    const locallyResolvedEventsRef = useRef(new Set()); // Track events resolved on THIS device
     const [combatLog, setCombatLog] = useState([]);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
 
@@ -1322,19 +1323,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
                     }
                 } else if (change.type === 'removed') {
-                    // Limpiar de la cola si Firebase lo elimina externamente Y nosotros no lo hemos resuelto aún.
-                    // Si ya se ha resuelto localmente, handleReaction se encarga de quitarlo.
-                    setCombatEventQueue(prev => {
-                        return prev.filter(e => {
-                            // Si el evento retirado ya no está en la base de datos pero está en el frente de nuestra cola 
-                            // asumiendo que el usuario ya ha reaccionado o lo hará, no lo vaciamos abruptamente.
-                            // Solo se purgan si los eventos borrados NO son el que estamos viendo actualmente.
-                            if (e.event.id === change.doc.id) {
-                                return prev.indexOf(e) === 0; // Keep it if it's the current one being resolved locally
-                            }
-                            return true;
-                        });
-                    });
+                    // Limpiar de la cola. Solo protegemos eventos que ESTE dispositivo resolvió localmente
+                    // (handleReaction los marca en locallyResolvedEventsRef antes de quitarlos).
+                    // Si el evento fue resuelto en OTRO dispositivo, lo eliminamos de nuestra cola inmediatamente.
+                    const removedId = change.doc.id;
+                    const wasResolvedLocally = locallyResolvedEventsRef.current.has(removedId);
+
+                    if (wasResolvedLocally) {
+                        // Este dispositivo ya lo procesó, limpiar del tracking
+                        locallyResolvedEventsRef.current.delete(removedId);
+                    } else {
+                        // Resuelto en OTRO dispositivo → quitar de nuestra cola
+                        setCombatEventQueue(prev => prev.filter(e => e.event.id !== removedId));
+                    }
                 }
             });
         });
@@ -4126,8 +4127,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             console.warn('Evento de combate ya procesado o eliminado:', currentEvent.event.id);
         }
 
-        // Modificación visual: no avanzar inmediatamente a la siguiente pantalla sin asegurar
-        // que la BD ya ha recibido el estatus pendiente. 
+        // Marcar que ESTE dispositivo resolvió este evento, para que el onSnapshot 'removed'
+        // no lo quite de la cola duplicadamente (ya lo quitamos aquí abajo).
+        locallyResolvedEventsRef.current.add(currentEvent.event.id);
+
         // Eliminamos el evento actual de la cola ahora que ha sido procesado "localmente".
         setResolvedEventCount(prev => prev + 1);
         setCombatEventQueue(prev => prev.filter(e => e.event.id !== currentEvent.event.id));
