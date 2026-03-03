@@ -3884,9 +3884,40 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
     };
 
-    const applyCombatCalculations = (token, damage) => {
-        const posturaUmbral = parseDieValue(token.attributes?.destreza || 'd6') || 1;
-        const vidaUmbral = parseDieValue(token.attributes?.vigor || 'd6') || 1;
+    const applyCombatCalculations = (token, damage, weapon) => {
+        let destrezaRaw = token.attributes?.destreza || 'd6';
+        let vigorRaw = token.attributes?.vigor || 'd6';
+
+        // Reducir grado del dado si el arma tiene Agudeza
+        const traits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
+        const traitsArray = Array.isArray(traits) ? traits : traits.toString().split(',');
+        const hasAgudeza = traitsArray.some(t => {
+            if (typeof t !== 'string') return false;
+            return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('agudeza');
+        });
+
+        const reduceDieStep = (dieStr) => {
+            if (!dieStr || typeof dieStr !== 'string') return dieStr;
+            const match = dieStr.toLowerCase().match(/d(\d+)/);
+            if (!match) return dieStr;
+            let faces = parseInt(match[1]);
+
+            if (faces > 12) faces = 12;
+            else if (faces > 10) faces = 10;
+            else if (faces > 8) faces = 8;
+            else if (faces > 6) faces = 6;
+            else if (faces <= 6) faces = 4;
+
+            return `d${faces}`;
+        };
+
+        if (hasAgudeza) {
+            destrezaRaw = reduceDieStep(destrezaRaw);
+            vigorRaw = reduceDieStep(vigorRaw);
+        }
+
+        const posturaUmbral = parseDieValue(destrezaRaw) || 1;
+        const vidaUmbral = parseDieValue(vigorRaw) || 1;
 
         let remainingBlocks = Math.floor(damage / posturaUmbral);
         if (remainingBlocks === 0 && damage >= posturaUmbral) remainingBlocks = 1;
@@ -4021,7 +4052,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             });
 
             finalDamage = newTotal;
-            const res = applyCombatCalculations(targetToken, newTotal);
+            const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
             blocksLost = res.lost;
             updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + (event.reactionData.yellowCost || 0) });
             logText = `${targetToken.name} evadió dados de ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
@@ -4066,14 +4097,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 logText = `${targetToken.name} realizó una parada perfecta con ${defWeaponName}.`;
             } else if (diff > 0) {
                 finalDamage = diff;
-                const res = applyCombatCalculations(targetToken, diff);
+                const res = applyCombatCalculations(targetToken, diff, event.weapon);
                 blocksLost = res.lost;
                 updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `${targetToken.name} paró con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             } else {
                 counterDamage = Math.abs(diff);
-                const res = applyCombatCalculations(attackerToken, counterDamage);
+                const res = applyCombatCalculations(attackerToken, counterDamage, event.reactionData.weapon);
                 blocksLost = res.lost;
                 updateTokenInList(attackerToken.id, { stats: res.stats, status: res.status });
                 updateTokenInList(targetToken.id, { velocidad: (targetToken.velocidad || 0) + yellowCost });
@@ -4082,7 +4113,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
         } else {
             finalDamage = event.attackerRollResult.total;
-            const res = applyCombatCalculations(targetToken, event.attackerRollResult.total);
+            const res = applyCombatCalculations(targetToken, event.attackerRollResult.total, event.weapon);
             blocksLost = res.lost;
             updateTokenInList(targetToken.id, { stats: res.stats, status: res.status });
             logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;

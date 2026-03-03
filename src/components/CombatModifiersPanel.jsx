@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trash2, Zap } from 'lucide-react';
+import { Sparkles, Trash2, Zap, Target } from 'lucide-react';
 
 const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 const AVAILABLE_TRAITS = [
     { id: 'crítico', label: 'Crítico', icon: Zap, color: 'text-yellow-400', border: 'border-yellow-500/50', bg: 'bg-yellow-900/30' },
+    { id: 'agudeza', label: 'Agudeza', icon: Target, color: 'text-cyan-400', border: 'border-cyan-500/50', bg: 'bg-cyan-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
 ];
 
@@ -58,7 +59,7 @@ const CombatModifiersPanel = ({
             >
                 <div className="flex items-center justify-center gap-2 text-[#c8aa6e]">
                     <Sparkles className="w-4 h-4" />
-                    <span className="font-fantasy text-sm uppercase tracking-[0.2em] font-bold">Modificadores</span>
+                    <span className="font-fantasy text-xs md:text-sm uppercase tracking-[0.1em] md:tracking-[0.2em] font-bold">Modificadores</span>
                 </div>
                 {hasAnyModifiers && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
