@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trash2, Zap } from 'lucide-react';
+import { Sparkles, Trash2, Zap, Target } from 'lucide-react';
 
 const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 const AVAILABLE_TRAITS = [
     { id: 'crítico', label: 'Crítico', icon: Zap, color: 'text-yellow-400', border: 'border-yellow-500/50', bg: 'bg-yellow-900/30' },
+    { id: 'agudeza', label: 'Agudeza', icon: Target, color: 'text-cyan-400', border: 'border-cyan-500/50', bg: 'bg-cyan-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
 ];
 
