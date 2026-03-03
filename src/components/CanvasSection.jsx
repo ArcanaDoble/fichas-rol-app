@@ -2341,115 +2341,137 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // Auto-create player token when entering with character data
     const hasCreatedAutoToken = useRef(false);
     // Auto-create OR sync player token on join / characterData change
+    // ⚠️ CRITICAL: Este efecto SIEMPRE lee datos frescos del servidor antes de escribir,
+    // para evitar que un jugador con datos locales antiguos sobrescriba los tokens del Master.
     useEffect(() => {
         if (!isPlayerView || !characterData || !activeScenario?.id) return;
-
-        const characterName = characterData.name || playerName;
-
-        // Check if this specific character already has a token in this scenario
-        const existingToken = activeScenario.items?.find(i =>
-            i.controlledBy?.includes(playerName) && i.name === characterName
-        );
-
-        if (existingToken) {
-            // Sincronizar el token existente si acaba de entrar o los datos han cambiado
-            if (!hasCreatedAutoToken.current) {
-                const syncedToken = syncTokenWithSheet(existingToken, characterData);
-
-                // Solo guardamos si hay una diferencia real
-                if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
-                    console.log('🔄 Sincronizando token existente al entrar:', characterName);
-                    const updatedItems = activeScenario.items.map(i => i.id === existingToken.id ? syncedToken : i);
-                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                    updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
-                        .catch(err => console.error('Error al sincronizar token existente:', err));
-                }
-                hasCreatedAutoToken.current = true;
-            }
-            return;
-        }
-
         if (hasCreatedAutoToken.current) return;
 
-        // Calculate spawn position (center of the map)
-        const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
-        const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
+        const characterName = characterData.name || playerName;
+        const scenarioId = activeScenario.id;
 
-        // Crear nuevo token base
-        const baseToken = {
-            id: `token-${Date.now()}-${playerName}`,
-            x: spawnX,
-            y: spawnY,
-            width: gridConfig.cellWidth,
-            height: gridConfig.cellHeight,
-            rotation: 0,
-            layer: 'TOKEN',
-            hasVision: true,
-            visionRadius: 300,
-            controlledBy: [playerName],
-            isCircular: true,
+        const safeSync = async () => {
+            try {
+                // 1. SIEMPRE leer datos FRESCOS del servidor (nunca confiar en el estado local)
+                const freshSnap = await getDoc(doc(db, 'canvas_scenarios', scenarioId));
+                if (!freshSnap.exists()) return;
+                const freshData = freshSnap.data();
+                const freshItems = freshData.items || [];
+
+                // 2. Buscar si el token del jugador ya existe en los datos FRESCOS del servidor
+                const existingToken = freshItems.find(i =>
+                    i.controlledBy?.includes(playerName) && i.name === characterName
+                );
+
+                if (existingToken) {
+                    // Sincronizar datos de ficha al token existente (stats, atributos, etc.)
+                    const syncedToken = syncTokenWithSheet(existingToken, characterData);
+
+                    if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
+                        console.log('🔄 [SafeSync] Sincronizando token existente al entrar:', characterName);
+                        // Modificar SOLO el token del jugador en la lista fresca del servidor
+                        const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
+                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
+                        await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
+                            items: updatedItems,
+                            lastModified: Date.now()
+                        });
+                    } else {
+                        // Si no hay cambios, solo actualizar estado local con datos frescos
+                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
+                    }
+                } else {
+                    // El token NO existe en el servidor → crearlo (spawn nuevo)
+                    const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
+                    const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
+
+                    const baseToken = {
+                        id: `token-${Date.now()}-${playerName}`,
+                        x: spawnX,
+                        y: spawnY,
+                        width: gridConfig.cellWidth,
+                        height: gridConfig.cellHeight,
+                        rotation: 0,
+                        layer: 'TOKEN',
+                        hasVision: true,
+                        visionRadius: 300,
+                        controlledBy: [playerName],
+                        isCircular: true,
+                    };
+
+                    const newToken = syncTokenWithSheet(baseToken, characterData);
+                    console.log('🎭 [SafeSync] Auto-creating player token:', newToken.name);
+
+                    // Añadir a la lista fresca del servidor (no a la local)
+                    const updatedItems = [...freshItems, newToken];
+                    setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
+
+                    const playerZoom = 1.2;
+                    setZoom(playerZoom);
+                    setOffset({
+                        x: -(spawnX + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
+                        y: -(spawnY + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
+                    });
+
+                    await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
+                        items: updatedItems,
+                        lastModified: Date.now()
+                    });
+                }
+
+                hasCreatedAutoToken.current = true;
+            } catch (err) {
+                console.error('❌ [SafeSync] Error en sincronización segura:', err);
+            }
         };
 
-        // Enriquecer con los datos de la ficha usando el helper
-        const newToken = syncTokenWithSheet(baseToken, characterData);
-
-        console.log('🎭 Auto-creating player token:', newToken.name, 'for scenario:', activeScenario.name);
-
-        setActiveScenario(prev => ({
-            ...prev,
-            items: [...(prev.items || []), newToken]
-        }));
-
-        // Center camera on the new token
-        const playerZoom = 1.2;
-        setZoom(playerZoom);
-        setOffset({
-            x: -(spawnX + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
-            y: -(spawnY + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
-        });
-
-        hasCreatedAutoToken.current = true;
-
-        // Save the new token to Firebase
-        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
-            items: [...(activeScenario.items || []), newToken]
-        }).catch(err => console.error('Error saving auto-created token:', err));
-
+        safeSync();
     }, [isPlayerView, characterData, activeScenario?.id, playerName, gridConfig]);
 
     // Listener para sincronización en tiempo real desde edición de fichas
+    // ⚠️ CRITICAL: Lee datos frescos del servidor antes de escribir para evitar sobrescrituras.
     useEffect(() => {
-        const handleSyncEvent = (e) => {
+        const handleSyncEvent = async (e) => {
             const { name, sheet } = e.detail || {};
             const currentScenario = activeScenarioRef.current;
 
             if (!name || !sheet || !currentScenario?.id) return;
 
-            const currentItems = currentScenario.items || [];
-            let hasChanges = false;
+            try {
+                // Leer datos frescos del servidor
+                const freshSnap = await getDoc(doc(db, 'canvas_scenarios', currentScenario.id));
+                if (!freshSnap.exists()) return;
+                const freshData = freshSnap.data();
+                const freshItems = freshData.items || [];
 
-            const updatedItems = currentItems.map(item => {
-                // Sincronizamos por ID vinculado (prioridad) o por nombre (fallback)
-                const isMatch = (item.linkedCharacterId && item.linkedCharacterId === sheet.id) ||
-                    (!item.linkedCharacterId && item.name === name);
+                let hasChanges = false;
+                const updatedItems = freshItems.map(item => {
+                    const isMatch = (item.linkedCharacterId && item.linkedCharacterId === sheet.id) ||
+                        (!item.linkedCharacterId && item.name === name);
 
-                if (isMatch && item.layer === 'TOKEN') {
-                    const synced = syncTokenWithSheet(item, sheet);
-                    if (JSON.stringify(synced) !== JSON.stringify(item)) {
-                        hasChanges = true;
-                        return synced;
+                    if (isMatch && item.layer === 'TOKEN') {
+                        const synced = syncTokenWithSheet(item, sheet);
+                        if (JSON.stringify(synced) !== JSON.stringify(item)) {
+                            hasChanges = true;
+                            return synced;
+                        }
                     }
-                }
-                return item;
-            });
+                    return item;
+                });
 
-            if (hasChanges) {
-                console.log('🔄 Sincronización en tiempo real detectada para:', name);
-                setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), { items: updatedItems })
-                    .catch(err => console.error('Error al sincronizar token en tiempo real:', err));
+                if (hasChanges) {
+                    console.log('🔄 [SafeSync] Sincronización en tiempo real para:', name);
+                    setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
+                    await updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+                        items: updatedItems,
+                        lastModified: Date.now()
+                    });
+                }
+            } catch (err) {
+                console.error('❌ [SafeSync] Error sincronizando ficha en tiempo real:', err);
             }
         };
+
 
         window.addEventListener('playerSheetSaved', handleSyncEvent);
         return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
