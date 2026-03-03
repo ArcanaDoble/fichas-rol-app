@@ -27,7 +27,11 @@ export const parseDamage = (val) => {
 
 export const rollAttack = (weapon, attributes) => {
     const itemDamage = weapon?.dano ?? weapon?.poder ?? weapon?.damage ?? '';
-    const baseFormula = parseDamage(itemDamage) || '1d20';
+    let baseFormula = parseDamage(itemDamage) || '1d20';
+
+    if (weapon?.extraDamageString) {
+        baseFormula += ` + ${weapon.extraDamageString}`;
+    }
 
     const allTraits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
 
@@ -84,7 +88,13 @@ export const rollAttack = (weapon, attributes) => {
     });
 
     const traitsArray = Array.isArray(allTraits) ? allTraits : allTraits.toString().split(',');
-    const hasCritical = traitsArray.some((r) => typeof r === 'string' && r.toLowerCase().includes('crítico'));
+
+    // Check for critical hit trait, ignoring case and accents
+    const hasCritical = traitsArray.some((r) => {
+        if (typeof r !== 'string') return false;
+        const normalized = r.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return normalized.includes('critico');
+    });
 
     // 1. Roll Base Damage
     let baseRes;

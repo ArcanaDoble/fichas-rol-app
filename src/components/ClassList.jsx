@@ -5034,13 +5034,15 @@ const ClassList = ({
         <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
           {renderActiveView()}
 
-          {/* Close Button Absolute Positioned */}
-          <button
-            onClick={closeClassDetails}
-            className="absolute top-4 right-4 md:top-6 md:right-6 z-50 p-2 rounded-full bg-black/40 text-slate-400 hover:text-white hover:bg-black/60 transition-colors border border-slate-700/50"
-          >
-            <FiX className="w-5 h-5 md:w-6 md:h-6" />
-          </button>
+          {/* Close Button Absolute Positioned — hidden when opened from canvas overlay (which has its own golden X) */}
+          {!initialCharacterName && (
+            <button
+              onClick={closeClassDetails}
+              className="absolute top-4 right-4 md:top-6 md:right-6 z-50 p-2 rounded-full bg-black/40 text-slate-400 hover:text-white hover:bg-black/60 transition-colors border border-slate-700/50"
+            >
+              <FiX className="w-5 h-5 md:w-6 md:h-6" />
+            </button>
+          )}
         </div>
 
         {/* Mobile Navigation Bar */}
