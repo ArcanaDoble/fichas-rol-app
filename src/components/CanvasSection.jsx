@@ -2,18 +2,19 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints, Map, Circle } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import CombatReactionModal from './CombatReactionModal';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
-import { rollAttack } from '../utils/combatSystem';
+import { rollAttack, getSpeedConsumption } from '../utils/combatSystem';
 import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { parseDieValue } from '../utils/damage';
+import DiceSvg from './DiceSvg';
 
 // --- Constants ---
 const STATUS_EFFECT_IDS = [
@@ -1306,8 +1307,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     if (targetToken) {
                         const isMasterView = !isPlayerView;
-                        const isControlledByMe = isPlayerView && playerName && targetToken.controlledBy?.includes(playerName);
-                        const isMasterNPC = isMasterView && (!targetToken.controlledBy || targetToken.controlledBy.length === 0);
+                        const isControlledByMe = isPlayerView && playerName && targetToken.controlledBy === playerName;
+                        const isMasterNPC = isMasterView && (!targetToken.controlledBy || targetToken.controlledBy === 'master' || targetToken.controlledBy.length === 0);
 
                         if (isControlledByMe || isMasterNPC) {
                             // Añadir al final de la cola si no existe ya
@@ -1830,15 +1831,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const newSelected = activeScenario.items.filter(item => {
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
-                    const isCorrectLayer = activeLayer === 'LIGHTING' ? (isLight || isWall) : (!isLight && !isWall);
+                    const isGeometry = item.type === 'geometry';
+                    const isCorrectLayer = activeLayer === 'LIGHTING' ? (isLight || isWall) : activeLayer === 'MAP' ? isGeometry : (!isLight && !isWall && !isGeometry);
 
                     if (!isCorrectLayer) return false;
 
                     // Restricción de Jugador: No permitir seleccionar tokens ajenos
-                    if (isPlayerView && !isLight && !isWall) {
+                    if (isPlayerView && !isLight && !isWall && !isGeometry) {
                         const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
                         if (!hasPermission) return false;
-                    } else if (isPlayerView && (isLight || isWall)) {
+                    } else if (isPlayerView && (isLight || isWall || isGeometry)) {
                         return false;
                     }
 
@@ -2233,8 +2235,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         // Feedback visual reutilizando el Toast existente
                         setToastType('success');
                         setShowToast(true);
-                        setTimeout(() => setToastExiting(true), 2000);
-                        setTimeout(() => { setShowToast(false); setToastExiting(false); }, 2500);
+                        setTimeout(() => setShowToast(false), 2500);
 
                     } catch (error) {
                         console.error('Error al pegar tokens:', error);
@@ -2994,6 +2995,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
     };
 
+    const addAreaToCanvas = async (shape = 'rect') => {
+        if (!activeScenario) return;
+
+        const spawnX = WORLD_SIZE / 2;
+        const spawnY = WORLD_SIZE / 2;
+        const side = gridConfig.cellWidth * 2 || 100;
+
+        const newArea = {
+            id: crypto.randomUUID(),
+            type: 'geometry',
+            shapeType: shape, // 'rect' | 'circle'
+            name: shape === 'rect' ? 'Zona Rectangular' : 'Zona Circular',
+            x: spawnX - side / 2,
+            y: spawnY - side / 2,
+            width: side,
+            height: side,
+            backgroundColor: shape === 'rect' ? '#22c55e' : '#60a5fa', // Verde para rect, Azul para círculo por defecto
+            opacity: 0.3,
+            rotation: 0,
+            snapToGrid: true,
+            controlledBy: ['master'],
+            isCircular: shape === 'circle'
+        };
+
+        const updatedItems = [...(activeScenario.items || []), newArea];
+        setActiveScenario(prev => ({ ...prev, items: updatedItems }));
+        setSelectedTokenIds([newArea.id]);
+
+        try {
+            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                items: updatedItems,
+                lastModified: Date.now()
+            });
+        } catch (error) {
+            console.error("Error adding area:", error);
+        }
+    };
+
     // --- HELPER: renderItemJSX ---
     // Usamos una función que devuelve JSX en lugar de un "Componente" de React definido dentro de otro,
     // para evitar que los nodos DOM se destruyan y reconstruyan en cada renderizado (lo cual rompe el double-click).
@@ -3002,23 +3041,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isSelected = selectedTokenIds.includes(item.id);
         const isLight = item.type === 'light';
         const isWall = item.type === 'wall';
+        const isGeometry = item.type === 'geometry';
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
-        let canInteract = isLightingLayer ? (isLight || isWall) : (!isLight && !isWall);
+        const isMapLayer = activeLayer === 'MAP';
+
+        let canInteract = false;
+        if (isLightingLayer) canInteract = (isLight || isWall);
+        else if (isMapLayer) canInteract = isGeometry;
+        else canInteract = (!isLight && !isWall && !isGeometry);
 
         // Si estamos en targeting (apuntando o eligiendo arma), TODOS los tokens son interactuables como objetivos.
         // Importante: Esto previene que el click en un enemigo "atraviese" la ficha hacia el fondo y cancele la acción en móvil.
         const isTargetingActive = targetingState && (targetingState.phase === 'targeting' || targetingState.phase === 'weapon_selection');
-        if (isTargetingActive && !isLight && !isWall) {
+        if (isTargetingActive && !isLight && !isWall && !isGeometry) {
             canInteract = true;
-        } else if (isPlayerView && !isLight && !isWall) {
+        } else if (isPlayerView && !isLight && !isWall && !isGeometry) {
             const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
             if (!hasPermission) {
                 canInteract = false;
             }
-        } else if (isPlayerView && (isLight || isWall)) {
-            // Jugadores no pueden tocar luces ni muros
+        } else if (isPlayerView && (isLight || isWall || isGeometry)) {
+            // Jugadores no pueden tocar luces ni muros ni áreas
             canInteract = false;
         }
 
@@ -3297,7 +3342,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             height: `${item.height}px`,
                                         }}
                                     >
-                                        {!isLight && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
+                                        {!isLight && !isGeometry && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
+                                        {isGeometry && (
+                                            <div
+                                                className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                                style={{
+                                                    backgroundColor: item.backgroundColor || '#22c55e',
+                                                    opacity: item.opacity || 0.4,
+                                                    borderRadius: item.isCircular ? '50%' : '4px',
+                                                    border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                                    pointerEvents: 'none'
+                                                }}
+                                            >
+                                                <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* --- INDICADOR DE TARGETING: Eliminado de aquí y movido a Capa Global al final de la sección del mapa --- */}
@@ -3311,6 +3370,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onDoubleClick={(e) => {
+                        if (!canInteract) return;
+
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
                         const hasPermission = !isPlayerView || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return;
@@ -3343,14 +3404,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             )}
 
                             {/* Indicador de Compartido (Izquierda) */}
-                            {item.controlledBy?.length > 0 && (
+                            {item.type !== 'geometry' && item.type !== 'light' && item.type !== 'wall' && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
                                     <Users size={8} />
                                 </div>
                             )}
 
                             {/* Indicador de Velocidad (Derecha) */}
-                            {(() => {
+                            {item.type !== 'geometry' && item.type !== 'light' && item.type !== 'wall' && (() => {
                                 const currentVel = item.velocidad || 0;
                                 const pendingVel = (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)
                                     ? (pendingTurnState.moveCost + pendingTurnState.actionCost)
@@ -3442,18 +3503,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     }}
                                 />
                             </div>
+                        ) : isGeometry ? (
+                            <div
+                                className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                style={{
+                                    backgroundColor: item.backgroundColor || '#22c55e',
+                                    opacity: item.opacity || 0.4,
+                                    borderRadius: item.shapeType === 'circle' ? '50%' : '4px',
+                                    border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                    pointerEvents: 'none'
+                                }}
+                            >
+                                <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                            </div>
                         ) : (
                             item.isCircular ? (
                                 <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]">
-                                    <img src={item.img} className="w-full h-full object-cover" draggable={false} />
+                                    <img src={item.img} className="w-full h-full object-cover" draggable={false} alt="" />
                                 </div>
                             ) : (
-                                <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} />
+                                <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} alt="" />
                             )
                         )}
 
-                        {/* Recursos (HUD) - Solo para tokens, no luces */}
-                        {!isLight && canInteract && (
+                        {/* Recursos (HUD) - Solo para tokens, no luces ni geometria */}
+                        {!isLight && !isGeometry && canInteract && (
                             <TokenHUD
                                 stats={item.stats}
                                 width={item.width}
@@ -3464,7 +3538,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
                         {/* MOVEMENT DISTANCE INDICATOR (Solo para tokens al arrastrar) */}
-                        {!isLight && canInteract && tokenOriginalPos[item.id] && (
+                        {!isLight && !isGeometry && canInteract && tokenOriginalPos[item.id] && (
                             (() => {
                                 const original = tokenOriginalPos[item.id];
                                 const dx = Math.abs(item.x - original.x);
@@ -3733,7 +3807,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         if (actionId === 'attack') {
             const weapon = data || (attackerToken.equippedItems || []).find(i => i.type === 'weapon');
-            cost = Number(weapon?.velocidad || weapon?.vel || 2);
+            cost = weapon ? getSpeedConsumption(weapon) : 2;
             actionName = `Ataque a ${targetToken.name} (${weapon?.nombre || weapon?.name || 'Arma'})`;
 
             // Aquí podríamos disparar efectos visuales, tirar dados, etc.
@@ -3864,12 +3938,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const attackerDice = [];
         (event.attackerRollResult?.details || []).forEach((detail, dIdx) => {
             if (detail.type === 'dice') {
+                const match = detail.formula?.match(/d(\d+)/i);
+                const faces = match ? parseInt(match[1]) : 20;
+
                 detail.rolls.forEach((r, rIdx) => {
                     attackerDice.push({
                         value: typeof r === 'object' ? r.value : r,
                         critical: typeof r === 'object' ? r.critical : false,
                         matchedAttr: detail.matchedAttr || null,
-                        id: `${dIdx}-${rIdx}`
+                        id: `${dIdx}-${rIdx}`,
+                        faces
                     });
                 });
             } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
@@ -3877,7 +3955,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     value: detail.value || detail.total || 0,
                     matchedAttr: detail.matchedAttr,
                     critical: false,
-                    id: `${dIdx}-0`
+                    id: `${dIdx}-0`,
+                    faces: 6
                 });
             }
         });
@@ -3930,18 +4009,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Extract defender dice details
             (defenderRoll.details || []).forEach((detail, dIdx) => {
                 if (detail.type === 'dice') {
+                    const match = detail.formula?.match(/d(\d+)/i);
+                    const faces = match ? parseInt(match[1]) : 20;
+
                     detail.rolls.forEach((r, rIdx) => {
                         defenderDice.push({
                             value: typeof r === 'object' ? r.value : r,
                             matchedAttr: detail.matchedAttr || null,
-                            id: `def-${dIdx}-${rIdx}`
+                            critical: typeof r === 'object' && r.critical,
+                            id: `def-${dIdx}-${rIdx}`,
+                            faces
                         });
                     });
                 } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
                     defenderDice.push({
                         value: detail.value || detail.total || 0,
                         matchedAttr: detail.matchedAttr,
-                        id: `def-${dIdx}-0`
+                        critical: false,
+                        id: `def-${dIdx}-0`,
+                        faces: 6
                     });
                 }
             });
@@ -4336,7 +4422,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         {/* --- SPEED TIMELINE --- */}
                         <SpeedTimeline
-                            tokens={(activeScenario?.items || []).filter(i => i && i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats))}
+                            tokens={(activeScenario?.items || []).filter(i => i && i.type !== 'wall' && i.type !== 'light' && i.type !== 'geometry' && (i.isCircular || i.stats))}
                             selectedId={selectedTokenIds[0]}
                             onSelect={(id) => setSelectedTokenIds([id])}
                             isPlayerView={isPlayerView}
@@ -4549,33 +4635,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                             // Render distinctively if critical
                                                                             if (wasEvaded) {
                                                                                 return (
-                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all line-through"
-                                                                                        style={{ borderColor: 'rgba(127,29,29,0.2)', color: 'rgba(127,29,29,0.4)', backgroundColor: 'transparent', boxShadow: 'none' }}
-                                                                                        title={die.critical ? "Dado Crítico (Evadido)" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)} (Evadido)` : "Dado de Arma (Evadido)"}>
-                                                                                        {die.value}
-                                                                                    </span>
+                                                                                    <div key={i} className="relative flex-shrink-0" title={die.critical ? "Dado Crítico (Evadido)" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)} (Evadido)` : "Dado de Arma (Evadido)"}>
+                                                                                        <DiceSvg faces={die.faces} value={die.value} className="w-5 h-5 drop-shadow-sm" style={{ borderColor: 'rgba(153,27,27,0.3)', color: 'rgba(153,27,27,0.6)', backgroundColor: 'transparent', textDecoration: 'line-through' }} />
+                                                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                                                                                            <div className="w-full h-[1.5px] bg-red-600 rounded-full rotate-[-45deg] opacity-70"></div>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 );
                                                                             }
 
                                                                             // Estilo Dorado Rojizo para el log de combate si el dado es Crítico
                                                                             return (
-                                                                                <span key={i} className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all ${die.critical ? 'shadow-[0_0_6px_rgba(234,88,12,0.3)] bg-gradient-to-br from-transparent to-[#ea580c]/10' : ''}`}
-                                                                                    title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
-                                                                                    style={die.critical ? {
-                                                                                        borderColor: '#ea580c',
-                                                                                        color: '#ea580c',
-                                                                                    } : attrStyle ? {
-                                                                                        backgroundColor: 'transparent',
-                                                                                        borderColor: attrStyle.color,
-                                                                                        color: attrStyle.color,
-                                                                                        boxShadow: 'none',
-                                                                                    } : {
-                                                                                        borderColor: 'rgba(200,170,110,0.2)',
-                                                                                        color: 'rgba(200,170,110,0.8)',
-                                                                                        backgroundColor: 'transparent',
-                                                                                    }}>
-                                                                                    {die.value}
-                                                                                </span>
+                                                                                <div key={i} className="flex-shrink-0 focus:outline-none" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}>
+                                                                                    <DiceSvg faces={die.faces} value={die.value}
+                                                                                        className={`w-5 h-5 ${die.critical ? 'drop-shadow-[0_0_6px_rgba(234,88,12,0.3)]' : 'drop-shadow-sm'}`}
+                                                                                        style={die.critical ? {
+                                                                                            borderColor: '#ea580c',
+                                                                                            color: '#ea580c',
+                                                                                            backgroundColor: 'rgba(234, 88, 12, 0.1)'
+                                                                                        } : attrStyle ? {
+                                                                                            backgroundColor: 'transparent',
+                                                                                            borderColor: attrStyle.color,
+                                                                                            color: attrStyle.color,
+                                                                                        } : {
+                                                                                            borderColor: 'rgba(200,170,110,0.3)',
+                                                                                            color: 'rgba(200,170,110,0.9)',
+                                                                                            backgroundColor: 'transparent',
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
                                                                             );
                                                                         })}
                                                                     </div>
@@ -4600,19 +4688,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                 const attrStyle = matchedAttr && attrColorMap[matchedAttr] ? attrColorMap[matchedAttr] : null;
 
                                                                                 return (
-                                                                                    <span key={i} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm border transition-all"
-                                                                                        style={attrStyle ? {
-                                                                                            backgroundColor: 'transparent',
-                                                                                            borderColor: attrStyle.color,
-                                                                                            color: attrStyle.color,
-                                                                                            boxShadow: 'none',
-                                                                                        } : {
-                                                                                            borderColor: 'rgba(96,165,250,0.2)',
-                                                                                            color: 'rgba(96,165,250,0.8)',
-                                                                                            backgroundColor: 'transparent',
-                                                                                        }}>
-                                                                                        {die.value}
-                                                                                    </span>
+                                                                                    <div key={i} className="flex-shrink-0" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}>
+                                                                                        <DiceSvg faces={die.faces} value={die.value}
+                                                                                            className={`w-5 h-5 ${die.critical ? 'drop-shadow-[0_0_6px_rgba(234,88,12,0.3)]' : 'drop-shadow-sm'}`}
+                                                                                            style={die.critical ? {
+                                                                                                borderColor: '#ea580c',
+                                                                                                color: '#ea580c',
+                                                                                                backgroundColor: 'rgba(234, 88, 12, 0.15)'
+                                                                                            } : attrStyle ? {
+                                                                                                backgroundColor: 'transparent',
+                                                                                                borderColor: attrStyle.color,
+                                                                                                color: attrStyle.color,
+                                                                                            } : {
+                                                                                                borderColor: 'rgba(96,165,250,0.3)',
+                                                                                                color: 'rgba(96,165,250,0.9)',
+                                                                                                backgroundColor: 'transparent',
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
                                                                                 );
                                                                             })}
                                                                         </div>
@@ -5251,6 +5344,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <Sparkles className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'wall' ? (
                                                         <PenTool className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
+                                                    ) : token.type === 'geometry' ? (
+                                                        token.shapeType === 'circle' ? <Circle className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" /> : <Square className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : (
                                                         <img src={token.portrait || token.img} className="w-full h-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-110" />
                                                     )}
@@ -5287,24 +5382,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rotación (°)</label>
-                                                        <div className="flex items-center bg-[#111827] border border-slate-800 rounded h-9">
+                                                    <div className="space-y-2 flex flex-col justify-end">
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 h-4 mb-1">
+                                                            <RotateCw size={10} className="text-[#c8aa6e]" /> Rotación (°)
+                                                        </label>
+                                                        <div className="flex items-center bg-[#111827] border border-slate-800 rounded h-10">
                                                             <input
                                                                 type="number"
                                                                 value={Math.round(token.rotation || 0)}
                                                                 onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
-                                                                className="w-full h-full bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
+                                                                className="w-full h-full py-0 min-h-0 bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
+                                                                style={{ minHeight: 'unset' }}
                                                             />
                                                             <span className="pr-3 text-slate-600 text-xs">°</span>
                                                         </div>
                                                     </div>
                                                     {/* Placeholder for Size/Scale - podría ser complejo por ahora simplemente mostramos */}
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                    <div className="space-y-2 flex flex-col justify-end">
+                                                        <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 h-4 mb-1">
                                                             <Maximize size={10} className="text-[#c8aa6e]" /> Tamaño
                                                         </label>
-                                                        <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-9">
+                                                        <div className="flex items-center justify-between bg-[#111827] border border-slate-800 rounded overflow-hidden h-10">
                                                             <button
                                                                 onClick={() => {
                                                                     // Lógica inteligente de decremento
@@ -5374,7 +5472,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* Future Links (Solo para personas/tokens reales) */}
                                                 {/* FORMA CIRCULAR */}
-                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-0.5">
@@ -5392,7 +5490,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Users size={12} /> Control de Jugador
@@ -5494,7 +5592,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Eye size={12} /> Visión y Niebla
@@ -5639,8 +5737,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
 
-                                                {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro ni geometria) */}
+                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50">
                                                         <TokenResources
                                                             token={token}
@@ -5762,8 +5860,64 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                 )}
 
+                                                {/* CONFIGURACIÓN DE GEOMETRÍA (Solo si ES geometry) */}
+                                                {token.type === 'geometry' && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
+                                                            <Map size={12} /> Propiedades del Tapete
+                                                        </h4>
+
+                                                        {/* Opacidad del bloque */}
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className="text-slate-500">Transparencia</span>
+                                                                <span className="text-[#c8aa6e] font-mono">{Math.round((token.opacity || 0.4) * 100)}%</span>
+                                                            </div>
+                                                            <input
+                                                                type="range"
+                                                                min="0.1" max="1" step="0.1"
+                                                                value={token.opacity || 0.4}
+                                                                onChange={(e) => updateItem(token.id, { opacity: Number(e.target.value) })}
+                                                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                            />
+                                                        </div>
+
+                                                        {/* Snap Toggle para Tapete */}
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Snap a Rejilla</span>
+                                                                <span className="text-[9px] text-slate-600">Ajustar bloque a las celdas al moverse</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { snapToGrid: token.snapToGrid === false ? true : false })}
+                                                                className={`w-12 h-6 rounded-full transition-all relative ${token.snapToGrid !== false ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.snapToGrid !== false ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Color de Fondo */}
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
+                                                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className="text-slate-500">Tono del Área</span>
+                                                                <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.backgroundColor }}></div>
+                                                            </div>
+                                                            <div className="grid grid-cols-5 gap-2">
+                                                                {['#22c55e', '#ef4444', '#3b82f6', '#eab308', '#a855f7', '#64748b', '#000000', '#ffffff', '#f97316', '#14b8a6'].map(c => (
+                                                                    <button
+                                                                        key={c}
+                                                                        onClick={() => updateItem(token.id, { backgroundColor: c })}
+                                                                        className={`w-full aspect-square rounded border transition-all ${token.backgroundColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:border-white/30'}`}
+                                                                        style={{ backgroundColor: c }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Estados Alterados (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && (
+                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-3">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Flame size={12} /> Estados Alterados
@@ -5851,7 +6005,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* SECCIÓN DE EQUIPAMIENTO */}
-                                                {(token.type !== 'light' && token.type !== 'wall') && (() => {
+                                                {(token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry') && (() => {
                                                     const equippedItems = token.equippedItems || [];
 
                                                     // Category tabs for adding items — mirrors LoadoutView
@@ -5960,6 +6114,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 </div>
                             )}
 
+                            {/* Herramientas de Edición (Solo visibles en capa MAP y para Master) */}
+                            {!isPlayerView && (
+                                <div className={`transition-all duration-300 transform flex flex-col gap-2 md:gap-3 ${activeLayer === 'MAP' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
+                                    {/* Botón para añadir Área Rectangular */}
+                                    <button
+                                        onClick={() => addAreaToCanvas('rect')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Zona Rectangular"
+                                    >
+                                        <Square className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+
+                                    {/* Botón para añadir Área Circular */}
+                                    <button
+                                        onClick={() => addAreaToCanvas('circle')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Zona Circular"
+                                    >
+                                        <Circle className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Selector de Capas (Sólo Master) */}
                             {!isPlayerView && (
                                 <div className="bg-[#1a1b26] border border-[#c8aa6e]/30 rounded-lg p-1 shadow-2xl flex flex-col gap-1 items-center">
@@ -5986,6 +6163,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     >
                                         <LayoutGrid size={16} className="md:hidden" />
                                         <LayoutGrid size={20} className="hidden md:block" />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setActiveLayer('MAP');
+                                            setSelectedTokenIds([]);
+                                            setIsDrawingWall(false);
+                                        }}
+                                        className={`w-8 h-8 md:w-10 md:h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'MAP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                                        title="Capa de Tapete / Áreas"
+                                    >
+                                        <Map size={16} className="md:hidden" />
+                                        <Map size={20} className="hidden md:block" />
                                     </button>
                                 </div>
                             )}
@@ -7132,11 +7321,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 const x2 = target.x + target.width / 2;
                                                 const y2 = target.y + target.height / 2;
 
-                                                const dx = Math.abs(target.x - attacker.x);
-                                                const dy = Math.abs(target.y - attacker.y);
                                                 const cellW = gridConfig.cellWidth || 50;
                                                 const cellH = gridConfig.cellHeight || 50;
-                                                const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                                                const ax = Math.round(attacker.x / cellW);
+                                                const ay = Math.round(attacker.y / cellH);
+                                                const aw = Math.max(1, Math.round((attacker.width || cellW) / cellW));
+                                                const ah = Math.max(1, Math.round((attacker.height || cellH) / cellH));
+
+                                                const tx = Math.round(target.x / cellW);
+                                                const ty = Math.round(target.y / cellH);
+                                                const tw = Math.max(1, Math.round((target.width || cellW) / cellW));
+                                                const th = Math.max(1, Math.round((target.height || cellH) / cellH));
+
+                                                const distX = Math.max(0, tx - (ax + aw - 1), ax - (tx + tw - 1));
+                                                const distY = Math.max(0, ty - (ay + ah - 1), ay - (ty + th - 1));
+                                                const distance = Math.max(distX, distY);
 
                                                 return (
                                                     <g key={`attack-path-${idx}`}>
@@ -7265,12 +7465,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const attacker = items.find(i => i.id === targetingState.attackerId);
                             const target = items.find(i => i.id === focusedTargetId);
                             if (!attacker || !target) return null;
-                            const dx = Math.abs(target.x - attacker.x);
-                            const dy = Math.abs(target.y - attacker.y);
                             const cellW = gridConfig.cellWidth || 50;
                             const cellH = gridConfig.cellHeight || 50;
-                            // Regla Chebyshev
-                            return Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                            const ax = Math.round(attacker.x / cellW);
+                            const ay = Math.round(attacker.y / cellH);
+                            const aw = Math.max(1, Math.round((attacker.width || cellW) / cellW));
+                            const ah = Math.max(1, Math.round((attacker.height || cellH) / cellH));
+
+                            const tx = Math.round(target.x / cellW);
+                            const ty = Math.round(target.y / cellH);
+                            const tw = Math.max(1, Math.round((target.width || cellW) / cellW));
+                            const th = Math.max(1, Math.round((target.height || cellH) / cellH));
+
+                            const distX = Math.max(0, tx - (ax + aw - 1), ax - (tx + tw - 1));
+                            const distY = Math.max(0, ty - (ay + ah - 1), ay - (ty + th - 1));
+                            return Math.max(distX, distY);
                         })()
                         : null;
 
@@ -7391,12 +7601,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         const attacker = items.find(i => i.id === targetingState.attackerId);
                                         const target = items.find(i => i.id === focusedTargetId);
                                         if (!attacker || !target) return null;
-                                        const dx = Math.abs(target.x - attacker.x);
-                                        const dy = Math.abs(target.y - attacker.y);
                                         const cellW = gridConfig.cellWidth || 50;
                                         const cellH = gridConfig.cellHeight || 50;
-                                        // Regla Chebyshev
-                                        return Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+
+                                        const ax = Math.round(attacker.x / cellW);
+                                        const ay = Math.round(attacker.y / cellH);
+                                        const aw = Math.max(1, Math.round((attacker.width || cellW) / cellW));
+                                        const ah = Math.max(1, Math.round((attacker.height || cellH) / cellH));
+
+                                        const tx = Math.round(target.x / cellW);
+                                        const ty = Math.round(target.y / cellH);
+                                        const tw = Math.max(1, Math.round((target.width || cellW) / cellW));
+                                        const th = Math.max(1, Math.round((target.height || cellH) / cellH));
+
+                                        const distX = Math.max(0, tx - (ax + aw - 1), ax - (tx + tw - 1));
+                                        const distY = Math.max(0, ty - (ay + ah - 1), ay - (ty + th - 1));
+                                        return Math.max(distX, distY);
                                     })()
                                     : null;
 

@@ -1,11 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, FastForward, Sword, Zap, X, Check } from 'lucide-react';
 import { getSpeedConsumption, rollAttack } from '../utils/combatSystem';
+import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
+import DiceSvg from './DiceSvg';
 
 const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
     const [selectedDiceIndices, setSelectedDiceIndices] = useState([]);
     const [reactionType, setReactionType] = useState(null); // 'evadir', 'parar', 'recibir'
     const [selectedWeapon, setSelectedWeapon] = useState('');
+    const [customModifiers, setCustomModifiers] = useState({ extraDice: {}, activeTraits: [] });
+    const [modifiersExpanded, setModifiersExpanded] = useState(false);
 
     // Extraer dados del atacante (manteniendo individualidad de los críticos)
     const attackerDice = useMemo(() => {
@@ -13,6 +17,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         const dice = [];
         event.attackerRollResult.details.forEach((detail, detailIdx) => {
             if (detail.type === 'dice') {
+                const match = detail.formula?.match(/d(\d+)/i);
+                const faces = match ? parseInt(match[1]) : 20;
+
                 detail.rolls.forEach((r, idx) => {
                     const isCrit = typeof r === 'object' && r.critical;
                     dice.push({
@@ -21,7 +28,8 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                         detailIdx,
                         rollIdx: idx,
                         isCrit,
-                        id: `${detailIdx}-${idx}`
+                        id: `${detailIdx}-${idx}`,
+                        faces
                     });
                 });
             } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
@@ -32,7 +40,8 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                     detailIdx,
                     rollIdx: 0,
                     isCrit: false,
-                    id: `${detailIdx}-0`
+                    id: `${detailIdx}-0`,
+                    faces: 6
                 });
             }
         });
@@ -67,8 +76,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             onReact({ type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } });
         } else if (reactionType === 'parar') {
             const weapon = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
-            const cost = getSpeedConsumption(weapon);
-            onReact({ type: 'parar', data: { weapon, yellowCost: cost } });
+            const modifiedWeapon = applyModifiersToWeapon(weapon, customModifiers);
+            const cost = getSpeedConsumption(modifiedWeapon);
+            onReact({ type: 'parar', data: { weapon: modifiedWeapon, yellowCost: cost } });
         } else {
             onReact({ type: 'recibir', data: null });
         }
@@ -178,13 +188,17 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                             <div
                                                 key={die.id}
                                                 onClick={() => reactionType === 'evadir' && toggleDie(die.id)}
-                                                className={`w-12 h-12 flex items-center justify-center rounded-lg text-xl font-bold font-fantasy border-2 transition-all relative ${reactionType === 'evadir' ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
-                                                style={isSelected ? selectedStyle : baseStyle}
-                                                title={die.isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                className={`relative transition-all ${reactionType === 'evadir' ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
                                             >
-                                                {die.value}
-                                                {die.isCrit && <span className="absolute -top-3 -right-2 text-[#ea580c] text-[10px] font-sans tracking-tight font-bold drop-shadow-md pointer-events-none uppercase bg-black/60 px-1 rounded border border-[#ea580c]/50">CRIT</span>}
-                                                {isSelected && <X className="absolute text-red-500 w-8 h-8" />}
+                                                <DiceSvg
+                                                    faces={die.faces}
+                                                    value={die.value}
+                                                    className="w-12 h-12"
+                                                    style={isSelected ? selectedStyle : baseStyle}
+                                                    title={die.isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                />
+                                                {die.isCrit && <span className="absolute -top-3 -right-2 text-[#ea580c] text-[10px] font-sans tracking-tight font-bold drop-shadow-md pointer-events-none uppercase bg-black/60 px-1 z-20 rounded border border-[#ea580c]/50">CRIT</span>}
+                                                {isSelected && <X className="absolute inset-0 m-auto text-red-500 w-8 h-8 pointer-events-none z-20" />}
                                             </div>
                                         )
                                     })}
@@ -237,23 +251,35 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
 
                             {/* SELECTOR DE ARMA (Si es Parar) */}
                             {reactionType === 'parar' && weapons.length > 0 && (
-                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                    <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
-                                        Selecciona el arma para parar:
-                                    </label>
-                                    <div className="flex flex-col gap-2">
-                                        {weapons.map((w, idx) => {
-                                            const currentId = getWeaponId(w, idx);
-                                            return (
-                                                <WeaponCard
-                                                    key={currentId}
-                                                    weapon={w}
-                                                    isSelected={selectedWeapon === currentId}
-                                                    onSelect={() => setSelectedWeapon(currentId)}
-                                                />
-                                            );
-                                        })}
+                                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div>
+                                        <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
+                                            Selecciona el arma para parar:
+                                        </label>
+                                        <div className="flex flex-col gap-2">
+                                            {weapons.map((w, idx) => {
+                                                const currentId = getWeaponId(w, idx);
+                                                return (
+                                                    <WeaponCard
+                                                        key={currentId}
+                                                        weapon={w}
+                                                        isSelected={selectedWeapon === currentId}
+                                                        onSelect={() => setSelectedWeapon(currentId)}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
                                     </div>
+
+                                    {/* Panel de Modificadores Creativos / DM */}
+                                    {selectedWeapon && (
+                                        <CombatModifiersPanel
+                                            modifiers={customModifiers}
+                                            onChange={setCustomModifiers}
+                                            isExpanded={modifiersExpanded}
+                                            onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>

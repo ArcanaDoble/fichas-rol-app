@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
+import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 
 const ItemImage = ({ src, type, name }) => {
     const [error, setError] = React.useState(false);
@@ -37,6 +38,11 @@ const CombatHUD = ({
     const [selectedActionId, setSelectedActionId] = useState(null); // Para submenús (ej: elegir arma)
     const [isEndingTurn, setIsEndingTurn] = useState(false);
     const endTurnTimerRef = useRef(null);
+
+    // States for Attack Weapon Modifiers
+    const [selectedAttackItemIdx, setSelectedAttackItemIdx] = useState(null);
+    const [customAttackModifiers, setCustomAttackModifiers] = useState({ extraDice: {}, activeTraits: [] });
+    const [attackModifiersExpanded, setAttackModifiersExpanded] = useState(false);
 
     // Mapa de alcances según la especificación del usuario
     const RANGE_MAP = {
@@ -376,60 +382,101 @@ const CombatHUD = ({
                                                     };
 
                                                     return (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => {
-                                                                onAction('attack', item);
-                                                                setSelectedActionId(null);
-                                                            }}
-                                                            className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border border-white/5 hover:border-[#c8aa6e]/30 shadow-lg"
-                                                        >
-                                                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
-                                                                <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
-                                                            </div>
-                                                            <div className="flex flex-col flex-1 min-w-0">
-                                                                <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
-                                                                    {item.name || item.nombre}
-                                                                </span>
-                                                                <div className="flex items-center gap-1.5 md:gap-2">
-                                                                    <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
-                                                                        {getSpeedConsumption(item)}🟡
+                                                        <div key={idx} className="flex flex-col mb-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (selectedAttackItemIdx === idx) {
+                                                                        setSelectedAttackItemIdx(null);
+                                                                    } else {
+                                                                        setSelectedAttackItemIdx(idx);
+                                                                        setCustomAttackModifiers({ extraDice: {}, activeTraits: [] });
+                                                                        setAttackModifiersExpanded(false);
+                                                                    }
+                                                                }}
+                                                                className={`flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border shadow-lg ${selectedAttackItemIdx === idx ? 'border-[#c8aa6e] bg-[#c8aa6e]/10' : 'border-white/5 hover:border-[#c8aa6e]/30'
+                                                                    }`}
+                                                            >
+                                                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
+                                                                    <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
+                                                                </div>
+                                                                <div className="flex flex-col flex-1 min-w-0">
+                                                                    <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
+                                                                        {item.name || item.nombre}
                                                                     </span>
-                                                                    {(item.damage || item.dano) && (
-                                                                        <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
-                                                                            {item.damage || item.dano}
+                                                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                                                        <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
+                                                                            {getSpeedConsumption(item)}🟡
                                                                         </span>
-                                                                    )}
+                                                                        {(item.damage || item.dano) && (
+                                                                            <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
+                                                                                {item.damage || item.dano}
+                                                                            </span>
+                                                                        )}
 
-                                                                    {/* Attribute Dice Icons */}
-                                                                    <div className="flex gap-1 ml-1 overflow-x-auto scrollbar-hide">
-                                                                        {attrBonuses.map((bonus, bIdx) => (
-                                                                            <div
-                                                                                key={bIdx}
-                                                                                className="flex items-center gap-0.5"
-                                                                            >
-                                                                                {Array.from({ length: bonus.mult }).map((_, mIdx) => (
-                                                                                    <div
-                                                                                        key={mIdx}
-                                                                                        className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center"
-                                                                                        style={{
-                                                                                            borderColor: attrColorMap[bonus.attr] || '#94a3b8',
-                                                                                            color: attrColorMap[bonus.attr] || '#94a3b8',
-                                                                                            backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
-                                                                                        }}
-                                                                                    >
-                                                                                        <span className="text-[6px] md:text-[7px] font-black">
-                                                                                            {bonus.attr.charAt(0).toUpperCase()}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        ))}
+                                                                        {/* Attribute Dice Icons */}
+                                                                        <div className="flex gap-1 ml-1 overflow-x-auto scrollbar-hide">
+                                                                            {attrBonuses.map((bonus, bIdx) => (
+                                                                                <div
+                                                                                    key={bIdx}
+                                                                                    className="flex items-center gap-0.5"
+                                                                                >
+                                                                                    {Array.from({ length: bonus.mult }).map((_, mIdx) => (
+                                                                                        <div
+                                                                                            key={mIdx}
+                                                                                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center"
+                                                                                            style={{
+                                                                                                borderColor: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                                color: attrColorMap[bonus.attr] || '#94a3b8',
+                                                                                                backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
+                                                                                            }}
+                                                                                        >
+                                                                                            <span className="text-[6px] md:text-[7px] font-black">
+                                                                                                {bonus.attr.charAt(0).toUpperCase()}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                            <ChevronUp className="rotate-90 text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-colors w-3 h-3 md:w-4 md:h-4" />
-                                                        </button>
+                                                                <ChevronUp className={`text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-all w-3 h-3 md:w-4 md:h-4 ${selectedAttackItemIdx === idx ? 'rotate-180' : 'rotate-90'}`} />
+                                                            </button>
+
+                                                            {/* Panel Expandible de Modificadores para el arma seleccionada */}
+                                                            <AnimatePresence>
+                                                                {selectedAttackItemIdx === idx && (
+                                                                    <motion.div
+                                                                        initial={{ height: 0, opacity: 0 }}
+                                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                                        exit={{ height: 0, opacity: 0 }}
+                                                                        transition={{ duration: 0.2 }}
+                                                                        className="overflow-hidden px-1"
+                                                                    >
+                                                                        <div className="pt-2 pb-1 space-y-3">
+                                                                            <CombatModifiersPanel
+                                                                                modifiers={customAttackModifiers}
+                                                                                onChange={setCustomAttackModifiers}
+                                                                                isExpanded={attackModifiersExpanded}
+                                                                                onToggleExpand={() => setAttackModifiersExpanded(!attackModifiersExpanded)}
+                                                                            />
+
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const modifiedItem = applyModifiersToWeapon(item, customAttackModifiers);
+                                                                                    onAction('attack', modifiedItem);
+                                                                                    setSelectedActionId(null);
+                                                                                    setSelectedAttackItemIdx(null);
+                                                                                }}
+                                                                                className="w-full py-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white text-[11px] md:text-xs font-fantasy uppercase tracking-[0.2em] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-2"
+                                                                            >
+                                                                                <Sword size={14} /> Confirmar Ataque
+                                                                            </button>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
