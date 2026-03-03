@@ -932,6 +932,29 @@ const EQUIPMENT_CATEGORY_HISTORY_LABEL = {
   powers: 'habilidad',
 };
 function App() {
+  // --- Guardian de Versión (Previene caché antiguo y evita sobrescrituras por código viejo) ---
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const response = await fetch('/index.html?cb=' + Date.now(), { cache: 'no-store' });
+        const text = await response.text();
+        const match = text.match(/<meta name="app-build-id" content="([^"]+)"/);
+        const serverVersion = match ? match[1] : null;
+        const localVersion = document.querySelector('meta[name="app-build-id"]')?.content;
+
+        if (serverVersion && localVersion && serverVersion !== localVersion) {
+          console.warn(`[VersionGuardian] Nueva versión detectada en servidor (${serverVersion}) vs Local (${localVersion}). Recargando...`);
+          window.location.reload();
+        }
+      } catch (e) {
+        // Fallar silenciosamente si no hay red
+      }
+    };
+    checkVersion();
+    const interval = setInterval(checkVersion, 15 * 60 * 1000); // 15 min
+    return () => clearInterval(interval);
+  }, []);
+
   // ───────────────────────────────────────────────────────────
   // STATES
   // ───────────────────────────────────────────────────────────

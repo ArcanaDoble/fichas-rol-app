@@ -8,6 +8,16 @@ import { TouchBackend } from 'react-dnd-touch-backend';
 import { ConfirmProvider } from './components/Confirm';
 import reportWebVitals from './reportWebVitals';
 
+// Si hay Service Workers registrados (de versiones antiguas PWA), los eliminamos
+// para forzar que el navegador use siempre el contenido fresco del servidor.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (let registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
@@ -23,3 +33,4 @@ root.render(
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
+
