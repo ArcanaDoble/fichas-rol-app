@@ -980,6 +980,17 @@ const VersionNotice = ({ current, target }) => (
 const APP_VERSION = "20240303-1130";
 
 function App() {
+  // ───────────────────────────────────────────────────────────
+  // STATES BÁSICOS (Deben ir primero para que los Efectos puedan usarlos)
+  // ───────────────────────────────────────────────────────────
+  const confirm = useConfirm();
+  const [userType, setUserType] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [loginTransition, setLoginTransition] = useState(false);
+
   // --- Guardian de Versión (Bloqueo si el Master sube una versión nueva) ---
   const [showVersionBlock, setShowVersionBlock] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState(null);
@@ -1034,22 +1045,7 @@ function App() {
     }
   }, [showVersionBlock]);
 
-  // ───────────────────────────────────────────────────────────
-  // STATES
-  // ───────────────────────────────────────────────────────────
-  const confirm = useConfirm();
-  const [userType, setUserType] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [authenticated, setAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [loginTransition, setLoginTransition] = useState(false);
-
-  // Renderizado del Bloqueo de Versión (Prioritario sobre todo lo demás)
-  if (showVersionBlock) {
-    return <VersionNotice current={APP_VERSION} target={remoteVersion} />;
-  }
-
+  // El bloque de bloqueo de versión ahora está integrado en withTooltips para no romper el orden de los Hooks.
 
   const handleLogin = () => {
     if (passwordInput === MASTER_PASSWORD) {
@@ -5519,7 +5515,11 @@ function App() {
   const withTooltips = useCallback(
     (content) => (
       <>
-        {content}
+        {showVersionBlock ? (
+          <VersionNotice current={APP_VERSION} target={remoteVersion} />
+        ) : (
+          content
+        )}
         {tooltipElements}
         {showBarraReflejos && (
           <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
@@ -5585,7 +5585,7 @@ function App() {
         )}
       </>
     ),
-    [tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName, authenticated, glossary, playerData, armas, armaduras, habilidades, userType]
+    [showVersionBlock, remoteVersion, tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName, authenticated, glossary, playerData, armas, armaduras, habilidades, userType]
   );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
