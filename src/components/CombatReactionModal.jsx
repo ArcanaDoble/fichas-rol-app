@@ -336,28 +336,56 @@ const WeaponCard = ({ weapon, isSelected, onSelect }) => {
     const rarity = getRarityColors(weapon.rareza);
 
     const getItemImage = (i) => {
-        if (i.img || i.icon) return i.img || i.icon;
+        // Prioridad 1: imagen explícita del item (icon custom o img con URL válida)
+        if (i.img && (i.img.startsWith('data:') || i.img.startsWith('http') || i.img.startsWith('/'))) return i.img;
+        if (i.icon && (i.icon.startsWith('data:') || i.icon.startsWith('http') || i.icon.startsWith('/'))) return i.icon;
+
+        // Prioridad 2: resolver por nombre
         const name = (i.name || i.nombre || '').toLowerCase();
-        if (name.includes('fauces')) return '/armas/fauces.png';
+
+        if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
+        if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
+        if (name.includes('antorcha')) return '/armas/antorcha.png';
+        if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
+        if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
+        if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+        if (name.includes('mordisco') || name.includes('fauces')) return '/armas/fauces.png';
         if (name.includes('garras')) return '/armas/garras.png';
-        if (name.includes('hacha')) return '/armas/hacha_de_mano.png';
-        if (name.includes('alabarda')) return '/armas/alabarda.png';
-        if (name.includes('espada')) {
-            if (name.includes('corta')) return '/armas/espada_corta.png';
-            if (name.includes('bastarda')) return '/armas/espada_bastarda.png';
-            if (name.includes('hierro')) return '/armas/espada_de_hierro.png';
-            if (name.includes('larga')) return '/armas/espada_larga.png';
-            return '/armas/espada_de_acero.png';
-        }
+        if (name.includes('cuchillo')) return '/armas/cuchillo.png';
+        if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
+        if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
+        if (name.includes('pistola')) return '/armas/pistola.png';
+        if (name.includes('rifle')) return '/armas/rifle.png';
+        if (name.includes('escopeta')) return '/armas/escopeta.png';
+        if (name.includes('granarco')) return '/armas/arco_largo.png';
+        if (name.includes('arco')) return '/armas/arco_corto.png';
+        if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
+        if (name.includes('clava')) return '/armas/clava.png';
+        if (name.includes('jabalina')) return '/armas/jabalina.png';
+        if (name.includes('lanza')) return '/armas/lanza.png';
         if (name.includes('daga')) return '/armas/daga.png';
-        if (name.includes('arco')) return name.includes('largo') ? '/armas/arco_largo.png' : '/armas/arco_corto.png';
-        if (name.includes('ballesta')) {
-            if (name.includes('mano')) return '/armas/ballesta_de_mano.png';
-            if (name.includes('ligera')) return '/armas/ballesta_ligera.png';
-            return '/armas/ballesta_pesada.png';
-        }
+        if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
+        if (name.includes('hacha')) return '/armas/hacha_de_mano.png';
+        if (name.includes('honda')) return '/armas/honda.png';
+        if (name.includes('tirachinas')) return '/armas/tirachinas.png';
+        if (name.includes('estoque')) return '/armas/estoque.png';
+        if (name.includes('alabarda')) return '/armas/alabarda.png';
+        if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
+        if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
+        if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
+        if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+        if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
+        if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
+        if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
+        if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
+        if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
+        if (name.includes('espada larga')) return '/armas/espada_larga.png';
+        if (name.includes('espada corta')) return '/armas/espada_corta.png';
+        if (name.includes('mandoble')) return '/armas/mandoble.png';
+        if (name.includes('cimitarra')) return '/armas/cimitarra.png';
+        if (name.includes('espada')) return '/armas/espada_de_acero.png';
         if (name.includes('escudo')) return '/armas/escudo.png';
-        if (i.type === 'weapon' || i.categoria?.toLowerCase()?.includes('arma')) return '/armas/espada_de_acero.png';
+
         return null;
     };
 
