@@ -1307,8 +1307,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     if (targetToken) {
                         const isMasterView = !isPlayerView;
-                        const isControlledByMe = isPlayerView && playerName && targetToken.controlledBy === playerName;
-                        const isMasterNPC = isMasterView && (!targetToken.controlledBy || targetToken.controlledBy === 'master' || targetToken.controlledBy.length === 0);
+                        const controlledBy = targetToken.controlledBy;
+                        const isControlledByMe = isPlayerView && playerName && Array.isArray(controlledBy) && controlledBy.includes(playerName);
+                        const isMasterNPC = isMasterView && (!controlledBy || !Array.isArray(controlledBy) || controlledBy.length === 0 || controlledBy.includes('master'));
 
                         if (isControlledByMe || isMasterNPC) {
                             // Añadir al final de la cola si no existe ya
