@@ -1,10 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Shield, FastForward, Sword, Zap, X, Check } from 'lucide-react';
 import { getSpeedConsumption, rollAttack } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import DiceSvg from './DiceSvg';
+import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
+
+const normalizeKey = (name) => (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 
 const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
+    const customEquipmentImages = useCustomEquipmentImages();
     const [selectedDiceIndices, setSelectedDiceIndices] = useState([]);
     const [reactionType, setReactionType] = useState(null); // 'evadir', 'parar', 'recibir'
     const [selectedWeapon, setSelectedWeapon] = useState('');
@@ -265,6 +269,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                         weapon={w}
                                                         isSelected={selectedWeapon === currentId}
                                                         onSelect={() => setSelectedWeapon(currentId)}
+                                                        customEquipmentImages={customEquipmentImages}
                                                     />
                                                 );
                                             })}
@@ -312,8 +317,21 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     );
 };
 
-const WeaponCard = ({ weapon, isSelected, onSelect }) => {
+const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages }) => {
     const [imgError, setImgError] = useState(false);
+
+    // Reset imgError when the resolved image URL changes (e.g., custom image loads from Firestore)
+    const resolvedImg = useMemo(() => {
+        const customImg = getCustomImage(weapon, customEquipmentImages);
+        if (customImg) return customImg;
+        if (weapon.img && (weapon.img.startsWith('data:') || weapon.img.startsWith('http') || weapon.img.startsWith('/'))) return weapon.img;
+        if (weapon.icon && (weapon.icon.startsWith('data:') || weapon.icon.startsWith('http') || weapon.icon.startsWith('/'))) return weapon.icon;
+        return null;
+    }, [weapon, customEquipmentImages]);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [resolvedImg]);
 
     const damage = weapon.dano || weapon.damage || '';
     const range = weapon.alcance || weapon.range || weapon.alc || '';
@@ -336,6 +354,10 @@ const WeaponCard = ({ weapon, isSelected, onSelect }) => {
     const rarity = getRarityColors(weapon.rareza);
 
     const getItemImage = (i) => {
+        // Prioridad 0: imagen custom de Firestore (Equipment Manager)
+        const customImg = getCustomImage(i, customEquipmentImages);
+        if (customImg) return customImg;
+
         // Prioridad 1: imagen explícita del item (icon custom o img con URL válida)
         if (i.img && (i.img.startsWith('data:') || i.img.startsWith('http') || i.img.startsWith('/'))) return i.img;
         if (i.icon && (i.icon.startsWith('data:') || i.icon.startsWith('http') || i.icon.startsWith('/'))) return i.icon;

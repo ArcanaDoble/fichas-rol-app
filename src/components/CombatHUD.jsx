@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
+import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 
 const ItemImage = ({ src, type, name }) => {
     const [error, setError] = React.useState(false);
@@ -34,6 +35,7 @@ const CombatHUD = ({
     forceWeaponMenu = false, // Nueva prop para forzar la apertura del menú de armas
     targetDistance = null // Distancia al objetivo actual (en casillas)
 }) => {
+    const customEquipmentImages = useCustomEquipmentImages();
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
     const [selectedActionId, setSelectedActionId] = useState(null); // Para submenús (ej: elegir arma)
     const [isEndingTurn, setIsEndingTurn] = useState(false);
@@ -337,9 +339,13 @@ const CombatHUD = ({
                                                         return 'text-[#f0e6d2]';
                                                     };
                                                     const getItemImage = (i) => {
-                                                        // Prioridad 1: imagen explícita del item (icon custom o img con URL válida)
                                                         if (i.img && (i.img.startsWith('data:') || i.img.startsWith('http') || i.img.startsWith('/'))) return i.img;
                                                         if (i.icon && (i.icon.startsWith('data:') || i.icon.startsWith('http') || i.icon.startsWith('/'))) return i.icon;
+
+                                                        if (customEquipmentImages && customEquipmentImages.size > 0) {
+                                                            const custom = getCustomImage(i, customEquipmentImages);
+                                                            if (custom) return custom;
+                                                        }
 
                                                         // Prioridad 2: resolver por nombre (misma lógica que getObjectImage de CanvasSection)
                                                         const name = (i.name || i.nombre || '').toLowerCase();

@@ -68,6 +68,7 @@ import CanvasSection from './components/CanvasSection';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
 import StatusEffectsManager from './components/StatusEffectsManager';
+import EquipmentImageManager from './components/EquipmentImageManager';
 import AssetSidebar from './components/AssetSidebar';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
@@ -8752,6 +8753,17 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'status_effects') {
     return withTooltips(
       <StatusEffectsManager onBack={() => setChosenView(null)} highlightText={highlightText} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'equipment_images') {
+    return withTooltips(
+      <EquipmentImageManager
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        accesorios={accesorios}
+        onBack={() => setChosenView(null)}
+      />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'classes') {

@@ -13,6 +13,7 @@ import { rollAttack, getSpeedConsumption } from '../utils/combatSystem';
 import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
+import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
 import DiceSvg from './DiceSvg';
 
@@ -292,8 +293,15 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset }) 
 };
 
 // --- Helper: Resolve item image (mirrors LoadoutView getObjectImage) ---
-const getObjectImage = (item) => {
+const getObjectImage = (item, customImages) => {
     if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) return item.icon;
+
+    // Check custom uploaded images from Gestor de Equipamiento
+    if (customImages && customImages.size > 0) {
+        const custom = getCustomImage(item, customImages);
+        if (custom) return custom;
+    }
+
     const name = (item.name || item.nombre || '').toLowerCase();
     const type = (item.type || '').toLowerCase();
     const category = (item.category || '').toLowerCase();
@@ -513,6 +521,7 @@ const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NF
 // Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
 // =============================================================================
 const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem, isPlayerView = false }) => {
+    const customEquipmentImages = useCustomEquipmentImages();
     const [addCat, setAddCat] = useState('weapons');
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -585,7 +594,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                     {equippedItems.map((item, idx) => {
                         const rarity = getRarityInfo(item.rareza);
                         const rarityColor = rarityColorMap[item.rareza] || '#94a3b8';
-                        const itemImage = getObjectImage(item);
+                        const itemImage = getObjectImage(item, customEquipmentImages);
                         const TypeIcon = typeIcons[item.type] || Package;
                         const traits = item.rasgos ? (Array.isArray(item.rasgos) ? item.rasgos : item.rasgos.toString().split(',')) : (item.traits ? item.traits.toString().split(',') : []);
 

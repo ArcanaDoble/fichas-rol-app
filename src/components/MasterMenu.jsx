@@ -12,7 +12,8 @@ import {
     FiArrowLeft,
     FiStar,
     FiUser,
-    FiLayout
+    FiLayout,
+    FiImage
 } from 'react-icons/fi';
 import { FaSkull } from 'react-icons/fa';
 
@@ -97,6 +98,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             color: 'violet',
             icon: FiMap,
             features: ['Mundo', 'Nodos', 'Progreso'],
+            isNew: true,
+        },
+        {
+            id: 'equipment_images',
+            title: 'Gestor de Equipamiento',
+            description: 'Gestiona las imágenes de armas, armaduras, objetos, habilidades y accesorios.',
+            color: 'amber',
+            icon: FiImage,
+            features: ['Imágenes', 'Catálogo', 'Upload'],
             isNew: true,
         },
         {
