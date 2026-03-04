@@ -6,7 +6,8 @@ import { GiBelt } from 'react-icons/gi';
 import { Sword, Shield, Zap, Gem } from 'lucide-react';
 import HexIcon from './HexIcon';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
 
 import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
 
@@ -54,10 +55,16 @@ const getRarityColors = (item) => {
 };
 
 // Función para obtener imagen de objetos genéricos (public/objetos)
-const getObjectImage = (item) => {
+const getObjectImage = (item, customImages) => {
     // 1. Priorizar imágenes personalizadas (Base64 o URLs externas)
     if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) {
         return item.icon;
+    }
+
+    // 1.5. Priorizar imágenes personalizadas subidas desde el Gestor de Equipamiento
+    if (customImages) {
+        const custom = getCustomImage(item, customImages);
+        if (custom) return custom;
     }
 
     const name = (item.name || '').toLowerCase();
@@ -170,6 +177,7 @@ const formatItemName = (name) => {
 };
 
 const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary = [], onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
+    const customEquipmentImages = useCustomEquipmentImages();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
     const [showRarityDropdown, setShowRarityDropdown] = useState(false);
@@ -631,7 +639,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                             };
 
                                             const rarityColors = getRarityColors();
-                                            const objectImage = getObjectImage(item);
+                                            const objectImage = getObjectImage(item, customEquipmentImages);
 
                                             return (
                                                 <div key={index} className="group bg-[#161f32] border border-slate-700 hover:border-[#c8aa6e] p-1 rounded-lg transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex overflow-hidden relative h-full">
@@ -782,7 +790,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const isSlotActive = activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem) : null;
 
-                                                const weaponImage = equippedItem ? getObjectImage(equippedItem) : null;
+                                                const weaponImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
 
                                                 return (
                                                     <div key={key} className="relative group">
@@ -937,8 +945,8 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                                 `}
                                                                             >
                                                                                 <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
-                                                                                    {getObjectImage(weapon) ? (
-                                                                                        <img src={getObjectImage(weapon)} alt="" className="w-full h-full object-cover" />
+                                                                                    {getObjectImage(weapon, customEquipmentImages) ? (
+                                                                                        <img src={getObjectImage(weapon, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
                                                                                     ) : (
                                                                                         <Sword className="w-5 h-5" />
                                                                                     )}
@@ -1013,7 +1021,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     return null;
                                                 };
 
-                                                const armorImage = equippedArmor ? (getObjectImage(equippedArmor) || getArmorImage(equippedArmor.name)) : null;
+                                                const armorImage = equippedArmor ? (getObjectImage(equippedArmor, customEquipmentImages) || getArmorImage(equippedArmor.name)) : null;
 
                                                 return (
                                                     <>
@@ -1150,8 +1158,8 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                                 `}
                                                                             >
                                                                                 <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
-                                                                                    {getObjectImage(armor) ? (
-                                                                                        <img src={getObjectImage(armor)} alt="" className="w-full h-full object-cover" />
+                                                                                    {getObjectImage(armor, customEquipmentImages) ? (
+                                                                                        <img src={getObjectImage(armor, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
                                                                                     ) : (
                                                                                         <Shield className="w-5 h-5" />
                                                                                     )}
@@ -1205,7 +1213,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const isSlotActive = activeSlotSelector === slotId;
                                                 // Filter available objects for belt slots
                                                 const availableObjects = equipment.filter(item => item.itemType === 'object');
-                                                const objectImage = equippedItem ? getObjectImage(equippedItem) : null;
+                                                const objectImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
                                                 const itemRarityColors = equippedItem ? getRarityColors(equippedItem.rareza) : null;
 
                                                 return (
@@ -1403,7 +1411,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                 </div>
                                                                 {availableObjects.length > 0 ? (
                                                                     availableObjects.map((item, i) => {
-                                                                        const itemImg = getObjectImage(item);
+                                                                        const itemImg = getObjectImage(item, customEquipmentImages);
                                                                         return (
                                                                             <button
                                                                                 key={item.id || item.name || i}
@@ -1489,7 +1497,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const equippedAccessory = equippedItems[slotKey];
                                                 const isSlotActive = activeSlotSelector === slotKey;
                                                 const rarityColors = equippedAccessory ? getRarityColors(equippedAccessory) : null;
-                                                const accessoryImage = equippedAccessory ? getObjectImage(equippedAccessory) : null;
+                                                const accessoryImage = equippedAccessory ? getObjectImage(equippedAccessory, customEquipmentImages) : null;
 
                                                 return (
                                                     <div key={slotNum} className="relative group">
@@ -1605,8 +1613,8 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                                 `}
                                                                             >
                                                                                 <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
-                                                                                    {getObjectImage(accessory) ? (
-                                                                                        <img src={getObjectImage(accessory)} alt="" className="w-full h-full object-cover" />
+                                                                                    {getObjectImage(accessory, customEquipmentImages) ? (
+                                                                                        <img src={getObjectImage(accessory, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
                                                                                     ) : (
                                                                                         <Gem className="w-5 h-5" />
                                                                                     )}
