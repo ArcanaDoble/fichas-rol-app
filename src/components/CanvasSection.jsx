@@ -1305,44 +1305,43 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const q = query(
             collection(db, 'combat_events'),
             where('scenarioId', '==', activeScenario.id),
-            where('status', '==', 'esperando_reaccion')
+            where('status', 'in', ['esperando_reaccion', 'evadir_pendiente', 'parar_pendiente', 'recibir_pendiente', 'resuelto'])
         );
 
         const unsub = onSnapshot(q, (snapshot) => {
             snapshot.docChanges().forEach((change) => {
+                const eventData = { id: change.doc.id, ...change.doc.data() };
+                const isMasterView = !isPlayerView;
+                
                 if (change.type === 'added') {
-                    const eventData = { id: change.doc.id, ...change.doc.data() };
                     const items = activeScenarioRef.current?.items || activeScenario.items || [];
                     const targetToken = items.find(i => i.id === eventData.targetId);
 
                     if (targetToken) {
-                        const isMasterView = !isPlayerView;
                         const controlledBy = targetToken.controlledBy;
                         const isControlledByMe = isPlayerView && playerName && Array.isArray(controlledBy) && controlledBy.includes(playerName);
                         const isMasterNPC = isMasterView && (!controlledBy || !Array.isArray(controlledBy) || controlledBy.length === 0 || controlledBy.includes('master'));
 
                         if (isControlledByMe || isMasterNPC) {
-                            // Añadir al final de la cola si no existe ya
                             setCombatEventQueue(prev => {
                                 if (prev.some(e => e.event.id === eventData.id)) return prev;
-                                // Si la cola estaba vacía, reiniciar contador de resueltos
                                 if (prev.length === 0) setResolvedEventCount(0);
                                 return [...prev, { event: eventData, targetToken }];
                             });
                         }
                     }
+                } else if (change.type === 'modified') {
+                    setCombatEventQueue(prev => {
+                        // Actulizamos los datos dentro del evento
+                        return prev.map(e => e.event.id === eventData.id ? { ...e, event: eventData } : e);
+                    });
                 } else if (change.type === 'removed') {
-                    // Limpiar de la cola. Solo protegemos eventos que ESTE dispositivo resolvió localmente
-                    // (handleReaction los marca en locallyResolvedEventsRef antes de quitarlos).
-                    // Si el evento fue resuelto en OTRO dispositivo, lo eliminamos de nuestra cola inmediatamente.
                     const removedId = change.doc.id;
                     const wasResolvedLocally = locallyResolvedEventsRef.current.has(removedId);
 
                     if (wasResolvedLocally) {
-                        // Este dispositivo ya lo procesó, limpiar del tracking
                         locallyResolvedEventsRef.current.delete(removedId);
                     } else {
-                        // Resuelto en OTRO dispositivo → quitar de nuestra cola
                         setCombatEventQueue(prev => prev.filter(e => e.event.id !== removedId));
                     }
                 }
@@ -4172,12 +4171,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             console.warn('Error limpiando combat_log antiguo:', err);
         }
 
-        await deleteDoc(doc(db, 'combat_events', event.id));
+        await updateDoc(doc(db, 'combat_events', event.id), {
+            status: 'resuelto',
+            result: combatLogEntry
+        });
     };
 
     const handleReaction = async (reaction) => {
         if (combatEventQueue.length === 0) return;
         const currentEvent = combatEventQueue[0];
+
+        if (reaction.type === 'cerrar') {
+            try {
+                // Locally mark as resolved to ignore the 'removed' event logic
+                locallyResolvedEventsRef.current.add(currentEvent.event.id);
+                setResolvedEventCount(prev => prev + 1);
+                setCombatEventQueue(prev => prev.filter(e => e.event.id !== currentEvent.event.id));
+                await deleteDoc(doc(db, 'combat_events', currentEvent.event.id));
+            } catch (err) {
+                console.warn('Error al borrar el evento resuelto:', err);
+            }
+            return;
+        }
 
         try {
             await updateDoc(doc(db, 'combat_events', currentEvent.event.id), {
@@ -4189,13 +4204,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             console.warn('Evento de combate ya procesado o eliminado:', currentEvent.event.id);
         }
 
-        // Marcar que ESTE dispositivo resolvió este evento, para que el onSnapshot 'removed'
-        // no lo quite de la cola duplicadamente (ya lo quitamos aquí abajo).
-        locallyResolvedEventsRef.current.add(currentEvent.event.id);
-
-        // Eliminamos el evento actual de la cola ahora que ha sido procesado "localmente".
-        setResolvedEventCount(prev => prev + 1);
-        setCombatEventQueue(prev => prev.filter(e => e.event.id !== currentEvent.event.id));
+        // Ya NO quitamos el evento de la cola. Simplemente marcamos algo localmente si es necesario.
+        // The modal will respond to the `status` change.
     };
 
     const handleEndTurn = async (tokenId) => {

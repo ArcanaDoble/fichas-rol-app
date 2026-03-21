@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Shield, FastForward, Sword, Zap, X, Check } from 'lucide-react';
+import { Shield, FastForward, Sword, Swords, Zap, X, Check } from 'lucide-react';
 import { getSpeedConsumption, rollAttack } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import DiceSvg from './DiceSvg';
@@ -91,6 +91,8 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     if (!event) return null;
 
     const showQueue = queueTotal > 1;
+    const isResolving = event.status && event.status.endsWith('_pendiente');
+    const isResolved = event.status === 'resuelto';
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -135,18 +137,118 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                     )}
 
                     <div className="flex flex-col max-h-[70vh]">
-                        {/* ZONA SUPERIOR (ESTÁTICA) */}
-                        <div className="shrink-0">
-                            <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
-                                ¡Ataque Inminente!
-                            </h2>
-                            <p className="text-center text-slate-300 mb-6">
-                                <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
-                            </p>
-                        </div>
+                        {isResolving && (
+                            <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                                <div className="w-16 h-16 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
+                                <p className="text-red-400 font-fantasy text-xl uppercase tracking-widest animate-pulse">
+                                    Calculando Resultado...
+                                </p>
+                            </div>
+                        )}
 
-                        {/* ZONA SCROLLABLE (DADOS Y BOTONES DE REACCIÓN) */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
+                        {isResolved && (
+                            <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-300">
+                                <div className="shrink-0">
+                                    <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                        Resultado del Combate
+                                    </h2>
+                                    <p className="text-center text-slate-300 mb-6">
+                                        Mira lo que ha sucedido y cierra para continuar.
+                                    </p>
+                                </div>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
+                                    {event.result && (
+                                        <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-5">
+                                            <div className="space-y-4 text-center">
+                                                <div className="flex justify-center items-center gap-4 text-lg">
+                                                    <span className="text-red-400 font-fantasy uppercase tracking-wide">{event.result.attackerName}</span>
+                                                    <Swords className="w-5 h-5 text-slate-500" />
+                                                    <span className="text-blue-400 font-fantasy uppercase tracking-wide">{event.result.targetName}</span>
+                                                </div>
+
+                                                <div className="py-3 border-y border-slate-700/50">
+                                                    {event.result.reactionType === 'evadir' && (
+                                                        <p className="text-slate-300 leading-relaxed font-bold">
+                                                            ¡<span className="text-blue-400">{event.result.targetName}</span> evadió <span className="text-yellow-500">{event.result.evadedDiceIds?.length || 0}</span> dados!
+                                                        </p>
+                                                    )}
+                                                    {event.result.reactionType === 'parar' && (
+                                                        <div>
+                                                            <p className="text-slate-300 leading-relaxed font-bold">
+                                                                ¡<span className="text-blue-400">{event.result.targetName}</span> intentó parar con <span className="text-blue-300">{event.result.defenderWeapon || 'su arma'}</span>!
+                                                            </p>
+                                                            <div className="mt-2 text-sm flex justify-center items-center gap-4">
+                                                                <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Atq:</span><span className="text-red-400 font-bold">{event.result.attackTotal}</span></div>
+                                                                <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Def:</span><span className="text-blue-400 font-bold">{event.result.defenderTotal}</span></div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {event.result.reactionType === 'recibir' && (
+                                                        <p className="text-slate-300 leading-relaxed font-bold">
+                                                            <span className="text-blue-400">{event.result.targetName}</span> recibió el golpe.
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {event.result.damage > 0 ? (
+                                                        <div className="bg-red-900/20 border border-red-500/30 p-3 rounded">
+                                                            <p className="text-red-400 font-bold uppercase tracking-wider text-sm mb-1">
+                                                                Daño Recibido: {event.result.damage}
+                                                            </p>
+                                                            <p className="text-xs text-slate-300">
+                                                                Bloques perdidos: 
+                                                                Postura <span className="text-white font-bold">{event.result.blocksLost?.postura || 0}</span> | 
+                                                                Armadura <span className="text-white font-bold">{event.result.blocksLost?.armadura || 0}</span> | 
+                                                                Vida <span className="text-red-400 font-bold">{event.result.blocksLost?.vida || 0}</span>
+                                                            </p>
+                                                        </div>
+                                                    ) : event.result.reactionType === 'parar' && event.result.counterDamage > 0 ? (
+                                                        <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded">
+                                                            <p className="text-blue-400 font-bold uppercase tracking-wider text-sm mb-1">
+                                                                ¡Contraataque Exitoso!
+                                                            </p>
+                                                            <p className="text-xs text-slate-300">
+                                                                <span className="text-red-400">{event.result.attackerName}</span> recibe <span className="text-white font-bold">{event.result.counterDamage}</span> de daño.
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-emerald-900/20 border border-emerald-500/30 p-3 rounded">
+                                                            <p className="text-emerald-400 font-bold uppercase tracking-wider text-sm">
+                                                                ¡Ataque anulado por completo!
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="shrink-0 flex justify-center pt-5 border-t border-red-900/30 bg-[#1a1b26]">
+                                    <button
+                                        onClick={() => onReact({ type: 'cerrar' })}
+                                        className="px-12 py-3 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 transition-all w-full"
+                                    >
+                                        Aceptar y Continuar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {!isResolving && !isResolved && (
+                            <>
+                                {/* ZONA SUPERIOR (ESTÁTICA) */}
+                                <div className="shrink-0">
+                                    <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                        ¡Ataque Inminente!
+                                    </h2>
+                                    <p className="text-center text-slate-300 mb-6">
+                                        <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
+                                    </p>
+                                </div>
+
+                                {/* ZONA SCROLLABLE (DADOS Y BOTONES DE REACCIÓN) */}
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
                             <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-4">
                                 <p className="text-sm text-[#c8aa6e] uppercase tracking-widest mb-3 text-center">Dados del Atacante</p>
                                 <div className="flex flex-wrap gap-3 justify-center">
@@ -310,6 +412,8 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                 Confirmar
                             </button>
                         </div>
+                        </>
+                    )}
                     </div>
                 </div>
             </div>
