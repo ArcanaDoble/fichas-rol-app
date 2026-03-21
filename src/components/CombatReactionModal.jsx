@@ -93,6 +93,61 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const showQueue = queueTotal > 1;
     const isResolving = event.status && event.status.endsWith('_pendiente');
     const isResolved = event.status === 'resuelto';
+    const renderResultDice = (diceList, evadedIds = []) => {
+        if (!diceList || diceList.length === 0) return null;
+        return (
+            <div className="flex flex-wrap gap-2 justify-center my-3 relative z-10">
+                {diceList.map((die) => {
+                    const isEvaded = evadedIds.includes(die.id);
+                    const isCrit = die.isCrit || die.critical;
+                    const matchedAttr = die.matchedAttr ? die.matchedAttr.trim().toLowerCase() : null;
+
+                    const attrColorMap = {
+                        destreza: { color: '#4ade80' },
+                        intelecto: { color: '#60a5fa' },
+                        voluntad: { color: '#c084fc' },
+                        vigor: { color: '#f87171' },
+                    };
+                    const attrStyle = (matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
+
+                    const baseStyle = isCrit ? {
+                        backgroundColor: 'rgba(234, 88, 12, 0.15)',
+                        borderColor: '#ea580c',
+                        color: '#ea580c',
+                        boxShadow: '0 0 10px rgba(234,88,12,0.3)',
+                    } : attrStyle ? {
+                        backgroundColor: 'transparent',
+                        borderColor: attrStyle.color,
+                        color: attrStyle.color,
+                        boxShadow: 'none',
+                    } : {
+                        backgroundColor: '#c8aa6e',
+                        borderColor: '#f0e6d2',
+                        color: '#0b1120',
+                    };
+
+                    return (
+                        <div key={die.id} className={`relative transition-all duration-300 ${isEvaded ? 'opacity-40 grayscale scale-95' : 'hover:scale-110'}`}>
+                            <DiceSvg
+                                faces={die.faces}
+                                value={die.value}
+                                className="w-8 h-8 md:w-10 md:h-10"
+                                style={baseStyle}
+                                title={isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr}` : "Dado Arma"}
+                            />
+                            {isCrit && <span className="absolute -top-2 -right-2 text-[#ea580c] text-[8px] font-sans font-bold bg-black/80 px-1 rounded border border-[#ea580c]/50 z-20">CRIT</span>}
+                            {isEvaded && (
+                                <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                                    <div className="w-[120%] h-0.5 bg-red-500 rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>
+                                    <div className="w-[120%] h-0.5 bg-red-500 -rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -168,25 +223,42 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
 
                                                 <div className="py-3 border-y border-slate-700/50">
                                                     {event.result.reactionType === 'evadir' && (
-                                                        <p className="text-slate-300 leading-relaxed font-bold">
-                                                            ¡<span className="text-blue-400">{event.result.targetName}</span> evadió <span className="text-yellow-500">{event.result.evadedDiceIds?.length || 0}</span> dados!
-                                                        </p>
+                                                        <div className="space-y-3">
+                                                            <p className="text-slate-300 leading-relaxed font-bold">
+                                                                ¡<span className="text-blue-400">{event.result.targetName}</span> evadió <span className="text-yellow-500">{event.result.evadedDiceIds?.length || 0}</span> dados!
+                                                            </p>
+                                                            {renderResultDice(event.result.attackerDice, event.result.evadedDiceIds)}
+                                                        </div>
                                                     )}
                                                     {event.result.reactionType === 'parar' && (
-                                                        <div>
+                                                        <div className="space-y-3">
                                                             <p className="text-slate-300 leading-relaxed font-bold">
                                                                 ¡<span className="text-blue-400">{event.result.targetName}</span> intentó parar con <span className="text-blue-300">{event.result.defenderWeapon || 'su arma'}</span>!
                                                             </p>
-                                                            <div className="mt-2 text-sm flex justify-center items-center gap-4">
+                                                            
+                                                            <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
+                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Ataque ({event.result.attackTotal})</div>
+                                                                {renderResultDice(event.result.attackerDice)}
+                                                            </div>
+                                                            
+                                                            <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
+                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Defensa ({event.result.defenderTotal})</div>
+                                                                {renderResultDice(event.result.defenderDice)}
+                                                            </div>
+
+                                                            <div className="text-sm flex justify-center items-center gap-4 mt-2 mb-1">
                                                                 <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Atq:</span><span className="text-red-400 font-bold">{event.result.attackTotal}</span></div>
                                                                 <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Def:</span><span className="text-blue-400 font-bold">{event.result.defenderTotal}</span></div>
                                                             </div>
                                                         </div>
                                                     )}
                                                     {event.result.reactionType === 'recibir' && (
-                                                        <p className="text-slate-300 leading-relaxed font-bold">
-                                                            <span className="text-blue-400">{event.result.targetName}</span> recibió el golpe.
-                                                        </p>
+                                                        <div className="space-y-3">
+                                                            <p className="text-slate-300 leading-relaxed font-bold">
+                                                                <span className="text-blue-400">{event.result.targetName}</span> recibió el golpe.
+                                                            </p>
+                                                            {renderResultDice(event.result.attackerDice)}
+                                                        </div>
                                                     )}
                                                 </div>
 
@@ -229,7 +301,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                         onClick={() => onReact({ type: 'cerrar' })}
                                         className="px-12 py-3 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 transition-all w-full"
                                     >
-                                        Aceptar y Continuar
+                                        Continuar
                                     </button>
                                 </div>
                             </div>
