@@ -85,6 +85,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
+import {
+  buildDamageEventWrite,
+  getDamageEventTimestampMs,
+  isDamageEventStale,
+} from '../utils/damageEvents';
 import useAttackRequests from '../hooks/useAttackRequests';
 
 
@@ -1669,6 +1674,7 @@ const MapCanvas = ({
   const [damagePopups, setDamagePopups] = useState([]);
   const [damageFlashTimes, setDamageFlashTimes] = useState(new Map());
   const damageFlashTimesRef = useRef(damageFlashTimes);
+  const processedDamageEventIdsRef = useRef(new Map());
   useEffect(() => {
     damageFlashTimesRef.current = damageFlashTimes;
   }, [damageFlashTimes]);
@@ -3760,71 +3766,29 @@ const MapCanvas = ({
 
   // Función para mostrar animaciones de daño
   const triggerDamagePopup = useCallback(
-    ({ tokenId, value, stat, type }) => {
-      // Validaciones más robustas
+    ({ tokenId, value, stat, type, clientTimestamp, ts }) => {
       if (!tokenId) {
         console.warn('triggerDamagePopup: tokenId no proporcionado');
-        return;
-      }
-
-      // Buscar el token en la lista de tokens para obtener sus coordenadas de celda
-      const token = tokensRef.current.find(t => t.id === tokenId);
-      if (!token) {
-        console.warn(`triggerDamagePopup: No se encontró token con id ${tokenId}`);
-        return;
-      }
-
-      if (!stageRef.current || !containerRef.current) {
-        console.warn('triggerDamagePopup: Referencias de stage o container no disponibles');
-        return;
+        return false;
       }
 
       try {
-        // Usar refs para obtener valores actuales sin dependencias (evita recreación del callback)
-        const currentBaseScale = baseScaleRef.current;
-        const currentZoom = zoomRef.current;
-        const currentGroupPos = groupPosRef.current;
-
-        // Usar las mismas funciones que se usan para renderizar los tokens
-        const tokenPixelX = token.x * gridSizeRef.current + gridOffsetXRef.current;
-        const tokenPixelY = token.y * gridSizeRef.current + gridOffsetYRef.current;
-        const tokenWidth = (token.w || 1) * gridSizeRef.current;
-        const tokenHeight = (token.h || 1) * gridSizeRef.current;
-
-        // Calcular el centro del token en coordenadas del mundo
-        const centerX = tokenPixelX + tokenWidth / 2;
-        const centerY = tokenPixelY + tokenHeight / 2;
-
-        // Transformar a coordenadas de pantalla usando las transformaciones actuales
-        const groupScale = currentBaseScale * currentZoom;
-        const screenX = centerX * groupScale + currentGroupPos.x;
-        const screenY = centerY * groupScale + currentGroupPos.y;
-
-        // Obtener la posición relativa al contenedor
-        const stageRect = stageRef.current.container().getBoundingClientRect();
-        const containerRect = containerRef.current.getBoundingClientRect();
-
-        const x = screenX + stageRect.left - containerRect.left;
-        const y = screenY + stageRect.top - containerRect.top;
-
-        // Validar que las coordenadas sean números válidos
-        if (isNaN(x) || isNaN(y)) {
-          console.warn(`triggerDamagePopup: Coordenadas inválidas x=${x}, y=${y}`);
-          return;
-        }
-
-        console.log(`Animación de daño para token ${tokenId} en celda (${token.x}, ${token.y}) -> píxeles (${tokenPixelX}, ${tokenPixelY}) -> pantalla (${x}, ${y}) [zoom: ${currentZoom}, pos: ${currentGroupPos.x},${currentGroupPos.y}]`);
-
         const id = nanoid();
-        const createdAt = Date.now();
-        // No guardar coordenadas fijas, solo el tokenId para calcular posición en tiempo real
+        const createdAt =
+          typeof clientTimestamp === 'number'
+            ? clientTimestamp
+            : typeof ts === 'number'
+              ? ts
+              : Date.now();
         setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type, createdAt }]);
 
         setTimeout(() => {
           setDamagePopups((prev) => prev.filter((p) => p.id !== id));
         }, DAMAGE_ANIMATION_MS);
+        return true;
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
+        return false;
       }
     },
     []
@@ -3846,20 +3810,25 @@ const MapCanvas = ({
   useEffect(() => {
     if (!pageId) return undefined;
     console.log(`Configurando listener de damageEvents para pageId: ${pageId}`);
+    processedDamageEventIdsRef.current = new Map();
     const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
-    const getEventTimestampMs = (data) => {
-      if (data?.timestamp?.toMillis) return data.timestamp.toMillis();
-      if (typeof data?.timestamp === 'number') return data.timestamp;
-      if (typeof data?.ts === 'number') return data.ts;
-      return 0;
-    };
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type !== 'added') return;
-        const data = change.doc.data();
-        const eventAgeMs = Date.now() - getEventTimestampMs(data);
+        if (change.type === 'removed') return;
 
-        if (eventAgeMs > DAMAGE_ANIMATION_MS + 1500) {
+        const now = Date.now();
+        processedDamageEventIdsRef.current.forEach((processedAt, eventId) => {
+          if (now - processedAt > DAMAGE_ANIMATION_MS * 2) {
+            processedDamageEventIdsRef.current.delete(eventId);
+          }
+        });
+
+        if (processedDamageEventIdsRef.current.has(change.doc.id)) return;
+
+        const data = change.doc.data();
+
+        if (isDamageEventStale(data, now)) {
+          processedDamageEventIdsRef.current.set(change.doc.id, now);
           deleteDoc(doc(db, 'damageEvents', change.doc.id)).catch((err) => {
             console.error('Error eliminando evento de daño obsoleto:', err);
           });
@@ -3867,7 +3836,13 @@ const MapCanvas = ({
         }
 
         console.log('Evento de daño recibido desde Firebase:', data);
-        triggerDamagePopup(data);
+        const popupQueued = triggerDamagePopup({
+          ...data,
+          clientTimestamp: getDamageEventTimestampMs(data),
+        });
+        if (!popupQueued) return;
+
+        processedDamageEventIdsRef.current.set(change.doc.id, now);
         if (
           ['vida', 'armadura', 'postura'].includes(data.stat) &&
           data.value > 0
@@ -7476,9 +7451,7 @@ const MapCanvas = ({
                             console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
                           }
                           await addDoc(collection(db, 'damageEvents'), {
-                            ...anim,
-                            pageId: effectivePageId,
-                            timestamp: serverTimestamp(),
+                            ...buildDamageEventWrite(anim, effectivePageId),
                           });
                         } catch { }
                       }
@@ -7497,9 +7470,7 @@ const MapCanvas = ({
                           console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
                         }
                         await addDoc(collection(db, 'damageEvents'), {
-                          ...anim,
-                          pageId: effectivePageId,
-                          timestamp: serverTimestamp(),
+                          ...buildDamageEventWrite(anim, effectivePageId),
                         });
                       } catch { }
                     }

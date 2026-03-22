@@ -105,3 +105,45 @@ test('blocks duplicate close submissions on resolved events', async () => {
 
   await waitFor(() => expect(onReact).toHaveBeenCalledTimes(1));
 });
+
+test('keeps resolved modal constrained to the viewport-friendly mobile layout', () => {
+  render(
+    <CombatReactionModal
+      event={{
+        ...baseEvent,
+        status: 'resuelto',
+        result: {
+          attackerName: 'Atacante',
+          targetName: 'Defensor',
+          reactionType: 'parar',
+          attackerDice: [
+            { id: 'a1', value: 10, faces: 10 },
+            { id: 'a2', value: 9, faces: 10 },
+            { id: 'a3', value: 6, faces: 10, matchedAttr: 'vigor' },
+            { id: 'a4', value: 8, faces: 10, matchedAttr: 'vigor' },
+          ],
+          defenderDice: [
+            { id: 'd1', value: 5, faces: 10 },
+            { id: 'd2', value: 3, faces: 10 },
+            { id: 'd3', value: 1, faces: 10, matchedAttr: 'destreza' },
+            { id: 'd4', value: 6, faces: 10, matchedAttr: 'destreza' },
+          ],
+          attackTotal: 33,
+          defenderTotal: 15,
+          defenderWeapon: 'Pica',
+          damage: 18,
+          blocksLost: { postura: 1, armadura: 1, vida: 0 },
+        },
+      }}
+      targetToken={baseTargetToken}
+      onReact={jest.fn()}
+      queueTotal={2}
+      queueResolved={1}
+      queueCurrent={1}
+    />
+  );
+
+  const modalCard = screen.getByTestId('combat-reaction-modal-card');
+  expect(modalCard).toHaveClass('flex', 'flex-col', 'max-h-[calc(100dvh-1rem)]');
+  expect(screen.getByRole('button', { name: /continuar/i })).toBeInTheDocument();
+});

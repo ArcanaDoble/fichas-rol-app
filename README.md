@@ -1860,4 +1860,6 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se añadió una verificación adicional en la hoja de fichas de tokens para evitar referencias a enemigos inexistentes en el mapa de batalla de jugadores.
 - Mejora de sincronización de tokens en el mapa de batalla: los cambios remotos se fusionan con el estado local respetando modificaciones pendientes y reflejando eliminaciones.
 - Se corrigió un problema donde la eliminación de tokens por jugadores no se reflejaba en el mapa del máster.
+- El modal de resultado/reaction log de combate ahora queda limitado al alto del viewport en móvil, con cuerpo scrollable y botón de confirmación siempre accesible como en el modal normal de reacción.
+- Se reforzó la sincronización de `damageEvents` con `clientTimestamp` estable y un listener más tolerante, evitando que algunas animaciones de daño se perdieran de forma intermitente en clientes lentos o móviles.
 

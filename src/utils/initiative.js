@@ -4,10 +4,10 @@ import {
   updateDoc,
   addDoc,
   collection,
-  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { saveTokenSheet } from './token';
+import { buildDamageEventWrite } from './damageEvents';
 
 export const addSpeedForToken = async (token, speed) => {
   if (!token || !token.id || speed <= 0) return;
@@ -80,12 +80,15 @@ export const consumeStatForToken = async (token, stat, amount, pageId) => {
       }
       try {
         await addDoc(collection(db, 'damageEvents'), {
-          tokenId: token.id,
-          value: amount,
-          stat,
-          ts: Date.now(),
-          pageId: effectivePageId,
-          timestamp: serverTimestamp(),
+          ...buildDamageEventWrite(
+            {
+              tokenId: token.id,
+              value: amount,
+              stat,
+              ts: Date.now(),
+            },
+            effectivePageId,
+          ),
         });
       } catch (err) {
         console.error('Error registrando consumo de stat:', err);
