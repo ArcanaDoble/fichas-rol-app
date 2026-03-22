@@ -14,6 +14,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const [selectedWeapon, setSelectedWeapon] = useState('');
     const [customModifiers, setCustomModifiers] = useState({ extraDice: {}, activeTraits: [] });
     const [modifiersExpanded, setModifiersExpanded] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Extraer dados del atacante (manteniendo individualidad de los críticos)
     const attackerDice = useMemo(() => {
@@ -75,16 +76,43 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
 
     const getWeaponId = (w, idx) => `${w.nombre || w.name || 'Arma'}-${idx}`;
 
-    const handleConfirm = () => {
+    useEffect(() => {
+        setIsSubmitting(false);
+    }, [event?.id, event?.status]);
+
+    const handleConfirm = async () => {
+        if (isSubmitting) return;
+
+        let payload;
         if (reactionType === 'evadir') {
-            onReact({ type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } });
+            payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
         } else if (reactionType === 'parar') {
             const weapon = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
             const modifiedWeapon = applyModifiersToWeapon(weapon, customModifiers);
             const cost = getSpeedConsumption(modifiedWeapon);
-            onReact({ type: 'parar', data: { weapon: modifiedWeapon, yellowCost: cost } });
+            payload = { type: 'parar', data: { weapon: modifiedWeapon, yellowCost: cost } };
         } else {
-            onReact({ type: 'recibir', data: null });
+            payload = { type: 'recibir', data: null };
+        }
+
+        setIsSubmitting(true);
+        try {
+            await Promise.resolve(onReact(payload));
+        } catch (error) {
+            setIsSubmitting(false);
+            throw error;
+        }
+    };
+
+    const handleCloseResolved = async () => {
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        try {
+            await Promise.resolve(onReact({ type: 'cerrar' }));
+        } catch (error) {
+            setIsSubmitting(false);
+            throw error;
         }
     };
 
@@ -298,8 +326,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                 </div>
                                 <div className="shrink-0 flex justify-center pt-5 border-t border-red-900/30 bg-[#1a1b26]">
                                     <button
-                                        onClick={() => onReact({ type: 'cerrar' })}
-                                        className="px-12 py-3 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 transition-all w-full"
+                                        onClick={handleCloseResolved}
+                                        disabled={isSubmitting}
+                                        className="px-12 py-3 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 transition-all w-full disabled:opacity-50 disabled:cursor-wait"
                                     >
                                         Continuar
                                     </button>
@@ -478,10 +507,10 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </div>
                             <button
                                 onClick={handleConfirm}
-                                disabled={!reactionType || (reactionType === 'parar' && !selectedWeapon)}
+                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && !selectedWeapon)}
                                 className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
                             >
-                                Confirmar
+                                {isSubmitting ? 'Procesando...' : 'Confirmar'}
                             </button>
                         </div>
                         </>

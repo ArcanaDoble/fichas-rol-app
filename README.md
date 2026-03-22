@@ -53,6 +53,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Píldoras de Equipamiento interactivas** - Uso directo de armas y poderes desde la ficha
 - **Consumo de velocidad inteligente** - Cálculo automático basado en emojis 🟡 del equipamiento
 - **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
+- **Animación de daño sin duplicados** - Cada reacción de combate confirma una sola vez y el efecto flotante se deduplica por evento resuelto
 - **Permisos granulares** - Jugadores pueden eliminar sus propios participantes
 - **Interfaz color-coded** - Identificación visual por jugador y tipo de equipamiento
 - **Sincronización en tiempo real** - Cambios instantáneos para todos los participantes
@@ -126,6 +127,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 - **Integración de Animaciones de Combate VTT**: Nuevo sistema de efectos visuales flotantes sincronizados en tiempo real que muestran el resultado de cada ataque.
 - **Feedback Visual Avanzado**: Los números de daño aparecen sobre los tokens con colores específicos según el recurso perdido (Vida en rojo, Armadura en gris, Postura en azul).
+- **Daño multibloque escalonado**: Cuando un mismo impacto rompe varios bloques, cada pérdida se muestra con la animación clásica pero con un retraso breve entre una y otra para que Postura, Armadura y Vida no se tapen.
+- **Colores de daño sincronizados con las barras**: Los textos flotantes usan la misma paleta que los recursos del juego, incluyendo Postura en verde, Vida en rojo, Armadura en gris, Ingenio en azul y Voluntad/Cordura en morado.
+- **Cola de reacciones más clara**: Cuando un token encadena varios ataques, el modal prioriza el siguiente ataque aún sin decidir y marca los anteriores como ya gestionados en el tracker superior, evitando que el progreso visual se quede atrás.
+- **Orden estable en ataques encadenados**: La cola de `combat_events` conserva el orden original del golpe usando marcas de tiempo del cliente como respaldo, evitando que Firestore reordene los ataques y el tracker vuelva erróneamente a `1 de 2`.
 - **Indicadores de Reacción**: Mensajes dinámicos de «¡Bloqueo Perfecto!», «¡Contraataque!» y «¡Evasión!» que aparecen tras resolver la reacción del defensor.
 - **Tinte de Daño Pulsante**: Los tokens que pierden bloques de vida o postura muestran un pulso rojo majestuoso y un efecto de impacto escalable en el canvas.
 - **Sincronización Transversal**: Las animaciones se disparan para todos los jugadores conectados en el momento en que el defensor pulsa «Continuar» en su modal de reacción.

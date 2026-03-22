@@ -478,6 +478,10 @@ const DOOR_PATHS = {
 };
 
 const DAMAGE_ANIMATION_MS = 8000;
+const DAMAGE_POPUP_GROUP_WINDOW_MS = 1000;
+const DAMAGE_POPUP_STAT_ORDER = ['postura', 'armadura', 'vida', 'ingenio', 'voluntad', 'cordura'];
+const DAMAGE_POPUP_STAGGER_SECONDS = 1.5;
+const DAMAGE_POPUP_DURATION_SECONDS = 4.5;
 
 const normalizeWallRotation = (x1, y1, x2, y2) => {
   let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
@@ -3812,8 +3816,9 @@ const MapCanvas = ({
         console.log(`Animación de daño para token ${tokenId} en celda (${token.x}, ${token.y}) -> píxeles (${tokenPixelX}, ${tokenPixelY}) -> pantalla (${x}, ${y}) [zoom: ${currentZoom}, pos: ${currentGroupPos.x},${currentGroupPos.y}]`);
 
         const id = nanoid();
+        const createdAt = Date.now();
         // No guardar coordenadas fijas, solo el tokenId para calcular posición en tiempo real
-        setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type }]);
+        setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type, createdAt }]);
 
         setTimeout(() => {
           setDamagePopups((prev) => prev.filter((p) => p.id !== id));
@@ -3842,10 +3847,25 @@ const MapCanvas = ({
     if (!pageId) return undefined;
     console.log(`Configurando listener de damageEvents para pageId: ${pageId}`);
     const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
+    const getEventTimestampMs = (data) => {
+      if (data?.timestamp?.toMillis) return data.timestamp.toMillis();
+      if (typeof data?.timestamp === 'number') return data.timestamp;
+      if (typeof data?.ts === 'number') return data.ts;
+      return 0;
+    };
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type !== 'added') return;
         const data = change.doc.data();
+        const eventAgeMs = Date.now() - getEventTimestampMs(data);
+
+        if (eventAgeMs > DAMAGE_ANIMATION_MS + 1500) {
+          deleteDoc(doc(db, 'damageEvents', change.doc.id)).catch((err) => {
+            console.error('Error eliminando evento de daño obsoleto:', err);
+          });
+          return;
+        }
+
         console.log('Evento de daño recibido desde Firebase:', data);
         triggerDamagePopup(data);
         if (
@@ -7095,93 +7115,132 @@ const MapCanvas = ({
           </div>
         ))}
         {(() => {
-          const groups = damagePopups.reduce((acc, p) => {
-            acc[p.tokenId] = acc[p.tokenId] || [];
-            acc[p.tokenId].push(p);
+          const colors = {
+            postura: '#34d399',
+            vida: '#f87171',
+            armadura: '#9ca3af',
+            ingenio: '#60a5fa',
+            voluntad: '#a78bfa',
+            cordura: '#a78bfa',
+            counter: '#facc15',
+            perfect: '#60a5fa',
+            resist: '#60a5fa',
+          };
+
+          const getPopupText = (popup) =>
+            popup.type === 'resist'
+              ? 'Resiste el daño'
+              : popup.type === 'counter'
+                ? '¡Contraataque!'
+                : popup.type === 'perfect'
+                  ? '¡Bloqueo perfecto!'
+                  : `-${popup.value} ${popup.stat ? popup.stat.charAt(0).toUpperCase() + popup.stat.slice(1) : ''}`.trim();
+
+          const groupedPopups = damagePopups.reduce((acc, popup) => {
+            acc[popup.tokenId] = acc[popup.tokenId] || [];
+            const tokenGroups = acc[popup.tokenId];
+            const lastGroup = tokenGroups[tokenGroups.length - 1];
+            const popupTime = popup.createdAt || 0;
+
+            if (
+              lastGroup &&
+              Math.abs(popupTime - lastGroup.anchorTime) <= DAMAGE_POPUP_GROUP_WINDOW_MS
+            ) {
+              lastGroup.entries.push(popup);
+              lastGroup.anchorTime = Math.min(lastGroup.anchorTime, popupTime);
+            } else {
+              tokenGroups.push({
+                id: popup.id,
+                tokenId: popup.tokenId,
+                anchorTime: popupTime,
+                entries: [popup],
+              });
+            }
+
             return acc;
           }, {});
-          return damagePopups.map((p) => {
-            // Calcular posición en tiempo real basándose en la posición actual del token
-            const token = tokens.find(t => t.id === p.tokenId);
-            if (!token || !stageRef.current || !containerRef.current) {
-              return null; // No renderizar si no se encuentra el token
-            }
 
-            try {
-              // Usar valores actuales de transformación
-              const currentBaseScale = baseScaleRef.current;
-              const currentZoom = zoomRef.current;
-              const currentGroupPos = groupPosRef.current;
+          return Object.values(groupedPopups).flatMap((tokenGroups) =>
+            tokenGroups.flatMap((group, groupIndex) => {
+              const orderedEntries = [...group.entries].sort((a, b) => {
+                const aPriority = a.type ? -1 : DAMAGE_POPUP_STAT_ORDER.indexOf(a.stat);
+                const bPriority = b.type ? -1 : DAMAGE_POPUP_STAT_ORDER.indexOf(b.stat);
+                return aPriority - bPriority;
+              });
 
-              // Calcular posición actual del token
-              const tokenPixelX = cellToPx(token.x, gridOffsetX);
-              const tokenPixelY = cellToPx(token.y, gridOffsetY);
-              const tokenWidth = (token.w || 1) * effectiveGridSize;
-              const tokenHeight = (token.h || 1) * effectiveGridSize;
+              // Calcular posición en tiempo real basándose en la posición actual del token
+              const token = tokens.find(t => t.id === group.tokenId);
+              if (!token || !stageRef.current || !containerRef.current) {
+                return []; // No renderizar si no se encuentra el token
+              }
 
-              // Centro del token en coordenadas del mundo
-              const centerX = tokenPixelX + tokenWidth / 2;
-              const centerY = tokenPixelY + tokenHeight / 2;
+              try {
+                // Usar valores actuales de transformación
+                const currentBaseScale = baseScaleRef.current;
+                const currentZoom = zoomRef.current;
+                const currentGroupPos = groupPosRef.current;
 
-              // Transformar a coordenadas de pantalla
-              const groupScale = currentBaseScale * currentZoom;
-              const screenX = centerX * groupScale + currentGroupPos.x;
-              const screenY = centerY * groupScale + currentGroupPos.y;
+                // Calcular posición actual del token
+                const tokenPixelX = cellToPx(token.x, gridOffsetX);
+                const tokenPixelY = cellToPx(token.y, gridOffsetY);
+                const tokenWidth = (token.w || 1) * effectiveGridSize;
+                const tokenHeight = (token.h || 1) * effectiveGridSize;
 
-              // Posición relativa al contenedor
-              const stageRect = stageRef.current.container().getBoundingClientRect();
-              const containerRect = containerRef.current.getBoundingClientRect();
+                // Centro del token en coordenadas del mundo
+                const centerX = tokenPixelX + tokenWidth / 2;
+                const centerY = tokenPixelY + tokenHeight / 2;
 
-              const x = screenX + stageRect.left - containerRect.left;
-              const y = screenY + stageRect.top - containerRect.top;
+                // Transformar a coordenadas de pantalla
+                const groupScale = currentBaseScale * currentZoom;
+                const screenX = centerX * groupScale + currentGroupPos.x;
+                const screenY = centerY * groupScale + currentGroupPos.y;
 
-              const colors = {
-                postura: '#34d399',
-                vida: '#f87171',
-                armadura: '#9ca3af',
-                ingenio: '#60a5fa',
-                counter: '#facc15',
-                perfect: '#60a5fa',
-                resist: '#60a5fa',
-              };
-              const color = p.type ? colors[p.type] || '#fff' : colors[p.stat] || '#fff';
-              const text =
-                p.type === 'resist'
-                  ? 'Resiste el daño'
-                  : p.type === 'counter'
-                    ? '¡Contraataque!'
-                    : p.type === 'perfect'
-                      ? '¡Bloqueo perfecto!'
-                      : `-${p.value}`;
-              const group = groups[p.tokenId] || [];
-              const index = group.findIndex((g) => g.id === p.id);
-              const offset = (index - (group.length - 1) / 2) * 30;
+                // Posición relativa al contenedor
+                const stageRect = stageRef.current.container().getBoundingClientRect();
+                const containerRect = containerRef.current.getBoundingClientRect();
 
-              return (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 1, y: 0 }}
-                  animate={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 10 }}
-                  style={{
-                    position: 'absolute',
-                    left: x + offset,
-                    top: y,
-                    transform: 'translate(-50%, -100%)',
-                    color,
-                    fontSize: 30,
-                    fontWeight: 'bold',
-                    textShadow: '0 0 2px #000',
-                  }}
-                >
-                  {text}
-                </motion.div>
-              );
-            } catch (error) {
-              console.error('Error renderizando animación de daño:', error);
-              return null;
-            }
-          }).filter(Boolean); // Filtrar elementos null
+                const x = screenX + stageRect.left - containerRect.left;
+                const y = screenY + stageRect.top - containerRect.top;
+
+                return orderedEntries.map((entry, entryIndex) => {
+                  const color = entry.type ? colors[entry.type] || '#fff' : colors[entry.stat] || '#fff';
+                  const text = getPopupText(entry);
+                  const horizontalOffset = orderedEntries.length > 1
+                    ? entryIndex * 18 - ((orderedEntries.length - 1) * 9)
+                    : 0;
+
+                  return (
+                    <motion.div
+                      key={`${group.id}-${entry.id}`}
+                      initial={{ opacity: 1, y: 0 }}
+                      animate={{ opacity: 0, y: -20 }}
+                      transition={{
+                        delay: entryIndex * DAMAGE_POPUP_STAGGER_SECONDS,
+                        duration: DAMAGE_POPUP_DURATION_SECONDS,
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: x + horizontalOffset,
+                        top: y - groupIndex * 56 - entryIndex * 6,
+                        transform: 'translate(-50%, -100%)',
+                        color,
+                        fontSize: 30,
+                        fontWeight: 'bold',
+                        lineHeight: 1,
+                        textShadow: '0 0 2px #000',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {text}
+                    </motion.div>
+                  );
+                });
+              } catch (error) {
+                console.error('Error renderizando animación de daño:', error);
+                return [];
+              }
+            })
+          );
         })()}
       </div>
       <Toolbar

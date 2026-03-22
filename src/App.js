@@ -8984,7 +8984,7 @@ function App() {
                 enableDarkness={enableDarkness}
                 darknessOpacity={pages[currentPage]?.darknessOpacity || 0.7}
                 showVisionPolygons={showVisionRanges}
-                pageId={pages[currentPage]?.id}
+                pageId={userType === 'player' ? playerVisiblePageId : pages[currentPage]?.id}
                 onGridSettingsChange={handleGridSettingsChange}
               />
             </div>

@@ -6,6 +6,14 @@ jest.mock('react-dnd', () => ({ useDrag: () => [{}, () => {}], useDrop: () => [{
 jest.mock('./components/inventory/Inventory', () => () => <div>Inventory</div>);
 jest.mock('./components/MasterMenu', () => () => <div>MasterMenu</div>);
 jest.mock('./components/MapCanvas', () => () => <div>MapCanvas</div>);
+jest.mock('react-konva', () => ({
+  Image: () => null,
+  Circle: () => null,
+  Group: () => null,
+  Arc: () => null,
+  Rect: () => null,
+}));
+jest.mock('use-image', () => () => [null, 'loaded']);
 
 test('renders main menu', () => {
   render(
@@ -13,8 +21,9 @@ test('renders main menu', () => {
       <App />
     </ConfirmProvider>
   );
-  const heading = screen.getByText(/¿Quién eres\?/i);
-  expect(heading).toBeInTheDocument();
+  expect(screen.getByText(/selecciona tu rol para continuar/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /soy jugador/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /soy máster/i })).toBeInTheDocument();
 });
 
 test.skip('master login shows master menu', async () => {

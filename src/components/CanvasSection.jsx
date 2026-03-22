@@ -16,6 +16,7 @@ import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where
 import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
+import { getCombatQueueDisplayState, sortCombatQueueEntries } from '../utils/combatQueue';
 import DiceSvg from './DiceSvg';
 
 // --- Constants ---
@@ -975,10 +976,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [combatEventQueue, setCombatEventQueue] = useState([]);
     const [activeCombatAnimations, setActiveCombatAnimations] = useState([]);
     const seenAnimIdsRef = useRef(new Set()); // Persistent dedup set across renders
+    const resolvingCombatEventsRef = useRef(new Set());
     const [resolvedEventCount, setResolvedEventCount] = useState(0);
     const locallyResolvedEventsRef = useRef(new Set()); // Track events resolved on THIS device
     const [combatLog, setCombatLog] = useState([]);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
+
+    const combatQueueDisplay = useMemo(
+        () => getCombatQueueDisplayState({ queue: combatEventQueue, resolvedCount: resolvedEventCount }),
+        [combatEventQueue, resolvedEventCount]
+    );
+    const activeCombatQueueEntry = combatQueueDisplay.activeEntry;
 
     // --- TARGETING STATE ---
     const [targetingState, setTargetingState] = useState(null);
@@ -1329,23 +1337,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             setCombatEventQueue(prev => {
                                 if (prev.some(e => e.event.id === eventData.id)) return prev;
                                 if (prev.length === 0) setResolvedEventCount(0);
-                                return [...prev, { event: eventData, targetToken }];
+                                return sortCombatQueueEntries([
+                                    ...prev,
+                                    {
+                                        event: {
+                                            ...eventData,
+                                            clientTimestamp: typeof eventData.clientTimestamp === 'number' ? eventData.clientTimestamp : Date.now(),
+                                        },
+                                        targetToken
+                                    }
+                                ]);
                             });
                         }
                     }
                 } else if (change.type === 'modified') {
                     setCombatEventQueue(prev => {
                         // Actulizamos los datos dentro del evento
-                        return prev.map(e => e.event.id === eventData.id ? { ...e, event: eventData } : e);
+                        return sortCombatQueueEntries(
+                            prev.map(e => e.event.id === eventData.id
+                                ? {
+                                    ...e,
+                                    event: {
+                                        ...eventData,
+                                        clientTimestamp: typeof eventData.clientTimestamp === 'number'
+                                            ? eventData.clientTimestamp
+                                            : e.event.clientTimestamp,
+                                    }
+                                }
+                                : e
+                            )
+                        );
                     });
                 } else if (change.type === 'removed') {
                     const removedId = change.doc.id;
                     const wasResolvedLocally = locallyResolvedEventsRef.current.has(removedId);
+                    resolvingCombatEventsRef.current.delete(removedId);
 
                     if (wasResolvedLocally) {
                         locallyResolvedEventsRef.current.delete(removedId);
                     } else {
-                        setCombatEventQueue(prev => prev.filter(e => e.event.id !== removedId));
+                        setCombatEventQueue(prev => sortCombatQueueEntries(prev.filter(e => e.event.id !== removedId)));
                     }
                 }
             });
@@ -1392,15 +1423,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (change.type === 'added') {
                     const entry = { id: change.doc.id, ...change.doc.data() };
                     const animId = `anim_${entry.id}`;
+                    const dedupeKey = entry.sourceEventId ? `event_${entry.sourceEventId}` : animId;
 
-                    // Saltar si ya hemos procesado este ID (dedup global con ref)
-                    if (seenAnimIdsRef.current.has(animId)) return;
+                    // Saltar si ya hemos procesado este evento (o este log si no trae sourceEventId)
+                    if (seenAnimIdsRef.current.has(dedupeKey)) return;
 
                     // Solo disparar para entradas recientes (menos de 5 segundos)
                     const now = Date.now();
-                    const entryTime = entry.timestamp?.toMillis ? entry.timestamp.toMillis() : 0;
+                    const entryTime = entry.timestamp?.toMillis
+                        ? entry.timestamp.toMillis()
+                        : (typeof entry.timestamp === 'number'
+                            ? entry.timestamp
+                            : (typeof entry.clientTimestamp === 'number' ? entry.clientTimestamp : 0));
                     if (now - entryTime < 5000) {
-                        seenAnimIdsRef.current.add(animId);
+                        seenAnimIdsRef.current.add(dedupeKey);
                         newAnims.push({ id: animId, effect: entry });
                     }
                 }
@@ -4015,13 +4051,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const resolveCombatEvent = async (event) => {
-        if (event.status === 'resolviendo') return;
+        if (event.status === 'resolviendo' || resolvingCombatEventsRef.current.has(event.id)) return;
+
+        resolvingCombatEventsRef.current.add(event.id);
 
         try {
             await updateDoc(doc(db, 'combat_events', event.id), { status: 'resolviendo' });
         } catch (error) {
             // Si el documento ya no existe (porque otro cliente o pestaña ya lo resolvió y borró), 
             // ignoramos el error en vez de colapsar la app.
+            resolvingCombatEventsRef.current.delete(event.id);
             console.warn("Se intentó resolver un evento ya procesado o borrado:", event.id);
             return;
         }
@@ -4171,6 +4210,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         const combatLogEntry = {
+            sourceEventId: event.id,
+            scenarioId: scenario.id,
             attackerId: attackerToken.id,
             targetId: targetToken.id,
             attackerName: attackerToken.name,
@@ -4189,7 +4230,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             blocksLost,
             damage: finalDamage,
             logText, // deferred for chat
-            timestamp: Date.now() // temporary timestamp for state
+            clientTimestamp: Date.now()
         };
 
         const updatedTarget = finalItems.find(i => i.id === targetToken.id);
@@ -4206,8 +4247,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleReaction = async (reaction) => {
-        if (combatEventQueue.length === 0) return;
-        const currentEvent = combatEventQueue[0];
+        if (!activeCombatQueueEntry) return;
+        const currentEvent = activeCombatQueueEntry;
 
         if (reaction.type === 'cerrar') {
             try {
@@ -4359,6 +4400,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             weapon: action.weapon || null,
                             status: 'esperando_reaccion',
                             scenarioId: scenario.id,
+                            clientTimestamp: Date.now(),
                             timestamp: serverTimestamp(),
                             attackerVel: token.velocidad || 0,
                             targetVel: targetToken.velocidad || 0,
@@ -7585,8 +7627,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             <FloatingCombatEffects
                                                 key={id}
                                                 effect={effect}
-                                                targetPos={targetToken ? { x: targetToken.x, y: targetToken.y, width: targetToken.width } : null}
-                                                attackerPos={attackerToken ? { x: attackerToken.x, y: attackerToken.y, width: attackerToken.width } : null}
+                                                targetPos={targetToken ? { x: targetToken.x, y: targetToken.y, width: targetToken.width, height: targetToken.height } : null}
+                                                attackerPos={attackerToken ? { x: attackerToken.x, y: attackerToken.y, width: attackerToken.width, height: attackerToken.height } : null}
                                             />
                                         );
                                     })}
@@ -7835,15 +7877,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             })()}
 
             <AnimatePresence>
-                {combatEventQueue.length > 0 && (
+                {activeCombatQueueEntry && (
                     <CombatReactionModal
-                        key={combatEventQueue[0].event.id}
-                        event={combatEventQueue[0].event}
-                        targetToken={enrichTokenWithCharacterData(combatEventQueue[0].targetToken)}
+                        key={activeCombatQueueEntry.event.id}
+                        event={activeCombatQueueEntry.event}
+                        targetToken={enrichTokenWithCharacterData(activeCombatQueueEntry.targetToken)}
                         onReact={handleReaction}
-                        queueTotal={combatEventQueue.length + resolvedEventCount}
-                        queueResolved={resolvedEventCount}
-                        queueCurrent={resolvedEventCount}
+                        queueTotal={combatQueueDisplay.queueTotal}
+                        queueResolved={combatQueueDisplay.queueResolved}
+                        queueCurrent={combatQueueDisplay.queueCurrent}
                     />
                 )}
             </AnimatePresence>
