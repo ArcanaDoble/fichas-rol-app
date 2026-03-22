@@ -21,6 +21,7 @@ import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
 import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
+import { buildDamageEventWrite } from '../utils/damageEvents';
 
 const AUTO_RESOLVE_MS = 20000;
 
@@ -339,9 +340,7 @@ const AttackModal = ({
                 console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
               }
               await addDoc(collection(db, 'damageEvents'), {
-                ...anim,
-                pageId: effectivePageId,
-                timestamp: serverTimestamp(),
+                ...buildDamageEventWrite(anim, effectivePageId),
               });
             } catch {}
           }
@@ -360,9 +359,7 @@ const AttackModal = ({
               console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
             }
             await addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
+              ...buildDamageEventWrite(anim, effectivePageId),
             });
           } catch {}
         }

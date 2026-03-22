@@ -178,16 +178,19 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#1a1b26] border-2 border-red-900/50 rounded-lg p-6 max-w-lg w-full shadow-2xl shadow-red-900/20 relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-stretch justify-center overflow-y-auto p-2 sm:items-center sm:p-4">
+            <div
+                data-testid="combat-reaction-modal-card"
+                className="bg-[#1a1b26] border-2 border-red-900/50 rounded-lg p-4 sm:p-6 max-w-lg w-full shadow-2xl shadow-red-900/20 relative overflow-hidden my-auto max-h-[calc(100dvh-1rem)] sm:max-h-[85vh] flex flex-col"
+            >
                 {/* Fondo decorativo */}
                 <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-                <div className="relative z-10">
+                <div className="relative z-10 flex flex-1 min-h-0 flex-col">
 
                     {/* === COLA DE ATAQUES (Progress Tracker) === */}
                     {showQueue && (
-                        <div className="mb-4 pb-4 border-b border-red-900/30">
+                        <div className="mb-4 pb-4 border-b border-red-900/30 shrink-0">
                             <p className="text-[9px] text-slate-500 uppercase tracking-[0.3em] font-bold text-center mb-2.5">
                                 Ataques Pendientes — {queueCurrent + 1} de {queueTotal}
                             </p>
@@ -219,9 +222,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                         </div>
                     )}
 
-                    <div className="flex flex-col max-h-[70vh]">
+                    <div className="flex flex-1 min-h-0 flex-col">
                         {isResolving && (
-                            <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                            <div className="flex flex-1 min-h-0 flex-col items-center justify-center py-12 space-y-6">
                                 <div className="w-16 h-16 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
                                 <p className="text-red-400 font-fantasy text-xl uppercase tracking-widest animate-pulse">
                                     Calculando Resultado...
@@ -230,23 +233,23 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                         )}
 
                         {isResolved && (
-                            <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-300">
+                            <div className="flex flex-1 min-h-0 flex-col animate-in fade-in zoom-in-95 duration-300">
                                 <div className="shrink-0">
-                                    <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                    <h2 className="text-2xl sm:text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
                                         Resultado del Combate
                                     </h2>
                                     <p className="text-center text-slate-300 mb-6">
                                         Mira lo que ha sucedido y cierra para continuar.
                                     </p>
                                 </div>
-                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
+                                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 mb-4 space-y-6">
                                     {event.result && (
-                                        <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-5">
+                                        <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-4 sm:p-5">
                                             <div className="space-y-4 text-center">
-                                                <div className="flex justify-center items-center gap-4 text-lg">
-                                                    <span className="text-red-400 font-fantasy uppercase tracking-wide">{event.result.attackerName}</span>
+                                                <div className="flex justify-center items-center gap-3 sm:gap-4 text-base sm:text-lg">
+                                                    <span className="text-red-400 font-fantasy uppercase tracking-wide break-words">{event.result.attackerName}</span>
                                                     <Swords className="w-5 h-5 text-slate-500" />
-                                                    <span className="text-blue-400 font-fantasy uppercase tracking-wide">{event.result.targetName}</span>
+                                                    <span className="text-blue-400 font-fantasy uppercase tracking-wide break-words">{event.result.targetName}</span>
                                                 </div>
 
                                                 <div className="py-3 border-y border-slate-700/50">
@@ -324,7 +327,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                         </div>
                                     )}
                                 </div>
-                                <div className="shrink-0 flex justify-center pt-5 border-t border-red-900/30 bg-[#1a1b26]">
+                                <div className="shrink-0 flex justify-center pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] border-t border-red-900/30 bg-[#1a1b26]">
                                     <button
                                         onClick={handleCloseResolved}
                                         disabled={isSubmitting}
@@ -340,7 +343,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             <>
                                 {/* ZONA SUPERIOR (ESTÁTICA) */}
                                 <div className="shrink-0">
-                                    <h2 className="text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                    <h2 className="text-2xl sm:text-3xl font-fantasy text-red-500 text-center mb-2 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
                                         ¡Ataque Inminente!
                                     </h2>
                                     <p className="text-center text-slate-300 mb-6">
@@ -349,7 +352,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                 </div>
 
                                 {/* ZONA SCROLLABLE (DADOS Y BOTONES DE REACCIÓN) */}
-                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-6">
+                                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 mb-4 space-y-6">
                             <div className="bg-black/40 border border-[#c8aa6e]/20 rounded-lg p-4">
                                 <p className="text-sm text-[#c8aa6e] uppercase tracking-widest mb-3 text-center">Dados del Atacante</p>
                                 <div className="flex flex-wrap gap-3 justify-center">
@@ -493,7 +496,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                         </div>
 
                         {/* ZONA INFERIOR (ESTÁTICA Y SIEMPRE VISIBLE) */}
-                        <div className="shrink-0 flex justify-between items-center pt-5 border-t border-red-900/30 bg-[#1a1b26]">
+                        <div className="shrink-0 flex justify-between items-center pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] border-t border-red-900/30 bg-[#1a1b26]">
                             <div className="flex flex-col">
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Costo de Reacción</span>
                                 <div className="text-lg font-fantasy text-yellow-500 flex items-center gap-1.5 leading-none">

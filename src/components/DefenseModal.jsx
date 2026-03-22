@@ -8,11 +8,12 @@ import {
   rollExpressionCritical,
 } from '../utils/dice';
 import { applyDamage, parseDieValue } from '../utils/damage';
-import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
 import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
+import { buildDamageEventWrite } from '../utils/damageEvents';
 
 const atributoColor = {
   destreza: '#34d399',
@@ -325,9 +326,7 @@ const DefenseModal = ({
             console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
           }
           addDoc(collection(db, 'damageEvents'), {
-            ...anim,
-            pageId: effectivePageId,
-            timestamp: serverTimestamp(),
+            ...buildDamageEventWrite(anim, effectivePageId),
           }).catch(() => {});
         } catch {}
       } else {
@@ -345,9 +344,7 @@ const DefenseModal = ({
               console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
             }
             addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
+              ...buildDamageEventWrite(anim, effectivePageId),
             }).catch(() => {});
           } catch {}
         }
@@ -373,9 +370,7 @@ const DefenseModal = ({
                 console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
               }
               addDoc(collection(db, 'damageEvents'), {
-                ...anim,
-                pageId: effectivePageId,
-                timestamp: serverTimestamp(),
+                ...buildDamageEventWrite(anim, effectivePageId),
               }).catch(() => {});
             } catch {}
           }
@@ -394,9 +389,7 @@ const DefenseModal = ({
               console.warn('No se pudo obtener playerVisiblePageId, usando pageId actual:', err);
             }
             addDoc(collection(db, 'damageEvents'), {
-              ...anim,
-              pageId: effectivePageId,
-              timestamp: serverTimestamp(),
+              ...buildDamageEventWrite(anim, effectivePageId),
             }).catch(() => {});
           } catch {}
         }
