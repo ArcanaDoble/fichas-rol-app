@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfirmProvider, useConfirm } from '../Confirm';
 import React from 'react';
 
@@ -28,7 +28,7 @@ test('shows confirmation modal and resolves', async () => {
   expect(screen.getByText('¿Seguro?')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: /aceptar/i }));
-  expect(screen.queryByText('¿Seguro?')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText('¿Seguro?')).not.toBeInTheDocument());
   const result = await screen.findByTestId('result');
   expect(result).toHaveTextContent('yes');
 });
