@@ -3878,9 +3878,9 @@ const ClassList = ({
                   {['Yerma', 'Taiga', 'Tundra'].includes(dndClass.name) && !isCropping && (
                     <div className="flex justify-center gap-6 mt-4">
                       {[
-                        { name: 'Yerma', src: '/yerma/Yerma.png' },
-                        { name: 'Taiga', src: '/yerma/Taiga.png' },
-                        { name: 'Tundra', src: '/yerma/Tundra.png' }
+                        { name: 'Yerma', src: '/yerma/Yerma.webp' },
+                        { name: 'Taiga', src: '/yerma/Taiga.webp' },
+                        { name: 'Tundra', src: '/yerma/Tundra.webp' }
                       ].map((item) => (
                         <div key={item.name} className="relative group w-14 h-14 cursor-pointer">
                           {/* Glow Effect */}

@@ -8,6 +8,7 @@ import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import CombatReactionModal from './CombatReactionModal';
+import FloatingCombatEffects from './FloatingCombatEffects';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { rollAttack, getSpeedConsumption } from '../utils/combatSystem';
 import { db, storage } from '../firebase';
@@ -972,6 +973,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
     const [combatEventQueue, setCombatEventQueue] = useState([]);
+    const [activeCombatAnimations, setActiveCombatAnimations] = useState([]);
+    const seenAnimIdsRef = useRef(new Set()); // Persistent dedup set across renders
     const [resolvedEventCount, setResolvedEventCount] = useState(0);
     const locallyResolvedEventsRef = useRef(new Set()); // Track events resolved on THIS device
     const [combatLog, setCombatLog] = useState([]);
@@ -1305,44 +1308,43 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const q = query(
             collection(db, 'combat_events'),
             where('scenarioId', '==', activeScenario.id),
-            where('status', '==', 'esperando_reaccion')
+            where('status', 'in', ['esperando_reaccion', 'evadir_pendiente', 'parar_pendiente', 'recibir_pendiente', 'resuelto'])
         );
 
         const unsub = onSnapshot(q, (snapshot) => {
             snapshot.docChanges().forEach((change) => {
+                const eventData = { id: change.doc.id, ...change.doc.data() };
+                const isMasterView = !isPlayerView;
+                
                 if (change.type === 'added') {
-                    const eventData = { id: change.doc.id, ...change.doc.data() };
                     const items = activeScenarioRef.current?.items || activeScenario.items || [];
                     const targetToken = items.find(i => i.id === eventData.targetId);
 
                     if (targetToken) {
-                        const isMasterView = !isPlayerView;
                         const controlledBy = targetToken.controlledBy;
                         const isControlledByMe = isPlayerView && playerName && Array.isArray(controlledBy) && controlledBy.includes(playerName);
                         const isMasterNPC = isMasterView && (!controlledBy || !Array.isArray(controlledBy) || controlledBy.length === 0 || controlledBy.includes('master'));
 
                         if (isControlledByMe || isMasterNPC) {
-                            // Añadir al final de la cola si no existe ya
                             setCombatEventQueue(prev => {
                                 if (prev.some(e => e.event.id === eventData.id)) return prev;
-                                // Si la cola estaba vacía, reiniciar contador de resueltos
                                 if (prev.length === 0) setResolvedEventCount(0);
                                 return [...prev, { event: eventData, targetToken }];
                             });
                         }
                     }
+                } else if (change.type === 'modified') {
+                    setCombatEventQueue(prev => {
+                        // Actulizamos los datos dentro del evento
+                        return prev.map(e => e.event.id === eventData.id ? { ...e, event: eventData } : e);
+                    });
                 } else if (change.type === 'removed') {
-                    // Limpiar de la cola. Solo protegemos eventos que ESTE dispositivo resolvió localmente
-                    // (handleReaction los marca en locallyResolvedEventsRef antes de quitarlos).
-                    // Si el evento fue resuelto en OTRO dispositivo, lo eliminamos de nuestra cola inmediatamente.
                     const removedId = change.doc.id;
                     const wasResolvedLocally = locallyResolvedEventsRef.current.has(removedId);
 
                     if (wasResolvedLocally) {
-                        // Este dispositivo ya lo procesó, limpiar del tracking
                         locallyResolvedEventsRef.current.delete(removedId);
                     } else {
-                        // Resuelto en OTRO dispositivo → quitar de nuestra cola
                         setCombatEventQueue(prev => prev.filter(e => e.event.id !== removedId));
                     }
                 }
@@ -1375,12 +1377,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // --- Listener de Combat Log (últimas 3 entradas) ---
     useEffect(() => {
         if (!activeScenario?.id) return;
+
+        // Limpiar el set de IDs vistos al cambiar de escenario para no bloquear nuevas animaciones
+        seenAnimIdsRef.current.clear();
+
         const q = query(
             collection(db, 'combat_log'),
             orderBy('timestamp', 'desc'),
             limit(3)
         );
         const unsub = onSnapshot(q, (snapshot) => {
+            const newAnims = [];
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    const entry = { id: change.doc.id, ...change.doc.data() };
+                    const animId = `anim_${entry.id}`;
+
+                    // Saltar si ya hemos procesado este ID (dedup global con ref)
+                    if (seenAnimIdsRef.current.has(animId)) return;
+
+                    // Solo disparar para entradas recientes (menos de 5 segundos)
+                    const now = Date.now();
+                    const entryTime = entry.timestamp?.toMillis ? entry.timestamp.toMillis() : 0;
+                    if (now - entryTime < 5000) {
+                        seenAnimIdsRef.current.add(animId);
+                        newAnims.push({ id: animId, effect: entry });
+                    }
+                }
+            });
+
+            if (newAnims.length > 0) {
+                setActiveCombatAnimations(prev => [...prev, ...newAnims]);
+
+                // Limpiar cada animación tras su duración (4s animación + 1s buffer)
+                newAnims.forEach((anim) => {
+                    setTimeout(() => {
+                        setActiveCombatAnimations(prev => prev.filter(a => a.id !== anim.id));
+                    }, 5500);
+                });
+            }
+
+            // Actualizar logs visibles
             const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setCombatLog(entries);
         });
@@ -4061,10 +4098,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             });
 
             finalDamage = newTotal;
+            const evadedAll = newTotal <= 0; // Todos los dados evadidos
             const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
             blocksLost = res.lost;
             updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + (event.reactionData.yellowCost || 0) });
-            logText = `${targetToken.name} evadió dados de ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            if (evadedAll) {
+                logText = `¡${targetToken.name} evadió completamente el ataque de ${attackerToken.name}!`;
+            } else {
+                logText = `${targetToken.name} evadió parcialmente a ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            }
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
             const defenderRoll = rollAttack(event.reactionData.weapon, defenderAttrs);
@@ -4128,19 +4170,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
         }
 
-        await updateDoc(doc(db, 'canvas_scenarios', scenario.id), { items: finalItems, lastModified: Date.now() });
-
-        // Escribir en el chat
-        const chatRef = doc(db, 'assetSidebar', 'chat');
-        const chatSnap = await getDoc(chatRef);
-        if (chatSnap.exists()) {
-            const messages = chatSnap.data().messages || [];
-            messages.push({ id: nanoid(), author: "Combate", text: logText, timestamp: Date.now() });
-            await updateDoc(chatRef, { messages });
-        }
-
-        // Escribir entrada rica en combat_log
         const combatLogEntry = {
+            attackerId: attackerToken.id,
+            targetId: targetToken.id,
             attackerName: attackerToken.name,
             targetName: targetToken.name,
             weaponName: event.weapon?.nombre || event.weapon?.name || null,
@@ -4150,34 +4182,95 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             defenderTotal,
             reactionType: event.reactionType || 'recibir',
             evadedDiceIds,
+            evadedAll: event.reactionType === 'evadir' && finalDamage <= 0, // Flag para animación
             finalDamage,
             counterDamage,
             defenderWeapon: event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
             blocksLost,
             damage: finalDamage,
-            timestamp: serverTimestamp()
+            logText, // deferred for chat
+            timestamp: Date.now() // temporary timestamp for state
         };
 
-        await addDoc(collection(db, 'combat_log'), combatLogEntry);
+        const updatedTarget = finalItems.find(i => i.id === targetToken.id);
+        const updatedAttacker = finalItems.find(i => i.id === attackerToken.id);
 
-        // Limpiar entradas antiguas (máximo 3)
-        try {
-            const allLogsQuery = query(collection(db, 'combat_log'), orderBy('timestamp', 'desc'));
-            const allSnap = await getDocs(allLogsQuery);
-            const docsToDelete = allSnap.docs.slice(3);
-            for (const d of docsToDelete) {
-                await deleteDoc(doc(db, 'combat_log', d.id));
+        await updateDoc(doc(db, 'combat_events', event.id), {
+            status: 'resuelto',
+            result: combatLogEntry,
+            tokenUpdates: {
+                target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad } : null,
+                attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad } : null
             }
-        } catch (err) {
-            console.warn('Error limpiando combat_log antiguo:', err);
-        }
-
-        await deleteDoc(doc(db, 'combat_events', event.id));
+        });
     };
 
     const handleReaction = async (reaction) => {
         if (combatEventQueue.length === 0) return;
         const currentEvent = combatEventQueue[0];
+
+        if (reaction.type === 'cerrar') {
+            try {
+                const ev = currentEvent.event;
+                
+                // 1. APLICAR CAMBIOS DIFERIDOS DE TOKENS (Stats, Velocidad, etc)
+                if (ev.tokenUpdates) {
+                    const snap = await getDoc(doc(db, 'canvas_scenarios', activeScenarioRef.current?.id || ev.scenarioId));
+                    if (snap.exists()) {
+                        let currentItems = snap.data().items || [];
+                        let changed = false;
+                        if (ev.tokenUpdates.target) {
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.target.id ? { ...item, stats: ev.tokenUpdates.target.stats, status: ev.tokenUpdates.target.status, velocidad: ev.tokenUpdates.target.velocidad } : item);
+                            changed = true;
+                        }
+                        if (ev.tokenUpdates.attacker) {
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? { ...item, stats: ev.tokenUpdates.attacker.stats, status: ev.tokenUpdates.attacker.status, velocidad: ev.tokenUpdates.attacker.velocidad } : item);
+                            changed = true;
+                        }
+                        if (changed) {
+                            await updateDoc(doc(db, 'canvas_scenarios', snap.id), { items: currentItems, lastModified: Date.now() });
+                        }
+                    }
+                }
+
+                // 2. APLICAR CHAT Y LOGS DIFERIDOS
+                if (ev.result) {
+                    const chatRef = doc(db, 'assetSidebar', 'chat');
+                    const chatSnap = await getDoc(chatRef);
+                    if (chatSnap.exists() && ev.result.logText) {
+                        const messages = chatSnap.data().messages || [];
+                        messages.push({ id: nanoid(), author: "Combate", text: ev.result.logText, timestamp: Date.now() });
+                        await updateDoc(chatRef, { messages });
+                    }
+
+                    // Escribir en combat_log para el sistema (también gatillará animaciones HTML)
+                    const logEntryToWrite = { ...ev.result, timestamp: serverTimestamp() };
+                    delete logEntryToWrite.logText; // no es necesario guardar esto permanente
+                    await addDoc(collection(db, 'combat_log'), logEntryToWrite);
+
+                    // Limpieza opcional de logs
+                    try {
+                        const allLogsQuery = query(collection(db, 'combat_log'), orderBy('timestamp', 'desc'));
+                        const allSnap = await getDocs(allLogsQuery);
+                        const docsToDelete = allSnap.docs.slice(3);
+                        for (const d of docsToDelete) {
+                            await deleteDoc(doc(db, 'combat_log', d.id));
+                        }
+                    } catch (err) {
+                        console.warn('Error limpiando combat_log antiguo:', err);
+                    }
+                }
+
+                // Locally mark as resolved to ignore the 'removed' event logic
+                locallyResolvedEventsRef.current.add(ev.id);
+                setResolvedEventCount(prev => prev + 1);
+                setCombatEventQueue(prev => prev.filter(e => e.event.id !== ev.id));
+                await deleteDoc(doc(db, 'combat_events', ev.id));
+            } catch (err) {
+                console.warn('Error al borrar el evento resuelto:', err);
+            }
+            return;
+        }
 
         try {
             await updateDoc(doc(db, 'combat_events', currentEvent.event.id), {
@@ -4189,13 +4282,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             console.warn('Evento de combate ya procesado o eliminado:', currentEvent.event.id);
         }
 
-        // Marcar que ESTE dispositivo resolvió este evento, para que el onSnapshot 'removed'
-        // no lo quite de la cola duplicadamente (ya lo quitamos aquí abajo).
-        locallyResolvedEventsRef.current.add(currentEvent.event.id);
-
-        // Eliminamos el evento actual de la cola ahora que ha sido procesado "localmente".
-        setResolvedEventCount(prev => prev + 1);
-        setCombatEventQueue(prev => prev.filter(e => e.event.id !== currentEvent.event.id));
+        // Ya NO quitamos el evento de la cola. Simplemente marcamos algo localmente si es necesario.
+        // The modal will respond to the `status` change.
     };
 
     const handleEndTurn = async (tokenId) => {
@@ -7485,6 +7573,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                 )}
                                             </div>
+                                        );
+                                    })}
+
+                                    {/* --- FLOATING COMBAT EFFECTS --- */}
+                                    {activeCombatAnimations.map(({ id, effect }) => {
+                                        const items = activeScenario?.items || [];
+                                        const targetToken = items.find(i => i.id === effect.targetId);
+                                        const attackerToken = items.find(i => i.id === effect.attackerId);
+                                        return (
+                                            <FloatingCombatEffects
+                                                key={id}
+                                                effect={effect}
+                                                targetPos={targetToken ? { x: targetToken.x, y: targetToken.y, width: targetToken.width } : null}
+                                                attackerPos={attackerToken ? { x: attackerToken.x, y: attackerToken.y, width: attackerToken.width } : null}
+                                            />
                                         );
                                     })}
                                 </div>

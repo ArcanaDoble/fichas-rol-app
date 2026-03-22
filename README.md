@@ -120,17 +120,18 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.70**
+> **Versión actual: 2.4.71**
+
+**Resumen de cambios v2.4.71:**
+
+- **Integración de Animaciones de Combate VTT**: Nuevo sistema de efectos visuales flotantes sincronizados en tiempo real que muestran el resultado de cada ataque.
+- **Feedback Visual Avanzado**: Los números de daño aparecen sobre los tokens con colores específicos según el recurso perdido (Vida en rojo, Armadura en gris, Postura en azul).
+- **Indicadores de Reacción**: Mensajes dinámicos de «¡Bloqueo Perfecto!», «¡Contraataque!» y «¡Evasión!» que aparecen tras resolver la reacción del defensor.
+- **Tinte de Daño Pulsante**: Los tokens que pierden bloques de vida o postura muestran un pulso rojo majestuoso y un efecto de impacto escalable en el canvas.
+- **Sincronización Transversal**: Las animaciones se disparan para todos los jugadores conectados en el momento en que el defensor pulsa «Continuar» en su modal de reacción.
+- **Transiciones Majestic**: Animaciones lentas y fluidas (4.0s de duración) diseñadas para garantizar la visibilidad total de lo sucedido durante el intercambio.
 
 **Resumen de cambios v2.4.70:**
-
-- Nuevo **Panel de Encuentros** táctil dentro de las fichas de enemigos, con agrupaciones plegables, controles grandes para vida y estados, historial por criatura y persistencia automática en `localStorage` para retomar la sesión desde el móvil.
-- Botón **«Al encuentro»** en cada carta del catálogo que permite clonar varias copias de un enemigo en una sola acción, numerarlas automáticamente y gestionarlas desde la pestaña móvil.
-- Pestañas Catálogo/Encuentro en la vista del máster para alternar entre la edición tradicional y el control rápido de combate, con sincronización mediante eventos `encounterInstanceUpdate`/`encounterTokenSync` para integrarse con otros paneles.
-- Gestión táctil de estados con el selector visual oficial (iconos, descripciones y estados personalizados), tanto por criatura como en bloque para grupos completos, además de tarjetas individuales plegables para concentrarse en los enemigos relevantes.
-- Píldoras de equipo enriquecidas que muestran daño, alcance, consumo, bloques y rasgos de armas, armaduras y poderes, junto a un diálogo de **cambios personalizados** para aplicar ajustes numéricos, marcar equipo como usado y registrar notas rápidas durante el encuentro.
-
-**Resumen de cambios v2.4.69:**
 
 - Se retiró el panel de «Encuentro activo» y toda su persistencia local para simplificar el flujo del máster.
 - Animaciones de sincronización en la tienda táctica: los lotes sugeridos ahora resaltan con un pulso más suave al añadir o comprar objetos, el máster recibe un aviso con los detalles de la compra en tiempo real y los objetos adquiridos quedan marcados como vendidos para poder reemplazarlos rápidamente.
